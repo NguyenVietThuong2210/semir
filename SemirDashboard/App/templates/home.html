@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Customer Analytics{% endblock %}
+
+{% block content %}
+<div class="row mb-5">
+    <div class="col-12 text-center">
+        <h1 class="display-4 mb-3">
+            <i class="bi bi-graph-up-arrow text-primary"></i>
+            Customer Analytics System
+        </h1>
+        <p class="lead text-muted">Analyze customer return rates and purchasing behavior</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card h-100 border-primary">
+            <div class="card-body text-center p-4">
+                <div class="mb-3">
+                    <i class="bi bi-people-fill text-primary" style="font-size: 3rem;"></i>
+                </div>
+                <h5 class="card-title">Upload Customer Data</h5>
+                <p class="card-text text-muted">
+                    Import customer information from CSV or Excel files. Data includes VIP ID, contact details, and registration information.
+                </p>
+                <a href="{% url 'upload_customers' %}" class="btn btn-primary">
+                    <i class="bi bi-upload"></i> Upload Customers
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 border-success">
+            <div class="card-body text-center p-4">
+                <div class="mb-3">
+                    <i class="bi bi-cart-fill text-success" style="font-size: 3rem;"></i>
+                </div>
+                <h5 class="card-title">Upload Sales Data</h5>
+                <p class="card-text text-muted">
+                    Import sales transactions from POS system. Includes invoice details, amounts, and customer purchase information.
+                </p>
+                <a href="{% url 'upload_sales' %}" class="btn btn-success">
+                    <i class="bi bi-upload"></i> Upload Sales
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 border-info">
+            <div class="card-body text-center p-4">
+                <div class="mb-3">
+                    <i class="bi bi-bar-chart-fill text-info" style="font-size: 3rem;"></i>
+                </div>
+                <h5 class="card-title">View Analytics</h5>
+                <p class="card-text text-muted">
+                    Analyze customer return rates, view statistics by VIP grade, and download comprehensive reports.
+                </p>
+                <a href="{% url 'analytics_dashboard' %}" class="btn btn-info text-white">
+                    <i class="bi bi-graph-up"></i> View Analytics
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> How It Works
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <h6><i class="bi bi-1-circle-fill text-primary"></i> Upload Customer Data</h6>
+                        <p class="text-muted small">
+                            Start by uploading your customer database. The system will automatically handle duplicates based on VIP ID and Phone number.
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <h6><i class="bi bi-2-circle-fill text-success"></i> Import Sales Transactions</h6>
+                        <p class="text-muted small">
+                            Upload sales data from your POS system. The system links transactions to customers automatically.
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <h6><i class="bi bi-3-circle-fill text-info"></i> Analyze & Export</h6>
+                        <p class="text-muted small">
+                            View comprehensive analytics including return rates by VIP grade and export detailed reports to Excel.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
