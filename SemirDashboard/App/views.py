@@ -3,11 +3,13 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
+from django.db.models import Min, Max, Count
 from datetime import datetime
 from .forms import CustomerUploadForm, SalesUploadForm
 from .utils import process_customer_file, process_sales_file
 from .analytics import (calculate_return_rate_analytics, export_analytics_to_excel,
                          calculate_coupon_analytics, export_coupon_to_excel)
+from .models import Customer, SalesTransaction
 
 logger = logging.getLogger('customer_analytics')
 
@@ -53,7 +55,18 @@ def upload_customers(request):
                 messages.error(request, f'Error: {e}')
     else:
         form = CustomerUploadForm()
-    return render(request, 'upload_customers.html', {'form': form})
+    
+    # Get date range statistics
+    date_stats = Customer.objects.aggregate(
+        min_date=Min('registration_date'),
+        max_date=Max('registration_date'),
+        total_count=Count('id')
+    )
+    
+    return render(request, 'upload_customers.html', {
+        'form': form,
+        'date_stats': date_stats
+    })
 
 
 @login_required
@@ -76,7 +89,18 @@ def upload_sales(request):
                 messages.error(request, f'Error: {e}')
     else:
         form = SalesUploadForm()
-    return render(request, 'upload_sales.html', {'form': form})
+    
+    # Get date range statistics
+    date_stats = SalesTransaction.objects.aggregate(
+        min_date=Min('sales_date'),
+        max_date=Max('sales_date'),
+        total_count=Count('id')
+    )
+    
+    return render(request, 'upload_sales.html', {
+        'form': form,
+        'date_stats': date_stats
+    })
 
 
 @login_required
