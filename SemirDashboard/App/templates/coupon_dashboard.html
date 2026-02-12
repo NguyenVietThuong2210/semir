@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 {% block title %}Coupon Analytics Dashboard{% endblock %}
 
 {% block extra_css %}
@@ -153,7 +154,7 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
             <div class="card-body">
                 <div class="stat-label" style="color:#856404">Total Amount (All Time)</div>
                 <div class="stat-value amount-vnd" style="color:#856404;font-size:1.15rem">
-                    {{ s.total_amount|floatformat:0 }} VND
+                    {{ s.total_amount|vnd }} VND
                 </div>
                 <small class="text-muted">From matched invoices</small>
             </div>
@@ -200,7 +201,7 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
             <div class="card-body">
                 <div class="stat-label" style="color:#856404">Total Amount (Period)</div>
                 <div class="stat-value amount-vnd" style="color:#856404;font-size:1.15rem">
-                    {{ s.total_amount|floatformat:0 }} VND
+                    {{ s.total_amount|vnd }} VND
                 </div>
                 <small class="text-muted">From matched invoices</small>
             </div>
@@ -258,7 +259,7 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                             <td class="text-end c-blue">
                                 <span class="badge" style="background:#0a7a9a">{{ s.used_pct_of_used }}%</span>
                             </td>
-                            <td class="text-end c-amber amount-vnd">{{ s.total_amount|floatformat:0 }} VND</td>
+                            <td class="text-end c-amber amount-vnd">{{ s.total_amount|vnd }} VND</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -303,7 +304,7 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                         <tr {% if d.note %}class="table-warning"{% endif %}>
                             <td><strong>{{ d.coupon_id }}</strong></td>
                             <td>{{ d.creator|default:"-" }}</td>
-                            <td class="text-end amount-vnd">{{ d.face_value|floatformat:0 }} VND</td>
+                            <td class="text-end amount-vnd">{{ d.face_value|vnd }} VND</td>
                             <td>{{ d.using_shop|default:"-" }}</td>
                             <td>{{ d.using_date|default:"-" }}</td>
                             <td>{{ d.vip_id|default:"-" }}</td>
@@ -311,7 +312,7 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                             <td>{{ d.customer_phone|default:"-" }}</td>
                             <td>{{ d.sales_day|default:"-" }}</td>
                             <td>{{ d.inv_shop|default:"-" }}</td>
-                            <td class="text-end amount-vnd">{{ d.amount|floatformat:0 }} VND</td>
+                            <td class="text-end amount-vnd">{{ d.amount|vnd }} VND</td>
                             <td>
                                 {% if d.note %}
                                 <span class="badge bg-warning text-dark small" title="{{ d.note }}">
