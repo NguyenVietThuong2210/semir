@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Register - Customer Analytics{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header text-center">
+                <h4><i class="bi bi-person-plus"></i> Create Account</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Username</label>
+                        <input type="text" class="form-control" name="username" id="id_username" required autofocus>
+                        <div class="form-text">Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_password1" class="form-label">Password</label>
+                        <input type="password" class="form-control" name="password1" id="id_password1" required>
+                        <div class="form-text">
+                            Your password must contain at least 8 characters and cannot be entirely numeric.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_password2" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" name="password2" id="id_password2" required>
+                        <div class="form-text">Enter the same password as before, for verification.</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-person-check"></i> Create Account
+                        </button>
+                    </div>
+                </form>
+                
+                <hr>
+                
+                <div class="text-center">
+                    <p class="mb-0">Already have an account? <a href="{% url 'login' %}">Login here</a></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6><i class="bi bi-info-circle"></i> Password Requirements:</h6>
+                <ul class="small mb-0">
+                    <li>Minimum 8 characters</li>
+                    <li>Cannot be too similar to username</li>
+                    <li>Cannot be entirely numeric</li>
+                    <li>Cannot be a commonly used password</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

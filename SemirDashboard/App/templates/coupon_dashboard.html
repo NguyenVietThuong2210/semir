@@ -1,0 +1,394 @@
+{% extends 'base.html' %}
+{% block title %}Coupon Analytics Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+.dark-tabs .nav-link {
+    background:#2c3e50; color:#bdc3c7;
+    border:1px solid #1a252f; border-radius:6px 6px 0 0;
+    margin-right:3px; font-weight:500; font-size:.9rem;
+}
+.dark-tabs .nav-link:hover  { background:#34495e; color:#ecf0f1; }
+.dark-tabs .nav-link.active { background:#366092; color:#fff; border-color:#366092; }
+.dark-tabs { border-bottom:none; }
+
+.stat-card { min-height:120px; border-radius:10px; }
+.stat-card .card-body { display:flex; flex-direction:column; justify-content:space-between; }
+.stat-value { font-size:1.7rem; font-weight:700; margin:4px 0; }
+.stat-label { font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; }
+
+td.c-green { background:rgba(25,135,84,.08)!important;  color:#000!important; }
+td.c-amber { background:rgba(255,193,7,.12)!important;  color:#000!important; }
+td.c-gray  { background:#f0f2f5!important;               color:#000!important; }
+td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
+
+.tbl-hdr-shop { background:#366092!important; color:#fff!important; }
+.tbl-hdr-used { background:#198754!important; color:#fff!important; }
+.tbl-hdr-pct  { background:#0d6efd!important; color:#fff!important; }
+.tbl-hdr-pct2 { background:#0a7a9a!important; color:#fff!important; }
+.tbl-hdr-amt  { background:#e6a817!important; color:#fff!important; }
+.tbl-hdr-gray { background:#6c757d!important; color:#fff!important; }
+.tbl-hdr-red  { background:#dc3545!important; color:#fff!important; }
+
+.badge.bg-warning { color:#000!important; }
+.amount-vnd { white-space:nowrap; font-variant-numeric:tabular-nums; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-ticket-perforated"></i> Coupon Analytics</h2>
+    <div>
+        <a href="{% url 'upload_coupons' %}" class="btn btn-outline-primary me-2 page-link">
+            <i class="bi bi-upload"></i> Upload Coupons
+        </a>
+        <a href="{% url 'export_coupons' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}"
+           class="btn btn-success">
+            <i class="bi bi-download"></i> Export to Excel
+        </a>
+    </div>
+</div>
+
+<!-- FILTER FORM -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" id="couponFilterForm" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-calendar"></i> Start Date (Using Date)</label>
+                <input type="date" class="form-control" id="fieldStartDate" name="start_date" value="{{ start_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-calendar"></i> End Date</label>
+                <input type="date" class="form-control" id="fieldEndDate" name="end_date" value="{{ end_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">
+                    <i class="bi bi-search"></i> Coupon ID Prefix
+                    <small class="text-muted">(e.g. SEMIR50K)</small>
+                </label>
+                <input type="text" class="form-control" id="fieldPrefix" name="coupon_id_prefix"
+                       value="{{ coupon_id_prefix }}"
+                       placeholder="Leave blank = all coupons">
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel"></i> Apply
+                </button>
+                <a href="{% url 'coupon_dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+            </div>
+        </form>
+
+        <div class="mt-2 pt-2 border-top">
+            <small class="text-muted me-2">Quick Date:</small>
+            <div class="btn-group btn-group-sm flex-wrap">
+                {% for label, days in quick_btns %}
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="{{ days }}">{{ label }}</button>
+                {% endfor %}
+                <button class="btn btn-outline-secondary" id="btnThisMonth">This Month</button>
+                <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
+                <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
+            </div>
+        </div>
+
+        {% if start_date or end_date or coupon_id_prefix %}
+        <div class="alert alert-info mt-2 mb-0 py-2 small">
+            <i class="bi bi-funnel-fill"></i>
+            Active filters:
+            {% if start_date and end_date %}
+            Date <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong>
+            {% elif start_date %}
+            From <strong>{{ start_date }}</strong>
+            {% elif end_date %}
+            Until <strong>{{ end_date }}</strong>
+            {% endif %}
+            {% if coupon_id_prefix %}
+            | Coupon ID starts with <strong class="text-primary">{{ coupon_id_prefix }}</strong>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ALL-TIME SUMMARY -->
+<p class="text-muted small mb-1 fw-semibold text-uppercase">
+    <i class="bi bi-infinity"></i> All-Time Summary
+    {% if coupon_id_prefix %}
+    <span class="badge bg-primary ms-1">Prefix: {{ coupon_id_prefix }}*</span>
+    {% endif %}
+</p>
+<div class="row g-2 mb-3">
+    {% with s=all_time %}
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm bg-light">
+            <div class="card-body">
+                <div class="stat-label">Total Coupons (All Time)</div>
+                <div class="stat-value">{{ s.total }}</div>
+                <small class="text-muted">All records in DB</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(25,135,84,.09)">
+            <div class="card-body">
+                <div class="stat-label text-success">Used (All Time)</div>
+                <div class="stat-value text-success">{{ s.used }}</div>
+                <small class="text-muted">{{ s.used_pct }}% of all</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(220,53,69,.08)">
+            <div class="card-body">
+                <div class="stat-label text-danger">Unused (All Time)</div>
+                <div class="stat-value text-danger">{{ s.unused }}</div>
+                <small class="text-muted">{{ s.unused_pct }}% of all</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(255,193,7,.14)">
+            <div class="card-body">
+                <div class="stat-label" style="color:#856404">Total Amount (All Time)</div>
+                <div class="stat-value amount-vnd" style="color:#856404;font-size:1.15rem">
+                    {{ s.total_amount|floatformat:0 }} VND
+                </div>
+                <small class="text-muted">From matched invoices</small>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+</div>
+
+<!-- PERIOD / FILTER SUMMARY -->
+<p class="text-muted small mb-1 fw-semibold text-uppercase mt-1">
+    <i class="bi bi-calendar-range"></i> Period / Filter Summary
+</p>
+<div class="row g-2 mb-4">
+    {% with s=period %}
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm bg-light">
+            <div class="card-body">
+                <div class="stat-label">Total Coupons (Period)</div>
+                <div class="stat-value">{{ s.total }}</div>
+                <small class="text-muted">Matching all filters</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(25,135,84,.09)">
+            <div class="card-body">
+                <div class="stat-label text-success">Used (Period)</div>
+                <div class="stat-value text-success">{{ s.used }}</div>
+                <small class="text-muted">{{ s.used_pct }}%</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(220,53,69,.08)">
+            <div class="card-body">
+                <div class="stat-label text-danger">Unused (Period)</div>
+                <div class="stat-value text-danger">{{ s.unused }}</div>
+                <small class="text-muted">{{ s.unused_pct }}%</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(255,193,7,.14)">
+            <div class="card-body">
+                <div class="stat-label" style="color:#856404">Total Amount (Period)</div>
+                <div class="stat-value amount-vnd" style="color:#856404;font-size:1.15rem">
+                    {{ s.total_amount|floatformat:0 }} VND
+                </div>
+                <small class="text-muted">From matched invoices</small>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+</div>
+
+<!-- TABS -->
+<div class="card mb-4">
+    <div class="card-header p-0 border-0" style="background:#1a252f">
+        <ul class="nav dark-tabs px-3 pt-2" id="couponTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#shopTab" type="button">
+                    <i class="bi bi-shop"></i> By Shop
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#detailTab" type="button">
+                    <i class="bi bi-list-ul"></i> Coupon Detail
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card-body tab-content p-0">
+
+        <!-- BY SHOP TAB -->
+        <div class="tab-pane fade show active p-3" id="shopTab">
+            <p class="text-muted small mb-2">
+                Sorted by Using Shop name (A-Z).
+                <strong>% Used / Total</strong> = Used / total coupons in period (all shops).
+                <strong>% Used / Used All</strong> = Used / total USED coupons across all shops.
+            </p>
+            {% if by_shop %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th class="tbl-hdr-shop">Using Shop</th>
+                            <th class="text-end tbl-hdr-used">Used Coupons</th>
+                            <th class="text-end tbl-hdr-pct">% Used / Total (Period)</th>
+                            <th class="text-end tbl-hdr-pct2">% Used / Total Used (All Shops)</th>
+                            <th class="text-end tbl-hdr-amt">Total Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in by_shop %}
+                        <tr>
+                            <td><strong>{{ s.shop_name }}</strong></td>
+                            <td class="text-end c-green"><strong>{{ s.used }}</strong></td>
+                            <td class="text-end c-blue">
+                                <span class="badge bg-primary">{{ s.used_pct_period }}%</span>
+                            </td>
+                            <td class="text-end c-blue">
+                                <span class="badge" style="background:#0a7a9a">{{ s.used_pct_of_used }}%</span>
+                            </td>
+                            <td class="text-end c-amber amount-vnd">{{ s.total_amount|floatformat:0 }} VND</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted text-center py-3">
+                No coupon data for this filter.
+                {% if coupon_id_prefix %}
+                Prefix <strong>{{ coupon_id_prefix }}</strong> returned no results.
+                {% endif %}
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- DETAIL TAB -->
+        <div class="tab-pane fade p-3" id="detailTab">
+            <p class="text-muted small mb-2">
+                Sorted by Coupon ID (ascending). Customer name + phone from VIP ID lookup.
+                <span class="badge bg-warning text-dark">Warning</span> = shop or date mismatch.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.86rem">
+                    <thead>
+                        <tr>
+                            <th class="tbl-hdr-shop">Coupon ID</th>
+                            <th class="tbl-hdr-gray">Creator</th>
+                            <th class="text-end tbl-hdr-gray">Face Value</th>
+                            <th class="tbl-hdr-shop">Using Shop</th>
+                            <th class="tbl-hdr-shop">Using Date</th>
+                            <th class="tbl-hdr-used">VIP ID</th>
+                            <th class="tbl-hdr-used">Name</th>
+                            <th class="tbl-hdr-used">Phone No</th>
+                            <th class="tbl-hdr-used">Sales Date</th>
+                            <th class="tbl-hdr-used">Shop (Invoice)</th>
+                            <th class="text-end tbl-hdr-amt">Amount</th>
+                            <th class="tbl-hdr-red">Note</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in details %}
+                        <tr {% if d.note %}class="table-warning"{% endif %}>
+                            <td><strong>{{ d.coupon_id }}</strong></td>
+                            <td>{{ d.creator|default:"-" }}</td>
+                            <td class="text-end amount-vnd">{{ d.face_value|floatformat:0 }} VND</td>
+                            <td>{{ d.using_shop|default:"-" }}</td>
+                            <td>{{ d.using_date|default:"-" }}</td>
+                            <td>{{ d.vip_id|default:"-" }}</td>
+                            <td>{{ d.customer_name|default:"-" }}</td>
+                            <td>{{ d.customer_phone|default:"-" }}</td>
+                            <td>{{ d.sales_day|default:"-" }}</td>
+                            <td>{{ d.inv_shop|default:"-" }}</td>
+                            <td class="text-end amount-vnd">{{ d.amount|floatformat:0 }} VND</td>
+                            <td>
+                                {% if d.note %}
+                                <span class="badge bg-warning text-dark small" title="{{ d.note }}">
+                                    &#9888; {{ d.note|truncatechars:35 }}
+                                </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="12" class="text-center text-muted py-3">No data</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if details|length >= 500 %}
+            <div class="p-3 text-muted small border-top">
+                Showing first 500 rows. Export to Excel for all data.
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+<div class="text-center mb-4">
+    <a href="{% url 'analytics_dashboard' %}" class="btn btn-outline-secondary me-2 page-link">
+        <i class="bi bi-bar-chart"></i> Customer Analytics
+    </a>
+    <a href="{% url 'home' %}" class="btn btn-outline-secondary page-link">
+        <i class="bi bi-house"></i> Home
+    </a>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function _fmt(d) {
+    return d.getFullYear() + '-'
+        + String(d.getMonth() + 1).padStart(2, '0') + '-'
+        + String(d.getDate()).padStart(2, '0');
+}
+
+/*
+ * _submitDates sets only the date fields then submits.
+ * The prefix field retains its value - we do NOT touch it.
+ */
+function _submitDates(s, e) {
+    document.getElementById('fieldStartDate').value = s;
+    document.getElementById('fieldEndDate').value   = e;
+    showLoading('Loading coupon data...');
+    document.getElementById('couponFilterForm').submit();
+}
+
+document.querySelectorAll('.quick-days-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var n = parseInt(this.dataset.days, 10), end = new Date(), start = new Date();
+        start.setDate(start.getDate() - n);
+        _submitDates(_fmt(start), _fmt(end));
+    });
+});
+document.getElementById('btnThisMonth').addEventListener('click', function() {
+    var n = new Date();
+    _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth(), 1)),
+                 _fmt(new Date(n.getFullYear(), n.getMonth() + 1, 0)));
+});
+document.getElementById('btnLastMonth').addEventListener('click', function() {
+    var n = new Date();
+    _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth() - 1, 1)),
+                 _fmt(new Date(n.getFullYear(), n.getMonth(), 0)));
+});
+document.getElementById('btnThisYear').addEventListener('click', function() {
+    var y = new Date().getFullYear();
+    _submitDates(y + '-01-01', y + '-12-31');
+});
+document.getElementById('couponFilterForm').addEventListener('submit', function() {
+    showLoading('Loading coupon data...');
+});
+</script>
+{% endblock %}
