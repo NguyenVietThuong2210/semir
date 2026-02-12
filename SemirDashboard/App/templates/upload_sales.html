@@ -2,61 +2,6 @@
 
 {% block title %}Upload Sales Transactions{% endblock %}
 
-{% block extra_head %}
-<style>
-#loading-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 9999;
-    justify-content: center;
-    align-items: center;
-}
-
-#loading-content {
-    background: white;
-    padding: 40px;
-    border-radius: 15px;
-    text-align: center;
-    max-width: 500px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-}
-
-.spinner-border-lg {
-    width: 4rem;
-    height: 4rem;
-    border-width: 0.4rem;
-}
-
-#loading-text {
-    font-size: 1.2rem;
-    font-weight: 500;
-    color: #333;
-    margin-top: 20px;
-}
-
-#loading-subtext {
-    font-size: 0.95rem;
-    color: #666;
-    margin-top: 10px;
-}
-
-.pulse {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.6; }
-    100% { opacity: 1; }
-}
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="row">
     <div class="col-md-8 mx-auto">
@@ -84,7 +29,7 @@
                     </p>
                 </div>
 
-                <form id="upload-form" method="post" enctype="multipart/form-data">
+                <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
                     
                     <div class="mb-3">
@@ -93,11 +38,10 @@
                         </label>
                         {{ form.file }}
                         <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
-                        <div id="file-size-info" class="form-text text-muted mt-2"></div>
                     </div>
 
                     <div class="d-grid gap-2">
-                        <button type="submit" id="upload-btn" class="btn btn-success btn-lg">
+                        <button type="submit" class="btn btn-success btn-lg">
                             <i class="bi bi-upload"></i> Upload Sales Data
                         </button>
                         <a href="{% url 'home' %}" class="btn btn-outline-secondary">
@@ -196,107 +140,4 @@
         </div>
     </div>
 </div>
-
-<!-- Loading Overlay -->
-<div id="loading-overlay">
-    <div id="loading-content">
-        <div class="spinner-border spinner-border-lg text-success" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
-        <div id="loading-text" class="pulse">
-            Processing sales transactions...
-        </div>
-        <div id="loading-subtext">
-            Please wait. This may take a few minutes for large files.<br>
-            <strong>Do not close this window.</strong>
-        </div>
-        <div class="mt-3">
-            <small class="text-muted">
-                <i class="bi bi-info-circle"></i> Processing in batches for optimal performance
-            </small>
-        </div>
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('upload-form');
-    const fileInput = document.querySelector('input[type="file"]');
-    const uploadBtn = document.getElementById('upload-btn');
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const loadingText = document.getElementById('loading-text');
-    const fileSizeInfo = document.getElementById('file-size-info');
-    
-    fileInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-            let sizeClass = 'text-muted';
-            let sizeMsg = `File size: ${sizeMB} MB`;
-            
-            if (sizeMB > 50) {
-                sizeClass = 'text-danger';
-                sizeMsg += ' - Large file! Upload may take 5-10 minutes.';
-            } else if (sizeMB > 20) {
-                sizeClass = 'text-warning';
-                sizeMsg += ' - Medium file. Upload may take 2-5 minutes.';
-            } else if (sizeMB > 5) {
-                sizeClass = 'text-info';
-                sizeMsg += ' - Upload may take 1-2 minutes.';
-            } else {
-                sizeClass = 'text-success';
-                sizeMsg += ' - Should upload quickly!';
-            }
-            
-            fileSizeInfo.className = `form-text ${sizeClass} mt-2`;
-            fileSizeInfo.innerHTML = `<i class="bi bi-info-circle"></i> ${sizeMsg}`;
-        }
-    });
-    
-    form.addEventListener('submit', function(e) {
-        const file = fileInput.files[0];
-        if (!file) {
-            e.preventDefault();
-            alert('Please select a file first!');
-            return;
-        }
-        
-        loadingOverlay.style.display = 'flex';
-        uploadBtn.disabled = true;
-        
-        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-        if (sizeMB > 50) {
-            loadingText.textContent = 'Processing large file (100k+ transactions)...';
-        } else if (sizeMB > 20) {
-            loadingText.textContent = 'Processing file (50k+ transactions)...';
-        } else {
-            loadingText.textContent = 'Processing sales transactions...';
-        }
-        
-        let messageIndex = 0;
-        const messages = [
-            'Reading file...',
-            'Matching with customers...',
-            'Processing in batches...',
-            'Creating transactions...',
-            'Updating existing records...',
-            'Almost done...'
-        ];
-        
-        setInterval(() => {
-            if (messageIndex < messages.length) {
-                loadingText.textContent = messages[messageIndex];
-                messageIndex++;
-            }
-        }, 10000);
-    });
-    
-    window.addEventListener('beforeunload', function(e) {
-        if (loadingOverlay.style.display === 'flex') {
-            e.preventDefault();
-            e.returnValue = 'Upload in progress. Are you sure you want to leave?';
-        }
-    });
-});
-</script>
 {% endblock %}
