@@ -177,7 +177,16 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
             cust = None; grade = 'No Grade'
             name = 'Unknown (No VIP)'; reg_date = None
         else:
-            cust     = purchases_sorted[0]['customer']
+            # FIX: Lookup customer directly from database by VIP ID
+            # Don't rely on foreign key which may be None
+            cust = purchases_sorted[0]['customer']
+            if not cust:
+                # Foreign key is None, lookup by VIP ID
+                try:
+                    cust = Customer.objects.get(vip_id=vip_id)
+                except Customer.DoesNotExist:
+                    cust = None
+            
             grade    = _normalize_grade(cust.vip_grade if cust else None)
             name     = (cust.name if cust else '') or 'Unknown'
             reg_date = cust.registration_date if cust else None

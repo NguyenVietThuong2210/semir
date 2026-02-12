@@ -1,3 +1,11 @@
+"""
+views.py - Customer Analytics Application
+
+Version: 3.1
+- Added database statistics with date ranges to upload pages
+- Shows min/max dates and total counts for better UX
+"""
+
 import logging
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -18,10 +26,13 @@ QUICK_BTNS = [
     ('Last 30 Days', 30),
     ('Last 90 Days', 90),
     ('Last Year',    365),
+    ('Year 2025',    '2025'),
+    ('Year 2026',    '2026'),
 ]
 
 
 def _parse_date(val, label, request):
+    """Parse date string to date object."""
     if not val:
         return None
     try:
@@ -32,11 +43,16 @@ def _parse_date(val, label, request):
 
 
 def home(request):
+    """Home page view."""
     return render(request, 'home.html')
 
 
 @login_required
 def upload_customers(request):
+    """
+    Upload customer data from Excel/CSV file.
+    Now includes database statistics showing date ranges.
+    """
     if request.method == 'POST':
         form = CustomerUploadForm(request.POST, request.FILES)
         if form.is_valid():
@@ -56,7 +72,7 @@ def upload_customers(request):
     else:
         form = CustomerUploadForm()
     
-    # Get date range statistics
+    # Get database statistics with date ranges
     date_stats = Customer.objects.aggregate(
         min_date=Min('registration_date'),
         max_date=Max('registration_date'),
@@ -71,6 +87,10 @@ def upload_customers(request):
 
 @login_required
 def upload_sales(request):
+    """
+    Upload sales transaction data from Excel/CSV file.
+    Now includes database statistics showing date ranges.
+    """
     if request.method == 'POST':
         form = SalesUploadForm(request.POST, request.FILES)
         if form.is_valid():
@@ -90,7 +110,7 @@ def upload_sales(request):
     else:
         form = SalesUploadForm()
     
-    # Get date range statistics
+    # Get database statistics with date ranges
     date_stats = SalesTransaction.objects.aggregate(
         min_date=Min('sales_date'),
         max_date=Max('sales_date'),
@@ -105,6 +125,7 @@ def upload_sales(request):
 
 @login_required
 def upload_coupons(request):
+    """Upload coupon data from Excel/CSV file."""
     if request.method == 'POST' and request.FILES.get('file'):
         f = request.FILES['file']
         logger.info("upload_coupons: %s user=%s", f.name, request.user)
@@ -123,6 +144,10 @@ def upload_coupons(request):
 
 @login_required
 def analytics_dashboard(request):
+    """
+    Main analytics dashboard showing return visit rate statistics.
+    Supports date range filtering via query parameters.
+    """
     start_date = request.GET.get('start_date', '')
     end_date   = request.GET.get('end_date', '')
     date_from  = _parse_date(start_date, 'start date', request)
@@ -156,6 +181,7 @@ def analytics_dashboard(request):
 
 @login_required
 def export_analytics(request):
+    """Export analytics data to Excel file."""
     start_date = request.GET.get('start_date', '')
     end_date   = request.GET.get('end_date', '')
     date_from  = _parse_date(start_date, 'start date', request)
@@ -176,6 +202,10 @@ def export_analytics(request):
 
 @login_required
 def coupon_dashboard(request):
+    """
+    Coupon analytics dashboard.
+    Supports date range filtering and coupon ID prefix search.
+    """
     start_date       = request.GET.get('start_date', '')
     end_date         = request.GET.get('end_date', '')
     coupon_id_prefix = request.GET.get('coupon_id_prefix', '').strip()
@@ -202,6 +232,7 @@ def coupon_dashboard(request):
 
 @login_required
 def export_coupons(request):
+    """Export coupon analytics to Excel file."""
     start_date       = request.GET.get('start_date', '')
     end_date         = request.GET.get('end_date', '')
     coupon_id_prefix = request.GET.get('coupon_id_prefix', '').strip()
@@ -218,7 +249,6 @@ def export_coupons(request):
     resp['Content-Disposition'] = f'attachment; filename="{fn}"'
     wb.save(resp)
     return resp
-
 
 
 @login_required
