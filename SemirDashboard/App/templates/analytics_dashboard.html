@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 {% block title %}Customer Analytics Dashboard{% endblock %}
 
 {% block extra_css %}
@@ -149,7 +150,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <div class="card-body">
                 <div class="stat-label" style="color:#856404">Total Amount (Period)</div>
                 <div class="stat-value amount-vnd" style="color:#856404;font-size:1.1rem">
-                    {{ overview.total_amount_period|floatformat:0 }} VND
+                    {{ overview.total_amount_period|vnd }} VND
                 </div>
                 <small class="text-muted">Sum of all sales</small>
             </div>
@@ -273,7 +274,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                 <span class="badge bg-warning">{{ g.return_rate_all_time }}%</span>
                             </td>
                             <td class="text-end c-gray">{{ g.total_invoices }}</td>
-                            <td class="text-end c-amber amount-vnd">{{ g.total_amount|floatformat:0 }} VND</td>
+                            <td class="text-end c-amber amount-vnd">{{ g.total_amount|vnd }} VND</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="8" class="text-center text-muted py-3">No data</td></tr>
@@ -310,7 +311,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                 <span class="badge bg-primary">{{ s.return_rate }}%</span>
                             </td>
                             <td class="text-end c-gray">{{ s.total_invoices }}</td>
-                            <td class="text-end c-amber amount-vnd">{{ s.total_amount|floatformat:0 }} VND</td>
+                            <td class="text-end c-amber amount-vnd">{{ s.total_amount|vnd }} VND</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="6" class="text-center text-muted py-3">No season data for this period</td></tr>
@@ -357,7 +358,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                         <span class="badge bg-primary" style="font-size:.8rem">{{ shop.return_rate }}%</span>
                                     </td>
                                     <td class="cv text-end c-gray">{{ shop.total_invoices }}</td>
-                                    <td class="cv text-end c-amber amount-vnd" style="font-size:.82rem">{{ shop.total_amount|floatformat:0 }}</td>
+                                    <td class="cv text-end c-amber amount-vnd" style="font-size:.82rem">{{ shop.total_amount|vnd }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -389,7 +390,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                         <span class="badge bg-primary" style="font-size:.73rem">{{ gd.return_rate }}%</span>
                                                     </td>
                                                     <td class="sv text-end">{{ gd.total_invoices }}</td>
-                                                    <td class="sv text-end amount-vnd" style="font-size:.77rem">{{ gd.total_amount|floatformat:0 }}</td>
+                                                    <td class="sv text-end amount-vnd" style="font-size:.77rem">{{ gd.total_amount|vnd }}</td>
                                                 </tr>
                                                 {% empty %}
                                                 <tr><td colspan="6" class="text-muted small text-center py-1">No data</td></tr>
@@ -423,7 +424,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                         <span class="badge bg-success" style="font-size:.73rem">{{ sd.return_rate }}%</span>
                                                     </td>
                                                     <td class="sv text-end">{{ sd.total_invoices }}</td>
-                                                    <td class="sv text-end amount-vnd" style="font-size:.77rem">{{ sd.total_amount|floatformat:0 }}</td>
+                                                    <td class="sv text-end amount-vnd" style="font-size:.77rem">{{ sd.total_amount|vnd }}</td>
                                                 </tr>
                                                 {% endif %}
                                                 {% empty %}
@@ -482,7 +483,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <span class="badge bg-light text-dark border">0</span>
                             {% endif %}
                         </td>
-                        <td class="text-end amount-vnd">{{ c.total_spent|floatformat:0 }} VND</td>
+                        <td class="text-end amount-vnd">{{ c.total_spent|vnd }} VND</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="8" class="text-center text-muted py-3">No data</td></tr>
