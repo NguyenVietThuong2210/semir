@@ -43,8 +43,8 @@ if not DEBUG:
     SESSION_COOKIE_SAMESITE = 'Lax'
     CSRF_COOKIE_SAMESITE = 'Lax'
     
-    # Session timeout (30 minutes)
-    SESSION_COOKIE_AGE = 1800
+    # Session timeout (60 minutes)
+    SESSION_COOKIE_AGE = 3600
 
 # Application definition
 INSTALLED_APPS = [
@@ -151,3 +151,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
+
+LOGIN_URL = '/login/'              # Fix 404 redirect
+LOGIN_REDIRECT_URL = '/'           # After login go to home
+LOGOUT_REDIRECT_URL = '/login/'    # After logout go to login
