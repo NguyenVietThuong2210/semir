@@ -2,6 +2,61 @@
 
 {% block title %}Upload Customers{% endblock %}
 
+{% block extra_head %}
+<style>
+#loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+}
+
+#loading-content {
+    background: white;
+    padding: 40px;
+    border-radius: 15px;
+    text-align: center;
+    max-width: 500px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.spinner-border-lg {
+    width: 4rem;
+    height: 4rem;
+    border-width: 0.4rem;
+}
+
+#loading-text {
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: #333;
+    margin-top: 20px;
+}
+
+#loading-subtext {
+    font-size: 0.95rem;
+    color: #666;
+    margin-top: 10px;
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-md-8 mx-auto">
@@ -24,9 +79,12 @@
                     <p class="mt-2 mb-0 small">
                         <i class="bi bi-exclamation-triangle"></i> Duplicate customers (same VIP ID and Phone) will be updated with new data.
                     </p>
+                    <p class="mt-2 mb-0 small text-success">
+                        <i class="bi bi-lightning-charge"></i> <strong>Optimized for large files!</strong> Can handle 100,000+ records efficiently.
+                    </p>
                 </div>
 
-                <form method="post" enctype="multipart/form-data">
+                <form id="upload-form" method="post" enctype="multipart/form-data">
                     {% csrf_token %}
                     
                     <div class="mb-3">
@@ -35,10 +93,11 @@
                         </label>
                         {{ form.file }}
                         <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
+                        <div id="file-size-info" class="form-text text-muted mt-2"></div>
                     </div>
 
                     <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary btn-lg">
+                        <button type="submit" id="upload-btn" class="btn btn-primary btn-lg">
                             <i class="bi bi-upload"></i> Upload Customer Data
                         </button>
                         <a href="{% url 'home' %}" class="btn btn-outline-secondary">
@@ -48,6 +107,55 @@
                 </form>
             </div>
         </div>
+
+        <!-- Database Statistics -->
+        {% if date_stats.total_count > 0 %}
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <i class="bi bi-database"></i> Current Database Statistics
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            <h3 class="text-primary mb-0">{{ date_stats.total_count|default:0 }}</h3>
+                            <small class="text-muted">Total Customers</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            {% if date_stats.min_date %}
+                            <h5 class="text-success mb-0">{{ date_stats.min_date|date:"Y-m-d" }}</h5>
+                            <small class="text-muted">Earliest Registration</small>
+                            {% else %}
+                            <h5 class="text-muted mb-0">N/A</h5>
+                            <small class="text-muted">Earliest Registration</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            {% if date_stats.max_date %}
+                            <h5 class="text-info mb-0">{{ date_stats.max_date|date:"Y-m-d" }}</h5>
+                            <small class="text-muted">Latest Registration</small>
+                            {% else %}
+                            <h5 class="text-muted mb-0">N/A</h5>
+                            <small class="text-muted">Latest Registration</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% if date_stats.min_date and date_stats.max_date %}
+                <div class="mt-3 text-center">
+                    <small class="text-muted">
+                        <i class="bi bi-calendar-range"></i> 
+                        Date Range: <strong>{{ date_stats.min_date|date:"M d, Y" }}</strong> to <strong>{{ date_stats.max_date|date:"M d, Y" }}</strong>
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
 
         <div class="card mt-4">
             <div class="card-header">
@@ -88,4 +196,116 @@
         </div>
     </div>
 </div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay">
+    <div id="loading-content">
+        <div class="spinner-border spinner-border-lg text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div id="loading-text" class="pulse">
+            Processing your file...
+        </div>
+        <div id="loading-subtext">
+            Please wait. This may take a few minutes for large files.<br>
+            <strong>Do not close this window.</strong>
+        </div>
+        <div class="mt-3">
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i> Processing in batches for optimal performance
+            </small>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('upload-form');
+    const fileInput = document.querySelector('input[type="file"]');
+    const uploadBtn = document.getElementById('upload-btn');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    const fileSizeInfo = document.getElementById('file-size-info');
+    
+    // Show file size info
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            let sizeClass = 'text-muted';
+            let sizeMsg = `File size: ${sizeMB} MB`;
+            
+            if (sizeMB > 50) {
+                sizeClass = 'text-danger';
+                sizeMsg += ' - Large file! Upload may take 5-10 minutes.';
+            } else if (sizeMB > 20) {
+                sizeClass = 'text-warning';
+                sizeMsg += ' - Medium file. Upload may take 2-5 minutes.';
+            } else if (sizeMB > 5) {
+                sizeClass = 'text-info';
+                sizeMsg += ' - Upload may take 1-2 minutes.';
+            } else {
+                sizeClass = 'text-success';
+                sizeMsg += ' - Should upload quickly!';
+            }
+            
+            fileSizeInfo.className = `form-text ${sizeClass} mt-2`;
+            fileSizeInfo.innerHTML = `<i class="bi bi-info-circle"></i> ${sizeMsg}`;
+        }
+    });
+    
+    // Show loading overlay on submit
+    form.addEventListener('submit', function(e) {
+        const file = fileInput.files[0];
+        if (!file) {
+            e.preventDefault();
+            alert('Please select a file first!');
+            return;
+        }
+        
+        // Show loading overlay
+        loadingOverlay.style.display = 'flex';
+        uploadBtn.disabled = true;
+        
+        // Update loading text based on file size
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        if (sizeMB > 50) {
+            loadingText.textContent = 'Processing large file (100k+ records)...';
+        } else if (sizeMB > 20) {
+            loadingText.textContent = 'Processing file (50k+ records)...';
+        } else {
+            loadingText.textContent = 'Processing your file...';
+        }
+        
+        // Animate loading messages
+        let messageIndex = 0;
+        const messages = [
+            'Reading file...',
+            'Validating data...',
+            'Processing in batches...',
+            'Creating records...',
+            'Updating existing records...',
+            'Almost done...'
+        ];
+        
+        const messageInterval = setInterval(() => {
+            if (messageIndex < messages.length) {
+                loadingText.textContent = messages[messageIndex];
+                messageIndex++;
+            }
+        }, 10000); // Change message every 10 seconds
+        
+        // Store interval ID to clear it later if needed
+        form.messageInterval = messageInterval;
+    });
+    
+    // Handle back button / page refresh
+    window.addEventListener('beforeunload', function(e) {
+        if (loadingOverlay.style.display === 'flex') {
+            e.preventDefault();
+            e.returnValue = 'Upload in progress. Are you sure you want to leave?';
+        }
+    });
+});
+</script>
 {% endblock %}
