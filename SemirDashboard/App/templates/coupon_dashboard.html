@@ -369,9 +369,18 @@ function _submitDates(s, e) {
 
 document.querySelectorAll('.quick-days-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
-        var n = parseInt(this.dataset.days, 10), end = new Date(), start = new Date();
-        start.setDate(start.getDate() - n);
-        _submitDates(_fmt(start), _fmt(end));
+        var days = this.dataset.days;
+        // Check if it's a year (2025, 2026) or number of days
+        if (days === '2025' || days === '2026') {
+            // Year button - set to full year
+            var year = parseInt(days, 10);
+            _submitDates(year + '-01-01', year + '-12-31');
+        } else {
+            // Days button - calculate date range
+            var n = parseInt(days, 10), end = new Date(), start = new Date();
+            start.setDate(start.getDate() - n);
+            _submitDates(_fmt(start), _fmt(end));
+        }
     });
 });
 document.getElementById('btnThisMonth').addEventListener('click', function() {
