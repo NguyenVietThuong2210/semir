@@ -3,7 +3,7 @@ set -e
 
 echo "🚀 Starting deployment..."
 
-cd ~/semir
+cd /home/semir/semir
 
 # Pull latest code
 echo "📥 Pulling latest code from git..."
