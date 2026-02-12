@@ -1,123 +1,203 @@
+import logging
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
 from datetime import datetime
 from .forms import CustomerUploadForm, SalesUploadForm
 from .utils import process_customer_file, process_sales_file
-from .analytics import calculate_return_rate_analytics, export_analytics_to_excel
+from .analytics import (calculate_return_rate_analytics, export_analytics_to_excel,
+                         calculate_coupon_analytics, export_coupon_to_excel)
+
+logger = logging.getLogger('customer_analytics')
+
+QUICK_BTNS = [
+    ('Last 7 Days',  7),
+    ('Last 30 Days', 30),
+    ('Last 90 Days', 90),
+    ('Last Year',    365),
+]
+
+
+def _parse_date(val, label, request):
+    if not val:
+        return None
+    try:
+        return datetime.strptime(val, '%Y-%m-%d').date()
+    except ValueError:
+        messages.warning(request, f'Invalid {label} format')
+        return None
 
 
 def home(request):
-    """Home page with navigation"""
     return render(request, 'home.html')
 
 
+@login_required
 def upload_customers(request):
-    """Upload customer data"""
     if request.method == 'POST':
         form = CustomerUploadForm(request.POST, request.FILES)
         if form.is_valid():
-            file = request.FILES['file']
-            
+            f = request.FILES['file']
+            logger.info("upload_customers: %s user=%s", f.name, request.user)
             try:
-                result = process_customer_file(file)
-                
-                messages.success(
-                    request,
-                    f'Successfully processed {result["total_processed"]} customers. '
-                    f'Created: {result["created"]}, Updated: {result["updated"]}'
-                )
-                
-                if result['errors']:
-                    for error in result['errors'][:5]:  # Show first 5 errors
-                        messages.warning(request, error)
-                    if len(result['errors']) > 5:
-                        messages.warning(request, f'...and {len(result["errors"]) - 5} more errors')
-                
+                result = process_customer_file(f)
+                messages.success(request,
+                    f"Processed {result['total_processed']} customers – "
+                    f"Created: {result['created']}, Updated: {result['updated']}")
+                for err in result.get('errors', [])[:5]:
+                    messages.warning(request, err)
                 return redirect('upload_customers')
-                
             except Exception as e:
-                messages.error(request, f'Error processing file: {str(e)}')
+                logger.exception("upload_customers error")
+                messages.error(request, f'Error: {e}')
     else:
         form = CustomerUploadForm()
-    
     return render(request, 'upload_customers.html', {'form': form})
 
 
+@login_required
 def upload_sales(request):
-    """Upload sales data"""
     if request.method == 'POST':
         form = SalesUploadForm(request.POST, request.FILES)
         if form.is_valid():
-            file = request.FILES['file']
-            
+            f = request.FILES['file']
+            logger.info("upload_sales: %s user=%s", f.name, request.user)
             try:
-                result = process_sales_file(file)
-                
-                messages.success(
-                    request,
-                    f'Successfully imported {result["created"]} sales transactions. '
-                    f'Skipped {result["skipped"]} duplicates.'
-                )
-                
-                if result['errors']:
-                    for error in result['errors'][:5]:
-                        messages.warning(request, error)
-                    if len(result['errors']) > 5:
-                        messages.warning(request, f'...and {len(result["errors"]) - 5} more errors')
-                
+                result = process_sales_file(f)
+                messages.success(request,
+                    f"Imported {result['created']} new transactions. "
+                    f"Updated (overwritten) {result['updated']} existing.")
+                for err in result.get('errors', [])[:5]:
+                    messages.warning(request, err)
                 return redirect('analytics_dashboard')
-                
             except Exception as e:
-                messages.error(request, f'Error processing file: {str(e)}')
+                logger.exception("upload_sales error")
+                messages.error(request, f'Error: {e}')
     else:
         form = SalesUploadForm()
-    
     return render(request, 'upload_sales.html', {'form': form})
 
 
+@login_required
+def upload_coupons(request):
+    if request.method == 'POST' and request.FILES.get('file'):
+        f = request.FILES['file']
+        logger.info("upload_coupons: %s user=%s", f.name, request.user)
+        try:
+            from .utils import process_coupon_file
+            result = process_coupon_file(f)
+            messages.success(request,
+                f"Coupon import complete – Created: {result['created']}, "
+                f"Updated (overwritten): {result['updated']}, Errors: {result['errors']}")
+        except Exception as e:
+            logger.exception("upload_coupons error")
+            messages.error(request, f'Error: {e}')
+        return redirect('upload_coupons')
+    return render(request, 'upload_coupons.html')
+
+
+@login_required
 def analytics_dashboard(request):
-    """Display return rate analytics dashboard"""
-    analytics_data = calculate_return_rate_analytics()
-    
-    if not analytics_data:
-        messages.info(request, 'No sales data available. Please upload sales data first.')
+    start_date = request.GET.get('start_date', '')
+    end_date   = request.GET.get('end_date', '')
+    date_from  = _parse_date(start_date, 'start date', request)
+    date_to    = _parse_date(end_date,   'end date',   request)
+
+    if date_from and date_to and date_from > date_to:
+        messages.error(request, 'Start date must be before end date')
+        date_from = date_to = None
+
+    logger.info("analytics_dashboard: from=%s to=%s user=%s", date_from, date_to, request.user)
+    data = calculate_return_rate_analytics(date_from=date_from, date_to=date_to)
+
+    if not data:
+        messages.info(request, 'No sales data. Please upload sales data first.')
         return redirect('upload_sales')
-    
-    context = {
-        'analytics': analytics_data,
-        'date_range': analytics_data['date_range'],
-        'overview': analytics_data['overview'],
-        'grade_stats': analytics_data['by_grade'],
-        'customer_details': analytics_data['customer_details'][:100],  # Limit display to first 100
-        'total_detail_count': len(analytics_data['customer_details'])
-    }
-    
-    return render(request, 'analytics_dashboard.html', context)
+
+    return render(request, 'analytics_dashboard.html', {
+        'date_range':         data['date_range'],
+        'session_label':      data.get('session_label'),
+        'overview':           data['overview'],
+        'grade_stats':        data['by_grade'],
+        'session_stats':      data['by_session'],
+        'shop_stats':         data['by_shop'],
+        'customer_details':   data['customer_details'][:100],
+        'total_detail_count': len(data['customer_details']),
+        'start_date':         start_date,
+        'end_date':           end_date,
+        'quick_btns':         QUICK_BTNS,
+    })
 
 
+@login_required
 def export_analytics(request):
-    """Export analytics to Excel file"""
-    analytics_data = calculate_return_rate_analytics()
-    
-    if not analytics_data:
-        messages.error(request, 'No data available to export')
+    start_date = request.GET.get('start_date', '')
+    end_date   = request.GET.get('end_date', '')
+    date_from  = _parse_date(start_date, 'start date', request)
+    date_to    = _parse_date(end_date,   'end date',   request)
+    data = calculate_return_rate_analytics(date_from=date_from, date_to=date_to)
+    if not data:
+        messages.error(request, 'No data to export')
         return redirect('analytics_dashboard')
-    
-    try:
-        wb = export_analytics_to_excel(analytics_data)
-        
-        # Create response
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        
-        filename = f'return_rate_analysis_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        wb.save(response)
-        return response
-        
-    except Exception as e:
-        messages.error(request, f'Error exporting data: {str(e)}')
-        return redirect('analytics_dashboard')
+    wb = export_analytics_to_excel(data)
+    fn = (f"return_visit_rate_{date_from}_{date_to}_{datetime.now().strftime('%H%M%S')}.xlsx"
+          if date_from and date_to else
+          f"return_visit_rate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+    resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f'attachment; filename="{fn}"'
+    wb.save(resp)
+    return resp
+
+
+@login_required
+def coupon_dashboard(request):
+    start_date       = request.GET.get('start_date', '')
+    end_date         = request.GET.get('end_date', '')
+    coupon_id_prefix = request.GET.get('coupon_id_prefix', '').strip()
+    date_from  = _parse_date(start_date, 'start date', request)
+    date_to    = _parse_date(end_date,   'end date',   request)
+
+    logger.info("coupon_dashboard: from=%s to=%s prefix=%s user=%s",
+                date_from, date_to, coupon_id_prefix, request.user)
+    data = calculate_coupon_analytics(
+        date_from=date_from, date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix or None)
+
+    return render(request, 'coupon_dashboard.html', {
+        'all_time':          data['all_time'],
+        'period':            data['period'],
+        'by_shop':           data['by_shop'],
+        'details':           data['details'],
+        'start_date':        start_date,
+        'end_date':          end_date,
+        'coupon_id_prefix':  coupon_id_prefix,
+        'quick_btns':        QUICK_BTNS,
+    })
+
+
+@login_required
+def export_coupons(request):
+    start_date       = request.GET.get('start_date', '')
+    end_date         = request.GET.get('end_date', '')
+    coupon_id_prefix = request.GET.get('coupon_id_prefix', '').strip()
+    date_from  = _parse_date(start_date, 'start date', request)
+    date_to    = _parse_date(end_date,   'end date',   request)
+    data = calculate_coupon_analytics(
+        date_from=date_from, date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix or None)
+    wb = export_coupon_to_excel(data, date_from=date_from, date_to=date_to)
+    fn = (f"coupon_{date_from}_{date_to}_{datetime.now().strftime('%H%M%S')}.xlsx"
+          if date_from and date_to else
+          f"coupon_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+    resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f'attachment; filename="{fn}"'
+    wb.save(resp)
+    return resp
+
+
+
+@login_required
+def formulas_page(request):
+    """Display formulas and definitions used in analytics."""
+    return render(request, 'formulas.html')

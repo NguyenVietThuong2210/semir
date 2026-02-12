@@ -1,100 +1,196 @@
 {% extends 'base.html' %}
-
 {% block title %}Home - Customer Analytics{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Uniform card action button: dark background, white text */
+.card-action-btn {
+    display: block;
+    width: 100%;
+    padding: .55rem 1rem;
+    background: #2c3e50;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    text-align: center;
+    text-decoration: none;
+    transition: background .2s, transform .1s;
+    margin-top: .75rem;
+}
+.card-action-btn:hover {
+    background: #1a252f;
+    color: #ffffff !important;
+    transform: translateY(-1px);
+    text-decoration: none;
+}
+.action-card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.09);
+    height: 100%;
+    transition: transform .15s, box-shadow .15s;
+}
+.action-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(0,0,0,.14);
+}
+.action-icon {
+    font-size: 2.4rem;
+    margin-bottom: .75rem;
+    display: block;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row mb-5">
+
+<div class="row mb-4">
     <div class="col-12 text-center">
-        <h1 class="display-4 mb-3">
-            <i class="bi bi-graph-up-arrow text-primary"></i>
-            Customer Analytics System
+        <h1 class="display-5 mb-2">
+            <i class="bi bi-graph-up-arrow" style="color:#366092"></i> Customer Analytics System
         </h1>
-        <p class="lead text-muted">Analyze customer return rates and purchasing behavior</p>
+        <p class="lead text-muted">Analyze customer return rates, purchasing behavior and coupon usage</p>
     </div>
 </div>
 
-<div class="row g-4">
-    <div class="col-md-4">
-        <div class="card h-100 border-primary">
-            <div class="card-body text-center p-4">
-                <div class="mb-3">
-                    <i class="bi bi-people-fill text-primary" style="font-size: 3rem;"></i>
-                </div>
-                <h5 class="card-title">Upload Customer Data</h5>
-                <p class="card-text text-muted">
-                    Import customer information from CSV or Excel files. Data includes VIP ID, contact details, and registration information.
+{# ── 5 ACTION CARDS ──────────────────────────────────── #}
+<div class="row g-3 mb-4">
+
+    {# 1 - Upload Customers #}
+    <div class="col-md-6 col-xl">
+        <div class="card action-card" style="border-top:4px solid #366092">
+            <div class="card-body d-flex flex-column text-center p-4">
+                <i class="bi bi-people-fill action-icon" style="color:#366092"></i>
+                <h5 class="card-title mb-1">Upload Customers</h5>
+                <p class="card-text text-muted small flex-grow-1">
+                    Import customer records from CSV or Excel.
+                    Duplicate VIP ID + Phone data is overwritten.
                 </p>
-                <a href="{% url 'upload_customers' %}" class="btn btn-primary">
+                <a href="{% url 'upload_customers' %}" class="card-action-btn page-link">
                     <i class="bi bi-upload"></i> Upload Customers
                 </a>
             </div>
         </div>
     </div>
 
-    <div class="col-md-4">
-        <div class="card h-100 border-success">
-            <div class="card-body text-center p-4">
-                <div class="mb-3">
-                    <i class="bi bi-cart-fill text-success" style="font-size: 3rem;"></i>
-                </div>
-                <h5 class="card-title">Upload Sales Data</h5>
-                <p class="card-text text-muted">
-                    Import sales transactions from POS system. Includes invoice details, amounts, and customer purchase information.
+    {# 2 - Upload Sales #}
+    <div class="col-md-6 col-xl">
+        <div class="card action-card" style="border-top:4px solid #198754">
+            <div class="card-body d-flex flex-column text-center p-4">
+                <i class="bi bi-cart-fill action-icon" style="color:#198754"></i>
+                <h5 class="card-title mb-1">Upload Sales</h5>
+                <p class="card-text text-muted small flex-grow-1">
+                    Import POS sales transactions from CSV or Excel.
+                    Duplicate Invoice Number data is overwritten.
                 </p>
-                <a href="{% url 'upload_sales' %}" class="btn btn-success">
+                <a href="{% url 'upload_sales' %}" class="card-action-btn page-link">
                     <i class="bi bi-upload"></i> Upload Sales
                 </a>
             </div>
         </div>
     </div>
 
-    <div class="col-md-4">
-        <div class="card h-100 border-info">
-            <div class="card-body text-center p-4">
-                <div class="mb-3">
-                    <i class="bi bi-bar-chart-fill text-info" style="font-size: 3rem;"></i>
-                </div>
-                <h5 class="card-title">View Analytics</h5>
-                <p class="card-text text-muted">
-                    Analyze customer return rates, view statistics by VIP grade, and download comprehensive reports.
+    {# 3 - Upload Coupons #}
+    <div class="col-md-6 col-xl">
+        <div class="card action-card" style="border-top:4px solid #d4920a">
+            <div class="card-body d-flex flex-column text-center p-4">
+                <i class="bi bi-ticket-perforated action-icon" style="color:#d4920a"></i>
+                <h5 class="card-title mb-1">Upload Coupons</h5>
+                <p class="card-text text-muted small flex-grow-1">
+                    Import coupon records from Excel.
+                    Duplicate Coupon ID data is overwritten.
                 </p>
-                <a href="{% url 'analytics_dashboard' %}" class="btn btn-info text-white">
-                    <i class="bi bi-graph-up"></i> View Analytics
+                <a href="{% url 'upload_coupons' %}" class="card-action-btn page-link">
+                    <i class="bi bi-upload"></i> Upload Coupons
                 </a>
+            </div>
+        </div>
+    </div>
+
+    {# 4 - Customer Analytics #}
+    <div class="col-md-6 col-xl">
+        <div class="card action-card" style="border-top:4px solid #0a7a9a">
+            <div class="card-body d-flex flex-column text-center p-4">
+                <i class="bi bi-bar-chart-fill action-icon" style="color:#0a7a9a"></i>
+                <h5 class="card-title mb-1">Customer Analytics</h5>
+                <p class="card-text text-muted small flex-grow-1">
+                    Return visit rates by VIP grade, season and shop.
+                    Filter by date range and export Excel reports.
+                </p>
+                <a href="{% url 'analytics_dashboard' %}" class="card-action-btn page-link">
+                    <i class="bi bi-bar-chart"></i> View Customer Analytics
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {# 5 - Coupon Analytics #}
+    <div class="col-md-6 col-xl">
+        <div class="card action-card" style="border-top:4px solid #6f42c1">
+            <div class="card-body d-flex flex-column text-center p-4">
+                <i class="bi bi-ticket-perforated action-icon" style="color:#6f42c1"></i>
+                <h5 class="card-title mb-1">Coupon Analytics</h5>
+                <p class="card-text text-muted small flex-grow-1">
+                    Track used/unused rates per shop.
+                    Filter by Coupon ID prefix and export Excel reports.
+                </p>
+                <a href="{% url 'coupon_dashboard' %}" class="card-action-btn page-link">
+                    <i class="bi bi-ticket-perforated"></i> View Coupon Analytics
+                </a>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{# ── HOW IT WORKS ─────────────────────────────────────── #}
+<div class="card">
+    <div class="card-header"><i class="bi bi-info-circle"></i> How It Works</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="d-flex">
+                    <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
+                          style="min-width:2rem;height:2rem;text-align:center;background:#366092">1</span>
+                    <div>
+                        <h6>Upload Customers</h6>
+                        <p class="text-muted small mb-0">Load your customer database. Duplicates are updated automatically.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex">
+                    <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
+                          style="min-width:2rem;height:2rem;text-align:center;background:#198754">2</span>
+                    <div>
+                        <h6>Import Sales</h6>
+                        <p class="text-muted small mb-0">Upload POS transactions. Linked to customers by VIP ID.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex">
+                    <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
+                          style="min-width:2rem;height:2rem;text-align:center;background:#d4920a">3</span>
+                    <div>
+                        <h6>Import Coupons</h6>
+                        <p class="text-muted small mb-0">Upload coupon file. Matched to invoices via Docket Number.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex">
+                    <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
+                          style="min-width:2rem;height:2rem;text-align:center;background:#2c3e50">4</span>
+                    <div>
+                        <h6>Analyze and Export</h6>
+                        <p class="text-muted small mb-0">Filter by date, view return rates and export full Excel reports.</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mt-5">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <i class="bi bi-info-circle"></i> How It Works
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <h6><i class="bi bi-1-circle-fill text-primary"></i> Upload Customer Data</h6>
-                        <p class="text-muted small">
-                            Start by uploading your customer database. The system will automatically handle duplicates based on VIP ID and Phone number.
-                        </p>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <h6><i class="bi bi-2-circle-fill text-success"></i> Import Sales Transactions</h6>
-                        <p class="text-muted small">
-                            Upload sales data from your POS system. The system links transactions to customers automatically.
-                        </p>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <h6><i class="bi bi-3-circle-fill text-info"></i> Analyze & Export</h6>
-                        <p class="text-muted small">
-                            View comprehensive analytics including return rates by VIP grade and export detailed reports to Excel.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}

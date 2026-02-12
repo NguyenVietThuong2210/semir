@@ -1,0 +1,275 @@
+{% extends 'base.html' %}
+{% block title %}Formulas & Definitions{% endblock %}
+
+{% block extra_css %}
+<style>
+.formula-card { border-left: 4px solid #366092; }
+.formula-code { background: #f8f9fa; padding: 1rem; border-radius: 6px; font-family: 'Courier New', monospace; }
+.example-box { background: #e7f3ff; border-left: 3px solid #0d6efd; padding: 1rem; margin: 1rem 0; }
+.def-term { font-weight: 600; color: #366092; }
+.formula-math { font-size: 1.05rem; color: #2c3e50; font-weight: 500; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+    <h2><i class="bi bi-calculator"></i> Formulas & Definitions</h2>
+    <p class="text-muted">
+        This page explains all calculations and metrics used in the Customer Analytics and Coupon Analytics dashboards.
+    </p>
+</div>
+
+<!-- KEY METRICS DEFINITIONS (MOVED TO TOP) -->
+<div class="card formula-card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-book"></i> Key Metric Definitions</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="fw-bold">Period Metrics</h6>
+                <dl>
+                    <dt>New Members (Period)</dt>
+                    <dd>Customers whose Registration Date falls within the selected period</dd>
+                    
+                    <dt>Active Customers (Period)</dt>
+                    <dd>Total unique customers (VIP IDs) who made purchases in the period</dd>
+                    
+                    <dt>Returning Customers (Period)</dt>
+                    <dd>Count of customers with return_visits > 0</dd>
+                    
+                    <dt>Total Amount (Period)</dt>
+                    <dd>Sum of sales_amount for all transactions in the period (includes VIP ID = 0)</dd>
+                    
+                    <dt>Buyer Without Info (Period)</dt>
+                    <dd>Number of invoices with VIP ID = 0, blank, or null</dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <h6 class="fw-bold">All-Time Metrics</h6>
+                <dl>
+                    <dt>Total Customers (All Time)</dt>
+                    <dd>Total count of records in Customer table</dd>
+                    
+                    <dt>Member Active (All Time)</dt>
+                    <dd>Customers with points > 0</dd>
+                    
+                    <dt>Member Inactive (All Time)</dt>
+                    <dd>Customers with points = 0</dd>
+                    
+                    <dt>Return Visit Rate (All Time)</dt>
+                    <dd>(Returning Customers / Total Customers in DB) × 100</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CUSTOMER ANALYTICS SECTION -->
+<div class="card formula-card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-person-check"></i> Customer Analytics Formulas</h5>
+    </div>
+    <div class="card-body">
+
+        <!-- Return Visits Formula -->
+        <h6 class="fw-bold mb-3">1. Return Visits Calculation</h6>
+        <p>The <span class="def-term">Return Visits</span> metric counts how many times a customer came back AFTER their initial visit.</p>
+        
+        <div class="formula-code">
+            <strong>Rule:</strong><br>
+            IF Registration Date == First Purchase Date:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases - 1<br>
+            ELSE:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases<br><br>
+            
+            is_returning = (return_visits > 0)
+        </div>
+
+        <div class="example-box">
+            <strong>Example 1:</strong> Customer registers on Jan 1 and makes 3 purchases on Jan 1<br>
+            - Registration Date = Jan 1<br>
+            - First Purchase Date = Jan 1<br>
+            - Total Purchases = 3<br>
+            - <strong>Return Visits = 3 - 1 = 2</strong> (first purchase is initial visit, next 2 are returns)<br>
+            - Is Returning = True
+        </div>
+
+        <div class="example-box">
+            <strong>Example 2:</strong> Customer registers on Jan 1, makes first purchase on Jan 5 (1 invoice)<br>
+            - Registration Date = Jan 1<br>
+            - First Purchase Date = Jan 5<br>
+            - Total Purchases = 1<br>
+            - <strong>Return Visits = 1</strong> (they already came once to register, so first purchase is a return)<br>
+            - Is Returning = True
+        </div>
+
+        <div class="example-box">
+            <strong>Example 3:</strong> Customer with no registration date, makes 2 purchases<br>
+            - Registration Date = None<br>
+            - First Purchase Date = Jan 10<br>
+            - Total Purchases = 2<br>
+            - <strong>Return Visits = 2</strong> (without reg date, we assume they visited before to get VIP ID)<br>
+            - Is Returning = True
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Return Visit Rate -->
+        <h6 class="fw-bold mb-3">2. Return Visit Rate</h6>
+        <p class="formula-math">
+            Return Visit Rate (Period) % = (Returning Customers / Active Customers) × 100
+        </p>
+        <ul>
+            <li><span class="def-term">Returning Customers</span>: Number of customers with return_visits > 0</li>
+            <li><span class="def-term">Active Customers</span>: Total unique customers who made purchases in the period</li>
+        </ul>
+
+        <div class="example-box">
+            <strong>Example:</strong> In January 2026:<br>
+            - 100 unique customers made purchases<br>
+            - 75 of them have return_visits > 0<br>
+            - <strong>Return Visit Rate = (75 / 100) × 100 = 75%</strong>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- VIP ID = 0 Handling -->
+        <h6 class="fw-bold mb-3">3. VIP ID = 0 (Unknown Customers)</h6>
+        <p>All purchases with <code>VIP ID = 0</code>, blank, or null are treated as a <strong>single virtual "Unknown" customer</strong> with grade "No Grade".</p>
+        <ul>
+            <li>This customer is counted ONCE in Active Customers</li>
+            <li>If they have multiple invoices: return_visits = total_invoices - 1 (same rule)</li>
+            <li>Their purchases contribute to totals in grade, season, and shop breakdowns</li>
+            <li><span class="def-term">Buyer Without Info (Period)</span>: Count of invoices (not customers) with VIP ID = 0</li>
+        </ul>
+
+        <div class="example-box">
+            <strong>Example:</strong> 50 invoices have VIP ID = 0<br>
+            - Active Customers count: +1 (single "Unknown" customer)<br>
+            - Total Purchases for Unknown: 50<br>
+            - Return Visits for Unknown: 49<br>
+            - Buyer Without Info (Period): 50 invoices
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Season Logic -->
+        <h6 class="fw-bold mb-3">4. Season (Year-Aware)</h6>
+        <p>Seasons are defined as:</p>
+        <ul>
+            <li><strong>M2-4</strong>: February, March, April</li>
+            <li><strong>M5-7</strong>: May, June, July</li>
+            <li><strong>M8-10</strong>: August, September, October</li>
+            <li><strong>M11-1</strong>: November, December, January (spans 2 years)</li>
+        </ul>
+        <p>Each season is labeled with the year(s) it covers:</p>
+
+        <div class="example-box">
+            <strong>Examples of year-aware season labels:</strong><br>
+            - <code>M2-4 2025</code>: Feb-Apr 2025<br>
+            - <code>M11-1 2025-2026</code>: Nov 2025 + Dec 2025 + Jan 2026<br>
+            - <code>M11-1 2024-2025</code>: Nov 2024 + Dec 2024 + Jan 2025
+        </div>
+
+        <p class="mt-3">For date range Jan 2025 to May 2026, the "By Season" table shows all season windows with data:</p>
+        <ul>
+            <li>M11-1 2024-2025 (if Jan 2025 has data)</li>
+            <li>M2-4 2025</li>
+            <li>M5-7 2025</li>
+            <li>M8-10 2025</li>
+            <li>M11-1 2025-2026</li>
+            <li>M2-4 2026</li>
+            <li>M5-7 2026 (if May 2026 has data)</li>
+        </ul>
+
+        <hr class="my-4">
+
+        <!-- Grade Order -->
+        <h6 class="fw-bold mb-3">5. VIP Grade Order</h6>
+        <p>Grades are always sorted in this order:</p>
+        <ol>
+            <li>No Grade</li>
+            <li>Member</li>
+            <li>Silver</li>
+            <li>Gold</li>
+            <li>Diamond</li>
+        </ol>
+        <p class="small text-muted">Note: "Olden" and "Golden" are automatically normalized to "Gold"</p>
+
+    </div>
+</div>
+
+<!-- COUPON ANALYTICS SECTION -->
+<div class="card formula-card mb-4">
+    <div class="card-header" style="background:#6f42c1;color:#fff">
+        <h5 class="mb-0"><i class="bi bi-ticket-perforated"></i> Coupon Analytics Formulas</h5>
+    </div>
+    <div class="card-body">
+
+        <!-- Used % Calculations -->
+        <h6 class="fw-bold mb-3">1. Coupon Usage Percentages</h6>
+        
+        <p><span class="def-term">By Shop Table</span> shows two percentage calculations:</p>
+        
+        <div class="formula-code mb-3">
+            <strong>% Used / Total (Period):</strong><br>
+            = (Used Coupons at Shop / Total Coupons in Period - All Shops) × 100<br><br>
+            
+            <strong>% Used / Total Used (All Shops):</strong><br>
+            = (Used Coupons at Shop / Total USED Coupons - All Shops) × 100
+        </div>
+
+        <div class="example-box">
+            <strong>Example:</strong> Period has 1000 coupons total across all shops, 400 are used.<br>
+            - Shop A used 100 coupons<br>
+            - <strong>% Used / Total (Period) = (100 / 1000) × 100 = 10%</strong><br>
+            - <strong>% Used / Total Used (All Shops) = (100 / 400) × 100 = 25%</strong>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Coupon ID Prefix Filter -->
+        <h6 class="fw-bold mb-3">2. Coupon ID Prefix Filter</h6>
+        <p>The prefix filter is <strong>case-insensitive</strong> and matches the beginning of the Coupon ID.</p>
+        
+        <div class="example-box">
+            <strong>Example:</strong> Filter = <code>SEMIR50K</code><br>
+            Matches:<br>
+            - SEMIR50K001<br>
+            - SEMIR50K002<br>
+            - semir50k003 (case-insensitive)<br><br>
+            Does NOT match:<br>
+            - ABC-SEMIR50K (prefix must be at start)<br>
+            - SEMIR40K001 (different prefix)
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Customer Lookup -->
+        <h6 class="fw-bold mb-3">3. Customer Name & Phone in Coupon Detail</h6>
+        <p>When a coupon is used, we lookup the customer's name and phone number using the VIP ID from the matched invoice.</p>
+        <ul>
+            <li>If no invoice match: VIP ID, Name, Phone are blank</li>
+            <li>If invoice found but VIP ID = 0: Name = "-", Phone = "-"</li>
+            <li>If invoice found with valid VIP ID: Name and Phone from Customer table</li>
+        </ul>
+
+    </div>
+</div>
+
+<!-- FOOTER NAVIGATION -->
+<div class="text-center mb-4">
+    <a href="{% url 'analytics_dashboard' %}" class="btn btn-outline-primary me-2 page-link">
+        <i class="bi bi-bar-chart"></i> Customer Analytics
+    </a>
+    <a href="{% url 'coupon_dashboard' %}" class="btn btn-outline-secondary me-2 page-link">
+        <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+    </a>
+    <a href="{% url 'home' %}" class="btn btn-outline-secondary page-link">
+        <i class="bi bi-house"></i> Home
+    </a>
+</div>
+
+{% endblock %}
