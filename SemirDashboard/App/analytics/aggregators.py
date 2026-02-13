@@ -1,0 +1,323 @@
+"""
+App/analytics/aggregators.py
+
+Data aggregation functions for different dimensions.
+Handles by_grade, by_season, by_shop, and buyer_without_info analytics.
+
+Version: 3.3 - Fixed within-season return calculation
+"""
+import logging
+from collections import defaultdict
+from decimal import Decimal
+
+from .calculations import calculate_return_visits, create_empty_bucket
+from .customer_utils import GRADE_ORDER, get_all_time_grade_counts
+from .season_utils import session_sort_key
+
+logger = logging.getLogger('customer_analytics')
+
+
+def aggregate_by_grade(customer_details):
+    """
+    Aggregate customer data by VIP grade.
+    
+    Args:
+        customer_details: List of customer detail dicts (already excludes VIP ID = 0)
+    
+    Returns:
+        List of grade stats dicts sorted by grade order
+    """
+    grade_buckets = defaultdict(create_empty_bucket)
+    
+    for d in customer_details:
+        g = d['vip_grade']
+        grade_buckets[g]['active'] += 1
+        grade_buckets[g]['amount'] += Decimal(str(d['total_spent']))
+        grade_buckets[g]['invoices'] += d['total_purchases']
+        if d['return_visits'] > 0:
+            grade_buckets[g]['returning'] += 1
+    
+    # Ensure all grades exist
+    for g in GRADE_ORDER:
+        if g not in grade_buckets:
+            _ = grade_buckets[g]
+    
+    # Get all-time grade counts from database
+    grade_db = get_all_time_grade_counts()
+    
+    # Build stats list
+    grade_stats = []
+    for grade in sorted(grade_buckets, key=lambda x: GRADE_ORDER.get(x, 99)):
+        s = grade_buckets[grade]
+        tdb = grade_db.get(grade, 0)
+        grade_stats.append({
+            'grade': grade,
+            'total_customers': s['active'],
+            'total_in_db': tdb,
+            'returning_customers': s['returning'],
+            'return_rate': round(s['returning'] / s['active'] * 100 if s['active'] else 0, 2),
+            'return_rate_all_time': round(s['returning'] / tdb * 100 if tdb else 0, 2),
+            'total_invoices': s['invoices'],
+            'total_amount': float(s['amount']),
+        })
+    
+    return grade_stats
+
+
+def aggregate_by_season(customer_purchases, get_customer_info_fn):
+    """
+    Aggregate customer data by season.
+    
+    Fixed v3.3: Now correctly counts BOTH within-season AND cross-season returns.
+    
+    Args:
+        customer_purchases: Dict[vip_id] -> List[purchase_dict]
+        get_customer_info_fn: Function to get customer info
+    
+    Returns:
+        List of season stats dicts sorted chronologically
+    """
+    session_buckets = defaultdict(create_empty_bucket)
+    
+    for vip_id, purchases in customer_purchases.items():
+        # Skip VIP ID = 0
+        if vip_id == '0':
+            continue
+        
+        # Get customer info
+        grade, reg_date, name = get_customer_info_fn(vip_id, purchases[0]['customer'])
+        
+        # Sort all purchases by date (needed for cross-season check)
+        all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        
+        # Group by session
+        by_sess = defaultdict(list)
+        for p in purchases:
+            by_sess[p['session']].append(p)
+        
+        for sk, sp in by_sess.items():
+            sp_sorted = sorted(sp, key=lambda x: x['date'])
+            session_first_date = sp_sorted[0]['date']
+            
+            # Customer is ACTIVE in this session
+            session_buckets[sk]['active'] += 1
+            session_buckets[sk]['invoices'] += len(sp)
+            session_buckets[sk]['amount'] += sum(p['amount'] for p in sp)
+            
+            # FIX v3.3: Check BOTH within-season AND cross-season returns
+            # 1. Calculate return visits WITHIN this season
+            _, is_ret_in_season = calculate_return_visits(sp_sorted, reg_date)
+            
+            # 2. Check if has prior purchases BEFORE this season
+            has_prior_purchases = any(p['date'] < session_first_date for p in all_purchases_sorted)
+            
+            # Customer is returning if:
+            # - Has multiple invoices in this season (is_ret_in_season), OR
+            # - Has purchased before this season (has_prior_purchases)
+            if is_ret_in_season or has_prior_purchases:
+                session_buckets[sk]['returning'] += 1
+    
+    # Build stats list
+    session_stats = []
+    for key in sorted(session_buckets, key=session_sort_key):
+        s = session_buckets[key]
+        ac = s['active']
+        rc = s['returning']
+        session_stats.append({
+            'session': key,
+            'total_customers': ac,
+            'returning_customers': rc,
+            'return_rate': round(rc / ac * 100 if ac else 0, 2),
+            'total_invoices': s['invoices'],
+            'total_amount': float(s['amount']),
+        })
+    
+    logger.info("session_stats: %d rows", len(session_stats))
+    return session_stats
+
+
+def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys):
+    """
+    Aggregate customer data by shop with sub-breakdowns.
+    
+    Fixed v3.3: Shop→Season now counts within-season returns correctly.
+    
+    Args:
+        customer_purchases: Dict[vip_id] -> List[purchase_dict]
+        get_customer_info_fn: Function to get customer info
+        all_session_keys: List of all season keys (for consistent shop sub-breakdowns)
+    
+    Returns:
+        List of shop stats dicts with by_grade and by_session breakdowns
+    """
+    shop_customers = defaultdict(set)
+    shop_invoices = defaultdict(int)
+    shop_amount = defaultdict(Decimal)
+    shop_returning = defaultdict(set)
+    shop_grade = defaultdict(lambda: defaultdict(lambda: {
+        'active': set(), 'returning': set(), 'invoices': 0, 'amount': Decimal(0)
+    }))
+    shop_sess = defaultdict(lambda: defaultdict(create_empty_bucket))
+    
+    for vip_id, purchases in customer_purchases.items():
+        # Skip VIP ID = 0
+        if vip_id == '0':
+            continue
+        
+        # Get customer info
+        grade, reg_date, name = get_customer_info_fn(vip_id, purchases[0]['customer'])
+        
+        # Group purchases by shop
+        by_shop_visits = defaultdict(list)
+        for p in purchases:
+            by_shop_visits[p['shop']].append(p)
+        
+        for sh, sh_p in by_shop_visits.items():
+            shop_customers[sh].add(vip_id)
+            shop_invoices[sh] += len(sh_p)
+            for p in sh_p:
+                shop_amount[sh] += p['amount']
+            
+            # Shop-level returning calculation
+            _, ret = calculate_return_visits(sorted(sh_p, key=lambda x: x['date']), reg_date)
+            if ret:
+                shop_returning[sh].add(vip_id)
+            
+            # Shop → By Grade breakdown
+            shop_grade[sh][grade]['active'].add(vip_id)
+            if ret:
+                shop_grade[sh][grade]['returning'].add(vip_id)
+            for p in sh_p:
+                shop_grade[sh][grade]['invoices'] += 1
+                shop_grade[sh][grade]['amount'] += p['amount']
+            
+            # Shop → By Session - FIXED v3.3: Within-season + Cross-season
+            sh_p_sorted = sorted(sh_p, key=lambda x: x['date'])
+            
+            by_sess_shop = defaultdict(list)
+            for p in sh_p:
+                by_sess_shop[p['session']].append(p)
+            
+            for sk, sp in by_sess_shop.items():
+                sp_sorted = sorted(sp, key=lambda x: x['date'])
+                session_first_date = sp_sorted[0]['date']
+                
+                shop_sess[sh][sk]['active'] += 1
+                shop_sess[sh][sk]['invoices'] += len(sp)
+                shop_sess[sh][sk]['amount'] += sum(p['amount'] for p in sp)
+                
+                # FIX v3.3: Check BOTH within-season AND cross-season returns
+                # 1. Calculate return visits WITHIN this season
+                _, is_ret_in_season = calculate_return_visits(sp_sorted, reg_date)
+                
+                # 2. Check if has prior shop purchases BEFORE this season
+                has_prior_shop_purchases = any(p['date'] < session_first_date for p in sh_p_sorted)
+                
+                # Customer is returning if:
+                # - Has multiple invoices in this season (is_ret_in_season), OR
+                # - Has purchased at this shop before this season (has_prior_shop_purchases)
+                if is_ret_in_season or has_prior_shop_purchases:
+                    shop_sess[sh][sk]['returning'] += 1
+    
+    # Build shop stats list
+    shop_stats = []
+    for sh in shop_customers:
+        ac = len(shop_customers[sh])
+        rc = len(shop_returning[sh])
+        
+        # By grade list
+        by_grade_list = []
+        for grade in sorted(shop_grade[sh], key=lambda x: GRADE_ORDER.get(x, 99)):
+            gd = shop_grade[sh][grade]
+            a = len(gd['active'])
+            r = len(gd['returning'])
+            by_grade_list.append({
+                'grade': grade,
+                'total_customers': a,
+                'returning_customers': r,
+                'return_rate': round(r / a * 100 if a else 0, 2),
+                'total_invoices': gd['invoices'],
+                'total_amount': float(gd['amount']),
+            })
+        
+        # By season list
+        by_session_list = []
+        for key in all_session_keys:
+            sd = shop_sess[sh].get(key)
+            if sd is None:
+                sd = create_empty_bucket()
+            a = sd['active']
+            r = sd['returning']
+            by_session_list.append({
+                'session': key,
+                'total_customers': a,
+                'returning_customers': r,
+                'return_rate': round(r / a * 100 if a else 0, 2),
+                'total_invoices': sd['invoices'],
+                'total_amount': float(sd['amount']),
+            })
+        
+        shop_stats.append({
+            'shop_name': sh,
+            'total_customers': ac,
+            'returning_customers': rc,
+            'return_rate': round(rc / ac * 100 if ac else 0, 2),
+            'total_invoices': shop_invoices[sh],
+            'total_amount': float(shop_amount[sh]),
+            'by_grade': by_grade_list,
+            'by_session': by_session_list,
+        })
+    
+    # Sort by customer count
+    shop_stats.sort(key=lambda x: x['total_customers'], reverse=True)
+    return shop_stats
+
+
+def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, date_to):
+    """
+    Calculate analytics for VIP ID = 0 (buyers without customer info).
+    
+    Args:
+        vip_0_purchases_period: List of VIP ID = 0 purchases in period
+        all_sales: All sales transactions (for all-time calculation)
+        date_from: Period start date
+        date_to: Period end date
+    
+    Returns:
+        dict with period, all_time, and by_shop stats
+    """
+    # Period stats
+    period_invoices = len(vip_0_purchases_period)
+    period_amount = sum(p['amount'] for p in vip_0_purchases_period)
+    
+    # All-time stats (VIP ID = 0 only)
+    all_time_vip_0 = [s for s in all_sales if (s.vip_id or '').strip() in ('', '0', 'None')]
+    all_time_invoices = len(all_time_vip_0)
+    all_time_amount = sum(s.sales_amount or Decimal(0) for s in all_time_vip_0)
+    
+    # By shop (period)
+    shop_stats = defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)})
+    for p in vip_0_purchases_period:
+        shop = p['shop']
+        shop_stats[shop]['invoices'] += 1
+        shop_stats[shop]['amount'] += p['amount']
+    
+    shop_list = []
+    for shop_name in sorted(shop_stats.keys(), key=lambda s: shop_stats[s]['invoices'], reverse=True):
+        shop_list.append({
+            'shop_name': shop_name,
+            'invoices': shop_stats[shop_name]['invoices'],
+            'amount': float(shop_stats[shop_name]['amount']),
+        })
+    
+    return {
+        'period': {
+            'total_invoices': period_invoices,
+            'total_amount': float(period_amount),
+        },
+        'all_time': {
+            'total_invoices': all_time_invoices,
+            'total_amount': float(all_time_amount),
+        },
+        'by_shop': shop_list,
+    }
