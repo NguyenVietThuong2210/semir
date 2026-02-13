@@ -13,10 +13,12 @@ from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.db.models import Min, Max, Count
 from datetime import datetime
+
+from App.analytics.core import calculate_return_rate_analytics
+from App.analytics.coupon_analytics import calculate_coupon_analytics, export_coupon_to_excel
+from App.analytics.excel_export import export_analytics_to_excel
 from .forms import CustomerUploadForm, SalesUploadForm
 from .utils import process_customer_file, process_sales_file
-from .analytics import (calculate_return_rate_analytics, export_analytics_to_excel,
-                         calculate_coupon_analytics, export_coupon_to_excel)
 from .models import Customer, SalesTransaction
 
 logger = logging.getLogger('customer_analytics')
