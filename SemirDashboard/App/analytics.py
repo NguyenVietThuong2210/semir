@@ -1,11 +1,13 @@
 """
-analytics.py  --  v3.1 - FINAL VERSION WITH UNIFIED FUNCTIONS
+analytics.py  --  v3.2 - VIP ID = 0 EXCLUSION VERSION
 
-✅ ALL BUGS FIXED:
+✅ ALL BUGS FIXED + VIP ID = 0 PROPERLY HANDLED:
 1. Customer Details: Unified customer lookup function
 2. By Season: Cross-season returns calculated correctly
 3. Shop → By Season: Cross-shop-season returns calculated correctly  
 4. Shop → By Grade: Now uses unified customer lookup (fixes "No Grade" issue)
+5. VIP ID = 0: EXCLUDED from all customer/return rate calculations ⭐ NEW
+6. Buyer Without Info: Separate analytics for VIP ID = 0 ⭐ NEW
 
 RETURN VISIT FORMULA (user-confirmed):
   Registration Date = First Purchase Date:
@@ -237,14 +239,22 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
                 len(customer_purchases), buyer_no_info_invoices)
 
     # ========================================================================
-    # PERIOD-LEVEL METRICS
+    # PERIOD-LEVEL METRICS (EXCLUDING VIP ID = 0)
     # ========================================================================
     returning_customers   = set()
     new_members_in_period = set()
     customer_details      = []
     total_amount_period   = Decimal(0)
 
+    # Separate tracking for VIP ID = 0
+    vip_0_purchases = customer_purchases.get('0', [])
+    vip_0_amount = sum(p['amount'] for p in vip_0_purchases)
+
     for vip_id, purchases in customer_purchases.items():
+        # CRITICAL: Skip VIP ID = 0 for customer metrics
+        if vip_id == '0':
+            continue
+        
         purchases_sorted = sorted(purchases, key=lambda x: x['date'])
         n = len(purchases_sorted)
 
@@ -275,7 +285,8 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
             'total_spent':         float(amt),
         })
 
-    total_active    = len(customer_purchases)
+    # Calculate metrics EXCLUDING VIP ID = 0
+    total_active    = len([vid for vid in customer_purchases if vid != '0'])
     total_returning = len(returning_customers)
     return_rate_p   = round(total_returning / total_active          * 100, 2) if total_active          else 0
     return_rate_at  = round(total_returning / total_customers_in_db * 100, 2) if total_customers_in_db else 0
@@ -287,10 +298,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
         grade_db[g] = grade_db.get(g, 0) + row['cnt']
 
     # ========================================================================
-    # BY VIP GRADE (ALL PERIOD)
+    # BY VIP GRADE (ALL PERIOD - EXCLUDING VIP ID = 0)
     # ========================================================================
     grade_buckets = defaultdict(_empty_bucket)
-    for d in customer_details:
+    for d in customer_details:  # customer_details already excludes VIP ID = 0
         g = d['vip_grade']
         grade_buckets[g]['active']   += 1
         grade_buckets[g]['amount']   += Decimal(str(d['total_spent']))
@@ -318,11 +329,15 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
         })
 
     # ========================================================================
-    # BY SEASON (ALL PERIOD) - FIXED: Cross-season returns
+    # BY SEASON (ALL PERIOD) - FIXED: Cross-season returns, EXCLUDING VIP ID = 0
     # ========================================================================
     session_buckets = defaultdict(_empty_bucket)
 
     for vip_id, purchases in customer_purchases.items():
+        # CRITICAL: Skip VIP ID = 0
+        if vip_id == '0':
+            continue
+            
         # UNIFIED: Get customer info
         grade, reg_date, name = get_customer_info(vip_id, purchases[0]['customer'])
 
@@ -366,7 +381,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
     logger.info("session_stats: %d rows", len(session_stats))
 
     # ========================================================================
-    # SHOP STATS WITH SUB-BREAKDOWNS - ALL FIXED
+    # SHOP STATS WITH SUB-BREAKDOWNS - ALL FIXED, EXCLUDING VIP ID = 0
     # ========================================================================
     shop_customers  = defaultdict(set)
     shop_invoices   = defaultdict(int)
@@ -378,6 +393,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
     shop_sess       = defaultdict(lambda: defaultdict(_empty_bucket))
 
     for vip_id, purchases in customer_purchases.items():
+        # CRITICAL: Skip VIP ID = 0
+        if vip_id == '0':
+            continue
+            
         # UNIFIED: Get customer info (CRITICAL FIX for shop → by grade)
         grade, reg_date, name = get_customer_info(vip_id, purchases[0]['customer'])
 
@@ -483,6 +502,16 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
     logger.info("DONE  total_amount=%.2f  shops=%d  sessions=%d",
                 float(total_amount_period), len(shop_stats), len(session_stats))
 
+    # ========================================================================
+    # BUYER WITHOUT INFO (VIP ID = 0) ANALYTICS
+    # ========================================================================
+    buyer_without_info_stats = calculate_buyer_without_info(
+        vip_0_purchases, 
+        sales_list, 
+        date_from, 
+        date_to
+    )
+
     return {
         'date_range':    {'start': date_stats['start_date'], 'end': date_stats['end_date']},
         'session_label': _get_session_for_range(date_from, date_to),
@@ -502,6 +531,57 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
         'by_session':     session_stats,
         'by_shop':        shop_stats,
         'customer_details': customer_details,
+        'buyer_without_info_stats': buyer_without_info_stats,  # NEW
+    }
+
+
+def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, date_to):
+    """
+    Calculate analytics for VIP ID = 0 (buyers without customer info).
+    
+    Args:
+        vip_0_purchases_period: List of VIP ID = 0 purchases in period
+        all_sales: All sales transactions (for all-time calculation)
+        date_from: Period start date
+        date_to: Period end date
+    
+    Returns:
+        dict with period, all_time, and by_shop stats
+    """
+    # Period stats
+    period_invoices = len(vip_0_purchases_period)
+    period_amount = sum(p['amount'] for p in vip_0_purchases_period)
+    
+    # All-time stats (VIP ID = 0 only)
+    all_time_vip_0 = [s for s in all_sales if (s.vip_id or '').strip() in ('', '0', 'None')]
+    all_time_invoices = len(all_time_vip_0)
+    all_time_amount = sum(s.sales_amount or Decimal(0) for s in all_time_vip_0)
+    
+    # By shop (period)
+    shop_stats = defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)})
+    for p in vip_0_purchases_period:
+        shop = p['shop']
+        shop_stats[shop]['invoices'] += 1
+        shop_stats[shop]['amount'] += p['amount']
+    
+    shop_list = []
+    for shop_name in sorted(shop_stats.keys(), key=lambda s: shop_stats[s]['invoices'], reverse=True):
+        shop_list.append({
+            'shop_name': shop_name,
+            'invoices': shop_stats[shop_name]['invoices'],
+            'amount': float(shop_stats[shop_name]['amount']),
+        })
+    
+    return {
+        'period': {
+            'total_invoices': period_invoices,
+            'total_amount': float(period_amount),
+        },
+        'all_time': {
+            'total_invoices': all_time_invoices,
+            'total_amount': float(all_time_amount),
+        },
+        'by_shop': shop_list,
     }
 
 
