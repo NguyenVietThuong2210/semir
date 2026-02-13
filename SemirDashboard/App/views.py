@@ -175,6 +175,7 @@ def analytics_dashboard(request):
         'shop_stats':         data['by_shop'],
         'customer_details':   data['customer_details'][:100],
         'total_detail_count': len(data['customer_details']),
+        'buyer_without_info_stats': data.get('buyer_without_info_stats', {}),  # FIXED: Add this
         'start_date':         start_date,
         'end_date':           end_date,
         'quick_btns':         QUICK_BTNS,
