@@ -69,6 +69,10 @@ def _create_overview_sheet(wb, data, header_fill, header_font, header_align):
         ("Return Visit Rate (All Time)", f"{ov['return_rate_all_time']}%"),
         ("New Members (Period)", ov['new_members_in_period']),
         ("Buyer Without Info (Period)", ov['buyer_without_info']),
+        ("Total Invoices (Without VIP 0)", ov.get('total_invoices_without_vip0', 0)),
+        ("Total Amount (Without VIP 0)", f"{ov.get('total_amount_without_vip0', 0):,.0f} VND"),
+        ("Total Invoices (Include VIP 0)", ov.get('total_invoices_with_vip0', 0)),
+        ("Total Amount (Include VIP 0)", f"{ov.get('total_amount_with_vip0', 0):,.0f} VND"),
         ("Total Amount (Period)", f"{ov['total_amount_period']:,.0f} VND"),
     ]
     
@@ -109,7 +113,7 @@ def _create_season_sheet(wb, data, header_fill, header_font, header_align):
     """Create By Season sheet."""
     ws_session = wb.create_sheet("By Season")
     
-    headers = ["Season", "Active", "Returning", "Return Rate", "Invoices", "Amount (VND)"]
+    headers = ["Season", "Active", "Returning", "Return Rate", "Invoices (Customers)", "Amount (Customers)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_session.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -123,6 +127,8 @@ def _create_season_sheet(wb, data, header_fill, header_font, header_align):
         ws_session.cell(row=row_num, column=4, value=f"{session_stat['return_rate']}%")
         ws_session.cell(row=row_num, column=5, value=session_stat['total_invoices'])
         ws_session.cell(row=row_num, column=6, value=f"{session_stat['total_amount']:,.0f}")
+        ws_session.cell(row=row_num, column=7, value=session_stat.get('total_invoices_with_vip0', 0))
+        ws_session.cell(row=row_num, column=8, value=f"{session_stat.get('total_amount_with_vip0', 0):,.0f}")
     
     for col in range(1, 7):
         ws_session.column_dimensions[get_column_letter(col)].width = 18
@@ -132,7 +138,7 @@ def _create_shop_sheet(wb, data, header_fill, header_font, header_align):
     """Create By Shop sheet."""
     ws_shop = wb.create_sheet("By Shop")
     
-    headers = ["Shop", "Active", "Returning", "Return Rate", "Invoices", "Amount (VND)"]
+    headers = ["Shop", "Active", "Returning", "Return Rate", "Invoices (Customers)", "Amount (Customers)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_shop.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -146,6 +152,8 @@ def _create_shop_sheet(wb, data, header_fill, header_font, header_align):
         ws_shop.cell(row=row_num, column=4, value=f"{shop_stat['return_rate']}%")
         ws_shop.cell(row=row_num, column=5, value=shop_stat['total_invoices'])
         ws_shop.cell(row=row_num, column=6, value=f"{shop_stat['total_amount']:,.0f}")
+        ws_shop.cell(row=row_num, column=7, value=shop_stat.get('total_invoices_with_vip0', 0))
+        ws_shop.cell(row=row_num, column=8, value=f"{shop_stat.get('total_amount_with_vip0', 0):,.0f}")
     
     ws_shop.column_dimensions['A'].width = 30
     for col in range(2, 7):

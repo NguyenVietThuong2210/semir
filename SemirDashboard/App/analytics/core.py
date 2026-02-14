@@ -68,7 +68,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
     member_active_all_time = Customer.objects.filter(points__gt=0).count()
     member_inactive_all_time = Customer.objects.filter(points=0).count()
     
-    # Fetch sales data
+    # Fetch sales data (filtered by period)
     qs = SalesTransaction.objects.select_related('customer').order_by('sales_date')
     if date_from:
         qs = qs.filter(sales_date__gte=date_from)
@@ -78,6 +78,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
         return None
     
     sales_list = list(qs)
+    
+    # Also get ALL sales (unfiltered) for buyer without info all-time stats
+    all_sales_unfiltered = list(SalesTransaction.objects.all())
+    
     date_stats = qs.aggregate(start_date=Min('sales_date'), end_date=Max('sales_date'))
     logger.info("Transactions: %d", len(sales_list))
     
@@ -100,6 +104,9 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
     vip_0_purchases = customer_purchases.get('0', [])
     vip_0_amount = sum(p['amount'] for p in vip_0_purchases)
     
+    # NEW: Track invoice counts for VIP 0 totals
+    total_invoices_without_vip0 = 0
+    
     for vip_id, purchases in customer_purchases.items():
         # CRITICAL: Skip VIP ID = 0 for customer metrics
         if vip_id == '0':
@@ -107,6 +114,9 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
         
         purchases_sorted = sorted(purchases, key=lambda x: x['date'])
         n = len(purchases_sorted)
+        
+        # NEW: Count invoices WITHOUT VIP 0
+        total_invoices_without_vip0 += n
         
         # Get customer info
         grade, reg_date, name = get_customer_info(vip_id, purchases_sorted[0]['customer'])
@@ -145,6 +155,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
     return_rate_p = round(total_returning / total_active * 100, 2) if total_active else 0
     return_rate_at = round(total_returning / total_customers_in_db * 100, 2) if total_customers_in_db else 0
     
+    # NEW: Calculate totals WITH VIP 0
+    total_invoices_with_vip0 = total_invoices_without_vip0 + len(vip_0_purchases)
+    total_amount_with_vip0 = total_amount_period + vip_0_amount
+    
     # ========================================================================
     # AGGREGATE BY DIMENSIONS
     # ========================================================================
@@ -156,9 +170,11 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
     
     buyer_without_info_stats = calculate_buyer_without_info(
         vip_0_purchases,
-        sales_list,
+        all_sales_unfiltered,  # Use unfiltered sales for all-time stats
         date_from,
-        date_to
+        date_to,
+        total_invoices_with_vip0,
+        total_amount_with_vip0,
     )
     
     # Sort customer details by return visits
@@ -181,6 +197,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
             'total_customers_in_db': total_customers_in_db,
             'member_active_all_time': member_active_all_time,
             'member_inactive_all_time': member_inactive_all_time,
+            'total_invoices_without_vip0': total_invoices_without_vip0,
+            'total_amount_without_vip0': float(total_amount_period),
+            'total_invoices_with_vip0': total_invoices_with_vip0,
+            'total_amount_with_vip0': float(total_amount_with_vip0),
         },
         'by_grade': grade_stats,
         'by_session': session_stats,

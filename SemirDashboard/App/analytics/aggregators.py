@@ -78,10 +78,18 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn):
         List of season stats dicts sorted chronologically
     """
     session_buckets = defaultdict(create_empty_bucket)
+    session_vip0_invoices = defaultdict(int)
+    session_vip0_amount = defaultdict(lambda: Decimal(0))
     
     for vip_id, purchases in customer_purchases.items():
-        # Skip VIP ID = 0
+        # Track VIP 0 separately
         if vip_id == '0':
+            by_sess = defaultdict(list)
+            for p in purchases:
+                by_sess[p['session']].append(p)
+            for sk, sp in by_sess.items():
+                session_vip0_invoices[sk] += len(sp)
+                session_vip0_amount[sk] += sum(p['amount'] for p in sp)
             continue
         
         # Get customer info
@@ -123,6 +131,10 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn):
         s = session_buckets[key]
         ac = s['active']
         rc = s['returning']
+        
+        vip0_inv = session_vip0_invoices.get(key, 0)
+        vip0_amt = session_vip0_amount.get(key, Decimal(0))
+        
         session_stats.append({
             'session': key,
             'total_customers': ac,
@@ -130,6 +142,8 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn):
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'total_invoices': s['invoices'],
             'total_amount': float(s['amount']),
+            'total_invoices_with_vip0': s['invoices'] + vip0_inv,
+            'total_amount_with_vip0': float(s['amount'] + vip0_amt),
         })
     
     logger.info("session_stats: %d rows", len(session_stats))
@@ -159,9 +173,29 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
     }))
     shop_sess = defaultdict(lambda: defaultdict(create_empty_bucket))
     
+    # NEW: VIP 0 tracking
+    shop_vip0_invoices = defaultdict(int)
+    shop_vip0_amount = defaultdict(lambda: Decimal(0))
+    shop_sess_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
+    
     for vip_id, purchases in customer_purchases.items():
-        # Skip VIP ID = 0
+        # Track VIP 0
         if vip_id == '0':
+            by_shop = defaultdict(list)
+            for p in purchases:
+                by_shop[p['shop']].append(p)
+            
+            for sh, sh_p in by_shop.items():
+                shop_vip0_invoices[sh] += len(sh_p)
+                shop_vip0_amount[sh] += sum(p['amount'] for p in sh_p)
+                
+                # By session within shop
+                by_sess = defaultdict(list)
+                for p in sh_p:
+                    by_sess[p['session']].append(p)
+                for sk, sp in by_sess.items():
+                    shop_sess_vip0[sh][sk]['invoices'] += len(sp)
+                    shop_sess_vip0[sh][sk]['amount'] += sum(p['amount'] for p in sp)
             continue
         
         # Get customer info
@@ -246,6 +280,9 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             sd = shop_sess[sh].get(key)
             if sd is None:
                 sd = create_empty_bucket()
+            
+            vip0_sess = shop_sess_vip0[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
+            
             a = sd['active']
             r = sd['returning']
             by_session_list.append({
@@ -255,6 +292,8 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'return_rate': round(r / a * 100 if a else 0, 2),
                 'total_invoices': sd['invoices'],
                 'total_amount': float(sd['amount']),
+                'total_invoices_with_vip0': sd['invoices'] + vip0_sess['invoices'],
+                'total_amount_with_vip0': float(sd['amount'] + vip0_sess['amount']),
             })
         
         shop_stats.append({
@@ -264,6 +303,8 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'total_invoices': shop_invoices[sh],
             'total_amount': float(shop_amount[sh]),
+            'total_invoices_with_vip0': shop_invoices[sh] + shop_vip0_invoices.get(sh, 0),
+            'total_amount_with_vip0': float(shop_amount[sh] + shop_vip0_amount.get(sh, Decimal(0))),
             'by_grade': by_grade_list,
             'by_session': by_session_list,
         })
@@ -273,7 +314,8 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
     return shop_stats
 
 
-def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, date_to):
+def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, date_to,
+                                  total_invoices_all_period, total_amount_all_period):
     """
     Calculate analytics for VIP ID = 0 (buyers without customer info).
     
@@ -282,6 +324,8 @@ def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, d
         all_sales: All sales transactions (for all-time calculation)
         date_from: Period start date
         date_to: Period end date
+        total_invoices_all_period: Total invoices INCLUDING VIP 0 in period
+        total_amount_all_period: Total amount INCLUDING VIP 0 in period
     
     Returns:
         dict with period, all_time, and by_shop stats
@@ -289,6 +333,10 @@ def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, d
     # Period stats
     period_invoices = len(vip_0_purchases_period)
     period_amount = sum(p['amount'] for p in vip_0_purchases_period)
+    
+    # Calculate percentages
+    pct_invoices = round(period_invoices / total_invoices_all_period * 100, 2) if total_invoices_all_period else 0
+    pct_amount = round(period_amount / total_amount_all_period * 100, 2) if total_amount_all_period else 0
     
     # All-time stats (VIP ID = 0 only)
     all_time_vip_0 = [s for s in all_sales if (s.vip_id or '').strip() in ('', '0', 'None')]
@@ -304,16 +352,23 @@ def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, d
     
     shop_list = []
     for shop_name in sorted(shop_stats.keys(), key=lambda s: shop_stats[s]['invoices'], reverse=True):
+        inv = shop_stats[shop_name]['invoices']
+        amt = shop_stats[shop_name]['amount']
+        
         shop_list.append({
             'shop_name': shop_name,
-            'invoices': shop_stats[shop_name]['invoices'],
-            'amount': float(shop_stats[shop_name]['amount']),
+            'invoices': inv,
+            'amount': float(amt),
+            'pct_of_period_invoices': round(inv / total_invoices_all_period * 100, 2) if total_invoices_all_period else 0,
+            'pct_of_period_amount': round(amt / total_amount_all_period * 100, 2) if total_amount_all_period else 0,
         })
     
     return {
         'period': {
             'total_invoices': period_invoices,
             'total_amount': float(period_amount),
+            'pct_of_all_invoices': pct_invoices,
+            'pct_of_all_amount': pct_amount,
         },
         'all_time': {
             'total_invoices': all_time_invoices,
