@@ -25,14 +25,23 @@ td.c-gray  { background:#f0f2f5!important;               color:#000!important; }
 td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 
 .shop-tbl   { table-layout:fixed; width:100%; }
-.shop-tbl   .cn { width:20%; }
-.shop-tbl   .cv { width:11.43%; }
+.shop-tbl   .cn { width:30%; }
+.shop-tbl   .cv { width:10%; }
 
 .sub-tbl    { table-layout:fixed; width:100%; font-size:.82rem; }
-.sub-tbl    .sl { width:20%; }
-.sub-tbl    .sv { width:11.43%; }
+.sub-tbl    .sl { width:30%; }
+.sub-tbl    .sv { width:10%; }
 .sub-hdr th { background:#bdd7ee!important; color:#1f3864!important; font-size:.8rem; }
 .sub-ses th { background:#d5e8d4!important; color:#1a3d2b!important; font-size:.8rem; }
+
+/* Grade and Season Comparison Tables */
+.grade-compare-tbl { table-layout:fixed; width:100%; }
+.grade-compare-tbl .shop-col { width:30%; }
+.grade-compare-tbl .val-col { width:14%; }
+
+.season-compare-tbl { table-layout:fixed; width:100%; }
+.season-compare-tbl .shop-col { width:30%; }
+.season-compare-tbl .val-col { width:10%; }
 
 .amount-vnd { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .badge.bg-warning { color:#000!important; }
@@ -503,20 +512,20 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             {% regroup by_shop|dictsort:"shop_name" by shop_name as shops_list %}
             {% for grade_name in grade_stats %}
             <div class="card mb-3">
-                <div class="card-header" style="background:#366092;color:white">
+                <div class="card-header" style="background:#2c3e50;color:white">
                     <strong>GRADE: {{ grade_name.grade }}</strong>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
+                        <table class="table table-striped table-hover mb-0 grade-compare-tbl">
                             <thead style="background-color: #366092; color: white;">
                                 <tr>
-                                    <th>Shop</th>
-                                    <th class="text-end">Active</th>
-                                    <th class="text-end">Returning</th>
-                                    <th class="text-end">Return Rate</th>
-                                    <th class="text-end">Invoices</th>
-                                    <th class="text-end">Amount</th>
+                                    <th class="shop-col">Shop</th>
+                                    <th class="val-col text-end">Active</th>
+                                    <th class="val-col text-end">Returning</th>
+                                    <th class="val-col text-end">Return Rate</th>
+                                    <th class="val-col text-end">Invoices</th>
+                                    <th class="val-col text-end">Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -524,14 +533,14 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     {% for g in shop.by_grade %}
                                         {% if g.grade == grade_name.grade %}
                                         <tr>
-                                            <td><strong>{{ shop.shop_name }}</strong></td>
-                                            <td class="text-end">{{ g.total_customers }}</td>
-                                            <td class="text-end">{{ g.returning_customers }}</td>
-                                            <td class="text-end">
+                                            <td class="shop-col"><strong>{{ shop.shop_name }}</strong></td>
+                                            <td class="val-col text-end">{{ g.total_customers }}</td>
+                                            <td class="val-col text-end">{{ g.returning_customers }}</td>
+                                            <td class="val-col text-end">
                                                 <span class="badge bg-primary">{{ g.return_rate }}%</span>
                                             </td>
-                                            <td class="text-end">{{ g.total_invoices }}</td>
-                                            <td class="text-end amount-vnd">{{ g.total_amount|vnd }}</td>
+                                            <td class="val-col text-end">{{ g.total_invoices }}</td>
+                                            <td class="val-col text-end amount-vnd">{{ g.total_amount|vnd }}</td>
                                         </tr>
                                         {% endif %}
                                     {% endfor %}
@@ -552,22 +561,22 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             
             {% for season_name in session_stats %}
             <div class="card mb-3">
-                <div class="card-header" style="background:#366092;color:white">
+                <div class="card-header" style="background:#2c3e50;color:white">
                     <strong>SEASON: {{ season_name.session }}</strong>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
+                        <table class="table table-striped table-hover mb-0 season-compare-tbl">
                             <thead style="background-color: #366092; color: white;">
                                 <tr>
-                                    <th>Shop</th>
-                                    <th class="text-end">Active</th>
-                                    <th class="text-end">Returning</th>
-                                    <th class="text-end">Return Rate</th>
-                                    <th class="text-end">Invoices (Customers)</th>
-                                    <th class="text-end">Amount (Customers)</th>
-                                    <th class="text-end">Total Invoices</th>
-                                    <th class="text-end">Total Amount</th>
+                                    <th class="shop-col">Shop</th>
+                                    <th class="val-col text-end">Active</th>
+                                    <th class="val-col text-end">Returning</th>
+                                    <th class="val-col text-end">Return Rate</th>
+                                    <th class="val-col text-end">Invoices (Customers)</th>
+                                    <th class="val-col text-end">Amount (Customers)</th>
+                                    <th class="val-col text-end">Total Invoices</th>
+                                    <th class="val-col text-end">Total Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -575,16 +584,16 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     {% for s in shop.by_session %}
                                         {% if s.session == season_name.session %}
                                         <tr>
-                                            <td><strong>{{ shop.shop_name }}</strong></td>
-                                            <td class="text-end">{{ s.total_customers }}</td>
-                                            <td class="text-end">{{ s.returning_customers }}</td>
-                                            <td class="text-end">
+                                            <td class="shop-col"><strong>{{ shop.shop_name }}</strong></td>
+                                            <td class="val-col text-end">{{ s.total_customers }}</td>
+                                            <td class="val-col text-end">{{ s.returning_customers }}</td>
+                                            <td class="val-col text-end">
                                                 <span class="badge bg-primary">{{ s.return_rate }}%</span>
                                             </td>
-                                            <td class="text-end">{{ s.total_invoices }}</td>
-                                            <td class="text-end amount-vnd">{{ s.total_amount|vnd }}</td>
-                                            <td class="text-end">{{ s.total_invoices_with_vip0 }}</td>
-                                            <td class="text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }}</td>
+                                            <td class="val-col text-end">{{ s.total_invoices }}</td>
+                                            <td class="val-col text-end amount-vnd">{{ s.total_amount|vnd }}</td>
+                                            <td class="val-col text-end">{{ s.total_invoices_with_vip0 }}</td>
+                                            <td class="val-col text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }}</td>
                                         </tr>
                                         {% endif %}
                                     {% endfor %}
