@@ -28,9 +28,9 @@ QUICK_BTNS = [
     ('Last 30 Days', 30),
     ('Last 90 Days', 90),
     ('Last Year',    365),
-    ('Year 2025',    '2025'),
-    ('Year 2026',    '2026'),
 ]
+
+YEAR_BTNS = [2024, 2025, 2026]
 
 
 def _parse_date(val, label, request):
@@ -175,10 +175,11 @@ def analytics_dashboard(request):
         'shop_stats':         data['by_shop'],
         'customer_details':   data['customer_details'][:100],
         'total_detail_count': len(data['customer_details']),
-        'buyer_without_info_stats': data.get('buyer_without_info_stats', {}),  # FIXED: Add this
+        'buyer_without_info_stats': data.get('buyer_without_info_stats', {}),
         'start_date':         start_date,
         'end_date':           end_date,
         'quick_btns':         QUICK_BTNS,
+        'year_btns':          YEAR_BTNS,
     })
 
 

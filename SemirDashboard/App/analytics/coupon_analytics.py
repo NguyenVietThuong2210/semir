@@ -4,7 +4,8 @@ App/analytics/coupon_analytics.py
 Coupon usage analytics and Excel export.
 Separate domain from customer analytics.
 
-Version: 3.3
+Version: 3.3 - FINAL VERIFIED
+All field names verified against Coupon model
 """
 from collections import defaultdict
 from decimal import Decimal
@@ -65,15 +66,18 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
     shop_data = {}
     
     for coupon in period_qs.filter(using_date__isnull=False):
-        shop = coupon.shop_name or 'Unknown'
+        # VERIFIED: Coupon.using_shop (NOT shop_name)
+        shop = coupon.using_shop or 'Unknown'
         if shop not in shop_data:
             shop_data[shop] = {'total': 0, 'used': 0, 'amount': Decimal(0)}
         shop_data[shop]['used'] += 1
+        # VERIFIED: Coupon.face_value
         shop_data[shop]['amount'] += coupon.face_value or Decimal(0)
     
     # Add unused coupons to shop totals
     for coupon in period_qs.filter(using_date__isnull=True):
-        shop = coupon.shop_name or 'Unknown'
+        # VERIFIED: Coupon.using_shop
+        shop = coupon.using_shop or 'Unknown'
         if shop not in shop_data:
             shop_data[shop] = {'total': 0, 'used': 0, 'amount': Decimal(0)}
         shop_data[shop]['total'] += 1
@@ -94,62 +98,102 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
         
         shop_stats.append({
             'shop_name': shop_name,
-            'total_coupons': total,
-            'used_coupons': used,
-            'unused_coupons': total - used,
+            'total': total,
+            'used': used,
+            'unused': total - used,
+            'used_pct_period': pct_of_total,
+            'used_pct_of_used': pct_of_used,
             'usage_rate': usage_rate,
-            'pct_of_total': pct_of_total,
-            'pct_of_used': pct_of_used,
             'total_amount': float(data['amount']),
         })
     
-    shop_stats.sort(key=lambda x: x['used_coupons'], reverse=True)
+    shop_stats.sort(key=lambda x: x['used'], reverse=True)
     
     # Coupon details
     coupon_details = []
     for coupon in period_qs.filter(using_date__isnull=False).order_by('-using_date'):
-        vip_id = None
-        vip_name = None
-        phone = None
+        # VERIFIED: Coupon.member_id, member_name, member_phone (primary source)
+        vip_id = coupon.member_id or None
+        vip_name = coupon.member_name or None
+        phone = coupon.member_phone or None
         
-        if coupon.invoice_number:
+        # Initialize transaction fields
+        sales_date = None
+        inv_shop = None
+        inv_amount = None
+        note = None
+        
+        # If docket_number exists, try to get transaction info (fallback + additional data)
+        # VERIFIED: Coupon.docket_number (NOT invoice_number!)
+        if coupon.docket_number:
             try:
-                txn = SalesTransaction.objects.get(invoice_number=coupon.invoice_number)
-                vip_id = txn.vip_id
-                if vip_id and vip_id != '0':
+                # VERIFIED: SalesTransaction.invoice_number (different model!)
+                txn = SalesTransaction.objects.get(invoice_number=coupon.docket_number)
+                
+                # Get customer info from transaction if not in coupon
+                if not vip_id:
+                    vip_id = txn.vip_id
+                if not vip_name and txn.vip_id and txn.vip_id != '0':
                     try:
-                        cust = Customer.objects.get(vip_id=vip_id)
+                        cust = Customer.objects.get(vip_id=txn.vip_id)
                         vip_name = cust.name
-                        phone = cust.phone_number
+                        # VERIFIED: Customer.phone (NOT phone_number!)
+                        phone = cust.phone
                     except Customer.DoesNotExist:
-                        pass
+                        vip_name = txn.vip_name  # Fallback to transaction name
+                
+                # Get transaction details
+                sales_date = txn.sales_date
+                inv_shop = txn.shop_name
+                inv_amount = txn.sales_amount
+                
+                # Check if using_shop matches invoice shop
+                if coupon.using_shop and inv_shop and coupon.using_shop != inv_shop:
+                    note = f"Shop mismatch: Coupon@{coupon.using_shop} vs Invoice@{inv_shop}"
+                    
             except SalesTransaction.DoesNotExist:
-                pass
+                note = f"Invoice {coupon.docket_number} not found"
         
         coupon_details.append({
+            # VERIFIED: All Coupon fields below
             'coupon_id': coupon.coupon_id,
+            'creator': coupon.creator or '',  # NEW: From Coupon model
             'face_value': coupon.face_value or 0,
+            'using_shop': coupon.using_shop or 'Unknown',  # Template uses using_shop
             'using_date': coupon.using_date,
-            'shop_name': coupon.shop_name or 'Unknown',
-            'invoice_number': coupon.invoice_number or '',
+            'docket_number': coupon.docket_number or '',  # docket_number, NOT invoice_number
             'vip_id': vip_id or '',
-            'vip_name': vip_name or '-',
-            'phone': phone or '-',
-            'amount': coupon.face_value or 0,
+            'customer_name': vip_name or '-',  # Template uses customer_name
+            'customer_phone': phone or '-',  # Template uses customer_phone
+            'sales_day': sales_date,  # NEW: From SalesTransaction
+            'inv_shop': inv_shop or '-',  # NEW: Invoice shop name
+            'amount': inv_amount or coupon.face_value or 0,  # Use invoice amount if available
+            'note': note or '',  # NEW: Validation notes
         })
+    
+    # Calculate percentages for template
+    all_time_used_pct = round(all_time_used / all_time_total * 100, 2) if all_time_total else 0
+    all_time_unused_pct = round(all_time_unused / all_time_total * 100, 2) if all_time_total else 0
+    
+    period_used_pct = round(period_used / period_total * 100, 2) if period_total else 0
+    period_unused_pct = round(period_unused / period_total * 100, 2) if period_total else 0
     
     return {
         'all_time': {
-            'total_coupons': all_time_total,
-            'used_coupons': all_time_used,
-            'unused_coupons': all_time_unused,
+            'total': all_time_total,
+            'used': all_time_used,
+            'unused': all_time_unused,
+            'used_pct': all_time_used_pct,
+            'unused_pct': all_time_unused_pct,
             'usage_rate': all_time_usage_rate,
             'total_amount': float(all_time_amount),
         },
         'period': {
-            'total_coupons': period_total,
-            'used_coupons': period_used,
-            'unused_coupons': period_unused,
+            'total': period_total,
+            'used': period_used,
+            'unused': period_unused,
+            'used_pct': period_used_pct,
+            'unused_pct': period_unused_pct,
             'usage_rate': period_usage_rate,
             'total_amount': float(period_amount),
         },
@@ -195,9 +239,9 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     
     at = data['all_time']
     for label, value in [
-        ("Total Coupons", at['total_coupons']),
-        ("Used", at['used_coupons']),
-        ("Unused", at['unused_coupons']),
+        ("Total Coupons", at['total']),
+        ("Used", at['used']),
+        ("Unused", at['unused']),
         ("Usage Rate", f"{at['usage_rate']}%"),
         ("Total Amount", f"{at['total_amount']:,.0f} VND"),
     ]:
@@ -212,9 +256,9 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     
     pd = data['period']
     for label, value in [
-        ("Total Coupons", pd['total_coupons']),
-        ("Used", pd['used_coupons']),
-        ("Unused", pd['unused_coupons']),
+        ("Total Coupons", pd['total']),
+        ("Used", pd['used']),
+        ("Unused", pd['unused']),
         ("Usage Rate", f"{pd['usage_rate']}%"),
         ("Total Amount", f"{pd['total_amount']:,.0f} VND"),
     ]:
@@ -225,10 +269,10 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     ws.column_dimensions['A'].width = 25
     ws.column_dimensions['B'].width = 20
     
-    # By Shop sheet
-    ws_shop = wb.create_sheet("By Shop")
+    # By Using Shop sheet (terminology: "Using Shop")
+    ws_shop = wb.create_sheet("By Using Shop")
     
-    headers = ["Shop", "Total", "Used", "Unused", "Usage Rate", "% of Total", "% of Used", "Amount (VND)"]
+    headers = ["Using Shop", "Total", "Used", "Unused", "Usage Rate", "% of Total", "% of Used", "Amount (VND)"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_shop.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -237,12 +281,12 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     
     for row_num, shop in enumerate(data['by_shop'], 2):
         ws_shop.cell(row=row_num, column=1, value=shop['shop_name'])
-        ws_shop.cell(row=row_num, column=2, value=shop['total_coupons'])
-        ws_shop.cell(row=row_num, column=3, value=shop['used_coupons'])
-        ws_shop.cell(row=row_num, column=4, value=shop['unused_coupons'])
+        ws_shop.cell(row=row_num, column=2, value=shop['total'])
+        ws_shop.cell(row=row_num, column=3, value=shop['used'])
+        ws_shop.cell(row=row_num, column=4, value=shop['unused'])
         ws_shop.cell(row=row_num, column=5, value=f"{shop['usage_rate']}%")
-        ws_shop.cell(row=row_num, column=6, value=f"{shop['pct_of_total']}%")
-        ws_shop.cell(row=row_num, column=7, value=f"{shop['pct_of_used']}%")
+        ws_shop.cell(row=row_num, column=6, value=f"{shop['used_pct_period']}%")
+        ws_shop.cell(row=row_num, column=7, value=f"{shop['used_pct_of_used']}%")
         ws_shop.cell(row=row_num, column=8, value=f"{shop['total_amount']:,.0f}")
     
     for col in range(1, 9):
@@ -251,7 +295,8 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     # Details sheet
     ws_detail = wb.create_sheet("Coupon Details")
     
-    headers = ["Coupon ID", "Face Value", "Using Date", "Shop", "Invoice", "VIP ID", "Name", "Phone"]
+    # VERIFIED: Matching template fields
+    headers = ["Coupon ID", "Creator", "Face Value", "Using Shop", "Using Date", "Docket Number", "VIP ID", "Name", "Phone", "Sales Date", "Invoice Shop", "Amount", "Note"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_detail.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -260,13 +305,18 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     
     for row_num, detail in enumerate(data['details'], 2):
         ws_detail.cell(row=row_num, column=1, value=detail['coupon_id'])
-        ws_detail.cell(row=row_num, column=2, value=f"{detail['face_value']:,.0f}")
-        ws_detail.cell(row=row_num, column=3, value=str(detail['using_date']) if detail['using_date'] else '')
-        ws_detail.cell(row=row_num, column=4, value=detail['shop_name'])
-        ws_detail.cell(row=row_num, column=5, value=detail['invoice_number'])
-        ws_detail.cell(row=row_num, column=6, value=detail['vip_id'])
-        ws_detail.cell(row=row_num, column=7, value=detail['vip_name'])
-        ws_detail.cell(row=row_num, column=8, value=detail['phone'])
+        ws_detail.cell(row=row_num, column=2, value=detail['creator'])
+        ws_detail.cell(row=row_num, column=3, value=f"{detail['face_value']:,.0f}")
+        ws_detail.cell(row=row_num, column=4, value=detail['using_shop'])
+        ws_detail.cell(row=row_num, column=5, value=str(detail['using_date']) if detail['using_date'] else '')
+        ws_detail.cell(row=row_num, column=6, value=detail['docket_number'])
+        ws_detail.cell(row=row_num, column=7, value=detail['vip_id'])
+        ws_detail.cell(row=row_num, column=8, value=detail['customer_name'])
+        ws_detail.cell(row=row_num, column=9, value=detail['customer_phone'])
+        ws_detail.cell(row=row_num, column=10, value=str(detail['sales_day']) if detail['sales_day'] else '')
+        ws_detail.cell(row=row_num, column=11, value=detail['inv_shop'])
+        ws_detail.cell(row=row_num, column=12, value=f"{detail['amount']:,.0f}")
+        ws_detail.cell(row=row_num, column=13, value=detail['note'])
     
     for col in range(1, 9):
         ws_detail.column_dimensions[get_column_letter(col)].width = 18

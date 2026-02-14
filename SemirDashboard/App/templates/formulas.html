@@ -33,17 +33,26 @@
                     <dt>New Members (Period)</dt>
                     <dd>Customers whose Registration Date falls within the selected period</dd>
                     
-                    <dt>Active Customers (Period)</dt>
-                    <dd>Total unique customers (VIP IDs) who made purchases in the period</dd>
-                    
                     <dt>Returning Customers (Period)</dt>
-                    <dd>Count of customers with return_visits > 0</dd>
+                    <dd>Count of customers with at least 1 return visit in the period</dd>
                     
-                    <dt>Total Amount (Period)</dt>
-                    <dd>Sum of sales_amount for all transactions in the period (includes VIP ID = 0)</dd>
+                    <dt>Active (Period)</dt>
+                    <dd>Total unique customers (VIP IDs, excluding VIP ID = 0) who made purchases in the period</dd>
                     
-                    <dt>Buyer Without Info (Period)</dt>
-                    <dd>Number of invoices with VIP ID = 0, blank, or null</dd>
+                    <dt>Return Visit Rate (Period)</dt>
+                    <dd>(Returning Customers / Active Customers) × 100</dd>
+                    
+                    <dt>Invoices (Customers)</dt>
+                    <dd>Total invoices from customers with valid VIP IDs (excludes VIP ID = 0)</dd>
+                    
+                    <dt>Amount (Customers)</dt>
+                    <dd>Sum of sales_amount for transactions with valid VIP IDs (excludes VIP ID = 0)</dd>
+                    
+                    <dt>Total Invoices</dt>
+                    <dd>All invoices in period including VIP ID = 0</dd>
+                    
+                    <dt>Total Amount</dt>
+                    <dd>Sum of all sales_amount in period including VIP ID = 0</dd>
                 </dl>
             </div>
             <div class="col-md-6">
@@ -75,40 +84,38 @@
 
         <!-- Return Visits Formula -->
         <h6 class="fw-bold mb-3">1. Return Visits Calculation</h6>
-        <p>The <span class="def-term">Return Visits</span> metric counts how many times a customer came back AFTER their initial visit.</p>
+        <p>The <span class="def-term">Return Visits</span> metric counts how many invoices a customer had AFTER their first invoice.</p>
         
         <div class="formula-code">
-            <strong>Rule:</strong><br>
-            IF Registration Date == First Purchase Date:<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases - 1<br>
-            ELSE:<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases<br><br>
+            <strong>Formula:</strong> return_visits = total_invoices - 1<br>
+            <strong>Note:</strong> We count INVOICES, not unique days<br><br>
             
             is_returning = (return_visits > 0)
         </div>
 
         <div class="example-box">
-            <strong>Example 1:</strong> Customer registers on Jan 1 and makes 3 purchases on Jan 1<br>
-            - Registration Date = Jan 1<br>
-            - First Purchase Date = Jan 1<br>
-            - Total Purchases = 3<br>
-            - <strong>Return Visits = 3 - 1 = 2</strong> (first purchase is initial visit, next 2 are returns)<br>
-            - Is Returning = True
+            <strong>Example 1:</strong> Customer makes 3 purchases on same day<br>
+            - Total Invoices = 3<br>
+            - <strong>Return Visits = 3 - 1 = 2</strong><br>
+            - Is Returning = True (had 2 return visits on same day)
         </div>
 
         <div class="example-box">
-            <strong>Example 2:</strong> Customer registers on Jan 1, makes first purchase on Jan 5 (1 invoice)<br>
-            - Registration Date = Jan 1<br>
-            - First Purchase Date = Jan 5<br>
-            - Total Purchases = 1<br>
-            - <strong>Return Visits = 1</strong> (they already came once to register, so first purchase is a return)<br>
-            - Is Returning = True
+            <strong>Example 2:</strong> Customer makes 1 purchase<br>
+            - Total Invoices = 1<br>
+            - <strong>Return Visits = 1 - 1 = 0</strong><br>
+            - Is Returning = False (no returns yet)
         </div>
 
         <div class="example-box">
-            <strong>Example 3:</strong> Customer with no registration date, makes 2 purchases<br>
-            - Registration Date = None<br>
-            - First Purchase Date = Jan 10<br>
+            <strong>Example 3:</strong> Customer makes 5 purchases across 3 different days<br>
+            - Day 1: 2 invoices<br>
+            - Day 2: 1 invoice<br>
+            - Day 3: 2 invoices<br>
+            - Total Invoices = 5<br>
+            - <strong>Return Visits = 5 - 1 = 4</strong> (counts all invoices after first)<br>
+            - Is Returning = True
+        </div>
             - Total Purchases = 2<br>
             - <strong>Return Visits = 2</strong> (without reg date, we assume they visited before to get VIP ID)<br>
             - Is Returning = True
@@ -136,21 +143,35 @@
         <hr class="my-4">
 
         <!-- VIP ID = 0 Handling -->
-        <h6 class="fw-bold mb-3">3. VIP ID = 0 (Unknown Customers)</h6>
-        <p>All purchases with <code>VIP ID = 0</code>, blank, or null are treated as a <strong>single virtual "Unknown" customer</strong> with grade "No Grade".</p>
-        <ul>
-            <li>This customer is counted ONCE in Active Customers</li>
-            <li>If they have multiple invoices: return_visits = total_invoices - 1 (same rule)</li>
-            <li>Their purchases contribute to totals in grade, season, and shop breakdowns</li>
-            <li><span class="def-term">Buyer Without Info (Period)</span>: Count of invoices (not customers) with VIP ID = 0</li>
-        </ul>
+        <h6 class="fw-bold mb-3">3. VIP ID = 0 (Buyer Without Info)</h6>
+        <p>Purchases with <code>VIP ID = 0</code>, blank, or null are <strong>EXCLUDED</strong> from customer metrics but <strong>INCLUDED</strong> in total invoice/amount metrics.</p>
+        
+        <dl>
+            <dt>Invoices (Customers)</dt>
+            <dd>Total invoices from customers with valid VIP IDs (excludes VIP ID = 0)</dd>
+            
+            <dt>Amount (Customers)</dt>
+            <dd>Sum of sales_amount from customers with valid VIP IDs (excludes VIP ID = 0)</dd>
+            
+            <dt>Total Invoices</dt>
+            <dd>ALL invoices including VIP ID = 0</dd>
+            
+            <dt>Total Amount</dt>
+            <dd>Sum of ALL sales_amount including VIP ID = 0</dd>
+        </dl>
 
         <div class="example-box">
-            <strong>Example:</strong> 50 invoices have VIP ID = 0<br>
-            - Active Customers count: +1 (single "Unknown" customer)<br>
-            - Total Purchases for Unknown: 50<br>
-            - Return Visits for Unknown: 49<br>
-            - Buyer Without Info (Period): 50 invoices
+            <strong>Example:</strong><br>
+            - 100 customers made 500 invoices totaling 250M VND<br>
+            - 50 invoices (25M VND) have VIP ID = 0<br>
+            <br>
+            <strong>Results:</strong><br>
+            - Active (Period): 100 (excludes VIP 0)<br>
+            - Invoices (Customers): 450<br>
+            - Amount (Customers): 225M VND<br>
+            - Total Invoices: 500 (includes VIP 0)<br>
+            - Total Amount: 250M VND (includes VIP 0)
+        </div>
         </div>
 
         <hr class="my-4">
