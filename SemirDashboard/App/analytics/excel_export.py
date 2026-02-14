@@ -82,7 +82,7 @@ def _create_grade_sheet(wb, data, header_fill, header_font, header_align):
         cell.font = header_font
         cell.alignment = header_align
     
-    for row_num, g in enumerate(data['grade_stats'], 2):
+    for row_num, g in enumerate(data['by_grade'], 2):
         ws.cell(row=row_num, column=1, value=g['grade'])
         ws.cell(row=row_num, column=2, value=g['total_customers'])
         ws.cell(row=row_num, column=3, value=g['returning_customers'])
