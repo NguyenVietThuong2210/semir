@@ -512,10 +512,16 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             {% regroup by_shop|dictsort:"shop_name" by shop_name as shops_list %}
             {% for grade_name in grade_stats %}
             <div class="card mb-3">
-                <div class="card-header" style="background:#2c3e50;color:white">
+                <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+                     style="background:#2c3e50;color:white;cursor:pointer"
+                     data-bs-toggle="collapse"
+                     data-bs-target="#gradeCompare-{{ forloop.counter }}"
+                     aria-expanded="false">
                     <strong>GRADE: {{ grade_name.grade }}</strong>
+                    <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
                 </div>
-                <div class="card-body p-0">
+                <div class="collapse" id="gradeCompare-{{ forloop.counter }}">
+                    <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-striped table-hover mb-0 grade-compare-tbl">
                             <thead style="background-color: #366092; color: white;">
@@ -549,6 +555,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                         </table>
                     </div>
                 </div>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -561,10 +568,16 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             
             {% for season_name in session_stats %}
             <div class="card mb-3">
-                <div class="card-header" style="background:#2c3e50;color:white">
+                <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+                     style="background:#2c3e50;color:white;cursor:pointer"
+                     data-bs-toggle="collapse"
+                     data-bs-target="#seasonCompare-{{ forloop.counter }}"
+                     aria-expanded="false">
                     <strong>SEASON: {{ season_name.session }}</strong>
+                    <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
                 </div>
-                <div class="card-body p-0">
+                <div class="collapse" id="seasonCompare-{{ forloop.counter }}">
+                    <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-striped table-hover mb-0 season-compare-tbl">
                             <thead style="background-color: #366092; color: white;">
@@ -601,6 +614,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             </tbody>
                         </table>
                     </div>
+                </div>
                 </div>
             </div>
             {% endfor %}
