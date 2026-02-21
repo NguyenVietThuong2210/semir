@@ -351,7 +351,7 @@ def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, d
         shop_stats[shop]['amount'] += p['amount']
     
     shop_list = []
-    for shop_name in sorted(shop_stats.keys(), key=lambda s: shop_stats[s]['invoices'], reverse=True):
+    for shop_name in sorted(shop_stats.keys()):  # Sort alphabetically
         inv = shop_stats[shop_name]['invoices']
         amt = shop_stats[shop_name]['amount']
         

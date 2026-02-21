@@ -375,9 +375,9 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <!-- BY SHOP TAB -->
         <div class="tab-pane fade p-3" id="shopTab">
             <p class="text-muted small mb-2">
-                Sorted by active customers desc. Click a shop row to expand grade and season breakdown.
+                Shops sorted alphabetically. Click a shop row to expand grade and season breakdown.
             </p>
-            {% for shop in shop_stats %}
+            {% for shop in shop_stats|dictsort:"shop_name" %}
             <div class="card mb-3 border">
                 <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
                      style="background:#2c3e50;cursor:pointer"
