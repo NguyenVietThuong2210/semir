@@ -3,7 +3,7 @@
 
 {% block extra_css %}
 <style>
-/* Uniform card action button: dark background, white text */
+/* Card action buttons */
 .card-action-btn {
     display: block;
     width: 100%;
@@ -40,157 +40,259 @@
     margin-bottom: .75rem;
     display: block;
 }
+.group-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+.group-header h4 {
+    margin: 0;
+    font-weight: 600;
+}
+.group-header p {
+    margin: 0;
+    opacity: 0.9;
+    font-size: 0.9rem;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 
+<!-- Header -->
 <div class="row mb-4">
     <div class="col-12 text-center">
         <h1 class="display-5 mb-2">
-            <i class="bi bi-graph-up-arrow" style="color:#366092"></i> Customer Analytics System
+            <i class="bi bi-graph-up-arrow" style="color:#667eea"></i> Customer Analytics System
         </h1>
-        <p class="lead text-muted">Analyze customer return rates, purchasing behavior and coupon usage</p>
+        <p class="lead text-muted">Comprehensive analytics for sales, customers, and loyalty management</p>
     </div>
 </div>
 
-{# ── 5 ACTION CARDS ──────────────────────────────────── #}
-<div class="row g-3 mb-4">
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- UPLOAD GROUP -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="group-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <h4><i class="bi bi-cloud-upload"></i> Data Upload</h4>
+        <p>Import customer, sales, and coupon data</p>
+    </div>
+    
+    <div class="row g-3 mb-5">
+        <!-- Upload Customers -->
+        <div class="col-md-4">
+            <div class="card action-card" style="border-top:4px solid #667eea">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <i class="bi bi-people-fill action-icon" style="color:#667eea"></i>
+                    <h5 class="card-title mb-1">Upload Customers</h5>
+                    <p class="card-text text-muted small flex-grow-1">
+                        Import customer records from CSV or Excel. Duplicate VIP ID + Phone data is overwritten.
+                    </p>
+                    <a href="{% url 'upload_customers' %}" class="card-action-btn">
+                        <i class="bi bi-upload"></i> Upload Customers
+                    </a>
+                </div>
+            </div>
+        </div>
 
-    {# 1 - Upload Customers #}
-    <div class="col-md-6 col-xl">
-        <div class="card action-card" style="border-top:4px solid #366092">
-            <div class="card-body d-flex flex-column text-center p-4">
-                <i class="bi bi-people-fill action-icon" style="color:#366092"></i>
-                <h5 class="card-title mb-1">Upload Customers</h5>
-                <p class="card-text text-muted small flex-grow-1">
-                    Import customer records from CSV or Excel.
-                    Duplicate VIP ID + Phone data is overwritten.
-                </p>
-                <a href="{% url 'upload_customers' %}" class="card-action-btn page-link">
-                    <i class="bi bi-upload"></i> Upload Customers
-                </a>
+        <!-- Upload Sales -->
+        <div class="col-md-4">
+            <div class="card action-card" style="border-top:4px solid #764ba2">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <i class="bi bi-cart-fill action-icon" style="color:#764ba2"></i>
+                    <h5 class="card-title mb-1">Upload Sales</h5>
+                    <p class="card-text text-muted small flex-grow-1">
+                        Import POS sales transactions from CSV or Excel. Duplicate Invoice Number data is overwritten.
+                    </p>
+                    <a href="{% url 'upload_sales' %}" class="card-action-btn">
+                        <i class="bi bi-upload"></i> Upload Sales
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Coupons -->
+        <div class="col-md-4">
+            <div class="card action-card" style="border-top:4px solid #9f7aea">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <i class="bi bi-ticket-perforated action-icon" style="color:#9f7aea"></i>
+                    <h5 class="card-title mb-1">Upload Coupons</h5>
+                    <p class="card-text text-muted small flex-grow-1">
+                        Import coupon records from Excel. Duplicate Coupon ID data is overwritten.
+                    </p>
+                    <a href="{% url 'upload_coupons' %}" class="card-action-btn">
+                        <i class="bi bi-upload"></i> Upload Coupons
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 
-    {# 2 - Upload Sales #}
-    <div class="col-md-6 col-xl">
-        <div class="card action-card" style="border-top:4px solid #198754">
-            <div class="card-body d-flex flex-column text-center p-4">
-                <i class="bi bi-cart-fill action-icon" style="color:#198754"></i>
-                <h5 class="card-title mb-1">Upload Sales</h5>
-                <p class="card-text text-muted small flex-grow-1">
-                    Import POS sales transactions from CSV or Excel.
-                    Duplicate Invoice Number data is overwritten.
-                </p>
-                <a href="{% url 'upload_sales' %}" class="card-action-btn page-link">
-                    <i class="bi bi-upload"></i> Upload Sales
-                </a>
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ANALYTICS GROUP -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="group-header" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+        <h4><i class="bi bi-bar-chart-line"></i> Analytics & Reports</h4>
+        <p>Analyze sales performance, customer behavior, and coupon usage</p>
+    </div>
+    
+    <div class="row g-3 mb-5">
+        <!-- Sales Analytics (renamed from Customer Analytics) -->
+        <div class="col-md-4">
+            <div class="card action-card" style="border-top:4px solid #f093fb">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <i class="bi bi-graph-up action-icon" style="color:#f093fb"></i>
+                    <h5 class="card-title mb-1">Sales Analytics</h5>
+                    <p class="card-text text-muted small flex-grow-1">
+                        Return visit rates by VIP grade, season and shop. Filter by date range and export Excel reports.
+                    </p>
+                    <a href="{% url 'analytics_dashboard' %}" class="card-action-btn">
+                        <i class="bi bi-bar-chart"></i> View Sales Analytics
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Analytics (renamed from Customer Comparison) -->
+        <div class="col-md-4">
+            <div class="card action-card" style="border-top:4px solid #f5576c">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <i class="bi bi-people action-icon" style="color:#f5576c"></i>
+                    <h5 class="card-title mb-1">Customer Analytics</h5>
+                    <p class="card-text text-muted small flex-grow-1">
+                        Compare POS System vs CNV Loyalty customers. Filter by date and view detailed comparison tables.
+                    </p>
+                    <a href="{% url 'cnv:customer_comparison' %}" class="card-action-btn">
+                        <i class="bi bi-clipboard-data"></i> View Customer Analytics
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Coupon Analytics -->
+        <div class="col-md-4">
+            <div class="card action-card" style="border-top:4px solid #ff8c94">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <i class="bi bi-ticket-detailed action-icon" style="color:#ff8c94"></i>
+                    <h5 class="card-title mb-1">Coupon Analytics</h5>
+                    <p class="card-text text-muted small flex-grow-1">
+                        Track used/unused rates per shop. Filter by Coupon ID prefix and export Excel reports.
+                    </p>
+                    <a href="{% url 'coupon_dashboard' %}" class="card-action-btn">
+                        <i class="bi bi-ticket-perforated"></i> View Coupon Analytics
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 
-    {# 3 - Upload Coupons #}
-    <div class="col-md-6 col-xl">
-        <div class="card action-card" style="border-top:4px solid #d4920a">
-            <div class="card-body d-flex flex-column text-center p-4">
-                <i class="bi bi-ticket-perforated action-icon" style="color:#d4920a"></i>
-                <h5 class="card-title mb-1">Upload Coupons</h5>
-                <p class="card-text text-muted small flex-grow-1">
-                    Import coupon records from Excel.
-                    Duplicate Coupon ID data is overwritten.
-                </p>
-                <a href="{% url 'upload_coupons' %}" class="card-action-btn page-link">
-                    <i class="bi bi-upload"></i> Upload Coupons
-                </a>
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ADDITIONAL TOOLS GROUP -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="group-header" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+        <h4><i class="bi bi-tools"></i> Additional Tools</h4>
+        <p>Formulas reference and CNV sync management</p>
+    </div>
+    
+    <div class="row g-3 mb-5">
+        <!-- Formulas -->
+        <div class="col-md-6">
+            <div class="card action-card" style="border-top:4px solid #4facfe">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <i class="bi bi-calculator action-icon" style="color:#4facfe"></i>
+                    <h5 class="card-title mb-1">Formulas</h5>
+                    <p class="card-text text-muted small flex-grow-1">
+                        View detailed formulas and calculation methods used in analytics reports.
+                    </p>
+                    <a href="{% url 'formulas' %}" class="card-action-btn">
+                        <i class="bi bi-calculator"></i> View Formulas
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- CNV Sync Status -->
+        <div class="col-md-6">
+            <div class="card action-card" style="border-top:4px solid #00f2fe">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <i class="bi bi-arrow-repeat action-icon" style="color:#00f2fe"></i>
+                    <h5 class="card-title mb-1">CNV Sync Status</h5>
+                    <p class="card-text text-muted small flex-grow-1">
+                        Monitor CNV Loyalty synchronization status. View sync logs and statistics.
+                    </p>
+                    <a href="{% url 'cnv:sync_status' %}" class="card-action-btn">
+                        <i class="bi bi-cloud-arrow-up"></i> View Sync Status
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 
-    {# 4 - Customer Analytics #}
-    <div class="col-md-6 col-xl">
-        <div class="card action-card" style="border-top:4px solid #0a7a9a">
-            <div class="card-body d-flex flex-column text-center p-4">
-                <i class="bi bi-bar-chart-fill action-icon" style="color:#0a7a9a"></i>
-                <h5 class="card-title mb-1">Customer Analytics</h5>
-                <p class="card-text text-muted small flex-grow-1">
-                    Return visit rates by VIP grade, season and shop.
-                    Filter by date range and export Excel reports.
-                </p>
-                <a href="{% url 'analytics_dashboard' %}" class="card-action-btn page-link">
-                    <i class="bi bi-bar-chart"></i> View Customer Analytics
-                </a>
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- HOW IT WORKS -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="bi bi-info-circle"></i> How It Works</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <div class="d-flex">
+                        <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
+                              style="min-width:2.5rem;height:2.5rem;background:#667eea;font-size:1.1rem">1</span>
+                        <div>
+                            <h6 class="fw-bold">Upload Data</h6>
+                            <p class="text-muted small mb-0">
+                                Import your customer database, sales transactions, and coupon records. 
+                                Duplicates are automatically updated.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex">
+                        <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
+                              style="min-width:2.5rem;height:2.5rem;background:#f093fb;font-size:1.1rem">2</span>
+                        <div>
+                            <h6 class="fw-bold">Analyze Performance</h6>
+                            <p class="text-muted small mb-0">
+                                View comprehensive analytics on sales, customer behavior, and coupon effectiveness 
+                                across different periods and segments.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex">
+                        <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
+                              style="min-width:2.5rem;height:2.5rem;background:#4facfe;font-size:1.1rem">3</span>
+                        <div>
+                            <h6 class="fw-bold">Sync with CNV</h6>
+                            <p class="text-muted small mb-0">
+                                Automatically synchronize with CNV Loyalty platform to compare 
+                                and validate customer data.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex">
+                        <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
+                              style="min-width:2.5rem;height:2.5rem;background:#2c3e50;font-size:1.1rem">4</span>
+                        <div>
+                            <h6 class="fw-bold">Export Reports</h6>
+                            <p class="text-muted small mb-0">
+                                Generate and download comprehensive Excel reports with detailed 
+                                breakdowns and insights.
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-
-    {# 5 - Coupon Analytics #}
-    <div class="col-md-6 col-xl">
-        <div class="card action-card" style="border-top:4px solid #6f42c1">
-            <div class="card-body d-flex flex-column text-center p-4">
-                <i class="bi bi-ticket-perforated action-icon" style="color:#6f42c1"></i>
-                <h5 class="card-title mb-1">Coupon Analytics</h5>
-                <p class="card-text text-muted small flex-grow-1">
-                    Track used/unused rates per shop.
-                    Filter by Coupon ID prefix and export Excel reports.
-                </p>
-                <a href="{% url 'coupon_dashboard' %}" class="card-action-btn page-link">
-                    <i class="bi bi-ticket-perforated"></i> View Coupon Analytics
-                </a>
-            </div>
-        </div>
-    </div>
-
 </div>
-
-{# ── HOW IT WORKS ─────────────────────────────────────── #}
-<div class="card">
-    <div class="card-header"><i class="bi bi-info-circle"></i> How It Works</div>
-    <div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-3">
-                <div class="d-flex">
-                    <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
-                          style="min-width:2rem;height:2rem;text-align:center;background:#366092">1</span>
-                    <div>
-                        <h6>Upload Customers</h6>
-                        <p class="text-muted small mb-0">Load your customer database. Duplicates are updated automatically.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="d-flex">
-                    <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
-                          style="min-width:2rem;height:2rem;text-align:center;background:#198754">2</span>
-                    <div>
-                        <h6>Import Sales</h6>
-                        <p class="text-muted small mb-0">Upload POS transactions. Linked to customers by VIP ID.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="d-flex">
-                    <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
-                          style="min-width:2rem;height:2rem;text-align:center;background:#d4920a">3</span>
-                    <div>
-                        <h6>Import Coupons</h6>
-                        <p class="text-muted small mb-0">Upload coupon file. Matched to invoices via Docket Number.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="d-flex">
-                    <span class="badge rounded-circle me-3 pt-2 flex-shrink-0"
-                          style="min-width:2rem;height:2rem;text-align:center;background:#2c3e50">4</span>
-                    <div>
-                        <h6>Analyze and Export</h6>
-                        <p class="text-muted small mb-0">Filter by date, view return rates and export full Excel reports.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}

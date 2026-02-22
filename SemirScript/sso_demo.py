@@ -65,7 +65,7 @@ def callback():
     token_response.raise_for_status()
     token = token_response.json()
 
-    print("✅ TOKEN RECEIVED:")
+    print("TOKEN RECEIVED:")
     print(token)
     
     # OUTPUT TOKEN

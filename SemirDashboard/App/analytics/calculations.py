@@ -4,7 +4,7 @@ App/analytics/calculations.py
 Pure calculation functions with NO side effects or database access.
 All return visit formulas and mathematical calculations.
 
-⚠️ RETURN VISIT FORMULA - DO NOT CHANGE WITHOUT USER APPROVAL
+RETURN VISIT FORMULA - DO NOT CHANGE WITHOUT USER APPROVAL
 This formula counts INVOICES, not unique days (user-confirmed).
 
 Version: 3.3
@@ -16,7 +16,7 @@ def calculate_return_visits(purchases_sorted, reg_date):
     """
     🎯 RETURN VISIT CALCULATION - By INVOICES (user-confirmed formula)
     
-    ⚠️ DO NOT CHANGE THIS FORMULA WITHOUT USER APPROVAL
+    DO NOT CHANGE THIS FORMULA WITHOUT USER APPROVAL
     
     This is the SINGLE source of truth for return visit calculations.
     Formula counts INVOICES, not unique days.

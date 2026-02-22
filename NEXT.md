@@ -93,7 +93,7 @@ cat ~/semir/logs/backup.log
 
 ---
 
-## ✅ MONTHLY MAINTENANCE CHECKLIST
+## MONTHLY MAINTENANCE CHECKLIST
 
 - [ ] Check SSL certificate expiry
 - [ ] Review backup logs
