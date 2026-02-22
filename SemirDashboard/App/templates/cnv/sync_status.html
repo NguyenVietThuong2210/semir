@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}CNV Sync Status{% endblock %}
+
+{% block extra_css %}
+<style>
+.stat-card { 
+    min-height: 120px; 
+    border-radius: 10px; 
+}
+.stat-card .card-body { 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: space-between; 
+}
+.stat-value { 
+    font-size: 1.7rem; 
+    font-weight: 700; 
+    margin: 4px 0; 
+}
+.stat-label { 
+    font-size: .75rem; 
+    text-transform: uppercase; 
+    letter-spacing: .5px; 
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Page Header -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-arrow-repeat"></i> CNV Sync Status</h2>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card card bg-primary text-white">
+            <div class="card-body text-center">
+                <div class="stat-label opacity-75">Total Customers</div>
+                <div class="stat-value">{{ total_customers|default:0 }}</div>
+                <small class="opacity-75">Synced from CNV</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card card bg-info text-white">
+            <div class="card-body text-center">
+                <div class="stat-label opacity-75">Total Orders</div>
+                <div class="stat-value">{{ total_orders|default:0 }}</div>
+                <small class="opacity-75">Synced from CNV</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card card bg-success text-white">
+            <div class="card-body text-center">
+                <div class="stat-label opacity-75">Last Customer Sync</div>
+                <h5 class="mb-1">{{ latest_customer_sync.completed_at|date:"Y-m-d H:i"|default:"Never" }}</h5>
+                <small class="opacity-75">{{ latest_customer_sync.records_created|default:0 }} created</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card card bg-warning text-white">
+            <div class="card-body text-center">
+                <div class="stat-label opacity-75">Last Order Sync</div>
+                <h5 class="mb-1">{{ latest_order_sync.completed_at|date:"Y-m-d H:i"|default:"Never" }}</h5>
+                <small class="opacity-75">{{ latest_order_sync.records_created|default:0 }} created</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sync History -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Sync History</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Type</th>
+                        <th>Started</th>
+                        <th>Completed</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th class="text-end">Created</th>
+                        <th class="text-end">Updated</th>
+                        <th class="text-end">Failed</th>
+                        <th>Checkpoint</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sync in recent_syncs %}
+                    <tr>
+                        <td>
+                            <span class="badge {% if sync.sync_type == 'customers' %}bg-primary{% else %}bg-info{% endif %}">
+                                {{ sync.sync_type|title }}
+                            </span>
+                        </td>
+                        <td>{{ sync.started_at|date:"Y-m-d H:i:s" }}</td>
+                        <td>{{ sync.completed_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                        <td>{{ sync.duration_seconds|default:0 }}s</td>
+                        <td>
+                            <span class="badge {% if sync.status == 'completed' %}bg-success{% elif sync.status == 'failed' %}bg-danger{% else %}bg-warning{% endif %}">
+                                {{ sync.status|title }}
+                            </span>
+                        </td>
+                        <td class="text-end">{{ sync.records_created|default:0 }}</td>
+                        <td class="text-end">{{ sync.records_updated|default:0 }}</td>
+                        <td class="text-end">{{ sync.records_failed|default:0 }}</td>
+                        <td>
+                            <small class="text-muted">
+                                {{ sync.checkpoint_updated_at|date:"Y-m-d H:i"|default:"-" }}
+                            </small>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-3">No sync logs found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

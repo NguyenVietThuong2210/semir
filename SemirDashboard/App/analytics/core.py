@@ -4,7 +4,7 @@ App/analytics/core.py
 Main orchestrator for customer analytics.
 Entry point that coordinates all analytics calculations.
 
-⚠️ Uses user-confirmed formula: counts INVOICES, not unique days
+Uses user-confirmed formula: counts INVOICES, not unique days
 
 Version: 3.3 - Fixed within-season + cross-season returns
 """

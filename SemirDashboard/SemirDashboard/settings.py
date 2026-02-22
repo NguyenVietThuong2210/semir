@@ -54,7 +54,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'App'
+    'App',
+    'django_apscheduler',
 ]
 
 MIDDLEWARE = [
@@ -105,6 +106,7 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST', 'db'),
         'PORT': os.getenv('DB_PORT', '5432'),
+        'CONN_MAX_AGE': 600,  # Keep connections alive for 10 minutes
     }
 }
 
@@ -155,3 +157,106 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
 LOGIN_URL = '/login/'              # Fix 404 redirect
 LOGIN_REDIRECT_URL = '/'           # After login go to home
 LOGOUT_REDIRECT_URL = '/login/'    # After logout go to login
+
+# ============================================================================
+# CNV LOYALTY API CONFIGURATION
+# ============================================================================
+
+# CNV API Credentials
+# IMPORTANT: Update these with your actual credentials
+CNV_USERNAME = "danthanhtran@semir.com"  # Replace with actual username
+CNV_PASSWORD = "sOG3eEyWprnDWeM"  # Replace with actual password
+
+# CNV API URLs
+CNV_API_BASE_URL = "https://apis.cnvloyalty.com"
+CNV_SSO_URL = "https://id.cnv.vn"
+
+# Cache configuration (required for token caching)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'cnv-cache',
+        'TIMEOUT': 3600,  # 1 hour
+        'OPTIONS': {
+            'MAX_ENTRIES': 100
+        }
+    }
+}
+
+# ============================================================================
+# DJANGO APSCHEDULER CONFIGURATION
+# ============================================================================
+
+# APScheduler settings
+APSCHEDULER_DATETIME_FORMAT = "N j, Y, f:s a"
+APSCHEDULER_RUN_NOW_TIMEOUT = 25  # Seconds
+
+# ============================================================================
+# LOGGING CONFIGURATION (Optional but recommended)
+# ============================================================================
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+    
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+            'level': 'INFO',
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'cnv_sync.log'),  # FIX: Add filename!
+            'maxBytes': 10485760,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+            'level': 'INFO',
+        },
+        'error_file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'errors.log'),
+            'maxBytes': 10485760,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+            'level': 'ERROR',
+        },
+    },
+    'loggers': {
+        # CNV module logger
+        'App.cnv': {
+            'handlers': ['console', 'file', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # General App logger
+        'App': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Django APScheduler
+        'django_apscheduler': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Root logger (catches everything else)
+        '': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
+    },
+}

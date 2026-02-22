@@ -38,7 +38,7 @@ echo "🏥 Checking service health..."
 docker compose ps
 
 echo ""
-echo "✅ Deployment completed successfully!"
+echo "Deployment completed successfully!"
 echo "🌐 Visit: https://analytics-customer-dashboard.com"
 echo ""
 echo "📊 View logs: docker compose logs -f web"
