@@ -1,11 +1,11 @@
 """
-CNV Customer Comparison View
-Compares internal POS system customers with CNV Loyalty system customers
+Customer Comparison View
+Compares POS System customers vs CNV Loyalty customers based on phone numbers
 """
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Count, Sum
-from datetime import datetime, timedelta
+from django.db.models import Q
+from datetime import datetime
 from django.utils import timezone
 
 from App.models import Customer as POSCustomer, SalesTransaction
@@ -49,7 +49,7 @@ def sync_status(request):
 def customer_comparison(request):
     """
     Compare POS System vs CNV Loyalty customers
-    Shows 4 tables: All Time + Period for both systems
+    Focus on phone number matching
     """
     # Get date filters
     start_date = request.GET.get('start_date')
@@ -58,6 +58,7 @@ def customer_comparison(request):
     # Parse dates
     period_filter = {}
     period_label = "All Time"
+    has_filter = False
     
     if start_date and end_date:
         try:
@@ -68,6 +69,7 @@ def customer_comparison(request):
                 'end': timezone.make_aware(end)
             }
             period_label = f"{start_date} to {end_date}"
+            has_filter = True
         except ValueError:
             pass
     
@@ -75,92 +77,120 @@ def customer_comparison(request):
     # ALL TIME DATA
     # ============================================
     
-    # POS System - All Time
-    pos_all_time = POSCustomer.objects.filter(
-        vip_id__isnull=False
+    # All POS customers (excluding VIP ID = 0)
+    pos_all = POSCustomer.objects.filter(
+        vip_id__isnull=False,
+        phone__isnull=False
     ).exclude(
         vip_id=0
-    ).values(
-        'vip_id', 
-        'phone', 
-        'name', 
-        'vip_grade', 
-        'email', 
-        'registration_date',
-        'points'  # Use points field directly
-    ).order_by('-registration_date')
+    ).exclude(
+        phone=''
+    )
     
-    # CNV - All Time  
-    cnv_all_time = CNVCustomer.objects.values(
-        'customer_id',
-        'phone',
-        'full_name',
-        'email',
-        'registration_date',
-        'points_balance',
-        'total_points_earned'
-    ).order_by('-registration_date')
+    # All CNV customers
+    cnv_all = CNVCustomer.objects.filter(
+        phone__isnull=False
+    ).exclude(
+        phone=''
+    )
+    
+    # Get phone sets for comparison
+    pos_phones_all = set(pos_all.values_list('phone', flat=True))
+    cnv_phones_all = set(cnv_all.values_list('phone', flat=True))
+    
+    # (1) In POS but not in CNV
+    pos_only_phones_all = pos_phones_all - cnv_phones_all
+    pos_only_all = pos_all.filter(phone__in=pos_only_phones_all).values(
+        'vip_id', 'phone', 'name', 'vip_grade', 'email', 'registration_date', 'points'
+    ).order_by('-registration_date')[:50]
+    
+    # (2) In CNV but not in POS
+    cnv_only_phones_all = cnv_phones_all - pos_phones_all
+    cnv_only_all = cnv_all.filter(phone__in=cnv_only_phones_all).values(
+        'customer_id', 'phone', 'full_name', 'email', 'registration_date',
+        'total_points_earned', 'total_points_spent'
+    ).order_by('-registration_date')[:50]
     
     # ============================================
-    # PERIOD DATA (if filtered)
+    # PERIOD DATA
     # ============================================
     
-    pos_period = []
-    cnv_period = []
+    pos_only_period = []
+    cnv_only_period = []
+    new_pos_count = 0
+    new_cnv_count = 0
+    pos_only_period_count = 0
+    cnv_only_period_count = 0
     
     if period_filter:
-        # POS System - Period
-        pos_period = POSCustomer.objects.filter(
-            vip_id__isnull=False,
+        # New POS customers in period
+        pos_period = pos_all.filter(
             registration_date__gte=period_filter['start'],
             registration_date__lte=period_filter['end']
-        ).exclude(
-            vip_id=0
-        ).values(
-            'vip_id',
-            'phone',
-            'name',
-            'vip_grade',
-            'email',
-            'registration_date',
-            'points'  # Use points field directly
-        ).order_by('-registration_date')
+        )
+        new_pos_count = pos_period.count()
         
-        # CNV - Period
-        cnv_period = CNVCustomer.objects.filter(
+        # New CNV customers in period
+        cnv_period = cnv_all.filter(
             registration_date__gte=period_filter['start'],
             registration_date__lte=period_filter['end']
-        ).values(
-            'customer_id',
-            'phone',
-            'full_name',
-            'email',
-            'registration_date',
-            'points_balance',
-            'total_points_earned'
-        ).order_by('-registration_date')
+        )
+        new_cnv_count = cnv_period.count()
+        
+        # Get phone sets for period
+        pos_phones_period = set(pos_period.values_list('phone', flat=True))
+        cnv_phones_period = set(cnv_period.values_list('phone', flat=True))
+        
+        # (3) New in POS but not in CNV
+        pos_only_phones_period = pos_phones_period - cnv_phones_all
+        pos_only_period_count = len(pos_only_phones_period)
+        pos_only_period = pos_period.filter(phone__in=pos_only_phones_period).values(
+            'vip_id', 'phone', 'name', 'vip_grade', 'email', 'registration_date', 'points'
+        ).order_by('-registration_date')[:50]
+        
+        # (4) New in CNV but not in POS
+        cnv_only_phones_period = cnv_phones_period - pos_phones_all
+        cnv_only_period_count = len(cnv_only_phones_period)
+        cnv_only_period = cnv_period.filter(phone__in=cnv_only_phones_period).values(
+            'customer_id', 'phone', 'full_name', 'email', 'registration_date',
+            'total_points_earned', 'total_points_spent'
+        ).order_by('-registration_date')[:50]
     
     # ============================================
-    # STATISTICS
+    # CONTEXT
     # ============================================
-    
-    stats = {
-        'pos_all_time_count': pos_all_time.count(),
-        'cnv_all_time_count': cnv_all_time.count(),
-        'pos_period_count': len(pos_period) if period_filter else 0,
-        'cnv_period_count': len(cnv_period) if period_filter else 0,
-        'period_label': period_label,
-        'has_period_filter': bool(period_filter)
-    }
     
     context = {
-        'pos_all_time': list(pos_all_time),
-        'cnv_all_time': list(cnv_all_time),
-        'pos_period': list(pos_period),
-        'cnv_period': list(cnv_period),
-        'stats': stats,
+        # Filter info
         'start_date': start_date or '',
         'end_date': end_date or '',
+        'period_label': period_label,
+        'has_filter': has_filter,
+        
+        # All time counts
+        'total_pos': pos_all.count(),
+        'total_cnv': cnv_all.count(),
+        'pos_only_all_count': len(pos_only_phones_all),
+        'cnv_only_all_count': len(cnv_only_phones_all),
+        
+        # Period counts
+        'new_pos_count': new_pos_count,
+        'new_cnv_count': new_cnv_count,
+        'pos_only_period_count': pos_only_period_count,
+        'cnv_only_period_count': cnv_only_period_count,
+        
+        # Tables data
+        'pos_only_all': list(pos_only_all),
+        'cnv_only_all': list(cnv_only_all),
+        'pos_only_period': list(pos_only_period),
+        'cnv_only_period': list(cnv_only_period),
+        
+        # Quick buttons (similar to analytics)
+        'quick_btns': [
+            ('Last 7 Days', 7),
+            ('Last 30 Days', 30),
+            ('Last 90 Days', 90),
+        ],
     }
     
     return render(request, 'cnv/customer_comparison.html', context)
