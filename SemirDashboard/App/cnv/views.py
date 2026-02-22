@@ -1,6 +1,6 @@
 """
-Customer Comparison View
-Compares POS System customers vs CNV Loyalty customers based on phone numbers
+CNV Views
+Handles CNV Loyalty integration pages
 """
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
@@ -8,7 +8,7 @@ from django.db.models import Q
 from datetime import datetime
 from django.utils import timezone
 
-from App.models import Customer as POSCustomer, SalesTransaction
+from App.models import Customer as POSCustomer
 from App.models_cnv import CNVCustomer, CNVOrder, CNVSyncLog
 
 
@@ -32,7 +32,7 @@ def sync_status(request):
     total_orders = CNVOrder.objects.count()
     
     # Recent sync history (last 10)
-    recent_syncs = CNVSyncLog.objects.order_by('-completed_at')[:10]
+    recent_syncs = CNVSyncLog.objects.order_by('-started_at')[:10]
     
     context = {
         'latest_customer_sync': latest_customer_sync,
@@ -87,12 +87,22 @@ def customer_comparison(request):
         phone=''
     )
     
+    # Total POS customers (for accurate total, before phone filter)
+    total_pos_all = POSCustomer.objects.filter(
+        vip_id__isnull=False
+    ).exclude(
+        vip_id=0
+    ).count()
+    
     # All CNV customers
     cnv_all = CNVCustomer.objects.filter(
         phone__isnull=False
     ).exclude(
         phone=''
     )
+    
+    # Total CNV customers (without phone filter for accurate total)
+    total_cnv_all = CNVCustomer.objects.count()
     
     # Get phone sets for comparison
     pos_phones_all = set(pos_all.values_list('phone', flat=True))
@@ -168,8 +178,8 @@ def customer_comparison(request):
         'has_filter': has_filter,
         
         # All time counts
-        'total_pos': pos_all.count(),
-        'total_cnv': cnv_all.count(),
+        'total_pos': total_pos_all,  # Total excluding VIP ID = 0
+        'total_cnv': total_cnv_all,  # Total from CNV (no filters)
         'pos_only_all_count': len(pos_only_phones_all),
         'cnv_only_all_count': len(cnv_only_phones_all),
         

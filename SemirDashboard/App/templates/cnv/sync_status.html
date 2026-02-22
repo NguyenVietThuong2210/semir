@@ -58,7 +58,7 @@
             <div class="card-body text-center">
                 <div class="stat-label opacity-75">Last Customer Sync</div>
                 <h5 class="mb-1">{{ latest_customer_sync.completed_at|date:"Y-m-d H:i"|default:"Never" }}</h5>
-                <small class="opacity-75">{{ latest_customer_sync.records_created|default:0 }} created</small>
+                <small class="opacity-75">{{ latest_customer_sync.created_count|default:0 }} created</small>
             </div>
         </div>
     </div>
@@ -67,7 +67,7 @@
             <div class="card-body text-center">
                 <div class="stat-label opacity-75">Last Order Sync</div>
                 <h5 class="mb-1">{{ latest_order_sync.completed_at|date:"Y-m-d H:i"|default:"Never" }}</h5>
-                <small class="opacity-75">{{ latest_order_sync.records_created|default:0 }} created</small>
+                <small class="opacity-75">{{ latest_order_sync.created_count|default:0 }} created</small>
             </div>
         </div>
     </div>
@@ -86,8 +86,8 @@
                         <th>Type</th>
                         <th>Started</th>
                         <th>Completed</th>
-                        <th>Duration</th>
                         <th>Status</th>
+                        <th class="text-end">Total</th>
                         <th class="text-end">Created</th>
                         <th class="text-end">Updated</th>
                         <th class="text-end">Failed</th>
@@ -104,15 +104,15 @@
                         </td>
                         <td>{{ sync.started_at|date:"Y-m-d H:i:s" }}</td>
                         <td>{{ sync.completed_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
-                        <td>{{ sync.duration_seconds|default:0 }}s</td>
                         <td>
-                            <span class="badge {% if sync.status == 'completed' %}bg-success{% elif sync.status == 'failed' %}bg-danger{% else %}bg-warning{% endif %}">
+                            <span class="badge {% if sync.status == 'completed' %}bg-success{% elif sync.status == 'failed' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
                                 {{ sync.status|title }}
                             </span>
                         </td>
-                        <td class="text-end">{{ sync.records_created|default:0 }}</td>
-                        <td class="text-end">{{ sync.records_updated|default:0 }}</td>
-                        <td class="text-end">{{ sync.records_failed|default:0 }}</td>
+                        <td class="text-end">{{ sync.total_records|default:0 }}</td>
+                        <td class="text-end">{{ sync.created_count|default:0 }}</td>
+                        <td class="text-end">{{ sync.updated_count|default:0 }}</td>
+                        <td class="text-end">{{ sync.failed_count|default:0 }}</td>
                         <td>
                             <small class="text-muted">
                                 {{ sync.checkpoint_updated_at|date:"Y-m-d H:i"|default:"-" }}

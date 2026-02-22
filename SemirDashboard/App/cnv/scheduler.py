@@ -156,7 +156,7 @@ def start_scheduler():
         replace_existing=True,
         name="CNV Customers Sync"
     )
-    logger.info("Registered job: CNV Customers Sync (Every 10 min: :05, :15, :25, :35, :45, :55)")
+    logger.info("Registered job: CNV Customers Sync ( every 1 hour at :05)")
     
     # Orders sync every 1 hour at :35
     scheduler.add_job(
@@ -167,7 +167,7 @@ def start_scheduler():
         replace_existing=True,
         name="CNV Orders Sync"
     )
-    logger.info("Registered job: CNV Orders Sync (Every 10 min: :00, :10, :20, :30, :40, :50)")
+    logger.info("Registered job: CNV Orders Sync ( every 1 hour at :35)")
     
     # Cleanup daily at 2 AM
     scheduler.add_job(
