@@ -1,97 +1,42 @@
 {% extends 'base.html' %}
-{% block title %}Customer Comparison - POS vs CNV{% endblock %}
+{% block title %}Customer Analytics{% endblock %}
 
 {% block extra_css %}
 <style>
-.stat-card { 
-    min-height: 120px; 
-    border-radius: 10px; 
-}
-.stat-card .card-body { 
-    display: flex; 
-    flex-direction: column; 
-    justify-content: space-between; 
-}
-.stat-value { 
-    font-size: 1.7rem; 
-    font-weight: 700; 
-    margin: 4px 0; 
-}
-.stat-label { 
-    font-size: .75rem; 
-    text-transform: uppercase; 
-    letter-spacing: .5px; 
-}
+.stat-card { min-height:130px; border-radius:10px; }
+.stat-card .card-body { display:flex; flex-direction:column; justify-content:space-between; }
+.stat-value { font-size:1.65rem; font-weight:700; margin:5px 0; }
+.stat-label { font-size:.74rem; text-transform:uppercase; letter-spacing:.5px; }
+
 .table-wrapper {
     background: white;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,.08);
-    overflow: hidden;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 .table-header {
     background: #f8f9fa;
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1rem;
     border-bottom: 2px solid #dee2e6;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
-.table-header h5 {
+.table-header h6 {
     margin: 0;
     font-weight: 600;
-    color: #2c3e50;
 }
 .expand-btn {
     background: white;
     border: 1px solid #dee2e6;
-    padding: 0.375rem 0.75rem;
+    padding: 0.25rem 0.75rem;
     border-radius: 4px;
     font-size: 0.875rem;
     cursor: pointer;
-    transition: all 0.2s;
-}
-.expand-btn:hover {
-    background: #f8f9fa;
-    border-color: #adb5bd;
 }
 .table-scroll {
-    max-height: 500px;
+    max-height: 400px;
     overflow-y: auto;
-}
-.table thead th {
-    position: sticky;
-    top: 0;
-    background: #2c3e50;
-    color: white;
-    font-weight: 600;
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border: none;
-    z-index: 10;
-}
-.table tbody tr:hover {
-    background: #f8f9fa;
-}
-.period-display {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    display: inline-block;
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-}
-.section-divider {
-    border-top: 2px solid #e9ecef;
-    margin: 2rem 0 1.5rem 0;
-    padding-top: 1.5rem;
-}
-.section-title {
-    color: #2c3e50;
-    font-weight: 700;
-    margin-bottom: 1.5rem;
 }
 </style>
 {% endblock %}
@@ -100,13 +45,13 @@
 
 <!-- Page Header -->
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-people"></i> Customer Comparison</h2>
+    <h2><i class="bi bi-people"></i> Customer Analytics</h2>
 </div>
 
 <!-- Date Filter -->
 <div class="card mb-3">
     <div class="card-body">
-        <form method="get" class="row g-2 align-items-end">
+        <form method="get" id="dateFilterForm" class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="form-label"><i class="bi bi-calendar"></i> Start Date</label>
                 <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
@@ -124,263 +69,365 @@
                 </a>
             </div>
         </form>
+        <div class="mt-2 pt-2 border-top">
+            <small class="text-muted me-2">Quick:</small>
+            <div class="btn-group btn-group-sm flex-wrap" id="quickBtnGroup">
+                {% for label, days in quick_btns %}
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="{{ days }}">{{ label }}</button>
+                {% endfor %}
+                <button class="btn btn-outline-secondary" id="btnThisMonth">This Month</button>
+                <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
+                <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
+            </div>
+        </div>
+        {% if has_filter %}
+        <div class="alert alert-info mt-2 mb-0 py-2">
+            <i class="bi bi-funnel-fill"></i>
+            Period: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong>
+        </div>
+        {% endif %}
     </div>
 </div>
 
-<!-- Period Display -->
-<div class="text-center mb-4">
-    <div class="period-display">
-        <i class="bi bi-calendar3"></i> 
-        <strong>Period:</strong> {{ stats.period_label }}
-    </div>
-</div>
+<!-- ALL-TIME METRICS -->
+<p class="text-muted small mb-1 mt-1 fw-semibold text-uppercase">
+    <i class="bi bi-infinity"></i> All-Time Overview
+</p>
 
-<!-- Statistics Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="stat-card card bg-primary text-white">
-            <div class="card-body text-center">
-                <div class="stat-label opacity-75">POS System - All Time</div>
-                <div class="stat-value">{{ stats.pos_all_time_count|default:0 }}</div>
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+    <div class="col">
+        <div class="stat-card card bg-primary bg-gradient text-white border-0">
+            <div class="card-body">
+                <div class="stat-label opacity-75">Total Customers (POS System)</div>
+                <div class="stat-value">{{ total_pos|default:0 }}</div>
+                <small class="opacity-75">From Customer table</small>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card card bg-info text-white">
-            <div class="card-body text-center">
-                <div class="stat-label opacity-75">CNV Loyalty - All Time</div>
-                <div class="stat-value">{{ stats.cnv_all_time_count|default:0 }}</div>
+    <div class="col">
+        <div class="stat-card card bg-info bg-gradient text-white border-0">
+            <div class="card-body">
+                <div class="stat-label opacity-75">Total CNV Customers</div>
+                <div class="stat-value">{{ total_cnv|default:0 }}</div>
+                <small class="opacity-75">From CNV Customer table</small>
             </div>
         </div>
     </div>
-    {% if stats.has_period_filter %}
-    <div class="col-md-3">
-        <div class="stat-card card bg-success text-white">
-            <div class="card-body text-center">
-                <div class="stat-label opacity-75">POS System - Period</div>
-                <div class="stat-value">{{ stats.pos_period_count|default:0 }}</div>
+    <div class="col">
+        <div class="stat-card card bg-warning bg-gradient text-dark border-0">
+            <div class="card-body">
+                <div class="stat-label">POS Only (Not in CNV)</div>
+                <div class="stat-value">{{ pos_only_all_count|default:0 }}</div>
+                <small>By phone number</small>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card card bg-warning text-white">
-            <div class="card-body text-center">
-                <div class="stat-label opacity-75">CNV Loyalty - Period</div>
-                <div class="stat-value">{{ stats.cnv_period_count|default:0 }}</div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- ALL TIME TABLES -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<h4 class="section-title">
-    <i class="bi bi-infinity"></i> All Time Data
-</h4>
-
-<div class="row g-4 mb-4">
-    <!-- POS System - All Time -->
-    <div class="col-lg-6">
-        <div class="table-wrapper">
-            <div class="table-header">
-                <h5><i class="bi bi-shop"></i> POS System ({{ stats.pos_all_time_count }})</h5>
-                <button class="expand-btn" type="button" data-bs-toggle="collapse" data-bs-target="#posAllTime">
-                    <i class="bi bi-arrows-expand"></i> Toggle
-                </button>
-            </div>
-            <div class="collapse show" id="posAllTime">
-                <div class="table-scroll">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>VIP ID</th>
-                                <th>Phone</th>
-                                <th>Name</th>
-                                <th>Grade</th>
-                                <th>Email</th>
-                                <th>Reg. Date</th>
-                                <th class="text-end">Points</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for customer in pos_all_time %}
-                            <tr>
-                                <td>{{ customer.vip_id }}</td>
-                                <td>{{ customer.phone|default:"-" }}</td>
-                                <td>{{ customer.name|default:"-" }}</td>
-                                <td>
-                                    <span class="badge bg-secondary">{{ customer.vip_grade|default:"No Grade" }}</span>
-                                </td>
-                                <td>{{ customer.email|default:"-" }}</td>
-                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td class="text-end">{{ customer.points|default:0 }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center text-muted py-3">No customers found</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- CNV Loyalty - All Time -->
-    <div class="col-lg-6">
-        <div class="table-wrapper">
-            <div class="table-header">
-                <h5><i class="bi bi-award"></i> CNV Loyalty ({{ stats.cnv_all_time_count }})</h5>
-                <button class="expand-btn" type="button" data-bs-toggle="collapse" data-bs-target="#cnvAllTime">
-                    <i class="bi bi-arrows-expand"></i> Toggle
-                </button>
-            </div>
-            <div class="collapse show" id="cnvAllTime">
-                <div class="table-scroll">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Customer ID</th>
-                                <th>Phone</th>
-                                <th>Full Name</th>
-                                <th>Email</th>
-                                <th>Reg. Date</th>
-                                <th class="text-end">Balance</th>
-                                <th class="text-end">Earned</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for customer in cnv_all_time %}
-                            <tr>
-                                <td>{{ customer.customer_id }}</td>
-                                <td>{{ customer.phone|default:"-" }}</td>
-                                <td>{{ customer.full_name|default:"-" }}</td>
-                                <td>{{ customer.email|default:"-" }}</td>
-                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td class="text-end">{{ customer.points_balance|default:0 }}</td>
-                                <td class="text-end">{{ customer.total_points_earned|default:0 }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center text-muted py-3">No customers found</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+    <div class="col">
+        <div class="stat-card card bg-danger bg-gradient text-white border-0">
+            <div class="card-body">
+                <div class="stat-label opacity-75">CNV Only (Not in POS)</div>
+                <div class="stat-value">{{ cnv_only_all_count|default:0 }}</div>
+                <small class="opacity-75">By phone number</small>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- PERIOD TABLES (Only show if filtered) -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-{% if stats.has_period_filter %}
-<div class="section-divider"></div>
+<!-- PERIOD METRICS (if filtered) -->
+{% if has_filter %}
+<p class="text-muted small mb-1 mt-3 fw-semibold text-uppercase">
+    <i class="bi bi-calendar-range"></i> Period Overview ({{ period_label }})
+</p>
 
-<h4 class="section-title">
-    <i class="bi bi-calendar-range"></i> Period Data: {{ stats.period_label }}
-</h4>
-
-<div class="row g-4">
-    <!-- POS System - Period -->
-    <div class="col-lg-6">
-        <div class="table-wrapper" style="border: 2px solid #198754;">
-            <div class="table-header" style="background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);">
-                <h5 class="text-success"><i class="bi bi-shop"></i> POS System ({{ stats.pos_period_count }})</h5>
-                <button class="expand-btn" type="button" data-bs-toggle="collapse" data-bs-target="#posPeriod">
-                    <i class="bi bi-arrows-expand"></i> Toggle
-                </button>
-            </div>
-            <div class="collapse show" id="posPeriod">
-                <div class="table-scroll">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>VIP ID</th>
-                                <th>Phone</th>
-                                <th>Name</th>
-                                <th>Grade</th>
-                                <th>Email</th>
-                                <th>Reg. Date</th>
-                                <th class="text-end">Points</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for customer in pos_period %}
-                            <tr>
-                                <td>{{ customer.vip_id }}</td>
-                                <td>{{ customer.phone|default:"-" }}</td>
-                                <td>{{ customer.name|default:"-" }}</td>
-                                <td>
-                                    <span class="badge bg-secondary">{{ customer.vip_grade|default:"No Grade" }}</span>
-                                </td>
-                                <td>{{ customer.email|default:"-" }}</td>
-                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td class="text-end">{{ customer.points|default:0 }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center text-muted py-3">No customers in this period</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+    <div class="col">
+        <div class="stat-card card text-white border-0" style="background:#198754">
+            <div class="card-body">
+                <div class="stat-label opacity-75">New Customers (POS)</div>
+                <div class="stat-value">{{ new_pos_count|default:0 }}</div>
+                <small class="opacity-75">Registered in period</small>
             </div>
         </div>
     </div>
-
-    <!-- CNV Loyalty - Period -->
-    <div class="col-lg-6">
-        <div class="table-wrapper" style="border: 2px solid #ffc107;">
-            <div class="table-header" style="background: linear-gradient(135deg, #fff3cd 0%, #fff8dc 100%);">
-                <h5 class="text-warning"><i class="bi bi-award"></i> CNV Loyalty ({{ stats.cnv_period_count }})</h5>
-                <button class="expand-btn" type="button" data-bs-toggle="collapse" data-bs-target="#cnvPeriod">
-                    <i class="bi bi-arrows-expand"></i> Toggle
-                </button>
+    <div class="col">
+        <div class="stat-card card text-white border-0" style="background:#0dcaf0">
+            <div class="card-body">
+                <div class="stat-label opacity-75">New CNV Customers</div>
+                <div class="stat-value">{{ new_cnv_count|default:0 }}</div>
+                <small class="opacity-75">Registered in period</small>
             </div>
-            <div class="collapse show" id="cnvPeriod">
-                <div class="table-scroll">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Customer ID</th>
-                                <th>Phone</th>
-                                <th>Full Name</th>
-                                <th>Email</th>
-                                <th>Reg. Date</th>
-                                <th class="text-end">Balance</th>
-                                <th class="text-end">Earned</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for customer in cnv_period %}
-                            <tr>
-                                <td>{{ customer.customer_id }}</td>
-                                <td>{{ customer.phone|default:"-" }}</td>
-                                <td>{{ customer.full_name|default:"-" }}</td>
-                                <td>{{ customer.email|default:"-" }}</td>
-                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td class="text-end">{{ customer.points_balance|default:0 }}</td>
-                                <td class="text-end">{{ customer.total_points_earned|default:0 }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center text-muted py-3">No customers in this period</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="stat-card card text-dark border-0" style="background:#ffc107">
+            <div class="card-body">
+                <div class="stat-label">New POS Only (Period)</div>
+                <div class="stat-value">{{ pos_only_period_count|default:0 }}</div>
+                <small>Not in CNV</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="stat-card card text-white border-0" style="background:#dc3545">
+            <div class="card-body">
+                <div class="stat-label opacity-75">New CNV Only (Period)</div>
+                <div class="stat-value">{{ cnv_only_period_count|default:0 }}</div>
+                <small class="opacity-75">Not in POS</small>
             </div>
         </div>
     </div>
 </div>
 {% endif %}
 
+<!-- TABLES SECTION -->
+<div class="row g-3 mt-3">
+    
+    <!-- Table (1): POS Only - All Time -->
+    <div class="col-12">
+        <div class="table-wrapper">
+            <div class="table-header">
+                <h6><i class="bi bi-1-circle"></i> POS Customers NOT in CNV - All Time ({{ pos_only_all_count }})</h6>
+                <button class="expand-btn" type="button" data-bs-toggle="collapse" data-bs-target="#table1">
+                    <i class="bi bi-arrows-expand"></i> Show/Hide
+                </button>
+            </div>
+            <div class="collapse show" id="table1">
+                <div class="table-scroll">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>VIP ID</th>
+                                <th>Phone</th>
+                                <th>Name</th>
+                                <th>VIP Grade</th>
+                                <th>Email</th>
+                                <th>Registration Date</th>
+                                <th class="text-end">Points</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in pos_only_all %}
+                            <tr>
+                                <td>{{ customer.vip_id }}</td>
+                                <td>{{ customer.phone }}</td>
+                                <td>{{ customer.name|default:"-" }}</td>
+                                <td><span class="badge bg-secondary">{{ customer.vip_grade|default:"No Grade" }}</span></td>
+                                <td>{{ customer.email|default:"-" }}</td>
+                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
+                                <td class="text-end">{{ customer.points|default:0 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if pos_only_all_count > 50 %}
+                <div class="p-2 bg-light border-top text-center">
+                    <small class="text-muted">Showing first 50 of {{ pos_only_all_count }} records</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Table (2): CNV Only - All Time -->
+    <div class="col-12">
+        <div class="table-wrapper">
+            <div class="table-header">
+                <h6><i class="bi bi-2-circle"></i> CNV Customers NOT in POS - All Time ({{ cnv_only_all_count }})</h6>
+                <button class="expand-btn" type="button" data-bs-toggle="collapse" data-bs-target="#table2">
+                    <i class="bi bi-arrows-expand"></i> Show/Hide
+                </button>
+            </div>
+            <div class="collapse show" id="table2">
+                <div class="table-scroll">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Customer ID</th>
+                                <th>Phone</th>
+                                <th>Full Name</th>
+                                <th>Email</th>
+                                <th>Registration Date</th>
+                                <th class="text-end">Points Earned</th>
+                                <th class="text-end">Points Spent</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in cnv_only_all %}
+                            <tr>
+                                <td>{{ customer.customer_id }}</td>
+                                <td>{{ customer.phone }}</td>
+                                <td>{{ customer.full_name|default:"-" }}</td>
+                                <td>{{ customer.email|default:"-" }}</td>
+                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
+                                <td class="text-end">{{ customer.total_points_earned|default:0 }}</td>
+                                <td class="text-end">{{ customer.total_points_spent|default:0 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if cnv_only_all_count > 50 %}
+                <div class="p-2 bg-light border-top text-center">
+                    <small class="text-muted">Showing first 50 of {{ cnv_only_all_count }} records</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Table (3): POS Only - Period -->
+    {% if has_filter %}
+    <div class="col-12">
+        <div class="table-wrapper border-warning" style="border-width: 2px!important;">
+            <div class="table-header bg-warning bg-opacity-10">
+                <h6><i class="bi bi-3-circle"></i> New POS Customers NOT in CNV - Period ({{ pos_only_period_count }})</h6>
+                <button class="expand-btn" type="button" data-bs-toggle="collapse" data-bs-target="#table3">
+                    <i class="bi bi-arrows-expand"></i> Show/Hide
+                </button>
+            </div>
+            <div class="collapse show" id="table3">
+                <div class="table-scroll">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>VIP ID</th>
+                                <th>Phone</th>
+                                <th>Name</th>
+                                <th>VIP Grade</th>
+                                <th>Email</th>
+                                <th>Registration Date</th>
+                                <th class="text-end">Points</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in pos_only_period %}
+                            <tr>
+                                <td>{{ customer.vip_id }}</td>
+                                <td>{{ customer.phone }}</td>
+                                <td>{{ customer.name|default:"-" }}</td>
+                                <td><span class="badge bg-secondary">{{ customer.vip_grade|default:"No Grade" }}</span></td>
+                                <td>{{ customer.email|default:"-" }}</td>
+                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
+                                <td class="text-end">{{ customer.points|default:0 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if pos_only_period_count > 50 %}
+                <div class="p-2 bg-light border-top text-center">
+                    <small class="text-muted">Showing first 50 of {{ pos_only_period_count }} records</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Table (4): CNV Only - Period -->
+    <div class="col-12">
+        <div class="table-wrapper border-danger" style="border-width: 2px!important;">
+            <div class="table-header bg-danger bg-opacity-10">
+                <h6><i class="bi bi-4-circle"></i> New CNV Customers NOT in POS - Period ({{ cnv_only_period_count }})</h6>
+                <button class="expand-btn" type="button" data-bs-toggle="collapse" data-bs-target="#table4">
+                    <i class="bi bi-arrows-expand"></i> Show/Hide
+                </button>
+            </div>
+            <div class="collapse show" id="table4">
+                <div class="table-scroll">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Customer ID</th>
+                                <th>Phone</th>
+                                <th>Full Name</th>
+                                <th>Email</th>
+                                <th>Registration Date</th>
+                                <th class="text-end">Points Earned</th>
+                                <th class="text-end">Points Spent</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in cnv_only_period %}
+                            <tr>
+                                <td>{{ customer.customer_id }}</td>
+                                <td>{{ customer.phone }}</td>
+                                <td>{{ customer.full_name|default:"-" }}</td>
+                                <td>{{ customer.email|default:"-" }}</td>
+                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
+                                <td class="text-end">{{ customer.total_points_earned|default:0 }}</td>
+                                <td class="text-end">{{ customer.total_points_spent|default:0 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if cnv_only_period_count > 50 %}
+                <div class="p-2 bg-light border-top text-center">
+                    <small class="text-muted">Showing first 50 of {{ cnv_only_period_count }} records</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Quick date buttons (similar to analytics dashboard)
+document.querySelectorAll('.quick-days-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const days = parseInt(this.dataset.days);
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - days);
+        
+        document.querySelector('input[name="start_date"]').value = start.toISOString().split('T')[0];
+        document.querySelector('input[name="end_date"]').value = end.toISOString().split('T')[0];
+        document.getElementById('dateFilterForm').submit();
+    });
+});
+
+document.getElementById('btnThisMonth')?.addEventListener('click', function() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    document.querySelector('input[name="start_date"]').value = start.toISOString().split('T')[0];
+    document.querySelector('input[name="end_date"]').value = end.toISOString().split('T')[0];
+    document.getElementById('dateFilterForm').submit();
+});
+
+document.getElementById('btnLastMonth')?.addEventListener('click', function() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    
+    document.querySelector('input[name="start_date"]').value = start.toISOString().split('T')[0];
+    document.querySelector('input[name="end_date"]').value = end.toISOString().split('T')[0];
+    document.getElementById('dateFilterForm').submit();
+});
+
+document.getElementById('btnThisYear')?.addEventListener('click', function() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 1);
+    const end = new Date(now.getFullYear(), 11, 31);
+    
+    document.querySelector('input[name="start_date"]').value = start.toISOString().split('T')[0];
+    document.querySelector('input[name="end_date"]').value = end.toISOString().split('T')[0];
+    document.getElementById('dateFilterForm').submit();
+});
+</script>
 {% endblock %}
