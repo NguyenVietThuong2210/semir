@@ -210,7 +210,10 @@ def export_analytics(request):
     if not data:
         messages.error(request, 'No data to export')
         return redirect('analytics_dashboard')
-    wb = export_analytics_to_excel(data)
+    
+    # Pass filter info to export
+    wb = export_analytics_to_excel(data, date_from=date_from, date_to=date_to, shop_group=shop_group)
+    
     fn = (f"return_visit_rate_{date_from}_{date_to}_{datetime.now().strftime('%H%M%S')}.xlsx"
           if date_from and date_to else
           f"return_visit_rate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
