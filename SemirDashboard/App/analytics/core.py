@@ -118,6 +118,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     customer_details = []
     total_amount_period = Decimal(0)
     
+    # NEW: Track returning invoices and amounts
+    returning_invoices = 0
+    returning_amount = Decimal(0)
+    
     # Separate tracking for VIP ID = 0
     vip_0_purchases = customer_purchases.get('0', [])
     vip_0_amount = sum(p['amount'] for p in vip_0_purchases)
@@ -139,10 +143,17 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         # Get customer info
         grade, reg_date, name = get_customer_info(vip_id, purchases_sorted[0]['customer'])
         
+        # Calculate total amount (needed for returning tracking)
+        amt = sum(p['amount'] for p in purchases_sorted)
+        total_amount_period += amt
+        
         # Calculate return visits (by unique days)
         rc, is_ret = calculate_return_visits(purchases_sorted, reg_date)
         if is_ret:
             returning_customers.add(vip_id)
+            # NEW: Track returning invoices and amount
+            returning_invoices += n
+            returning_amount += amt
         
         # Track new members in period
         if reg_date and vip_id != '0':
@@ -150,10 +161,6 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             hi = date_to or date_stats['end_date']
             if lo <= reg_date <= hi:
                 new_members_in_period.add(vip_id)
-        
-        # Calculate total amount
-        amt = sum(p['amount'] for p in purchases_sorted)
-        total_amount_period += amt
         
         # Build customer detail record
         customer_details.append({
@@ -209,6 +216,8 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             'returning_customers': total_returning,
             'return_rate': return_rate_p,
             'return_rate_all_time': return_rate_at,
+            'returning_invoices': returning_invoices,  # NEW
+            'returning_amount': float(returning_amount),  # NEW
             'total_amount_period': float(total_amount_period),
             'buyer_without_info': buyer_no_info_invoices,
             'new_members_in_period': len(new_members_in_period),

@@ -34,8 +34,13 @@ def aggregate_by_grade(customer_details):
         grade_buckets[g]['active'] += 1
         grade_buckets[g]['amount'] += Decimal(str(d['total_spent']))
         grade_buckets[g]['invoices'] += d['total_purchases']
+        
+        # Track returning customers
         if d['return_visits'] > 0:
             grade_buckets[g]['returning'] += 1
+            # NEW: Track returning invoices and amount
+            grade_buckets[g]['returning_invoices'] = grade_buckets[g].get('returning_invoices', 0) + d['total_purchases']
+            grade_buckets[g]['returning_amount'] = grade_buckets[g].get('returning_amount', Decimal(0)) + Decimal(str(d['total_spent']))
     
     # Ensure all grades exist
     for g in GRADE_ORDER:
@@ -57,6 +62,8 @@ def aggregate_by_grade(customer_details):
             'returning_customers': s['returning'],
             'return_rate': round(s['returning'] / s['active'] * 100 if s['active'] else 0, 2),
             'return_rate_all_time': round(s['returning'] / tdb * 100 if tdb else 0, 2),
+            'returning_invoices': s.get('returning_invoices', 0),  # NEW
+            'returning_amount': float(s.get('returning_amount', Decimal(0))),  # NEW
             'total_invoices': s['invoices'],
             'total_amount': float(s['amount']),
         })
@@ -80,6 +87,9 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn):
     session_buckets = defaultdict(create_empty_bucket)
     session_vip0_invoices = defaultdict(int)
     session_vip0_amount = defaultdict(lambda: Decimal(0))
+    # NEW: Track returning invoices and amounts
+    session_returning_invoices = defaultdict(int)
+    session_returning_amount = defaultdict(lambda: Decimal(0))
     
     for vip_id, purchases in customer_purchases.items():
         # Track VIP 0 separately
@@ -124,6 +134,9 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn):
             # - Has purchased before this season (has_prior_purchases)
             if is_ret_in_season or has_prior_purchases:
                 session_buckets[sk]['returning'] += 1
+                # NEW: Track returning invoices and amount
+                session_returning_invoices[sk] += len(sp)
+                session_returning_amount[sk] += sum(p['amount'] for p in sp)
     
     # Build stats list
     session_stats = []
@@ -140,6 +153,8 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn):
             'total_customers': ac,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
+            'returning_invoices': session_returning_invoices.get(key, 0),  # NEW
+            'returning_amount': float(session_returning_amount.get(key, Decimal(0))),  # NEW
             'total_invoices': s['invoices'],
             'total_amount': float(s['amount']),
             'total_invoices_with_vip0': s['invoices'] + vip0_inv,
@@ -168,10 +183,17 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
     shop_invoices = defaultdict(int)
     shop_amount = defaultdict(Decimal)
     shop_returning = defaultdict(set)
+    # NEW: Track returning invoices and amounts at shop level
+    shop_returning_invoices = defaultdict(int)
+    shop_returning_amount = defaultdict(lambda: Decimal(0))
+    
     shop_grade = defaultdict(lambda: defaultdict(lambda: {
-        'active': set(), 'returning': set(), 'invoices': 0, 'amount': Decimal(0)
+        'active': set(), 'returning': set(), 'invoices': 0, 'amount': Decimal(0),
+        'returning_invoices': 0, 'returning_amount': Decimal(0)  # NEW
     }))
     shop_sess = defaultdict(lambda: defaultdict(create_empty_bucket))
+    # NEW: Track returning for shop-session
+    shop_sess_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
     
     # NEW: VIP 0 tracking
     shop_vip0_invoices = defaultdict(int)
@@ -216,11 +238,17 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             _, ret = calculate_return_visits(sorted(sh_p, key=lambda x: x['date']), reg_date)
             if ret:
                 shop_returning[sh].add(vip_id)
+                # NEW: Track returning invoices and amount at shop level
+                shop_returning_invoices[sh] += len(sh_p)
+                shop_returning_amount[sh] += sum(p['amount'] for p in sh_p)
             
             # Shop → By Grade breakdown
             shop_grade[sh][grade]['active'].add(vip_id)
             if ret:
                 shop_grade[sh][grade]['returning'].add(vip_id)
+                # NEW: Track returning for this grade
+                shop_grade[sh][grade]['returning_invoices'] += len(sh_p)
+                shop_grade[sh][grade]['returning_amount'] += sum(p['amount'] for p in sh_p)
             for p in sh_p:
                 shop_grade[sh][grade]['invoices'] += 1
                 shop_grade[sh][grade]['amount'] += p['amount']
@@ -252,6 +280,9 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 # - Has purchased at this shop before this season (has_prior_shop_purchases)
                 if is_ret_in_season or has_prior_shop_purchases:
                     shop_sess[sh][sk]['returning'] += 1
+                    # NEW: Track returning invoices and amount for this shop-season
+                    shop_sess_returning[sh][sk]['invoices'] += len(sp)
+                    shop_sess_returning[sh][sk]['amount'] += sum(p['amount'] for p in sp)
     
     # Build shop stats list
     shop_stats = []
@@ -270,6 +301,8 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_customers': a,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
+                'returning_invoices': gd.get('returning_invoices', 0),  # NEW
+                'returning_amount': float(gd.get('returning_amount', Decimal(0))),  # NEW
                 'total_invoices': gd['invoices'],
                 'total_amount': float(gd['amount']),
             })
@@ -282,6 +315,7 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 sd = create_empty_bucket()
             
             vip0_sess = shop_sess_vip0[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
+            ret_sess = shop_sess_returning[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})  # NEW
             
             a = sd['active']
             r = sd['returning']
@@ -290,6 +324,8 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_customers': a,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
+                'returning_invoices': ret_sess['invoices'],  # NEW
+                'returning_amount': float(ret_sess['amount']),  # NEW
                 'total_invoices': sd['invoices'],
                 'total_amount': float(sd['amount']),
                 'total_invoices_with_vip0': sd['invoices'] + vip0_sess['invoices'],
@@ -301,6 +337,8 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             'total_customers': ac,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
+            'returning_invoices': shop_returning_invoices.get(sh, 0),  # NEW
+            'returning_amount': float(shop_returning_amount.get(sh, Decimal(0))),  # NEW
             'total_invoices': shop_invoices[sh],
             'total_amount': float(shop_amount[sh]),
             'total_invoices_with_vip0': shop_invoices[sh] + shop_vip0_invoices.get(sh, 0),
