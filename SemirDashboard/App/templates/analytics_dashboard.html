@@ -221,6 +221,35 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
     </div>
 </div>
 
+<!-- Row 3: Returning Metrics -->
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+    <div class="col d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(25,135,84,.12)">
+            <div class="card-body">
+                <div class="stat-label text-success">Invoices (Returning)</div>
+                <div class="stat-value text-success">{{ overview.returning_invoices|default:0 }}</div>
+                <small class="text-muted">From returning customers</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(25,135,84,.12)">
+            <div class="card-body">
+                <div class="stat-label text-success">Amount (Returning)</div>
+                <div class="stat-value amount-vnd text-success" style="font-size:1.1rem">
+                    {{ overview.returning_amount|default:0|vnd }} VND
+                </div>
+                <small class="text-muted">From returning customers</small>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Spacer columns -->
+    <div class="col d-flex"></div>
+    <div class="col d-flex"></div>
+</div>
+
 <!-- ALL-TIME METRICS (4 cards) -->
 <p class="text-muted small mb-1 fw-semibold text-uppercase">
     <i class="bi bi-infinity"></i> All-Time Metrics
@@ -318,6 +347,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <th class="text-end">Return Visit Rate (Period)</th>
                             <th class="text-end">Total in DB</th>
                             <th class="text-end">Return Rate (All Time)</th>
+                            <th class="text-end">Invoices (Returning)</th>
+                            <th class="text-end">Amount (Returning)</th>
                             <th class="text-end">Total Invoices</th>
                             <th class="text-end">Total Amount</th>
                         </tr>
@@ -335,11 +366,13 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="text-end">
                                 <span class="badge bg-warning">{{ g.return_rate_all_time }}%</span>
                             </td>
+                            <td class="text-end text-success">{{ g.returning_invoices|default:0 }}</td>
+                            <td class="text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} VND</td>
                             <td class="text-end">{{ g.total_invoices }}</td>
                             <td class="text-end amount-vnd">{{ g.total_amount|vnd }} VND</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="8" class="text-center text-muted py-3">No data</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-3">No data</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -359,6 +392,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <th class="text-end">Returning</th>
                             <th class="text-end">Active</th>
                             <th class="text-end">Return Rate</th>
+                            <th class="text-end">Invoices (Returning)</th>
+                            <th class="text-end">Amount (Returning)</th>
                             <th class="text-end">Invoices (Customers)</th>
                             <th class="text-end">Amount (Customers)</th>
                             <th class="text-end">Total Invoices</th>
@@ -374,13 +409,15 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="text-end">
                                 <span class="badge bg-primary">{{ s.return_rate }}%</span>
                             </td>
+                            <td class="text-end text-success">{{ s.returning_invoices|default:0 }}</td>
+                            <td class="text-end text-success amount-vnd">{{ s.returning_amount|default:0|vnd }} VND</td>
                             <td class="text-end">{{ s.total_invoices }}</td>
                             <td class="text-end amount-vnd">{{ s.total_amount|vnd }}</td>
                             <td class="text-end">{{ s.total_invoices_with_vip0 }}</td>
                             <td class="text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="8" class="text-center text-muted py-3">No season data for this period</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-3">No season data for this period</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -411,6 +448,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <th class="cv text-end">Returning</th>
                                     <th class="cv text-end">Active</th>
                                     <th class="cv text-end">Rate</th>
+                                    <th class="cv text-end">Invoices (Ret)</th>
+                                    <th class="cv text-end">Amount (Ret)</th>
                                     <th class="cv text-end">Invoices (Customers)</th>
                                     <th class="cv text-end">Amount (Customers)</th>
                                     <th class="cv text-end">Total Invoices</th>
@@ -425,6 +464,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <td class="cv text-end">
                                         <span class="badge bg-primary" style="font-size:.8rem">{{ shop.return_rate }}%</span>
                                     </td>
+                                    <td class="cv text-end text-success">{{ shop.returning_invoices|default:0 }}</td>
+                                    <td class="cv text-end text-success amount-vnd" style="font-size:.82rem">{{ shop.returning_amount|default:0|vnd }}</td>
                                     <td class="cv text-end">{{ shop.total_invoices }}</td>
                                     <td class="cv text-end amount-vnd" style="font-size:.82rem">{{ shop.total_amount|vnd }}</td>
                                     <td class="cv text-end">{{ shop.total_invoices_with_vip0 }}</td>
@@ -446,6 +487,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                     <th class="sv text-end">Returning</th>
                                                     <th class="sv text-end">Active</th>
                                                     <th class="sv text-end">Rate</th>
+                                                    <th class="sv text-end">Inv(Ret)</th>
+                                                    <th class="sv text-end">Amt(Ret)</th>
                                                     <th class="sv text-end">Invoices</th>
                                                     <th class="sv text-end">Amount</th>
                                                 </tr>
@@ -459,11 +502,13 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                     <td class="sv text-end">
                                                         <span class="badge bg-primary" style="font-size:.73rem">{{ gd.return_rate }}%</span>
                                                     </td>
+                                                    <td class="sv text-end text-success">{{ gd.returning_invoices|default:0 }}</td>
+                                                    <td class="sv text-end text-success amount-vnd" style="font-size:.77rem">{{ gd.returning_amount|default:0|vnd }}</td>
                                                     <td class="sv text-end">{{ gd.total_invoices }}</td>
                                                     <td class="sv text-end amount-vnd" style="font-size:.77rem">{{ gd.total_amount|vnd }}</td>
                                                 </tr>
                                                 {% empty %}
-                                                <tr><td colspan="6" class="text-muted small text-center py-1">No data</td></tr>
+                                                <tr><td colspan="8" class="text-muted small text-center py-1">No data</td></tr>
                                                 {% endfor %}
                                             </tbody>
                                         </table>
@@ -479,6 +524,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                     <th class="sv text-end">Returning</th>
                                                     <th class="sv text-end">Active</th>
                                                     <th class="sv text-end">Rate</th>
+                                                    <th class="sv text-end">Inv(Ret)</th>
+                                                    <th class="sv text-end">Amt(Ret)</th>
                                                     <th class="sv text-end">Invoices (Customers)</th>
                                                     <th class="sv text-end">Amount (Customers)</th>
                                                     <th class="sv text-end">Total Invoices</th>
@@ -495,6 +542,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                     <td class="sv text-end">
                                                         <span class="badge bg-success" style="font-size:.73rem">{{ sd.return_rate }}%</span>
                                                     </td>
+                                                    <td class="sv text-end text-success">{{ sd.returning_invoices|default:0 }}</td>
+                                                    <td class="sv text-end text-success amount-vnd" style="font-size:.77rem">{{ sd.returning_amount|default:0|vnd }}</td>
                                                     <td class="sv text-end">{{ sd.total_invoices }}</td>
                                                     <td class="sv text-end amount-vnd" style="font-size:.77rem">{{ sd.total_amount|vnd }}</td>
                                                     <td class="sv text-end">{{ sd.total_invoices_with_vip0 }}</td>
@@ -502,7 +551,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 </tr>
                                                 {% endif %}
                                                 {% empty %}
-                                                <tr><td colspan="8" class="text-muted small text-center py-1">No data</td></tr>
+                                                <tr><td colspan="10" class="text-muted small text-center py-1">No data</td></tr>
                                                 {% endfor %}
                                             </tbody>
                                         </table>
@@ -545,6 +594,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <th class="val-col text-end">Returning</th>
                                     <th class="val-col text-end">Active</th>
                                     <th class="val-col text-end">Return Rate</th>
+                                    <th class="val-col text-end">Inv(Ret)</th>
+                                    <th class="val-col text-end">Amt(Ret)</th>
                                     <th class="val-col text-end">Invoices</th>
                                     <th class="val-col text-end">Amount</th>
                                 </tr>
@@ -560,6 +611,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             <td class="val-col text-end">
                                                 <span class="badge bg-primary">{{ g.return_rate }}%</span>
                                             </td>
+                                            <td class="val-col text-end text-success">{{ g.returning_invoices|default:0 }}</td>
+                                            <td class="val-col text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }}</td>
                                             <td class="val-col text-end">{{ g.total_invoices }}</td>
                                             <td class="val-col text-end amount-vnd">{{ g.total_amount|vnd }}</td>
                                         </tr>
@@ -601,6 +654,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <th class="val-col text-end">Returning</th>
                                     <th class="val-col text-end">Active</th>
                                     <th class="val-col text-end">Return Rate</th>
+                                    <th class="val-col text-end">Inv(Ret)</th>
+                                    <th class="val-col text-end">Amt(Ret)</th>
                                     <th class="val-col text-end">Invoices (Customers)</th>
                                     <th class="val-col text-end">Amount (Customers)</th>
                                     <th class="val-col text-end">Total Invoices</th>
@@ -618,6 +673,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             <td class="val-col text-end">
                                                 <span class="badge bg-primary">{{ s.return_rate }}%</span>
                                             </td>
+                                            <td class="val-col text-end text-success">{{ s.returning_invoices|default:0 }}</td>
+                                            <td class="val-col text-end text-success amount-vnd">{{ s.returning_amount|default:0|vnd }}</td>
                                             <td class="val-col text-end">{{ s.total_invoices }}</td>
                                             <td class="val-col text-end amount-vnd">{{ s.total_amount|vnd }}</td>
                                             <td class="val-col text-end">{{ s.total_invoices_with_vip0 }}</td>
@@ -751,7 +808,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                         <th>Reg. Date</th><th>First Purchase (Period)</th>
                         <th class="text-end">Purchases (Period)</th>
                         <th class="text-end">Return Visits (Period)</th>
-                        <th class="text-end">Total Spent (Period)</th>
+                        <th class="text-end">Total Spent</th>
                     </tr>
                 </thead>
                 <tbody>
