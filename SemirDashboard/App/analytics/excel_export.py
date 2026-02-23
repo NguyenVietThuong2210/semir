@@ -11,12 +11,12 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 
-def export_analytics_to_excel(data):
+def export_analytics_to_excel(data, date_from=None, date_to=None, shop_group=None):
     """
     Export analytics data to Excel workbook.
     
     Creates 8 sheets:
-    1. Overview
+    1. Overview (includes filter info)
     2. By VIP Grade
     3. By Season
     4. By Shop
@@ -24,6 +24,12 @@ def export_analytics_to_excel(data):
     6. By Grade - All Shops
     7. By Season - All Shops
     8. Customer Details
+    
+    Args:
+        data: Analytics data dict
+        date_from: Start date filter (for display)
+        date_to: End date filter (for display)
+        shop_group: Shop group filter (for display)
     """
     wb = Workbook()
     
@@ -31,7 +37,7 @@ def export_analytics_to_excel(data):
     header_font = Font(bold=True, color="FFFFFF")
     header_align = Alignment(horizontal="center", vertical="center")
     
-    _create_overview_sheet(wb, data, header_fill, header_font, header_align)
+    _create_overview_sheet(wb, data, header_fill, header_font, header_align, date_from, date_to, shop_group)
     _create_grade_sheet(wb, data, header_fill, header_font, header_align)
     _create_season_sheet(wb, data, header_fill, header_font, header_align)
     _create_shop_sheet(wb, data, header_fill, header_font, header_align)
@@ -43,16 +49,31 @@ def export_analytics_to_excel(data):
     return wb
 
 
-def _create_overview_sheet(wb, data, header_fill, header_font, header_align):
-    """Overview sheet."""
+def _create_overview_sheet(wb, data, header_fill, header_font, header_align, date_from=None, date_to=None, shop_group=None):
+    """Overview sheet with filter information."""
     ws = wb.active
     ws.title = "Overview"
     
     ws['A1'] = "Customer Analytics Overview"
     ws['A1'].font = Font(bold=True, size=14)
     
+    # Show active filters
+    row = 2
+    if date_from and date_to:
+        ws[f'A{row}'] = "Period Filter:"
+        ws[f'B{row}'] = f"{date_from} to {date_to}"
+        ws[f'B{row}'].font = Font(bold=True, color="0066CC")
+        row += 1
+    
+    if shop_group:
+        ws[f'A{row}'] = "Shop Group Filter:"
+        ws[f'B{row}'] = shop_group
+        ws[f'B{row}'].font = Font(bold=True, color="0066CC")
+        row += 1
+    
+    row += 1  # Empty row
+    
     ov = data['overview']
-    row = 3
     for label, value in [
         ("New Members (Period)", ov['new_members_in_period']),
         ("Returning (Period)", ov['returning_customers']),
@@ -68,7 +89,7 @@ def _create_overview_sheet(wb, data, header_fill, header_font, header_align):
         row += 1
     
     ws.column_dimensions['A'].width = 35
-    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['B'].width = 25
 
 
 def _create_grade_sheet(wb, data, header_fill, header_font, header_align):
