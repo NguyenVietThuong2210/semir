@@ -7,12 +7,13 @@ Entry point that coordinates all analytics calculations.
 Uses user-confirmed formula: counts INVOICES, not unique days
 
 Version: 3.3 - Fixed within-season + cross-season returns
+Version: 3.4 - Added shop_group filter
 """
 import logging
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Count, Min, Max
+from django.db.models import Count, Min, Max, Q
 
 from App.models import Customer, SalesTransaction
 
@@ -33,7 +34,7 @@ from .aggregators import (
 logger = logging.getLogger('customer_analytics')
 
 
-def calculate_return_rate_analytics(date_from=None, date_to=None):
+def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=None):
     """
     🎯 MAIN ANALYTICS FUNCTION - Entry point for all customer analytics
     
@@ -48,6 +49,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
     Args:
         date_from: Start date for period filter (optional)
         date_to: End date for period filter (optional)
+        shop_group: Shop group filter - "Bala Group", "Semir Group", "Others Group" (optional)
     
     Returns:
         Dict with complete analytics data:
@@ -61,19 +63,35 @@ def calculate_return_rate_analytics(date_from=None, date_to=None):
         - buyer_without_info_stats: VIP ID = 0 analytics
     """
     clear_customer_cache()
-    logger.info("START date_from=%s date_to=%s", date_from, date_to)
+    logger.info("START date_from=%s date_to=%s shop_group=%s", date_from, date_to, shop_group)
     
     # Database counts
     total_customers_in_db = Customer.objects.count()
     member_active_all_time = Customer.objects.filter(points__gt=0).count()
     member_inactive_all_time = Customer.objects.filter(points=0).count()
     
-    # Fetch sales data (filtered by period)
+    # Fetch sales data (filtered by period and shop group)
     qs = SalesTransaction.objects.select_related('customer').order_by('sales_date')
     if date_from:
         qs = qs.filter(sales_date__gte=date_from)
     if date_to:
         qs = qs.filter(sales_date__lte=date_to)
+    
+    # NEW: Apply shop group filter
+    if shop_group:
+        if shop_group == 'Bala Group':
+            # Filter shops containing "Bala" or "巴拉"
+            qs = qs.filter(Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉'))
+        elif shop_group == 'Semir Group':
+            # Filter shops containing "Semir" or "森马"
+            qs = qs.filter(Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马'))
+        elif shop_group == 'Others Group':
+            # Exclude Bala and Semir shops
+            qs = qs.exclude(
+                Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉') |
+                Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马')
+            )
+    
     if not qs.exists():
         return None
     

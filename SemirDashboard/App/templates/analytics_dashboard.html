@@ -52,7 +52,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-bar-chart"></i> Sales Analytics</h2>
-    <a href="{% url 'export_analytics' %}{% if start_date and end_date %}?start_date={{ start_date }}&end_date={{ end_date }}{% endif %}"
+    <a href="{% url 'export_analytics' %}?{% if start_date and end_date %}start_date={{ start_date }}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}"
        class="btn btn-success">
         <i class="bi bi-download"></i> Export to Excel
     </a>
@@ -70,7 +70,16 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                 <label class="form-label"><i class="bi bi-calendar"></i> End Date</label>
                 <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
             </div>
-            <div class="col-md-6">
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-shop"></i> Shop Group</label>
+                <select class="form-select" name="shop_group">
+                    <option value="">All Shops</option>
+                    <option value="Bala Group" {% if shop_group == 'Bala Group' %}selected{% endif %}>Bala Group</option>
+                    <option value="Semir Group" {% if shop_group == 'Semir Group' %}selected{% endif %}>Semir Group</option>
+                    <option value="Others Group" {% if shop_group == 'Others Group' %}selected{% endif %}>Others Group</option>
+                </select>
+            </div>
+            <div class="col-md-3">
                 <button type="submit" class="btn btn-primary me-2">
                     <i class="bi bi-funnel"></i> Apply
                 </button>
@@ -98,6 +107,12 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <i class="bi bi-funnel-fill"></i>
             Period: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong>
             {% if session_label %} | Season: <strong>{{ session_label }}</strong>{% endif %}
+            {% if shop_group %} | Shop Group: <strong>{{ shop_group }}</strong>{% endif %}
+        </div>
+        {% elif shop_group %}
+        <div class="alert alert-info mt-2 mb-0 py-2">
+            <i class="bi bi-funnel-fill"></i>
+            Shop Group: <strong>{{ shop_group }}</strong>
         </div>
         {% endif %}
     </div>
@@ -733,9 +748,9 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                 <thead>
                     <tr>
                         <th>VIP ID</th><th>Name</th><th>Grade</th>
-                        <th>Reg. Date</th><th>First Purchase</th>
-                        <th class="text-end">Purchases</th>
-                        <th class="text-end">Return Visits</th>
+                        <th>Reg. Date</th><th>First Purchase (Period)</th>
+                        <th class="text-end">Purchases (Period)</th>
+                        <th class="text-end">Return Visits (Period)</th>
                         <th class="text-end">Total Spent</th>
                     </tr>
                 </thead>
