@@ -4,7 +4,7 @@ App/analytics/coupon_analytics.py
 Coupon usage analytics and Excel export.
 Separate domain from customer analytics.
 
-Version: 3.3 - FINAL VERIFIED
+Version: 3.4 - FIXED: Total amount now uses invoice amounts, not face_value
 All field names verified against Coupon model
 """
 from collections import defaultdict
@@ -21,6 +21,8 @@ from App.models import Coupon, Customer, SalesTransaction
 def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=None):
     """
     Calculate coupon usage analytics.
+    
+    IMPORTANT: Total amounts are calculated from INVOICE AMOUNTS, not face_value.
     
     Args:
         date_from: Start date for period filter
@@ -48,43 +50,131 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
         qs = qs.filter(coupon_id__istartswith=coupon_id_prefix)
         period_qs = period_qs.filter(coupon_id__istartswith=coupon_id_prefix)
     
-    # All-time stats
+    # All-time stats - counts only (amounts calculated below)
     all_time_total = qs.count()
     all_time_used = qs.filter(using_date__isnull=False).count()
     all_time_unused = all_time_total - all_time_used
     all_time_usage_rate = round(all_time_used / all_time_total * 100 if all_time_total else 0, 2)
-    all_time_amount = sum(c.face_value or 0 for c in qs.filter(using_date__isnull=False))
     
-    # Period stats
+    # Period stats - counts only (amounts calculated below)
     period_total = period_qs.count()
     period_used = period_qs.filter(using_date__isnull=False).count()
     period_unused = period_total - period_used
     period_usage_rate = round(period_used / period_total * 100 if period_total else 0, 2)
-    period_amount = sum(c.face_value or 0 for c in period_qs.filter(using_date__isnull=False))
     
-    # By shop
+    # ===========================================================================
+    # CALCULATE AMOUNTS FROM INVOICE AMOUNTS (NOT face_value)
+    # ===========================================================================
+    
+    all_time_amount = Decimal(0)
+    period_amount = Decimal(0)
     shop_data = {}
+    coupon_details = []
     
-    for coupon in period_qs.filter(using_date__isnull=False):
-        # VERIFIED: Coupon.using_shop (NOT shop_name)
+    # Helper function to get invoice amount for a coupon
+    def get_invoice_amount(coupon):
+        """Get invoice amount for a coupon, fallback to face_value if no invoice found."""
+        if coupon.docket_number:
+            try:
+                txn = SalesTransaction.objects.get(invoice_number=coupon.docket_number)
+                return txn.sales_amount or coupon.face_value or Decimal(0)
+            except SalesTransaction.DoesNotExist:
+                pass
+        return coupon.face_value or Decimal(0)
+    
+    # Calculate all-time amount (process ALL used coupons)
+    for coupon in qs.filter(using_date__isnull=False):
+        inv_amount = get_invoice_amount(coupon)
+        all_time_amount += inv_amount
+    
+    # ===========================================================================
+    # PROCESS PERIOD COUPONS - Build details and calculate period amounts
+    # ===========================================================================
+    
+    for coupon in period_qs.filter(using_date__isnull=False).order_by('-using_date'):
+        # Get customer info from coupon
+        vip_id = coupon.member_id or None
+        vip_name = coupon.member_name or None
+        phone = coupon.member_phone or None
+        
+        # Initialize transaction fields
+        sales_date = None
+        inv_shop = None
+        inv_amount = None
+        note = None
+        
+        # Try to get invoice/transaction info
+        if coupon.docket_number:
+            try:
+                txn = SalesTransaction.objects.get(invoice_number=coupon.docket_number)
+                
+                # Get customer info from transaction if not in coupon
+                if not vip_id:
+                    vip_id = txn.vip_id
+                if not vip_name and txn.vip_id and txn.vip_id != '0':
+                    try:
+                        cust = Customer.objects.get(vip_id=txn.vip_id)
+                        vip_name = cust.name
+                        phone = cust.phone
+                    except Customer.DoesNotExist:
+                        vip_name = txn.vip_name
+                
+                # Get transaction details
+                sales_date = txn.sales_date
+                inv_shop = txn.shop_name
+                inv_amount = txn.sales_amount
+                
+                # Validate shop match
+                if coupon.using_shop and inv_shop and coupon.using_shop != inv_shop:
+                    note = f"Shop mismatch: Coupon@{coupon.using_shop} vs Invoice@{inv_shop}"
+                    
+            except SalesTransaction.DoesNotExist:
+                note = f"Invoice {coupon.docket_number} not found"
+        
+        # Final amount (invoice amount or fallback to face_value)
+        final_amount = inv_amount or coupon.face_value or Decimal(0)
+        
+        # Accumulate period amount
+        period_amount += final_amount
+        
+        # Accumulate by shop
         shop = coupon.using_shop or 'Unknown'
         if shop not in shop_data:
             shop_data[shop] = {'total': 0, 'used': 0, 'amount': Decimal(0)}
         shop_data[shop]['used'] += 1
-        # VERIFIED: Coupon.face_value
-        shop_data[shop]['amount'] += coupon.face_value or Decimal(0)
+        shop_data[shop]['amount'] += final_amount
+        
+        # Build detail record
+        coupon_details.append({
+            'coupon_id': coupon.coupon_id,
+            'creator': coupon.creator or '',
+            'face_value': coupon.face_value or 0,
+            'using_shop': coupon.using_shop or 'Unknown',
+            'using_date': coupon.using_date,
+            'docket_number': coupon.docket_number or '',
+            'vip_id': vip_id or '',
+            'customer_name': vip_name or '-',
+            'customer_phone': phone or '-',
+            'sales_day': sales_date,
+            'inv_shop': inv_shop or '-',
+            'amount': float(final_amount),  # THIS IS INVOICE AMOUNT
+            'note': note or '',
+        })
     
     # Add unused coupons to shop totals
     for coupon in period_qs.filter(using_date__isnull=True):
-        # VERIFIED: Coupon.using_shop
         shop = coupon.using_shop or 'Unknown'
         if shop not in shop_data:
             shop_data[shop] = {'total': 0, 'used': 0, 'amount': Decimal(0)}
         shop_data[shop]['total'] += 1
     
-    # Update totals
+    # Update shop totals (add used to total for each shop)
     for shop_name in shop_data:
         shop_data[shop_name]['total'] += shop_data[shop_name]['used']
+    
+    # ===========================================================================
+    # BUILD SHOP STATS
+    # ===========================================================================
     
     total_used_all_shops = period_used
     
@@ -104,72 +194,10 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'used_pct_period': pct_of_total,
             'used_pct_of_used': pct_of_used,
             'usage_rate': usage_rate,
-            'total_amount': float(data['amount']),
+            'total_amount': float(data['amount']),  # Sum of invoice amounts
         })
     
     shop_stats.sort(key=lambda x: x['used'], reverse=True)
-    
-    # Coupon details
-    coupon_details = []
-    for coupon in period_qs.filter(using_date__isnull=False).order_by('-using_date'):
-        # VERIFIED: Coupon.member_id, member_name, member_phone (primary source)
-        vip_id = coupon.member_id or None
-        vip_name = coupon.member_name or None
-        phone = coupon.member_phone or None
-        
-        # Initialize transaction fields
-        sales_date = None
-        inv_shop = None
-        inv_amount = None
-        note = None
-        
-        # If docket_number exists, try to get transaction info (fallback + additional data)
-        # VERIFIED: Coupon.docket_number (NOT invoice_number!)
-        if coupon.docket_number:
-            try:
-                # VERIFIED: SalesTransaction.invoice_number (different model!)
-                txn = SalesTransaction.objects.get(invoice_number=coupon.docket_number)
-                
-                # Get customer info from transaction if not in coupon
-                if not vip_id:
-                    vip_id = txn.vip_id
-                if not vip_name and txn.vip_id and txn.vip_id != '0':
-                    try:
-                        cust = Customer.objects.get(vip_id=txn.vip_id)
-                        vip_name = cust.name
-                        # VERIFIED: Customer.phone (NOT phone_number!)
-                        phone = cust.phone
-                    except Customer.DoesNotExist:
-                        vip_name = txn.vip_name  # Fallback to transaction name
-                
-                # Get transaction details
-                sales_date = txn.sales_date
-                inv_shop = txn.shop_name
-                inv_amount = txn.sales_amount
-                
-                # Check if using_shop matches invoice shop
-                if coupon.using_shop and inv_shop and coupon.using_shop != inv_shop:
-                    note = f"Shop mismatch: Coupon@{coupon.using_shop} vs Invoice@{inv_shop}"
-                    
-            except SalesTransaction.DoesNotExist:
-                note = f"Invoice {coupon.docket_number} not found"
-        
-        coupon_details.append({
-            # VERIFIED: All Coupon fields below
-            'coupon_id': coupon.coupon_id,
-            'creator': coupon.creator or '',  # NEW: From Coupon model
-            'face_value': coupon.face_value or 0,
-            'using_shop': coupon.using_shop or 'Unknown',  # Template uses using_shop
-            'using_date': coupon.using_date,
-            'docket_number': coupon.docket_number or '',  # docket_number, NOT invoice_number
-            'vip_id': vip_id or '',
-            'customer_name': vip_name or '-',  # Template uses customer_name
-            'customer_phone': phone or '-',  # Template uses customer_phone
-            'sales_day': sales_date,  # NEW: From SalesTransaction
-            'inv_shop': inv_shop or '-',  # NEW: Invoice shop name
-            'amount': inv_amount or coupon.face_value or 0,  # Use invoice amount if available
-            'note': note or '',  # NEW: Validation notes
-        })
     
     # Calculate percentages for template
     all_time_used_pct = round(all_time_used / all_time_total * 100, 2) if all_time_total else 0
@@ -186,7 +214,7 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'used_pct': all_time_used_pct,
             'unused_pct': all_time_unused_pct,
             'usage_rate': all_time_usage_rate,
-            'total_amount': float(all_time_amount),
+            'total_amount': float(all_time_amount),  # Sum of ALL invoice amounts
         },
         'period': {
             'total': period_total,
@@ -195,7 +223,7 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'used_pct': period_used_pct,
             'unused_pct': period_unused_pct,
             'usage_rate': period_usage_rate,
-            'total_amount': float(period_amount),
+            'total_amount': float(period_amount),  # Sum of PERIOD invoice amounts
         },
         'by_shop': shop_stats,
         'details': coupon_details,
@@ -243,7 +271,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
         ("Used", at['used']),
         ("Unused", at['unused']),
         ("Usage Rate", f"{at['usage_rate']}%"),
-        ("Total Amount", f"{at['total_amount']:,.0f} VND"),
+        ("Total Amount (Invoice)", f"{at['total_amount']:,.0f} VND"),
     ]:
         ws[f'A{row}'] = label
         ws[f'B{row}'] = value
@@ -260,7 +288,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
         ("Used", pd['used']),
         ("Unused", pd['unused']),
         ("Usage Rate", f"{pd['usage_rate']}%"),
-        ("Total Amount", f"{pd['total_amount']:,.0f} VND"),
+        ("Total Amount (Invoice)", f"{pd['total_amount']:,.0f} VND"),
     ]:
         ws[f'A{row}'] = label
         ws[f'B{row}'] = value
@@ -269,10 +297,10 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     ws.column_dimensions['A'].width = 25
     ws.column_dimensions['B'].width = 20
     
-    # By Using Shop sheet (terminology: "Using Shop")
+    # By Using Shop sheet
     ws_shop = wb.create_sheet("By Using Shop")
     
-    headers = ["Using Shop", "Total", "Used", "Unused", "Usage Rate", "% of Total", "% of Used", "Amount (VND)"]
+    headers = ["Using Shop", "Total", "Used", "Unused", "Usage Rate", "% of Total", "% of Used", "Amount (Invoice)"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_shop.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -295,8 +323,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     # Details sheet
     ws_detail = wb.create_sheet("Coupon Details")
     
-    # VERIFIED: Matching template fields
-    headers = ["Coupon ID", "Creator", "Face Value", "Using Shop", "Using Date", "Docket Number", "VIP ID", "Name", "Phone", "Sales Date", "Invoice Shop", "Amount", "Note"]
+    headers = ["Coupon ID", "Creator", "Face Value", "Using Shop", "Using Date", "Docket Number", "VIP ID", "Name", "Phone", "Sales Date", "Invoice Shop", "Amount (Invoice)", "Note"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_detail.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -318,7 +345,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
         ws_detail.cell(row=row_num, column=12, value=f"{detail['amount']:,.0f}")
         ws_detail.cell(row=row_num, column=13, value=detail['note'])
     
-    for col in range(1, 9):
+    for col in range(1, 14):
         ws_detail.column_dimensions[get_column_letter(col)].width = 18
     
     return wb
