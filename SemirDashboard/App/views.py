@@ -148,10 +148,12 @@ def upload_coupons(request):
 def analytics_dashboard(request):
     """
     Main analytics dashboard showing return visit rate statistics.
-    Supports date range filtering via query parameters.
+    Supports date range filtering and shop group filtering via query parameters.
     """
     start_date = request.GET.get('start_date', '')
     end_date   = request.GET.get('end_date', '')
+    shop_group = request.GET.get('shop_group', '')  # New: Bala Group, Semir Group, Others Group
+    
     date_from  = _parse_date(start_date, 'start date', request)
     date_to    = _parse_date(end_date,   'end date',   request)
 
@@ -159,8 +161,13 @@ def analytics_dashboard(request):
         messages.error(request, 'Start date must be before end date')
         date_from = date_to = None
 
-    logger.info("analytics_dashboard: from=%s to=%s user=%s", date_from, date_to, request.user)
-    data = calculate_return_rate_analytics(date_from=date_from, date_to=date_to)
+    logger.info("analytics_dashboard: from=%s to=%s shop_group=%s user=%s", 
+                date_from, date_to, shop_group, request.user)
+    data = calculate_return_rate_analytics(
+        date_from=date_from, 
+        date_to=date_to,
+        shop_group=shop_group or None
+    )
 
     if not data:
         messages.info(request, 'No sales data. Please upload sales data first.')
@@ -179,6 +186,7 @@ def analytics_dashboard(request):
         'buyer_without_info_stats': data.get('buyer_without_info_stats', {}),
         'start_date':         start_date,
         'end_date':           end_date,
+        'shop_group':         shop_group,  # New: pass to template
         'quick_btns':         QUICK_BTNS,
         'year_btns':          YEAR_BTNS,
     })
@@ -189,9 +197,16 @@ def export_analytics(request):
     """Export analytics data to Excel file."""
     start_date = request.GET.get('start_date', '')
     end_date   = request.GET.get('end_date', '')
+    shop_group = request.GET.get('shop_group', '')  # New: include shop_group in export
+    
     date_from  = _parse_date(start_date, 'start date', request)
     date_to    = _parse_date(end_date,   'end date',   request)
-    data = calculate_return_rate_analytics(date_from=date_from, date_to=date_to)
+    
+    data = calculate_return_rate_analytics(
+        date_from=date_from, 
+        date_to=date_to,
+        shop_group=shop_group or None
+    )
     if not data:
         messages.error(request, 'No data to export')
         return redirect('analytics_dashboard')
