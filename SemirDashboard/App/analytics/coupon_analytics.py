@@ -18,6 +18,33 @@ from openpyxl.utils import get_column_letter
 from App.models import Coupon, Customer, SalesTransaction
 
 
+def format_face_value(face_value):
+    """
+    Format face value for display.
+    
+    Rules:
+    - If face_value > 1: Display as VND amount (e.g., "50,000 VND")
+    - If 0 < face_value <= 1: Display as percentage (e.g., 0.95 → "95%")
+    - If face_value = 0 or None: Display as "0"
+    
+    Args:
+        face_value: Decimal or float value
+    
+    Returns:
+        Formatted string
+    """
+    if not face_value or face_value == 0:
+        return "0"
+    
+    if face_value > 1:
+        # VND amount
+        return f"{face_value:,.0f} VND"
+    else:
+        # Percentage (0.95 → 95%)
+        percentage = face_value * 100
+        return f"{percentage:.0f}%"
+
+
 def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=None):
     """
     Calculate coupon usage analytics.
@@ -149,6 +176,7 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'coupon_id': coupon.coupon_id,
             'creator': coupon.creator or '',
             'face_value': coupon.face_value or 0,
+            'face_value_display': format_face_value(coupon.face_value),  # NEW: Formatted display
             'using_shop': coupon.using_shop or 'Unknown',
             'using_date': coupon.using_date,
             'docket_number': coupon.docket_number or '',
@@ -333,7 +361,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     for row_num, detail in enumerate(data['details'], 2):
         ws_detail.cell(row=row_num, column=1, value=detail['coupon_id'])
         ws_detail.cell(row=row_num, column=2, value=detail['creator'])
-        ws_detail.cell(row=row_num, column=3, value=f"{detail['face_value']:,.0f}")
+        ws_detail.cell(row=row_num, column=3, value=detail['face_value_display'])  # Use formatted display
         ws_detail.cell(row=row_num, column=4, value=detail['using_shop'])
         ws_detail.cell(row=row_num, column=5, value=str(detail['using_date']) if detail['using_date'] else '')
         ws_detail.cell(row=row_num, column=6, value=detail['docket_number'])
