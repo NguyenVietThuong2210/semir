@@ -19,7 +19,8 @@ from App.analytics.coupon_analytics import calculate_coupon_analytics, export_co
 from App.analytics.excel_export import export_analytics_to_excel
 from .forms import CustomerUploadForm, SalesUploadForm
 from .utils import process_customer_file, process_sales_file
-from .models import Customer, SalesTransaction
+from .models import Customer, SalesTransaction, Coupon
+from .models_cnv import CNVCustomer
 
 logger = logging.getLogger('customer_analytics')
 
@@ -296,3 +297,106 @@ def export_coupons(request):
 def formulas_page(request):
     """Display formulas and definitions used in analytics."""
     return render(request, 'formulas.html')
+
+# Add this to views.py
+
+@login_required
+def customer_detail(request):
+    """
+    Customer Detail Analytics - Search and view individual customer info.
+    Searches by VIP ID or Phone Number.
+    Shows customer info, CNV sync status, and invoice history.
+    """
+    search_vip_id = request.GET.get('vip_id', '').strip()
+    search_phone = request.GET.get('phone', '').strip()
+    
+    customer = None
+    invoices = []
+    stats = {}
+    is_synced_to_cnv = False
+    search_attempted = bool(search_vip_id or search_phone)
+    
+    if search_vip_id or search_phone:
+        logger.info("customer_detail: vip_id=%s phone=%s user=%s", 
+                    search_vip_id, search_phone, request.user)
+        
+        # Search customer
+        if search_vip_id:
+            try:
+                customer = Customer.objects.get(vip_id=search_vip_id)
+            except Customer.DoesNotExist:
+                logger.warning("Customer not found: vip_id=%s", search_vip_id)
+        elif search_phone:
+            try:
+                customer = Customer.objects.get(phone=search_phone)
+            except Customer.DoesNotExist:
+                logger.warning("Customer not found: phone=%s", search_phone)
+            except Customer.MultipleObjectsReturned:
+                # If multiple customers with same phone, get first one
+                customer = Customer.objects.filter(phone=search_phone).first()
+                logger.warning("Multiple customers found with phone=%s, using first", search_phone)
+        
+        if customer:
+            # Check CNV sync status (use 'phone' field not 'phone_no')
+            if customer.phone:
+                is_synced_to_cnv = CNVCustomer.objects.filter(phone=customer.phone).exists()
+            
+            # Get all invoices for this customer
+            invoices = SalesTransaction.objects.filter(
+                vip_id=customer.vip_id
+            ).select_related().order_by('-sales_date')
+            
+            # Add coupon info to each invoice
+            invoices_with_coupons = []
+            for inv in invoices:
+                invoice_data = {
+                    'invoice_no': inv.invoice_number,
+                    'sales_day': inv.sales_date,
+                    'shop_name': inv.shop_name,
+                    'amount': inv.settlement_amount,
+                    'season': inv.bu,
+                    'coupon_id': None,
+                    'coupon_amount': None,
+                }
+                
+                # Check if this invoice has a coupon
+                coupon = Coupon.objects.filter(
+                    docket_number=inv.invoice_number,
+                    using_date__isnull=False
+                ).first()
+                
+                if coupon:
+                    invoice_data['coupon_id'] = coupon.coupon_id
+                    invoice_data['coupon_amount'] = coupon.face_value
+                
+                invoices_with_coupons.append(invoice_data)
+            
+            invoices = invoices_with_coupons
+            
+            # Calculate statistics
+            from decimal import Decimal
+            from django.db.models import Sum, Max, Count
+            
+            invoice_stats = SalesTransaction.objects.filter(
+                vip_id=customer.vip_id
+            ).aggregate(
+                total=Count('id'),
+                total_amount=Sum('settlement_amount'),
+                last_date=Max('sales_date')
+            )
+            
+            stats = {
+                'total_purchases': invoice_stats['total'] or 0,
+                'total_amount': invoice_stats['total_amount'] or Decimal(0),
+                'last_purchase_date': invoice_stats['last_date'],
+            }
+    
+    return render(request, 'customer_detail.html', {
+        'customer': customer,
+        'invoices': invoices,
+        'stats': stats,
+        'is_synced_to_cnv': is_synced_to_cnv,
+        'search_vip_id': search_vip_id,
+        'search_phone': search_phone,
+        'search_attempted': search_attempted,
+    })
