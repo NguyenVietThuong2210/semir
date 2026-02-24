@@ -55,14 +55,15 @@ td.c-gray  { background:#f0f2f5!important;               color:#000!important; }
 td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 
 .shop-tbl   { table-layout:fixed; width:100%; }
-.shop-tbl   .cn { width:30%; }
+.shop-tbl   .cn { width:20%; }
 .shop-tbl   .cv { width:10%; }
 
 .sub-tbl    { table-layout:fixed; width:100%; font-size:.85rem; }
-.sub-tbl    .sl { width:12%; }    /* Season/Grade column */
-.sub-tbl    .sv { width:9%; }     /* Numeric columns */
-.sub-tbl    .sv-amt { width:11%; } /* Amount columns - balanced */
-.sub-tbl    .amount-vnd { white-space:nowrap; font-size:.82rem; }  /* Slightly larger */
+.sub-tbl    .sl { width:20%; }     /* Grade/Season = Shop width (20%) */
+.sub-tbl    .sv { width:10%; }     /* Standard columns (10%) */
+.sub-tbl    .sv-amt { width:10%; } /* Standard amount columns (10%) */
+.sub-tbl    .sv-double { width:20%; }  /* Double width for Grade INV/AMT(CUS) (20%) */
+.sub-tbl    .amount-vnd { white-space:nowrap; font-size:.82rem; }
 .sub-hdr th { background:#bdd7ee!important; color:#1f3864!important; font-size:.8rem; }
 .sub-ses th { background:#d5e8d4!important; color:#1a3d2b!important; font-size:.8rem; }
 
@@ -207,11 +208,12 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         </div>
     </div>
 
+    <!-- Line 2: INV(CUS) - AMT(CUS) - INV(RET) - AMT(RET) -->
     <div class="row row-cols-2 row-cols-md-4 g-2 mb-2">
         <div class="col d-flex">
             <div class="card stat-card w-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="stat-label">Customer Invoices</div>
+                    <div class="stat-label">INV(CUS)</div>
                     <div class="stat-value">{{ overview.total_invoices_without_vip0 }}</div>
                     <small>Excluding VIP ID = 0</small>
                 </div>
@@ -221,7 +223,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <div class="col d-flex">
             <div class="card stat-card w-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="stat-label">Customer Amount</div>
+                    <div class="stat-label">AMT(CUS)</div>
                     <div class="stat-value amount-vnd" style="font-size:1.2rem">
                         {{ overview.total_amount_without_vip0|vnd }} {{ currency }}
                     </div>
@@ -233,7 +235,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <div class="col d-flex">
             <div class="card stat-card w-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="stat-label">Returning Invoices</div>
+                    <div class="stat-label">INV(RET)</div>
                     <div class="stat-value">{{ overview.returning_invoices|default:0 }}</div>
                     <small>From returning customers</small>
                 </div>
@@ -243,7 +245,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <div class="col d-flex">
             <div class="card stat-card w-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="stat-label">Returning Amount</div>
+                    <div class="stat-label">AMT(RET)</div>
                     <div class="stat-value amount-vnd" style="font-size:1.2rem">
                         {{ overview.returning_amount|default:0|vnd }} {{ currency }}
                     </div>
@@ -534,8 +536,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <th class="sv text-end">Rate</th>
                                                 <th class="sv text-end">INV(RET)</th>
                                                 <th class="sv-amt text-end">AMT(RET)</th>
-                                                <th class="sv text-end">INV(CUS)</th>
-                                                <th class="sv-amt text-end">AMT(CUS)</th>
+                                                <th class="sv-double text-end">INV(CUS)</th>
+                                                <th class="sv-double text-end">AMT(CUS)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -549,8 +551,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 </td>
                                                 <td class="sv text-end text-success">{{ gd.returning_invoices|default:0 }}</td>
                                                 <td class="sv-amt text-end text-success amount-vnd">{{ gd.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                                <td class="sv text-end">{{ gd.total_invoices }}</td>
-                                                <td class="sv-amt text-end amount-vnd">{{ gd.total_amount|vnd }} {{ currency }}</td>
+                                                <td class="sv-double text-end">{{ gd.total_invoices }}</td>
+                                                <td class="sv-double text-end amount-vnd">{{ gd.total_amount|vnd }} {{ currency }}</td>
                                             </tr>
                                             {% empty %}
                                             <tr><td colspan="8" class="text-muted small text-center py-1">No data</td></tr>
