@@ -189,7 +189,6 @@ def analytics_dashboard(request):
         'shop_group':         shop_group,  # New: pass to template
         'quick_btns':         QUICK_BTNS,
         'year_btns':          YEAR_BTNS,
-        'currency':           'VND',  # Currency constant
     })
 
 
@@ -228,19 +227,24 @@ def export_analytics(request):
 def coupon_dashboard(request):
     """
     Coupon analytics dashboard.
-    Supports date range filtering and coupon ID prefix search.
+    Supports date range filtering, coupon ID prefix search, and shop group filtering.
     """
     start_date       = request.GET.get('start_date', '')
     end_date         = request.GET.get('end_date', '')
     coupon_id_prefix = request.GET.get('coupon_id_prefix', '').strip()
+    shop_group       = request.GET.get('shop_group', '').strip()
+    
     date_from  = _parse_date(start_date, 'start date', request)
     date_to    = _parse_date(end_date,   'end date',   request)
 
-    logger.info("coupon_dashboard: from=%s to=%s prefix=%s user=%s",
-                date_from, date_to, coupon_id_prefix, request.user)
+    logger.info("coupon_dashboard: from=%s to=%s prefix=%s shop_group=%s user=%s",
+                date_from, date_to, coupon_id_prefix, shop_group, request.user)
+    
     data = calculate_coupon_analytics(
-        date_from=date_from, date_to=date_to,
-        coupon_id_prefix=coupon_id_prefix or None)
+        date_from=date_from, 
+        date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix or None,
+        shop_group=shop_group or None)
 
     return render(request, 'coupon_dashboard.html', {
         'all_time':          data['all_time'],
@@ -250,22 +254,35 @@ def coupon_dashboard(request):
         'start_date':        start_date,
         'end_date':          end_date,
         'coupon_id_prefix':  coupon_id_prefix,
+        'shop_group':        shop_group,
         'quick_btns':        QUICK_BTNS,
     })
 
 
 @login_required
 def export_coupons(request):
-    """Export coupon analytics to Excel file."""
+    """Export coupon analytics to Excel file with shop group filter support."""
     start_date       = request.GET.get('start_date', '')
     end_date         = request.GET.get('end_date', '')
     coupon_id_prefix = request.GET.get('coupon_id_prefix', '').strip()
+    shop_group       = request.GET.get('shop_group', '').strip()
+    
     date_from  = _parse_date(start_date, 'start date', request)
     date_to    = _parse_date(end_date,   'end date',   request)
+    
     data = calculate_coupon_analytics(
-        date_from=date_from, date_to=date_to,
-        coupon_id_prefix=coupon_id_prefix or None)
-    wb = export_coupon_to_excel(data, date_from=date_from, date_to=date_to)
+        date_from=date_from, 
+        date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix or None,
+        shop_group=shop_group or None)
+    
+    wb = export_coupon_to_excel(
+        data, 
+        date_from=date_from, 
+        date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix,
+        shop_group=shop_group)
+    
     fn = (f"coupon_{date_from}_{date_to}_{datetime.now().strftime('%H%M%S')}.xlsx"
           if date_from and date_to else
           f"coupon_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")

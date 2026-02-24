@@ -45,7 +45,7 @@ def format_face_value(face_value):
         return f"{percentage:.0f}%"
 
 
-def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=None):
+def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None):
     """
     Calculate coupon usage analytics.
     
@@ -55,11 +55,27 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
         date_from: Start date for period filter
         date_to: End date for period filter
         coupon_id_prefix: Filter by coupon ID prefix (case-insensitive)
+        shop_group: Filter by shop group (Bala Group, Semir Group, Others Group)
     
     Returns:
         Dict with all_time, period, by_shop, and details data
     """
     qs = Coupon.objects.all()
+    
+    # Apply shop group filter using icontains
+    if shop_group:
+        if shop_group == 'Bala Group':
+            # Filter shops containing "Bala" or "巴拉"
+            qs = qs.filter(Q(using_shop__icontains='Bala') | Q(using_shop__icontains='巴拉'))
+        elif shop_group == 'Semir Group':
+            # Filter shops containing "Semir" or "森马"
+            qs = qs.filter(Q(using_shop__icontains='Semir') | Q(using_shop__icontains='森马'))
+        elif shop_group == 'Others Group':
+            # Exclude Bala and Semir shops
+            qs = qs.exclude(
+                Q(using_shop__icontains='Bala') | Q(using_shop__icontains='巴拉') |
+                Q(using_shop__icontains='Semir') | Q(using_shop__icontains='森马')
+            )
     
     # Filter by usage date if specified
     if date_from or date_to:
@@ -258,7 +274,7 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
     }
 
 
-def export_coupon_to_excel(data, date_from=None, date_to=None):
+def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None):
     """
     Export coupon analytics to Excel workbook.
     
@@ -266,6 +282,8 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
         data: Coupon analytics dict from calculate_coupon_analytics()
         date_from: Period start date (for display)
         date_to: Period end date (for display)
+        coupon_id_prefix: Coupon ID prefix filter (for display)
+        shop_group: Shop group filter (for display)
     
     Returns:
         openpyxl Workbook object
@@ -284,11 +302,27 @@ def export_coupon_to_excel(data, date_from=None, date_to=None):
     ws['A1'].font = Font(bold=True, size=14)
     ws.merge_cells('A1:B1')
     
+    # Display active filters
+    row = 3
     if date_from and date_to:
-        ws['A3'] = "Period:"
-        ws['B3'] = f"{date_from} to {date_to}"
+        ws[f'A{row}'] = "Period Filter:"
+        ws[f'B{row}'] = f"{date_from} to {date_to}"
+        ws[f'B{row}'].font = Font(bold=True, color="0066CC")
+        row += 1
     
-    row = 5
+    if coupon_id_prefix:
+        ws[f'A{row}'] = "Coupon ID Prefix:"
+        ws[f'B{row}'] = coupon_id_prefix
+        ws[f'B{row}'].font = Font(bold=True, color="0066CC")
+        row += 1
+    
+    if shop_group:
+        ws[f'A{row}'] = "Shop Group:"
+        ws[f'B{row}'] = shop_group
+        ws[f'B{row}'].font = Font(bold=True, color="0066CC")
+        row += 1
+    
+    row += 1
     ws[f'A{row}'] = "All-Time Statistics"
     ws[f'A{row}'].font = Font(bold=True)
     row += 1
