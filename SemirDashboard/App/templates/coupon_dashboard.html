@@ -44,7 +44,7 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
         <a href="{% url 'upload_coupons' %}" class="btn btn-outline-primary me-2 page-link">
             <i class="bi bi-upload"></i> Upload Coupons
         </a>
-        <a href="{% url 'export_coupons' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}"
+        <a href="{% url 'export_coupons' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}"
            class="btn btn-success">
             <i class="bi bi-download"></i> Export to Excel
         </a>
@@ -55,11 +55,11 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
 <div class="card mb-4">
     <div class="card-body">
         <form method="get" id="couponFilterForm" class="row g-2 align-items-end">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label"><i class="bi bi-calendar"></i> Start Date (Using Date)</label>
                 <input type="date" class="form-control" id="fieldStartDate" name="start_date" value="{{ start_date }}">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label"><i class="bi bi-calendar"></i> End Date</label>
                 <input type="date" class="form-control" id="fieldEndDate" name="end_date" value="{{ end_date }}">
             </div>
@@ -71,6 +71,15 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                 <input type="text" class="form-control" id="fieldPrefix" name="coupon_id_prefix"
                        value="{{ coupon_id_prefix }}"
                        placeholder="Leave blank = all coupons">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label"><i class="bi bi-building"></i> Shop Group</label>
+                <select class="form-select" id="fieldShopGroup" name="shop_group">
+                    <option value="">All Shop Groups</option>
+                    <option value="Bala Group" {% if shop_group == "Bala Group" %}selected{% endif %}>Bala Group</option>
+                    <option value="Semir Group" {% if shop_group == "Semir Group" %}selected{% endif %}>Semir Group</option>
+                    <option value="Others Group" {% if shop_group == "Others Group" %}selected{% endif %}>Others Group</option>
+                </select>
             </div>
             <div class="col-md-3 d-flex align-items-end gap-2">
                 <button type="submit" class="btn btn-primary">
@@ -94,7 +103,7 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
             </div>
         </div>
 
-        {% if start_date or end_date or coupon_id_prefix %}
+        {% if start_date or end_date or coupon_id_prefix or shop_group %}
         <div class="alert alert-info mt-2 mb-0 py-2 small">
             <i class="bi bi-funnel-fill"></i>
             Active filters:
@@ -108,6 +117,9 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
             {% if coupon_id_prefix %}
             | Coupon ID starts with <strong class="text-primary">{{ coupon_id_prefix }}</strong>
             {% endif %}
+            {% if shop_group %}
+            | Shop Group: <strong class="text-success">{{ shop_group }}</strong>
+            {% endif %}
         </div>
         {% endif %}
     </div>
@@ -118,6 +130,9 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
     <i class="bi bi-infinity"></i> All-Time Summary
     {% if coupon_id_prefix %}
     <span class="badge bg-primary ms-1">Prefix: {{ coupon_id_prefix }}*</span>
+    {% endif %}
+    {% if shop_group %}
+    <span class="badge bg-success ms-1">{{ shop_group }}</span>
     {% endif %}
 </p>
 <div class="row g-2 mb-3">
@@ -358,7 +373,7 @@ function _fmt(d) {
 
 /*
  * _submitDates sets only the date fields then submits.
- * The prefix field retains its value - we do NOT touch it.
+ * The prefix and shop_group fields retain their values - we do NOT touch them.
  */
 function _submitDates(s, e) {
     document.getElementById('fieldStartDate').value = s;
