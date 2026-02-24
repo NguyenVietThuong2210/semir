@@ -58,11 +58,11 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 .shop-tbl   .cn { width:30%; }
 .shop-tbl   .cv { width:10%; }
 
-.sub-tbl    { table-layout:fixed; width:100%; font-size:.82rem; }
-.sub-tbl    .sl { width:10%; }    /* Season/Grade - narrower */
-.sub-tbl    .sv { width:8%; }     /* Numeric columns - compact */
-.sub-tbl    .sv-amt { width:13%; } /* Amount columns - wider for VND */
-.sub-tbl    .amount-vnd { white-space:nowrap; }  /* No wrap, keep font size */
+.sub-tbl    { table-layout:fixed; width:100%; font-size:.85rem; }
+.sub-tbl    .sl { width:12%; }    /* Season/Grade column */
+.sub-tbl    .sv { width:9%; }     /* Numeric columns */
+.sub-tbl    .sv-amt { width:11%; } /* Amount columns - balanced */
+.sub-tbl    .amount-vnd { white-space:nowrap; font-size:.82rem; }  /* Slightly larger */
 .sub-hdr th { background:#bdd7ee!important; color:#1f3864!important; font-size:.8rem; }
 .sub-ses th { background:#d5e8d4!important; color:#1a3d2b!important; font-size:.8rem; }
 
@@ -212,7 +212,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <div class="col d-flex">
             <div class="card stat-card w-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="stat-label">Customer Invoices</div>
+                    <div class="stat-label">INV(CUS)</div>
                     <div class="stat-value">{{ overview.total_invoices_without_vip0 }}</div>
                     <small>Excluding VIP ID = 0</small>
                 </div>
@@ -222,7 +222,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <div class="col d-flex">
             <div class="card stat-card w-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="stat-label">Customer Amount</div>
+                    <div class="stat-label">AMT(CUS)</div>
                     <div class="stat-value amount-vnd" style="font-size:1.2rem">
                         {{ overview.total_amount_without_vip0|vnd }} {{ currency }}
                     </div>
@@ -234,7 +234,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <div class="col d-flex">
             <div class="card stat-card w-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="stat-label">Returning Invoices</div>
+                    <div class="stat-label">INV(RET)</div>
                     <div class="stat-value">{{ overview.returning_invoices|default:0 }}</div>
                     <small>From returning customers</small>
                 </div>
@@ -244,7 +244,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <div class="col d-flex">
             <div class="card stat-card w-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="stat-label">Returning Amount</div>
+                    <div class="stat-label">AMT(RET)</div>
                     <div class="stat-value amount-vnd" style="font-size:1.2rem">
                         {{ overview.returning_amount|default:0|vnd }} {{ currency }}
                     </div>
@@ -522,86 +522,87 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                     </div>
                     <div class="collapse" id="shop-{{ forloop.counter }}">
                         <div class="px-3 py-2 border-top bg-light">
-                            <div class="row g-3">
-                                <div class="col-lg-6">
-                                    <p class="text-muted small fw-semibold mb-1 text-uppercase">By VIP Grade</p>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm align-middle mb-0 sub-tbl">
-                                            <thead class="sub-hdr">
-                                                <tr>
-                                                    <th class="sl">Grade</th>
-                                                    <th class="sv text-end">Returning</th>
-                                                    <th class="sv text-end">Active</th>
-                                                    <th class="sv text-end">Rate</th>
-                                                    <th class="sv text-end">INV(RET)</th>
-                                                    <th class="sv-amt text-end">AMT(RET)</th>
-                                                    <th class="sv text-end">INV(CUS)</th>
-                                                    <th class="sv-amt text-end">AMT(CUS)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for gd in shop.by_grade %}
-                                                <tr>
-                                                    <td class="sl">{{ gd.grade }}</td>
-                                                    <td class="sv text-end">{{ gd.returning_customers }}</td>
-                                                    <td class="sv text-end">{{ gd.total_customers }}</td>
-                                                    <td class="sv text-end">
-                                                        <span class="badge bg-primary" style="font-size:.73rem">{{ gd.return_rate }}%</span>
-                                                    </td>
-                                                    <td class="sv text-end text-success">{{ gd.returning_invoices|default:0 }}</td>
-                                                    <td class="sv-amt text-end text-success amount-vnd" style="font-size:.77rem">{{ gd.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                                    <td class="sv text-end">{{ gd.total_invoices }}</td>
-                                                    <td class="sv-amt text-end amount-vnd" style="font-size:.77rem">{{ gd.total_amount|vnd }} {{ currency }}</td>
-                                                </tr>
-                                                {% empty %}
-                                                <tr><td colspan="8" class="text-muted small text-center py-1">No data</td></tr>
-                                                {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                            <!-- By VIP Grade - Full Width on Top -->
+                            <div class="mb-3">
+                                <p class="text-muted small fw-semibold mb-1 text-uppercase">By VIP Grade</p>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0 sub-tbl">
+                                        <thead class="sub-hdr">
+                                            <tr>
+                                                <th class="sl">Grade</th>
+                                                <th class="sv text-end">Returning</th>
+                                                <th class="sv text-end">Active</th>
+                                                <th class="sv text-end">Rate</th>
+                                                <th class="sv text-end">INV(RET)</th>
+                                                <th class="sv-amt text-end">AMT(RET)</th>
+                                                <th class="sv text-end">INV(CUS)</th>
+                                                <th class="sv-amt text-end">AMT(CUS)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for gd in shop.by_grade %}
+                                            <tr>
+                                                <td class="sl">{{ gd.grade }}</td>
+                                                <td class="sv text-end">{{ gd.returning_customers }}</td>
+                                                <td class="sv text-end">{{ gd.total_customers }}</td>
+                                                <td class="sv text-end">
+                                                    <span class="badge bg-primary" style="font-size:.73rem">{{ gd.return_rate }}%</span>
+                                                </td>
+                                                <td class="sv text-end text-success">{{ gd.returning_invoices|default:0 }}</td>
+                                                <td class="sv-amt text-end text-success amount-vnd">{{ gd.returning_amount|default:0|vnd }} {{ currency }}</td>
+                                                <td class="sv text-end">{{ gd.total_invoices }}</td>
+                                                <td class="sv-amt text-end amount-vnd">{{ gd.total_amount|vnd }} {{ currency }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="8" class="text-muted small text-center py-1">No data</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div class="col-lg-6">
-                                    <p class="text-muted small fw-semibold mb-1 text-uppercase">By Season</p>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm align-middle mb-0 sub-tbl">
-                                            <thead class="sub-ses" style="background-color: #366092; color: white;">
-                                                <tr>
-                                                    <th class="sl">Season</th>
-                                                    <th class="sv text-end">Returning</th>
-                                                    <th class="sv text-end">Active</th>
-                                                    <th class="sv text-end">Rate</th>
-                                                    <th class="sv text-end">INV(RET)</th>
-                                                    <th class="sv-amt text-end">AMT(RET)</th>
-                                                    <th class="sv text-end">INV(CUS)</th>
-                                                    <th class="sv-amt text-end">AMT(CUS)</th>
-                                                    <th class="sv text-end">Total Invoices</th>
-                                                    <th class="sv-amt text-end">Total Amount</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for sd in shop.by_session %}
-                                                {% if sd.total_customers > 0 %}
-                                                <tr>
-                                                    <td class="sl">{{ sd.session }}</td>
-                                                    <td class="sv text-end">{{ sd.returning_customers }}</td>
-                                                    <td class="sv text-end">{{ sd.total_customers }}</td>
-                                                    <td class="sv text-end">
-                                                        <span class="badge bg-success" style="font-size:.73rem">{{ sd.return_rate }}%</span>
-                                                    </td>
-                                                    <td class="sv text-end text-success">{{ sd.returning_invoices|default:0 }}</td>
-                                                    <td class="sv-amt text-end text-success amount-vnd" style="font-size:.77rem">{{ sd.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                                    <td class="sv text-end">{{ sd.total_invoices }}</td>
-                                                    <td class="sv-amt text-end amount-vnd" style="font-size:.77rem">{{ sd.total_amount|vnd }} {{ currency }}</td>
-                                                    <td class="sv text-end">{{ sd.total_invoices_with_vip0 }}</td>
-                                                    <td class="sv-amt text-end amount-vnd" style="font-size:.77rem">{{ sd.total_amount_with_vip0|vnd }} {{ currency }}</td>
-                                                </tr>
-                                                {% endif %}
-                                                {% empty %}
-                                                <tr><td colspan="10" class="text-muted small text-center py-1">No data</td></tr>
-                                                {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                            </div>
+
+                            <!-- By Season - Full Width on Bottom -->
+                            <div>
+                                <p class="text-muted small fw-semibold mb-1 text-uppercase">By Season</p>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0 sub-tbl">
+                                        <thead class="sub-ses" style="background-color: #366092; color: white;">
+                                            <tr>
+                                                <th class="sl">Season</th>
+                                                <th class="sv text-end">Returning</th>
+                                                <th class="sv text-end">Active</th>
+                                                <th class="sv text-end">Rate</th>
+                                                <th class="sv text-end">INV(RET)</th>
+                                                <th class="sv-amt text-end">AMT(RET)</th>
+                                                <th class="sv text-end">INV(CUS)</th>
+                                                <th class="sv-amt text-end">AMT(CUS)</th>
+                                                <th class="sv text-end">Total Invoices</th>
+                                                <th class="sv-amt text-end">Total Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for sd in shop.by_session %}
+                                            {% if sd.total_customers > 0 %}
+                                            <tr>
+                                                <td class="sl">{{ sd.session }}</td>
+                                                <td class="sv text-end">{{ sd.returning_customers }}</td>
+                                                <td class="sv text-end">{{ sd.total_customers }}</td>
+                                                <td class="sv text-end">
+                                                    <span class="badge bg-success" style="font-size:.73rem">{{ sd.return_rate }}%</span>
+                                                </td>
+                                                <td class="sv text-end text-success">{{ sd.returning_invoices|default:0 }}</td>
+                                                <td class="sv-amt text-end text-success amount-vnd">{{ sd.returning_amount|default:0|vnd }} {{ currency }}</td>
+                                                <td class="sv text-end">{{ sd.total_invoices }}</td>
+                                                <td class="sv-amt text-end amount-vnd">{{ sd.total_amount|vnd }} {{ currency }}</td>
+                                                <td class="sv text-end">{{ sd.total_invoices_with_vip0 }}</td>
+                                                <td class="sv-amt text-end amount-vnd">{{ sd.total_amount_with_vip0|vnd }} {{ currency }}</td>
+                                            </tr>
+                                            {% endif %}
+                                            {% empty %}
+                                            <tr><td colspan="10" class="text-muted small text-center py-1">No data</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
