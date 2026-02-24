@@ -4,7 +4,14 @@ App/analytics/excel_export.py
 Excel export functionality for analytics data.
 Generates formatted Excel workbooks with multiple sheets.
 
+Header Abbreviations:
+    INV(RET) = Returning Invoices (invoices from customers who made return visits)
+    AMT(RET) = Returning Amount (total amount from returning customers)
+    INV(CUS) = Customer Invoices (all invoices excluding VIP ID = 0)
+    AMT(CUS) = Customer Amount (total amount from customers excluding VIP ID = 0)
+
 Version: 3.4 - Added shop details and comparison sheets
+Version: 3.5 - Standardized headers to use abbreviations consistently
 """
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -45,6 +52,7 @@ def export_analytics_to_excel(data, date_from=None, date_to=None, shop_group=Non
     _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_align)
     _create_season_comparison_sheet(wb, data, header_fill, header_font, header_align)
     _create_details_sheet(wb, data, header_fill, header_font, header_align)
+    _create_reconciliation_sheet(wb, data, header_fill, header_font, header_align)  # NEW
     
     return wb
 
@@ -79,15 +87,39 @@ def _create_overview_sheet(wb, data, header_fill, header_font, header_align, dat
         ("Returning (Period)", ov['returning_customers']),
         ("Active (Period)", ov['active_customers']),
         ("Return Rate (Period)", f"{ov['return_rate']}%"),
-        ("Invoices (Returning)", ov.get('returning_invoices', 0)),
-        ("Amount (Returning)", f"{ov.get('returning_amount', 0):,.0f} VND"),
-        ("Invoices (Customers)", ov['total_invoices_without_vip0']),
-        ("Amount (Customers)", f"{ov['total_amount_without_vip0']:,.0f} VND"),
+        ("INV(RET)", ov.get('returning_invoices', 0)),
+        ("AMT(RET)", ov.get('returning_amount', 0)),
+        ("INV(CUS)", ov['total_invoices_without_vip0']),
+        ("AMT(CUS)", ov['total_amount_without_vip0']),
         ("Total Invoices", ov['total_invoices_with_vip0']),
-        ("Total Amount", f"{ov['total_amount_with_vip0']:,.0f} VND"),
+        ("Total Amount", ov['total_amount_with_vip0']),
     ]:
         ws[f'A{row}'] = label
-        ws[f'B{row}'] = value
+        # Format amounts with number format instead of string
+        if 'AMT' in label or 'Amount' in label:
+            ws[f'B{row}'] = value
+            ws[f'B{row}'].number_format = '#,##0'
+        else:
+            ws[f'B{row}'] = value
+        row += 1
+    
+    # Add abbreviations explanation
+    row += 1
+    ws[f'A{row}'] = "Column Abbreviations:"
+    ws[f'A{row}'].font = Font(bold=True, color="0066CC")
+    row += 1
+    
+    abbrev_info = [
+        ("INV(RET)", "= Returning Invoices"),
+        ("AMT(RET)", "= Returning Amount"),
+        ("INV(CUS)", "= Customer Invoices"),
+        ("AMT(CUS)", "= Customer Amount"),
+    ]
+    
+    for abbrev, meaning in abbrev_info:
+        ws[f'A{row}'] = abbrev
+        ws[f'A{row}'].font = Font(bold=True)
+        ws[f'B{row}'] = meaning
         row += 1
     
     ws.column_dimensions['A'].width = 35
@@ -98,7 +130,7 @@ def _create_grade_sheet(wb, data, header_fill, header_font, header_align):
     """By VIP Grade sheet."""
     ws = wb.create_sheet("By VIP Grade")
     
-    headers = ["Grade", "Returning", "Active", "Return Rate", "Invoices (Returning)", "Amount (Returning)", "Invoices (Customers)", "Amount (Customers)", "Total Invoices", "Total Amount"]
+    headers = ["Grade", "Returning", "Active", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -111,21 +143,27 @@ def _create_grade_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=3, value=g['total_customers'])
         ws.cell(row=row_num, column=4, value=f"{g['return_rate']}%")
         ws.cell(row=row_num, column=5, value=g.get('returning_invoices', 0))
-        ws.cell(row=row_num, column=6, value=f"{g.get('returning_amount', 0):,.0f}")
+        ws.cell(row=row_num, column=6, value=g.get('returning_amount', 0))
+        ws.cell(row=row_num, column=6).number_format = '#,##0'
         ws.cell(row=row_num, column=7, value=g['total_invoices'])
-        ws.cell(row=row_num, column=8, value=f"{g['total_amount']:,.0f}")
+        ws.cell(row=row_num, column=8, value=g['total_amount'])
+        ws.cell(row=row_num, column=8).number_format = '#,##0'
         ws.cell(row=row_num, column=9, value=g.get('total_invoices_with_vip0', g['total_invoices']))
-        ws.cell(row=row_num, column=10, value=f"{g.get('total_amount_with_vip0', g['total_amount']):,.0f}")
+        ws.cell(row=row_num, column=10, value=g.get('total_amount_with_vip0', g['total_amount']))
+        ws.cell(row=row_num, column=10).number_format = '#,##0'
     
-    for col in range(1, 11):
-        ws.column_dimensions[get_column_letter(col)].width = 18
+    ws.column_dimensions['A'].width = 12  # Grade
+    for col in range(2, 5):
+        ws.column_dimensions[get_column_letter(col)].width = 14  # Numeric
+    for col in range(5, 11):
+        ws.column_dimensions[get_column_letter(col)].width = 16  # Amount
 
 
 def _create_season_sheet(wb, data, header_fill, header_font, header_align):
     """By Season sheet."""
     ws = wb.create_sheet("By Season")
     
-    headers = ["Season", "Returning", "Active", "Return Rate", "Invoices (Returning)", "Amount (Returning)", "Invoices (Customers)", "Amount (Customers)", "Total Invoices", "Total Amount"]
+    headers = ["Season", "Returning", "Active", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -138,21 +176,27 @@ def _create_season_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=3, value=s['total_customers'])
         ws.cell(row=row_num, column=4, value=f"{s['return_rate']}%")
         ws.cell(row=row_num, column=5, value=s.get('returning_invoices', 0))
-        ws.cell(row=row_num, column=6, value=f"{s.get('returning_amount', 0):,.0f}")
+        ws.cell(row=row_num, column=6, value=s.get('returning_amount', 0))
+        ws.cell(row=row_num, column=6).number_format = '#,##0'
         ws.cell(row=row_num, column=7, value=s['total_invoices'])
-        ws.cell(row=row_num, column=8, value=f"{s['total_amount']:,.0f}")
+        ws.cell(row=row_num, column=8, value=s['total_amount'])
+        ws.cell(row=row_num, column=8).number_format = '#,##0'
         ws.cell(row=row_num, column=9, value=s.get('total_invoices_with_vip0', 0))
-        ws.cell(row=row_num, column=10, value=f"{s.get('total_amount_with_vip0', 0):,.0f}")
+        ws.cell(row=row_num, column=10, value=s.get('total_amount_with_vip0', 0))
+        ws.cell(row=row_num, column=10).number_format = '#,##0'
     
-    for col in range(1, 11):
-        ws.column_dimensions[get_column_letter(col)].width = 18
+    ws.column_dimensions['A'].width = 15  # Season
+    for col in range(2, 5):
+        ws.column_dimensions[get_column_letter(col)].width = 14  # Numeric
+    for col in range(5, 11):
+        ws.column_dimensions[get_column_letter(col)].width = 16  # Amount
 
 
 def _create_shop_sheet(wb, data, header_fill, header_font, header_align):
     """By Shop summary."""
     ws = wb.create_sheet("By Shop")
     
-    headers = ["Shop", "Returning", "Active", "Return Rate", "Invoices (Returning)", "Amount (Returning)", "Invoices (Customers)", "Amount (Customers)", "Total Invoices", "Total Amount"]
+    headers = ["Shop", "Returning", "Active", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -167,15 +211,20 @@ def _create_shop_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=3, value=shop['total_customers'])
         ws.cell(row=row_num, column=4, value=f"{shop['return_rate']}%")
         ws.cell(row=row_num, column=5, value=shop.get('returning_invoices', 0))
-        ws.cell(row=row_num, column=6, value=f"{shop.get('returning_amount', 0):,.0f}")
+        ws.cell(row=row_num, column=6, value=shop.get('returning_amount', 0))
+        ws.cell(row=row_num, column=6).number_format = '#,##0'
         ws.cell(row=row_num, column=7, value=shop['total_invoices'])
-        ws.cell(row=row_num, column=8, value=f"{shop['total_amount']:,.0f}")
+        ws.cell(row=row_num, column=8, value=shop['total_amount'])
+        ws.cell(row=row_num, column=8).number_format = '#,##0'
         ws.cell(row=row_num, column=9, value=shop.get('total_invoices_with_vip0', 0))
-        ws.cell(row=row_num, column=10, value=f"{shop.get('total_amount_with_vip0', 0):,.0f}")
+        ws.cell(row=row_num, column=10, value=shop.get('total_amount_with_vip0', 0))
+        ws.cell(row=row_num, column=10).number_format = '#,##0'
     
-    ws.column_dimensions['A'].width = 30
-    for col in range(2, 11):
-        ws.column_dimensions[get_column_letter(col)].width = 16
+    ws.column_dimensions['A'].width = 30  # Shop name
+    for col in range(2, 5):
+        ws.column_dimensions[get_column_letter(col)].width = 14  # Numeric
+    for col in range(5, 11):
+        ws.column_dimensions[get_column_letter(col)].width = 16  # Amount
 
 
 def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
@@ -195,7 +244,7 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=current_row, column=1, value="By VIP Grade").font = Font(bold=True)
         current_row += 1
         
-        grade_headers = ["Grade", "Returning", "Active", "Return Rate", "Inv(Ret)", "Amt(Ret)", "Invoices", "Amount"]
+        grade_headers = ["Grade", "Returning", "Active", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)"]
         for col_num, header in enumerate(grade_headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -208,9 +257,11 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
             ws.cell(row=current_row, column=3, value=g['total_customers'])
             ws.cell(row=current_row, column=4, value=f"{g['return_rate']}%")
             ws.cell(row=current_row, column=5, value=g.get('returning_invoices', 0))
-            ws.cell(row=current_row, column=6, value=f"{g.get('returning_amount', 0):,.0f}")
+            ws.cell(row=current_row, column=6, value=g.get('returning_amount', 0))
+            ws.cell(row=current_row, column=6).number_format = '#,##0'
             ws.cell(row=current_row, column=7, value=g['total_invoices'])
-            ws.cell(row=current_row, column=8, value=f"{g['total_amount']:,.0f}")
+            ws.cell(row=current_row, column=8, value=g['total_amount'])
+            ws.cell(row=current_row, column=8).number_format = '#,##0'
             current_row += 1
         
         current_row += 1
@@ -219,7 +270,7 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=current_row, column=1, value="By Season").font = Font(bold=True)
         current_row += 1
         
-        season_headers = ["Season", "Returning", "Active", "Return Rate", "Inv(Ret)", "Amt(Ret)", "Invoices (Customers)", "Amount (Customers)", "Total Invoices", "Total Amount"]
+        season_headers = ["Season", "Returning", "Active", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(season_headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -232,17 +283,24 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
             ws.cell(row=current_row, column=3, value=s['total_customers'])
             ws.cell(row=current_row, column=4, value=f"{s['return_rate']}%")
             ws.cell(row=current_row, column=5, value=s.get('returning_invoices', 0))
-            ws.cell(row=current_row, column=6, value=f"{s.get('returning_amount', 0):,.0f}")
+            ws.cell(row=current_row, column=6, value=s.get('returning_amount', 0))
+            ws.cell(row=current_row, column=6).number_format = '#,##0'
             ws.cell(row=current_row, column=7, value=s['total_invoices'])
-            ws.cell(row=current_row, column=8, value=f"{s['total_amount']:,.0f}")
+            ws.cell(row=current_row, column=8, value=s['total_amount'])
+            ws.cell(row=current_row, column=8).number_format = '#,##0'
             ws.cell(row=current_row, column=9, value=s.get('total_invoices_with_vip0', 0))
-            ws.cell(row=current_row, column=10, value=f"{s.get('total_amount_with_vip0', 0):,.0f}")
+            ws.cell(row=current_row, column=10, value=s.get('total_amount_with_vip0', 0))
+            ws.cell(row=current_row, column=10).number_format = '#,##0'
             current_row += 1
         
         current_row += 2
     
-    for col in range(1, 9):
-        ws.column_dimensions[get_column_letter(col)].width = 18
+    # Column widths
+    ws.column_dimensions['A'].width = 12  # Grade/Season
+    for col in range(2, 5):
+        ws.column_dimensions[get_column_letter(col)].width = 14  # Numeric
+    for col in range(5, 11):
+        ws.column_dimensions[get_column_letter(col)].width = 16  # Amount
 
 
 def _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_align):
@@ -266,7 +324,7 @@ def _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_al
         ws.merge_cells(f'A{current_row}:H{current_row}')
         current_row += 1
         
-        headers = ["Shop", "Returning", "Active", "Return Rate", "Inv(Ret)", "Amt(Ret)", "Invoices", "Amount"]
+        headers = ["Shop", "Returning", "Active", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -308,7 +366,7 @@ def _create_season_comparison_sheet(wb, data, header_fill, header_font, header_a
         ws.merge_cells(f'A{current_row}:J{current_row}')
         current_row += 1
         
-        headers = ["Shop", "Returning", "Active", "Return Rate", "Inv(Ret)", "Amt(Ret)", "Invoices (Customers)", "Amount (Customers)", "Total Invoices", "Total Amount"]
+        headers = ["Shop", "Returning", "Active", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -360,3 +418,374 @@ def _create_details_sheet(wb, data, header_fill, header_font, header_align):
     
     for col in range(1, 9):
         ws.column_dimensions[get_column_letter(col)].width = 18
+
+"""
+ULTIMATE FIX - Uses customer_utils.get_customer_info() for proper lookup
+"""
+
+def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_align):
+    """
+    ULTIMATE FIX: Use customer_utils.get_customer_info() instead of manual lookup
+    """
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from collections import defaultdict
+    from App.analytics.season_utils import get_session_key
+    from App.analytics.customer_utils import get_customer_info  # CRITICAL IMPORT
+    
+    customer_purchases = data.get('customer_purchases', {})
+    
+    if not customer_purchases:
+        ws = wb.create_sheet("⚠️ Reconciliation")
+        ws['A1'] = "⚠️ Customer purchase data not available"
+        ws['A1'].font = Font(bold=True, size=14, color="FF0000")
+        return
+    
+    # ============================================================================
+    # Helper Functions
+    # ============================================================================
+    
+    def to_date(d):
+        """Convert datetime to date for comparison"""
+        if d is None:
+            return None
+        return d.date() if hasattr(d, 'date') else d
+    
+    def calculate_return_visits_local(purchases_sorted, reg_date):
+        """Calculate return visits with proper date comparison"""
+        n = len(purchases_sorted)
+        if n == 0:
+            return (0, False)
+        
+        # Convert to dates for comparison
+        first_date = to_date(purchases_sorted[0]['date'])
+        reg_date_cmp = to_date(reg_date)
+        
+        # Apply formula
+        if reg_date_cmp and first_date == reg_date_cmp:
+            return_visits = n - 1
+        else:
+            return_visits = n
+        
+        is_returning = (return_visits > 0)
+        return (return_visits, is_returning)
+    
+    # ============================================================================
+    # Get Summary Data
+    # ============================================================================
+    
+    ov = data.get('overview', {})
+    overview_total = ov.get('returning_invoices', 0)
+    shop_sum = sum(s.get('returning_invoices', 0) for s in data.get('by_shop', []))
+    season_sum = sum(s.get('returning_invoices', 0) for s in data.get('by_session', []))
+    
+    shop_diff = overview_total - shop_sum
+    season_diff = overview_total - season_sum
+    
+    # ============================================================================
+    # SHEET 1: SHOP RECONCILIATION
+    # ============================================================================
+    
+    ws_shop = wb.create_sheet("Reconciliation - Shops")
+    
+    # Title
+    ws_shop['A1'] = "SHOP RECONCILIATION"
+    ws_shop['A1'].font = Font(bold=True, size=14, color="FF0000")
+    ws_shop.merge_cells('A1:I1')
+    
+    row = 3
+    
+    # Summary
+    ws_shop[f'A{row}'] = "Global Returning Invoices:"
+    ws_shop[f'B{row}'] = overview_total
+    ws_shop[f'B{row}'].font = Font(bold=True, color="0066CC")
+    row += 1
+    
+    ws_shop[f'A{row}'] = "Sum of Shop Returning Invoices:"
+    ws_shop[f'B{row}'] = shop_sum
+    row += 1
+    
+    ws_shop[f'A{row}'] = "Difference:"
+    ws_shop[f'B{row}'] = shop_diff
+    ws_shop[f'B{row}'].font = Font(bold=True, size=12, color="FF0000")
+    row += 2
+    
+    # Find shop problem customers
+    shop_problems = []
+    
+    for vip_id, purchases in customer_purchases.items():
+        if vip_id == '0' or not purchases:
+            continue
+        
+        # CRITICAL FIX: Use customer_utils.get_customer_info() with customer object
+        # Get customer object from first purchase
+        customer_obj = purchases[0].get('customer') if purchases else None
+        grade, reg_date, name = get_customer_info(vip_id, customer_obj)
+        
+        purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        
+        # Global calculation
+        global_rv, global_is_ret = calculate_return_visits_local(purchases_sorted, reg_date)
+        
+        if not global_is_ret:
+            continue
+        
+        global_ret_inv = len(purchases)
+        
+        # Shop calculation
+        shop_total = 0
+        by_shop = defaultdict(list)
+        
+        for p in purchases:
+            shop = p.get('shop', 'Unknown')
+            by_shop[shop].append(p)
+        
+        for shop, shop_purch in by_shop.items():
+            shop_sorted = sorted(shop_purch, key=lambda x: x['date'])
+            _, is_ret = calculate_return_visits_local(shop_sorted, reg_date)
+            
+            if is_ret:
+                shop_total += len(shop_purch)
+        
+        diff = global_ret_inv - shop_total
+        
+        if diff > 0:
+            # Find reg day purchases
+            reg_date_cmp = to_date(reg_date)
+            if reg_date_cmp:
+                reg_day_purch = [p for p in purchases if to_date(p['date']) == reg_date_cmp]
+                reg_day_shops = set([p.get('shop', 'Unknown') for p in reg_day_purch])
+            else:
+                reg_day_purch = []
+                reg_day_shops = set()
+            
+            # Determine pattern
+            if len(reg_day_shops) >= 2:
+                pattern = "Multi-shop reg day"
+            elif len(reg_day_purch) >= 1 and len(by_shop) >= 2:
+                pattern = "Reg day → other shops"
+            else:
+                pattern = "Other"
+            
+            # Build shop details
+            shop_details = []
+            for shop, shop_purch in list(by_shop.items())[:3]:
+                shop_sorted_temp = sorted(shop_purch, key=lambda x: x['date'])
+                _, shop_is_ret = calculate_return_visits_local(shop_sorted_temp, reg_date)
+                shop_details.append(f"{shop[:25]}({len(shop_purch)},ret={shop_is_ret})")
+            
+            shop_problems.append({
+                'vip_id': vip_id,
+                'name': name,
+                'reg_date': reg_date,
+                'total_purchases': len(purchases),
+                'global_ret_inv': global_ret_inv,
+                'shop_total': shop_total,
+                'difference': diff,
+                'pattern': pattern,
+                'details': "; ".join(shop_details)
+            })
+    
+    shop_problems.sort(key=lambda x: x['difference'], reverse=True)
+    
+    # Pattern summary
+    pattern1 = [c for c in shop_problems if c['pattern'] == "Multi-shop reg day"]
+    pattern2 = [c for c in shop_problems if c['pattern'] == "Reg day → other shops"]
+    
+    ws_shop[f'A{row}'] = "PATTERNS:"
+    ws_shop[f'A{row}'].font = Font(bold=True)
+    row += 1
+    
+    ws_shop[f'A{row}'] = f"Pattern 1 (Multi-shop reg day): {len(pattern1)} customers, {sum(c['difference'] for c in pattern1)} invoices"
+    row += 1
+    
+    ws_shop[f'A{row}'] = f"Pattern 2 (Reg day → other shops): {len(pattern2)} customers, {sum(c['difference'] for c in pattern2)} invoices"
+    row += 2
+    
+    # Table
+    ws_shop[f'A{row}'] = f"ALL {len(shop_problems)} CUSTOMERS WITH SHOP DIFFERENCES:"
+    ws_shop[f'A{row}'].font = Font(bold=True, size=11)
+    ws_shop.merge_cells(f'A{row}:I{row}')
+    row += 1
+    
+    # Headers
+    headers = ["VIP ID", "Name", "Reg Date", "Total Purch", "Global", "Shop Sum", "Diff", "Pattern", "Details"]
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws_shop.cell(row=row, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+    row += 1
+    
+    # Data rows
+    for c in shop_problems:
+        ws_shop.cell(row=row, column=1, value=c['vip_id'])
+        ws_shop.cell(row=row, column=2, value=c['name'])
+        ws_shop.cell(row=row, column=3, value=c['reg_date'].strftime('%Y-%m-%d') if c['reg_date'] else 'NULL')
+        ws_shop.cell(row=row, column=4, value=c['total_purchases'])
+        ws_shop.cell(row=row, column=5, value=c['global_ret_inv'])
+        ws_shop.cell(row=row, column=6, value=c['shop_total'])
+        
+        diff_cell = ws_shop.cell(row=row, column=7, value=c['difference'])
+        diff_cell.font = Font(bold=True, color="FF0000")
+        
+        pattern_cell = ws_shop.cell(row=row, column=8, value=c['pattern'])
+        if c['pattern'] == "Multi-shop reg day":
+            pattern_cell.fill = PatternFill(start_color="FFE0E0", end_color="FFE0E0", fill_type="solid")
+        else:
+            pattern_cell.fill = PatternFill(start_color="E0FFE0", end_color="E0FFE0", fill_type="solid")
+        
+        ws_shop.cell(row=row, column=9, value=c['details'])
+        row += 1
+    
+    # Column widths
+    ws_shop.column_dimensions['A'].width = 12
+    ws_shop.column_dimensions['B'].width = 25
+    ws_shop.column_dimensions['C'].width = 12
+    ws_shop.column_dimensions['D'].width = 12
+    ws_shop.column_dimensions['E'].width = 10
+    ws_shop.column_dimensions['F'].width = 10
+    ws_shop.column_dimensions['G'].width = 8
+    ws_shop.column_dimensions['H'].width = 22
+    ws_shop.column_dimensions['I'].width = 50
+    
+    # ============================================================================
+    # SHEET 2: SEASON RECONCILIATION
+    # ============================================================================
+    
+    ws_season = wb.create_sheet("Reconciliation - Seasons")
+    
+    # Title
+    ws_season['A1'] = "SEASON RECONCILIATION"
+    ws_season['A1'].font = Font(bold=True, size=14, color="FF0000")
+    ws_season.merge_cells('A1:I1')
+    
+    row = 3
+    
+    # Summary
+    ws_season[f'A{row}'] = "Global Returning Invoices:"
+    ws_season[f'B{row}'] = overview_total
+    ws_season[f'B{row}'].font = Font(bold=True, color="0066CC")
+    row += 1
+    
+    ws_season[f'A{row}'] = "Sum of Season Returning Invoices:"
+    ws_season[f'B{row}'] = season_sum
+    row += 1
+    
+    ws_season[f'A{row}'] = "Difference:"
+    ws_season[f'B{row}'] = season_diff
+    ws_season[f'B{row}'].font = Font(bold=True, size=12, color="FF0000")
+    row += 2
+    
+    # Find season problem customers
+    season_problems = []
+    
+    for vip_id, purchases in customer_purchases.items():
+        if vip_id == '0' or not purchases:
+            continue
+        
+        # CRITICAL FIX: Use customer_utils.get_customer_info()
+        customer_obj = purchases[0].get('customer') if purchases else None
+        grade, reg_date, name = get_customer_info(vip_id, customer_obj)
+        
+        purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        
+        # Global calculation
+        global_rv, global_is_ret = calculate_return_visits_local(purchases_sorted, reg_date)
+        
+        if not global_is_ret:
+            continue
+        
+        global_ret_inv = len(purchases)
+        
+        # Season calculation
+        season_total = 0
+        by_season = defaultdict(list)
+        
+        for p in purchases:
+            season = get_session_key(p['date'])
+            by_season[season].append(p)
+        
+        for season, season_purch in by_season.items():
+            season_sorted = sorted(season_purch, key=lambda x: x['date'])
+            _, is_ret = calculate_return_visits_local(season_sorted, reg_date)
+            
+            if is_ret:
+                season_total += len(season_purch)
+        
+        diff = global_ret_inv - season_total
+        
+        if diff > 0:
+            # Build season details
+            season_details = []
+            for season, season_purch in list(by_season.items())[:3]:
+                season_sorted_temp = sorted(season_purch, key=lambda x: x['date'])
+                _, season_is_ret = calculate_return_visits_local(season_sorted_temp, reg_date)
+                season_details.append(f"{season}({len(season_purch)},ret={season_is_ret})")
+            
+            season_problems.append({
+                'vip_id': vip_id,
+                'name': name,
+                'reg_date': reg_date,
+                'total_purchases': len(purchases),
+                'global_ret_inv': global_ret_inv,
+                'season_total': season_total,
+                'difference': diff,
+                'num_seasons': len(by_season),
+                'details': "; ".join(season_details)
+            })
+    
+    season_problems.sort(key=lambda x: x['difference'], reverse=True)
+    
+    # Pattern explanation
+    ws_season[f'A{row}'] = f"Pattern: {len(season_problems)} customers, {sum(c['difference'] for c in season_problems)} invoices"
+    ws_season[f'A{row}'].font = Font(bold=True)
+    row += 1
+    
+    ws_season[f'A{row}'] = "First purchase on reg day in Season 1 → NOT returning in Season 1"
+    row += 1
+    ws_season[f'A{row}'] = "Then purchases in other seasons → IS returning in those seasons"
+    row += 1
+    ws_season[f'A{row}'] = "Each customer loses exactly 1 invoice from first season"
+    row += 2
+    
+    # Table
+    ws_season[f'A{row}'] = f"ALL {len(season_problems)} CUSTOMERS WITH SEASON DIFFERENCES:"
+    ws_season[f'A{row}'].font = Font(bold=True, size=11)
+    ws_season.merge_cells(f'A{row}:I{row}')
+    row += 1
+    
+    # Headers
+    headers = ["VIP ID", "Name", "Reg Date", "Total Purch", "Global", "Season Sum", "Diff", "Num Seasons", "Details"]
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws_season.cell(row=row, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+    row += 1
+    
+    # Data rows (ALL season problems)
+    for c in season_problems:
+        ws_season.cell(row=row, column=1, value=c['vip_id'])
+        ws_season.cell(row=row, column=2, value=c['name'])
+        ws_season.cell(row=row, column=3, value=c['reg_date'].strftime('%Y-%m-%d') if c['reg_date'] else 'NULL')
+        ws_season.cell(row=row, column=4, value=c['total_purchases'])
+        ws_season.cell(row=row, column=5, value=c['global_ret_inv'])
+        ws_season.cell(row=row, column=6, value=c['season_total'])
+        
+        diff_cell = ws_season.cell(row=row, column=7, value=c['difference'])
+        diff_cell.font = Font(bold=True, color="FF0000")
+        
+        ws_season.cell(row=row, column=8, value=c['num_seasons'])
+        ws_season.cell(row=row, column=9, value=c['details'])
+        row += 1
+    
+    # Column widths
+    ws_season.column_dimensions['A'].width = 12
+    ws_season.column_dimensions['B'].width = 25
+    ws_season.column_dimensions['C'].width = 12
+    ws_season.column_dimensions['D'].width = 12
+    ws_season.column_dimensions['E'].width = 10
+    ws_season.column_dimensions['F'].width = 10
+    ws_season.column_dimensions['G'].width = 8
+    ws_season.column_dimensions['H'].width = 12
+    ws_season.column_dimensions['I'].width = 50

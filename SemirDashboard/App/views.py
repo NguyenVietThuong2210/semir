@@ -189,6 +189,7 @@ def analytics_dashboard(request):
         'shop_group':         shop_group,  # New: pass to template
         'quick_btns':         QUICK_BTNS,
         'year_btns':          YEAR_BTNS,
+        'currency':           'VND',  # Currency constant
     })
 
 
