@@ -1,0 +1,329 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+{% block title %}Customer Detail Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+.search-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.search-card input,
+.search-card button {
+    height: 50px;
+    font-size: 1.1rem;
+}
+
+.info-card {
+    border-left: 4px solid #667eea;
+    background: #f8f9fa;
+    transition: transform 0.2s;
+}
+
+.info-card:hover {
+    transform: translateX(5px);
+}
+
+.stat-value-lg {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.badge-synced {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+}
+
+.badge-not-synced {
+    background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+}
+
+.invoice-table {
+    font-size: 0.9rem;
+}
+
+.invoice-table th {
+    background: #667eea;
+    color: white;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.coupon-badge {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    padding: 0.3rem 0.6rem;
+    border-radius: 5px;
+    font-size: 0.8rem;
+}
+
+.amount-vnd {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-person-circle"></i> Customer Detail Analytics</h2>
+    <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-house"></i> Back to Home
+    </a>
+</div>
+
+<!-- SEARCH CARD -->
+<div class="search-card shadow">
+    <form method="get" id="searchForm">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label text-white fw-semibold">
+                    <i class="bi bi-search"></i> Search by VIP ID
+                </label>
+                <input type="text" 
+                       class="form-control form-control-lg" 
+                       name="vip_id" 
+                       id="vipIdInput"
+                       value="{{ search_vip_id }}"
+                       placeholder="Enter VIP ID (e.g., 12345)">
+            </div>
+            <div class="col-md-2 text-center">
+                <span class="text-white fw-bold">OR</span>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label text-white fw-semibold">
+                    <i class="bi bi-telephone"></i> Search by Phone Number
+                </label>
+                <input type="text" 
+                       class="form-control form-control-lg" 
+                       name="phone" 
+                       id="phoneInput"
+                       value="{{ search_phone }}"
+                       placeholder="Enter phone (e.g., 0901234567)">
+            </div>
+            <div class="col-12 text-center">
+                <button type="submit" class="btn btn-light btn-lg px-5">
+                    <i class="bi bi-search"></i> Search Customer
+                </button>
+                <a href="{% url 'customer_detail' %}" class="btn btn-outline-light btn-lg px-5 ms-2">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if customer %}
+<!-- SESSION 1: CUSTOMER INFO -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <h5 class="mb-0 text-white">
+            <i class="bi bi-person-badge"></i> Customer Information
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <!-- Basic Info -->
+            <div class="col-md-6">
+                <div class="info-card p-3 rounded">
+                    <h6 class="text-muted mb-2">VIP ID</h6>
+                    <p class="h4 mb-0">{{ customer.vip_id }}</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-card p-3 rounded">
+                    <h6 class="text-muted mb-2">Name</h6>
+                    <p class="h4 mb-0">{{ customer.name|default:"-" }}</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-card p-3 rounded">
+                    <h6 class="text-muted mb-2">Phone Number</h6>
+                    <p class="h4 mb-0">{{ customer.phone }}</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-card p-3 rounded">
+                    <h6 class="text-muted mb-2">VIP Grade</h6>
+                    <p class="h4 mb-0">
+                        {% if customer.vip_grade == "Member" %}
+                        <span class="badge bg-secondary">{{ customer.vip_grade }}</span>
+                        {% elif customer.vip_grade == "Silver" %}
+                        <span class="badge bg-secondary">{{ customer.vip_grade }}</span>
+                        {% elif customer.vip_grade == "Gold" %}
+                        <span class="badge bg-warning text-dark">{{ customer.vip_grade }}</span>
+                        {% elif customer.vip_grade == "Diamond" %}
+                        <span class="badge bg-info">{{ customer.vip_grade }}</span>
+                        {% else %}
+                        {{ customer.vip_grade|default:"-" }}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-card p-3 rounded">
+                    <h6 class="text-muted mb-2">Registration Date</h6>
+                    <p class="h4 mb-0">{{ customer.registration_date|default:"-" }}</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-card p-3 rounded">
+                    <h6 class="text-muted mb-2">CNV Sync Status</h6>
+                    <p class="h4 mb-0">
+                        {% if is_synced_to_cnv %}
+                        <span class="badge badge-synced">
+                            <i class="bi bi-check-circle"></i> Synced to CNV
+                        </span>
+                        {% else %}
+                        <span class="badge badge-not-synced">
+                            <i class="bi bi-x-circle"></i> Not Synced
+                        </span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Purchase Statistics -->
+        <hr class="my-4">
+        <h6 class="text-muted mb-3">Purchase Statistics</h6>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="p-4 bg-light rounded h-100 d-flex flex-column justify-content-center">
+                    <h6 class="text-muted mb-3 text-center">Total Purchases</h6>
+                    <p class="stat-value-lg mb-0 text-center">{{ stats.total_purchases }}</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-4 bg-light rounded h-100 d-flex flex-column justify-content-center">
+                    <h6 class="text-muted mb-3 text-center">Total Amount Spent</h6>
+                    <p class="stat-value-lg mb-1 text-center amount-vnd">{{ stats.total_amount|vnd }}</p>
+                    <small class="text-muted text-center d-block">VND</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-4 bg-light rounded h-100 d-flex flex-column justify-content-center">
+                    <h6 class="text-muted mb-3 text-center">Last Purchase Date</h6>
+                    <p class="stat-value-lg mb-0 text-center" style="font-size:1.5rem">{{ stats.last_purchase_date|default:"-" }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SESSION 2: INVOICE HISTORY -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <h5 class="mb-0 text-white">
+            <i class="bi bi-receipt"></i> Invoice History ({{ invoices|length }} invoices)
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if invoices %}
+        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+            <table class="table table-hover align-middle mb-0 invoice-table">
+                <thead>
+                    <tr>
+                        <th>Invoice No</th>
+                        <th>Sales Date</th>
+                        <th>Shop</th>
+                        <th class="text-end">Amount</th>
+                        <th>Coupon</th>
+                        <th>Coupon Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inv in invoices %}
+                    <tr>
+                        <td><strong>{{ inv.invoice_no }}</strong></td>
+                        <td>{{ inv.sales_day }}</td>
+                        <td>{{ inv.shop_name }}</td>
+                        <td class="text-end amount-vnd">{{ inv.amount|vnd }} VND</td>
+                        <td>
+                            {% if inv.coupon_id %}
+                            <span class="coupon-badge">
+                                <i class="bi bi-ticket-perforated"></i> {{ inv.coupon_id }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="amount-vnd">
+                            {% if inv.coupon_amount %}
+                            {{ inv.coupon_amount|vnd }} VND
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+            <p class="mt-3">No invoices found for this customer</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% elif search_attempted %}
+<!-- No Customer Found -->
+<div class="alert alert-warning shadow" role="alert">
+    <h5 class="alert-heading">
+        <i class="bi bi-exclamation-triangle"></i> No Customer Found
+    </h5>
+    <p class="mb-0">
+        No customer found with 
+        {% if search_vip_id %}VIP ID: <strong>{{ search_vip_id }}</strong>{% endif %}
+        {% if search_phone %}Phone: <strong>{{ search_phone }}</strong>{% endif %}
+    </p>
+    <hr>
+    <p class="mb-0 small">Please check the VIP ID or phone number and try again.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Clear opposite input when typing
+document.getElementById('vipIdInput').addEventListener('input', function() {
+    if (this.value) {
+        document.getElementById('phoneInput').value = '';
+    }
+});
+
+document.getElementById('phoneInput').addEventListener('input', function() {
+    if (this.value) {
+        document.getElementById('vipIdInput').value = '';
+    }
+});
+
+// Form validation
+document.getElementById('searchForm').addEventListener('submit', function(e) {
+    const vipId = document.getElementById('vipIdInput').value.trim();
+    const phone = document.getElementById('phoneInput').value.trim();
+    
+    if (!vipId && !phone) {
+        e.preventDefault();
+        alert('Please enter either VIP ID or Phone Number');
+        return false;
+    }
+    
+    showLoading('Searching customer...');
+});
+</script>
+{% endblock %}
