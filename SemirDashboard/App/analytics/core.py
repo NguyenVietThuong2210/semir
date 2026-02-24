@@ -234,4 +234,5 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         'by_shop': shop_stats,
         'customer_details': customer_details,
         'buyer_without_info_stats': buyer_without_info_stats,
+        'customer_purchases': customer_purchases,  # NEW: For reconciliation sheet
     }

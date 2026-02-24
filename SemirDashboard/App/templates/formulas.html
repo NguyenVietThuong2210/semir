@@ -13,14 +13,12 @@
 
 {% block content %}
 
-<!-- Page Header -->
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="mb-4">
     <h2><i class="bi bi-calculator"></i> Formulas & Definitions</h2>
+    <p class="text-muted">
+        This page explains all calculations and metrics used in the Customer Analytics and Coupon Analytics dashboards.
+    </p>
 </div>
-
-<p class="text-muted mb-4">
-    This page explains all calculations and metrics used in the Customer Analytics and Coupon Analytics dashboards.
-</p>
 
 <!-- KEY METRICS DEFINITIONS (MOVED TO TOP) -->
 <div class="card formula-card mb-4">
@@ -85,42 +83,173 @@
     <div class="card-body">
 
         <!-- Return Visits Formula -->
-        <h6 class="fw-bold mb-3">1. Return Visits Calculation</h6>
-        <p>The <span class="def-term">Return Visits</span> metric counts how many invoices a customer had AFTER their first invoice.</p>
+        <h6 class="fw-bold mb-3">1. Return Visits Calculation ⚠️ CRITICAL FORMULA</h6>
+        <p>The <span class="def-term">Return Visits</span> metric counts how many invoices a customer had AFTER their first visit.</p>
+        
+        <div class="alert alert-warning">
+            <strong>⚠️ IMPORTANT:</strong> This formula considers the <strong>Registration Date</strong> to determine if the first purchase is a "first visit" or a "return visit".
+        </div>
         
         <div class="formula-code">
-            <strong>Formula:</strong> return_visits = total_invoices - 1<br>
-            <strong>Note:</strong> We count INVOICES, not unique days<br><br>
+            <strong>Complete Formula:</strong><br><br>
             
-            is_returning = (return_visits > 0)
+            <span style="color: #0066CC;">IF</span> first_purchase_date == registration_date:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases - 1<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #666;"># First invoice on reg day = first visit (NOT a return)</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #666;"># All subsequent invoices = return visits</span><br><br>
+            
+            <span style="color: #0066CC;">ELSE</span> (first_purchase_date != registration_date OR no reg date):<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #666;"># Customer already visited to register</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #666;"># ALL purchases = return visits</span><br><br>
+            
+            is_returning = (return_visits > 0)<br>
+            <strong>Note:</strong> We count INVOICES, not unique days
+        </div>
+
+        <div class="alert alert-info mt-3">
+            <strong>Key Insight:</strong> The formula is applied <strong>CONSISTENTLY</strong> at all levels (Global, Shop, Season), 
+            but uses <strong>DIFFERENT purchase lists</strong> for each context, resulting in <strong>different "first_purchase_date"</strong> values.
         </div>
 
         <div class="example-box">
-            <strong>Example 1:</strong> Customer makes 3 purchases on same day<br>
-            - Total Invoices = 3<br>
+            <strong>Example 1:</strong> Registration day purchase (Same Day)<br>
+            - Registration Date: <strong>2026-01-01</strong><br>
+            - Purchases: <strong>2026-01-01</strong> (3 invoices on same day)<br>
+            - first_date == reg_date ✅<br>
             - <strong>Return Visits = 3 - 1 = 2</strong><br>
-            - Is Returning = True (had 2 return visits on same day)
+            - Is Returning = True (had 2 return visits on reg day)
         </div>
 
         <div class="example-box">
-            <strong>Example 2:</strong> Customer makes 1 purchase<br>
-            - Total Invoices = 1<br>
+            <strong>Example 2:</strong> Registered before, buying later (Different Day)<br>
+            - Registration Date: <strong>2026-01-01</strong><br>
+            - Purchases: <strong>2026-02-15</strong> (2 invoices)<br>
+            - first_date != reg_date ✅<br>
+            - <strong>Return Visits = 2</strong> (all purchases are returns)<br>
+            - Is Returning = True
+        </div>
+
+        <div class="example-box">
+            <strong>Example 3:</strong> Single purchase on registration day<br>
+            - Registration Date: <strong>2026-01-01</strong><br>
+            - Purchases: <strong>2026-01-01</strong> (1 invoice)<br>
+            - first_date == reg_date ✅<br>
             - <strong>Return Visits = 1 - 1 = 0</strong><br>
             - Is Returning = False (no returns yet)
         </div>
-
+        
         <div class="example-box">
-            <strong>Example 3:</strong> Customer makes 5 purchases across 3 different days<br>
-            - Day 1: 2 invoices<br>
-            - Day 2: 1 invoice<br>
-            - Day 3: 2 invoices<br>
-            - Total Invoices = 5<br>
-            - <strong>Return Visits = 5 - 1 = 4</strong> (counts all invoices after first)<br>
+            <strong>Example 4:</strong> No registration date<br>
+            - Registration Date: <strong>NULL</strong><br>
+            - Purchases: <strong>2026-03-10</strong> (2 invoices)<br>
+            - first_date != reg_date ✅ (NULL comparison)<br>
+            - <strong>Return Visits = 2</strong> (assume already visited to get VIP ID)<br>
             - Is Returning = True
         </div>
-            - Total Purchases = 2<br>
-            - <strong>Return Visits = 2</strong> (without reg date, we assume they visited before to get VIP ID)<br>
-            - Is Returning = True
+
+        <hr class="my-4">
+
+        <!-- Context-Dependent Calculation -->
+        <h6 class="fw-bold mb-3">🔍 Context-Dependent Calculations</h6>
+        <p><strong>CRITICAL:</strong> The same customer can have DIFFERENT returning status in different contexts!</p>
+        
+        <div class="alert alert-danger">
+            <strong>⚠️ Why Totals Don't Match:</strong> This is <strong>CORRECT</strong> behavior, not a bug!<br>
+            Global returning invoices ≠ Sum of shop returning invoices ≠ Sum of season returning invoices
+        </div>
+
+        <div class="example-box">
+            <strong>Real Example - Customer A:</strong><br><br>
+            
+            <strong>Registration:</strong> 2026-01-01<br>
+            <strong>Purchases:</strong><br>
+            • Invoice #1: Shop X, 2026-01-01 (reg day)<br>
+            • Invoice #2: Shop Y, 2026-02-01<br>
+            • Invoice #3: Shop C, 2026-03-01<br>
+            • Invoice #4: Shop C, 2026-03-01<br><br>
+            
+            <table class="table table-sm table-bordered">
+                <thead class="table-primary">
+                    <tr>
+                        <th>Context</th>
+                        <th>Purchases</th>
+                        <th>First Date</th>
+                        <th>Reg Date</th>
+                        <th>Formula</th>
+                        <th>Return Visits</th>
+                        <th>Is Returning?</th>
+                        <th>Ret Invoices</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-success">
+                        <td><strong>GLOBAL</strong></td>
+                        <td>4 invoices</td>
+                        <td>1/1</td>
+                        <td>1/1</td>
+                        <td>4 - 1 = 3</td>
+                        <td>3</td>
+                        <td>YES</td>
+                        <td><strong>4</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Shop X</td>
+                        <td>1 invoice</td>
+                        <td>1/1</td>
+                        <td>1/1</td>
+                        <td>1 - 1 = 0</td>
+                        <td>0</td>
+                        <td>NO</td>
+                        <td>0</td>
+                    </tr>
+                    <tr class="table-info">
+                        <td>Shop Y</td>
+                        <td>1 invoice</td>
+                        <td>2/1</td>
+                        <td>1/1</td>
+                        <td>1 (!=)</td>
+                        <td>1</td>
+                        <td>YES</td>
+                        <td>1</td>
+                    </tr>
+                    <tr class="table-info">
+                        <td>Shop C</td>
+                        <td>2 invoices</td>
+                        <td>3/1</td>
+                        <td>1/1</td>
+                        <td>2 (!=)</td>
+                        <td>2</td>
+                        <td>YES</td>
+                        <td>2</td>
+                    </tr>
+                </tbody>
+                <tfoot class="table-warning">
+                    <tr>
+                        <td colspan="7"><strong>TOTALS:</strong></td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td colspan="7">Global Returning Invoices:</td>
+                        <td><strong>4</strong></td>
+                    </tr>
+                    <tr>
+                        <td colspan="7">Sum of Shop Returning Invoices (X+Y+C):</td>
+                        <td><strong>0+1+2 = 3</strong></td>
+                    </tr>
+                    <tr class="table-danger">
+                        <td colspan="7"><strong>Difference:</strong></td>
+                        <td><strong>1 invoice</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <strong>Why Different?</strong><br>
+            • <strong>Shop X:</strong> First purchase at Shop X on reg day (1/1 == 1/1) → NOT returning at Shop X<br>
+            • <strong>Shop Y:</strong> First purchase at Shop Y after reg day (2/1 != 1/1) → IS returning at Shop Y<br>
+            • <strong>Globally:</strong> First purchase on reg day (1/1 == 1/1), but has 4 total → IS returning globally<br><br>
+            
+            <strong class="text-success">✅ This is CORRECT!</strong> Same customer, different "first_purchase_date" per context.
         </div>
 
         <hr class="my-4">
