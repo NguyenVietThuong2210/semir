@@ -581,3 +581,37 @@ class CNVAPIClient:
         
         logger.info(f"Fetched {len(all_orders)} orders ({page-1} pages)")
         return all_orders
+    
+    
+    def get_customer_membership(self, customer_id: int) -> Dict:
+        """
+        Fetch membership data for a specific customer.
+        
+        Endpoint: /loyalty/customers/{id}/membership.json
+        
+        Args:
+            customer_id: Customer ID
+            
+        Returns:
+            API response dict with membership data
+            
+        Response format:
+        {
+            "membership": {
+                "level_name": "Diamond",
+                "total_points": 29649.0,
+                "points": 29649.0,
+                "used_points": 0.0,
+                "barcode_url": "...",
+                "color_code": "#F844C7",
+                "icon": {...}
+            }
+        }
+        """
+        endpoint = f'/loyalty/customers/{customer_id}/membership.json'
+        
+        try:
+            return self._make_request('GET', endpoint)
+        except Exception as e:
+            logger.error(f"Failed to fetch membership for customer {customer_id}: {e}")
+            return {}
