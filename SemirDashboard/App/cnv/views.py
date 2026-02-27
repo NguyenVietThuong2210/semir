@@ -10,7 +10,9 @@ from django.utils import timezone
 
 from App.models import Customer as POSCustomer
 from App.models_cnv import CNVCustomer, CNVOrder, CNVSyncLog
-
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
+from datetime import datetime
 
 @login_required
 def sync_status(request):
@@ -204,3 +206,57 @@ def customer_comparison(request):
     }
     
     return render(request, 'cnv/customer_comparison.html', context)
+
+
+@login_required
+def export_customer_comparison(request):
+    """
+    Export Customer Analytics (POS vs CNV comparison) to Excel.
+    Uses export_customer_comparison_to_excel() from excel_export module.
+    """
+    from App.models import Customer
+    from App.analytics.excel_export import export_customer_comparison_to_excel
+    
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    
+    # Parse dates
+    date_from = None
+    date_to = None
+    if start_date:
+        try:
+            date_from = datetime.strptime(start_date, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            date_to = datetime.strptime(end_date, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    
+    # Get all customers
+    pos_customers = Customer.objects.all()
+    cnv_customers = CNVCustomer.objects.all()
+    
+    # Generate Excel workbook using excel_export module
+    wb = export_customer_comparison_to_excel(
+        pos_customers,
+        cnv_customers,
+        date_from,
+        date_to
+    )
+    
+    # Generate filename
+    if date_from and date_to:
+        filename = f"customer_analytics_{date_from}_{date_to}_{datetime.now().strftime('%H%M%S')}.xlsx"
+    else:
+        filename = f"customer_analytics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    
+    # Return response
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    
+    return response

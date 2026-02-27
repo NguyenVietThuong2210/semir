@@ -16,4 +16,5 @@ urlpatterns = [
     
     # Page 2: Customer comparison
     path('customer-comparison/', views.customer_comparison, name='customer_comparison'),
+    path('export-customer-comparison/', views.export_customer_comparison, name='export_customer_comparison'),
 ]

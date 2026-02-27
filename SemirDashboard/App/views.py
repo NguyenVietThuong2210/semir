@@ -188,6 +188,7 @@ def analytics_dashboard(request):
         'start_date':         start_date,
         'end_date':           end_date,
         'shop_group':         shop_group,  # New: pass to template
+        'currency':           'VND',  # Add currency variable
         'quick_btns':         QUICK_BTNS,
         'year_btns':          YEAR_BTNS,
     })
