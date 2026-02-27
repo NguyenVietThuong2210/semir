@@ -6,7 +6,7 @@ Handles bi-directional sync between internal DB and CNV Loyalty API.
 
 UPDATED: 2026-02-27
 - Changed to use new CNVCustomer model structure
-- Added membership endpoint integration
+- Added membership endpoint integration via CNVAPIClient
 - Updated field mappings to match API format
 """
 import logging
@@ -132,20 +132,7 @@ class CNVSyncService:
         """
         Fetch membership data for a customer from membership endpoint.
         
-        Endpoint: /loyalty/customers/{id}/membership.json
-        
-        Response:
-        {
-            "membership": {
-                "level_name": "Diamond",
-                "total_points": 29649.0,
-                "points": 29649.0,
-                "used_points": 0.0,
-                "barcode_url": "...",
-                "color_code": "#F844C7",
-                "icon": {...}
-            }
-        }
+        Uses CNVAPIClient.get_customer_membership() method.
         
         Args:
             customer_id: Customer ID
@@ -154,10 +141,10 @@ class CNVSyncService:
             Dict with membership fields or empty dict on error
         """
         try:
-            response = self.client.get(f'/loyalty/customers/{customer_id}/membership.json')
+            response = self.client.get_customer_membership(customer_id)
             
-            if response.status_code == 200:
-                membership = response.json().get('membership', {})
+            if response and 'membership' in response:
+                membership = response['membership']
                 return {
                     'level_name': membership.get('level_name'),
                     'used_points': Decimal(str(membership.get('used_points', 0))),
@@ -165,7 +152,7 @@ class CNVSyncService:
                     'total_points': Decimal(str(membership.get('total_points', 0))),
                 }
             else:
-                logger.warning(f"Membership fetch failed for customer {customer_id}: {response.status_code}")
+                logger.warning(f"No membership data for customer {customer_id}")
                 
         except Exception as e:
             logger.error(f"Error fetching membership for customer {customer_id}: {e}")
