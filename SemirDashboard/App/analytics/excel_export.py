@@ -798,7 +798,10 @@ def export_customer_comparison_to_excel(
     pos_customers,
     cnv_customers,
     date_from=None,
-    date_to=None
+    date_to=None,
+    points_mismatch=None,
+    total_points_mismatch=None,
+    cnv_used_points=None,
 ):
     """
     Export Customer Analytics (POS vs CNV comparison) to Excel.
@@ -825,39 +828,36 @@ def export_customer_comparison_to_excel(
     header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
     header_align = Alignment(horizontal="center", vertical="center")
-    
-    # Build phone sets for comparison
-    pos_phones = set(c.phone for c in pos_customers if c.phone)
-    cnv_phones = set(c.phone for c in cnv_customers if c.phone)
-    
-    # All-time comparisons
-    pos_only_all = pos_phones - cnv_phones
-    cnv_only_all = cnv_phones - pos_phones
-    
+
+    from django.db.models import Subquery
+
+    # Base querysets with phone
+    pos_base = pos_customers.filter(phone__isnull=False).exclude(phone='')
+    cnv_base = cnv_customers.filter(phone__isnull=False).exclude(phone='')
+
+    # Count sets (done via DB, no Python set needed for this)
+    pos_phones_sq = Subquery(cnv_base.values('phone'))
+    cnv_phones_sq = Subquery(pos_base.values('phone'))
+
+    pos_only_count = pos_base.exclude(phone__in=pos_phones_sq).count()
+    cnv_only_count = cnv_base.exclude(phone__in=cnv_phones_sq).count()
+    total_pos = pos_base.count()
+    total_cnv = cnv_base.count()
+
     # Period comparisons (if filtered)
-    pos_only_period = []
-    cnv_only_period = []
     new_pos_count = 0
     new_cnv_count = 0
-    
+    pos_only_period_count = 0
+    cnv_only_period_count = 0
+
     if date_from and date_to:
-        # New POS customers in period
-        new_pos = pos_customers.filter(
-            registration_date__gte=date_from,
-            registration_date__lte=date_to
-        )
+        new_pos = pos_base.filter(registration_date__gte=date_from, registration_date__lte=date_to)
         new_pos_count = new_pos.count()
-        new_pos_phones = set(c.phone for c in new_pos if c.phone)
-        pos_only_period = list(new_pos_phones - cnv_phones)
-        
-        # New CNV customers in period
-        new_cnv = cnv_customers.filter(
-            cnv_created_at__gte=date_from,  # Changed from registration_date
-            cnv_created_at__lte=date_to
-        )
+        pos_only_period_count = new_pos.exclude(phone__in=Subquery(cnv_base.values('phone'))).count()
+
+        new_cnv = cnv_base.filter(cnv_created_at__gte=date_from, cnv_created_at__lte=date_to)
         new_cnv_count = new_cnv.count()
-        new_cnv_phones = set(c.phone for c in new_cnv if c.phone)
-        cnv_only_period = list(new_cnv_phones - pos_phones)
+        cnv_only_period_count = new_cnv.exclude(phone__in=Subquery(pos_base.values('phone'))).count()
     
     # ========================================================================
     # OVERVIEW SHEET
@@ -886,10 +886,10 @@ def export_customer_comparison_to_excel(
     row += 1
     
     metrics_all = [
-        ("Total Customers (POS System)", len(pos_phones)),
-        ("Total CNV Customers", len(cnv_phones)),
-        ("POS Only (Not in CNV)", len(pos_only_all)),
-        ("CNV Only (Not in POS)", len(cnv_only_all)),
+        ("Total Customers (POS System)", total_pos),
+        ("Total CNV Customers", total_cnv),
+        ("POS Only (Not in CNV)", pos_only_count),
+        ("CNV Only (Not in POS)", cnv_only_count),
     ]
     
     for label, value in metrics_all:
@@ -907,8 +907,8 @@ def export_customer_comparison_to_excel(
         metrics_period = [
             ("New Customers (POS)", new_pos_count),
             ("New CNV Customers", new_cnv_count),
-            ("New POS Only (Period)", len(pos_only_period)),
-            ("New CNV Only (Period)", len(cnv_only_period)),
+            ("New POS Only (Period)", pos_only_period_count),
+            ("New CNV Only (Period)", cnv_only_period_count),
         ]
         
         for label, value in metrics_period:
@@ -932,8 +932,10 @@ def export_customer_comparison_to_excel(
         cell.font = header_font
         cell.alignment = header_align
     
-    # Data
-    pos_only_customers = pos_customers.filter(phone__in=pos_only_all).order_by('registration_date')
+    # Data — subquery, no large __in set
+    pos_only_customers = pos_base.exclude(
+        phone__in=Subquery(cnv_base.values('phone'))
+    ).order_by('registration_date')
     row = 2
     for cust in pos_only_customers:
         ws_pos_all.cell(row, 1, cust.vip_id)
@@ -946,13 +948,13 @@ def export_customer_comparison_to_excel(
         row += 1
     
     # Column widths
-    ws_pos_all.column_dimensions['A'].width = 12  # VIP ID
-    ws_pos_all.column_dimensions['B'].width = 15  # Phone
-    ws_pos_all.column_dimensions['C'].width = 25  # Name
-    ws_pos_all.column_dimensions['D'].width = 12  # Grade
-    ws_pos_all.column_dimensions['E'].width = 30  # Email
-    ws_pos_all.column_dimensions['F'].width = 18  # Registration Date
-    ws_pos_all.column_dimensions['G'].width = 10  # Points
+    ws_pos_all.column_dimensions['A'].width = 12
+    ws_pos_all.column_dimensions['B'].width = 15
+    ws_pos_all.column_dimensions['C'].width = 25
+    ws_pos_all.column_dimensions['D'].width = 12
+    ws_pos_all.column_dimensions['E'].width = 30
+    ws_pos_all.column_dimensions['F'].width = 18
+    ws_pos_all.column_dimensions['G'].width = 10
     
     # ========================================================================
     # CNV ONLY - ALL TIME SHEET
@@ -967,8 +969,10 @@ def export_customer_comparison_to_excel(
         cell.font = header_font
         cell.alignment = header_align
     
-    # Data
-    cnv_only_customers = cnv_customers.filter(phone__in=cnv_only_all).order_by('cnv_created_at')
+    # Data — subquery
+    cnv_only_customers = cnv_base.exclude(
+        phone__in=Subquery(pos_base.values('phone'))
+    ).order_by('cnv_created_at')
     row = 2
     for cust in cnv_only_customers:
         ws_cnv_all.cell(row, 1, cust.cnv_id)
@@ -982,92 +986,186 @@ def export_customer_comparison_to_excel(
         row += 1
     
     # Column widths
-    ws_cnv_all.column_dimensions['A'].width = 15  # Customer ID
-    ws_cnv_all.column_dimensions['B'].width = 15  # Phone
-    ws_cnv_all.column_dimensions['C'].width = 25  # Name
-    ws_cnv_all.column_dimensions['D'].width = 12  # Level
-    ws_cnv_all.column_dimensions['E'].width = 30  # Email
-    ws_cnv_all.column_dimensions['F'].width = 18  # Registration Date
-    ws_cnv_all.column_dimensions['G'].width = 12  # Points
-    ws_cnv_all.column_dimensions['H'].width = 12  # Used Points
+    ws_cnv_all.column_dimensions['A'].width = 15
+    ws_cnv_all.column_dimensions['B'].width = 15
+    ws_cnv_all.column_dimensions['C'].width = 25
+    ws_cnv_all.column_dimensions['D'].width = 12
+    ws_cnv_all.column_dimensions['E'].width = 30
+    ws_cnv_all.column_dimensions['F'].width = 18
+    ws_cnv_all.column_dimensions['G'].width = 12
+    ws_cnv_all.column_dimensions['H'].width = 12
     
     # ========================================================================
     # PERIOD SHEETS (if filtered)
     # ========================================================================
-    if date_from and date_to and pos_only_period:
-        ws_pos_period = wb.create_sheet("POS Only - Period")
-        
-        # Header
-        headers = ['VIP ID', 'Phone', 'Name', 'Grade', 'Email', 'Registration Date', 'Points']
-        for col_idx, header in enumerate(headers, 1):
-            cell = ws_pos_period.cell(1, col_idx, header)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = header_align
-        
-        # Data
-        pos_period_customers = pos_customers.filter(
-            phone__in=pos_only_period,
+    if date_from and date_to:
+        # POS Only - Period
+        pos_period_qs = pos_base.filter(
             registration_date__gte=date_from,
             registration_date__lte=date_to
-        ).order_by('registration_date')
-        row = 2
-        for cust in pos_period_customers:
-            ws_pos_period.cell(row, 1, cust.vip_id)
-            ws_pos_period.cell(row, 2, cust.phone)
-            ws_pos_period.cell(row, 3, cust.name)
-            ws_pos_period.cell(row, 4, cust.vip_grade or '-')
-            ws_pos_period.cell(row, 5, cust.email or '-')
-            ws_pos_period.cell(row, 6, str(cust.registration_date) if cust.registration_date else '-')
-            ws_pos_period.cell(row, 7, cust.points or 0)
-            row += 1
-        
-        # Column widths
-        ws_pos_period.column_dimensions['A'].width = 12  # VIP ID
-        ws_pos_period.column_dimensions['B'].width = 15  # Phone
-        ws_pos_period.column_dimensions['C'].width = 25  # Name
-        ws_pos_period.column_dimensions['D'].width = 12  # Grade
-        ws_pos_period.column_dimensions['E'].width = 30  # Email
-        ws_pos_period.column_dimensions['F'].width = 18  # Registration Date
-        ws_pos_period.column_dimensions['G'].width = 10  # Points
-    
-    if date_from and date_to and cnv_only_period:
-        ws_cnv_period = wb.create_sheet("CNV Only - Period")
-        
-        # Header (8 columns)
-        headers = ['Customer ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points']
-        for col_idx, header in enumerate(headers, 1):
-            cell = ws_cnv_period.cell(1, col_idx, header)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = header_align
-        
-        # Data
-        cnv_period_customers = cnv_customers.filter(
-            phone__in=cnv_only_period,
+        ).exclude(phone__in=Subquery(cnv_base.values('phone'))).order_by('registration_date')
+
+        if pos_period_qs.exists():
+            ws_pos_period = wb.create_sheet("POS Only - Period")
+            headers = ['VIP ID', 'Phone', 'Name', 'Grade', 'Email', 'Registration Date', 'Points']
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws_pos_period.cell(1, col_idx, header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_align
+            row = 2
+            for cust in pos_period_qs:
+                ws_pos_period.cell(row, 1, cust.vip_id)
+                ws_pos_period.cell(row, 2, cust.phone)
+                ws_pos_period.cell(row, 3, cust.name)
+                ws_pos_period.cell(row, 4, cust.vip_grade or '-')
+                ws_pos_period.cell(row, 5, cust.email or '-')
+                ws_pos_period.cell(row, 6, str(cust.registration_date) if cust.registration_date else '-')
+                ws_pos_period.cell(row, 7, cust.points or 0)
+                row += 1
+            for col, w in zip('ABCDEFG', [12, 15, 25, 12, 30, 18, 10]):
+                ws_pos_period.column_dimensions[col].width = w
+
+        # CNV Only - Period
+        cnv_period_qs = cnv_base.filter(
             cnv_created_at__gte=date_from,
             cnv_created_at__lte=date_to
-        ).order_by('cnv_created_at')
-        row = 2
-        for cust in cnv_period_customers:
-            ws_cnv_period.cell(row, 1, cust.cnv_id)
-            ws_cnv_period.cell(row, 2, cust.phone)
-            ws_cnv_period.cell(row, 3, cust.full_name or '-')
-            ws_cnv_period.cell(row, 4, cust.level_name or '-')
-            ws_cnv_period.cell(row, 5, cust.email or '-')
-            ws_cnv_period.cell(row, 6, str(cust.cnv_created_at.date()) if cust.cnv_created_at else '-')
-            ws_cnv_period.cell(row, 7, float(cust.total_points) if cust.total_points else 0)
-            ws_cnv_period.cell(row, 8, float(cust.used_points) if cust.used_points else 0)
-            row += 1
-        
-        # Column widths
-        ws_cnv_period.column_dimensions['A'].width = 15  # Customer ID
-        ws_cnv_period.column_dimensions['B'].width = 15  # Phone
-        ws_cnv_period.column_dimensions['C'].width = 25  # Name
-        ws_cnv_period.column_dimensions['D'].width = 12  # Level
-        ws_cnv_period.column_dimensions['E'].width = 30  # Email
-        ws_cnv_period.column_dimensions['F'].width = 18  # Registration Date
-        ws_cnv_period.column_dimensions['G'].width = 12  # Points
-        ws_cnv_period.column_dimensions['H'].width = 12  # Used Points
-    
+        ).exclude(phone__in=Subquery(pos_base.values('phone'))).order_by('cnv_created_at')
+
+        if cnv_period_qs.exists():
+            ws_cnv_period = wb.create_sheet("CNV Only - Period")
+            headers = ['Customer ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points']
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws_cnv_period.cell(1, col_idx, header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_align
+            row = 2
+            for cust in cnv_period_qs:
+                ws_cnv_period.cell(row, 1, cust.cnv_id)
+                ws_cnv_period.cell(row, 2, cust.phone)
+                ws_cnv_period.cell(row, 3, cust.full_name or '-')
+                ws_cnv_period.cell(row, 4, cust.level_name or '-')
+                ws_cnv_period.cell(row, 5, cust.email or '-')
+                ws_cnv_period.cell(row, 6, str(cust.cnv_created_at.date()) if cust.cnv_created_at else '-')
+                ws_cnv_period.cell(row, 7, float(cust.total_points) if cust.total_points else 0)
+                ws_cnv_period.cell(row, 8, float(cust.used_points) if cust.used_points else 0)
+                row += 1
+            for col, w in zip('ABCDEFGH', [15, 15, 25, 12, 30, 18, 12, 12]):
+                ws_cnv_period.column_dimensions[col].width = w
+
+    # ========================================================================
+    # POINTS MISMATCH SHEET
+    # ========================================================================
+    ws_mismatch = wb.create_sheet("Points Mismatch")
+
+    mismatch_headers = [
+        'Phone', 'POS VIP ID', 'POS Name', 'POS Grade', 'POS Points',
+        'CNV ID', 'CNV Name', 'CNV Level', 'CNV Points', 'CNV Total Points', 'CNV Used Points', 'Diff'
+    ]
+    orange_fill = PatternFill(start_color="C65911", end_color="C65911", fill_type="solid")
+    for col_idx, header in enumerate(mismatch_headers, 1):
+        cell = ws_mismatch.cell(1, col_idx, header)
+        cell.fill = orange_fill
+        cell.font = header_font
+        cell.alignment = header_align
+
+    row = 2
+    for m in (points_mismatch or []):
+        ws_mismatch.cell(row, 1, m.get('phone', ''))
+        ws_mismatch.cell(row, 2, m.get('pos_vip_id', ''))
+        ws_mismatch.cell(row, 3, m.get('pos_name', ''))
+        ws_mismatch.cell(row, 4, m.get('pos_grade', ''))
+        ws_mismatch.cell(row, 5, m.get('pos_points', 0))
+        ws_mismatch.cell(row, 6, m.get('cnv_id', ''))
+        ws_mismatch.cell(row, 7, m.get('cnv_name', ''))
+        ws_mismatch.cell(row, 8, m.get('cnv_level', ''))
+        ws_mismatch.cell(row, 9, m.get('cnv_points', 0))
+        ws_mismatch.cell(row, 10, m.get('cnv_total_points', 0))
+        ws_mismatch.cell(row, 11, m.get('cnv_used_points', 0))
+        diff = m.get('diff', 0)
+        diff_cell = ws_mismatch.cell(row, 12, diff)
+        if diff > 0:
+            diff_cell.font = Font(bold=True, color="16A34A")
+        else:
+            diff_cell.font = Font(bold=True, color="DC2626")
+        row += 1
+
+    for col_letter, width in zip('ABCDEFGHIJKL', [15, 12, 25, 12, 10, 12, 25, 12, 10, 14, 12, 10]):
+        ws_mismatch.column_dimensions[col_letter].width = width
+
+    # ========================================================================
+    # CNV USED POINTS > 0 SHEET
+    # ========================================================================
+    ws_used = wb.create_sheet("CNV Used Points")
+
+    green_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
+    used_headers = ['Customer ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points', 'Total Points']
+    for col_idx, header in enumerate(used_headers, 1):
+        cell = ws_used.cell(1, col_idx, header)
+        cell.fill = green_fill
+        cell.font = header_font
+        cell.alignment = header_align
+
+    row = 2
+    for cust in (cnv_used_points or []):
+        ws_used.cell(row, 1, cust.cnv_id)
+        ws_used.cell(row, 2, cust.phone)
+        ws_used.cell(row, 3, cust.full_name or '-')
+        ws_used.cell(row, 4, cust.level_name or '-')
+        ws_used.cell(row, 5, cust.email or '-')
+        ws_used.cell(row, 6, str(cust.cnv_created_at.date()) if cust.cnv_created_at else '-')
+        ws_used.cell(row, 7, float(cust.points or 0))
+        used_cell = ws_used.cell(row, 8, float(cust.used_points or 0))
+        used_cell.font = Font(bold=True, color="166534")
+        ws_used.cell(row, 9, float(cust.total_points or 0))
+        row += 1
+
+    ws_used.column_dimensions['A'].width = 15
+    ws_used.column_dimensions['B'].width = 15
+    ws_used.column_dimensions['C'].width = 25
+    ws_used.column_dimensions['D'].width = 12
+    ws_used.column_dimensions['E'].width = 30
+    ws_used.column_dimensions['F'].width = 18
+    ws_used.column_dimensions['G'].width = 12
+    ws_used.column_dimensions['H'].width = 14
+    ws_used.column_dimensions['I'].width = 14
+
+    # ========================================================================
+    # TOTAL POINTS MISMATCH SHEET  (POS.points vs CNV.total_points)
+    # ========================================================================
+    ws_total_mismatch = wb.create_sheet("Total Points Mismatch")
+
+    total_mismatch_headers = [
+        'Phone', 'POS VIP ID', 'POS Name', 'POS Grade', 'POS Points',
+        'CNV ID', 'CNV Name', 'CNV Level', 'CNV Points', 'CNV Total Points', 'CNV Used Points', 'Diff'
+    ]
+    purple_fill = PatternFill(start_color="7C3AED", end_color="7C3AED", fill_type="solid")
+    for col_idx, header in enumerate(total_mismatch_headers, 1):
+        cell = ws_total_mismatch.cell(1, col_idx, header)
+        cell.fill = purple_fill
+        cell.font = header_font
+        cell.alignment = header_align
+
+    row = 2
+    for m in (total_points_mismatch or []):
+        ws_total_mismatch.cell(row, 1, m.get('phone', ''))
+        ws_total_mismatch.cell(row, 2, m.get('pos_vip_id', ''))
+        ws_total_mismatch.cell(row, 3, m.get('pos_name', ''))
+        ws_total_mismatch.cell(row, 4, m.get('pos_grade', ''))
+        ws_total_mismatch.cell(row, 5, m.get('pos_points', 0))
+        ws_total_mismatch.cell(row, 6, m.get('cnv_id', ''))
+        ws_total_mismatch.cell(row, 7, m.get('cnv_name', ''))
+        ws_total_mismatch.cell(row, 8, m.get('cnv_level', ''))
+        ws_total_mismatch.cell(row, 9, m.get('cnv_points', 0))
+        ws_total_mismatch.cell(row, 10, m.get('cnv_total_points', 0))
+        ws_total_mismatch.cell(row, 11, m.get('cnv_used_points', 0))
+        diff = m.get('diff', 0)
+        diff_cell = ws_total_mismatch.cell(row, 12, diff)
+        diff_cell.font = Font(bold=True, color="16A34A" if diff > 0 else "DC2626")
+        row += 1
+
+    for col_letter, width in zip('ABCDEFGHIJKL', [15, 12, 25, 12, 10, 12, 25, 12, 10, 14, 12, 10]):
+        ws_total_mismatch.column_dimensions[col_letter].width = width
+
     return wb

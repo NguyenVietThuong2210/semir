@@ -53,15 +53,17 @@ def customer_comparison(request):
     Compare POS System vs CNV Loyalty customers
     Focus on phone number matching
     """
+    from django.db.models import Subquery, OuterRef, IntegerField
+
     # Get date filters
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    
+
     # Parse dates
     period_filter = {}
     period_label = "All Time"
     has_filter = False
-    
+
     if start_date and end_date:
         try:
             start = datetime.strptime(start_date, '%Y-%m-%d')
@@ -74,130 +76,226 @@ def customer_comparison(request):
             has_filter = True
         except ValueError:
             pass
-    
+
     # ============================================
-    # ALL TIME DATA
+    # BASE QUERYSETS (no phone__in on large sets)
     # ============================================
-    
+
     # All POS customers (excluding VIP ID = 0)
     pos_all = POSCustomer.objects.filter(
         vip_id__isnull=False,
-        phone__isnull=False
-    ).exclude(
-        vip_id=0
-    ).exclude(
-        phone=''
-    )
-    
-    # Total POS customers (for accurate total, before phone filter)
+        phone__isnull=False,
+    ).exclude(vip_id=0).exclude(phone='')
+
+    # Total POS customers
     total_pos_all = POSCustomer.objects.filter(
         vip_id__isnull=False
-    ).exclude(
-        vip_id=0
-    ).count()
-    
-    # All CNV customers
+    ).exclude(vip_id=0).count()
+
+    # All CNV customers with phone
     cnv_all = CNVCustomer.objects.filter(
         phone__isnull=False
-    ).exclude(
-        phone=''
-    )
-    
-    # Total CNV customers (without phone filter for accurate total)
+    ).exclude(phone='')
+
     total_cnv_all = CNVCustomer.objects.count()
-    
-    # Get phone sets for comparison
+
+    # Subquery helpers — avoids passing large Python sets into SQL
+    cnv_phones_sq = CNVCustomer.objects.filter(
+        phone=OuterRef('phone'), phone__isnull=False
+    ).exclude(phone='').values('phone')[:1]
+
+    pos_phones_sq = POSCustomer.objects.filter(
+        phone=OuterRef('phone'), phone__isnull=False
+    ).exclude(phone='').exclude(vip_id=0).values('phone')[:1]
+
+    # ============================================
+    # ALL TIME: counts (done in Python from small intermediate sets)
+    # ============================================
+
+    # Fetch phone sets — just phone strings, efficient
     pos_phones_all = set(pos_all.values_list('phone', flat=True))
     cnv_phones_all = set(cnv_all.values_list('phone', flat=True))
-    
-    # (1) In POS but not in CNV
+
     pos_only_phones_all = pos_phones_all - cnv_phones_all
-    pos_only_all = pos_all.filter(phone__in=pos_only_phones_all).values(
+    cnv_only_phones_all = cnv_phones_all - pos_phones_all
+
+    # (1) POS Only - All Time — use subquery, NOT __in with full set
+    pos_only_all = pos_all.exclude(
+        phone__in=Subquery(cnv_all.values('phone'))
+    ).values(
         'vip_id', 'phone', 'name', 'vip_grade', 'email', 'registration_date', 'points'
     ).order_by('-registration_date')[:50]
-    
-    # (2) In CNV but not in POS
-    cnv_only_phones_all = cnv_phones_all - pos_phones_all
-    cnv_only_all = cnv_all.filter(phone__in=cnv_only_phones_all).values(
-        'cnv_id', 'phone', 'last_name', 'first_name', 'level_name', 'email', 'cnv_created_at',
-        'total_points', 'used_points'
+
+    # (2) CNV Only - All Time — use subquery
+    cnv_only_all = cnv_all.exclude(
+        phone__in=Subquery(pos_all.values('phone'))
+    ).values(
+        'cnv_id', 'phone', 'last_name', 'first_name', 'level_name', 'email',
+        'cnv_created_at', 'points', 'total_points', 'used_points'
     ).order_by('-cnv_created_at')[:50]
-    
+
     # ============================================
     # PERIOD DATA
     # ============================================
-    
+
     pos_only_period = []
     cnv_only_period = []
     new_pos_count = 0
     new_cnv_count = 0
     pos_only_period_count = 0
     cnv_only_period_count = 0
-    
+
     if period_filter:
-        # New POS customers in period
         pos_period = pos_all.filter(
             registration_date__gte=period_filter['start'],
             registration_date__lte=period_filter['end']
         )
         new_pos_count = pos_period.count()
-        
-        # New CNV customers in period
+
         cnv_period = cnv_all.filter(
             cnv_created_at__gte=period_filter['start'],
             cnv_created_at__lte=period_filter['end']
         )
         new_cnv_count = cnv_period.count()
-        
-        # Get phone sets for period
-        pos_phones_period = set(pos_period.values_list('phone', flat=True))
-        cnv_phones_period = set(cnv_period.values_list('phone', flat=True))
-        
-        # (3) New in POS but not in CNV
-        pos_only_phones_period = pos_phones_period - cnv_phones_all
-        pos_only_period_count = len(pos_only_phones_period)
-        pos_only_period = pos_period.filter(phone__in=pos_only_phones_period).values(
+
+        # (3) New POS not in CNV at all — subquery
+        pos_only_period_qs = pos_period.exclude(
+            phone__in=Subquery(cnv_all.values('phone'))
+        )
+        pos_only_period_count = pos_only_period_qs.count()
+        pos_only_period = pos_only_period_qs.values(
             'vip_id', 'phone', 'name', 'vip_grade', 'email', 'registration_date', 'points'
         ).order_by('-registration_date')[:50]
-        
-        # (4) New in CNV but not in POS
-        cnv_only_phones_period = cnv_phones_period - pos_phones_all
-        cnv_only_period_count = len(cnv_only_phones_period)
-        cnv_only_period = cnv_period.filter(phone__in=cnv_only_phones_period).values(
-            'cnv_id', 'phone', 'last_name', 'first_name', 'level_name', 'email', 'cnv_created_at',
-            'total_points', 'used_points'
+
+        # (4) New CNV not in POS at all — subquery
+        cnv_only_period_qs = cnv_period.exclude(
+            phone__in=Subquery(pos_all.values('phone'))
+        )
+        cnv_only_period_count = cnv_only_period_qs.count()
+        cnv_only_period = cnv_only_period_qs.values(
+            'cnv_id', 'phone', 'last_name', 'first_name', 'level_name', 'email',
+            'cnv_created_at', 'points', 'total_points', 'used_points'
         ).order_by('-cnv_created_at')[:50]
-    
+
+    # ============================================
+    # POINTS MISMATCH — fetch both tables fully, join in Python
+    # No phone__in with large set; instead fetch all matched rows via subquery
+    # ============================================
+
+    # Fetch POS rows that have a matching CNV phone (subquery)
+    pos_matched_qs = pos_all.filter(
+        phone__in=Subquery(cnv_all.values('phone'))
+    ).values('vip_id', 'phone', 'name', 'vip_grade', 'points')
+
+    # Fetch CNV rows that have a matching POS phone (subquery)
+    cnv_matched_qs = cnv_all.filter(
+        phone__in=Subquery(pos_all.values('phone'))
+    ).values('cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
+             'points', 'total_points', 'used_points')
+
+    pos_map = {c['phone']: c for c in pos_matched_qs}
+    cnv_map = {c['phone']: c for c in cnv_matched_qs}
+
+    points_mismatch = []
+    for phone, pos_c in pos_map.items():
+        cnv_c = cnv_map.get(phone)
+        if cnv_c:
+            pos_pts = int(pos_c.get('points') or 0)
+            cnv_pts = int(cnv_c.get('points') or 0)
+            if pos_pts != cnv_pts:
+                points_mismatch.append({
+                    'phone': phone,
+                    'pos_vip_id': pos_c['vip_id'],
+                    'pos_name': pos_c['name'],
+                    'pos_grade': pos_c['vip_grade'],
+                    'pos_points': pos_pts,
+                    'cnv_id': cnv_c['cnv_id'],
+                    'cnv_name': f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
+                    'cnv_level': cnv_c['level_name'],
+                    'cnv_points': cnv_pts,
+                    'cnv_total_points': cnv_c.get('total_points') or 0,
+                    'cnv_used_points': cnv_c.get('used_points') or 0,
+                    'diff': cnv_pts - pos_pts,
+                })
+
+    points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
+    points_mismatch_count = len(points_mismatch)
+
+    # ============================================
+    # TOTAL POINTS MISMATCH: POS.points != CNV.total_points (matched by phone)
+    # ============================================
+    total_points_mismatch = []
+    for phone, pos_c in pos_map.items():
+        cnv_c = cnv_map.get(phone)
+        if cnv_c:
+            pos_pts = int(pos_c.get('points') or 0)
+            cnv_total = int(float(cnv_c.get('total_points') or 0))
+            if pos_pts != cnv_total:
+                total_points_mismatch.append({
+                    'phone': phone,
+                    'pos_vip_id': pos_c['vip_id'],
+                    'pos_name': pos_c['name'],
+                    'pos_grade': pos_c['vip_grade'],
+                    'pos_points': pos_pts,
+                    'cnv_id': cnv_c['cnv_id'],
+                    'cnv_name': f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
+                    'cnv_level': cnv_c['level_name'],
+                    'cnv_points': int(cnv_c.get('points') or 0),
+                    'cnv_total_points': cnv_total,
+                    'cnv_used_points': int(float(cnv_c.get('used_points') or 0)),
+                    'diff': cnv_total - pos_pts,
+                })
+
+    total_points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
+    total_points_mismatch_count = len(total_points_mismatch)
+
+    # ============================================
+    # CNV CUSTOMERS WITH USED_POINTS > 0
+    # ============================================
+    cnv_used_points_list = cnv_all.filter(used_points__gt=0).values(
+        'cnv_id', 'phone', 'last_name', 'first_name', 'level_name', 'email',
+        'cnv_created_at', 'points', 'total_points', 'used_points'
+    ).order_by('-used_points')[:200]
+    cnv_used_points_count = cnv_all.filter(used_points__gt=0).count()
+
     # ============================================
     # CONTEXT
     # ============================================
-    
+
     context = {
         # Filter info
         'start_date': start_date or '',
         'end_date': end_date or '',
         'period_label': period_label,
         'has_filter': has_filter,
-        
+
         # All time counts
-        'total_pos': total_pos_all,  # Total excluding VIP ID = 0
-        'total_cnv': total_cnv_all,  # Total from CNV (no filters)
+        'total_pos': total_pos_all,
+        'total_cnv': total_cnv_all,
         'pos_only_all_count': len(pos_only_phones_all),
         'cnv_only_all_count': len(cnv_only_phones_all),
-        
+
         # Period counts
         'new_pos_count': new_pos_count,
         'new_cnv_count': new_cnv_count,
         'pos_only_period_count': pos_only_period_count,
         'cnv_only_period_count': cnv_only_period_count,
-        
+
         # Tables data
         'pos_only_all': list(pos_only_all),
         'cnv_only_all': list(cnv_only_all),
         'pos_only_period': list(pos_only_period),
         'cnv_only_period': list(cnv_only_period),
-        
-        # Quick buttons (similar to analytics)
+
+        # New tables
+        'points_mismatch': points_mismatch[:100],
+        'points_mismatch_count': points_mismatch_count,
+        'total_points_mismatch': total_points_mismatch[:100],
+        'total_points_mismatch_count': total_points_mismatch_count,
+        'cnv_used_points_list': list(cnv_used_points_list),
+        'cnv_used_points_count': cnv_used_points_count,
+
+        # Quick buttons
         'quick_btns': [
             ('Last 7 Days', 7),
             ('Last 30 Days', 30),
@@ -237,13 +335,84 @@ def export_customer_comparison(request):
     # Get all customers
     pos_customers = Customer.objects.all()
     cnv_customers = CNVCustomer.objects.all()
-    
+
+    # Build points mismatch — use subquery, NOT phone__in with large Python set
+    from django.db.models import Subquery, OuterRef
+
+    pos_base = Customer.objects.filter(phone__isnull=False).exclude(phone='')
+    cnv_base = CNVCustomer.objects.filter(phone__isnull=False).exclude(phone='')
+
+    # Fetch only matched rows via subquery
+    pos_matched = pos_base.filter(
+        phone__in=Subquery(cnv_base.values('phone'))
+    ).values('vip_id', 'phone', 'name', 'vip_grade', 'points')
+
+    cnv_matched = cnv_base.filter(
+        phone__in=Subquery(pos_base.values('phone'))
+    ).values('cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
+             'points', 'total_points', 'used_points')
+
+    pos_map = {c['phone']: c for c in pos_matched}
+    cnv_map = {c['phone']: c for c in cnv_matched}
+
+    points_mismatch_export = []
+    for phone, pos_c in pos_map.items():
+        cnv_c = cnv_map.get(phone)
+        if cnv_c:
+            pos_pts = int(pos_c.get('points') or 0)
+            cnv_pts = int(cnv_c.get('points') or 0)
+            if pos_pts != cnv_pts:
+                points_mismatch_export.append({
+                    'phone': phone,
+                    'pos_vip_id': pos_c['vip_id'],
+                    'pos_name': pos_c['name'],
+                    'pos_grade': pos_c['vip_grade'],
+                    'pos_points': pos_pts,
+                    'cnv_id': cnv_c['cnv_id'],
+                    'cnv_name': f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
+                    'cnv_level': cnv_c['level_name'],
+                    'cnv_points': cnv_pts,
+                    'cnv_total_points': float(cnv_c.get('total_points') or 0),
+                    'cnv_used_points': float(cnv_c.get('used_points') or 0),
+                    'diff': cnv_pts - pos_pts,
+                })
+    points_mismatch_export.sort(key=lambda x: abs(x['diff']), reverse=True)
+
+    # Total Points Mismatch export: POS.points vs CNV.total_points
+    total_points_mismatch_export = []
+    for phone, pos_c in pos_map.items():
+        cnv_c = cnv_map.get(phone)
+        if cnv_c:
+            pos_pts = int(pos_c.get('points') or 0)
+            cnv_total = int(float(cnv_c.get('total_points') or 0))
+            if pos_pts != cnv_total:
+                total_points_mismatch_export.append({
+                    'phone': phone,
+                    'pos_vip_id': pos_c['vip_id'],
+                    'pos_name': pos_c['name'],
+                    'pos_grade': pos_c['vip_grade'],
+                    'pos_points': pos_pts,
+                    'cnv_id': cnv_c['cnv_id'],
+                    'cnv_name': f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
+                    'cnv_level': cnv_c['level_name'],
+                    'cnv_points': int(cnv_c.get('points') or 0),
+                    'cnv_total_points': cnv_total,
+                    'cnv_used_points': int(float(cnv_c.get('used_points') or 0)),
+                    'diff': cnv_total - pos_pts,
+                })
+    total_points_mismatch_export.sort(key=lambda x: abs(x['diff']), reverse=True)
+
+    cnv_used_points_export = list(CNVCustomer.objects.filter(used_points__gt=0).order_by('-used_points'))
+
     # Generate Excel workbook using excel_export module
     wb = export_customer_comparison_to_excel(
         pos_customers,
         cnv_customers,
         date_from,
-        date_to
+        date_to,
+        points_mismatch=points_mismatch_export,
+        total_points_mismatch=total_points_mismatch_export,
+        cnv_used_points=cnv_used_points_export,
     )
     
     # Generate filename
