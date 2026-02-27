@@ -792,6 +792,8 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
     
 
 
+# Add this function to the END of excel_export.py
+
 def export_customer_comparison_to_excel(
     pos_customers,
     cnv_customers,
@@ -850,8 +852,8 @@ def export_customer_comparison_to_excel(
         
         # New CNV customers in period
         new_cnv = cnv_customers.filter(
-            registration_date__gte=date_from,
-            registration_date__lte=date_to
+            cnv_created_at__gte=date_from,  # Changed from registration_date
+            cnv_created_at__lte=date_to
         )
         new_cnv_count = new_cnv.count()
         new_cnv_phones = set(c.phone for c in new_cnv if c.phone)
@@ -957,8 +959,8 @@ def export_customer_comparison_to_excel(
     # ========================================================================
     ws_cnv_all = wb.create_sheet("CNV Only - All Time")
     
-    # Header
-    headers = ['Customer Code', 'Phone', 'Name', 'Email', 'Registration Date', 'Points Earned', 'Points Spent']
+    # Header (8 columns)
+    headers = ['Customer ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points']
     for col_idx, header in enumerate(headers, 1):
         cell = ws_cnv_all.cell(1, col_idx, header)
         cell.fill = header_fill
@@ -966,26 +968,28 @@ def export_customer_comparison_to_excel(
         cell.alignment = header_align
     
     # Data
-    cnv_only_customers = cnv_customers.filter(phone__in=cnv_only_all).order_by('registration_date')
+    cnv_only_customers = cnv_customers.filter(phone__in=cnv_only_all).order_by('cnv_created_at')
     row = 2
     for cust in cnv_only_customers:
-        ws_cnv_all.cell(row, 1, cust.customer_code)
+        ws_cnv_all.cell(row, 1, cust.cnv_id)
         ws_cnv_all.cell(row, 2, cust.phone)
         ws_cnv_all.cell(row, 3, cust.full_name or '-')
-        ws_cnv_all.cell(row, 4, cust.email or '-')
-        ws_cnv_all.cell(row, 5, str(cust.registration_date.date()) if cust.registration_date else '-')
-        ws_cnv_all.cell(row, 6, cust.total_points_earned or 0)
-        ws_cnv_all.cell(row, 7, cust.total_points_spent or 0)
+        ws_cnv_all.cell(row, 4, cust.level_name or '-')
+        ws_cnv_all.cell(row, 5, cust.email or '-')
+        ws_cnv_all.cell(row, 6, str(cust.cnv_created_at.date()) if cust.cnv_created_at else '-')
+        ws_cnv_all.cell(row, 7, float(cust.total_points) if cust.total_points else 0)
+        ws_cnv_all.cell(row, 8, float(cust.used_points) if cust.used_points else 0)
         row += 1
     
     # Column widths
-    ws_cnv_all.column_dimensions['A'].width = 15  # Customer Code
+    ws_cnv_all.column_dimensions['A'].width = 15  # Customer ID
     ws_cnv_all.column_dimensions['B'].width = 15  # Phone
     ws_cnv_all.column_dimensions['C'].width = 25  # Name
-    ws_cnv_all.column_dimensions['D'].width = 30  # Email
-    ws_cnv_all.column_dimensions['E'].width = 18  # Registration Date
-    ws_cnv_all.column_dimensions['F'].width = 15  # Points Earned
-    ws_cnv_all.column_dimensions['G'].width = 15  # Points Spent
+    ws_cnv_all.column_dimensions['D'].width = 12  # Level
+    ws_cnv_all.column_dimensions['E'].width = 30  # Email
+    ws_cnv_all.column_dimensions['F'].width = 18  # Registration Date
+    ws_cnv_all.column_dimensions['G'].width = 12  # Points
+    ws_cnv_all.column_dimensions['H'].width = 12  # Used Points
     
     # ========================================================================
     # PERIOD SHEETS (if filtered)
@@ -1030,8 +1034,8 @@ def export_customer_comparison_to_excel(
     if date_from and date_to and cnv_only_period:
         ws_cnv_period = wb.create_sheet("CNV Only - Period")
         
-        # Header
-        headers = ['Customer Code', 'Phone', 'Name', 'Email', 'Registration Date', 'Points Earned', 'Points Spent']
+        # Header (8 columns)
+        headers = ['Customer ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points']
         for col_idx, header in enumerate(headers, 1):
             cell = ws_cnv_period.cell(1, col_idx, header)
             cell.fill = header_fill
@@ -1041,27 +1045,29 @@ def export_customer_comparison_to_excel(
         # Data
         cnv_period_customers = cnv_customers.filter(
             phone__in=cnv_only_period,
-            registration_date__gte=date_from,
-            registration_date__lte=date_to
-        ).order_by('registration_date')
+            cnv_created_at__gte=date_from,
+            cnv_created_at__lte=date_to
+        ).order_by('cnv_created_at')
         row = 2
         for cust in cnv_period_customers:
-            ws_cnv_period.cell(row, 1, cust.customer_code)
+            ws_cnv_period.cell(row, 1, cust.cnv_id)
             ws_cnv_period.cell(row, 2, cust.phone)
             ws_cnv_period.cell(row, 3, cust.full_name or '-')
-            ws_cnv_period.cell(row, 4, cust.email or '-')
-            ws_cnv_period.cell(row, 5, str(cust.registration_date.date()) if cust.registration_date else '-')
-            ws_cnv_period.cell(row, 6, cust.total_points_earned or 0)
-            ws_cnv_period.cell(row, 7, cust.total_points_spent or 0)
+            ws_cnv_period.cell(row, 4, cust.level_name or '-')
+            ws_cnv_period.cell(row, 5, cust.email or '-')
+            ws_cnv_period.cell(row, 6, str(cust.cnv_created_at.date()) if cust.cnv_created_at else '-')
+            ws_cnv_period.cell(row, 7, float(cust.total_points) if cust.total_points else 0)
+            ws_cnv_period.cell(row, 8, float(cust.used_points) if cust.used_points else 0)
             row += 1
         
         # Column widths
-        ws_cnv_period.column_dimensions['A'].width = 15  # Customer Code
+        ws_cnv_period.column_dimensions['A'].width = 15  # Customer ID
         ws_cnv_period.column_dimensions['B'].width = 15  # Phone
         ws_cnv_period.column_dimensions['C'].width = 25  # Name
-        ws_cnv_period.column_dimensions['D'].width = 30  # Email
-        ws_cnv_period.column_dimensions['E'].width = 18  # Registration Date
-        ws_cnv_period.column_dimensions['F'].width = 15  # Points Earned
-        ws_cnv_period.column_dimensions['G'].width = 15  # Points Spent
+        ws_cnv_period.column_dimensions['D'].width = 12  # Level
+        ws_cnv_period.column_dimensions['E'].width = 30  # Email
+        ws_cnv_period.column_dimensions['F'].width = 18  # Registration Date
+        ws_cnv_period.column_dimensions['G'].width = 12  # Points
+        ws_cnv_period.column_dimensions['H'].width = 12  # Used Points
     
     return wb

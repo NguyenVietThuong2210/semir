@@ -3,6 +3,11 @@ App/cnv/sync_service.py
 
 Production-ready CNV data synchronization service.
 Handles bi-directional sync between internal DB and CNV Loyalty API.
+
+UPDATED: 2026-02-27
+- Changed to use new CNVCustomer model structure
+- Added membership endpoint integration
+- Updated field mappings to match API format
 """
 import logging
 from datetime import datetime
@@ -26,6 +31,7 @@ class CNVSyncService:
     - Bulk operations for performance
     - Comprehensive error tracking
     - Sync history logging
+    - Membership data integration
     
     Usage:
         service = CNVSyncService(username="user@example.com", password="secret")
@@ -69,16 +75,28 @@ class CNVSyncService:
         """
         Transform CNV API customer data to internal model format.
         
-        API Response Fields:
-        - id: Customer ID (used as customer_code)
-        - first_name, last_name: Name components
-        - phone: Phone number
-        - email: Email address
-        - gender: Gender (female/male/empty)
-        - points: Current loyalty points balance
-        - total_points: Total points earned historically
-        - created_at: Registration datetime
-        - updated_at: Last update datetime
+        NEW API Response Format:
+        {
+            "customer": {
+                "id": 35577245,  # This becomes cnv_id
+                "last_name": "Nguyễn Thị Thuỳ Linh",
+                "first_name": ".",
+                "phone": "0338336011",
+                "email": "",
+                "gender": "female",
+                "birthday_day": 21,
+                "birthday_month": 12,
+                "birthday_year": 2020,
+                "tags": "巴拉越南海防AEON MALL-直营店",
+                "physical_card_code": "",
+                "points": 29649.0,
+                "exp_points": 25849.0,
+                "total_spending": 0.0,
+                "total_points": 0.0,
+                "created_at": "2025-06-23T08:51:26.859Z",
+                "updated_at": "2026-02-05T17:34:44.533Z"
+            }
+        }
         
         Args:
             data: Raw customer dict from API
@@ -86,37 +104,73 @@ class CNVSyncService:
         Returns:
             Transformed dict matching CNVCustomer model fields
         """
-        # Combine name fields
-        first_name = data.get('first_name', '')
-        last_name = data.get('last_name', '')
-        full_name = f"{last_name} {first_name}".strip() if last_name else first_name
-        
-        # Use 'id' as customer_code
-        customer_id = str(data.get('id', ''))
-        
         return {
-            'customer_code': customer_id,
-            'customer_id': customer_id,
-            'full_name': full_name,
+            'cnv_id': int(data.get('id')),  # CNV customer ID
+            'last_name': data.get('last_name'),
+            'first_name': data.get('first_name'),
             'phone': data.get('phone'),
             'email': data.get('email') or None,
-            'birthday': self._parse_datetime(data.get('birthday')),
-            'gender': data.get('gender') or None,
-            'address': None,
-            'city': None,
-            'district': None,
-            'ward': None,
-            'membership_level': None,
-            'points_balance': int(data.get('points', 0)),
-            'total_points_earned': int(data.get('total_points', 0)),
-            'total_points_spent': 0,
-            'registration_date': self._parse_datetime(data.get('created_at')),
-            'last_purchase_date': None,
-            'is_active': True,
-            'status': None,
-            'raw_data': data,
+            'gender': data.get('gender'),
+            'birthday_day': data.get('birthday_day'),
+            'birthday_month': data.get('birthday_month'),
+            'birthday_year': data.get('birthday_year'),
+            'tags': data.get('tags'),
+            'physical_card_code': data.get('physical_card_code'),
+            'points': Decimal(str(data.get('points', 0))),
+            'exp_points': Decimal(str(data.get('exp_points', 0))),
+            'total_spending': Decimal(str(data.get('total_spending', 0))),
+            'total_points': Decimal(str(data.get('total_points', 0))),
+            'cnv_created_at': self._parse_datetime(data.get('created_at')),
+            'cnv_updated_at': self._parse_datetime(data.get('updated_at')),
+            # Membership fields - will be fetched separately
+            'level_name': None,
+            'used_points': Decimal(0),
             'last_synced_at': timezone.now(),
         }
+    
+    def _fetch_membership(self, customer_id: int) -> Dict:
+        """
+        Fetch membership data for a customer from membership endpoint.
+        
+        Endpoint: /loyalty/customers/{id}/membership.json
+        
+        Response:
+        {
+            "membership": {
+                "level_name": "Diamond",
+                "total_points": 29649.0,
+                "points": 29649.0,
+                "used_points": 0.0,
+                "barcode_url": "...",
+                "color_code": "#F844C7",
+                "icon": {...}
+            }
+        }
+        
+        Args:
+            customer_id: Customer ID
+            
+        Returns:
+            Dict with membership fields or empty dict on error
+        """
+        try:
+            response = self.client.get(f'/loyalty/customers/{customer_id}/membership.json')
+            
+            if response.status_code == 200:
+                membership = response.json().get('membership', {})
+                return {
+                    'level_name': membership.get('level_name'),
+                    'used_points': Decimal(str(membership.get('used_points', 0))),
+                    'points': Decimal(str(membership.get('points', 0))),
+                    'total_points': Decimal(str(membership.get('total_points', 0))),
+                }
+            else:
+                logger.warning(f"Membership fetch failed for customer {customer_id}: {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"Error fetching membership for customer {customer_id}: {e}")
+        
+        return {}
     
     def _transform_order(self, data: Dict) -> Dict:
         """
@@ -159,19 +213,19 @@ class CNVSyncService:
             'customer_name': customer_name,
             'customer_phone': customer_phone,
             'order_date': order_date,
-            'order_status': data.get('financial_status') or data.get('orderStatus'),  # API uses financial_status
+            'order_status': data.get('financial_status') or data.get('orderStatus'),
             'payment_status': data.get('financial_status') or data.get('paymentStatus'),
             'payment_method': data.get('paymentMethod'),
             'store_code': str(data.get('location_id', '')) if data.get('location_id') else data.get('storeCode'),
             'store_name': data.get('storeName'),
-            'subtotal': Decimal(str(data.get('subtotal_price', 0))),  # API uses subtotal_price with underscore
-            'discount_amount': Decimal(str(data.get('total_discounts', 0))),  # API uses total_discounts
+            'subtotal': Decimal(str(data.get('subtotal_price', 0))),
+            'discount_amount': Decimal(str(data.get('total_discounts', 0))),
             'tax_amount': Decimal(str(data.get('taxAmount', 0))),
-            'shipping_fee': Decimal(str(data.get('shipment_fee', 0))),  # API uses shipment_fee
-            'total_amount': Decimal(str(data.get('total_price', 0))),  # API uses total_price with underscore
+            'shipping_fee': Decimal(str(data.get('shipment_fee', 0))),
+            'total_amount': Decimal(str(data.get('total_price', 0))),
             'points_earned': int(data.get('pointsEarned', 0)),
             'points_used': int(data.get('pointsUsed', 0)),
-            'items': data.get('line_items'),  # API uses line_items
+            'items': data.get('line_items'),
             'notes': data.get('notes'),
             'raw_data': data,
             'last_synced_at': timezone.now(),
@@ -183,9 +237,10 @@ class CNVSyncService:
         
         Strategy:
         1. Transform all records
-        2. Check which customer_codes already exist
-        3. Bulk create new records
-        4. Bulk update existing records
+        2. Fetch membership data for each customer
+        3. Check which cnv_ids already exist
+        4. Bulk create new records
+        5. Bulk update existing records
         
         Args:
             batch: List of raw customer dicts from API
@@ -200,18 +255,22 @@ class CNVSyncService:
         updated_count = 0
         failed_count = 0
         
-        codes = []
+        cnv_ids = []
         transformed_map = {}
         
         # Transform all customers
         for data in batch:
             try:
                 transformed = self._transform_customer(data)
-                code = transformed.get('customer_code')
+                cnv_id = transformed.get('cnv_id')
                 
-                if code:
-                    codes.append(code)
-                    transformed_map[code] = transformed
+                if cnv_id:
+                    # Fetch membership data
+                    membership = self._fetch_membership(cnv_id)
+                    transformed.update(membership)
+                    
+                    cnv_ids.append(cnv_id)
+                    transformed_map[cnv_id] = transformed
                 else:
                     logger.warning(f"Skipping customer with no ID: {data}")
                     failed_count += 1
@@ -220,22 +279,22 @@ class CNVSyncService:
                 logger.error(f"Transform error: {e}")
                 failed_count += 1
         
-        if not codes:
+        if not cnv_ids:
             return 0, 0, failed_count
         
         # Check existing records
-        existing_codes = set(
-            CNVCustomer.objects.filter(customer_code__in=codes)
-            .values_list('customer_code', flat=True)
+        existing_cnv_ids = set(
+            CNVCustomer.objects.filter(cnv_id__in=cnv_ids)
+            .values_list('cnv_id', flat=True)
         )
         
         # Separate new vs existing
         new_customers = []
-        update_codes = []
+        update_cnv_ids = []
         
-        for code, data in transformed_map.items():
-            if code in existing_codes:
-                update_codes.append((code, data))
+        for cnv_id, data in transformed_map.items():
+            if cnv_id in existing_cnv_ids:
+                update_cnv_ids.append((cnv_id, data))
             else:
                 new_customers.append(CNVCustomer(**data))
         
@@ -249,19 +308,17 @@ class CNVSyncService:
                 failed_count += len(new_customers)
         
         # Update existing records
-        for code, data in update_codes:
+        for cnv_id, data in update_cnv_ids:
             try:
-                CNVCustomer.objects.filter(customer_code=code).update(**{
-                    k: v for k, v in data.items() if k != 'customer_code'
+                CNVCustomer.objects.filter(cnv_id=cnv_id).update(**{
+                    k: v for k, v in data.items() if k != 'cnv_id'
                 })
                 updated_count += 1
             except Exception as e:
-                logger.error(f"Update failed for {code}: {e}")
+                logger.error(f"Update failed for CNV#{cnv_id}: {e}")
                 failed_count += 1
         
         return created_count, updated_count, failed_count
-    
-    def _process_order_batch(self, batch: List[Dict]) -> Tuple[int, int, int]:
         """
         Process batch of orders using bulk operations.
         

@@ -1,7 +1,12 @@
 """
-App/models_cnv.py
+App/cnv_sync/models.py
 
-CORRECTED: Fixed JSONField default values to avoid mutable default issues.
+UPDATED: CNVCustomer model based on actual API response format
+Includes membership level and points tracking
+
+Changes:
+- id: Auto-increment primary key (database internal)
+- cnv_id: Customer ID from CNV API (unique)
 """
 from django.db import models
 from django.utils import timezone
@@ -9,42 +14,46 @@ from django.utils import timezone
 
 class CNVCustomer(models.Model):
     """
-    Synced customer data from CNV Loyalty.
-    Primary key: customer_code from CNV
+    Synced customer data from CNV Loyalty API.
+    Based on actual API response format from /loyalty/customers/{id}.json
     """
-    # CNV identifiers
-    customer_code = models.CharField(max_length=100, primary_key=True)
-    customer_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    # Database primary key (auto-increment)
+    id = models.AutoField(primary_key=True)
     
-    # Basic info
-    full_name = models.CharField(max_length=255, null=True, blank=True)
+    # CNV identifier (from API 'id' field)
+    cnv_id = models.BigIntegerField(unique=True, db_index=True)
+    
+    # Basic info from customer endpoint
+    last_name = models.CharField(max_length=255, null=True, blank=True)
+    first_name = models.CharField(max_length=255, null=True, blank=True)
     phone = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     email = models.EmailField(max_length=255, null=True, blank=True)
-    birthday = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=20, null=True, blank=True)
     
-    # Address
-    address = models.TextField(null=True, blank=True)
-    city = models.CharField(max_length=100, null=True, blank=True)
-    district = models.CharField(max_length=100, null=True, blank=True)
-    ward = models.CharField(max_length=100, null=True, blank=True)
+    # Birthday fields
+    birthday_day = models.IntegerField(null=True, blank=True)
+    birthday_month = models.IntegerField(null=True, blank=True)
+    birthday_year = models.IntegerField(null=True, blank=True)
     
-    # Loyalty info
-    membership_level = models.CharField(max_length=50, null=True, blank=True)
-    points_balance = models.IntegerField(default=0)
-    total_points_earned = models.IntegerField(default=0)
-    total_points_spent = models.IntegerField(default=0)
+    # Tags and physical card
+    tags = models.TextField(null=True, blank=True)
+    physical_card_code = models.CharField(max_length=100, null=True, blank=True)
     
-    # Dates
-    registration_date = models.DateTimeField(null=True, blank=True)
-    last_purchase_date = models.DateTimeField(null=True, blank=True)
+    # Points from customer endpoint
+    points = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    exp_points = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_spending = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_points = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
-    # Status
-    is_active = models.BooleanField(default=True)
-    status = models.CharField(max_length=50, null=True, blank=True)
+    # Membership info from /membership.json endpoint
+    level_name = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    used_points = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
-    # Metadata - FIXED: Use null=True instead of mutable default
-    raw_data = models.JSONField(null=True, blank=True)
+    # Dates (renamed to avoid confusion)
+    cnv_created_at = models.DateTimeField(null=True, blank=True)
+    cnv_updated_at = models.DateTimeField(null=True, blank=True)
+    
+    # Internal tracking
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_synced_at = models.DateTimeField(default=timezone.now)
@@ -55,13 +64,26 @@ class CNVCustomer(models.Model):
         verbose_name_plural = 'CNV Customers'
         ordering = ['-last_synced_at']
         indexes = [
-            models.Index(fields=['customer_code']),
+            models.Index(fields=['cnv_id']),
             models.Index(fields=['phone']),
+            models.Index(fields=['level_name']),
             models.Index(fields=['-last_synced_at']),
+            models.Index(fields=['-cnv_updated_at']),
         ]
     
     def __str__(self):
-        return f"{self.customer_code} - {self.full_name or 'N/A'}"
+        full_name = f"{self.last_name or ''} {self.first_name or ''}".strip()
+        return f"CNV#{self.cnv_id} - {full_name or self.phone or 'N/A'}"
+    
+    @property
+    def full_name(self):
+        """Convenience property for full name"""
+        return f"{self.last_name or ''} {self.first_name or ''}".strip() or None
+    
+    @property
+    def registration_date(self):
+        """Alias for cnv_created_at to maintain compatibility"""
+        return self.cnv_created_at
 
 
 class CNVOrder(models.Model):
@@ -99,11 +121,11 @@ class CNVOrder(models.Model):
     points_earned = models.IntegerField(default=0)
     points_used = models.IntegerField(default=0)
     
-    # Items - FIXED: Use null=True instead of mutable default
+    # Items
     items = models.JSONField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
     
-    # Metadata - FIXED: Use null=True instead of mutable default
+    # Metadata
     raw_data = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -127,7 +149,6 @@ class CNVOrder(models.Model):
 class CNVSyncLog(models.Model):
     """
     Track sync operations for monitoring and debugging.
-    Includes checkpoint (latest updated_at) for incremental sync.
     """
     SYNC_TYPE_CHOICES = [
         ('customers', 'Customers'),
