@@ -38,6 +38,50 @@
     max-height: 400px;
     overflow-y: auto;
 }
+
+/* Fixed table layout for consistent column widths */
+.table-wrapper table {
+    table-layout: fixed;
+    width: 100%;
+}
+.table-wrapper th,
+.table-wrapper td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Column widths for POS table (7 columns) */
+.table-wrapper .pos-table th:nth-child(1),
+.table-wrapper .pos-table td:nth-child(1) { width: 10%; } /* VIP ID */
+.table-wrapper .pos-table th:nth-child(2),
+.table-wrapper .pos-table td:nth-child(2) { width: 15%; } /* Phone */
+.table-wrapper .pos-table th:nth-child(3),
+.table-wrapper .pos-table td:nth-child(3) { width: 15%; } /* Name */
+.table-wrapper .pos-table th:nth-child(4),
+.table-wrapper .pos-table td:nth-child(4) { width: 15%; } /* Grade */
+.table-wrapper .pos-table th:nth-child(5),
+.table-wrapper .pos-table td:nth-child(5) { width: 15%; } /* Email */
+.table-wrapper .pos-table th:nth-child(6),
+.table-wrapper .pos-table td:nth-child(6) { width: 15%; } /* Reg Date */
+.table-wrapper .pos-table th:nth-child(7),
+.table-wrapper .pos-table td:nth-child(7) { width: 15%; } /* Points */
+
+/* Column widths for CNV table (7 columns) */
+.table-wrapper .cnv-table th:nth-child(1),
+.table-wrapper .cnv-table td:nth-child(1) { width: 10%; } /* Customer ID */
+.table-wrapper .cnv-table th:nth-child(2),
+.table-wrapper .cnv-table td:nth-child(2) { width: 15%; } /* Phone */
+.table-wrapper .cnv-table th:nth-child(3),
+.table-wrapper .cnv-table td:nth-child(3) { width: 15%; } /* Name */
+.table-wrapper .cnv-table th:nth-child(4),
+.table-wrapper .cnv-table td:nth-child(4) { width: 15%; } /* Email */
+.table-wrapper .cnv-table th:nth-child(5),
+.table-wrapper .cnv-table td:nth-child(5) { width: 15%; } /* Reg Date */
+.table-wrapper .cnv-table th:nth-child(6),
+.table-wrapper .cnv-table td:nth-child(6) { width: 15%; } /* Points Earned */
+.table-wrapper .cnv-table th:nth-child(7),
+.table-wrapper .cnv-table td:nth-child(7) { width: 15%; } /* Points Spent */
 </style>
 {% endblock %}
 
@@ -46,6 +90,10 @@
 <!-- Page Header -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-people"></i> Customer Analytics</h2>
+    <a href="{% url 'cnv:export_customer_comparison' %}?{% if start_date and end_date %}start_date={{ start_date }}&end_date={{ end_date }}{% endif %}"
+       class="btn btn-success">
+        <i class="bi bi-download"></i> Export to Excel
+    </a>
 </div>
 
 <!-- Date Filter -->
@@ -193,7 +241,7 @@
             </div>
             <div class="collapse show" id="table1">
                 <div class="table-scroll">
-                    <table class="table table-sm table-hover mb-0">
+                    <table class="table table-sm table-hover mb-0 pos-table">
                         <thead class="table-dark">
                             <tr>
                                 <th>VIP ID</th>
@@ -202,7 +250,7 @@
                                 <th>VIP Grade</th>
                                 <th>Email</th>
                                 <th>Registration Date</th>
-                                <th class="text-end">Points</th>
+                                <th>Points</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -214,7 +262,7 @@
                                 <td><span class="badge bg-secondary">{{ customer.vip_grade|default:"No Grade" }}</span></td>
                                 <td>{{ customer.email|default:"-" }}</td>
                                 <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td class="text-end">{{ customer.points|default:0 }}</td>
+                                <td>{{ customer.points|default:0 }}</td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
@@ -242,7 +290,7 @@
             </div>
             <div class="collapse show" id="table2">
                 <div class="table-scroll">
-                    <table class="table table-sm table-hover mb-0">
+                    <table class="table table-sm table-hover mb-0 cnv-table">
                         <thead class="table-dark">
                             <tr>
                                 <th>Customer ID</th>
@@ -250,8 +298,8 @@
                                 <th>Full Name</th>
                                 <th>Email</th>
                                 <th>Registration Date</th>
-                                <th class="text-end">Points Earned</th>
-                                <th class="text-end">Points Spent</th>
+                                <th>Points Earned</th>
+                                <th>Points Spent</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -262,8 +310,8 @@
                                 <td>{{ customer.full_name|default:"-" }}</td>
                                 <td>{{ customer.email|default:"-" }}</td>
                                 <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td class="text-end">{{ customer.total_points_earned|default:0 }}</td>
-                                <td class="text-end">{{ customer.total_points_spent|default:0 }}</td>
+                                <td>{{ customer.total_points_earned|default:0 }}</td>
+                                <td>{{ customer.total_points_spent|default:0 }}</td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
@@ -301,7 +349,7 @@
                                 <th>VIP Grade</th>
                                 <th>Email</th>
                                 <th>Registration Date</th>
-                                <th class="text-end">Points</th>
+                                <th>Points</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -313,7 +361,7 @@
                                 <td><span class="badge bg-secondary">{{ customer.vip_grade|default:"No Grade" }}</span></td>
                                 <td>{{ customer.email|default:"-" }}</td>
                                 <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td class="text-end">{{ customer.points|default:0 }}</td>
+                                <td>{{ customer.points|default:0 }}</td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
@@ -349,8 +397,8 @@
                                 <th>Full Name</th>
                                 <th>Email</th>
                                 <th>Registration Date</th>
-                                <th class="text-end">Points Earned</th>
-                                <th class="text-end">Points Spent</th>
+                                <th>Points Earned</th>
+                                <th>Points Spent</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -361,8 +409,8 @@
                                 <td>{{ customer.full_name|default:"-" }}</td>
                                 <td>{{ customer.email|default:"-" }}</td>
                                 <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td class="text-end">{{ customer.total_points_earned|default:0 }}</td>
-                                <td class="text-end">{{ customer.total_points_spent|default:0 }}</td>
+                                <td>{{ customer.total_points_earned|default:0 }}</td>
+                                <td>{{ customer.total_points_spent|default:0 }}</td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
