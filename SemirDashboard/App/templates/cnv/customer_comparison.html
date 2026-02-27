@@ -67,7 +67,7 @@
 .table-wrapper .pos-table th:nth-child(7),
 .table-wrapper .pos-table td:nth-child(7) { width: 15%; } /* Points */
 
-/* Column widths for CNV table (7 columns) */
+/* Column widths for CNV table (8 columns) */
 .table-wrapper .cnv-table th:nth-child(1),
 .table-wrapper .cnv-table td:nth-child(1) { width: 10%; } /* Customer ID */
 .table-wrapper .cnv-table th:nth-child(2),
@@ -75,13 +75,15 @@
 .table-wrapper .cnv-table th:nth-child(3),
 .table-wrapper .cnv-table td:nth-child(3) { width: 15%; } /* Name */
 .table-wrapper .cnv-table th:nth-child(4),
-.table-wrapper .cnv-table td:nth-child(4) { width: 15%; } /* Email */
+.table-wrapper .cnv-table td:nth-child(4) { width: 15%; } /* Level */
 .table-wrapper .cnv-table th:nth-child(5),
-.table-wrapper .cnv-table td:nth-child(5) { width: 15%; } /* Reg Date */
+.table-wrapper .cnv-table td:nth-child(5) { width: 15%; } /* Email */
 .table-wrapper .cnv-table th:nth-child(6),
-.table-wrapper .cnv-table td:nth-child(6) { width: 15%; } /* Points Earned */
+.table-wrapper .cnv-table td:nth-child(6) { width: 15%; } /* Reg Date */
 .table-wrapper .cnv-table th:nth-child(7),
-.table-wrapper .cnv-table td:nth-child(7) { width: 15%; } /* Points Spent */
+.table-wrapper .cnv-table td:nth-child(7) { width: 7.5%; } /* Points */
+.table-wrapper .cnv-table th:nth-child(8),
+.table-wrapper .cnv-table td:nth-child(8) { width: 7.5%; } /* Used Points */
 </style>
 {% endblock %}
 
@@ -296,25 +298,27 @@
                                 <th>Customer ID</th>
                                 <th>Phone</th>
                                 <th>Full Name</th>
+                                <th>Level</th>
                                 <th>Email</th>
                                 <th>Registration Date</th>
-                                <th>Points Earned</th>
-                                <th>Points Spent</th>
+                                <th>Points</th>
+                                <th>Used Points</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for customer in cnv_only_all %}
                             <tr>
-                                <td>{{ customer.customer_id }}</td>
+                                <td>{{ customer.cnv_id }}</td>
                                 <td>{{ customer.phone }}</td>
-                                <td>{{ customer.full_name|default:"-" }}</td>
+                                <td>{{ customer.last_name|default:'' }} {{ customer.first_name|default:'' }}</td>
+                                <td><span class="badge bg-info">{{ customer.level_name|default:"-" }}</span></td>
                                 <td>{{ customer.email|default:"-" }}</td>
-                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td>{{ customer.total_points_earned|default:0 }}</td>
-                                <td>{{ customer.total_points_spent|default:0 }}</td>
+                                <td>{{ customer.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
+                                <td>{{ customer.total_points|default:0 }}</td>
+                                <td>{{ customer.used_points|default:0 }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-3">No records found</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -389,31 +393,33 @@
             </div>
             <div class="collapse show" id="table4">
                 <div class="table-scroll">
-                    <table class="table table-sm table-hover mb-0">
+                    <table class="table table-sm table-hover mb-0 cnv-table">
                         <thead class="table-dark">
                             <tr>
                                 <th>Customer ID</th>
                                 <th>Phone</th>
                                 <th>Full Name</th>
+                                <th>Level</th>
                                 <th>Email</th>
                                 <th>Registration Date</th>
-                                <th>Points Earned</th>
-                                <th>Points Spent</th>
+                                <th>Points</th>
+                                <th>Used Points</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for customer in cnv_only_period %}
                             <tr>
-                                <td>{{ customer.customer_id }}</td>
+                                <td>{{ customer.cnv_id }}</td>
                                 <td>{{ customer.phone }}</td>
-                                <td>{{ customer.full_name|default:"-" }}</td>
+                                <td>{{ customer.last_name|default:'' }} {{ customer.first_name|default:'' }}</td>
+                                <td><span class="badge bg-info">{{ customer.level_name|default:"-" }}</span></td>
                                 <td>{{ customer.email|default:"-" }}</td>
-                                <td>{{ customer.registration_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td>{{ customer.total_points_earned|default:0 }}</td>
-                                <td>{{ customer.total_points_spent|default:0 }}</td>
+                                <td>{{ customer.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
+                                <td>{{ customer.total_points|default:0 }}</td>
+                                <td>{{ customer.used_points|default:0 }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-3">No records found</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>

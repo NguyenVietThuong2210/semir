@@ -315,6 +315,7 @@ def customer_detail(request):
     invoices = []
     stats = {}
     is_synced_to_cnv = False
+    cnv_customer = None
     search_attempted = bool(search_vip_id or search_phone)
     
     if search_vip_id or search_phone:
@@ -340,7 +341,9 @@ def customer_detail(request):
         if customer:
             # Check CNV sync status (use 'phone' field not 'phone_no')
             if customer.phone:
-                is_synced_to_cnv = CNVCustomer.objects.filter(phone=customer.phone).exists()
+                cnv_customer = CNVCustomer.objects.filter(phone=customer.phone).first()
+                print(f"{cnv_customer.total_points} - {cnv_customer.used_points} - {cnv_customer.points}")
+                is_synced_to_cnv = True if cnv_customer is not None else False
             
             # Get all invoices for this customer
             invoices = SalesTransaction.objects.filter(
@@ -397,6 +400,7 @@ def customer_detail(request):
         'invoices': invoices,
         'stats': stats,
         'is_synced_to_cnv': is_synced_to_cnv,
+        'cnv_customer': cnv_customer,
         'search_vip_id': search_vip_id,
         'search_phone': search_phone,
         'search_attempted': search_attempted,

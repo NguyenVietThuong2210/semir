@@ -119,9 +119,9 @@ def customer_comparison(request):
     # (2) In CNV but not in POS
     cnv_only_phones_all = cnv_phones_all - pos_phones_all
     cnv_only_all = cnv_all.filter(phone__in=cnv_only_phones_all).values(
-        'customer_id', 'phone', 'full_name', 'email', 'registration_date',
-        'total_points_earned', 'total_points_spent'
-    ).order_by('-registration_date')[:50]
+        'cnv_id', 'phone', 'last_name', 'first_name', 'level_name', 'email', 'cnv_created_at',
+        'total_points', 'used_points'
+    ).order_by('-cnv_created_at')[:50]
     
     # ============================================
     # PERIOD DATA
@@ -144,8 +144,8 @@ def customer_comparison(request):
         
         # New CNV customers in period
         cnv_period = cnv_all.filter(
-            registration_date__gte=period_filter['start'],
-            registration_date__lte=period_filter['end']
+            cnv_created_at__gte=period_filter['start'],
+            cnv_created_at__lte=period_filter['end']
         )
         new_cnv_count = cnv_period.count()
         
@@ -164,9 +164,9 @@ def customer_comparison(request):
         cnv_only_phones_period = cnv_phones_period - pos_phones_all
         cnv_only_period_count = len(cnv_only_phones_period)
         cnv_only_period = cnv_period.filter(phone__in=cnv_only_phones_period).values(
-            'customer_id', 'phone', 'full_name', 'email', 'registration_date',
-            'total_points_earned', 'total_points_spent'
-        ).order_by('-registration_date')[:50]
+            'cnv_id', 'phone', 'last_name', 'first_name', 'level_name', 'email', 'cnv_created_at',
+            'total_points', 'used_points'
+        ).order_by('-cnv_created_at')[:50]
     
     # ============================================
     # CONTEXT
