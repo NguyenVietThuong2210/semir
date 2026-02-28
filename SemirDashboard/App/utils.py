@@ -503,3 +503,107 @@ def process_coupon_file(file):
     logger.info("=== DONE Coupon Import: created=%d updated=%d errors=%d ===",
                 created, updated, errors)
     return {'created': created, 'updated': updated, 'errors': errors}
+
+def process_used_points_file(file):
+    """
+    Process an Excel/CSV file to update Customer.used_points and used_points_note.
+
+    Expected columns:
+        - VIP ID       (required)
+        - Phone NO.    (required)
+        - Used Points  (required, integer)
+        - Used Points Note (optional)
+
+    Duplicate matching: same VIP ID AND Phone  →  update both fields.
+    Returns dict: { total_processed, updated, skipped, errors: [...] }
+    """
+    import io
+    import pandas as pd
+    from django.db import transaction
+
+    # ── Read file ────────────────────────────────────────────────
+    filename = file.name.lower()
+    try:
+        if filename.endswith('.csv'):
+            df = pd.read_csv(file, dtype=str)
+        else:
+            df = pd.read_excel(file, dtype=str)
+    except Exception as e:
+        raise ValueError(f"Cannot read file: {e}")
+
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.dropna(how='all')
+
+    # ── Column mapping ───────────────────────────────────────────
+    col_map = {}
+    for col in df.columns:
+        cl = col.lower().replace(' ', '').replace('.', '').replace('_', '')
+        if cl in ('vipid',):
+            col_map['vip_id'] = col
+        elif cl in ('phoneno', 'phone'):
+            col_map['phone'] = col
+        elif cl in ('usedpoints',):
+            col_map['used_points'] = col
+        elif cl in ('usedpointsnote', 'note'):
+            col_map['used_points_note'] = col
+
+    missing = [k for k in ('vip_id', 'phone', 'used_points') if k not in col_map]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}. Found: {list(df.columns)}")
+
+    total_processed = 0
+    updated = 0
+    skipped = 0
+    errors = []
+
+    BATCH = 2000
+
+    with transaction.atomic():
+        records = df.to_dict('records')
+        for i in range(0, len(records), BATCH):
+            batch = records[i:i + BATCH]
+            for rec in batch:
+                total_processed += 1
+                try:
+                    vip_id = str(rec.get(col_map['vip_id'], '') or '').strip()
+                    phone  = str(rec.get(col_map['phone'], '') or '').strip()
+                    pts_raw = str(rec.get(col_map['used_points'], '') or '').strip()
+                    note   = str(rec.get(col_map.get('used_points_note', ''), '') or '').strip() \
+                             if 'used_points_note' in col_map else ''
+
+                    if not vip_id or not phone:
+                        skipped += 1
+                        continue
+
+                    try:
+                        used_pts = int(float(pts_raw)) if pts_raw else 0
+                    except (ValueError, TypeError):
+                        errors.append(f"Row {total_processed}: invalid used_points '{pts_raw}' for VIP {vip_id}")
+                        skipped += 1
+                        continue
+
+                    rows_updated = Customer.objects.filter(
+                        vip_id=vip_id, phone=phone
+                    ).update(
+                        used_points=used_pts,
+                        used_points_note=note or None,
+                    )
+
+                    if rows_updated:
+                        updated += rows_updated
+                    else:
+                        skipped += 1
+                        errors.append(f"Row {total_processed}: no match for VIP ID={vip_id}, Phone={phone}")
+
+                except Exception as e:
+                    errors.append(f"Row {total_processed}: {e}")
+                    skipped += 1
+
+    logger.info("=== DONE UsedPoints Import: updated=%d skipped=%d errors=%d ===",
+                updated, skipped, len(errors))
+    return {
+        'total_processed': total_processed,
+        'updated': updated,
+        'skipped': skipped,
+        'errors': errors,
+    }

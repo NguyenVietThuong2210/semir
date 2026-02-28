@@ -143,4 +143,81 @@
         </div>
     </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- UPLOAD USED POINTS SECTION                                  -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="row mt-5">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <h6><i class="bi bi-info-circle"></i> File Requirements — Used Points</h6>
+                    <p class="mb-2">Your file should contain the following columns:</p>
+                    <ul class="small mb-0">
+                        <li><strong>VIP ID</strong> - Unique customer identifier (required)</li>
+                        <li><strong>Phone NO.</strong> - Customer phone number (required)</li>
+                        <li><strong>Used Points</strong> - Number of points used (required)</li>
+                        <li><strong>Used Points Note</strong> - Optional note/reason</li>
+                    </ul>
+                    <p class="mt-2 mb-0 small">
+                        <i class="bi bi-exclamation-triangle"></i> Duplicate customers (same VIP ID and Phone) will be updated with new data.
+                    </p>
+                </div>
+
+                <form method="post" enctype="multipart/form-data" action="{% url 'upload_used_points' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="{{ used_points_form.file.id_for_label }}" class="form-label">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> Select File
+                        </label>
+                        {{ used_points_form.file }}
+                        <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-warning btn-lg">
+                            <i class="bi bi-upload"></i> Upload Used Points Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sample File Format -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="bi bi-download"></i> Sample File Format — Used Points
+            </div>
+            <div class="card-body">
+                <p>Your file must follow this column structure:</p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>VIP ID</th>
+                                <th>Phone NO.</th>
+                                <th>Used Points</th>
+                                <th>Used Points Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1525819</td>
+                                <td>0935668079</td>
+                                <td>100</td>
+                                <td>Redeemed at store</td>
+                            </tr>
+                            <tr>
+                                <td>1496642</td>
+                                <td>0359551862</td>
+                                <td>500</td>
+                                <td>Online redemption</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

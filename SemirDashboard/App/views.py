@@ -17,8 +17,8 @@ from datetime import datetime
 from App.analytics.core import calculate_return_rate_analytics
 from App.analytics.coupon_analytics import calculate_coupon_analytics, export_coupon_to_excel
 from App.analytics.excel_export import export_analytics_to_excel
-from .forms import CustomerUploadForm, SalesUploadForm
-from .utils import process_customer_file, process_sales_file
+from .forms import CustomerUploadForm, SalesUploadForm, UsedPointsUploadForm
+from .utils import process_customer_file, process_sales_file, process_used_points_file
 from .models import Customer, SalesTransaction, Coupon
 from .models_cnv import CNVCustomer
 
@@ -58,6 +58,7 @@ def upload_customers(request):
     """
     if request.method == 'POST':
         form = CustomerUploadForm(request.POST, request.FILES)
+        used_points_form = UsedPointsUploadForm()
         if form.is_valid():
             f = request.FILES['file']
             logger.info("upload_customers: %s user=%s", f.name, request.user)
@@ -74,6 +75,7 @@ def upload_customers(request):
                 messages.error(request, f'Error: {e}')
     else:
         form = CustomerUploadForm()
+        used_points_form = UsedPointsUploadForm()
     
     # Get database statistics with date ranges
     date_stats = Customer.objects.aggregate(
@@ -84,8 +86,34 @@ def upload_customers(request):
     
     return render(request, 'upload_customers.html', {
         'form': form,
+        'used_points_form': used_points_form,
         'date_stats': date_stats
     })
+
+
+@login_required
+def upload_used_points(request):
+    """Upload used_points and used_points_note for existing POS customers."""
+    if request.method == 'POST':
+        form = UsedPointsUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            f = request.FILES['file']
+            logger.info("upload_used_points: %s user=%s", f.name, request.user)
+            try:
+                result = process_used_points_file(f)
+                messages.success(request,
+                    f"Processed {result['total_processed']} rows — "
+                    f"Updated: {result['updated']}, Skipped: {result['skipped']}")
+                for err in result.get('errors', [])[:5]:
+                    messages.warning(request, err)
+                return redirect('upload_customers')
+            except Exception as e:
+                logger.exception("upload_used_points error")
+                messages.error(request, f'Error: {e}')
+    else:
+        form = UsedPointsUploadForm()
+
+    return redirect('upload_customers')
 
 
 @login_required
