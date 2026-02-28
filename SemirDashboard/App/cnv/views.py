@@ -186,7 +186,7 @@ def customer_comparison(request):
     # Fetch POS rows that have a matching CNV phone (subquery)
     pos_matched_qs = pos_all.filter(
         phone__in=Subquery(cnv_all.values('phone'))
-    ).values('vip_id', 'phone', 'name', 'vip_grade', 'points')
+    ).values('vip_id', 'phone', 'name', 'vip_grade', 'points', 'used_points')
 
     # Fetch CNV rows that have a matching POS phone (subquery)
     cnv_matched_qs = cnv_all.filter(
@@ -201,22 +201,26 @@ def customer_comparison(request):
     for phone, pos_c in pos_map.items():
         cnv_c = cnv_map.get(phone)
         if cnv_c:
-            pos_pts = int(pos_c.get('points') or 0)
-            cnv_pts = int(cnv_c.get('points') or 0)
-            if pos_pts != cnv_pts:
+            pos_pts      = int(pos_c.get('points') or 0)
+            pos_used     = int(pos_c.get('used_points') or 0)
+            pos_net      = pos_pts - pos_used          # effective POS points
+            cnv_pts      = int(cnv_c.get('points') or 0)
+            if pos_net != cnv_pts:
                 points_mismatch.append({
                     'phone': phone,
                     'pos_vip_id': pos_c['vip_id'],
                     'pos_name': pos_c['name'],
                     'pos_grade': pos_c['vip_grade'],
                     'pos_points': pos_pts,
+                    'pos_used_points': pos_used,
+                    'pos_net_points': pos_net,
                     'cnv_id': cnv_c['cnv_id'],
                     'cnv_name': f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
                     'cnv_level': cnv_c['level_name'],
                     'cnv_points': cnv_pts,
                     'cnv_total_points': cnv_c.get('total_points') or 0,
                     'cnv_used_points': cnv_c.get('used_points') or 0,
-                    'diff': cnv_pts - pos_pts,
+                    'diff': cnv_pts - pos_net,
                 })
 
     points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
@@ -229,22 +233,26 @@ def customer_comparison(request):
     for phone, pos_c in pos_map.items():
         cnv_c = cnv_map.get(phone)
         if cnv_c:
-            pos_pts = int(pos_c.get('points') or 0)
-            cnv_total = int(float(cnv_c.get('total_points') or 0))
-            if pos_pts != cnv_total:
+            pos_pts      = int(pos_c.get('points') or 0)
+            pos_used     = int(pos_c.get('used_points') or 0)
+            pos_net      = pos_pts - pos_used          # effective POS points
+            cnv_total    = int(float(cnv_c.get('total_points') or 0))
+            if pos_net != cnv_total:
                 total_points_mismatch.append({
                     'phone': phone,
                     'pos_vip_id': pos_c['vip_id'],
                     'pos_name': pos_c['name'],
                     'pos_grade': pos_c['vip_grade'],
                     'pos_points': pos_pts,
+                    'pos_used_points': pos_used,
+                    'pos_net_points': pos_net,
                     'cnv_id': cnv_c['cnv_id'],
                     'cnv_name': f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
                     'cnv_level': cnv_c['level_name'],
                     'cnv_points': int(cnv_c.get('points') or 0),
                     'cnv_total_points': cnv_total,
                     'cnv_used_points': int(float(cnv_c.get('used_points') or 0)),
-                    'diff': cnv_total - pos_pts,
+                    'diff': cnv_total - pos_net,
                 })
 
     total_points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
@@ -357,7 +365,7 @@ def export_customer_comparison(request):
     # Fetch only matched rows via subquery
     pos_matched = pos_base.filter(
         phone__in=Subquery(cnv_base.values('phone'))
-    ).values('vip_id', 'phone', 'name', 'vip_grade', 'points')
+    ).values('vip_id', 'phone', 'name', 'vip_grade', 'points', 'used_points')
 
     cnv_matched = cnv_base.filter(
         phone__in=Subquery(pos_base.values('phone'))
@@ -371,46 +379,54 @@ def export_customer_comparison(request):
     for phone, pos_c in pos_map.items():
         cnv_c = cnv_map.get(phone)
         if cnv_c:
-            pos_pts = int(pos_c.get('points') or 0)
-            cnv_pts = int(cnv_c.get('points') or 0)
-            if pos_pts != cnv_pts:
+            pos_pts  = int(pos_c.get('points') or 0)
+            pos_used = int(pos_c.get('used_points') or 0)
+            pos_net  = pos_pts - pos_used
+            cnv_pts  = int(cnv_c.get('points') or 0)
+            if pos_net != cnv_pts:
                 points_mismatch_export.append({
                     'phone': phone,
                     'pos_vip_id': pos_c['vip_id'],
                     'pos_name': pos_c['name'],
                     'pos_grade': pos_c['vip_grade'],
                     'pos_points': pos_pts,
+                    'pos_used_points': pos_used,
+                    'pos_net_points': pos_net,
                     'cnv_id': cnv_c['cnv_id'],
                     'cnv_name': f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
                     'cnv_level': cnv_c['level_name'],
                     'cnv_points': cnv_pts,
                     'cnv_total_points': float(cnv_c.get('total_points') or 0),
                     'cnv_used_points': float(cnv_c.get('used_points') or 0),
-                    'diff': cnv_pts - pos_pts,
+                    'diff': cnv_pts - pos_net,
                 })
     points_mismatch_export.sort(key=lambda x: abs(x['diff']), reverse=True)
 
-    # Total Points Mismatch export: POS.points vs CNV.total_points
+    # Total Points Mismatch export: (POS.points - POS.used_points) vs CNV.total_points
     total_points_mismatch_export = []
     for phone, pos_c in pos_map.items():
         cnv_c = cnv_map.get(phone)
         if cnv_c:
-            pos_pts = int(pos_c.get('points') or 0)
+            pos_pts   = int(pos_c.get('points') or 0)
+            pos_used  = int(pos_c.get('used_points') or 0)
+            pos_net   = pos_pts - pos_used
             cnv_total = int(float(cnv_c.get('total_points') or 0))
-            if pos_pts != cnv_total:
+            if pos_net != cnv_total:
                 total_points_mismatch_export.append({
                     'phone': phone,
                     'pos_vip_id': pos_c['vip_id'],
                     'pos_name': pos_c['name'],
                     'pos_grade': pos_c['vip_grade'],
                     'pos_points': pos_pts,
+                    'pos_used_points': pos_used,
+                    'pos_net_points': pos_net,
                     'cnv_id': cnv_c['cnv_id'],
                     'cnv_name': f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
                     'cnv_level': cnv_c['level_name'],
                     'cnv_points': int(cnv_c.get('points') or 0),
                     'cnv_total_points': cnv_total,
                     'cnv_used_points': int(float(cnv_c.get('used_points') or 0)),
-                    'diff': cnv_total - pos_pts,
+                    'diff': cnv_total - pos_net,
                 })
     total_points_mismatch_export.sort(key=lambda x: abs(x['diff']), reverse=True)
 

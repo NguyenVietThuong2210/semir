@@ -20,6 +20,8 @@ class Customer(models.Model):
     registration_store = models.CharField(max_length=1000, blank=True, null=True)
     registration_date = models.DateField(blank=True, null=True)
     points = models.IntegerField(default=0)
+    used_points = models.IntegerField(default=0, null=True, blank=True)
+    used_points_note = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

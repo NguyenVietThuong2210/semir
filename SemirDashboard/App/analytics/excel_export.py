@@ -1060,8 +1060,9 @@ def export_customer_comparison_to_excel(
     ws_mismatch = wb.create_sheet("Points Mismatch")
 
     mismatch_headers = [
-        'Phone', 'POS VIP ID', 'POS Name', 'POS Grade', 'POS Points',
-        'CNV ID', 'CNV Name', 'CNV Level', 'CNV Points', 'CNV Total Points', 'CNV Used Points', 'Diff'
+        'Phone', 'POS VIP ID', 'POS Name', 'POS Grade', 'POS Points', 'POS Used Points',
+        'CNV ID', 'CNV Name', 'CNV Level', 'CNV Points', 'CNV Total Points', 'CNV Used Points',
+        'Diff Value', 'Diff Note'
     ]
     orange_fill = PatternFill(start_color="C65911", end_color="C65911", fill_type="solid")
     for col_idx, header in enumerate(mismatch_headers, 1):
@@ -1077,21 +1078,21 @@ def export_customer_comparison_to_excel(
         ws_mismatch.cell(row, 3, m.get('pos_name', ''))
         ws_mismatch.cell(row, 4, m.get('pos_grade', ''))
         ws_mismatch.cell(row, 5, m.get('pos_points', 0))
-        ws_mismatch.cell(row, 6, m.get('cnv_id', ''))
-        ws_mismatch.cell(row, 7, m.get('cnv_name', ''))
-        ws_mismatch.cell(row, 8, m.get('cnv_level', ''))
-        ws_mismatch.cell(row, 9, m.get('cnv_points', 0))
-        ws_mismatch.cell(row, 10, m.get('cnv_total_points', 0))
-        ws_mismatch.cell(row, 11, m.get('cnv_used_points', 0))
+        ws_mismatch.cell(row, 6, m.get('pos_used_points', 0))
+        ws_mismatch.cell(row, 7, m.get('cnv_id', ''))
+        ws_mismatch.cell(row, 8, m.get('cnv_name', ''))
+        ws_mismatch.cell(row, 9, m.get('cnv_level', ''))
+        ws_mismatch.cell(row, 10, m.get('cnv_points', 0))
+        ws_mismatch.cell(row, 11, m.get('cnv_total_points', 0))
+        ws_mismatch.cell(row, 12, m.get('cnv_used_points', 0))
         diff = m.get('diff', 0)
-        diff_cell = ws_mismatch.cell(row, 12, diff)
-        if diff > 0:
-            diff_cell.font = Font(bold=True, color="16A34A")
-        else:
-            diff_cell.font = Font(bold=True, color="DC2626")
+        diff_cell = ws_mismatch.cell(row, 13, diff)
+        diff_cell.font = Font(bold=True, color="16A34A" if diff > 0 else "DC2626")
+        note = "Run camp to reduce point in CNV" if diff > 0 else "Run camp to increase point in CNV"
+        ws_mismatch.cell(row, 14, note)
         row += 1
 
-    for col_letter, width in zip('ABCDEFGHIJKL', [15, 12, 25, 12, 10, 12, 25, 12, 10, 14, 12, 10]):
+    for col_letter, width in zip('ABCDEFGHIJKLMN', [15, 12, 25, 12, 10, 12, 12, 25, 12, 10, 14, 12, 10, 35]):
         ws_mismatch.column_dimensions[col_letter].width = width
 
     # ========================================================================
@@ -1132,13 +1133,14 @@ def export_customer_comparison_to_excel(
     ws_used.column_dimensions['I'].width = 14
 
     # ========================================================================
-    # TOTAL POINTS MISMATCH SHEET  (POS.points vs CNV.total_points)
+    # TOTAL POINTS MISMATCH SHEET  (POS.net_points vs CNV.total_points)
     # ========================================================================
     ws_total_mismatch = wb.create_sheet("Total Points Mismatch")
 
     total_mismatch_headers = [
-        'Phone', 'POS VIP ID', 'POS Name', 'POS Grade', 'POS Points',
-        'CNV ID', 'CNV Name', 'CNV Level', 'CNV Points', 'CNV Total Points', 'CNV Used Points', 'Diff'
+        'Phone', 'POS VIP ID', 'POS Name', 'POS Grade', 'POS Points', 'POS Used Points',
+        'CNV ID', 'CNV Name', 'CNV Level', 'CNV Points', 'CNV Total Points', 'CNV Used Points',
+        'Diff Value', 'Diff Note'
     ]
     purple_fill = PatternFill(start_color="7C3AED", end_color="7C3AED", fill_type="solid")
     for col_idx, header in enumerate(total_mismatch_headers, 1):
@@ -1154,18 +1156,21 @@ def export_customer_comparison_to_excel(
         ws_total_mismatch.cell(row, 3, m.get('pos_name', ''))
         ws_total_mismatch.cell(row, 4, m.get('pos_grade', ''))
         ws_total_mismatch.cell(row, 5, m.get('pos_points', 0))
-        ws_total_mismatch.cell(row, 6, m.get('cnv_id', ''))
-        ws_total_mismatch.cell(row, 7, m.get('cnv_name', ''))
-        ws_total_mismatch.cell(row, 8, m.get('cnv_level', ''))
-        ws_total_mismatch.cell(row, 9, m.get('cnv_points', 0))
-        ws_total_mismatch.cell(row, 10, m.get('cnv_total_points', 0))
-        ws_total_mismatch.cell(row, 11, m.get('cnv_used_points', 0))
+        ws_total_mismatch.cell(row, 6, m.get('pos_used_points', 0))
+        ws_total_mismatch.cell(row, 7, m.get('cnv_id', ''))
+        ws_total_mismatch.cell(row, 8, m.get('cnv_name', ''))
+        ws_total_mismatch.cell(row, 9, m.get('cnv_level', ''))
+        ws_total_mismatch.cell(row, 10, m.get('cnv_points', 0))
+        ws_total_mismatch.cell(row, 11, m.get('cnv_total_points', 0))
+        ws_total_mismatch.cell(row, 12, m.get('cnv_used_points', 0))
         diff = m.get('diff', 0)
-        diff_cell = ws_total_mismatch.cell(row, 12, diff)
+        diff_cell = ws_total_mismatch.cell(row, 13, diff)
         diff_cell.font = Font(bold=True, color="16A34A" if diff > 0 else "DC2626")
+        note = "Run camp to reduce point in CNV" if diff > 0 else "Run camp to increase point in CNV"
+        ws_total_mismatch.cell(row, 14, note)
         row += 1
 
-    for col_letter, width in zip('ABCDEFGHIJKL', [15, 12, 25, 12, 10, 12, 25, 12, 10, 14, 12, 10]):
+    for col_letter, width in zip('ABCDEFGHIJKLMN', [15, 12, 25, 12, 10, 12, 12, 25, 12, 10, 14, 12, 10, 35]):
         ws_total_mismatch.column_dimensions[col_letter].width = width
 
     return wb
