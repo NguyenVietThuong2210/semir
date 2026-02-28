@@ -150,7 +150,7 @@ def start_scheduler():
     # Customers sync every 1 hour at :5
     scheduler.add_job(
         sync_cnv_customers_only,
-        trigger=CronTrigger(minute='25'),
+        trigger=CronTrigger(minute='26'),
         id="cnv_customers_sync",
         max_instances=1,
         replace_existing=True,
