@@ -2,6 +2,7 @@
 CNV Views
 Handles CNV Loyalty integration pages
 """
+from django.conf import settings
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -252,11 +253,22 @@ def customer_comparison(request):
     # ============================================
     # CNV CUSTOMERS WITH USED_POINTS > 0
     # ============================================
-    cnv_used_points_list = cnv_all.filter(used_points__gt=0).values(
+    cnv_used_points_qs = cnv_all.filter(used_points__gt=0).values(
         'cnv_id', 'phone', 'last_name', 'first_name', 'level_name', 'email',
         'cnv_created_at', 'points', 'total_points', 'used_points'
     ).order_by('-used_points')[:200]
     cnv_used_points_count = cnv_all.filter(used_points__gt=0).count()
+
+    # Annotate each row with in_pos flag (phone exists in POS)
+    _used_phones = [r['phone'] for r in cnv_used_points_qs if r['phone']]
+    _pos_phones_set = set(
+        pos_all.filter(phone__in=_used_phones).values_list('phone', flat=True)
+    )
+    cnv_used_points_list = []
+    for row in cnv_used_points_qs:
+        row = dict(row)
+        row['in_pos'] = row['phone'] in _pos_phones_set
+        cnv_used_points_list.append(row)
 
     # ============================================
     # CONTEXT
@@ -429,3 +441,62 @@ def export_customer_comparison(request):
     wb.save(response)
     
     return response
+
+
+@login_required
+def sync_cnv_points(request):
+    """
+    AJAX endpoint: sync points for a list of CNV customer IDs.
+    POST body JSON: { "cnv_ids": [123, 456, ...] }
+    Returns JSON: { "results": [ {cnv_id, status, points, total_points, used_points, level_name}, ... ] }
+    """
+    import json
+    from django.http import JsonResponse
+    from decimal import Decimal
+    from App.cnv.api_client import CNVAPIClient
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        body = json.loads(request.body)
+        cnv_ids = body.get('cnv_ids', [])
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    if not cnv_ids:
+        return JsonResponse({'error': 'No cnv_ids provided'}, status=400)
+
+    client = CNVAPIClient(settings.CNV_USERNAME, settings.CNV_PASSWORD)
+    results = []
+
+    for cnv_id in cnv_ids:
+        try:
+            response = client.get_customer_membership(int(cnv_id))
+            if response and 'membership' in response:
+                m = response['membership']
+                points      = Decimal(str(m.get('points', 0)))
+                total_pts   = Decimal(str(m.get('total_points', 0)))
+                used_pts    = Decimal(str(m.get('used_points', 0)))
+                level_name  = m.get('level_name')
+
+                CNVCustomer.objects.filter(cnv_id=cnv_id).update(
+                    points=points,
+                    total_points=total_pts,
+                    used_points=used_pts,
+                    level_name=level_name,
+                )
+                results.append({
+                    'cnv_id': cnv_id,
+                    'status': 'ok',
+                    'points': float(points),
+                    'total_points': float(total_pts),
+                    'used_points': float(used_pts),
+                    'level_name': level_name,
+                })
+            else:
+                results.append({'cnv_id': cnv_id, 'status': 'no_data'})
+        except Exception as e:
+            results.append({'cnv_id': cnv_id, 'status': 'error', 'error': str(e)})
+
+    return JsonResponse({'results': results})

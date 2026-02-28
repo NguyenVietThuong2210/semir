@@ -81,7 +81,18 @@
 .mismatch-table th:nth-child(11), .mismatch-table td:nth-child(11) { width:8%; }
 .mismatch-table th:nth-child(12), .mismatch-table td:nth-child(12) { width:8%; }
 
-/* Badge colours */
+/* CNV used-points table — 10 cols (extra In POS col) */
+.cnv-used-table th:nth-child(1), .cnv-used-table td:nth-child(1) { width:10%; }
+.cnv-used-table th:nth-child(2), .cnv-used-table td:nth-child(2) { width:15%; }
+.cnv-used-table th:nth-child(3), .cnv-used-table td:nth-child(3) { width:15%; }
+.cnv-used-table th:nth-child(4), .cnv-used-table td:nth-child(4) { width:15%; }
+.cnv-used-table th:nth-child(5), .cnv-used-table td:nth-child(5) { width:15%; }
+.cnv-used-table th:nth-child(6), .cnv-used-table td:nth-child(6) { width:10%; }
+.cnv-used-table th:nth-child(7), .cnv-used-table td:nth-child(7) { width:5%; }
+.cnv-used-table th:nth-child(8), .cnv-used-table td:nth-child(8) { width:5%; }
+.cnv-used-table th:nth-child(9), .cnv-used-table td:nth-child(9) { width:5%; }
+.cnv-used-table th:nth-child(10), .cnv-used-table td:nth-child(10) { width:5%; }
+
 .badge-level-diamond { background-color:#a855f7 !important; color:#fff; }
 .badge-level-gold    { background-color:#f59e0b !important; color:#fff; }
 .badge-level-silver  { background-color:#94a3b8 !important; color:#fff; }
@@ -204,9 +215,9 @@
     </div>
     <div class="collapse show" id="t1">
         <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 cnv-table">
+            <table class="table table-sm table-hover mb-0 cnv-used-table">
                 <thead class="table-dark"><tr>
-                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
+                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th><th>In POS</th>
                 </tr></thead>
                 <tbody>
                 {% for c in cnv_used_points_list %}
@@ -219,8 +230,9 @@
                     <td>{{ c.points|default:0 }}</td>
                     <td><strong class="text-success">{{ c.used_points|default:0 }}</strong></td>
                     <td>{{ c.total_points|default:0 }}</td>
+                    <td>{% if c.in_pos %}<span class="badge bg-success">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
                 </tr>
-                {% empty %}<tr><td colspan="9" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
+                {% empty %}<tr><td colspan="10" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
                 </tbody>
             </table>
         </div>
@@ -233,7 +245,12 @@
 <div class="table-wrapper">
     <div class="table-header">
         <h6><i class="bi bi-2-circle text-warning"></i> Points Mismatch — POS Points vs CNV Points ({{ points_mismatch_count }} mismatches)</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t2"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary sync-points-btn" data-table="t2" data-url="{% url 'cnv:sync_cnv_points' %}">
+                <i class="bi bi-arrow-repeat"></i> Sync CNV Points
+            </button>
+            <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t2"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+        </div>
     </div>
     <div class="collapse show" id="t2">
         <div class="table-scroll">
@@ -244,7 +261,7 @@
                 </tr></thead>
                 <tbody>
                 {% for row in points_mismatch %}
-                <tr>
+                <tr data-cnv-id="{{ row.cnv_id }}">
                     <td>{{ row.phone }}</td><td>{{ row.pos_vip_id }}</td>
                     <td>{{ row.pos_name|default:"-" }}</td>
                     <td>{% with g=row.pos_grade|lower %}<span class="badge {% if g == 'diamond' %}badge-level-diamond{% elif g == 'vip3' %}badge-level-vip3{% elif g == 'vip2' %}badge-level-vip2{% elif g == 'vip1' %}badge-level-vip1{% elif g == 'vip0' %}badge-level-vip0{% elif g == 'gold' %}badge-level-gold{% elif g == 'silver' %}badge-level-silver{% elif g == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ row.pos_grade|default:"-" }}</span>{% endwith %}</td>
@@ -267,7 +284,12 @@
 <div class="table-wrapper">
     <div class="table-header">
         <h6><i class="bi bi-3-circle" style="color:#a855f7;"></i> Total Points Mismatch — POS Points vs CNV Total Points ({{ total_points_mismatch_count }} mismatches)</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t3"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary sync-points-btn" data-table="t3" data-url="{% url 'cnv:sync_cnv_points' %}">
+                <i class="bi bi-arrow-repeat"></i> Sync CNV Points
+            </button>
+            <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t3"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+        </div>
     </div>
     <div class="collapse show" id="t3">
         <div class="table-scroll">
@@ -278,7 +300,7 @@
                 </tr></thead>
                 <tbody>
                 {% for row in total_points_mismatch %}
-                <tr>
+                <tr data-cnv-id="{{ row.cnv_id }}">
                     <td>{{ row.phone }}</td><td>{{ row.pos_vip_id }}</td>
                     <td>{{ row.pos_name|default:"-" }}</td>
                     <td>{% with g=row.pos_grade|lower %}<span class="badge {% if g == 'diamond' %}badge-level-diamond{% elif g == 'vip3' %}badge-level-vip3{% elif g == 'vip2' %}badge-level-vip2{% elif g == 'vip1' %}badge-level-vip1{% elif g == 'vip0' %}badge-level-vip0{% elif g == 'gold' %}badge-level-gold{% elif g == 'silver' %}badge-level-silver{% elif g == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ row.pos_grade|default:"-" }}</span>{% endwith %}</td>
@@ -450,6 +472,90 @@ document.getElementById('btnThisYear')?.addEventListener('click', () => {
     document.querySelector('input[name="start_date"]').value = new Date(n.getFullYear(), 0, 1).toISOString().split('T')[0];
     document.querySelector('input[name="end_date"]').value   = new Date(n.getFullYear(), 11, 31).toISOString().split('T')[0];
     document.getElementById('dateFilterForm').submit();
+});
+
+// ── Sync CNV Points ──────────────────────────────────────────────
+document.querySelectorAll('.sync-points-btn').forEach(btn => {
+    btn.addEventListener('click', async function () {
+        const tableId = this.dataset.table;
+        const url     = this.dataset.url;
+        const table   = document.getElementById(tableId);
+        if (!table) return;
+
+        // Collect all cnv_ids from rows in this table
+        const rows = table.querySelectorAll('tbody tr[data-cnv-id]');
+        if (!rows.length) return;
+
+        const cnv_ids = [...rows].map(r => parseInt(r.dataset.cnvId));
+
+        // UI: loading state
+        const origHTML = this.innerHTML;
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Syncing...';
+
+        // Mark all rows as pending
+        rows.forEach(r => r.style.opacity = '0.5');
+
+        try {
+            const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ cnv_ids })
+            });
+            const data = await resp.json();
+
+            // Build result map
+            const resultMap = {};
+            (data.results || []).forEach(r => { resultMap[r.cnv_id] = r; });
+
+            // Update each row with fresh data
+            rows.forEach(row => {
+                const cnvId  = parseInt(row.dataset.cnvId);
+                const result = resultMap[cnvId];
+                row.style.opacity = '1';
+
+                if (!result || result.status !== 'ok') {
+                    row.style.background = '#fff3cd'; // yellow = warning
+                    return;
+                }
+
+                // T2: cols: phone|pos_vip_id|pos_name|pos_grade|pos_pts|cnv_id|cnv_name|cnv_level|cnv_pts|total_pts|used_pts|diff
+                // T3: same layout but col10 = cnv_total_pts
+                const cells = row.querySelectorAll('td');
+                if (tableId === 't2') {
+                    cells[8].innerHTML  = `<span class="pts-highlight">${result.points}</span>`;
+                    cells[9].textContent  = result.total_points;
+                    cells[10].textContent = result.used_points;
+                    // recalc diff = cnv_points - pos_points
+                    const posP = parseFloat(cells[4].textContent) || 0;
+                    const diff = result.points - posP;
+                    cells[11].innerHTML = `<span class="${diff > 0 ? 'diff-positive' : 'diff-negative'}">${diff > 0 ? '+' : ''}${diff}</span>`;
+                } else {
+                    // t3: cnv_pts col9, cnv_total_pts col10
+                    cells[8].textContent  = result.points;
+                    cells[9].innerHTML    = `<span class="pts-highlight">${result.total_points}</span>`;
+                    cells[10].textContent = result.used_points;
+                    // recalc diff = cnv_total_points - pos_points
+                    const posP = parseFloat(cells[4].textContent) || 0;
+                    const diff = result.total_points - posP;
+                    cells[11].innerHTML = `<span class="${diff > 0 ? 'diff-positive' : 'diff-negative'}">${diff > 0 ? '+' : ''}${diff}</span>`;
+                }
+                row.style.background = '#f0fdf4'; // green = success
+            });
+
+            // Count results
+            const ok  = (data.results || []).filter(r => r.status === 'ok').length;
+            const err = (data.results || []).filter(r => r.status !== 'ok').length;
+            this.innerHTML = `<i class="bi bi-check-circle text-success"></i> Synced ${ok}${err ? ` (${err} failed)` : ''}`;
+            setTimeout(() => { this.innerHTML = origHTML; this.disabled = false; }, 4000);
+
+        } catch (e) {
+            this.innerHTML = '<i class="bi bi-exclamation-circle text-danger"></i> Error';
+            rows.forEach(r => r.style.opacity = '1');
+            setTimeout(() => { this.innerHTML = origHTML; this.disabled = false; }, 3000);
+        }
+    });
 });
 </script>
 {% endblock %}

@@ -17,4 +17,7 @@ urlpatterns = [
     # Page 2: Customer comparison
     path('customer-comparison/', views.customer_comparison, name='customer_comparison'),
     path('export-customer-comparison/', views.export_customer_comparison, name='export_customer_comparison'),
+
+    # AJAX: Sync CNV points for selected customers
+    path('sync-cnv-points/', views.sync_cnv_points, name='sync_cnv_points'),
 ]
