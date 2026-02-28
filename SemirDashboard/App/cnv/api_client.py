@@ -82,7 +82,6 @@ class CNVAPIClient:
         # Check cache first
         cached = self._get_cached_token()
         if cached:
-            logger.info("Using cached token")
             return cached
         
         logger.info("Starting OAuth2 authentication...")
