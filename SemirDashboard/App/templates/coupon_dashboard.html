@@ -25,11 +25,17 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
 
 .tbl-hdr-shop { background:#366092!important; color:#fff!important; }
 .tbl-hdr-used { background:#198754!important; color:#fff!important; }
+.tbl-hdr-cnv  { background:#e6a817!important; color:#fff!important; }
 .tbl-hdr-pct  { background:#0d6efd!important; color:#fff!important; }
 .tbl-hdr-pct2 { background:#0a7a9a!important; color:#fff!important; }
-.tbl-hdr-amt  { background:#e6a817!important; color:#fff!important; }
-.tbl-hdr-gray { background:#6c757d!important; color:#fff!important; }
-.tbl-hdr-red  { background:#dc3545!important; color:#fff!important; }
+.tbl-hdr-amt  { background:#198754!important; color:#fff!important; }
+.tbl-hdr-gray { background:#366092!important; color:#fff!important; }
+.tbl-hdr-red  { background:#198754!important; color:#fff!important; }
+
+/* Row cell background tints */
+td.cell-shop { background:rgba(54,96,146,.07)!important; }
+td.cell-used { background:rgba(25,135,84,.07)!important; }
+td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
 
 .badge.bg-warning { color:#000!important; }
 .amount-vnd { white-space:nowrap; font-variant-numeric:tabular-nums; }
@@ -301,8 +307,8 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                     <thead>
                         <tr>
                             <th class="tbl-hdr-shop">Coupon ID</th>
-                            <th class="tbl-hdr-gray">Creator</th>
-                            <th class="text-end tbl-hdr-gray">Face Value</th>
+                            <th class="tbl-hdr-shop">Creator</th>
+                            <th class="text-end tbl-hdr-shop">Face Value</th>
                             <th class="tbl-hdr-shop">Using Shop</th>
                             <th class="tbl-hdr-shop">Using Date</th>
                             <th class="tbl-hdr-used">VIP ID</th>
@@ -310,37 +316,37 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                             <th class="tbl-hdr-used">Phone No</th>
                             <th class="tbl-hdr-used">Sales Date</th>
                             <th class="tbl-hdr-used">Shop (Invoice)</th>
-                            <th class="text-end tbl-hdr-amt">Amount</th>
-                            <th class="tbl-hdr-red">Note</th>
-                            <th class="tbl-hdr-used">CNV ID</th>
-                            <th class="tbl-hdr-used">CNV Points</th>
-                            <th class="tbl-hdr-used">CNV Total Pts</th>
+                            <th class="text-end tbl-hdr-used">Amount</th>
+                            <th class="tbl-hdr-used">Note</th>
+                            <th class="tbl-hdr-cnv">CNV ID</th>
+                            <th class="tbl-hdr-cnv">CNV Points</th>
+                            <th class="tbl-hdr-cnv">CNV Total Pts</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for d in details %}
                         <tr {% if d.note %}class="table-warning"{% endif %}>
-                            <td><strong>{{ d.coupon_id }}</strong></td>
-                            <td>{{ d.creator|default:"-" }}</td>
-                            <td class="text-end">{{ d.face_value_display }}</td>
-                            <td>{{ d.using_shop|default:"-" }}</td>
-                            <td>{{ d.using_date|default:"-" }}</td>
-                            <td>{{ d.vip_id|default:"-" }}</td>
-                            <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ d.customer_name }}">{{ d.customer_name|default:"-" }}</td>
-                            <td>{{ d.customer_phone|default:"-" }}</td>
-                            <td>{{ d.sales_day|default:"-" }}</td>
-                            <td>{{ d.inv_shop|default:"-" }}</td>
-                            <td class="text-end amount-vnd">{{ d.amount|vnd }} VND</td>
-                            <td>
+                            <td class="cell-shop"><strong>{{ d.coupon_id }}</strong></td>
+                            <td class="cell-shop">{{ d.creator|default:"-" }}</td>
+                            <td class="text-end cell-shop">{{ d.face_value_display }}</td>
+                            <td class="cell-shop">{{ d.using_shop|default:"-" }}</td>
+                            <td class="cell-shop">{{ d.using_date|default:"-" }}</td>
+                            <td class="cell-used">{{ d.vip_id|default:"-" }}</td>
+                            <td class="cell-used" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ d.customer_name }}">{{ d.customer_name|default:"-" }}</td>
+                            <td class="cell-used">{{ d.customer_phone|default:"-" }}</td>
+                            <td class="cell-used">{{ d.sales_day|default:"-" }}</td>
+                            <td class="cell-used">{{ d.inv_shop|default:"-" }}</td>
+                            <td class="text-end amount-vnd cell-used">{{ d.amount|vnd }} VND</td>
+                            <td class="cell-used">
                                 {% if d.note %}
                                 <span class="badge bg-warning text-dark small" title="{{ d.note }}">
                                     &#9888; {{ d.note|truncatechars:35 }}
                                 </span>
                                 {% endif %}
                             </td>
-                            <td>{{ d.cnv_id|default:"-" }}</td>
-                            <td>{{ d.cnv_points|default:"-" }}</td>
-                            <td>{{ d.cnv_total_points|default:"-" }}</td>
+                            <td class="cell-cnv">{{ d.cnv_id|default:"-" }}</td>
+                            <td class="cell-cnv">{% if d.cnv_points != '' %}{{ d.cnv_points|floatformat:0 }}{% else %}-{% endif %}</td>
+                            <td class="cell-cnv">{% if d.cnv_total_points != '' %}{{ d.cnv_total_points|floatformat:0 }}{% else %}-{% endif %}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="15" class="text-center text-muted py-3">No data</td></tr>
