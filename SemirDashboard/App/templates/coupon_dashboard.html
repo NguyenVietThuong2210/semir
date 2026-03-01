@@ -306,12 +306,15 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                             <th class="tbl-hdr-shop">Using Shop</th>
                             <th class="tbl-hdr-shop">Using Date</th>
                             <th class="tbl-hdr-used">VIP ID</th>
-                            <th class="tbl-hdr-used">Name</th>
+                            <th class="tbl-hdr-used" style="max-width:120px;min-width:80px;">Name</th>
                             <th class="tbl-hdr-used">Phone No</th>
                             <th class="tbl-hdr-used">Sales Date</th>
                             <th class="tbl-hdr-used">Shop (Invoice)</th>
                             <th class="text-end tbl-hdr-amt">Amount</th>
                             <th class="tbl-hdr-red">Note</th>
+                            <th class="tbl-hdr-used">CNV ID</th>
+                            <th class="tbl-hdr-used">CNV Points</th>
+                            <th class="tbl-hdr-used">CNV Total Pts</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -323,7 +326,7 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                             <td>{{ d.using_shop|default:"-" }}</td>
                             <td>{{ d.using_date|default:"-" }}</td>
                             <td>{{ d.vip_id|default:"-" }}</td>
-                            <td>{{ d.customer_name|default:"-" }}</td>
+                            <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ d.customer_name }}">{{ d.customer_name|default:"-" }}</td>
                             <td>{{ d.customer_phone|default:"-" }}</td>
                             <td>{{ d.sales_day|default:"-" }}</td>
                             <td>{{ d.inv_shop|default:"-" }}</td>
@@ -335,9 +338,12 @@ td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
                                 </span>
                                 {% endif %}
                             </td>
+                            <td>{{ d.cnv_id|default:"-" }}</td>
+                            <td>{{ d.cnv_points|default:"-" }}</td>
+                            <td>{{ d.cnv_total_points|default:"-" }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="12" class="text-center text-muted py-3">No data</td></tr>
+                        <tr><td colspan="15" class="text-center text-muted py-3">No data</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

@@ -16,6 +16,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 from App.models import Coupon, Customer, SalesTransaction
+from App.models_cnv import CNVCustomer
 
 
 def format_face_value(face_value):
@@ -250,6 +251,26 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
     period_used_pct = round(period_used / period_total * 100, 2) if period_total else 0
     period_unused_pct = round(period_unused / period_total * 100, 2) if period_total else 0
     
+    # ===========================================================================
+    # ENRICH DETAILS WITH CNV DATA (match by phone)
+    # ===========================================================================
+    phones = {d['customer_phone'] for d in coupon_details if d['customer_phone'] and d['customer_phone'] != '-'}
+    cnv_map = {
+        c['phone']: c
+        for c in CNVCustomer.objects.filter(phone__in=phones)
+                    .values('phone', 'cnv_id', 'points', 'total_points')
+    }
+    for d in coupon_details:
+        cnv = cnv_map.get(d['customer_phone'])
+        if cnv:
+            d['cnv_id']           = cnv['cnv_id']
+            d['cnv_points']       = cnv['points']
+            d['cnv_total_points'] = cnv['total_points']
+        else:
+            d['cnv_id']           = ''
+            d['cnv_points']       = ''
+            d['cnv_total_points'] = ''
+
     return {
         'all_time': {
             'total': all_time_total,
@@ -385,7 +406,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
     # Details sheet
     ws_detail = wb.create_sheet("Coupon Details")
     
-    headers = ["Coupon ID", "Creator", "Face Value", "Using Shop", "Using Date", "Docket Number", "VIP ID", "Name", "Phone", "Sales Date", "Invoice Shop", "Amount (Invoice)", "Note"]
+    headers = ["Coupon ID", "Creator", "Face Value", "Using Shop", "Using Date", "Docket Number", "VIP ID", "Name", "Phone", "Sales Date", "Invoice Shop", "Amount (Invoice)", "Note", "CNV ID", "CNV Points", "CNV Total Points"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_detail.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -395,7 +416,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
     for row_num, detail in enumerate(data['details'], 2):
         ws_detail.cell(row=row_num, column=1, value=detail['coupon_id'])
         ws_detail.cell(row=row_num, column=2, value=detail['creator'])
-        ws_detail.cell(row=row_num, column=3, value=detail['face_value_display'])  # Use formatted display
+        ws_detail.cell(row=row_num, column=3, value=detail['face_value_display'])
         ws_detail.cell(row=row_num, column=4, value=detail['using_shop'])
         ws_detail.cell(row=row_num, column=5, value=str(detail['using_date']) if detail['using_date'] else '')
         ws_detail.cell(row=row_num, column=6, value=detail['docket_number'])
@@ -406,8 +427,11 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
         ws_detail.cell(row=row_num, column=11, value=detail['inv_shop'])
         ws_detail.cell(row=row_num, column=12, value=f"{detail['amount']:,.0f}")
         ws_detail.cell(row=row_num, column=13, value=detail['note'])
+        ws_detail.cell(row=row_num, column=14, value=detail.get('cnv_id') or '')
+        ws_detail.cell(row=row_num, column=15, value=float(detail['cnv_points']) if detail.get('cnv_points') != '' else '')
+        ws_detail.cell(row=row_num, column=16, value=float(detail['cnv_total_points']) if detail.get('cnv_total_points') != '' else '')
     
-    for col in range(1, 14):
+    for col in range(1, 17):
         ws_detail.column_dimensions[get_column_letter(col)].width = 18
     
     return wb
