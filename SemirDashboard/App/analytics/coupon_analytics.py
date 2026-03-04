@@ -111,10 +111,31 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
     # ===========================================================================
     
     all_time_amount = Decimal(0)
+    all_time_coupon_amount = Decimal(0)
     period_amount = Decimal(0)
+    period_coupon_amount = Decimal(0)
     shop_data = {}
     coupon_details = []
-    
+
+    def calc_coupon_amount(face_value, invoice_amount):
+        """
+        face_value > 1  → cash VND  → coupon_amount = face_value
+        0 < face_value <= 1 → percentage (e.g. 0.9 = 90%)
+            → discount_pct = 1 - face_value
+            → coupon_amount = (discount_pct / face_value) * invoice_amount
+            → special case face_value = 1.0 (100%) → coupon_amount = 0
+        """
+        if not face_value or face_value <= 0:
+            return Decimal(0)
+        if face_value > 1:
+            return Decimal(str(face_value))
+        # percentage coupon
+        if face_value >= 1:   # exactly 1.0 = 100% pay → 0% discount
+            return Decimal(0)
+        discount = Decimal(1) - Decimal(str(face_value))
+        base     = Decimal(str(face_value))
+        return (discount / base) * Decimal(str(invoice_amount or 0))
+
     # Helper function to get invoice amount for a coupon
     def get_invoice_amount(coupon):
         """Get invoice amount for a coupon, fallback to face_value if no invoice found."""
@@ -130,6 +151,7 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
     for coupon in qs.filter(using_date__isnull=False):
         inv_amount = get_invoice_amount(coupon)
         all_time_amount += inv_amount
+        all_time_coupon_amount += calc_coupon_amount(coupon.face_value, inv_amount)
     
     # ===========================================================================
     # PROCESS PERIOD COUPONS - Build details and calculate period amounts
@@ -177,9 +199,11 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
         
         # Final amount (invoice amount or fallback to face_value)
         final_amount = inv_amount or coupon.face_value or Decimal(0)
-        
+        coupon_amt   = calc_coupon_amount(coupon.face_value, final_amount)
+
         # Accumulate period amount
         period_amount += final_amount
+        period_coupon_amount += coupon_amt
         
         # Accumulate by shop
         shop = coupon.using_shop or 'Unknown'
@@ -193,7 +217,7 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'coupon_id': coupon.coupon_id,
             'creator': coupon.creator or '',
             'face_value': coupon.face_value or 0,
-            'face_value_display': format_face_value(coupon.face_value),  # NEW: Formatted display
+            'face_value_display': format_face_value(coupon.face_value),
             'using_shop': coupon.using_shop or 'Unknown',
             'using_date': coupon.using_date,
             'docket_number': coupon.docket_number or '',
@@ -202,7 +226,8 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'customer_phone': phone or '-',
             'sales_day': sales_date,
             'inv_shop': inv_shop or '-',
-            'amount': float(final_amount),  # THIS IS INVOICE AMOUNT
+            'amount': float(final_amount),
+            'coupon_amount': float(coupon_amt),
             'note': note or '',
         })
     
@@ -279,7 +304,8 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'used_pct': all_time_used_pct,
             'unused_pct': all_time_unused_pct,
             'usage_rate': all_time_usage_rate,
-            'total_amount': float(all_time_amount),  # Sum of ALL invoice amounts
+            'total_amount': float(all_time_amount),
+            'total_coupon_amount': float(all_time_coupon_amount),
         },
         'period': {
             'total': period_total,
@@ -288,7 +314,8 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'used_pct': period_used_pct,
             'unused_pct': period_unused_pct,
             'usage_rate': period_usage_rate,
-            'total_amount': float(period_amount),  # Sum of PERIOD invoice amounts
+            'total_amount': float(period_amount),
+            'total_coupon_amount': float(period_coupon_amount),
         },
         'by_shop': shop_stats,
         'details': coupon_details,
@@ -355,6 +382,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
         ("Unused", at['unused']),
         ("Usage Rate", f"{at['usage_rate']}%"),
         ("Total Amount (Invoice)", f"{at['total_amount']:,.0f} VND"),
+        ("Total Coupon Amount", f"{at['total_coupon_amount']:,.0f} VND"),
     ]:
         ws[f'A{row}'] = label
         ws[f'B{row}'] = value
@@ -372,6 +400,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
         ("Unused", pd['unused']),
         ("Usage Rate", f"{pd['usage_rate']}%"),
         ("Total Amount (Invoice)", f"{pd['total_amount']:,.0f} VND"),
+        ("Total Coupon Amount", f"{pd['total_coupon_amount']:,.0f} VND"),
     ]:
         ws[f'A{row}'] = label
         ws[f'B{row}'] = value
@@ -406,7 +435,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
     # Details sheet
     ws_detail = wb.create_sheet("Coupon Details")
     
-    headers = ["Coupon ID", "Creator", "Face Value", "Using Shop", "Using Date", "Docket Number", "VIP ID", "Name", "Phone", "Sales Date", "Invoice Shop", "Amount (Invoice)", "Note", "CNV ID", "CNV Points", "CNV Total Points"]
+    headers = ["Coupon ID", "Creator", "Face Value", "Using Shop", "Using Date", "Docket Number", "VIP ID", "Name", "Phone", "Sales Date", "Invoice Shop", "Amount (Invoice)", "Coupon Amount", "Note", "CNV ID", "CNV Points", "CNV Total Points"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_detail.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -426,12 +455,13 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
         ws_detail.cell(row=row_num, column=10, value=str(detail['sales_day']) if detail['sales_day'] else '')
         ws_detail.cell(row=row_num, column=11, value=detail['inv_shop'])
         ws_detail.cell(row=row_num, column=12, value=f"{detail['amount']:,.0f}")
-        ws_detail.cell(row=row_num, column=13, value=detail['note'])
-        ws_detail.cell(row=row_num, column=14, value=detail.get('cnv_id') or '')
-        ws_detail.cell(row=row_num, column=15, value=float(detail['cnv_points']) if detail.get('cnv_points') != '' else '')
-        ws_detail.cell(row=row_num, column=16, value=float(detail['cnv_total_points']) if detail.get('cnv_total_points') != '' else '')
+        ws_detail.cell(row=row_num, column=13, value=f"{detail['coupon_amount']:,.0f}")
+        ws_detail.cell(row=row_num, column=14, value=detail['note'])
+        ws_detail.cell(row=row_num, column=15, value=detail.get('cnv_id') or '')
+        ws_detail.cell(row=row_num, column=16, value=float(detail['cnv_points']) if detail.get('cnv_points') != '' else '')
+        ws_detail.cell(row=row_num, column=17, value=float(detail['cnv_total_points']) if detail.get('cnv_total_points') != '' else '')
     
-    for col in range(1, 17):
+    for col in range(1, 18):
         ws_detail.column_dimensions[get_column_letter(col)].width = 18
     
     return wb

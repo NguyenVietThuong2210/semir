@@ -181,8 +181,21 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
             </div>
         </div>
     </div>
+    </div>
+    <div class="row g-2 mb-2">
+    {% with s=all_time %}
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(111,66,193,.08)">
+            <div class="card-body">
+                <div class="stat-label" style="color:#6f42c1">Total Coupon Amount (All Time)</div>
+                <div class="stat-value amount-vnd" style="color:#6f42c1;font-size:1.15rem">
+                    {{ s.total_coupon_amount|vnd }} VND
+                </div>
+                <small class="text-muted">Actual discount value</small>
+            </div>
+        </div>
+    </div>
     {% endwith %}
-</div>
 
 <!-- PERIOD / FILTER SUMMARY -->
 <p class="text-muted small mb-1 fw-semibold text-uppercase mt-1">
@@ -225,6 +238,20 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                     {{ s.total_amount|vnd }} VND
                 </div>
                 <small class="text-muted">From matched invoices</small>
+            </div>
+        </div>
+    </div>
+    </div>
+    <div class="row g-2 mb-4">
+    {% with s=period %}
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(111,66,193,.08)">
+            <div class="card-body">
+                <div class="stat-label" style="color:#6f42c1">Total Coupon Amount (Period)</div>
+                <div class="stat-value amount-vnd" style="color:#6f42c1;font-size:1.15rem">
+                    {{ s.total_coupon_amount|vnd }} VND
+                </div>
+                <small class="text-muted">Actual discount value</small>
             </div>
         </div>
     </div>
@@ -317,6 +344,7 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                             <th class="tbl-hdr-used">Sales Date</th>
                             <th class="tbl-hdr-used">Shop (Invoice)</th>
                             <th class="text-end tbl-hdr-used">Amount</th>
+                            <th class="text-end tbl-hdr-used">Coupon Amt</th>
                             <th class="tbl-hdr-used">Note</th>
                             <th class="tbl-hdr-cnv">CNV ID</th>
                             <th class="tbl-hdr-cnv">CNV Points</th>
@@ -337,6 +365,7 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                             <td class="cell-used">{{ d.sales_day|default:"-" }}</td>
                             <td class="cell-used">{{ d.inv_shop|default:"-" }}</td>
                             <td class="text-end amount-vnd cell-used">{{ d.amount|vnd }} VND</td>
+                            <td class="text-end amount-vnd cell-used">{{ d.coupon_amount|vnd }} VND</td>
                             <td class="cell-used">
                                 {% if d.note %}
                                 <span class="badge bg-warning text-dark small" title="{{ d.note }}">
@@ -349,7 +378,7 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                             <td class="cell-cnv">{% if d.cnv_total_points != '' %}{{ d.cnv_total_points|floatformat:0 }}{% else %}-{% endif %}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="15" class="text-center text-muted py-3">No data</td></tr>
+                        <tr><td colspan="16" class="text-center text-muted py-3">No data</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
