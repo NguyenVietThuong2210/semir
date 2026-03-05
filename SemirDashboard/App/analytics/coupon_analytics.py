@@ -19,6 +19,27 @@ from App.models import Coupon, Customer, SalesTransaction
 from App.models_cnv import CNVCustomer
 
 
+def calc_coupon_amount(face_value, invoice_amount):
+    """
+    Calculate the actual discount value of a coupon given the invoice amount.
+
+    face_value > 1  → cash VND  → coupon_amount = face_value
+    0 < face_value <= 1 → percentage (e.g. 0.9 = 90% pay → 10% discount)
+        → coupon_amount = (discount_pct / face_value_pct) * invoice_amount
+        → special case face_value = 1.0 (100% pay) → coupon_amount = 0
+    """
+    from decimal import Decimal
+    if not face_value or face_value <= 0:
+        return Decimal(0)
+    if face_value > 1:
+        return Decimal(str(face_value))
+    if face_value >= 1:
+        return Decimal(0)
+    discount = Decimal(1) - Decimal(str(face_value))
+    base     = Decimal(str(face_value))
+    return (discount / base) * Decimal(str(invoice_amount or 0))
+
+
 def format_face_value(face_value):
     """
     Format face value for display.
@@ -112,29 +133,12 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
     
     all_time_amount = Decimal(0)
     all_time_coupon_amount = Decimal(0)
+    all_time_unique_amount = Decimal(0)
     period_amount = Decimal(0)
     period_coupon_amount = Decimal(0)
+    period_unique_amount = Decimal(0)
     shop_data = {}
     coupon_details = []
-
-    def calc_coupon_amount(face_value, invoice_amount):
-        """
-        face_value > 1  → cash VND  → coupon_amount = face_value
-        0 < face_value <= 1 → percentage (e.g. 0.9 = 90%)
-            → discount_pct = 1 - face_value
-            → coupon_amount = (discount_pct / face_value) * invoice_amount
-            → special case face_value = 1.0 (100%) → coupon_amount = 0
-        """
-        if not face_value or face_value <= 0:
-            return Decimal(0)
-        if face_value > 1:
-            return Decimal(str(face_value))
-        # percentage coupon
-        if face_value >= 1:   # exactly 1.0 = 100% pay → 0% discount
-            return Decimal(0)
-        discount = Decimal(1) - Decimal(str(face_value))
-        base     = Decimal(str(face_value))
-        return (discount / base) * Decimal(str(invoice_amount or 0))
 
     # Helper function to get invoice amount for a coupon
     def get_invoice_amount(coupon):
@@ -146,16 +150,83 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             except SalesTransaction.DoesNotExist:
                 pass
         return coupon.face_value or Decimal(0)
-    
+
+    # ===========================================================================
+    # DUPLICATE INVOICE DETECTION
+    # ===========================================================================
+    from django.db.models import Count as _Count
+
+    # All-time duplicates
+    _dup_dockets_all = set(
+        Coupon.objects
+        .filter(using_date__isnull=False, docket_number__isnull=False)
+        .exclude(docket_number='')
+        .values('docket_number')
+        .annotate(_c=_Count('id'))
+        .filter(_c__gt=1)
+        .values_list('docket_number', flat=True)
+    )
+
+    # Period duplicates (within filtered qs)
+    _dup_dockets_period = set(
+        period_qs
+        .filter(using_date__isnull=False, docket_number__isnull=False)
+        .exclude(docket_number='')
+        .values('docket_number')
+        .annotate(_c=_Count('id'))
+        .filter(_c__gt=1)
+        .values_list('docket_number', flat=True)
+    )
+
+    # Build duplicate_invoices list (all coupons sharing a docket_number, period scope)
+    duplicate_invoices = []
+    if _dup_dockets_period:
+        for docket in sorted(_dup_dockets_period):
+            coupons_for_docket = list(
+                period_qs.filter(docket_number=docket, using_date__isnull=False)
+                .order_by('coupon_id')
+            )
+            try:
+                txn = SalesTransaction.objects.get(invoice_number=docket)
+                inv_amount = txn.sales_amount or Decimal(0)
+                shop_name  = txn.shop_name or ''
+                sales_date = txn.sales_date
+            except SalesTransaction.DoesNotExist:
+                inv_amount = Decimal(0)
+                shop_name  = ''
+                sales_date = None
+            for c in coupons_for_docket:
+                duplicate_invoices.append({
+                    'docket_number':    docket,
+                    'coupon_id':        c.coupon_id,
+                    'face_value_display': format_face_value(c.face_value),
+                    'coupon_amount':    float(calc_coupon_amount(c.face_value, inv_amount)),
+                    'using_date':       c.using_date,
+                    'using_shop':       c.using_shop or '',
+                    'inv_amount':       float(inv_amount),
+                    'shop_name':        shop_name,
+                    'sales_date':       sales_date,
+                    'member_id':        c.member_id or '',
+                    'member_name':      c.member_name or '',
+                    'member_phone':     c.member_phone or '',
+                })
+
     # Calculate all-time amount (process ALL used coupons)
+    _seen_dockets_all = set()
     for coupon in qs.filter(using_date__isnull=False):
         inv_amount = get_invoice_amount(coupon)
         all_time_amount += inv_amount
         all_time_coupon_amount += calc_coupon_amount(coupon.face_value, inv_amount)
+        # Unique: count invoice amount only once per docket
+        dk = coupon.docket_number or f'__no_docket_{coupon.pk}'
+        if dk not in _seen_dockets_all:
+            _seen_dockets_all.add(dk)
+            all_time_unique_amount += inv_amount
     
     # ===========================================================================
     # PROCESS PERIOD COUPONS - Build details and calculate period amounts
     # ===========================================================================
+    _seen_dockets_period = set()
     
     for coupon in period_qs.filter(using_date__isnull=False).order_by('-using_date'):
         # Get customer info from coupon
@@ -204,13 +275,31 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
         # Accumulate period amount
         period_amount += final_amount
         period_coupon_amount += coupon_amt
+
+        # Unique invoice tracking
+        dk = coupon.docket_number or f'__no_docket_{coupon.pk}'
+        is_duplicate = dk in _dup_dockets_period and bool(coupon.docket_number)
+        if dk not in _seen_dockets_period:
+            _seen_dockets_period = _seen_dockets_period | {dk}
+            period_unique_amount += final_amount
         
         # Accumulate by shop
         shop = coupon.using_shop or 'Unknown'
         if shop not in shop_data:
-            shop_data[shop] = {'total': 0, 'used': 0, 'amount': Decimal(0)}
+            shop_data[shop] = {
+                'total': 0, 'used': 0,
+                'amount': Decimal(0),
+                'coupon_amount': Decimal(0),
+                'unique_amount': Decimal(0),
+                'seen_dockets': set(),
+            }
         shop_data[shop]['used'] += 1
         shop_data[shop]['amount'] += final_amount
+        shop_data[shop]['coupon_amount'] += coupon_amt
+        # Unique per shop: count invoice amount once per docket per shop
+        if dk not in shop_data[shop]['seen_dockets']:
+            shop_data[shop]['seen_dockets'].add(dk)
+            shop_data[shop]['unique_amount'] += final_amount
         
         # Build detail record
         coupon_details.append({
@@ -228,6 +317,7 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'inv_shop': inv_shop or '-',
             'amount': float(final_amount),
             'coupon_amount': float(coupon_amt),
+            'is_duplicate': is_duplicate,
             'note': note or '',
         })
     
@@ -235,7 +325,13 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
     for coupon in period_qs.filter(using_date__isnull=True):
         shop = coupon.using_shop or 'Unknown'
         if shop not in shop_data:
-            shop_data[shop] = {'total': 0, 'used': 0, 'amount': Decimal(0)}
+            shop_data[shop] = {
+                'total': 0, 'used': 0,
+                'amount': Decimal(0),
+                'coupon_amount': Decimal(0),
+                'unique_amount': Decimal(0),
+                'seen_dockets': set(),
+            }
         shop_data[shop]['total'] += 1
     
     # Update shop totals (add used to total for each shop)
@@ -252,7 +348,6 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
     for shop_name, data in shop_data.items():
         total = data['total']
         used = data['used']
-        pct_of_total = round(used / period_total * 100 if period_total else 0, 2)
         pct_of_used = round(used / total_used_all_shops * 100 if total_used_all_shops else 0, 2)
         usage_rate = round(used / total * 100 if total else 0, 2)
         
@@ -261,10 +356,10 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'total': total,
             'used': used,
             'unused': total - used,
-            'used_pct_period': pct_of_total,
             'used_pct_of_used': pct_of_used,
             'usage_rate': usage_rate,
-            'total_amount': float(data['amount']),  # Sum of invoice amounts
+            'total_amount': float(data['unique_amount']),   # unique invoice amount
+            'coupon_amount': float(data['coupon_amount']),
         })
     
     shop_stats.sort(key=lambda x: x['used'], reverse=True)
@@ -306,6 +401,8 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'usage_rate': all_time_usage_rate,
             'total_amount': float(all_time_amount),
             'total_coupon_amount': float(all_time_coupon_amount),
+            'unique_invoice_amount': float(all_time_unique_amount),
+            'duplicate_invoice_count': len(_dup_dockets_all),
         },
         'period': {
             'total': period_total,
@@ -316,9 +413,12 @@ def calculate_coupon_analytics(date_from=None, date_to=None, coupon_id_prefix=No
             'usage_rate': period_usage_rate,
             'total_amount': float(period_amount),
             'total_coupon_amount': float(period_coupon_amount),
+            'unique_invoice_amount': float(period_unique_amount),
+            'duplicate_invoice_count': len(_dup_dockets_period),
         },
         'by_shop': shop_stats,
         'details': coupon_details,
+        'duplicate_invoices': duplicate_invoices,
     }
 
 
@@ -382,7 +482,9 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
         ("Unused", at['unused']),
         ("Usage Rate", f"{at['usage_rate']}%"),
         ("Total Amount (Invoice)", f"{at['total_amount']:,.0f} VND"),
+        ("Unique Invoice Amount", f"{at['unique_invoice_amount']:,.0f} VND"),
         ("Total Coupon Amount", f"{at['total_coupon_amount']:,.0f} VND"),
+        ("Duplicate Invoice Count", at['duplicate_invoice_count']),
     ]:
         ws[f'A{row}'] = label
         ws[f'B{row}'] = value
@@ -400,7 +502,9 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
         ("Unused", pd['unused']),
         ("Usage Rate", f"{pd['usage_rate']}%"),
         ("Total Amount (Invoice)", f"{pd['total_amount']:,.0f} VND"),
+        ("Unique Invoice Amount", f"{pd['unique_invoice_amount']:,.0f} VND"),
         ("Total Coupon Amount", f"{pd['total_coupon_amount']:,.0f} VND"),
+        ("Duplicate Invoice Count", pd['duplicate_invoice_count']),
     ]:
         ws[f'A{row}'] = label
         ws[f'B{row}'] = value
@@ -412,7 +516,7 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
     # By Using Shop sheet
     ws_shop = wb.create_sheet("By Using Shop")
     
-    headers = ["Using Shop", "Total", "Used", "Unused", "Usage Rate", "% of Total", "% of Used", "Amount (Invoice)"]
+    headers = ["Using Shop", "Total", "Used", "Unused", "Usage Rate", "% of Used (All Shops)", "Coupon Amount", "Total Amount (Unique Invoice)"]
     for col_num, header in enumerate(headers, 1):
         cell = ws_shop.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -425,12 +529,12 @@ def export_coupon_to_excel(data, date_from=None, date_to=None, coupon_id_prefix=
         ws_shop.cell(row=row_num, column=3, value=shop['used'])
         ws_shop.cell(row=row_num, column=4, value=shop['unused'])
         ws_shop.cell(row=row_num, column=5, value=f"{shop['usage_rate']}%")
-        ws_shop.cell(row=row_num, column=6, value=f"{shop['used_pct_period']}%")
-        ws_shop.cell(row=row_num, column=7, value=f"{shop['used_pct_of_used']}%")
+        ws_shop.cell(row=row_num, column=6, value=f"{shop['used_pct_of_used']}%")
+        ws_shop.cell(row=row_num, column=7, value=f"{shop['coupon_amount']:,.0f}")
         ws_shop.cell(row=row_num, column=8, value=f"{shop['total_amount']:,.0f}")
     
     for col in range(1, 9):
-        ws_shop.column_dimensions[get_column_letter(col)].width = 16
+        ws_shop.column_dimensions[get_column_letter(col)].width = 22
     
     # Details sheet
     ws_detail = wb.create_sheet("Coupon Details")

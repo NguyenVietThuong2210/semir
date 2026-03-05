@@ -200,8 +200,8 @@
             </div>
             <div class="col-md-6">
                 <div class="info-card p-3 rounded">
-                    <h6 class="text-muted mb-2">CNV Points - Used PTS - Total PTS</h6>
-                    <p class="h4 mb-0">{{ cnv_customer.points|default:0 }} - {{ cnv_customer.used_points|default:0 }} - {{ cnv_customer.total_points|default:0 }}</p>
+                    <h6 class="text-muted mb-2">CNV Points</h6>
+                    <p class="h4 mb-0">{{ cnv_customer.points|default:0 }}</p>
                 </div>
             </div>
         </div>
@@ -251,6 +251,7 @@
                         <th>Shop</th>
                         <th class="text-end">Amount</th>
                         <th>Coupon</th>
+                        <th>Face Value</th>
                         <th>Coupon Amount</th>
                     </tr>
                 </thead>
@@ -266,6 +267,13 @@
                             <span class="coupon-badge">
                                 <i class="bi bi-ticket-perforated"></i> {{ inv.coupon_id }}
                             </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="amount-vnd">
+                            {% if inv.face_value_display %}
+                            {{ inv.face_value_display }}
                             {% else %}
                             <span class="text-muted">-</span>
                             {% endif %}

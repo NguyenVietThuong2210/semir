@@ -277,15 +277,16 @@ def coupon_dashboard(request):
         shop_group=shop_group or None)
 
     return render(request, 'coupon_dashboard.html', {
-        'all_time':          data['all_time'],
-        'period':            data['period'],
-        'by_shop':           data['by_shop'],
-        'details':           data['details'],
-        'start_date':        start_date,
-        'end_date':          end_date,
-        'coupon_id_prefix':  coupon_id_prefix,
-        'shop_group':        shop_group,
-        'quick_btns':        QUICK_BTNS,
+        'all_time':           data['all_time'],
+        'period':             data['period'],
+        'by_shop':            data['by_shop'],
+        'details':            data['details'],
+        'duplicate_invoices': data['duplicate_invoices'],
+        'start_date':         start_date,
+        'end_date':           end_date,
+        'coupon_id_prefix':   coupon_id_prefix,
+        'shop_group':         shop_group,
+        'quick_btns':         QUICK_BTNS,
     })
 
 
@@ -388,6 +389,7 @@ def customer_detail(request):
                     'amount': inv.settlement_amount,
                     'season': inv.bu,
                     'coupon_id': None,
+                    'face_value_display': None,
                     'coupon_amount': None,
                 }
                 
@@ -399,7 +401,10 @@ def customer_detail(request):
                 
                 if coupon:
                     invoice_data['coupon_id'] = coupon.coupon_id
-                    invoice_data['coupon_amount'] = coupon.face_value
+                    # Display face value
+                    from App.analytics.coupon_analytics import format_face_value, calc_coupon_amount
+                    invoice_data['face_value_display'] = format_face_value(coupon.face_value)
+                    invoice_data['coupon_amount'] = calc_coupon_amount(coupon.face_value, inv.settlement_amount)
                 
                 invoices_with_coupons.append(invoice_data)
             
