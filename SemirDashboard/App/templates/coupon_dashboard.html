@@ -192,6 +192,17 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
             </div>
         </div>
     </div>
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(13,110,253,.07)">
+            <div class="card-body">
+                <div class="stat-label" style="color:#0d6efd">Unique Invoice Amount (All Time)</div>
+                <div class="stat-value amount-vnd" style="color:#0d6efd;font-size:1.15rem">
+                    {{ s.unique_invoice_amount|vnd }} VND
+                </div>
+                <small class="text-muted">Deduped invoices — {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
+            </div>
+        </div>
+    </div>
     {% endwith %}
 </div>
 
@@ -250,6 +261,17 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
             </div>
         </div>
     </div>
+    <div class="col-6 col-md-3 d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(13,110,253,.07)">
+            <div class="card-body">
+                <div class="stat-label" style="color:#0d6efd">Unique Invoice Amount (Period)</div>
+                <div class="stat-value amount-vnd" style="color:#0d6efd;font-size:1.15rem">
+                    {{ s.unique_invoice_amount|vnd }} VND
+                </div>
+                <small class="text-muted">Deduped — {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
+            </div>
+        </div>
+    </div>
     {% endwith %}
 </div>
 
@@ -267,6 +289,14 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                     <i class="bi bi-list-ul"></i> Coupon Detail
                 </button>
             </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dupTab" type="button">
+                    <i class="bi bi-exclamation-triangle text-warning"></i> Duplicate Invoices
+                    {% if duplicate_invoices %}
+                    <span class="badge bg-danger ms-1">{{ duplicate_invoices|length }}</span>
+                    {% endif %}
+                </button>
+            </li>
         </ul>
     </div>
 
@@ -275,9 +305,9 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
         <!-- BY SHOP TAB -->
         <div class="tab-pane fade show active p-3" id="shopTab">
             <p class="text-muted small mb-2">
-                Sorted by Using Shop name (A-Z).
-                <strong>% Used / Total</strong> = Used / total coupons in period (all shops).
+                Sorted by Used Coupons (descending).
                 <strong>% Used / Used All</strong> = Used / total USED coupons across all shops.
+                <strong>Total Amount</strong> = unique invoice amounts (deduped).
             </p>
             {% if by_shop %}
             <div class="table-responsive">
@@ -286,9 +316,9 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                         <tr>
                             <th class="tbl-hdr-shop">Using Shop</th>
                             <th class="text-end tbl-hdr-used">Used Coupons</th>
-                            <th class="text-end tbl-hdr-pct">% Used / Total (Period)</th>
-                            <th class="text-end tbl-hdr-pct2">% Used / Total Used (All Shops)</th>
-                            <th class="text-end tbl-hdr-amt">Total Amount</th>
+                            <th class="text-end tbl-hdr-pct2">% Used / Used All</th>
+                            <th class="text-end tbl-hdr-cnv">Coupon Amount</th>
+                            <th class="text-end tbl-hdr-amt">Total Amount (Unique)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -297,11 +327,9 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                             <td><strong>{{ s.shop_name }}</strong></td>
                             <td class="text-end c-green"><strong>{{ s.used }}</strong></td>
                             <td class="text-end c-blue">
-                                <span class="badge bg-primary">{{ s.used_pct_period }}%</span>
-                            </td>
-                            <td class="text-end c-blue">
                                 <span class="badge" style="background:#0a7a9a">{{ s.used_pct_of_used }}%</span>
                             </td>
+                            <td class="text-end cell-cnv amount-vnd">{{ s.coupon_amount|vnd }} VND</td>
                             <td class="text-end c-amber amount-vnd">{{ s.total_amount|vnd }} VND</td>
                         </tr>
                         {% endfor %}
@@ -381,6 +409,59 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
             {% if details|length >= 500 %}
             <div class="p-3 text-muted small border-top">
                 Showing first 500 rows. Export to Excel for all data.
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- DUPLICATE INVOICES TAB -->
+        <div class="tab-pane fade p-3" id="dupTab">
+            <p class="text-muted small mb-2">
+                Invoices linked to <strong>more than one coupon</strong> in the current period/filter.
+                The invoice amount is counted only once in <em>Unique Invoice Amount</em>.
+            </p>
+            {% if duplicate_invoices %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.86rem">
+                    <thead>
+                        <tr>
+                            <th class="tbl-hdr-shop">Invoice No</th>
+                            <th class="tbl-hdr-shop">Sales Date</th>
+                            <th class="tbl-hdr-shop">Shop (Invoice)</th>
+                            <th class="text-end tbl-hdr-shop">Invoice Amt</th>
+                            <th class="tbl-hdr-used">Coupon ID</th>
+                            <th class="tbl-hdr-used">Using Shop</th>
+                            <th class="tbl-hdr-used">Using Date</th>
+                            <th class="tbl-hdr-used">Face Value</th>
+                            <th class="text-end tbl-hdr-used">Coupon Amt</th>
+                            <th class="tbl-hdr-used">Member ID</th>
+                            <th class="tbl-hdr-used">Member Name</th>
+                            <th class="tbl-hdr-used">Phone</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in duplicate_invoices %}
+                        <tr>
+                            <td class="cell-shop"><strong>{{ d.docket_number }}</strong></td>
+                            <td class="cell-shop">{{ d.sales_date|default:"-" }}</td>
+                            <td class="cell-shop">{{ d.shop_name|default:"-" }}</td>
+                            <td class="text-end cell-shop amount-vnd">{{ d.inv_amount|vnd }} VND</td>
+                            <td class="cell-used"><strong>{{ d.coupon_id }}</strong></td>
+                            <td class="cell-used">{{ d.using_shop|default:"-" }}</td>
+                            <td class="cell-used">{{ d.using_date|default:"-" }}</td>
+                            <td class="cell-used">{{ d.face_value_display }}</td>
+                            <td class="text-end cell-used amount-vnd">{{ d.coupon_amount|vnd }} VND</td>
+                            <td class="cell-used">{{ d.member_id|default:"-" }}</td>
+                            <td class="cell-used">{{ d.member_name|default:"-" }}</td>
+                            <td class="cell-used">{{ d.member_phone|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-check-circle" style="font-size:2.5rem;color:#198754"></i>
+                <p class="mt-2">No duplicate invoices found in the current period.</p>
             </div>
             {% endif %}
         </div>
