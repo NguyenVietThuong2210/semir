@@ -389,6 +389,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                     <thead style="background-color: #366092; color: white;">
                         <tr>
                             <th>VIP Grade</th>
+                            <th class="text-end">New</th>
+                            <th class="text-end">New Rate</th>
                             <th class="text-end">Returning</th>
                             <th class="text-end">Active (Period)</th>
                             <th class="text-end">Return Visit Rate (Period)</th>
@@ -404,6 +406,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                         {% for g in grade_stats %}
                         <tr>
                             <td><strong>{{ g.grade }}</strong></td>
+                            <td class="text-end">{{ g.new_customers|default:0 }}</td>
+                            <td class="text-end">{{ g.new_rate|default:0 }}%</td>
                             <td class="text-end">{{ g.returning_customers }}</td>
                             <td class="text-end">{{ g.total_customers }}</td>
                             <td class="text-end">
@@ -419,7 +423,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="10" class="text-center text-muted py-3">No data</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-3">No data</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -436,6 +440,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                     <thead style="background-color: #366092; color: white;">
                         <tr>
                             <th>Season</th>
+                            <th class="text-end">New</th>
+                            <th class="text-end">New Rate</th>
                             <th class="text-end">Returning</th>
                             <th class="text-end">Active</th>
                             <th class="text-end">Return Rate</th>
@@ -451,6 +457,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                         {% for s in session_stats %}
                         <tr>
                             <td><strong>{{ s.session }}</strong></td>
+                            <td class="text-end">{{ s.new_customers|default:0 }}</td>
+                            <td class="text-end">{{ s.new_rate|default:0 }}%</td>
                             <td class="text-end">{{ s.returning_customers }}</td>
                             <td class="text-end">{{ s.total_customers }}</td>
                             <td class="text-end">
@@ -464,7 +472,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }} {{ currency }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="10" class="text-center text-muted py-3">No season data for this period</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-3">No season data for this period</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -493,6 +501,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                 <tr>
                                     <th class="cn">Shop</th>
                                     <th class="cv text-end">New</th>
+                                    <th class="cv text-end">New Rate</th>
                                     <th class="cv text-end">Returning</th>
                                     <th class="cv text-end">Active</th>
                                     <th class="cv text-end">Rate</th>
@@ -507,18 +516,19 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <tbody>
                                 <tr>
                                     <td class="cn"><strong>{{ shop.shop_name }}</strong></td>
-                                    <td class="cv text-end text-warning fw-semibold">{{ shop.new_customers|default:0 }}</td>
+                                    <td class="cv text-end">{{ shop.new_customers|default:0 }}</td>
+                                    <td class="cv text-end">{{ shop.new_rate|default:0 }}%</td>
                                     <td class="cv text-end">{{ shop.returning_customers }}</td>
                                     <td class="cv text-end">{{ shop.total_customers }}</td>
                                     <td class="cv text-end">
-                                        <span class="badge bg-primary" style="font-size:.8rem">{{ shop.return_rate }}%</span>
+                                        <span class="badge bg-primary">{{ shop.return_rate }}%</span>
                                     </td>
                                     <td class="cv text-end text-success">{{ shop.returning_invoices|default:0 }}</td>
-                                    <td class="cv text-end text-success amount-vnd" style="font-size:.82rem">{{ shop.returning_amount|default:0|vnd }} {{ currency }}</td>
+                                    <td class="cv text-end text-success amount-vnd">{{ shop.returning_amount|default:0|vnd }} {{ currency }}</td>
                                     <td class="cv text-end">{{ shop.total_invoices }}</td>
-                                    <td class="cv text-end amount-vnd" style="font-size:.82rem">{{ shop.total_amount|vnd }} {{ currency }}</td>
+                                    <td class="cv text-end amount-vnd">{{ shop.total_amount|vnd }} {{ currency }}</td>
                                     <td class="cv text-end">{{ shop.total_invoices_with_vip0 }}</td>
-                                    <td class="cv text-end amount-vnd" style="font-size:.82rem">{{ shop.total_amount_with_vip0|vnd }} {{ currency }}</td>
+                                    <td class="cv text-end amount-vnd">{{ shop.total_amount_with_vip0|vnd }} {{ currency }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -534,6 +544,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             <tr>
                                                 <th class="sl">Grade</th>
                                                 <th class="sv text-end">New</th>
+                                                <th class="sv text-end">New Rate</th>
                                                 <th class="sv text-end">Returning</th>
                                                 <th class="sv text-end">Active</th>
                                                 <th class="sv text-end">Rate</th>
@@ -547,7 +558,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             {% for gd in shop.by_grade %}
                                             <tr>
                                                 <td class="sl">{{ gd.grade }}</td>
-                                                <td class="sv text-end text-warning fw-semibold">{{ gd.new_customers|default:0 }}</td>
+                                                <td class="sv text-end">{{ gd.new_customers|default:0 }}</td>
+                                                <td class="sv text-end">{{ gd.new_rate|default:0 }}%</td>
                                                 <td class="sv text-end">{{ gd.returning_customers }}</td>
                                                 <td class="sv text-end">{{ gd.total_customers }}</td>
                                                 <td class="sv text-end">
@@ -559,7 +571,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <td class="sv-double text-end amount-vnd">{{ gd.total_amount|vnd }} {{ currency }}</td>
                                             </tr>
                                             {% empty %}
-                                            <tr><td colspan="9" class="text-muted small text-center py-1">No data</td></tr>
+                                            <tr><td colspan="10" class="text-muted small text-center py-1">No data</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
@@ -575,6 +587,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             <tr>
                                                 <th class="sl">Season</th>
                                                 <th class="sv text-end">New</th>
+                                                <th class="sv text-end">New Rate</th>
                                                 <th class="sv text-end">Returning</th>
                                                 <th class="sv text-end">Active</th>
                                                 <th class="sv text-end">Rate</th>
@@ -591,7 +604,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             {% if sd.total_customers > 0 %}
                                             <tr>
                                                 <td class="sl">{{ sd.session }}</td>
-                                                <td class="sv text-end text-warning fw-semibold">{{ sd.new_customers|default:0 }}</td>
+                                                <td class="sv text-end">{{ sd.new_customers|default:0 }}</td>
+                                                <td class="sv text-end">{{ sd.new_rate|default:0 }}%</td>
                                                 <td class="sv text-end">{{ sd.returning_customers }}</td>
                                                 <td class="sv text-end">{{ sd.total_customers }}</td>
                                                 <td class="sv text-end">
@@ -606,7 +620,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             </tr>
                                             {% endif %}
                                             {% empty %}
-                                            <tr><td colspan="11" class="text-muted small text-center py-1">No data</td></tr>
+                                            <tr><td colspan="12" class="text-muted small text-center py-1">No data</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
@@ -646,6 +660,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                 <tr>
                                     <th class="shop-col">Shop</th>
                                     <th class="val-col text-end">New</th>
+                                    <th class="val-col text-end">New Rate</th>
                                     <th class="val-col text-end">Returning</th>
                                     <th class="val-col text-end">Active</th>
                                     <th class="val-col text-end">Return Rate</th>
@@ -661,7 +676,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                         {% if g.grade == grade_name.grade %}
                                         <tr>
                                             <td class="shop-col"><strong>{{ shop.shop_name }}</strong></td>
-                                            <td class="val-col text-end text-warning fw-semibold">{{ g.new_customers|default:0 }}</td>
+                                            <td class="val-col text-end">{{ g.new_customers|default:0 }}</td>
+                                            <td class="val-col text-end">{{ g.new_rate|default:0 }}%</td>
                                             <td class="val-col text-end">{{ g.returning_customers }}</td>
                                             <td class="val-col text-end">{{ g.total_customers }}</td>
                                             <td class="val-col text-end">
@@ -708,6 +724,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                 <tr>
                                     <th class="shop-col">Shop</th>
                                     <th class="val-col text-end">New</th>
+                                    <th class="val-col text-end">New Rate</th>
                                     <th class="val-col text-end">Returning</th>
                                     <th class="val-col text-end">Active</th>
                                     <th class="val-col text-end">Return Rate</th>
@@ -725,7 +742,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                         {% if s.session == season_name.session %}
                                         <tr>
                                             <td class="shop-col"><strong>{{ shop.shop_name }}</strong></td>
-                                            <td class="val-col text-end text-warning fw-semibold">{{ s.new_customers|default:0 }}</td>
+                                            <td class="val-col text-end">{{ s.new_customers|default:0 }}</td>
+                                            <td class="val-col text-end">{{ s.new_rate|default:0 }}%</td>
                                             <td class="val-col text-end">{{ s.returning_customers }}</td>
                                             <td class="val-col text-end">{{ s.total_customers }}</td>
                                             <td class="val-col text-end">
