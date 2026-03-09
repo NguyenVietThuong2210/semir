@@ -61,11 +61,13 @@ def aggregate_by_grade(customer_details, new_members=None):
     for grade in sorted(grade_buckets, key=lambda x: GRADE_ORDER.get(x, 99)):
         s = grade_buckets[grade]
         tdb = grade_db.get(grade, 0)
+        new_c = grade_new.get(grade, 0)
         grade_stats.append({
             'grade': grade,
             'total_customers': s['active'],
             'total_in_db': tdb,
-            'new_customers': grade_new.get(grade, 0),
+            'new_customers': new_c,
+            'new_rate': round(new_c / s['active'] * 100, 2) if s['active'] else 0,
             'returning_customers': s['returning'],
             'return_rate': round(s['returning'] / s['active'] * 100 if s['active'] else 0, 2),
             'return_rate_all_time': round(s['returning'] / tdb * 100 if tdb else 0, 2),
@@ -161,10 +163,12 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
         vip0_inv = session_vip0_invoices.get(key, 0)
         vip0_amt = session_vip0_amount.get(key, Decimal(0))
 
+        new_c = session_new.get(key, 0)
         session_stats.append({
             'session': key,
             'total_customers': ac,
-            'new_customers': session_new.get(key, 0),
+            'new_customers': new_c,
+            'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'returning_invoices': session_returning_invoices.get(key, 0),  # NEW
@@ -324,10 +328,12 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             gd = shop_grade[sh][grade]
             a = len(gd['active'])
             r = len(gd['returning'])
+            grade_new_c = shop_grade_new[sh].get(grade, 0)
             by_grade_list.append({
                 'grade': grade,
                 'total_customers': a,
-                'new_customers': shop_grade_new[sh].get(grade, 0),
+                'new_customers': grade_new_c,
+                'new_rate': round(grade_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
                 'returning_invoices': gd.get('returning_invoices', 0),  # NEW
@@ -348,10 +354,12 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             
             a = sd['active']
             r = sd['returning']
+            sess_new_c = shop_sess_new[sh].get(key, 0)
             by_session_list.append({
                 'session': key,
                 'total_customers': a,
-                'new_customers': shop_sess_new[sh].get(key, 0),
+                'new_customers': sess_new_c,
+                'new_rate': round(sess_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
                 'returning_invoices': ret_sess['invoices'],  # NEW
@@ -362,10 +370,12 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_amount_with_vip0': float(sd['amount'] + vip0_sess['amount']),
             })
         
+        shop_new_c = shop_new.get(sh, 0)
         shop_stats.append({
             'shop_name': sh,
             'total_customers': ac,
-            'new_customers': shop_new.get(sh, 0),
+            'new_customers': shop_new_c,
+            'new_rate': round(shop_new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'returning_invoices': shop_returning_invoices.get(sh, 0),  # NEW
