@@ -187,11 +187,11 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     # ========================================================================
     # AGGREGATE BY DIMENSIONS
     # ========================================================================
-    grade_stats = aggregate_by_grade(customer_details)
-    session_stats = aggregate_by_season(customer_purchases, get_customer_info)
-    
+    grade_stats = aggregate_by_grade(customer_details, new_members_in_period)
+    session_stats = aggregate_by_season(customer_purchases, get_customer_info, new_members_in_period)
+
     all_session_keys = sorted([s['session'] for s in session_stats], key=session_sort_key)
-    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys)
+    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys, new_members_in_period)
     
     buyer_without_info_stats = calculate_buyer_without_info(
         vip_0_purchases,
