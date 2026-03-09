@@ -54,27 +54,70 @@ td.c-blue  { background:rgba(54,96,146,.08)!important;  color:#000!important; }
 td.c-gray  { background:#f0f2f5!important;               color:#000!important; }
 td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 
-.shop-tbl   { table-layout:fixed; width:100%; }
-.shop-tbl   .cn { width:20%; }
-.shop-tbl   .cv { width:10%; }
+/* ================================================================
+   COLUMN WIDTH SYSTEM - same type = same width across all tables
+   cnt=count  rate=percentage  inv=invoice#  amt=amount(VND)
+   ================================================================ */
 
+/* By VIP Grade top-level (12 cols: label + 4cnt + 3rate + 2inv + 2amt = 100%) */
+.grade-tbl  { table-layout:fixed; width:100%; }
+.grade-tbl  .col-grade { width:11%; }
+.grade-tbl  .col-cnt   { width: 7%; }
+.grade-tbl  .col-rate  { width: 7%; }
+.grade-tbl  .col-inv   { width: 7%; }
+.grade-tbl  .col-amt   { width:13%; }
+
+/* By Season top-level (12 cols: label + 3cnt + 2rate + 3inv + 3amt = 100%) */
+.season-tbl { table-layout:fixed; width:100%; }
+.season-tbl .col-ses   { width:11%; }
+.season-tbl .col-cnt   { width: 7%; }
+.season-tbl .col-rate  { width: 7%; }
+.season-tbl .col-inv   { width: 7%; }
+.season-tbl .col-amt   { width:11%; }
+
+/* By Shop main row (12 cols: label + 3cnt + 2rate + 3inv + 3amt = 100%) */
+.shop-tbl   { table-layout:fixed; width:100%; }
+.shop-tbl   .cn        { width:14%; }
+.shop-tbl   .cv-cnt    { width: 7%; }
+.shop-tbl   .cv-rate   { width: 7%; }
+.shop-tbl   .cv-inv    { width: 7%; }
+.shop-tbl   .cv-amt    { width:10%; }
+
+/* Shop → By Grade sub-table (10 cols: label + 3cnt + 2rate + 1inv + 1amt + 2dbl ≈ 95%) */
 .sub-tbl    { table-layout:fixed; width:100%; font-size:.85rem; }
-.sub-tbl    .sl { width:20%; }     /* Grade/Season = Shop width (20%) */
-.sub-tbl    .sv { width:10%; }     /* Standard columns (10%) */
-.sub-tbl    .sv-amt { width:10%; } /* Standard amount columns (10%) */
-.sub-tbl    .sv-double { width:20%; }  /* Double width for Grade INV/AMT(CUS) (20%) */
-.sub-tbl    .amount-vnd { white-space:nowrap; font-size:.82rem; }
+.sub-tbl    .sl        { width:12%; }
+.sub-tbl    .sv-cnt    { width: 7%; }
+.sub-tbl    .sv-rate   { width: 7%; }
+.sub-tbl    .sv-inv    { width: 7%; }
+.sub-tbl    .sv-amt    { width:13%; }
+.sub-tbl    .sv-dbl    { width:14%; }
+
+/* Shop → By Season sub-table (12 cols: label + 3cnt + 2rate + 3inv + 3amt = 100%) */
+.sub-ses-tbl .sl       { width:11%; }
+.sub-ses-tbl .sv-cnt   { width: 7%; }
+.sub-ses-tbl .sv-rate  { width: 7%; }
+.sub-ses-tbl .sv-inv   { width: 7%; }
+.sub-ses-tbl .sv-amt   { width:11%; }
+
+.sub-tbl    .amount-vnd { white-space:nowrap; }
 .sub-hdr th { background:#bdd7ee!important; color:#1f3864!important; font-size:.8rem; }
 .sub-ses th { background:#d5e8d4!important; color:#1a3d2b!important; font-size:.8rem; }
 
-/* Grade and Season Comparison Tables */
+/* By Grade - All Shops (10 cols) */
 .grade-compare-tbl { table-layout:fixed; width:100%; }
-.grade-compare-tbl .shop-col { width:30%; }
-.grade-compare-tbl .val-col { width:14%; }
+.grade-compare-tbl .shop-col  { width:22%; }
+.grade-compare-tbl .val-cnt   { width: 7%; }
+.grade-compare-tbl .val-rate  { width: 7%; }
+.grade-compare-tbl .val-inv   { width: 7%; }
+.grade-compare-tbl .val-amt   { width:12%; }
 
+/* By Season - All Shops (12 cols) */
 .season-compare-tbl { table-layout:fixed; width:100%; }
-.season-compare-tbl .shop-col { width:30%; }
-.season-compare-tbl .val-col { width:10%; }
+.season-compare-tbl .shop-col { width:18%; }
+.season-compare-tbl .val-cnt  { width: 6%; }
+.season-compare-tbl .val-rate { width: 6%; }
+.season-compare-tbl .val-inv  { width: 6%; }
+.season-compare-tbl .val-amt  { width:10%; }
 
 .amount-vnd { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .badge.bg-warning { color:#000!important; }
@@ -385,42 +428,38 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                 Grade order: No Grade to Member to Silver to Gold to Diamond.
             </p>
             <div class="table-responsive">
-                <table class="table table-striped table-hover align-middle mb-0">
+                <table class="table table-striped table-hover align-middle mb-0 grade-tbl">
                     <thead style="background-color: #366092; color: white;">
                         <tr>
-                            <th>VIP Grade</th>
-                            <th class="text-end">New</th>
-                            <th class="text-end">New Rate</th>
-                            <th class="text-end">Returning</th>
-                            <th class="text-end">Active (Period)</th>
-                            <th class="text-end">Return Visit Rate (Period)</th>
-                            <th class="text-end">Total in DB</th>
-                            <th class="text-end">Return Rate (All Time)</th>
-                            <th class="text-end">INV(RET)</th>
-                            <th class="text-end">AMT(RET)</th>
-                            <th class="text-end">Total Invoices</th>
-                            <th class="text-end">Total Amount</th>
+                            <th class="col-grade">VIP Grade</th>
+                            <th class="col-cnt text-end">New</th>
+                            <th class="col-rate text-end">New Rate</th>
+                            <th class="col-cnt text-end">Returning</th>
+                            <th class="col-cnt text-end">Active (Period)</th>
+                            <th class="col-rate text-end">Return Visit Rate</th>
+                            <th class="col-cnt text-end">Total in DB</th>
+                            <th class="col-rate text-end">Return Rate (AT)</th>
+                            <th class="col-inv text-end">INV(RET)</th>
+                            <th class="col-amt text-end">AMT(RET)</th>
+                            <th class="col-inv text-end">Total INV</th>
+                            <th class="col-amt text-end">Total Amount</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for g in grade_stats %}
                         <tr>
                             <td><strong>{{ g.grade }}</strong></td>
-                            <td class="text-end">{{ g.new_customers|default:0 }}</td>
-                            <td class="text-end">{{ g.new_rate|default:0 }}%</td>
-                            <td class="text-end">{{ g.returning_customers }}</td>
-                            <td class="text-end">{{ g.total_customers }}</td>
-                            <td class="text-end">
-                                <span class="badge bg-primary">{{ g.return_rate }}%</span>
-                            </td>
-                            <td class="text-end">{{ g.total_in_db }}</td>
-                            <td class="text-end">
-                                <span class="badge bg-warning">{{ g.return_rate_all_time }}%</span>
-                            </td>
-                            <td class="text-end text-success">{{ g.returning_invoices|default:0 }}</td>
-                            <td class="text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} {{ currency }}</td>
-                            <td class="text-end">{{ g.total_invoices }}</td>
-                            <td class="text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
+                            <td class="col-cnt text-end">{{ g.new_customers|default:0 }}</td>
+                            <td class="col-rate text-end"><span class="badge bg-info">{{ g.new_rate|default:0 }}%</span></td>
+                            <td class="col-cnt text-end">{{ g.returning_customers }}</td>
+                            <td class="col-cnt text-end">{{ g.total_customers }}</td>
+                            <td class="col-rate text-end"><span class="badge bg-primary">{{ g.return_rate }}%</span></td>
+                            <td class="col-cnt text-end">{{ g.total_in_db }}</td>
+                            <td class="col-rate text-end"><span class="badge bg-warning">{{ g.return_rate_all_time }}%</span></td>
+                            <td class="col-inv text-end text-success">{{ g.returning_invoices|default:0 }}</td>
+                            <td class="col-amt text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} {{ currency }}</td>
+                            <td class="col-inv text-end">{{ g.total_invoices }}</td>
+                            <td class="col-amt text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="12" class="text-center text-muted py-3">No data</td></tr>
@@ -436,40 +475,38 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                 Year-aware season windows. Returning within a season = customer has at least 1 return visit in that season.
             </p>
             <div class="table-responsive">
-                <table class="table table-striped table-hover align-middle mb-0">
+                <table class="table table-striped table-hover align-middle mb-0 season-tbl">
                     <thead style="background-color: #366092; color: white;">
                         <tr>
-                            <th>Season</th>
-                            <th class="text-end">New</th>
-                            <th class="text-end">New Rate</th>
-                            <th class="text-end">Returning</th>
-                            <th class="text-end">Active</th>
-                            <th class="text-end">Return Rate</th>
-                            <th class="text-end">INV(RET)</th>
-                            <th class="text-end">AMT(RET)</th>
-                            <th class="text-end">INV(CUS)</th>
-                            <th class="text-end">AMT(CUS)</th>
-                            <th class="text-end">Total Invoices</th>
-                            <th class="text-end">Total Amount</th>
+                            <th class="col-ses">Season</th>
+                            <th class="col-cnt text-end">New</th>
+                            <th class="col-rate text-end">New Rate</th>
+                            <th class="col-cnt text-end">Returning</th>
+                            <th class="col-cnt text-end">Active</th>
+                            <th class="col-rate text-end">Return Rate</th>
+                            <th class="col-inv text-end">INV(RET)</th>
+                            <th class="col-amt text-end">AMT(RET)</th>
+                            <th class="col-inv text-end">INV(CUS)</th>
+                            <th class="col-amt text-end">AMT(CUS)</th>
+                            <th class="col-inv text-end">Total INV</th>
+                            <th class="col-amt text-end">Total Amount</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for s in session_stats %}
                         <tr>
                             <td><strong>{{ s.session }}</strong></td>
-                            <td class="text-end">{{ s.new_customers|default:0 }}</td>
-                            <td class="text-end">{{ s.new_rate|default:0 }}%</td>
-                            <td class="text-end">{{ s.returning_customers }}</td>
-                            <td class="text-end">{{ s.total_customers }}</td>
-                            <td class="text-end">
-                                <span class="badge bg-primary">{{ s.return_rate }}%</span>
-                            </td>
-                            <td class="text-end text-success">{{ s.returning_invoices|default:0 }}</td>
-                            <td class="text-end text-success amount-vnd">{{ s.returning_amount|default:0|vnd }} {{ currency }}</td>
-                            <td class="text-end">{{ s.total_invoices }}</td>
-                            <td class="text-end amount-vnd">{{ s.total_amount|vnd }} {{ currency }}</td>
-                            <td class="text-end">{{ s.total_invoices_with_vip0 }}</td>
-                            <td class="text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }} {{ currency }}</td>
+                            <td class="col-cnt text-end">{{ s.new_customers|default:0 }}</td>
+                            <td class="col-rate text-end"><span class="badge bg-info">{{ s.new_rate|default:0 }}%</span></td>
+                            <td class="col-cnt text-end">{{ s.returning_customers }}</td>
+                            <td class="col-cnt text-end">{{ s.total_customers }}</td>
+                            <td class="col-rate text-end"><span class="badge bg-primary">{{ s.return_rate }}%</span></td>
+                            <td class="col-inv text-end text-success">{{ s.returning_invoices|default:0 }}</td>
+                            <td class="col-amt text-end text-success amount-vnd">{{ s.returning_amount|default:0|vnd }} {{ currency }}</td>
+                            <td class="col-inv text-end">{{ s.total_invoices }}</td>
+                            <td class="col-amt text-end amount-vnd">{{ s.total_amount|vnd }} {{ currency }}</td>
+                            <td class="col-inv text-end">{{ s.total_invoices_with_vip0 }}</td>
+                            <td class="col-amt text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }} {{ currency }}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="12" class="text-center text-muted py-3">No season data for this period</td></tr>
@@ -500,35 +537,33 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <thead style="background-color: #366092; color: white;">
                                 <tr>
                                     <th class="cn">Shop</th>
-                                    <th class="cv text-end">New</th>
-                                    <th class="cv text-end">New Rate</th>
-                                    <th class="cv text-end">Returning</th>
-                                    <th class="cv text-end">Active</th>
-                                    <th class="cv text-end">Rate</th>
-                                    <th class="cv text-end">INV(RET)</th>
-                                    <th class="cv text-end">AMT(RET)</th>
-                                    <th class="cv text-end">INV(CUS)</th>
-                                    <th class="cv text-end">AMT(CUS)</th>
-                                    <th class="cv text-end">Total Invoices</th>
-                                    <th class="cv text-end">Total Amount</th>
+                                    <th class="cv-cnt text-end">New</th>
+                                    <th class="cv-rate text-end">New Rate</th>
+                                    <th class="cv-cnt text-end">Returning</th>
+                                    <th class="cv-cnt text-end">Active</th>
+                                    <th class="cv-rate text-end">Rate</th>
+                                    <th class="cv-inv text-end">INV(RET)</th>
+                                    <th class="cv-amt text-end">AMT(RET)</th>
+                                    <th class="cv-inv text-end">INV(CUS)</th>
+                                    <th class="cv-amt text-end">AMT(CUS)</th>
+                                    <th class="cv-inv text-end">Total INV</th>
+                                    <th class="cv-amt text-end">Total Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
                                     <td class="cn"><strong>{{ shop.shop_name }}</strong></td>
-                                    <td class="cv text-end">{{ shop.new_customers|default:0 }}</td>
-                                    <td class="cv text-end">{{ shop.new_rate|default:0 }}%</td>
-                                    <td class="cv text-end">{{ shop.returning_customers }}</td>
-                                    <td class="cv text-end">{{ shop.total_customers }}</td>
-                                    <td class="cv text-end">
-                                        <span class="badge bg-primary">{{ shop.return_rate }}%</span>
-                                    </td>
-                                    <td class="cv text-end text-success">{{ shop.returning_invoices|default:0 }}</td>
-                                    <td class="cv text-end text-success amount-vnd">{{ shop.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                    <td class="cv text-end">{{ shop.total_invoices }}</td>
-                                    <td class="cv text-end amount-vnd">{{ shop.total_amount|vnd }} {{ currency }}</td>
-                                    <td class="cv text-end">{{ shop.total_invoices_with_vip0 }}</td>
-                                    <td class="cv text-end amount-vnd">{{ shop.total_amount_with_vip0|vnd }} {{ currency }}</td>
+                                    <td class="cv-cnt text-end">{{ shop.new_customers|default:0 }}</td>
+                                    <td class="cv-rate text-end"><span class="badge bg-info">{{ shop.new_rate|default:0 }}%</span></td>
+                                    <td class="cv-cnt text-end">{{ shop.returning_customers }}</td>
+                                    <td class="cv-cnt text-end">{{ shop.total_customers }}</td>
+                                    <td class="cv-rate text-end"><span class="badge bg-primary">{{ shop.return_rate }}%</span></td>
+                                    <td class="cv-inv text-end text-success">{{ shop.returning_invoices|default:0 }}</td>
+                                    <td class="cv-amt text-end text-success amount-vnd">{{ shop.returning_amount|default:0|vnd }} {{ currency }}</td>
+                                    <td class="cv-inv text-end">{{ shop.total_invoices }}</td>
+                                    <td class="cv-amt text-end amount-vnd">{{ shop.total_amount|vnd }} {{ currency }}</td>
+                                    <td class="cv-inv text-end">{{ shop.total_invoices_with_vip0 }}</td>
+                                    <td class="cv-amt text-end amount-vnd">{{ shop.total_amount_with_vip0|vnd }} {{ currency }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -543,32 +578,32 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                         <thead class="sub-hdr">
                                             <tr>
                                                 <th class="sl">Grade</th>
-                                                <th class="sv text-end">New</th>
-                                                <th class="sv text-end">New Rate</th>
-                                                <th class="sv text-end">Returning</th>
-                                                <th class="sv text-end">Active</th>
-                                                <th class="sv text-end">Rate</th>
-                                                <th class="sv text-end">INV(RET)</th>
+                                                <th class="sv-cnt text-end">New</th>
+                                                <th class="sv-rate text-end">New Rate</th>
+                                                <th class="sv-cnt text-end">Returning</th>
+                                                <th class="sv-cnt text-end">Active</th>
+                                                <th class="sv-rate text-end">Rate</th>
+                                                <th class="sv-inv text-end">INV(RET)</th>
                                                 <th class="sv-amt text-end">AMT(RET)</th>
-                                                <th class="sv-double text-end">INV(CUS)</th>
-                                                <th class="sv-double text-end">AMT(CUS)</th>
+                                                <th class="sv-dbl text-end">INV(CUS)</th>
+                                                <th class="sv-dbl text-end">AMT(CUS)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {% for gd in shop.by_grade %}
                                             <tr>
                                                 <td class="sl">{{ gd.grade }}</td>
-                                                <td class="sv text-end">{{ gd.new_customers|default:0 }}</td>
-                                                <td class="sv text-end">{{ gd.new_rate|default:0 }}%</td>
-                                                <td class="sv text-end">{{ gd.returning_customers }}</td>
-                                                <td class="sv text-end">{{ gd.total_customers }}</td>
-                                                <td class="sv text-end">
+                                                <td class="sv-cnt text-end">{{ gd.new_customers|default:0 }}</td>
+                                                <td class="sv-rate text-end"><span class="badge bg-info" style="font-size:.73rem">{{ gd.new_rate|default:0 }}%</span></td>
+                                                <td class="sv-cnt text-end">{{ gd.returning_customers }}</td>
+                                                <td class="sv-cnt text-end">{{ gd.total_customers }}</td>
+                                                <td class="sv-rate text-end">
                                                     <span class="badge bg-primary" style="font-size:.73rem">{{ gd.return_rate }}%</span>
                                                 </td>
-                                                <td class="sv text-end text-success">{{ gd.returning_invoices|default:0 }}</td>
+                                                <td class="sv-inv text-end text-success">{{ gd.returning_invoices|default:0 }}</td>
                                                 <td class="sv-amt text-end text-success amount-vnd">{{ gd.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                                <td class="sv-double text-end">{{ gd.total_invoices }}</td>
-                                                <td class="sv-double text-end amount-vnd">{{ gd.total_amount|vnd }} {{ currency }}</td>
+                                                <td class="sv-dbl text-end">{{ gd.total_invoices }}</td>
+                                                <td class="sv-dbl text-end amount-vnd">{{ gd.total_amount|vnd }} {{ currency }}</td>
                                             </tr>
                                             {% empty %}
                                             <tr><td colspan="10" class="text-muted small text-center py-1">No data</td></tr>
@@ -582,20 +617,20 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <div>
                                 <p class="text-muted small fw-semibold mb-1 text-uppercase">By Season</p>
                                 <div class="table-responsive">
-                                    <table class="table table-sm align-middle mb-0 sub-tbl">
+                                    <table class="table table-sm align-middle mb-0 sub-tbl sub-ses-tbl">
                                         <thead class="sub-ses" style="background-color: #366092; color: white;">
                                             <tr>
                                                 <th class="sl">Season</th>
-                                                <th class="sv text-end">New</th>
-                                                <th class="sv text-end">New Rate</th>
-                                                <th class="sv text-end">Returning</th>
-                                                <th class="sv text-end">Active</th>
-                                                <th class="sv text-end">Rate</th>
-                                                <th class="sv text-end">INV(RET)</th>
+                                                <th class="sv-cnt text-end">New</th>
+                                                <th class="sv-rate text-end">New Rate</th>
+                                                <th class="sv-cnt text-end">Returning</th>
+                                                <th class="sv-cnt text-end">Active</th>
+                                                <th class="sv-rate text-end">Rate</th>
+                                                <th class="sv-inv text-end">INV(RET)</th>
                                                 <th class="sv-amt text-end">AMT(RET)</th>
-                                                <th class="sv text-end">INV(CUS)</th>
+                                                <th class="sv-inv text-end">INV(CUS)</th>
                                                 <th class="sv-amt text-end">AMT(CUS)</th>
-                                                <th class="sv text-end">Total Invoices</th>
+                                                <th class="sv-inv text-end">Total INV</th>
                                                 <th class="sv-amt text-end">Total Amount</th>
                                             </tr>
                                         </thead>
@@ -604,18 +639,18 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             {% if sd.total_customers > 0 %}
                                             <tr>
                                                 <td class="sl">{{ sd.session }}</td>
-                                                <td class="sv text-end">{{ sd.new_customers|default:0 }}</td>
-                                                <td class="sv text-end">{{ sd.new_rate|default:0 }}%</td>
-                                                <td class="sv text-end">{{ sd.returning_customers }}</td>
-                                                <td class="sv text-end">{{ sd.total_customers }}</td>
-                                                <td class="sv text-end">
+                                                <td class="sv-cnt text-end">{{ sd.new_customers|default:0 }}</td>
+                                                <td class="sv-rate text-end"><span class="badge bg-info" style="font-size:.73rem">{{ sd.new_rate|default:0 }}%</span></td>
+                                                <td class="sv-cnt text-end">{{ sd.returning_customers }}</td>
+                                                <td class="sv-cnt text-end">{{ sd.total_customers }}</td>
+                                                <td class="sv-rate text-end">
                                                     <span class="badge bg-success" style="font-size:.73rem">{{ sd.return_rate }}%</span>
                                                 </td>
-                                                <td class="sv text-end text-success">{{ sd.returning_invoices|default:0 }}</td>
+                                                <td class="sv-inv text-end text-success">{{ sd.returning_invoices|default:0 }}</td>
                                                 <td class="sv-amt text-end text-success amount-vnd">{{ sd.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                                <td class="sv text-end">{{ sd.total_invoices }}</td>
+                                                <td class="sv-inv text-end">{{ sd.total_invoices }}</td>
                                                 <td class="sv-amt text-end amount-vnd">{{ sd.total_amount|vnd }} {{ currency }}</td>
-                                                <td class="sv text-end">{{ sd.total_invoices_with_vip0 }}</td>
+                                                <td class="sv-inv text-end">{{ sd.total_invoices_with_vip0 }}</td>
                                                 <td class="sv-amt text-end amount-vnd">{{ sd.total_amount_with_vip0|vnd }} {{ currency }}</td>
                                             </tr>
                                             {% endif %}
@@ -659,15 +694,15 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <thead style="background-color: #366092; color: white;">
                                 <tr>
                                     <th class="shop-col">Shop</th>
-                                    <th class="val-col text-end">New</th>
-                                    <th class="val-col text-end">New Rate</th>
-                                    <th class="val-col text-end">Returning</th>
-                                    <th class="val-col text-end">Active</th>
-                                    <th class="val-col text-end">Return Rate</th>
-                                    <th class="val-col text-end">INV(RET)</th>
-                                    <th class="val-col text-end">AMT(RET)</th>
-                                    <th class="val-col text-end">INV(CUS)</th>
-                                    <th class="val-col text-end">AMT(CUS)</th>
+                                    <th class="val-cnt text-end">New</th>
+                                    <th class="val-rate text-end">New Rate</th>
+                                    <th class="val-cnt text-end">Returning</th>
+                                    <th class="val-cnt text-end">Active</th>
+                                    <th class="val-rate text-end">Return Rate</th>
+                                    <th class="val-inv text-end">INV(RET)</th>
+                                    <th class="val-amt text-end">AMT(RET)</th>
+                                    <th class="val-inv text-end">INV(CUS)</th>
+                                    <th class="val-amt text-end">AMT(CUS)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -676,17 +711,17 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                         {% if g.grade == grade_name.grade %}
                                         <tr>
                                             <td class="shop-col"><strong>{{ shop.shop_name }}</strong></td>
-                                            <td class="val-col text-end">{{ g.new_customers|default:0 }}</td>
-                                            <td class="val-col text-end">{{ g.new_rate|default:0 }}%</td>
-                                            <td class="val-col text-end">{{ g.returning_customers }}</td>
-                                            <td class="val-col text-end">{{ g.total_customers }}</td>
-                                            <td class="val-col text-end">
+                                            <td class="val-cnt text-end">{{ g.new_customers|default:0 }}</td>
+                                            <td class="val-rate text-end"><span class="badge bg-info">{{ g.new_rate|default:0 }}%</span></td>
+                                            <td class="val-cnt text-end">{{ g.returning_customers }}</td>
+                                            <td class="val-cnt text-end">{{ g.total_customers }}</td>
+                                            <td class="val-rate text-end">
                                                 <span class="badge bg-primary">{{ g.return_rate }}%</span>
                                             </td>
-                                            <td class="val-col text-end text-success">{{ g.returning_invoices|default:0 }}</td>
-                                            <td class="val-col text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                            <td class="val-col text-end">{{ g.total_invoices }}</td>
-                                            <td class="val-col text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
+                                            <td class="val-inv text-end text-success">{{ g.returning_invoices|default:0 }}</td>
+                                            <td class="val-amt text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} {{ currency }}</td>
+                                            <td class="val-inv text-end">{{ g.total_invoices }}</td>
+                                            <td class="val-amt text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
                                         </tr>
                                         {% endif %}
                                     {% endfor %}
@@ -723,17 +758,17 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <thead style="background-color: #366092; color: white;">
                                 <tr>
                                     <th class="shop-col">Shop</th>
-                                    <th class="val-col text-end">New</th>
-                                    <th class="val-col text-end">New Rate</th>
-                                    <th class="val-col text-end">Returning</th>
-                                    <th class="val-col text-end">Active</th>
-                                    <th class="val-col text-end">Return Rate</th>
-                                    <th class="val-col text-end">INV(RET)</th>
-                                    <th class="val-col text-end">AMT(RET)</th>
-                                    <th class="val-col text-end">INV(CUS)</th>
-                                    <th class="val-col text-end">AMT(CUS)</th>
-                                    <th class="val-col text-end">Total Invoices</th>
-                                    <th class="val-col text-end">Total Amount</th>
+                                    <th class="val-cnt text-end">New</th>
+                                    <th class="val-rate text-end">New Rate</th>
+                                    <th class="val-cnt text-end">Returning</th>
+                                    <th class="val-cnt text-end">Active</th>
+                                    <th class="val-rate text-end">Return Rate</th>
+                                    <th class="val-inv text-end">INV(RET)</th>
+                                    <th class="val-amt text-end">AMT(RET)</th>
+                                    <th class="val-inv text-end">INV(CUS)</th>
+                                    <th class="val-amt text-end">AMT(CUS)</th>
+                                    <th class="val-inv text-end">Total INV</th>
+                                    <th class="val-amt text-end">Total Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -742,19 +777,19 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                         {% if s.session == season_name.session %}
                                         <tr>
                                             <td class="shop-col"><strong>{{ shop.shop_name }}</strong></td>
-                                            <td class="val-col text-end">{{ s.new_customers|default:0 }}</td>
-                                            <td class="val-col text-end">{{ s.new_rate|default:0 }}%</td>
-                                            <td class="val-col text-end">{{ s.returning_customers }}</td>
-                                            <td class="val-col text-end">{{ s.total_customers }}</td>
-                                            <td class="val-col text-end">
+                                            <td class="val-cnt text-end">{{ s.new_customers|default:0 }}</td>
+                                            <td class="val-rate text-end"><span class="badge bg-info">{{ s.new_rate|default:0 }}%</span></td>
+                                            <td class="val-cnt text-end">{{ s.returning_customers }}</td>
+                                            <td class="val-cnt text-end">{{ s.total_customers }}</td>
+                                            <td class="val-rate text-end">
                                                 <span class="badge bg-primary">{{ s.return_rate }}%</span>
                                             </td>
-                                            <td class="val-col text-end text-success">{{ s.returning_invoices|default:0 }}</td>
-                                            <td class="val-col text-end text-success amount-vnd">{{ s.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                            <td class="val-col text-end">{{ s.total_invoices }}</td>
-                                            <td class="val-col text-end amount-vnd">{{ s.total_amount|vnd }} {{ currency }}</td>
-                                            <td class="val-col text-end">{{ s.total_invoices_with_vip0 }}</td>
-                                            <td class="val-col text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }} {{ currency }}</td>
+                                            <td class="val-inv text-end text-success">{{ s.returning_invoices|default:0 }}</td>
+                                            <td class="val-amt text-end text-success amount-vnd">{{ s.returning_amount|default:0|vnd }} {{ currency }}</td>
+                                            <td class="val-inv text-end">{{ s.total_invoices }}</td>
+                                            <td class="val-amt text-end amount-vnd">{{ s.total_amount|vnd }} {{ currency }}</td>
+                                            <td class="val-inv text-end">{{ s.total_invoices_with_vip0 }}</td>
+                                            <td class="val-amt text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }} {{ currency }}</td>
                                         </tr>
                                         {% endif %}
                                     {% endfor %}
