@@ -127,29 +127,20 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
         for sk, sp in by_sess.items():
             sp_sorted = sorted(sp, key=lambda x: x['date'])
             session_first_date = sp_sorted[0]['date']
-            
-            # Customer is ACTIVE in this session
+            sp_amount = sum(p['amount'] for p in sp)
+
             session_buckets[sk]['active'] += 1
             session_buckets[sk]['invoices'] += len(sp)
-            session_buckets[sk]['amount'] += sum(p['amount'] for p in sp)
-            
-            # FIX v3.3: Check BOTH within-season AND cross-season returns
-            # 1. Calculate return visits WITHIN this season
+            session_buckets[sk]['amount'] += sp_amount
+
             _, is_ret_in_season = calculate_return_visits(sp_sorted, reg_date)
-            
-            # 2. Check if has prior purchases BEFORE this season
             has_prior_purchases = any(p['date'] < session_first_date for p in all_purchases_sorted)
-            
-            # Customer is returning if:
-            # - Has multiple invoices in this season (is_ret_in_season), OR
-            # - Has purchased before this season (has_prior_purchases)
+
             if is_ret_in_season or has_prior_purchases:
                 session_buckets[sk]['returning'] += 1
-                # NEW: Track returning invoices and amount
                 session_returning_invoices[sk] += len(sp)
-                session_returning_amount[sk] += sum(p['amount'] for p in sp)
+                session_returning_amount[sk] += sp_amount
 
-            # Track new members per session
             if new_members and vip_id in new_members:
                 session_new[sk] += 1
 
@@ -216,9 +207,10 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
             mp_sorted = sorted(mp, key=lambda x: x['date'])
             month_first_date = mp_sorted[0]['date']
 
+            mp_amount = sum(p['amount'] for p in mp)
             month_buckets[mk]['active'] += 1
             month_buckets[mk]['invoices'] += len(mp)
-            month_buckets[mk]['amount'] += sum(p['amount'] for p in mp)
+            month_buckets[mk]['amount'] += mp_amount
 
             _, is_ret_in_month = calculate_return_visits(mp_sorted, reg_date)
             has_prior_purchases = any(p['date'] < month_first_date for p in all_purchases_sorted)
@@ -226,7 +218,7 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
             if is_ret_in_month or has_prior_purchases:
                 month_buckets[mk]['returning'] += 1
                 month_returning_invoices[mk] += len(mp)
-                month_returning_amount[mk] += sum(p['amount'] for p in mp)
+                month_returning_amount[mk] += mp_amount
 
             if new_members and vip_id in new_members:
                 month_new[mk] += 1
@@ -315,21 +307,13 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             for sh, sh_p in by_shop.items():
                 shop_vip0_invoices[sh] += len(sh_p)
                 shop_vip0_amount[sh] += sum(p['amount'] for p in sh_p)
-                
-                # By session within shop
-                by_sess = defaultdict(list)
+                # Single pass: group by session and month simultaneously
                 for p in sh_p:
-                    by_sess[p['session']].append(p)
-                for sk, sp in by_sess.items():
-                    shop_sess_vip0[sh][sk]['invoices'] += len(sp)
-                    shop_sess_vip0[sh][sk]['amount'] += sum(p['amount'] for p in sp)
-                # By month within shop (VIP 0)
-                by_mo = defaultdict(list)
-                for p in sh_p:
-                    by_mo[p['month']].append(p)
-                for mk, mp in by_mo.items():
-                    shop_month_vip0[sh][mk]['invoices'] += len(mp)
-                    shop_month_vip0[sh][mk]['amount'] += sum(p['amount'] for p in mp)
+                    amt = p['amount']
+                    shop_sess_vip0[sh][p['session']]['invoices'] += 1
+                    shop_sess_vip0[sh][p['session']]['amount'] += amt
+                    shop_month_vip0[sh][p['month']]['invoices'] += 1
+                    shop_month_vip0[sh][p['month']]['amount'] += amt
             continue
         
         # Get customer info
@@ -341,18 +325,20 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             by_shop_visits[p['shop']].append(p)
         
         for sh, sh_p in by_shop_visits.items():
+            # Sort once — reused for shop-level return, session prior check, month prior check
+            sh_p_sorted = sorted(sh_p, key=lambda x: x['date'])
+            sh_amount = sum(p['amount'] for p in sh_p)
+
             shop_customers[sh].add(vip_id)
             shop_invoices[sh] += len(sh_p)
-            for p in sh_p:
-                shop_amount[sh] += p['amount']
-            
+            shop_amount[sh] += sh_amount
+
             # Shop-level returning calculation
-            _, ret = calculate_return_visits(sorted(sh_p, key=lambda x: x['date']), reg_date)
+            _, ret = calculate_return_visits(sh_p_sorted, reg_date)
             if ret:
                 shop_returning[sh].add(vip_id)
-                # NEW: Track returning invoices and amount at shop level
                 shop_returning_invoices[sh] += len(sh_p)
-                shop_returning_amount[sh] += sum(p['amount'] for p in sh_p)
+                shop_returning_amount[sh] += sh_amount
 
             # Track new members at shop level
             if new_members and vip_id in new_members:
@@ -363,67 +349,56 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             shop_grade[sh][grade]['active'].add(vip_id)
             if ret:
                 shop_grade[sh][grade]['returning'].add(vip_id)
-                # NEW: Track returning for this grade
                 shop_grade[sh][grade]['returning_invoices'] += len(sh_p)
-                shop_grade[sh][grade]['returning_amount'] += sum(p['amount'] for p in sh_p)
-            for p in sh_p:
-                shop_grade[sh][grade]['invoices'] += 1
-                shop_grade[sh][grade]['amount'] += p['amount']
-            
-            # Shop → By Session - FIXED v3.3: Within-season + Cross-season
-            sh_p_sorted = sorted(sh_p, key=lambda x: x['date'])
-            
+                shop_grade[sh][grade]['returning_amount'] += sh_amount
+            shop_grade[sh][grade]['invoices'] += len(sh_p)
+            shop_grade[sh][grade]['amount'] += sh_amount
+
+            # Single pass: build session and month groups simultaneously
             by_sess_shop = defaultdict(list)
+            by_month_shop = defaultdict(list)
             for p in sh_p:
                 by_sess_shop[p['session']].append(p)
-            
+                by_month_shop[p['month']].append(p)
+
+            # Shop → By Session
             for sk, sp in by_sess_shop.items():
                 sp_sorted = sorted(sp, key=lambda x: x['date'])
                 session_first_date = sp_sorted[0]['date']
-                
+                sp_amount = sum(p['amount'] for p in sp)
+
                 shop_sess[sh][sk]['active'] += 1
                 shop_sess[sh][sk]['invoices'] += len(sp)
-                shop_sess[sh][sk]['amount'] += sum(p['amount'] for p in sp)
-                
-                # FIX v3.3: Check BOTH within-season AND cross-season returns
-                # 1. Calculate return visits WITHIN this season
+                shop_sess[sh][sk]['amount'] += sp_amount
+
                 _, is_ret_in_season = calculate_return_visits(sp_sorted, reg_date)
-                
-                # 2. Check if has prior shop purchases BEFORE this season
                 has_prior_shop_purchases = any(p['date'] < session_first_date for p in sh_p_sorted)
-                
-                # Customer is returning if:
-                # - Has multiple invoices in this season (is_ret_in_season), OR
-                # - Has purchased at this shop before this season (has_prior_shop_purchases)
+
                 if is_ret_in_season or has_prior_shop_purchases:
                     shop_sess[sh][sk]['returning'] += 1
-                    # NEW: Track returning invoices and amount for this shop-season
                     shop_sess_returning[sh][sk]['invoices'] += len(sp)
-                    shop_sess_returning[sh][sk]['amount'] += sum(p['amount'] for p in sp)
+                    shop_sess_returning[sh][sk]['amount'] += sp_amount
 
-                # Track new members per shop-session
                 if new_members and vip_id in new_members:
                     shop_sess_new[sh][sk] += 1
 
             # Shop → By Month
-            by_month_shop = defaultdict(list)
-            for p in sh_p:
-                by_month_shop[p['month']].append(p)
-
             for mk, mp in by_month_shop.items():
                 mp_sorted = sorted(mp, key=lambda x: x['date'])
                 month_first_date = mp_sorted[0]['date']
+                mp_amount = sum(p['amount'] for p in mp)
 
                 shop_month[sh][mk]['active'] += 1
                 shop_month[sh][mk]['invoices'] += len(mp)
-                shop_month[sh][mk]['amount'] += sum(p['amount'] for p in mp)
+                shop_month[sh][mk]['amount'] += mp_amount
 
                 _, is_ret_in_month = calculate_return_visits(mp_sorted, reg_date)
-                has_prior_month = any(p['date'] < month_first_date for p in sorted(sh_p, key=lambda x: x['date']))
+                has_prior_month = any(p['date'] < month_first_date for p in sh_p_sorted)
+
                 if is_ret_in_month or has_prior_month:
                     shop_month[sh][mk]['returning'] += 1
                     shop_month_returning[sh][mk]['invoices'] += len(mp)
-                    shop_month_returning[sh][mk]['amount'] += sum(p['amount'] for p in mp)
+                    shop_month_returning[sh][mk]['amount'] += mp_amount
 
                 if new_members and vip_id in new_members:
                     shop_month_new[sh][mk] += 1
