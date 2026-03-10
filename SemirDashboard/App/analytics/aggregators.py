@@ -144,9 +144,10 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
             if new_members and vip_id in new_members:
                 session_new[sk] += 1
 
-    # Build stats list
+    # Build stats list — include months that have VIP0-only transactions
+    all_session_keys_union = set(session_buckets.keys()) | set(session_vip0_invoices.keys())
     session_stats = []
-    for key in sorted(session_buckets, key=session_sort_key):
+    for key in sorted(all_session_keys_union, key=session_sort_key):
         s = session_buckets[key]
         ac = s['active']
         rc = s['returning']
@@ -223,8 +224,10 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
             if new_members and vip_id in new_members:
                 month_new[mk] += 1
 
+    # Include months that have VIP0-only transactions
+    all_month_keys_union = set(month_buckets.keys()) | set(month_vip0_invoices.keys())
     month_stats = []
-    for key in sorted(month_buckets, key=month_sort_key):
+    for key in sorted(all_month_keys_union, key=month_sort_key):
         s = month_buckets[key]
         ac = s['active']
         rc = s['returning']
