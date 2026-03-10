@@ -54,6 +54,7 @@ def export_analytics_to_excel(data, date_from=None, date_to=None, shop_group=Non
     _create_season_comparison_sheet(wb, data, header_fill, header_font, header_align)
     _create_month_comparison_sheet(wb, data, header_fill, header_font, header_align)
     _create_details_sheet(wb, data, header_fill, header_font, header_align)
+    _create_buyer_without_info_sheet(wb, data, header_fill, header_font, header_align)
     _create_reconciliation_sheet(wb, data, header_fill, header_font, header_align)
     
     return wb
@@ -95,7 +96,15 @@ def _create_overview_sheet(wb, data, header_fill, header_font, header_align, dat
         ("AMT(CUS)", ov['total_amount_without_vip0']),
         ("Total Invoices", ov['total_invoices_with_vip0']),
         ("Total Amount", ov['total_amount_with_vip0']),
+        (None, None),  # separator
+        ("Total Customers (All Time)", ov['total_customers_in_db']),
+        ("Member Active (All Time)", ov['member_active_all_time']),
+        ("Member Inactive (All Time)", ov['member_inactive_all_time']),
+        ("Return Rate (All Time)", f"{ov['return_rate_all_time']}%"),
     ]:
+        if label is None:
+            row += 1
+            continue
         ws[f'A{row}'] = label
         # Format amounts with number format instead of string
         if 'AMT' in label or 'Amount' in label:
@@ -132,7 +141,7 @@ def _create_grade_sheet(wb, data, header_fill, header_font, header_align):
     """By VIP Grade sheet."""
     ws = wb.create_sheet("By VIP Grade")
 
-    headers = ["Grade", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "Total Invoices", "Total Amount"]
+    headers = ["Grade", "Active", "Returning", "Return Rate", "Total in DB", "Return Rate (AT)", "INV(RET)", "AMT(RET)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -144,17 +153,19 @@ def _create_grade_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=2, value=g['total_customers'])
         ws.cell(row=row_num, column=3, value=g['returning_customers'])
         ws.cell(row=row_num, column=4, value=f"{g['return_rate']}%")
-        ws.cell(row=row_num, column=5, value=g.get('returning_invoices', 0))
-        ws.cell(row=row_num, column=6, value=g.get('returning_amount', 0))
-        ws.cell(row=row_num, column=6).number_format = '#,##0'
-        ws.cell(row=row_num, column=7, value=g['total_invoices'])
-        ws.cell(row=row_num, column=8, value=g['total_amount'])
+        ws.cell(row=row_num, column=5, value=g.get('total_in_db', 0))
+        ws.cell(row=row_num, column=6, value=f"{g.get('return_rate_all_time', 0)}%")
+        ws.cell(row=row_num, column=7, value=g.get('returning_invoices', 0))
+        ws.cell(row=row_num, column=8, value=g.get('returning_amount', 0))
         ws.cell(row=row_num, column=8).number_format = '#,##0'
+        ws.cell(row=row_num, column=9, value=g['total_invoices'])
+        ws.cell(row=row_num, column=10, value=g['total_amount'])
+        ws.cell(row=row_num, column=10).number_format = '#,##0'
 
     ws.column_dimensions['A'].width = 12  # Grade
-    for col in range(2, 5):
+    for col in range(2, 7):
         ws.column_dimensions[get_column_letter(col)].width = 14  # Numeric
-    for col in range(5, 9):
+    for col in range(7, 11):
         ws.column_dimensions[get_column_letter(col)].width = 16  # Amount
 
 
@@ -544,6 +555,75 @@ def _create_details_sheet(wb, data, header_fill, header_font, header_align):
     for col in range(1, 9):
         ws.column_dimensions[get_column_letter(col)].width = 18
 
+def _create_buyer_without_info_sheet(wb, data, header_fill, header_font, header_align):
+    """Buyer Without Info (VIP ID = 0) sheet."""
+    bwi = data.get('buyer_without_info_stats')
+    if not bwi:
+        return
+
+    ws = wb.create_sheet("Buyer Without Info")
+    row = 1
+
+    # Period summary
+    ws.cell(row=row, column=1, value="Period Summary").font = Font(bold=True)
+    row += 1
+    period = bwi.get('period', {})
+    for label, value in [
+        ("Total Invoices (Period)", period.get('total_invoices', 0)),
+        ("Total Amount (Period)", period.get('total_amount', 0)),
+        ("% of All Invoices", f"{period.get('pct_of_all_invoices', 0)}%"),
+        ("% of All Amount", f"{period.get('pct_of_all_amount', 0)}%"),
+    ]:
+        ws.cell(row=row, column=1, value=label)
+        ws.cell(row=row, column=2, value=value)
+        if 'Amount' in label:
+            ws.cell(row=row, column=2).number_format = '#,##0'
+        row += 1
+
+    row += 1  # spacer
+
+    # All-time summary
+    ws.cell(row=row, column=1, value="All-Time Summary").font = Font(bold=True)
+    row += 1
+    alltime = bwi.get('all_time', {})
+    for label, value in [
+        ("Total Invoices (All Time)", alltime.get('total_invoices', 0)),
+        ("Total Amount (All Time)", alltime.get('total_amount', 0)),
+    ]:
+        ws.cell(row=row, column=1, value=label)
+        ws.cell(row=row, column=2, value=value)
+        if 'Amount' in label:
+            ws.cell(row=row, column=2).number_format = '#,##0'
+        row += 1
+
+    row += 1  # spacer
+
+    # By shop breakdown
+    ws.cell(row=row, column=1, value="By Shop (Period)").font = Font(bold=True)
+    row += 1
+    shop_headers = ["Shop", "Invoices", "Amount", "% Inv (All Period)", "% Amt (All Period)"]
+    for col_num, header in enumerate(shop_headers, 1):
+        cell = ws.cell(row=row, column=col_num, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_align
+    row += 1
+    for s in bwi.get('by_shop', []):
+        ws.cell(row=row, column=1, value=s['shop_name'])
+        ws.cell(row=row, column=2, value=s['invoices'])
+        ws.cell(row=row, column=3, value=s['amount'])
+        ws.cell(row=row, column=3).number_format = '#,##0'
+        ws.cell(row=row, column=4, value=f"{s['pct_of_period_invoices']}%")
+        ws.cell(row=row, column=5, value=f"{s['pct_of_period_amount']}%")
+        row += 1
+
+    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['B'].width = 14
+    ws.column_dimensions['C'].width = 18
+    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['E'].width = 18
+
+
 """
 ULTIMATE FIX - Uses customer_utils.get_customer_info() for proper lookup
 """
@@ -641,21 +721,20 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
         if vip_id == '0' or not purchases:
             continue
         
-        # CRITICAL FIX: Use customer_utils.get_customer_info() with customer object
-        # Get customer object from first purchase
-        customer_obj = purchases[0].get('customer') if purchases else None
-        grade, reg_date, name = get_customer_info(vip_id, customer_obj)
-        
         purchases_sorted = sorted(purchases, key=lambda x: x['date'])
-        
+
+        # Get customer info from the EARLIEST purchase (order-independent)
+        customer_obj = purchases_sorted[0].get('customer') if purchases else None
+        grade, reg_date, name = get_customer_info(vip_id, customer_obj)
+
         # Global calculation
         global_rv, global_is_ret = calculate_return_visits_local(purchases_sorted, reg_date)
-        
+
         if not global_is_ret:
             continue
-        
+
         global_ret_inv = len(purchases)
-        
+
         # Shop calculation
         shop_total = 0
         by_shop = defaultdict(list)
@@ -691,9 +770,10 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
             else:
                 pattern = "Other"
             
-            # Build shop details
+            # Build shop details — sort by first purchase date (chronological)
             shop_details = []
-            for shop, shop_purch in list(by_shop.items())[:3]:
+            by_shop_sorted = sorted(by_shop.items(), key=lambda kv: min(p['date'] for p in kv[1]))
+            for shop, shop_purch in by_shop_sorted[:3]:
                 shop_sorted_temp = sorted(shop_purch, key=lambda x: x['date'])
                 _, shop_is_ret = calculate_return_visits_local(shop_sorted_temp, reg_date)
                 shop_details.append(f"{shop[:25]}({len(shop_purch)},ret={shop_is_ret})")
@@ -808,11 +888,11 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
         if vip_id == '0' or not purchases:
             continue
         
-        # CRITICAL FIX: Use customer_utils.get_customer_info()
-        customer_obj = purchases[0].get('customer') if purchases else None
-        grade, reg_date, name = get_customer_info(vip_id, customer_obj)
-        
         purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+
+        # Get customer info from the EARLIEST purchase (order-independent)
+        customer_obj = purchases_sorted[0].get('customer') if purchases else None
+        grade, reg_date, name = get_customer_info(vip_id, customer_obj)
         
         # Global calculation
         global_rv, global_is_ret = calculate_return_visits_local(purchases_sorted, reg_date)
@@ -840,9 +920,10 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
         diff = global_ret_inv - season_total
         
         if diff > 0:
-            # Build season details
+            # Build season details — sort by first purchase date (chronological)
             season_details = []
-            for season, season_purch in list(by_season.items())[:3]:
+            by_season_sorted = sorted(by_season.items(), key=lambda kv: min(p['date'] for p in kv[1]))
+            for season, season_purch in by_season_sorted[:3]:
                 season_sorted_temp = sorted(season_purch, key=lambda x: x['date'])
                 _, season_is_ret = calculate_return_visits_local(season_sorted_temp, reg_date)
                 season_details.append(f"{season}({len(season_purch)},ret={season_is_ret})")

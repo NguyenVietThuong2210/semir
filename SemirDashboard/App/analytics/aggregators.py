@@ -113,12 +113,12 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
                 session_vip0_amount[sk] += sum(p['amount'] for p in sp)
             continue
         
-        # Get customer info
-        grade, reg_date, name = get_customer_info_fn(vip_id, purchases[0]['customer'])
-        
         # Sort all purchases by date (needed for cross-season check)
         all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
-        
+
+        # Get customer info from the EARLIEST purchase (consistent with core.py)
+        grade, reg_date, name = get_customer_info_fn(vip_id, all_purchases_sorted[0]['customer'])
+
         # Group by session
         by_sess = defaultdict(list)
         for p in purchases:
@@ -197,8 +197,8 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
                 month_vip0_amount[mk] += sum(p['amount'] for p in mp)
             continue
 
-        grade, reg_date, name = get_customer_info_fn(vip_id, purchases[0]['customer'])
         all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        _, reg_date, _ = get_customer_info_fn(vip_id, all_purchases_sorted[0]['customer'])
 
         by_month = defaultdict(list)
         for p in purchases:
@@ -319,9 +319,10 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                     shop_month_vip0[sh][p['month']]['amount'] += amt
             continue
         
-        # Get customer info
-        grade, reg_date, name = get_customer_info_fn(vip_id, purchases[0]['customer'])
-        
+        # Get customer info from the EARLIEST purchase (order-independent)
+        first_purchase = min(purchases, key=lambda x: x['date'])
+        grade, reg_date, name = get_customer_info_fn(vip_id, first_purchase['customer'])
+
         # Group purchases by shop
         by_shop_visits = defaultdict(list)
         for p in purchases:
