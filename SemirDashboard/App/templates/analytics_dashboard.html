@@ -867,7 +867,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <tbody>
                                 {% for shop in by_shop|dictsort:"shop_name" %}
                                     {% for s in shop.by_session %}
-                                        {% if s.session == season_name.session %}
+                                        {% if s.session == season_name.session and s.total_invoices_with_vip0 > 0 %}
                                         <tr>
                                             <td class="shop-col"><strong>{{ shop.shop_name }}</strong></td>
                                             <td class="val-cnt text-end">{{ s.total_customers }}</td>
@@ -935,7 +935,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <tbody>
                                 {% for shop in by_shop|dictsort:"shop_name" %}
                                     {% for m in shop.by_month %}
-                                        {% if m.month == month_name.month and m.total_customers > 0 %}
+                                        {% if m.month == month_name.month and m.total_invoices_with_vip0 > 0 %}
                                         <tr>
                                             <td class="shop-col"><strong>{{ shop.shop_name }}</strong></td>
                                             <td class="val-cnt text-end">{{ m.total_customers }}</td>
