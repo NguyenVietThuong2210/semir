@@ -306,61 +306,63 @@ class CNVSyncService:
                 failed_count += 1
         
         return created_count, updated_count, failed_count
+
+    def _process_order_batch(self, batch: List[Dict]) -> Tuple[int, int, int]:
         """
         Process batch of orders using bulk operations.
-        
+
         Args:
             batch: List of raw order dicts from API
-            
+
         Returns:
             Tuple of (created_count, updated_count, failed_count)
         """
         if not batch:
             return 0, 0, 0
-        
+
         created_count = 0
         updated_count = 0
         failed_count = 0
-        
+
         codes = []
         transformed_map = {}
-        
+
         # Transform all orders
         for data in batch:
             try:
                 transformed = self._transform_order(data)
                 code = transformed.get('order_code')
-                
+
                 if code:
                     codes.append(code)
                     transformed_map[code] = transformed
                 else:
                     logger.warning(f"Skipping order with no code: {data}")
                     failed_count += 1
-                    
+
             except Exception as e:
                 logger.error(f"Transform error: {e}")
                 failed_count += 1
-        
+
         if not codes:
             return 0, 0, failed_count
-        
+
         # Check existing records
         existing_codes = set(
             CNVOrder.objects.filter(order_code__in=codes)
             .values_list('order_code', flat=True)
         )
-        
+
         # Separate new vs existing
         new_orders = []
         update_codes = []
-        
+
         for code, data in transformed_map.items():
             if code in existing_codes:
                 update_codes.append((code, data))
             else:
                 new_orders.append(CNVOrder(**data))
-        
+
         # Bulk create new records
         if new_orders:
             try:
@@ -369,7 +371,7 @@ class CNVSyncService:
             except Exception as e:
                 logger.error(f"Bulk create failed: {e}")
                 failed_count += len(new_orders)
-        
+
         # Update existing records
         for code, data in update_codes:
             try:
@@ -380,9 +382,9 @@ class CNVSyncService:
             except Exception as e:
                 logger.error(f"Update failed for {code}: {e}")
                 failed_count += 1
-        
+
         return created_count, updated_count, failed_count
-    
+
     def sync_customers(
         self,
         incremental: bool = True,
