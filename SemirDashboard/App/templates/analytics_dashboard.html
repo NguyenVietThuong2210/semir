@@ -90,7 +90,6 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 .sub-tbl    .sv-rate   { width: 7%; }
 .sub-tbl    .sv-inv    { width: 7%; }
 .sub-tbl    .sv-amt    { width: 10%; }
-.sub-tbl    .sv-dbl    { width: 10%; }
 
 /* Shop → By Season sub-table (12 cols: label + 3cnt + 2rate + 3inv + 3amt = 100%) */
 .sub-ses-tbl .sl       { width: 14%; }
@@ -579,8 +578,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <th class="sv-rate text-end">Rate</th>
                                                 <th class="sv-inv text-end">INV(RET)</th>
                                                 <th class="sv-amt text-end">AMT(RET)</th>
-                                                <th class="sv-dbl text-end">INV(CUS)</th>
-                                                <th class="sv-dbl text-end">AMT(CUS)</th>
+                                                <th class="sv-inv text-end">INV(CUS)</th>
+                                                <th class="sv-amt text-end">AMT(CUS)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -594,8 +593,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 </td>
                                                 <td class="sv-inv text-end text-success">{{ gd.returning_invoices|default:0 }}</td>
                                                 <td class="sv-amt text-end text-success amount-vnd">{{ gd.returning_amount|default:0|vnd }} {{ currency }}</td>
-                                                <td class="sv-dbl text-end">{{ gd.total_invoices }}</td>
-                                                <td class="sv-dbl text-end amount-vnd">{{ gd.total_amount|vnd }} {{ currency }}</td>
+                                                <td class="sv-inv text-end">{{ gd.total_invoices }}</td>
+                                                <td class="sv-amt text-end amount-vnd">{{ gd.total_amount|vnd }} {{ currency }}</td>
                                             </tr>
                                             {% empty %}
                                             <tr><td colspan="8" class="text-muted small text-center py-1">No data</td></tr>
