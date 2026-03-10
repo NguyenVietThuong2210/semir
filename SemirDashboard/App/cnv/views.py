@@ -2,18 +2,19 @@
 CNV Views
 Handles CNV Loyalty integration pages
 """
+import threading
+
 from django.conf import settings
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
+from django.views.decorators.http import require_POST
 from datetime import datetime
 from django.utils import timezone
 
 from App.models import Customer as POSCustomer
 from App.models_cnv import CNVCustomer, CNVOrder, CNVSyncLog
-from django.http import HttpResponse
-from django.contrib.auth.decorators import login_required
-from datetime import datetime
 
 @login_required
 def sync_status(request):
@@ -37,14 +38,24 @@ def sync_status(request):
     # Recent sync history (last 10)
     recent_syncs = CNVSyncLog.objects.order_by('-started_at')[:10]
     
+    # Running-state flags (check DB)
+    customers_running = CNVSyncLog.objects.filter(sync_type='customers', status='running').exists()
+    orders_running = CNVSyncLog.objects.filter(sync_type='orders', status='running').exists()
+    zalo_running = CNVSyncLog.objects.filter(sync_type='zalo_sync', status='running').exists()
+    latest_zalo_sync = CNVSyncLog.objects.filter(sync_type='zalo_sync').order_by('-completed_at').first()
+
     context = {
         'latest_customer_sync': latest_customer_sync,
         'latest_order_sync': latest_order_sync,
+        'latest_zalo_sync': latest_zalo_sync,
         'total_customers': total_customers,
         'total_orders': total_orders,
         'recent_syncs': recent_syncs,
+        'customers_running': customers_running,
+        'orders_running': orders_running,
+        'zalo_running': zalo_running,
     }
-    
+
     return render(request, 'cnv/sync_status.html', context)
 
 
@@ -279,6 +290,62 @@ def customer_comparison(request):
         cnv_used_points_list.append(row)
 
     # ============================================
+    # ZALO STATS
+    # ============================================
+
+    zalo_app_qs = CNVCustomer.objects.filter(zalo_app_id__isnull=False).exclude(zalo_app_id='')
+    zalo_oa_qs  = CNVCustomer.objects.filter(zalo_oa_id__isnull=False).exclude(zalo_oa_id='')
+
+    zalo_app_all_count = zalo_app_qs.count()
+    zalo_oa_all_count  = zalo_oa_qs.count()
+    zalo_app_all_pct   = round(zalo_app_all_count / total_cnv_all * 100, 1) if total_cnv_all else 0
+    zalo_oa_all_pct    = round(zalo_oa_all_count  / total_cnv_all * 100, 1) if total_cnv_all else 0
+
+    # Period Zalo stats (filter by zalo_app_created_at)
+    zalo_app_period_count = 0
+    zalo_oa_period_count  = 0
+    zalo_app_period_pct   = 0
+    zalo_oa_period_pct    = 0
+    if period_filter:
+        _pqs = CNVCustomer.objects.filter(
+            zalo_app_created_at__gte=period_filter['start'],
+            zalo_app_created_at__lte=period_filter['end'],
+        )
+        zalo_app_period_count = _pqs.filter(zalo_app_id__isnull=False).exclude(zalo_app_id='').count()
+        zalo_oa_period_count  = _pqs.filter(zalo_oa_id__isnull=False).exclude(zalo_oa_id='').count()
+        _base = _pqs.count() or 1
+        zalo_app_period_pct = round(zalo_app_period_count / total_cnv_all * 100, 1)
+        zalo_oa_period_pct  = round(zalo_oa_period_count  / total_cnv_all * 100, 1)
+
+    # 100 latest active zalo mini app
+    _zalo_phones_app = list(
+        zalo_app_qs.order_by('-zalo_app_created_at')
+        .values('cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
+                'email', 'cnv_created_at', 'points', 'zalo_app_id', 'zalo_oa_id',
+                'zalo_app_created_at')[:100]
+    )
+    # 100 latest follow OA
+    _zalo_phones_oa = list(
+        zalo_oa_qs.order_by('-zalo_app_created_at')
+        .values('cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
+                'email', 'cnv_created_at', 'points', 'zalo_app_id', 'zalo_oa_id',
+                'zalo_app_created_at')[:100]
+    )
+
+    # Annotate in_pos flag
+    _all_phones_zalo = set(
+        r['phone'] for r in _zalo_phones_app + _zalo_phones_oa if r['phone']
+    )
+    _pos_zalo_phones = set(
+        pos_all.filter(phone__in=_all_phones_zalo).values_list('phone', flat=True)
+    ) if _all_phones_zalo else set()
+
+    for row in _zalo_phones_app:
+        row['in_pos'] = row['phone'] in _pos_zalo_phones
+    for row in _zalo_phones_oa:
+        row['in_pos'] = row['phone'] in _pos_zalo_phones
+
+    # ============================================
     # CONTEXT
     # ============================================
 
@@ -307,13 +374,29 @@ def customer_comparison(request):
         'pos_only_period': list(pos_only_period),
         'cnv_only_period': list(cnv_only_period),
 
-        # New tables
+        # Points mismatch tables
         'points_mismatch': points_mismatch[:100],
         'points_mismatch_count': points_mismatch_count,
         'total_points_mismatch': total_points_mismatch[:100],
         'total_points_mismatch_count': total_points_mismatch_count,
         'cnv_used_points_list': list(cnv_used_points_list),
         'cnv_used_points_count': cnv_used_points_count,
+
+        # Zalo stats — all time
+        'zalo_app_all_count': zalo_app_all_count,
+        'zalo_oa_all_count': zalo_oa_all_count,
+        'zalo_app_all_pct': zalo_app_all_pct,
+        'zalo_oa_all_pct': zalo_oa_all_pct,
+
+        # Zalo stats — period
+        'zalo_app_period_count': zalo_app_period_count,
+        'zalo_oa_period_count': zalo_oa_period_count,
+        'zalo_app_period_pct': zalo_app_period_pct,
+        'zalo_oa_period_pct': zalo_oa_period_pct,
+
+        # Zalo tables
+        'zalo_mini_app_list': _zalo_phones_app,
+        'zalo_oa_list': _zalo_phones_oa,
 
         # Quick buttons
         'quick_btns': [
@@ -322,7 +405,7 @@ def customer_comparison(request):
             ('Last 90 Days', 90),
         ],
     }
-    
+
     return render(request, 'cnv/customer_comparison.html', context)
 
 
@@ -432,6 +515,68 @@ def export_customer_comparison(request):
 
     cnv_used_points_export = list(CNVCustomer.objects.filter(used_points__gt=0).order_by('-used_points'))
 
+    # ── Zalo export data ────────────────────────────────────────────────────
+    pos_base_export = Customer.objects.filter(phone__isnull=False).exclude(phone='')
+
+    zalo_app_qs_export = CNVCustomer.objects.filter(
+        zalo_app_id__isnull=False
+    ).exclude(zalo_app_id='').order_by('-zalo_app_created_at')
+
+    zalo_oa_qs_export = CNVCustomer.objects.filter(
+        zalo_oa_id__isnull=False
+    ).exclude(zalo_oa_id='').order_by('-zalo_app_created_at')
+
+    total_cnv_export = CNVCustomer.objects.count()
+
+    zalo_app_all_count = zalo_app_qs_export.count()
+    zalo_oa_all_count  = zalo_oa_qs_export.count()
+    zalo_app_all_pct   = round(zalo_app_all_count / total_cnv_export * 100, 1) if total_cnv_export else 0
+    zalo_oa_all_pct    = round(zalo_oa_all_count  / total_cnv_export * 100, 1) if total_cnv_export else 0
+
+    zalo_app_period_count = 0
+    zalo_oa_period_count  = 0
+    zalo_app_period_pct   = 0
+    zalo_oa_period_pct    = 0
+    if date_from and date_to:
+        _pqs = CNVCustomer.objects.filter(
+            zalo_app_created_at__gte=date_from,
+            zalo_app_created_at__lte=date_to,
+        )
+        zalo_app_period_count = _pqs.filter(zalo_app_id__isnull=False).exclude(zalo_app_id='').count()
+        zalo_oa_period_count  = _pqs.filter(zalo_oa_id__isnull=False).exclude(zalo_oa_id='').count()
+        zalo_app_period_pct   = round(zalo_app_period_count / total_cnv_export * 100, 1) if total_cnv_export else 0
+        zalo_oa_period_pct    = round(zalo_oa_period_count  / total_cnv_export * 100, 1) if total_cnv_export else 0
+
+    zalo_stats_export = {
+        'zalo_app_all_count':    zalo_app_all_count,
+        'zalo_oa_all_count':     zalo_oa_all_count,
+        'zalo_app_all_pct':      zalo_app_all_pct,
+        'zalo_oa_all_pct':       zalo_oa_all_pct,
+        'zalo_app_period_count': zalo_app_period_count,
+        'zalo_oa_period_count':  zalo_oa_period_count,
+        'zalo_app_period_pct':   zalo_app_period_pct,
+        'zalo_oa_period_pct':    zalo_oa_period_pct,
+    }
+
+    _zalo_app_rows = list(zalo_app_qs_export.values(
+        'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
+        'email', 'cnv_created_at', 'points', 'zalo_app_id', 'zalo_oa_id',
+    ))
+    _zalo_oa_rows = list(zalo_oa_qs_export.values(
+        'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
+        'email', 'cnv_created_at', 'points', 'zalo_app_id', 'zalo_oa_id',
+    ))
+
+    _all_zalo_phones = set(r['phone'] for r in _zalo_app_rows + _zalo_oa_rows if r['phone'])
+    _pos_zalo_phones_export = set(
+        pos_base_export.filter(phone__in=_all_zalo_phones).values_list('phone', flat=True)
+    ) if _all_zalo_phones else set()
+
+    for r in _zalo_app_rows:
+        r['in_pos'] = r['phone'] in _pos_zalo_phones_export
+    for r in _zalo_oa_rows:
+        r['in_pos'] = r['phone'] in _pos_zalo_phones_export
+
     # Generate Excel workbook using excel_export module
     wb = export_customer_comparison_to_excel(
         pos_customers,
@@ -441,6 +586,9 @@ def export_customer_comparison(request):
         points_mismatch=points_mismatch_export,
         total_points_mismatch=total_points_mismatch_export,
         cnv_used_points=cnv_used_points_export,
+        zalo_mini_app_list=_zalo_app_rows,
+        zalo_oa_list=_zalo_oa_rows,
+        zalo_stats=zalo_stats_export,
     )
     
     # Generate filename
@@ -516,3 +664,91 @@ def sync_cnv_points(request):
             results.append({'cnv_id': cnv_id, 'status': 'error', 'error': str(e)})
 
     return JsonResponse({'results': results})
+
+
+# ============================================================================
+# MANUAL SYNC TRIGGERS
+# ============================================================================
+
+@login_required
+@require_POST
+def trigger_sync(request):
+    """
+    AJAX: Trigger manual sync for customers or orders.
+    Checks CNVSyncLog for running jobs before starting.
+    """
+    import json
+    try:
+        body = json.loads(request.body)
+        sync_type = body.get('sync_type')  # 'customers' or 'orders'
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    if sync_type not in ('customers', 'orders'):
+        return JsonResponse({'error': 'Invalid sync_type'}, status=400)
+
+    # Check if already running
+    if CNVSyncLog.objects.filter(sync_type=sync_type, status='running').exists():
+        return JsonResponse({
+            'status': 'skipped',
+            'message': f'A {sync_type} sync is already running. Please wait for it to complete.',
+        })
+
+    def _run():
+        from App.cnv.scheduler import sync_cnv_customers_only, sync_cnv_orders_only
+        if sync_type == 'customers':
+            sync_cnv_customers_only()
+        else:
+            sync_cnv_orders_only()
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    return JsonResponse({
+        'status': 'started',
+        'message': f'{sync_type.capitalize()} sync started in background.',
+    })
+
+
+@login_required
+@require_POST
+def trigger_zalo_sync(request):
+    """
+    AJAX: Start Zalo sync for all CNV customers.
+    Accepts cookie in POST body.
+    """
+    import json
+    from App.cnv.zalo_sync import run_zalo_sync, is_zalo_sync_running
+
+    try:
+        body = json.loads(request.body)
+        cookie = body.get('cookie', '').strip()
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    if not cookie:
+        return JsonResponse({'error': 'Cookie is required'}, status=400)
+
+    # In-memory guard
+    if is_zalo_sync_running():
+        return JsonResponse({
+            'status': 'skipped',
+            'message': 'Zalo sync is already running. Please wait.',
+        })
+
+    # DB guard
+    if CNVSyncLog.objects.filter(sync_type='zalo_sync', status='running').exists():
+        return JsonResponse({
+            'status': 'skipped',
+            'message': 'Zalo sync is already running (see sync log). Please wait.',
+        })
+
+    total = CNVCustomer.objects.count()
+    t = threading.Thread(target=run_zalo_sync, args=(cookie,), daemon=True)
+    t.start()
+
+    return JsonResponse({
+        'status': 'started',
+        'message': f'Zalo sync started for {total:,} customers. This may take a while.',
+        'total': total,
+    })
