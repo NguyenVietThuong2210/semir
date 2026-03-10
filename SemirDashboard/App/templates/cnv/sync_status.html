@@ -73,6 +73,65 @@
     </div>
 </div>
 
+<!-- Manual Sync Controls -->
+<div class="row g-3 mb-4">
+    <!-- Customer & Order Sync -->
+    <div class="col-md-6">
+        <div class="card border">
+            <div class="card-header py-2"><h6 class="mb-0"><i class="bi bi-cloud-download"></i> Manual Sync</h6></div>
+            <div class="card-body">
+                {% if customers_running %}
+                <div class="alert alert-warning py-2 mb-2"><i class="bi bi-exclamation-triangle-fill"></i> Customer sync is <strong>currently running</strong>. Please wait.</div>
+                {% endif %}
+                {% if orders_running %}
+                <div class="alert alert-warning py-2 mb-2"><i class="bi bi-exclamation-triangle-fill"></i> Order sync is <strong>currently running</strong>. Please wait.</div>
+                {% endif %}
+                <div class="d-flex gap-2">
+                    <button id="btnSyncCustomers" class="btn btn-primary btn-sm {% if customers_running %}disabled{% endif %}"
+                            {% if customers_running %}disabled{% endif %}>
+                        <i class="bi bi-people-fill"></i> Sync Customers
+                    </button>
+                    <button id="btnSyncOrders" class="btn btn-info btn-sm {% if orders_running %}disabled{% endif %}"
+                            {% if orders_running %}disabled{% endif %}>
+                        <i class="bi bi-bag-fill"></i> Sync Orders
+                    </button>
+                </div>
+                <div id="syncMsg" class="mt-2 small"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zalo Sync -->
+    <div class="col-md-6">
+        <div class="card border">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-chat-dots-fill text-primary"></i> Zalo Sync</h6>
+                {% if latest_zalo_sync %}
+                <small class="text-muted">Last: {{ latest_zalo_sync.completed_at|date:"Y-m-d H:i"|default:"—" }}
+                    ({{ latest_zalo_sync.updated_count|default:0 }} updated)</small>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if zalo_running %}
+                <div class="alert alert-warning py-2 mb-2"><i class="bi bi-exclamation-triangle-fill"></i> Zalo sync is <strong>currently running</strong>. Please wait.</div>
+                {% endif %}
+                <div class="mb-2">
+                    <label class="form-label form-label-sm mb-1">CNV Cookie <span class="text-danger">*</span></label>
+                    <textarea id="zaloCookie" class="form-control form-control-sm font-monospace"
+                              rows="3" placeholder="Paste full cookie string here…"
+                              {% if zalo_running %}disabled{% endif %}></textarea>
+                    <div class="form-text">Cookie from browser DevTools → Network → any request to app.cnvloyalty.com</div>
+                </div>
+                <button id="btnZaloSync" class="btn btn-primary btn-sm {% if zalo_running %}disabled{% endif %}"
+                        {% if zalo_running %}disabled{% endif %}>
+                    <i class="bi bi-arrow-repeat"></i> Start Zalo Sync
+                </button>
+                <div id="zaloMsg" class="mt-2 small"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Recent Sync History -->
 <div class="card">
     <div class="card-header">
@@ -130,4 +189,56 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+
+async function postJSON(url, data) {
+    const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify(data),
+    });
+    return r.json();
+}
+
+function showMsg(el, msg, isWarning) {
+    el.className = 'mt-2 small ' + (isWarning ? 'text-warning fw-semibold' : 'text-success fw-semibold');
+    el.textContent = msg;
+}
+
+document.getElementById('btnSyncCustomers').addEventListener('click', async function () {
+    this.disabled = true;
+    const msg = document.getElementById('syncMsg');
+    msg.textContent = 'Starting…';
+    const res = await postJSON("{% url 'cnv:trigger_sync' %}", { sync_type: 'customers' });
+    showMsg(msg, res.message, res.status === 'skipped');
+    if (res.status !== 'skipped') setTimeout(() => location.reload(), 2000);
+    else this.disabled = false;
+});
+
+document.getElementById('btnSyncOrders').addEventListener('click', async function () {
+    this.disabled = true;
+    const msg = document.getElementById('syncMsg');
+    msg.textContent = 'Starting…';
+    const res = await postJSON("{% url 'cnv:trigger_sync' %}", { sync_type: 'orders' });
+    showMsg(msg, res.message, res.status === 'skipped');
+    if (res.status !== 'skipped') setTimeout(() => location.reload(), 2000);
+    else this.disabled = false;
+});
+
+document.getElementById('btnZaloSync').addEventListener('click', async function () {
+    const cookie = document.getElementById('zaloCookie').value.trim();
+    if (!cookie) { alert('Please paste the CNV cookie first.'); return; }
+    this.disabled = true;
+    const msg = document.getElementById('zaloMsg');
+    msg.textContent = 'Starting…';
+    const res = await postJSON("{% url 'cnv:trigger_zalo_sync' %}", { cookie });
+    showMsg(msg, res.message, res.status === 'skipped');
+    if (res.status !== 'skipped') setTimeout(() => location.reload(), 2000);
+    else this.disabled = false;
+});
+</script>
 {% endblock %}

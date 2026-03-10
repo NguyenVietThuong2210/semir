@@ -53,6 +53,11 @@ class CNVCustomer(models.Model):
     cnv_created_at = models.DateTimeField(null=True, blank=True)
     cnv_updated_at = models.DateTimeField(null=True, blank=True)
     
+    # Zalo integration fields (populated by Zalo sync)
+    zalo_app_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    zalo_oa_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    zalo_app_created_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
     # Internal tracking
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -154,6 +159,7 @@ class CNVSyncLog(models.Model):
         ('customers', 'Customers'),
         ('orders', 'Orders'),
         ('full', 'Full Sync'),
+        ('zalo_sync', 'Zalo Sync'),
     ]
     
     STATUS_CHOICES = [

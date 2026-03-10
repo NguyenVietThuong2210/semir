@@ -107,6 +107,18 @@
 .diff-positive { color:#16a34a; font-weight:600; }
 .diff-negative { color:#dc2626; font-weight:600; }
 .pts-highlight { color:#d97706; font-weight:700; }
+
+/* Zalo table — 10 cols */
+.zalo-table th:nth-child(1), .zalo-table td:nth-child(1) { width:9%; }
+.zalo-table th:nth-child(2), .zalo-table td:nth-child(2) { width:10%; }
+.zalo-table th:nth-child(3), .zalo-table td:nth-child(3) { width:13%; }
+.zalo-table th:nth-child(4), .zalo-table td:nth-child(4) { width:9%; }
+.zalo-table th:nth-child(5), .zalo-table td:nth-child(5) { width:13%; }
+.zalo-table th:nth-child(6), .zalo-table td:nth-child(6) { width:10%; }
+.zalo-table th:nth-child(7), .zalo-table td:nth-child(7) { width:7%; }
+.zalo-table th:nth-child(8), .zalo-table td:nth-child(8) { width:9%; }
+.zalo-table th:nth-child(9), .zalo-table td:nth-child(9) { width:9%; }
+.zalo-table th:nth-child(10), .zalo-table td:nth-child(10){ width:9%; }
 </style>
 {% endblock %}
 
@@ -158,7 +170,7 @@
 
 <!-- ALL-TIME METRICS -->
 <p class="text-muted small mb-1 fw-semibold text-uppercase"><i class="bi bi-infinity"></i> All-Time Overview</p>
-<div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-2">
     <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
         <div class="stat-label opacity-75">Total Customers (POS System)</div>
         <div class="stat-value">{{ total_pos|default:0 }}</div>
@@ -178,6 +190,29 @@
         <div class="stat-label opacity-75">CNV Only (Not in POS)</div>
         <div class="stat-value">{{ cnv_only_all_count|default:0 }}</div>
         <small class="opacity-75">By phone number</small>
+    </div></div></div>
+</div>
+<!-- Zalo All-Time -->
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+    <div class="col"><div class="stat-card card text-white border-0" style="background:#0068FF"><div class="card-body">
+        <div class="stat-label opacity-75">Active Zalo Mini App</div>
+        <div class="stat-value">{{ zalo_app_all_count|default:0 }}</div>
+        <small class="opacity-75">{{ zalo_app_all_pct|default:0 }}% of CNV customers</small>
+    </div></div></div>
+    <div class="col"><div class="stat-card card text-white border-0" style="background:#0047B3"><div class="card-body">
+        <div class="stat-label opacity-75">% Active Zalo / CNV</div>
+        <div class="stat-value">{{ zalo_app_all_pct|default:0 }}%</div>
+        <small class="opacity-75">zalo_app_id not null</small>
+    </div></div></div>
+    <div class="col"><div class="stat-card card text-white border-0" style="background:#00AAFF"><div class="card-body">
+        <div class="stat-label opacity-75">Follow Zalo OA</div>
+        <div class="stat-value">{{ zalo_oa_all_count|default:0 }}</div>
+        <small class="opacity-75">{{ zalo_oa_all_pct|default:0 }}% of CNV customers</small>
+    </div></div></div>
+    <div class="col"><div class="stat-card card text-white border-0" style="background:#0080CC"><div class="card-body">
+        <div class="stat-label opacity-75">% Follow OA / CNV</div>
+        <div class="stat-value">{{ zalo_oa_all_pct|default:0 }}%</div>
+        <small class="opacity-75">zalo_oa_id not null</small>
     </div></div></div>
 </div>
 
@@ -203,6 +238,29 @@
         <div class="stat-label opacity-75">New CNV Only (Period)</div>
         <div class="stat-value">{{ cnv_only_period_count|default:0 }}</div>
         <small class="opacity-75">Not in POS</small>
+    </div></div></div>
+</div>
+<!-- Zalo Period Cards -->
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+    <div class="col"><div class="stat-card card text-white border-0" style="background:#0068FF"><div class="card-body">
+        <div class="stat-label opacity-75">Active Zalo Mini App (Period)</div>
+        <div class="stat-value">{{ zalo_app_period_count|default:0 }}</div>
+        <small class="opacity-75">by zalo_app_created_at</small>
+    </div></div></div>
+    <div class="col"><div class="stat-card card text-white border-0" style="background:#0047B3"><div class="card-body">
+        <div class="stat-label opacity-75">% Zalo App / CNV</div>
+        <div class="stat-value">{{ zalo_app_period_pct|default:0 }}%</div>
+        <small class="opacity-75">of total CNV</small>
+    </div></div></div>
+    <div class="col"><div class="stat-card card text-white border-0" style="background:#00AAFF"><div class="card-body">
+        <div class="stat-label opacity-75">Follow Zalo OA (Period)</div>
+        <div class="stat-value">{{ zalo_oa_period_count|default:0 }}</div>
+        <small class="opacity-75">by zalo_app_created_at</small>
+    </div></div></div>
+    <div class="col"><div class="stat-card card text-white border-0" style="background:#0080CC"><div class="card-body">
+        <div class="stat-label opacity-75">% Follow OA / CNV</div>
+        <div class="stat-value">{{ zalo_oa_period_pct|default:0 }}%</div>
+        <small class="opacity-75">of total CNV</small>
     </div></div></div>
 </div>
 {% endif %}
@@ -381,6 +439,72 @@
             </table>
         </div>
         {% if cnv_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_all_count }} records</small></div>{% endif %}
+    </div>
+</div>
+</div>
+
+<div class="col-12">
+<div class="table-wrapper" style="border:2px solid #0068FF;">
+    <div class="table-header" style="background:#eff6ff; border-bottom-color:#0068FF;">
+        <h6><i class="bi bi-8-circle" style="color:#0068FF;"></i> 100 Latest Active Zalo Mini App ({{ zalo_mini_app_list|length }})</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t8"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="t8">
+        <div class="table-scroll">
+            <table class="table table-sm table-hover mb-0 zalo-table">
+                <thead class="table-dark"><tr>
+                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Mini App</th><th>Follow OA</th><th>In POS</th>
+                </tr></thead>
+                <tbody>
+                {% for c in zalo_mini_app_list %}
+                <tr>
+                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
+                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
+                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
+                    <td>{{ c.email|default:"-" }}</td>
+                    <td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
+                    <td>{{ c.points|default:0 }}</td>
+                    <td>{% if c.zalo_app_id %}<span class="badge" style="background:#0068FF;">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                    <td>{% if c.zalo_oa_id %}<span class="badge" style="background:#00AAFF;">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                    <td>{% if c.in_pos %}<span class="badge bg-success">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                </tr>
+                {% empty %}<tr><td colspan="10" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</div>
+
+<div class="col-12">
+<div class="table-wrapper" style="border:2px solid #00AAFF;">
+    <div class="table-header" style="background:#f0f9ff; border-bottom-color:#00AAFF;">
+        <h6><i class="bi bi-9-circle" style="color:#00AAFF;"></i> 100 Latest Follow Zalo OA ({{ zalo_oa_list|length }})</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t9"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="t9">
+        <div class="table-scroll">
+            <table class="table table-sm table-hover mb-0 zalo-table">
+                <thead class="table-dark"><tr>
+                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Mini App</th><th>Follow OA</th><th>In POS</th>
+                </tr></thead>
+                <tbody>
+                {% for c in zalo_oa_list %}
+                <tr>
+                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
+                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
+                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
+                    <td>{{ c.email|default:"-" }}</td>
+                    <td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
+                    <td>{{ c.points|default:0 }}</td>
+                    <td>{% if c.zalo_app_id %}<span class="badge" style="background:#0068FF;">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                    <td>{% if c.zalo_oa_id %}<span class="badge" style="background:#00AAFF;">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                    <td>{% if c.in_pos %}<span class="badge bg-success">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                </tr>
+                {% empty %}<tr><td colspan="10" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 </div>
