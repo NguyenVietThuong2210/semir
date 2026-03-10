@@ -80,7 +80,9 @@ def get_customer_info(vip_id, customer_obj=None):
             # Import here to avoid circular dependency
             from App.models import Customer
             try:
-                cust = Customer.objects.get(vip_id=vip_id)
+                cust = Customer.objects.only(
+                    'id', 'vip_id', 'vip_grade', 'registration_date', 'name'
+                ).get(vip_id=vip_id)
                 _customer_cache[vip_id] = cust
             except Customer.DoesNotExist:
                 _customer_cache[vip_id] = None

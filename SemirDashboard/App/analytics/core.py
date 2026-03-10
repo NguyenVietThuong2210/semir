@@ -13,7 +13,7 @@ import logging
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Count, Min, Max, Q
+from django.db.models import Count, Case, When, IntegerField, Q
 
 from App.models import Customer, SalesTransaction
 
@@ -65,44 +65,61 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     """
     clear_customer_cache()
     logger.info("START date_from=%s date_to=%s shop_group=%s", date_from, date_to, shop_group)
-    
-    # Database counts
-    total_customers_in_db = Customer.objects.count()
-    member_active_all_time = Customer.objects.filter(points__gt=0).count()
-    member_inactive_all_time = Customer.objects.filter(points=0).count()
-    
-    # Fetch sales data (filtered by period and shop group)
-    qs = SalesTransaction.objects.select_related('customer').order_by('sales_date')
+
+    # OPT-1: Single query for all Customer aggregate stats (was 3 separate COUNT queries)
+    cust_stats = Customer.objects.aggregate(
+        total=Count('id'),
+        active=Count(Case(When(points__gt=0, then=1), output_field=IntegerField())),
+        inactive=Count(Case(When(points=0, then=1), output_field=IntegerField())),
+    )
+    total_customers_in_db   = cust_stats['total']
+    member_active_all_time   = cust_stats['active']
+    member_inactive_all_time = cust_stats['inactive']
+
+    # OPT-2: Only select needed fields; clear default model ordering (avoids DB-level sort)
+    # OPT-3: select_related with only() to avoid loading unused Customer columns
+    SALES_FIELDS = ('vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name', 'customer')
+    CUST_FIELDS  = ('customer__id', 'customer__vip_id', 'customer__vip_grade',
+                    'customer__registration_date', 'customer__name')
+    qs = (
+        SalesTransaction.objects
+        .select_related('customer')
+        .only(*SALES_FIELDS, *CUST_FIELDS)
+        .order_by()           # clears the model Meta ordering (no wasted DB sort)
+    )
     if date_from:
         qs = qs.filter(sales_date__gte=date_from)
     if date_to:
         qs = qs.filter(sales_date__lte=date_to)
-    
-    # NEW: Apply shop group filter
+
     if shop_group:
         if shop_group == 'Bala Group':
-            # Filter shops containing "Bala" or "巴拉"
             qs = qs.filter(Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉'))
         elif shop_group == 'Semir Group':
-            # Filter shops containing "Semir" or "森马"
             qs = qs.filter(Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马'))
         elif shop_group == 'Others Group':
-            # Exclude Bala and Semir shops
             qs = qs.exclude(
                 Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉') |
                 Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马')
             )
-    
-    if not qs.exists():
-        return None
-    
+
+    # OPT-4: Single fetch — no separate exists() call, no second aggregate(Min/Max)
     sales_list = list(qs)
-    
-    # Also get ALL sales (unfiltered) for buyer without info all-time stats
-    all_sales_unfiltered = list(SalesTransaction.objects.all())
-    
-    date_stats = qs.aggregate(start_date=Min('sales_date'), end_date=Max('sales_date'))
-    logger.info("Transactions: %d", len(sales_list))
+    if not sales_list:
+        return None
+    date_stats = {
+        'start_date': min(s.sales_date for s in sales_list),
+        'end_date':   max(s.sales_date for s in sales_list),
+    }
+
+    # OPT-5: Only load VIP0 rows with needed fields for all-time stats (was full table scan)
+    all_sales_unfiltered = list(
+        SalesTransaction.objects
+        .filter(Q(vip_id='') | Q(vip_id='0') | Q(vip_id__isnull=True))
+        .only('vip_id', 'sales_amount')
+    )
+
+    logger.info("Transactions: %d  VIP0-alltime: %d", len(sales_list), len(all_sales_unfiltered))
     
     # Build customer purchase map
     customer_purchases = build_customer_purchase_map(sales_list)
