@@ -1277,4 +1277,52 @@ def export_customer_comparison_to_excel(
     for col, w in zip('ABCDEFGHIJ', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8]):
         ws_zalo_oa.column_dimensions[col].width = w
 
+    # ========================================================================
+    # ALL CNV CUSTOMERS SHEET (filtered by period if dates provided)
+    # ========================================================================
+    cnv_all_fill = PatternFill(start_color="1D3557", end_color="1D3557", fill_type="solid")
+    cnv_all_headers = [
+        'Customer ID', 'Phone', 'Full Name', 'Level', 'Email',
+        'Reg Date', 'Points', 'Used Points', 'Total Points',
+        'Zalo App ID', 'Zalo OA ID', 'Zalo Created At'
+    ]
+
+    sheet_title = f"CNV {date_from} to {date_to}" if (date_from and date_to) else "All CNV Customers"
+    if len(sheet_title) > 31:
+        sheet_title = sheet_title[:31]
+
+    ws_cnv_all_full = wb.create_sheet(sheet_title)
+    for col_idx, header in enumerate(cnv_all_headers, 1):
+        cell = ws_cnv_all_full.cell(1, col_idx, header)
+        cell.fill = cnv_all_fill
+        cell.font = header_font
+        cell.alignment = header_align
+
+    cnv_all_qs = cnv_base.order_by('cnv_created_at')
+    if date_from and date_to:
+        cnv_all_qs = cnv_all_qs.filter(cnv_created_at__gte=date_from, cnv_created_at__lte=date_to)
+
+    row = 2
+    for cust in cnv_all_qs:
+        full_name = getattr(cust, 'full_name', None) or (
+            f"{cust.last_name or ''} {cust.first_name or ''}".strip()
+        )
+        ws_cnv_all_full.cell(row, 1, cust.cnv_id)
+        ws_cnv_all_full.cell(row, 2, cust.phone or '-')
+        ws_cnv_all_full.cell(row, 3, full_name or '-')
+        ws_cnv_all_full.cell(row, 4, cust.level_name or '-')
+        ws_cnv_all_full.cell(row, 5, cust.email or '-')
+        ws_cnv_all_full.cell(row, 6, str(cust.cnv_created_at.date()) if cust.cnv_created_at else '-')
+        ws_cnv_all_full.cell(row, 7, float(cust.points or 0))
+        ws_cnv_all_full.cell(row, 8, float(cust.used_points or 0))
+        ws_cnv_all_full.cell(row, 9, float(cust.total_points or 0))
+        ws_cnv_all_full.cell(row, 10, cust.zalo_app_id or '')
+        ws_cnv_all_full.cell(row, 11, cust.zalo_oa_id or '')
+        zalo_dt = cust.zalo_app_created_at
+        ws_cnv_all_full.cell(row, 12, str(zalo_dt.date()) if zalo_dt else '')
+        row += 1
+
+    for col, w in zip('ABCDEFGHIJKL', [15, 15, 25, 12, 30, 12, 10, 12, 12, 15, 15, 16]):
+        ws_cnv_all_full.column_dimensions[col].width = w
+
     return wb

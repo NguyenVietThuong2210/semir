@@ -265,7 +265,30 @@
 </div>
 {% endif %}
 
-<div class="row g-3 mt-3">
+<!-- Tab navigation -->
+<ul class="nav nav-tabs mt-3 mb-0" id="caTabNav" role="tablist" style="border-bottom:2px solid #dee2e6;">
+    <li class="nav-item">
+        <button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button">
+            <i class="bi bi-coin text-warning"></i> Points Analysis
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button">
+            <i class="bi bi-chat-dots-fill" style="color:#0068FF;"></i> Zalo
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button">
+            <i class="bi bi-people text-primary"></i> POS vs CNV
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="caTabContent">
+
+<!-- ══ TAB 1: Points Analysis (t1, t2, t3) ══════════════════════════════ -->
+<div class="tab-pane fade show active pt-3" id="tabPoints" role="tabpanel">
+<div class="row g-3">
 
 <div class="col-12">
 <div class="table-wrapper">
@@ -385,63 +408,12 @@
 </div>
 </div>
 
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-4-circle text-primary"></i> POS Customers NOT in CNV — All Time ({{ pos_only_all_count }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t4"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="t4">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 pos-table">
-                <thead class="table-dark"><tr>
-                    <th>VIP ID</th><th>Phone</th><th>Name</th><th>VIP Grade</th><th>Email</th><th>Reg Date</th><th>Points</th>
-                </tr></thead>
-                <tbody>
-                {% for c in pos_only_all %}
-                <tr>
-                    <td>{{ c.vip_id }}</td><td>{{ c.phone }}</td><td>{{ c.name|default:"-" }}</td>
-                    <td>{% with g=c.vip_grade|lower %}<span class="badge {% if g == 'diamond' %}badge-level-diamond{% elif g == 'vip3' %}badge-level-vip3{% elif g == 'vip2' %}badge-level-vip2{% elif g == 'vip1' %}badge-level-vip1{% elif g == 'vip0' %}badge-level-vip0{% elif g == 'gold' %}badge-level-gold{% elif g == 'silver' %}badge-level-silver{% elif g == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.vip_grade|default:"No Grade" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td><td>{{ c.registration_date|date:"Y-m-d"|default:"-" }}</td><td>{{ c.points|default:0 }}</td>
-                </tr>
-                {% empty %}<tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if pos_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ pos_only_all_count }} records</small></div>{% endif %}
-    </div>
-</div>
-</div>
+</div><!-- end row tab1 -->
+</div><!-- end tabPoints -->
 
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-5-circle text-info"></i> CNV Customers NOT in POS — All Time ({{ cnv_only_all_count }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t5"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="t5">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 cnv-table">
-                <thead class="table-dark"><tr>
-                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
-                </tr></thead>
-                <tbody>
-                {% for c in cnv_only_all %}
-                <tr>
-                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
-                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
-                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td><td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
-                    <td>{{ c.points|default:0 }}</td><td>{{ c.used_points|default:0 }}</td><td>{{ c.total_points|default:0 }}</td>
-                </tr>
-                {% empty %}<tr><td colspan="9" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if cnv_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_all_count }} records</small></div>{% endif %}
-    </div>
-</div>
-</div>
+<!-- ══ TAB 2: Zalo (t8, t9) ═════════════════════════════════════════════ -->
+<div class="tab-pane fade pt-3" id="tabZalo" role="tabpanel">
+<div class="row g-3">
 
 <div class="col-12">
 <div class="table-wrapper" style="border:2px solid #0068FF;">
@@ -509,6 +481,71 @@
 </div>
 </div>
 
+</div><!-- end row tabZalo -->
+</div><!-- end tabZalo -->
+
+<!-- ══ TAB 3: POS vs CNV (t4, t5, t6, t7) ═══════════════════════════════ -->
+<div class="tab-pane fade pt-3" id="tabPOSCNV" role="tabpanel">
+<div class="row g-3">
+
+<div class="col-12">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-4-circle text-primary"></i> POS Customers NOT in CNV — All Time ({{ pos_only_all_count }})</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t4"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="t4">
+        <div class="table-scroll">
+            <table class="table table-sm table-hover mb-0 pos-table">
+                <thead class="table-dark"><tr>
+                    <th>VIP ID</th><th>Phone</th><th>Name</th><th>VIP Grade</th><th>Email</th><th>Reg Date</th><th>Points</th>
+                </tr></thead>
+                <tbody>
+                {% for c in pos_only_all %}
+                <tr>
+                    <td>{{ c.vip_id }}</td><td>{{ c.phone }}</td><td>{{ c.name|default:"-" }}</td>
+                    <td>{% with g=c.vip_grade|lower %}<span class="badge {% if g == 'diamond' %}badge-level-diamond{% elif g == 'vip3' %}badge-level-vip3{% elif g == 'vip2' %}badge-level-vip2{% elif g == 'vip1' %}badge-level-vip1{% elif g == 'vip0' %}badge-level-vip0{% elif g == 'gold' %}badge-level-gold{% elif g == 'silver' %}badge-level-silver{% elif g == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.vip_grade|default:"No Grade" }}</span>{% endwith %}</td>
+                    <td>{{ c.email|default:"-" }}</td><td>{{ c.registration_date|date:"Y-m-d"|default:"-" }}</td><td>{{ c.points|default:0 }}</td>
+                </tr>
+                {% empty %}<tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if pos_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ pos_only_all_count }} records</small></div>{% endif %}
+    </div>
+</div>
+</div>
+
+<div class="col-12">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-5-circle text-info"></i> CNV Customers NOT in POS — All Time ({{ cnv_only_all_count }})</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t5"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="t5">
+        <div class="table-scroll">
+            <table class="table table-sm table-hover mb-0 cnv-table">
+                <thead class="table-dark"><tr>
+                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
+                </tr></thead>
+                <tbody>
+                {% for c in cnv_only_all %}
+                <tr>
+                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
+                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
+                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
+                    <td>{{ c.email|default:"-" }}</td><td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
+                    <td>{{ c.points|default:0 }}</td><td>{{ c.used_points|default:0 }}</td><td>{{ c.total_points|default:0 }}</td>
+                </tr>
+                {% empty %}<tr><td colspan="9" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if cnv_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_all_count }} records</small></div>{% endif %}
+    </div>
+</div>
+</div>
+
 {% if has_filter %}
 
 <div class="col-12">
@@ -570,7 +607,11 @@
 </div>
 
 {% endif %}
-</div><!-- end .row -->
+
+</div><!-- end row tabPOSCNV -->
+</div><!-- end tabPOSCNV -->
+
+</div><!-- end tab-content -->
 {% endblock %}
 
 {% block extra_js %}
