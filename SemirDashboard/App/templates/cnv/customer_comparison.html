@@ -108,6 +108,11 @@
 .diff-negative { color:#dc2626; font-weight:600; }
 .pts-highlight { color:#d97706; font-weight:700; }
 
+.dark-tabs .nav-link { background:#2c3e50; color:#bdc3c7; border-radius:4px 4px 0 0; margin-right:2px; }
+.dark-tabs .nav-link:hover  { background:#34495e; color:#ecf0f1; }
+.dark-tabs .nav-link.active { background:#366092; color:#fff; border-color:#366092; }
+.dark-tabs { border-bottom:none; }
+
 /* Zalo table — 10 cols */
 .zalo-table th:nth-child(1), .zalo-table td:nth-child(1) { width:9%; }
 .zalo-table th:nth-child(2), .zalo-table td:nth-child(2) { width:10%; }
@@ -266,23 +271,25 @@
 {% endif %}
 
 <!-- Tab navigation -->
-<ul class="nav nav-tabs mt-3 mb-0" id="caTabNav" role="tablist" style="border-bottom:2px solid #dee2e6;">
-    <li class="nav-item">
-        <button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button">
-            <i class="bi bi-coin text-warning"></i> Points Analysis
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button">
-            <i class="bi bi-chat-dots-fill" style="color:#0068FF;"></i> Zalo
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button">
-            <i class="bi bi-people text-primary"></i> POS vs CNV
-        </button>
-    </li>
-</ul>
+<div class="mt-3" style="background:#1a252f; border-radius:6px 6px 0 0;">
+    <ul class="nav dark-tabs px-3 pt-2 flex-wrap" id="caTabNav" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button">
+                <i class="bi bi-coin"></i> Points Analysis
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button">
+                <i class="bi bi-chat-dots-fill"></i> Zalo
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button">
+                <i class="bi bi-people"></i> POS vs CNV
+            </button>
+        </li>
+    </ul>
+</div>
 
 <div class="tab-content" id="caTabContent">
 
