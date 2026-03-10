@@ -208,6 +208,7 @@ def analytics_dashboard(request):
         'overview':           data['overview'],
         'grade_stats':        data['by_grade'],
         'session_stats':      data['by_session'],
+        'month_stats':        data['by_month'],
         'shop_stats':         data['by_shop'],
         'by_shop':            data['by_shop'],  # For comparison tabs
         'customer_details':   data['customer_details'][:100],

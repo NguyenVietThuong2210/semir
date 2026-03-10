@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from .calculations import calculate_return_visits, create_empty_bucket
 from .customer_utils import GRADE_ORDER, get_all_time_grade_counts
-from .season_utils import session_sort_key
+from .season_utils import session_sort_key, month_sort_key
 
 logger = logging.getLogger('customer_analytics')
 
@@ -183,7 +183,82 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
     return session_stats
 
 
-def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys, new_members=None):
+def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=None):
+    """
+    Aggregate customer data by calendar month (YYYY-MM).
+    Same logic as aggregate_by_season but uses the 'month' field.
+    """
+    month_buckets = defaultdict(create_empty_bucket)
+    month_vip0_invoices = defaultdict(int)
+    month_vip0_amount = defaultdict(lambda: Decimal(0))
+    month_returning_invoices = defaultdict(int)
+    month_returning_amount = defaultdict(lambda: Decimal(0))
+    month_new = defaultdict(int)
+
+    for vip_id, purchases in customer_purchases.items():
+        if vip_id == '0':
+            by_month = defaultdict(list)
+            for p in purchases:
+                by_month[p['month']].append(p)
+            for mk, mp in by_month.items():
+                month_vip0_invoices[mk] += len(mp)
+                month_vip0_amount[mk] += sum(p['amount'] for p in mp)
+            continue
+
+        grade, reg_date, name = get_customer_info_fn(vip_id, purchases[0]['customer'])
+        all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+
+        by_month = defaultdict(list)
+        for p in purchases:
+            by_month[p['month']].append(p)
+
+        for mk, mp in by_month.items():
+            mp_sorted = sorted(mp, key=lambda x: x['date'])
+            month_first_date = mp_sorted[0]['date']
+
+            month_buckets[mk]['active'] += 1
+            month_buckets[mk]['invoices'] += len(mp)
+            month_buckets[mk]['amount'] += sum(p['amount'] for p in mp)
+
+            _, is_ret_in_month = calculate_return_visits(mp_sorted, reg_date)
+            has_prior_purchases = any(p['date'] < month_first_date for p in all_purchases_sorted)
+
+            if is_ret_in_month or has_prior_purchases:
+                month_buckets[mk]['returning'] += 1
+                month_returning_invoices[mk] += len(mp)
+                month_returning_amount[mk] += sum(p['amount'] for p in mp)
+
+            if new_members and vip_id in new_members:
+                month_new[mk] += 1
+
+    month_stats = []
+    for key in sorted(month_buckets, key=month_sort_key):
+        s = month_buckets[key]
+        ac = s['active']
+        rc = s['returning']
+        vip0_inv = month_vip0_invoices.get(key, 0)
+        vip0_amt = month_vip0_amount.get(key, Decimal(0))
+        new_c = month_new.get(key, 0)
+        month_stats.append({
+            'month': key,
+            'total_customers': ac,
+            'new_customers': new_c,
+            'new_rate': round(new_c / ac * 100, 2) if ac else 0,
+            'returning_customers': rc,
+            'return_rate': round(rc / ac * 100 if ac else 0, 2),
+            'returning_invoices': month_returning_invoices.get(key, 0),
+            'returning_amount': float(month_returning_amount.get(key, Decimal(0))),
+            'total_invoices': s['invoices'],
+            'total_amount': float(s['amount']),
+            'total_invoices_with_vip0': s['invoices'] + vip0_inv,
+            'total_amount_with_vip0': float(s['amount'] + vip0_amt),
+        })
+
+    logger.info("month_stats: %d rows", len(month_stats))
+    return month_stats
+
+
+def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys, new_members=None, all_month_keys=None):
     """
     Aggregate customer data by shop with sub-breakdowns.
 
@@ -194,9 +269,10 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
         get_customer_info_fn: Function to get customer info
         all_session_keys: List of all season keys (for consistent shop sub-breakdowns)
         new_members: Set of vip_ids whose registration_date falls in the analysis period
+        all_month_keys: List of all month keys (for consistent shop by-month breakdowns)
 
     Returns:
-        List of shop stats dicts with by_grade and by_session breakdowns
+        List of shop stats dicts with by_grade, by_session, and by_month breakdowns
     """
     shop_customers = defaultdict(set)
     shop_invoices = defaultdict(int)
@@ -222,6 +298,12 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
     shop_vip0_invoices = defaultdict(int)
     shop_vip0_amount = defaultdict(lambda: Decimal(0))
     shop_sess_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
+
+    # Month tracking per shop
+    shop_month = defaultdict(lambda: defaultdict(create_empty_bucket))
+    shop_month_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
+    shop_month_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
+    shop_month_new = defaultdict(lambda: defaultdict(int))
     
     for vip_id, purchases in customer_purchases.items():
         # Track VIP 0
@@ -241,6 +323,13 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 for sk, sp in by_sess.items():
                     shop_sess_vip0[sh][sk]['invoices'] += len(sp)
                     shop_sess_vip0[sh][sk]['amount'] += sum(p['amount'] for p in sp)
+                # By month within shop (VIP 0)
+                by_mo = defaultdict(list)
+                for p in sh_p:
+                    by_mo[p['month']].append(p)
+                for mk, mp in by_mo.items():
+                    shop_month_vip0[sh][mk]['invoices'] += len(mp)
+                    shop_month_vip0[sh][mk]['amount'] += sum(p['amount'] for p in mp)
             continue
         
         # Get customer info
@@ -315,6 +404,29 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 # Track new members per shop-session
                 if new_members and vip_id in new_members:
                     shop_sess_new[sh][sk] += 1
+
+            # Shop → By Month
+            by_month_shop = defaultdict(list)
+            for p in sh_p:
+                by_month_shop[p['month']].append(p)
+
+            for mk, mp in by_month_shop.items():
+                mp_sorted = sorted(mp, key=lambda x: x['date'])
+                month_first_date = mp_sorted[0]['date']
+
+                shop_month[sh][mk]['active'] += 1
+                shop_month[sh][mk]['invoices'] += len(mp)
+                shop_month[sh][mk]['amount'] += sum(p['amount'] for p in mp)
+
+                _, is_ret_in_month = calculate_return_visits(mp_sorted, reg_date)
+                has_prior_month = any(p['date'] < month_first_date for p in sorted(sh_p, key=lambda x: x['date']))
+                if is_ret_in_month or has_prior_month:
+                    shop_month[sh][mk]['returning'] += 1
+                    shop_month_returning[sh][mk]['invoices'] += len(mp)
+                    shop_month_returning[sh][mk]['amount'] += sum(p['amount'] for p in mp)
+
+                if new_members and vip_id in new_members:
+                    shop_month_new[sh][mk] += 1
     
     # Build shop stats list
     shop_stats = []
@@ -370,6 +482,32 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_amount_with_vip0': float(sd['amount'] + vip0_sess['amount']),
             })
         
+        # By month list
+        by_month_list = []
+        for key in (all_month_keys or sorted(shop_month[sh].keys(), key=month_sort_key)):
+            md = shop_month[sh].get(key)
+            if md is None:
+                md = create_empty_bucket()
+            vip0_mo = shop_month_vip0[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
+            ret_mo = shop_month_returning[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
+            a = md['active']
+            r = md['returning']
+            mo_new_c = shop_month_new[sh].get(key, 0)
+            by_month_list.append({
+                'month': key,
+                'total_customers': a,
+                'new_customers': mo_new_c,
+                'new_rate': round(mo_new_c / a * 100, 2) if a else 0,
+                'returning_customers': r,
+                'return_rate': round(r / a * 100 if a else 0, 2),
+                'returning_invoices': ret_mo['invoices'],
+                'returning_amount': float(ret_mo['amount']),
+                'total_invoices': md['invoices'],
+                'total_amount': float(md['amount']),
+                'total_invoices_with_vip0': md['invoices'] + vip0_mo['invoices'],
+                'total_amount_with_vip0': float(md['amount'] + vip0_mo['amount']),
+            })
+
         shop_new_c = shop_new.get(sh, 0)
         shop_stats.append({
             'shop_name': sh,
@@ -378,14 +516,15 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             'new_rate': round(shop_new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
-            'returning_invoices': shop_returning_invoices.get(sh, 0),  # NEW
-            'returning_amount': float(shop_returning_amount.get(sh, Decimal(0))),  # NEW
+            'returning_invoices': shop_returning_invoices.get(sh, 0),
+            'returning_amount': float(shop_returning_amount.get(sh, Decimal(0))),
             'total_invoices': shop_invoices[sh],
             'total_amount': float(shop_amount[sh]),
             'total_invoices_with_vip0': shop_invoices[sh] + shop_vip0_invoices.get(sh, 0),
             'total_amount_with_vip0': float(shop_amount[sh] + shop_vip0_amount.get(sh, Decimal(0))),
             'by_grade': by_grade_list,
             'by_session': by_session_list,
+            'by_month': by_month_list,
         })
     
     # Sort by customer count

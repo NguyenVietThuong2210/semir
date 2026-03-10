@@ -84,6 +84,22 @@ def session_sort_key(label):
     return (first_year, season_order)
 
 
+def get_month_key(d):
+    """Convert a date to a month label like '2025-01'."""
+    if not d:
+        return 'Unknown'
+    return d.strftime('%Y-%m')
+
+
+def month_sort_key(label):
+    """Sort key for month labels 'YYYY-MM'."""
+    try:
+        parts = label.split('-')
+        return (int(parts[0]), int(parts[1]))
+    except (ValueError, AttributeError, IndexError):
+        return (9999, 99)
+
+
 def get_session_for_range(date_from, date_to):
     """
     Determine if a date range corresponds to a single season.

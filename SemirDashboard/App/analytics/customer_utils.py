@@ -129,10 +129,10 @@ def build_customer_purchase_map(sales_list):
         - customer: Customer object (or None)
         - session: Season label
     """
-    from .season_utils import get_session_key
-    
+    from .season_utils import get_session_key, get_month_key
+
     customer_purchases = defaultdict(list)
-    
+
     for s in sales_list:
         vid = (s.vip_id or '').strip()
         key = '0' if vid in ('', '0', 'None') else vid
@@ -143,6 +143,7 @@ def build_customer_purchase_map(sales_list):
             'shop':     s.shop_name or 'Unknown Shop',
             'customer': s.customer if key != '0' else None,
             'session':  get_session_key(s.sales_date),
+            'month':    get_month_key(s.sales_date),
         })
     
     return customer_purchases
