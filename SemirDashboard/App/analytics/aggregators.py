@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from .calculations import calculate_return_visits, create_empty_bucket
 from .customer_utils import GRADE_ORDER, get_all_time_grade_counts
-from .season_utils import session_sort_key, month_sort_key
+from .season_utils import session_sort_key, month_sort_key, year_sort_key
 
 logger = logging.getLogger('customer_analytics')
 
@@ -253,7 +253,85 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
     return month_stats
 
 
-def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys, new_members=None, all_month_keys=None):
+def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None):
+    """
+    Aggregate customer data by calendar year (YYYY).
+    Same logic as aggregate_by_month but uses the 'year' field.
+    Proper deduplication — no double-counting of returning/active customers.
+    """
+    year_buckets = defaultdict(create_empty_bucket)
+    year_vip0_invoices = defaultdict(int)
+    year_vip0_amount = defaultdict(lambda: Decimal(0))
+    year_returning_invoices = defaultdict(int)
+    year_returning_amount = defaultdict(lambda: Decimal(0))
+    year_new = defaultdict(int)
+
+    for vip_id, purchases in customer_purchases.items():
+        if vip_id == '0':
+            by_year = defaultdict(list)
+            for p in purchases:
+                by_year[p['year']].append(p)
+            for yk, yp in by_year.items():
+                year_vip0_invoices[yk] += len(yp)
+                year_vip0_amount[yk] += sum(p['amount'] for p in yp)
+            continue
+
+        all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        _, reg_date, _ = get_customer_info_fn(vip_id, all_purchases_sorted[0]['customer'])
+
+        by_year = defaultdict(list)
+        for p in purchases:
+            by_year[p['year']].append(p)
+
+        for yk, yp in by_year.items():
+            yp_sorted = sorted(yp, key=lambda x: x['date'])
+            year_first_date = yp_sorted[0]['date']
+
+            yp_amount = sum(p['amount'] for p in yp)
+            year_buckets[yk]['active'] += 1
+            year_buckets[yk]['invoices'] += len(yp)
+            year_buckets[yk]['amount'] += yp_amount
+
+            _, is_ret_in_year = calculate_return_visits(yp_sorted, reg_date)
+            has_prior_purchases = any(p['date'] < year_first_date for p in all_purchases_sorted)
+
+            if is_ret_in_year or has_prior_purchases:
+                year_buckets[yk]['returning'] += 1
+                year_returning_invoices[yk] += len(yp)
+                year_returning_amount[yk] += yp_amount
+
+            if new_members and vip_id in new_members:
+                year_new[yk] += 1
+
+    all_year_keys_union = set(year_buckets.keys()) | set(year_vip0_invoices.keys())
+    year_stats = []
+    for key in sorted(all_year_keys_union, key=year_sort_key):
+        s = year_buckets[key]
+        ac = s['active']
+        rc = s['returning']
+        vip0_inv = year_vip0_invoices.get(key, 0)
+        vip0_amt = year_vip0_amount.get(key, Decimal(0))
+        new_c = year_new.get(key, 0)
+        year_stats.append({
+            'year': key,
+            'total_customers': ac,
+            'new_customers': new_c,
+            'new_rate': round(new_c / ac * 100, 2) if ac else 0,
+            'returning_customers': rc,
+            'return_rate': round(rc / ac * 100 if ac else 0, 2),
+            'returning_invoices': year_returning_invoices.get(key, 0),
+            'returning_amount': float(year_returning_amount.get(key, Decimal(0))),
+            'total_invoices': s['invoices'],
+            'total_amount': float(s['amount']),
+            'total_invoices_with_vip0': s['invoices'] + vip0_inv,
+            'total_amount_with_vip0': float(s['amount'] + vip0_amt),
+        })
+
+    logger.info("year_stats: %d rows", len(year_stats))
+    return year_stats
+
+
+def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys, new_members=None, all_month_keys=None, all_year_keys=None):
     """
     Aggregate customer data by shop with sub-breakdowns.
 
@@ -299,6 +377,12 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
     shop_month_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
     shop_month_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
     shop_month_new = defaultdict(lambda: defaultdict(int))
+
+    # Year tracking per shop
+    shop_year = defaultdict(lambda: defaultdict(create_empty_bucket))
+    shop_year_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
+    shop_year_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
+    shop_year_new = defaultdict(lambda: defaultdict(int))
     
     for vip_id, purchases in customer_purchases.items():
         # Track VIP 0
@@ -317,6 +401,8 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                     shop_sess_vip0[sh][p['session']]['amount'] += amt
                     shop_month_vip0[sh][p['month']]['invoices'] += 1
                     shop_month_vip0[sh][p['month']]['amount'] += amt
+                    shop_year_vip0[sh][p['year']]['invoices'] += 1
+                    shop_year_vip0[sh][p['year']]['amount'] += amt
             continue
         
         # Get customer info from the EARLIEST purchase (order-independent)
@@ -358,12 +444,14 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             shop_grade[sh][grade]['invoices'] += len(sh_p)
             shop_grade[sh][grade]['amount'] += sh_amount
 
-            # Single pass: build session and month groups simultaneously
+            # Single pass: build session, month, and year groups simultaneously
             by_sess_shop = defaultdict(list)
             by_month_shop = defaultdict(list)
+            by_year_shop = defaultdict(list)
             for p in sh_p:
                 by_sess_shop[p['session']].append(p)
                 by_month_shop[p['month']].append(p)
+                by_year_shop[p['year']].append(p)
 
             # Shop → By Session
             for sk, sp in by_sess_shop.items():
@@ -406,7 +494,28 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
 
                 if new_members and vip_id in new_members:
                     shop_month_new[sh][mk] += 1
-    
+
+            # Shop → By Year
+            for yk, yp in by_year_shop.items():
+                yp_sorted = sorted(yp, key=lambda x: x['date'])
+                year_first_date = yp_sorted[0]['date']
+                yp_amount = sum(p['amount'] for p in yp)
+
+                shop_year[sh][yk]['active'] += 1
+                shop_year[sh][yk]['invoices'] += len(yp)
+                shop_year[sh][yk]['amount'] += yp_amount
+
+                _, is_ret_in_year = calculate_return_visits(yp_sorted, reg_date)
+                has_prior_year = any(p['date'] < year_first_date for p in sh_p_sorted)
+
+                if is_ret_in_year or has_prior_year:
+                    shop_year[sh][yk]['returning'] += 1
+                    shop_year_returning[sh][yk]['invoices'] += len(yp)
+                    shop_year_returning[sh][yk]['amount'] += yp_amount
+
+                if new_members and vip_id in new_members:
+                    shop_year_new[sh][yk] += 1
+
     # Build shop stats list
     shop_stats = []
     for sh in shop_customers:
@@ -487,6 +596,32 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_amount_with_vip0': float(md['amount'] + vip0_mo['amount']),
             })
 
+        # By year list
+        by_year_list = []
+        for key in (all_year_keys or sorted(shop_year[sh].keys(), key=year_sort_key)):
+            yd = shop_year[sh].get(key)
+            if yd is None:
+                yd = create_empty_bucket()
+            vip0_yr = shop_year_vip0[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
+            ret_yr = shop_year_returning[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
+            a = yd['active']
+            r = yd['returning']
+            yr_new_c = shop_year_new[sh].get(key, 0)
+            by_year_list.append({
+                'year': key,
+                'total_customers': a,
+                'new_customers': yr_new_c,
+                'new_rate': round(yr_new_c / a * 100, 2) if a else 0,
+                'returning_customers': r,
+                'return_rate': round(r / a * 100 if a else 0, 2),
+                'returning_invoices': ret_yr['invoices'],
+                'returning_amount': float(ret_yr['amount']),
+                'total_invoices': yd['invoices'],
+                'total_amount': float(yd['amount']),
+                'total_invoices_with_vip0': yd['invoices'] + vip0_yr['invoices'],
+                'total_amount_with_vip0': float(yd['amount'] + vip0_yr['amount']),
+            })
+
         shop_new_c = shop_new.get(sh, 0)
         shop_stats.append({
             'shop_name': sh,
@@ -504,6 +639,7 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             'by_grade': by_grade_list,
             'by_session': by_session_list,
             'by_month': by_month_list,
+            'by_year': by_year_list,
         })
     
     # Sort by customer count
