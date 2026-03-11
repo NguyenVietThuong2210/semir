@@ -16,7 +16,6 @@ from django.db.models import Min, Max, Count
 from datetime import datetime
 
 from App.analytics.core import calculate_return_rate_analytics
-from App.analytics.aggregators import get_comparison_data
 from App.analytics.coupon_analytics import calculate_coupon_analytics, export_coupon_to_excel
 from App.analytics.excel_export import export_analytics_to_excel
 from .forms import CustomerUploadForm, SalesUploadForm, UsedPointsUploadForm
@@ -248,16 +247,12 @@ def analytics_chart(request):
         messages.info(request, 'No sales data. Please upload sales data first.')
         return redirect('upload_sales')
 
-    # All-time monthly data for comparison chart (delegated to analytics layer)
-    comparison_shops = get_comparison_data(shop_group=shop_group or None)
-
     # Build compact JSON payload for Chart.js
     chart_data = {
         'overview':         data['overview'],
         'session_stats':    data['by_session'],
         'month_stats':      data['by_month'],
         'year_stats':       data['by_year'],
-        'comparison_shops': comparison_shops,
         'shop_stats': [
             {
                 'shop_name':  s['shop_name'],

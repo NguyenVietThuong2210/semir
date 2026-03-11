@@ -724,11 +724,19 @@ def get_comparison_data(shop_group=None):
     from django.db.models import Count, Sum, Q
     from App.models import SalesTransaction
 
+    VIP0 = Q(vip_id='') | Q(vip_id='0') | Q(vip_id__isnull=True)
+
     qs = (
         SalesTransaction.objects
         .filter(sales_date__isnull=False)
         .values('shop_name', 'sales_date__year', 'sales_date__month')
-        .annotate(invoices=Count('id'), amount=Sum('sales_amount'))
+        .annotate(
+            total_invoices_with_vip0=Count('id'),
+            total_amount_with_vip0=Sum('sales_amount'),
+            total_invoices=Count('id',         filter=~VIP0),
+            total_amount  =Sum('sales_amount', filter=~VIP0),
+            total_customers=Count('vip_id', distinct=True, filter=~VIP0),
+        )
     )
     if shop_group == 'Bala Group':
         qs = qs.filter(Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉'))
@@ -747,7 +755,10 @@ def get_comparison_data(shop_group=None):
         if sh not in result:
             result[sh] = {}
         result[sh][mo_key] = {
-            'invoices': row['invoices'],
-            'amount':   float(row['amount'] or 0),
+            'total_invoices_with_vip0': row['total_invoices_with_vip0'],
+            'total_amount_with_vip0':   float(row['total_amount_with_vip0'] or 0),
+            'total_invoices':           row['total_invoices'],
+            'total_amount':             float(row['total_amount'] or 0),
+            'total_customers':          row['total_customers'],
         }
     return result
