@@ -6,6 +6,7 @@ Version: 3.1
 - Shows min/max dates and total counts for better UX
 """
 
+import json
 import logging
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -220,6 +221,60 @@ def analytics_dashboard(request):
         'currency':           'VND',  # Add currency variable
         'quick_btns':         QUICK_BTNS,
         'year_btns':          YEAR_BTNS,
+    })
+
+
+@login_required
+def analytics_chart(request):
+    """Overview chart page — donut summaries + interactive shop trend line chart."""
+    start_date = request.GET.get('start_date', '')
+    end_date   = request.GET.get('end_date', '')
+    shop_group = request.GET.get('shop_group', '')
+
+    date_from = _parse_date(start_date, 'start date', request)
+    date_to   = _parse_date(end_date,   'end date',   request)
+
+    if date_from and date_to and date_from > date_to:
+        messages.error(request, 'Start date must be before end date')
+        date_from = date_to = None
+
+    data = calculate_return_rate_analytics(
+        date_from=date_from,
+        date_to=date_to,
+        shop_group=shop_group or None,
+    )
+    if not data:
+        messages.info(request, 'No sales data. Please upload sales data first.')
+        return redirect('upload_sales')
+
+    # Build compact JSON payload for Chart.js
+    chart_data = {
+        'overview':      data['overview'],
+        'session_stats': data['by_session'],
+        'month_stats':   data['by_month'],
+        'year_stats':    data['by_year'],
+        'shop_stats': [
+            {
+                'shop_name':  s['shop_name'],
+                'by_session': s['by_session'],
+                'by_month':   s['by_month'],
+                'by_year':    s['by_year'],
+            }
+            for s in data['by_shop']
+        ],
+    }
+
+    return render(request, 'analytics_chart.html', {
+        'date_range':    data['date_range'],
+        'session_label': data.get('session_label'),
+        'overview':      data['overview'],
+        'shop_stats':    data['by_shop'],
+        'chart_data_json': json.dumps(chart_data),
+        'start_date':    start_date,
+        'end_date':      end_date,
+        'shop_group':    shop_group,
+        'quick_btns':    QUICK_BTNS,
+        'year_btns':     YEAR_BTNS,
     })
 
 

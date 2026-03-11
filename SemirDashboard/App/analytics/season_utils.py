@@ -100,6 +100,24 @@ def month_sort_key(label):
         return (9999, 99)
 
 
+def get_year_key(d):
+    """Convert a date to a year label like '2024'."""
+    if not d:
+        return 'Unknown'
+    try:
+        return d.strftime('%Y')
+    except AttributeError:
+        return 'Unknown'
+
+
+def year_sort_key(label):
+    """Sort key for year labels 'YYYY'."""
+    try:
+        return int(label)
+    except (ValueError, AttributeError):
+        return 9999
+
+
 def get_session_for_range(date_from, date_to):
     """
     Determine if a date range corresponds to a single season.
