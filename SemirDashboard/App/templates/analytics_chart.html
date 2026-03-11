@@ -539,7 +539,7 @@
     <div class="card-header bg-white">
         <i class="bi bi-bar-chart-steps text-primary"></i>
         <strong>Year-over-Year Comparison</strong>
-        <small class="text-muted ms-2">All-time data — each color = one year</small>
+        <small class="text-muted ms-2">Each color = one year</small>
     </div>
     <div class="card-body">
         <div class="row g-3 mb-3">
@@ -583,8 +583,21 @@
                     <hr class="my-2">
                     <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
                     <select class="form-select form-select-sm mt-1" id="compMetricSelect">
-                        <option value="invoices">Total Invoices</option>
-                        <option value="amount">Total Amount (VND)</option>
+                        <optgroup label="Customers">
+                            <option value="total_customers">Active Customers</option>
+                            <option value="new_customers">New Customers</option>
+                            <option value="returning_customers">Returning Customers</option>
+                        </optgroup>
+                        <optgroup label="Invoices">
+                            <option value="returning_invoices">INV(RET)</option>
+                            <option value="total_invoices">INV(CUS)</option>
+                            <option value="total_invoices_with_vip0" selected>Total Invoices</option>
+                        </optgroup>
+                        <optgroup label="Amount (VND)">
+                            <option value="returning_amount">AMT(RET)</option>
+                            <option value="total_amount">AMT(CUS)</option>
+                            <option value="total_amount_with_vip0">Total Amount</option>
+                        </optgroup>
                     </select>
                 </div>
             </div>
@@ -1014,20 +1027,19 @@ function buildComparisonChart() {
     const xAxis         = document.querySelector('input[name="compXaxis"]:checked').value;
     const metric        = document.getElementById('compMetricSelect').value;
     const selectedShops = [...document.querySelectorAll('.comp-shop-check:checked')].map(el => el.value);
-    const isAmount      = metric === 'amount';
 
-    // Aggregate: yearPeriodData[year][period] = value
+    // Aggregate using same shop_stats data as bar chart 1 — full metric support
     const yearPeriodData = {};
     selectedShops.forEach(name => {
-        const shopData = CD.comparison_shops[name];
-        if (!shopData) return;
-        Object.entries(shopData).forEach(([moKey, vals]) => {
-            const [yr, moStr] = moKey.split('-');
+        const shop = CD.shop_stats.find(s => s.shop_name === name);
+        if (!shop) return;
+        (shop.by_month || []).forEach(row => {
+            const [yr, moStr] = row.month.split('-');
             const mo = parseInt(moStr);
             const period = xAxis === 'month' ? mo : monthToSeason(mo);
             if (!period) return;
             if (!yearPeriodData[yr]) yearPeriodData[yr] = {};
-            yearPeriodData[yr][period] = (yearPeriodData[yr][period] || 0) + (vals[metric] || 0);
+            yearPeriodData[yr][period] = (yearPeriodData[yr][period] || 0) + (row[metric] || 0);
         });
     });
 
@@ -1065,10 +1077,7 @@ function buildComparisonChart() {
                     backgroundColor: 'rgba(30,30,30,.92)',
                     itemSort: (a, b) => b.raw - a.raw,
                     callbacks: {
-                        label: ctx => '  ' + ctx.dataset.label + ': ' +
-                            (isAmount
-                                ? Math.round(ctx.raw).toLocaleString() + ' VND'
-                                : Math.round(ctx.raw).toLocaleString()),
+                        label: ctx => '  ' + ctx.dataset.label + ': ' + fmtVal(ctx.raw, metric),
                     },
                 },
             },
@@ -1077,12 +1086,10 @@ function buildComparisonChart() {
                 y: {
                     beginAtZero: true,
                     grid: { color: 'rgba(0,0,0,.05)' },
-                    title: { display: true, text: isAmount ? 'Total Amount VND' : 'Total Invoices', font: { size: 11 } },
+                    title: { display: true, text: yLabel(metric), font: { size: 11 } },
                     ticks: {
                         font: { size: 11 },
-                        callback: v => isAmount
-                            ? (v >= 1e9 ? (v/1e9).toFixed(1)+'B' : v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v.toLocaleString())
-                            : v.toLocaleString(),
+                        callback: v => fmtVal(v, metric),
                     },
                 },
             },
