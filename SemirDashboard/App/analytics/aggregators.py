@@ -709,3 +709,45 @@ def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, d
         },
         'by_shop': shop_list,
     }
+
+
+def get_comparison_data(shop_group=None):
+    """
+    All-time monthly invoice/amount totals per shop, for the year-over-year comparison chart.
+
+    No date filtering, no customer deduplication — just a lightweight DB aggregation.
+    Returns Dict[shop_name] -> Dict['YYYY-MM'] -> {'invoices': int, 'amount': float}
+
+    Args:
+        shop_group: Optional shop group filter string (same values as core.py)
+    """
+    from django.db.models import Count, Sum, Q
+    from App.models import SalesTransaction
+
+    qs = (
+        SalesTransaction.objects
+        .filter(sales_date__isnull=False)
+        .values('shop_name', 'sales_date__year', 'sales_date__month')
+        .annotate(invoices=Count('id'), amount=Sum('sales_amount'))
+    )
+    if shop_group == 'Bala Group':
+        qs = qs.filter(Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉'))
+    elif shop_group == 'Semir Group':
+        qs = qs.filter(Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马'))
+    elif shop_group == 'Others Group':
+        qs = qs.exclude(
+            Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉') |
+            Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马')
+        )
+
+    result = {}
+    for row in qs:
+        sh     = row['shop_name'] or 'Unknown Shop'
+        mo_key = f"{row['sales_date__year']}-{row['sales_date__month']:02d}"
+        if sh not in result:
+            result[sh] = {}
+        result[sh][mo_key] = {
+            'invoices': row['invoices'],
+            'amount':   float(row['amount'] or 0),
+        }
+    return result

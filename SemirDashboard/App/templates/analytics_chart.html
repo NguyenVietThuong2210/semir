@@ -532,6 +532,70 @@
     </div>
 </div>
 
+<!-- ═══════════════════════════════════════
+     SECTION 4 — YEAR-OVER-YEAR COMPARISON
+══════════════════════════════════════════ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-bar-chart-steps text-primary"></i>
+        <strong>Year-over-Year Comparison</strong>
+        <small class="text-muted ms-2">All-time data — each color = one year</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+
+            <!-- Comp shop checklist -->
+            <div class="col-lg-4 col-md-5">
+                <div class="control-label"><i class="bi bi-shop"></i> Select Shops</div>
+                <div class="shop-select-actions d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm" id="btnCompSelAll">All</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnCompSelNone">None</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnCompSelTop5">Top 5</button>
+                </div>
+                <div class="shop-checklist" id="compShopChecklist">
+                    {% for shop in shop_stats %}
+                    <label for="csc_{{ forloop.counter }}" class="form-check d-flex align-items-center gap-1" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input comp-shop-check" type="checkbox"
+                               value="{{ shop.shop_name }}"
+                               id="csc_{{ forloop.counter }}"
+                               {% if forloop.counter <= 5 %}checked{% endif %}
+                               style="flex-shrink:0;">
+                        <span style="font-size:.85rem;">{{ shop.shop_name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Comp time axis + metric -->
+            <div class="col-lg-3 col-md-3">
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="compXaxis"
+                               value="month" id="compXMonth" checked>
+                        <label class="form-check-label" for="compXMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="compXaxis"
+                               value="season" id="compXSeason">
+                        <label class="form-check-label" for="compXSeason">By Season</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm mt-1" id="compMetricSelect">
+                        <option value="invoices">Total Invoices</option>
+                        <option value="amount">Total Amount (VND)</option>
+                    </select>
+                </div>
+            </div>
+
+        </div>
+        <div class="bar-chart-wrap">
+            <canvas id="comparisonBarChart"></canvas>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 
@@ -673,6 +737,21 @@ function updateLegend(datasets) {
 
 const AVG_COLOR = '#2C3E50';
 
+// Plugin: detect if mouse is directly over a data point (for tooltip mode switching)
+let _trendHoverDs = null;
+const hoverDetectPlugin = {
+    id: 'hoverDetect',
+    beforeEvent(chart, args) {
+        if (args.event.type !== 'mousemove') return;
+        // Use chart-computed canvas coords (args.event.x/y) — more reliable than native event
+        const pts = chart.getElementsAtEventForMode(
+            { x: args.event.x, y: args.event.y },
+            'point', { intersect: true }, false
+        );
+        _trendHoverDs = pts.length ? pts[0].datasetIndex : null;
+    },
+};
+
 function buildChart() {
     const selectedShops = [...document.querySelectorAll('.shop-check:checked')]
         .map(el => el.value);
@@ -683,30 +762,32 @@ function buildChart() {
     const isRate   = ['return_rate', 'new_rate'].includes(metric);
     const isAmount = ['returning_amount','total_amount','total_amount_with_vip0'].includes(metric);
 
-    // Build per-shop datasets
+    // Build per-shop datasets — conditional dots (only where value > 0)
     const datasets = selectedShops.map((name, i) => {
         const shop = CD.shop_stats.find(s => s.shop_name === name);
         if (!shop) return null;
         const color = SHOP_PALETTE[i % SHOP_PALETTE.length];
+        const data  = getShopSeriesData(shop, xAxis, xLabels, metric);
         return {
             label: name,
-            data: getShopSeriesData(shop, xAxis, xLabels, metric),
+            data,
             borderColor: color,
             backgroundColor: color + '18',
             pointBackgroundColor: color,
             borderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            pointRadius:      data.map(v => v > 0 ? 4 : 0),
+            pointHoverRadius: data.map(v => v > 0 ? 6 : 0),
+            pointHitRadius:   data.map(v => v > 0 ? 8 : 0),
             tension: 0.35,
             fill: false,
         };
     }).filter(Boolean);
 
-    // AVG dataset — average across all selected shops per time point
+    // AVG dataset — only average shops that have data (>0) at each point
     if (showAvg && datasets.length > 0) {
         const avgData = xLabels.map((_, xi) => {
-            const vals = datasets.map(ds => ds.data[xi] ?? 0);
-            return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+            const nonZero = datasets.map(ds => ds.data[xi] ?? 0).filter(v => v > 0);
+            return nonZero.length ? nonZero.reduce((a, b) => a + b, 0) / nonZero.length : 0;
         });
         datasets.push({
             label: 'AVG (selected)',
@@ -716,16 +797,19 @@ function buildChart() {
             pointBackgroundColor: AVG_COLOR,
             borderWidth: 2.5,
             borderDash: [6, 3],
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            pointRadius:      avgData.map(v => v > 0 ? 4 : 0),
+            pointHoverRadius: avgData.map(v => v > 0 ? 6 : 0),
+            pointHitRadius:   avgData.map(v => v > 0 ? 8 : 0),
             tension: 0.35,
             fill: false,
         });
     }
 
+    _trendHoverDs = null;
     if (trendChart) trendChart.destroy();
     trendChart = new Chart(document.getElementById('shopTrendChart'), {
         type: 'line',
+        plugins: [hoverDetectPlugin],
         data: { labels: xLabels, datasets },
         options: {
             responsive: true,
@@ -737,6 +821,11 @@ function buildChart() {
                 tooltip: {
                     backgroundColor: 'rgba(30,30,30,.92)',
                     titleFont: { weight: '700' },
+                    // Hover on dot → show only that dataset; hover on axis → show all non-zero sorted ↓
+                    filter: item => _trendHoverDs !== null
+                        ? item.datasetIndex === _trendHoverDs
+                        : item.raw > 0,
+                    itemSort: (a, b) => b.raw - a.raw,
                     callbacks: {
                         label: ctx => '  ' + ctx.dataset.label + ': ' + fmtVal(ctx.raw, metric),
                     },
@@ -900,9 +989,129 @@ document.getElementById('btnBarSelTop5').addEventListener('click', () => {
     buildBarChart();
 });
 
+/* ══════════════════════════════════════════════
+   YEAR-OVER-YEAR COMPARISON BAR CHART
+══════════════════════════════════════════════ */
+let compChart = null;
+
+const COMP_YEAR_PALETTE = [
+    '#0D2B5A','#1565C0','#1E88E5','#64B5F6','#B3D8FF',
+    '#004D40','#00796B','#26A69A','#80CBC4','#B2DFDB',
+];
+
+const MONTH_LABELS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const SEASON_LABELS = ['M2-4','M5-7','M8-10','M11-1'];
+const SEASON_MAP    = { 'M2-4':[2,3,4], 'M5-7':[5,6,7], 'M8-10':[8,9,10], 'M11-1':[11,12,1] };
+
+function monthToSeason(m) {
+    for (const [s, months] of Object.entries(SEASON_MAP)) {
+        if (months.includes(m)) return s;
+    }
+    return null;
+}
+
+function buildComparisonChart() {
+    const xAxis         = document.querySelector('input[name="compXaxis"]:checked').value;
+    const metric        = document.getElementById('compMetricSelect').value;
+    const selectedShops = [...document.querySelectorAll('.comp-shop-check:checked')].map(el => el.value);
+    const isAmount      = metric === 'amount';
+
+    // Aggregate: yearPeriodData[year][period] = value
+    const yearPeriodData = {};
+    selectedShops.forEach(name => {
+        const shopData = CD.comparison_shops[name];
+        if (!shopData) return;
+        Object.entries(shopData).forEach(([moKey, vals]) => {
+            const [yr, moStr] = moKey.split('-');
+            const mo = parseInt(moStr);
+            const period = xAxis === 'month' ? mo : monthToSeason(mo);
+            if (!period) return;
+            if (!yearPeriodData[yr]) yearPeriodData[yr] = {};
+            yearPeriodData[yr][period] = (yearPeriodData[yr][period] || 0) + (vals[metric] || 0);
+        });
+    });
+
+    const xLabels = xAxis === 'month' ? MONTH_LABELS : SEASON_LABELS;
+    const years   = Object.keys(yearPeriodData).sort();
+
+    const datasets = years.map((yr, i) => {
+        const color = COMP_YEAR_PALETTE[i % COMP_YEAR_PALETTE.length];
+        const data  = xAxis === 'month'
+            ? Array.from({length: 12}, (_, j) => yearPeriodData[yr][j + 1] || 0)
+            : SEASON_LABELS.map(s => yearPeriodData[yr][s] || 0);
+        return {
+            label: yr,
+            data,
+            backgroundColor: color + 'cc',
+            borderColor: color,
+            borderWidth: 1,
+            borderRadius: 4,
+            borderSkipped: false,
+        };
+    });
+
+    if (compChart) compChart.destroy();
+    compChart = new Chart(document.getElementById('comparisonBarChart'), {
+        type: 'bar',
+        data: { labels: xLabels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 500 },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
+                tooltip: {
+                    backgroundColor: 'rgba(30,30,30,.92)',
+                    itemSort: (a, b) => b.raw - a.raw,
+                    callbacks: {
+                        label: ctx => '  ' + ctx.dataset.label + ': ' +
+                            (isAmount
+                                ? Math.round(ctx.raw).toLocaleString() + ' VND'
+                                : Math.round(ctx.raw).toLocaleString()),
+                    },
+                },
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,.05)' },
+                    title: { display: true, text: isAmount ? 'Total Amount VND' : 'Total Invoices', font: { size: 11 } },
+                    ticks: {
+                        font: { size: 11 },
+                        callback: v => isAmount
+                            ? (v >= 1e9 ? (v/1e9).toFixed(1)+'B' : v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v.toLocaleString())
+                            : v.toLocaleString(),
+                    },
+                },
+            },
+        },
+    });
+}
+
+/* ── Comparison chart event listeners ── */
+document.querySelectorAll('.comp-shop-check').forEach(cb => cb.addEventListener('change', buildComparisonChart));
+document.querySelectorAll('input[name="compXaxis"]').forEach(r => r.addEventListener('change', buildComparisonChart));
+document.getElementById('compMetricSelect').addEventListener('change', buildComparisonChart);
+
+document.getElementById('btnCompSelAll').addEventListener('click', () => {
+    document.querySelectorAll('.comp-shop-check').forEach(cb => cb.checked = true);
+    buildComparisonChart();
+});
+document.getElementById('btnCompSelNone').addEventListener('click', () => {
+    document.querySelectorAll('.comp-shop-check').forEach(cb => cb.checked = false);
+    buildComparisonChart();
+});
+document.getElementById('btnCompSelTop5').addEventListener('click', () => {
+    [...document.querySelectorAll('.comp-shop-check')].forEach((cb, i) => cb.checked = i < 5);
+    buildComparisonChart();
+});
+
 // Initial render
 buildChart();
 buildBarChart();
+buildComparisonChart();
 
 /* ══════════════════════════════════════════════
    Quick date buttons (copy from analytics page)
