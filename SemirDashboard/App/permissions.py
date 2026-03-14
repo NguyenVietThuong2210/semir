@@ -10,7 +10,8 @@ PERMISSION_DEFS = [
     ('page_customer_detail', 'Customer Detail',               'Pages'),
     ('page_upload',          'Upload Data',                   'Pages'),
     ('page_formulas',        'Formulas',                      'Pages'),
-    ('page_cnv',             'CNV Loyalty',                   'Pages'),
+    ('page_cnv_sync',        'CNV Sync Status',               'Pages'),
+    ('page_cnv_comparison',  'Customer Analytics',            'Pages'),
     ('download_analytics',   'Export Analytics (Excel)',      'Downloads'),
     ('download_coupons',     'Export Coupons (Excel)',        'Downloads'),
     ('download_cnv',         'Export CNV Comparison (Excel)', 'Downloads'),
@@ -21,7 +22,7 @@ ALL_PERMISSIONS   = [p[0] for p in PERMISSION_DEFS]
 ADMIN_PERMISSIONS = ALL_PERMISSIONS
 VIEWER_PERMISSIONS = [
     'page_analytics', 'page_chart', 'page_coupons',
-    'page_customer_detail', 'page_formulas', 'page_cnv',
+    'page_customer_detail', 'page_formulas', 'page_cnv_sync', 'page_cnv_comparison',
 ]
 
 

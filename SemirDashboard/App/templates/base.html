@@ -121,8 +121,8 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_cnv' as can_cnv %}
-                            {% if can_cnv %}
+                            {% check_perm 'page_cnv_comparison' as can_cnv_comparison %}
+                            {% if can_cnv_comparison %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'cnv:customer_comparison' %}">
                                     <i class="bi bi-people-fill"></i> Customer Analytics
@@ -164,13 +164,23 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_cnv' as can_cnv_tools %}
-                            {% if can_cnv_tools %}
+                            {% check_perm 'page_cnv_sync' as can_cnv_sync %}
+                            {% check_perm 'page_cnv_comparison' as can_cnv_comparison2 %}
+                            {% if can_cnv_sync or can_cnv_comparison2 %}
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">CNV Loyalty</h6></li>
+                            {% endif %}
+                            {% if can_cnv_sync %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'cnv:sync_status' %}">
                                     <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% if can_cnv_comparison2 %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'cnv:customer_comparison' %}">
+                                    <i class="bi bi-people-fill"></i> Customer Comparison
                                 </a>
                             </li>
                             {% endif %}
