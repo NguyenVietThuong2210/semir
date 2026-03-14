@@ -29,6 +29,10 @@ sleep 10
 echo "🗄️  Running database migrations..."
 docker compose exec -T web python manage.py migrate
 
+# Sync role permissions (safe to run on every deploy)
+echo "🔐 Syncing role permissions..."
+docker compose exec -T web python manage.py perm sync
+
 # Collect static files
 echo "📦 Collecting static files..."
 docker compose exec -T web python manage.py collectstatic --noinput
