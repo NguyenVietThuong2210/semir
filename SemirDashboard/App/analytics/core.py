@@ -123,7 +123,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     vip0_alltime_invoices = _vip0_agg['cnt'] or 0
     vip0_alltime_amount   = float(_vip0_agg['total'] or 0)
 
-    logger.info("Transactions: %d  VIP0-alltime: %d", len(sales_list), len(all_sales_unfiltered))
+    logger.info("Transactions: %d  VIP0-alltime: %d", len(sales_list), vip0_alltime_invoices)
     
     # Build customer purchase map
     customer_purchases = build_customer_purchase_map(sales_list)
