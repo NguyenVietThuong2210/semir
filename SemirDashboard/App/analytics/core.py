@@ -114,12 +114,14 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         'end_date':   max(s.sales_date for s in sales_list),
     }
 
-    # OPT-5: Only load VIP0 rows with needed fields for all-time stats (was full table scan)
-    all_sales_unfiltered = list(
-        SalesTransaction.objects
-        .filter(Q(vip_id='') | Q(vip_id='0') | Q(vip_id__isnull=True))
-        .only('vip_id', 'sales_amount')
+    # OPT-5: Single aggregate query for VIP0 all-time stats (no full table load)
+    _vip0_q = Q(vip_id='') | Q(vip_id='0') | Q(vip_id__isnull=True)
+    from django.db.models import Sum as _Sum
+    _vip0_agg = SalesTransaction.objects.filter(_vip0_q).aggregate(
+        cnt=Count('id'), total=_Sum('sales_amount')
     )
+    vip0_alltime_invoices = _vip0_agg['cnt'] or 0
+    vip0_alltime_amount   = float(_vip0_agg['total'] or 0)
 
     logger.info("Transactions: %d  VIP0-alltime: %d", len(sales_list), len(all_sales_unfiltered))
     
@@ -221,7 +223,8 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     
     buyer_without_info_stats = calculate_buyer_without_info(
         vip_0_purchases,
-        all_sales_unfiltered,  # Use unfiltered sales for all-time stats
+        vip0_alltime_invoices,
+        vip0_alltime_amount,
         date_from,
         date_to,
         total_invoices_with_vip0,

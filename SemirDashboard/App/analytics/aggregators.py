@@ -113,28 +113,29 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
                 session_vip0_amount[sk] += sum(p['amount'] for p in sp)
             continue
         
-        # Sort all purchases by date (needed for cross-season check)
-        all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        # purchases already sorted by build_customer_purchase_map
+        all_purchases_sorted = purchases
 
         # Get customer info from the EARLIEST purchase (consistent with core.py)
         grade, reg_date, name = get_customer_info_fn(vip_id, all_purchases_sorted[0]['customer'])
 
         # Group by session
         by_sess = defaultdict(list)
-        for p in purchases:
+        for p in all_purchases_sorted:
             by_sess[p['session']].append(p)
-        
+
         for sk, sp in by_sess.items():
-            sp_sorted = sorted(sp, key=lambda x: x['date'])
-            session_first_date = sp_sorted[0]['date']
+            # sp is date-ordered (iterating sorted all_purchases_sorted)
+            session_first_date = sp[0]['date']
             sp_amount = sum(p['amount'] for p in sp)
 
             session_buckets[sk]['active'] += 1
             session_buckets[sk]['invoices'] += len(sp)
             session_buckets[sk]['amount'] += sp_amount
 
-            _, is_ret_in_season = calculate_return_visits(sp_sorted, reg_date)
-            has_prior_purchases = any(p['date'] < session_first_date for p in all_purchases_sorted)
+            _, is_ret_in_season = calculate_return_visits(sp, reg_date)
+            # O(1): first ever purchase before first purchase in this bucket
+            has_prior_purchases = all_purchases_sorted[0]['date'] < session_first_date
 
             if is_ret_in_season or has_prior_purchases:
                 session_buckets[sk]['returning'] += 1
@@ -197,24 +198,23 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
                 month_vip0_amount[mk] += sum(p['amount'] for p in mp)
             continue
 
-        all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        all_purchases_sorted = purchases  # pre-sorted
         _, reg_date, _ = get_customer_info_fn(vip_id, all_purchases_sorted[0]['customer'])
 
         by_month = defaultdict(list)
-        for p in purchases:
+        for p in all_purchases_sorted:
             by_month[p['month']].append(p)
 
         for mk, mp in by_month.items():
-            mp_sorted = sorted(mp, key=lambda x: x['date'])
-            month_first_date = mp_sorted[0]['date']
+            month_first_date = mp[0]['date']
 
             mp_amount = sum(p['amount'] for p in mp)
             month_buckets[mk]['active'] += 1
             month_buckets[mk]['invoices'] += len(mp)
             month_buckets[mk]['amount'] += mp_amount
 
-            _, is_ret_in_month = calculate_return_visits(mp_sorted, reg_date)
-            has_prior_purchases = any(p['date'] < month_first_date for p in all_purchases_sorted)
+            _, is_ret_in_month = calculate_return_visits(mp, reg_date)
+            has_prior_purchases = all_purchases_sorted[0]['date'] < month_first_date
 
             if is_ret_in_month or has_prior_purchases:
                 month_buckets[mk]['returning'] += 1
@@ -278,25 +278,24 @@ def aggregate_by_week(customer_purchases, get_customer_info_fn, new_members=None
                 week_vip0_amount[wk] += sum(p['amount'] for p in wp)
             continue
 
-        all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        all_purchases_sorted = purchases  # pre-sorted
         _, reg_date, _ = get_customer_info_fn(vip_id, all_purchases_sorted[0]['customer'])
 
         by_week = defaultdict(list)
-        for p in purchases:
+        for p in all_purchases_sorted:
             by_week[p['week_sort']].append(p)
             week_labels[p['week_sort']] = p['week_label']
 
         for wk, wp in by_week.items():
-            wp_sorted = sorted(wp, key=lambda x: x['date'])
-            week_first_date = wp_sorted[0]['date']
+            week_first_date = wp[0]['date']
             wp_amount = sum(p['amount'] for p in wp)
 
             week_buckets[wk]['active'] += 1
             week_buckets[wk]['invoices'] += len(wp)
             week_buckets[wk]['amount'] += wp_amount
 
-            _, is_ret_in_week = calculate_return_visits(wp_sorted, reg_date)
-            has_prior_purchases = any(p['date'] < week_first_date for p in all_purchases_sorted)
+            _, is_ret_in_week = calculate_return_visits(wp, reg_date)
+            has_prior_purchases = all_purchases_sorted[0]['date'] < week_first_date
 
             if is_ret_in_week or has_prior_purchases:
                 week_buckets[wk]['returning'] += 1
@@ -358,24 +357,23 @@ def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None
                 year_vip0_amount[yk] += sum(p['amount'] for p in yp)
             continue
 
-        all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        all_purchases_sorted = purchases  # pre-sorted
         _, reg_date, _ = get_customer_info_fn(vip_id, all_purchases_sorted[0]['customer'])
 
         by_year = defaultdict(list)
-        for p in purchases:
+        for p in all_purchases_sorted:
             by_year[p['year']].append(p)
 
         for yk, yp in by_year.items():
-            yp_sorted = sorted(yp, key=lambda x: x['date'])
-            year_first_date = yp_sorted[0]['date']
+            year_first_date = yp[0]['date']
 
             yp_amount = sum(p['amount'] for p in yp)
             year_buckets[yk]['active'] += 1
             year_buckets[yk]['invoices'] += len(yp)
             year_buckets[yk]['amount'] += yp_amount
 
-            _, is_ret_in_year = calculate_return_visits(yp_sorted, reg_date)
-            has_prior_purchases = any(p['date'] < year_first_date for p in all_purchases_sorted)
+            _, is_ret_in_year = calculate_return_visits(yp, reg_date)
+            has_prior_purchases = all_purchases_sorted[0]['date'] < year_first_date
 
             if is_ret_in_year or has_prior_purchases:
                 year_buckets[yk]['returning'] += 1
@@ -497,18 +495,17 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                     shop_week_labels[p['week_sort']] = p['week_label']
             continue
         
-        # Get customer info from the EARLIEST purchase (order-independent)
-        first_purchase = min(purchases, key=lambda x: x['date'])
-        grade, reg_date, name = get_customer_info_fn(vip_id, first_purchase['customer'])
+        # purchases already sorted; first purchase is purchases[0]
+        grade, reg_date, name = get_customer_info_fn(vip_id, purchases[0]['customer'])
 
-        # Group purchases by shop
+        # Group purchases by shop — iterate sorted list so sh_p is date-ordered
         by_shop_visits = defaultdict(list)
         for p in purchases:
             by_shop_visits[p['shop']].append(p)
-        
+
         for sh, sh_p in by_shop_visits.items():
-            # Sort once — reused for shop-level return, session prior check, month prior check
-            sh_p_sorted = sorted(sh_p, key=lambda x: x['date'])
+            # sh_p is already date-ordered (built from pre-sorted purchases)
+            sh_p_sorted = sh_p
             sh_amount = sum(p['amount'] for p in sh_p)
 
             shop_customers[sh].add(vip_id)
@@ -536,30 +533,34 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             shop_grade[sh][grade]['invoices'] += len(sh_p)
             shop_grade[sh][grade]['amount'] += sh_amount
 
-            # Single pass: build session, month, year, and week groups simultaneously
+            # Single pass: build session, month, year, and week groups simultaneously.
+            # sh_p_sorted is already date-ordered, so sub-buckets are too.
             by_sess_shop = defaultdict(list)
             by_month_shop = defaultdict(list)
             by_year_shop = defaultdict(list)
             by_week_shop = defaultdict(list)
-            for p in sh_p:
+            for p in sh_p_sorted:
                 by_sess_shop[p['session']].append(p)
                 by_month_shop[p['month']].append(p)
                 by_year_shop[p['year']].append(p)
                 by_week_shop[p['week_sort']].append(p)
                 shop_week_labels[p['week_sort']] = p['week_label']
 
+            # Earliest purchase date at this shop — used for O(1) prior checks
+            sh_first_date = sh_p_sorted[0]['date']
+
             # Shop → By Session
             for sk, sp in by_sess_shop.items():
-                sp_sorted = sorted(sp, key=lambda x: x['date'])
-                session_first_date = sp_sorted[0]['date']
+                # sp is already date-ordered
+                session_first_date = sp[0]['date']
                 sp_amount = sum(p['amount'] for p in sp)
 
                 shop_sess[sh][sk]['active'] += 1
                 shop_sess[sh][sk]['invoices'] += len(sp)
                 shop_sess[sh][sk]['amount'] += sp_amount
 
-                _, is_ret_in_season = calculate_return_visits(sp_sorted, reg_date)
-                has_prior_shop_purchases = any(p['date'] < session_first_date for p in sh_p_sorted)
+                _, is_ret_in_season = calculate_return_visits(sp, reg_date)
+                has_prior_shop_purchases = sh_first_date < session_first_date
 
                 if is_ret_in_season or has_prior_shop_purchases:
                     shop_sess[sh][sk]['returning'] += 1
@@ -571,16 +572,15 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
 
             # Shop → By Month
             for mk, mp in by_month_shop.items():
-                mp_sorted = sorted(mp, key=lambda x: x['date'])
-                month_first_date = mp_sorted[0]['date']
+                month_first_date = mp[0]['date']
                 mp_amount = sum(p['amount'] for p in mp)
 
                 shop_month[sh][mk]['active'] += 1
                 shop_month[sh][mk]['invoices'] += len(mp)
                 shop_month[sh][mk]['amount'] += mp_amount
 
-                _, is_ret_in_month = calculate_return_visits(mp_sorted, reg_date)
-                has_prior_month = any(p['date'] < month_first_date for p in sh_p_sorted)
+                _, is_ret_in_month = calculate_return_visits(mp, reg_date)
+                has_prior_month = sh_first_date < month_first_date
 
                 if is_ret_in_month or has_prior_month:
                     shop_month[sh][mk]['returning'] += 1
@@ -592,16 +592,15 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
 
             # Shop → By Year
             for yk, yp in by_year_shop.items():
-                yp_sorted = sorted(yp, key=lambda x: x['date'])
-                year_first_date = yp_sorted[0]['date']
+                year_first_date = yp[0]['date']
                 yp_amount = sum(p['amount'] for p in yp)
 
                 shop_year[sh][yk]['active'] += 1
                 shop_year[sh][yk]['invoices'] += len(yp)
                 shop_year[sh][yk]['amount'] += yp_amount
 
-                _, is_ret_in_year = calculate_return_visits(yp_sorted, reg_date)
-                has_prior_year = any(p['date'] < year_first_date for p in sh_p_sorted)
+                _, is_ret_in_year = calculate_return_visits(yp, reg_date)
+                has_prior_year = sh_first_date < year_first_date
 
                 if is_ret_in_year or has_prior_year:
                     shop_year[sh][yk]['returning'] += 1
@@ -613,16 +612,15 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
 
             # Shop → By Week
             for wk, wp in by_week_shop.items():
-                wp_sorted = sorted(wp, key=lambda x: x['date'])
-                week_first_date = wp_sorted[0]['date']
+                week_first_date = wp[0]['date']
                 wp_amount = sum(p['amount'] for p in wp)
 
                 shop_week[sh][wk]['active'] += 1
                 shop_week[sh][wk]['invoices'] += len(wp)
                 shop_week[sh][wk]['amount'] += wp_amount
 
-                _, is_ret_in_week = calculate_return_visits(wp_sorted, reg_date)
-                has_prior_week = any(p['date'] < week_first_date for p in sh_p_sorted)
+                _, is_ret_in_week = calculate_return_visits(wp, reg_date)
+                has_prior_week = sh_first_date < week_first_date
 
                 if is_ret_in_week or has_prior_week:
                     shop_week[sh][wk]['returning'] += 1
@@ -791,7 +789,8 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
     return shop_stats
 
 
-def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, date_to,
+def calculate_buyer_without_info(vip_0_purchases_period, alltime_invoices, alltime_amount,
+                                  date_from, date_to,
                                   total_invoices_all_period, total_amount_all_period):
     """
     Calculate analytics for VIP ID = 0 (buyers without customer info).
@@ -815,10 +814,9 @@ def calculate_buyer_without_info(vip_0_purchases_period, all_sales, date_from, d
     pct_invoices = round(period_invoices / total_invoices_all_period * 100, 2) if total_invoices_all_period else 0
     pct_amount = round(period_amount / total_amount_all_period * 100, 2) if total_amount_all_period else 0
     
-    # All-time stats (VIP ID = 0 only)
-    all_time_vip_0 = [s for s in all_sales if (s.vip_id or '').strip() in ('', '0', 'None')]
-    all_time_invoices = len(all_time_vip_0)
-    all_time_amount = sum(s.sales_amount or Decimal(0) for s in all_time_vip_0)
+    # All-time stats — pre-computed via DB aggregate in core.py
+    all_time_invoices = alltime_invoices
+    all_time_amount   = alltime_amount
     
     # By shop (period)
     shop_stats = defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)})

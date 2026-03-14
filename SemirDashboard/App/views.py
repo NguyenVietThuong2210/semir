@@ -12,8 +12,22 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponse
 from django.db.models import Min, Max, Count
+from django.core.cache import cache
 from datetime import datetime
 from App.permissions import requires_perm, user_has_perm
+
+_ANALYTICS_VER_KEY = 'analytics_data_ver'
+_ANALYTICS_TTL     = 600  # 10 minutes
+
+
+def _analytics_cache_key(date_from, date_to, shop_group):
+    v = cache.get(_ANALYTICS_VER_KEY, 0)
+    return f"anl_ctx:{v}:{date_from}:{date_to}:{shop_group}"
+
+
+def _invalidate_analytics_cache():
+    v = cache.get(_ANALYTICS_VER_KEY, 0)
+    cache.set(_ANALYTICS_VER_KEY, v + 1, 86400 * 30)
 
 from App.analytics.core import calculate_return_rate_analytics
 from App.analytics.coupon_analytics import calculate_coupon_analytics, export_coupon_to_excel
@@ -65,6 +79,7 @@ def upload_customers(request):
             logger.info("upload_customers: %s user=%s", f.name, request.user)
             try:
                 result = process_customer_file(f)
+                _invalidate_analytics_cache()
                 messages.success(request,
                     f"Processed {result['total_processed']} customers – "
                     f"Created: {result['created']}, Updated: {result['updated']}")
@@ -130,6 +145,7 @@ def upload_sales(request):
             logger.info("upload_sales: %s user=%s", f.name, request.user)
             try:
                 result = process_sales_file(f)
+                _invalidate_analytics_cache()
                 messages.success(request,
                     f"Imported {result['created']} new transactions. "
                     f"Updated (overwritten) {result['updated']} existing.")
@@ -191,38 +207,50 @@ def analytics_dashboard(request):
         messages.error(request, 'Start date must be before end date')
         date_from = date_to = None
 
-    logger.info("analytics_dashboard: from=%s to=%s shop_group=%s user=%s", 
+    logger.info("analytics_dashboard: from=%s to=%s shop_group=%s user=%s",
                 date_from, date_to, shop_group, request.user)
-    data = calculate_return_rate_analytics(
-        date_from=date_from, 
-        date_to=date_to,
-        shop_group=shop_group or None
-    )
 
-    if not data:
-        messages.info(request, 'No sales data. Please upload sales data first.')
-        return redirect('upload_sales')
+    cache_key = _analytics_cache_key(date_from, date_to, shop_group)
+    ctx = cache.get(cache_key)
 
-    return render(request, 'analytics_dashboard.html', {
-        'date_range':         data['date_range'],
-        'session_label':      data.get('session_label'),
-        'overview':           data['overview'],
-        'grade_stats':        data['by_grade'],
-        'session_stats':      data['by_session'],
-        'month_stats':        data['by_month'],
-        'week_stats':         data['by_week'],
-        'shop_stats':         data['by_shop'],
-        'by_shop':            data['by_shop'],  # For comparison tabs
-        'customer_details':   data['customer_details'][:100],
-        'total_detail_count': len(data['customer_details']),
-        'buyer_without_info_stats': data.get('buyer_without_info_stats', {}),
-        'start_date':         start_date,
-        'end_date':           end_date,
-        'shop_group':         shop_group,
-        'currency':           'VND',
-        'quick_btns':         QUICK_BTNS,
-        'year_btns':          YEAR_BTNS,
+    if ctx is None:
+        data = calculate_return_rate_analytics(
+            date_from=date_from,
+            date_to=date_to,
+            shop_group=shop_group or None,
+        )
+        if not data:
+            messages.info(request, 'No sales data. Please upload sales data first.')
+            return redirect('upload_sales')
+
+        ctx = {
+            'date_range':               data['date_range'],
+            'session_label':            data.get('session_label'),
+            'overview':                 data['overview'],
+            'grade_stats':              data['by_grade'],
+            'session_stats':            data['by_session'],
+            'month_stats':              data['by_month'],
+            'week_stats':               data['by_week'],
+            'shop_stats':               data['by_shop'],
+            'by_shop':                  data['by_shop'],
+            'customer_details':         data['customer_details'][:100],
+            'total_detail_count':       len(data['customer_details']),
+            'buyer_without_info_stats': data.get('buyer_without_info_stats', {}),
+        }
+        cache.set(cache_key, ctx, _ANALYTICS_TTL)
+        logger.info("analytics_dashboard: cache miss — computed and cached (%s)", cache_key)
+    else:
+        logger.info("analytics_dashboard: cache hit (%s)", cache_key)
+
+    ctx.update({
+        'start_date': start_date,
+        'end_date':   end_date,
+        'shop_group': shop_group,
+        'currency':   'VND',
+        'quick_btns': QUICK_BTNS,
+        'year_btns':  YEAR_BTNS,
     })
+    return render(request, 'analytics_dashboard.html', ctx)
 
 
 @requires_perm('page_chart')
