@@ -1230,23 +1230,139 @@ buildBarChart();
 buildComparisonChart();
 
 /* ══════════════════════════════════════════════
-   PDF DOWNLOAD
+   PDF DOWNLOAD — builds a clean HTML template
+   from chart canvas PNG data-URLs, then renders
+   that to PDF (avoids html2canvas on live DOM)
 ══════════════════════════════════════════════ */
+function getCanvasPng(id) {
+    const c = document.getElementById(id);
+    if (!c) return null;
+    // Draw onto a white-bg canvas first so transparency becomes white
+    const tmp = document.createElement('canvas');
+    tmp.width  = c.width;
+    tmp.height = c.height;
+    const ctx = tmp.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, tmp.width, tmp.height);
+    ctx.drawImage(c, 0, 0);
+    return tmp.toDataURL('image/png');
+}
+
+function buildPDFTemplate() {
+    const filterInfo = (() => {
+        const sd = document.querySelector('[name=start_date]').value;
+        const ed = document.querySelector('[name=end_date]').value;
+        const sg = document.querySelector('[name=shop_group]').value;
+        const parts = [];
+        if (sd && ed) parts.push(`Period: ${sd} → ${ed}`);
+        if (sg)       parts.push(`Shop Group: ${sg}`);
+        if (!parts.length) parts.push('All data (no date filter)');
+        return parts.join('  |  ');
+    })();
+
+    const donutIds = ['dChart1','dChart2','dChart3','dChart4','dChart5','dChart6','dChart7','dChart8'];
+    const donutLabels = [
+        'New Members vs Total CUS','Return Visit Rate (Period)',
+        'Active (Period) vs Total CUS','Member Active All-Time',
+        'INV (CUS) vs Total INV','AMT (CUS) vs Total AMT',
+        'INV (RET) vs Total INV','AMT (RET) vs Total AMT',
+    ];
+
+    const donutHTML = donutIds.map((id, i) => {
+        const png = getCanvasPng(id);
+        if (!png) return '';
+        return `<div style="display:inline-block;text-align:center;width:120px;margin:4px 6px;">
+            <img src="${png}" style="width:100px;height:100px;display:block;margin:0 auto;">
+            <div style="font-size:9px;color:#555;margin-top:3px;line-height:1.2;">${donutLabels[i]}</div>
+        </div>`;
+    }).join('');
+
+    const trendPng = getCanvasPng('shopTrendChart');
+    const barPng   = getCanvasPng('sessionBarChart');
+    const compPng  = getCanvasPng('comparisonBarChart');
+
+    const xAxisLabel = document.querySelector('input[name="xaxis"]:checked')?.parentElement?.querySelector('label')?.textContent?.trim() || '';
+    const metricLabel = document.getElementById('metricSelect')?.selectedOptions[0]?.text || '';
+    const barXLabel  = document.querySelector('input[name="barXaxis"]:checked')?.parentElement?.querySelector('label')?.textContent?.trim() || '';
+    const barMetric  = document.getElementById('barMetricSelect')?.selectedOptions[0]?.text || '';
+    const compXLabel = document.querySelector('input[name="compXaxis"]:checked')?.parentElement?.querySelector('label')?.textContent?.trim() || '';
+    const compMetric = document.getElementById('compMetricSelect')?.selectedOptions[0]?.text || '';
+
+    const now = new Date().toLocaleString('en-GB');
+
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 16px; color: #2C3E50; font-size: 11px; }
+        h1   { font-size: 16px; margin: 0 0 4px; color: #0047B3; }
+        .meta { font-size: 10px; color: #666; margin-bottom: 12px; border-bottom: 1px solid #dee2e6; padding-bottom: 8px; }
+        .section { margin-bottom: 18px; }
+        .section-title {
+            font-size: 11px; font-weight: bold; text-transform: uppercase;
+            letter-spacing: .5px; color: #495057; border-bottom: 2px solid #0047B3;
+            padding-bottom: 3px; margin-bottom: 8px;
+        }
+        .note { font-size: 9px; color: #888; margin-top: 3px; }
+        img  { max-width: 100%; display: block; }
+        .donuts { line-height: 0; }
+        .page-break { page-break-before: always; }
+    </style></head><body>
+    <h1>&#128202; Sales Analytics Charts</h1>
+    <div class="meta">
+        ${filterInfo}<br>
+        Generated: ${now}
+    </div>
+
+    <!-- Donuts -->
+    <div class="section">
+        <div class="section-title">Session Overview</div>
+        <div class="donuts">${donutHTML}</div>
+    </div>
+
+    <!-- Shop Trends -->
+    <div class="section page-break">
+        <div class="section-title">Shop Trends</div>
+        <div class="note">Time Axis: ${xAxisLabel} &nbsp;|&nbsp; Metric: ${metricLabel}</div>
+        ${trendPng ? `<img src="${trendPng}" style="width:100%;margin-top:6px;">` : '<p style="color:#aaa">No data</p>'}
+    </div>
+
+    <!-- Bar Chart -->
+    <div class="section page-break">
+        <div class="section-title">Bar Chart — Total of Selected Shops</div>
+        <div class="note">Time Axis: ${barXLabel} &nbsp;|&nbsp; Metric: ${barMetric}</div>
+        ${barPng ? `<img src="${barPng}" style="width:100%;margin-top:6px;">` : '<p style="color:#aaa">No data</p>'}
+    </div>
+
+    <!-- Year-over-Year -->
+    <div class="section page-break">
+        <div class="section-title">Year-over-Year Comparison</div>
+        <div class="note">Time Axis: ${compXLabel} &nbsp;|&nbsp; Metric: ${compMetric}</div>
+        ${compPng ? `<img src="${compPng}" style="width:100%;margin-top:6px;">` : '<p style="color:#aaa">No data</p>'}
+    </div>
+    </body></html>`;
+}
+
 const btnPDF = document.getElementById('btnDownloadPDF');
 if (btnPDF) {
     btnPDF.addEventListener('click', async function() {
         btnPDF.disabled = true;
         btnPDF.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
         try {
-            const el = document.querySelector('main .container-fluid');
+            const htmlStr = buildPDFTemplate();
+            const el = document.createElement('div');
+            el.innerHTML = htmlStr;
+            el.style.cssText = 'position:fixed;left:-9999px;top:0;width:1100px;background:#fff;';
+            document.body.appendChild(el);
+
             await window.html2pdf().set({
-                margin: [8, 6, 8, 6],
+                margin: [8, 8, 8, 8],
                 filename: 'Sales_Analytics_Charts.pdf',
-                image: { type: 'jpeg', quality: 0.95 },
-                html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+                image: { type: 'png' },
+                html2canvas: { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-                pagebreak: { mode: ['avoid-all', 'css'] },
+                pagebreak: { mode: 'css', before: '.page-break' },
             }).from(el).save();
+
+            document.body.removeChild(el);
         } catch(e) {
             alert('PDF generation failed: ' + e.message);
         }
