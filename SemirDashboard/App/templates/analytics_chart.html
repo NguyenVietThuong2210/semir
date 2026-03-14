@@ -811,10 +811,29 @@ function updateLegend(datasets) {
 }
 
 // Shared: render a click-detail card into any panel
-// rows = [{label, color, value}], sorted descending before calling
-// showPct: show percentage column (for bar/comp charts)
-// onClose: callback when ✕ is clicked
-function renderClickCard(panelId, lbl, rows, metric, showPct, onClose) {
+// rows    = [{label, color, value}]
+// showPct = true → show secondary line in value column
+// pctMode = 'share' (% of total) | 'yoy' (% growth vs previous year, rows sorted by label asc)
+// onClose = callback when ✕ clicked
+function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) {
+    // For 'yoy': sort chronologically, build growth map, then keep display order by label asc
+    let displayRows = rows;
+    let yoyMap = null;
+    if (pctMode === 'yoy') {
+        displayRows = [...rows].sort((a, b) => a.label.localeCompare(b.label));
+        yoyMap = {};
+        displayRows.forEach((r, i) => {
+            if (i === 0) {
+                yoyMap[r.label] = null;                        // base year
+            } else {
+                const prev = displayRows[i - 1];
+                yoyMap[r.label] = prev.value > 0
+                    ? (r.value - prev.value) / prev.value * 100
+                    : null;
+            }
+        });
+    }
+
     const total = rows.reduce((s, r) => s + r.value, 0);
     const panel = document.getElementById(panelId);
     panel.innerHTML =
@@ -825,8 +844,24 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose) {
                   style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;
                          border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
          </div>` +
-        rows.map(r =>
-            `<div style="display:flex;align-items:center;margin-bottom:3px;">
+        displayRows.map(r => {
+            let pctHtml = '';
+            if (showPct) {
+                if (pctMode === 'yoy') {
+                    const g = yoyMap[r.label];
+                    if (g === null) {
+                        pctHtml = `<div style="font-weight:400;color:#aaa;font-size:.7rem;">base</div>`;
+                    } else {
+                        const sign  = g >= 0 ? '+' : '';
+                        const color = g >= 0 ? '#2e7d32' : '#c62828';
+                        pctHtml = `<div style="font-weight:600;color:${color};font-size:.7rem;">${sign}${g.toFixed(1)}%</div>`;
+                    }
+                } else {
+                    if (total > 0)
+                        pctHtml = `<div style="font-weight:400;color:#888;font-size:.7rem;">${(r.value/total*100).toFixed(1)}%</div>`;
+                }
+            }
+            return `<div style="display:flex;align-items:center;margin-bottom:3px;">
                 <div style="width:80%;display:flex;align-items:center;min-width:0;overflow:hidden;">
                     <span style="display:inline-block;width:20px;height:2.5px;background:${r.color};
                                  margin-right:5px;flex-shrink:0;border-radius:2px;"></span>
@@ -836,12 +871,10 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose) {
                 <div style="width:20%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;
                              flex-shrink:0;padding-left:4px;">
                     ${fmtVal(r.value, metric)}
-                    ${showPct && total > 0
-                        ? `<div style="font-weight:400;color:#888;font-size:.7rem;">${(r.value/total*100).toFixed(1)}%</div>`
-                        : ''}
+                    ${pctHtml}
                 </div>
-             </div>`
-        ).join('');
+             </div>`;
+        }).join('');
     document.getElementById('_closeCard_' + panelId)
         .addEventListener('click', onClose);
 }
@@ -1271,10 +1304,9 @@ function buildComparisonChart() {
                 const lbl = compChart.data.labels[di];
                 const rows = compChart.data.datasets
                     .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
-                    .filter(r => r.value > 0)
-                    .sort((a, b) => b.value - a.value);
+                    .filter(r => r.value > 0);   // order handled by renderClickCard (yoy = asc by label)
                 renderClickCard('compInfoPanel', lbl, rows, metric, true,
-                    () => { document.getElementById('compInfoPanel').innerHTML = ''; });
+                    () => { document.getElementById('compInfoPanel').innerHTML = ''; }, 'yoy');
             },
             plugins: {
                 legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
