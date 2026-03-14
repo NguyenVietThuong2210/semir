@@ -253,12 +253,14 @@ def analytics_chart(request):
         'session_stats':    data['by_session'],
         'month_stats':      data['by_month'],
         'year_stats':       data['by_year'],
+        'week_stats':       data['by_week'],
         'shop_stats': [
             {
                 'shop_name':  s['shop_name'],
                 'by_session': s['by_session'],
                 'by_month':   s['by_month'],
                 'by_year':    s['by_year'],
+                'by_week':    s['by_week'],
             }
             for s in data['by_shop']
         ],

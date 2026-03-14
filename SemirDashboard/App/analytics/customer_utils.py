@@ -131,22 +131,25 @@ def build_customer_purchase_map(sales_list):
         - customer: Customer object (or None)
         - session: Season label
     """
-    from .season_utils import get_session_key, get_month_key, get_year_key
+    from .season_utils import get_session_key, get_month_key, get_year_key, get_week_info
 
     customer_purchases = defaultdict(list)
 
     for s in sales_list:
         vid = (s.vip_id or '').strip()
         key = '0' if vid in ('', '0', 'None') else vid
+        _wk = get_week_info(s.sales_date)
         customer_purchases[key].append({
-            'date':     s.sales_date,
-            'invoice':  s.invoice_number,
-            'amount':   s.sales_amount or 0,
-            'shop':     s.shop_name or 'Unknown Shop',
-            'customer': s.customer if key != '0' else None,
-            'session':  get_session_key(s.sales_date),
-            'month':    get_month_key(s.sales_date),
-            'year':     get_year_key(s.sales_date),
+            'date':       s.sales_date,
+            'invoice':    s.invoice_number,
+            'amount':     s.sales_amount or 0,
+            'shop':       s.shop_name or 'Unknown Shop',
+            'customer':   s.customer if key != '0' else None,
+            'session':    get_session_key(s.sales_date),
+            'month':      get_month_key(s.sales_date),
+            'year':       get_year_key(s.sales_date),
+            'week_sort':  _wk[0],
+            'week_label': _wk[1],
         })
     
     return customer_purchases
