@@ -376,7 +376,14 @@
                     <button class="btn btn-outline-secondary btn-sm" id="btnSelTop5">Top 5</button>
                 </div>
                 <div class="shop-checklist" id="shopChecklist">
-                    <!-- AVG line -->
+                    <!-- AVG all shops line -->
+                    <label for="cbAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox"
+                               id="cbAvgAll" value="__avg_all__" style="flex-shrink:0;">
+                        <span class="shop-dot" id="dot_avg_all" style="background:#6c757d;flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (all shops)</span>
+                    </label>
+                    <!-- AVG selected line -->
                     <label for="cbAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox"
                                id="cbAvg" value="__avg__" style="flex-shrink:0;">
@@ -403,6 +410,11 @@
                     <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
                     <div class="form-check mt-1">
                         <input class="form-check-input" type="radio" name="xaxis"
+                               value="week" id="xWeek">
+                        <label class="form-check-label" for="xWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="xaxis"
                                value="month" id="xMonth" checked>
                         <label class="form-check-label" for="xMonth">By Month</label>
                     </div>
@@ -415,11 +427,6 @@
                         <input class="form-check-input" type="radio" name="xaxis"
                                value="year" id="xYear">
                         <label class="form-check-label" for="xYear">By Year</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="xaxis"
-                               value="week" id="xWeek">
-                        <label class="form-check-label" for="xWeek">By Week</label>
                     </div>
                     <hr class="my-2">
                     <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
@@ -504,6 +511,11 @@
                     <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
                     <div class="form-check mt-1">
                         <input class="form-check-input" type="radio" name="barXaxis"
+                               value="week" id="barXWeek">
+                        <label class="form-check-label" for="barXWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="barXaxis"
                                value="month" id="barXMonth" checked>
                         <label class="form-check-label" for="barXMonth">By Month</label>
                     </div>
@@ -516,11 +528,6 @@
                         <input class="form-check-input" type="radio" name="barXaxis"
                                value="year" id="barXYear">
                         <label class="form-check-label" for="barXYear">By Year</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="barXaxis"
-                               value="week" id="barXWeek">
-                        <label class="form-check-label" for="barXWeek">By Week</label>
                     </div>
                     <hr class="my-2">
                     <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
@@ -591,6 +598,11 @@
                     <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
                     <div class="form-check mt-1">
                         <input class="form-check-input" type="radio" name="compXaxis"
+                               value="week" id="compXWeek">
+                        <label class="form-check-label" for="compXWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="compXaxis"
                                value="month" id="compXMonth" checked>
                         <label class="form-check-label" for="compXMonth">By Month</label>
                     </div>
@@ -598,11 +610,6 @@
                         <input class="form-check-input" type="radio" name="compXaxis"
                                value="season" id="compXSeason">
                         <label class="form-check-label" for="compXSeason">By Season</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="compXaxis"
-                               value="week" id="compXWeek">
-                        <label class="form-check-label" for="compXWeek">By Week</label>
                     </div>
                     <hr class="my-2">
                     <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
@@ -639,6 +646,8 @@
 {% block extra_js %}
 <!-- Chart.js 4 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- html2pdf (UMD bundle — must load via script tag, not dynamic import) -->
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 
 <script id="cd-data" type="application/json">{{ chart_data_json|safe }}</script>
 <script>
@@ -782,22 +791,8 @@ function updateLegend(datasets) {
     ).join('');
 }
 
-const AVG_COLOR = '#2C3E50';
-
-// Plugin: detect if mouse is directly over a data point (for tooltip mode switching)
-let _trendHoverDs = null;
-const hoverDetectPlugin = {
-    id: 'hoverDetect',
-    beforeEvent(chart, args) {
-        if (args.event.type !== 'mousemove') return;
-        // Use chart-computed canvas coords (args.event.x/y) — more reliable than native event
-        const pts = chart.getElementsAtEventForMode(
-            { x: args.event.x, y: args.event.y },
-            'point', { intersect: true }, false
-        );
-        _trendHoverDs = pts.length ? pts[0].datasetIndex : null;
-    },
-};
+const AVG_COLOR     = '#2C3E50';
+const AVG_ALL_COLOR = '#6c757d';
 
 // Manage hover highlight on mousemove — make hovered line thicker
 function attachLineHighlight(chart) {
@@ -823,7 +818,8 @@ function attachLineHighlight(chart) {
 function buildChart() {
     const selectedShops = [...document.querySelectorAll('.shop-check:checked')]
         .map(el => el.value);
-    const showAvg = document.getElementById('cbAvg').checked;
+    const showAvg    = document.getElementById('cbAvg').checked;
+    const showAvgAll = document.getElementById('cbAvgAll').checked;
     const xAxis   = document.querySelector('input[name="xaxis"]:checked').value;
     const metric  = document.getElementById('metricSelect').value;
     const xLabels = getXLabels(xAxis);
@@ -851,10 +847,36 @@ function buildChart() {
         };
     }).filter(Boolean);
 
-    // AVG dataset — only average shops that have data (>0) at each point
+    // AVG all shops — average of every shop in CD.shop_stats (ignores selection)
+    if (showAvgAll) {
+        const allData = xLabels.map((lbl, xi) => {
+            const nonZero = CD.shop_stats.map(shop => {
+                const d = getShopSeriesData(shop, xAxis, xLabels, metric);
+                return d[xi] ?? 0;
+            }).filter(v => v > 0);
+            return nonZero.length ? nonZero.reduce((a, b) => a + b, 0) / nonZero.length : 0;
+        });
+        datasets.push({
+            label: 'AVG (all shops)',
+            data: allData,
+            borderColor: AVG_ALL_COLOR,
+            backgroundColor: 'transparent',
+            pointBackgroundColor: AVG_ALL_COLOR,
+            borderWidth: 2.5,
+            borderDash: [4, 4],
+            pointRadius:      allData.map(v => v > 0 ? 4 : 0),
+            pointHoverRadius: allData.map(v => v > 0 ? 6 : 0),
+            pointHitRadius:   allData.map(v => v > 0 ? 8 : 0),
+            tension: 0.35,
+            fill: false,
+        });
+    }
+
+    // AVG selected — average of currently-selected shops
     if (showAvg && datasets.length > 0) {
+        const selDs = datasets.filter(ds => ds.label !== 'AVG (all shops)');
         const avgData = xLabels.map((_, xi) => {
-            const nonZero = datasets.map(ds => ds.data[xi] ?? 0).filter(v => v > 0);
+            const nonZero = selDs.map(ds => ds.data[xi] ?? 0).filter(v => v > 0);
             return nonZero.length ? nonZero.reduce((a, b) => a + b, 0) / nonZero.length : 0;
         });
         datasets.push({
@@ -873,26 +895,22 @@ function buildChart() {
         });
     }
 
-    _trendHoverDs = null;
     if (trendChart) trendChart.destroy();
     trendChart = new Chart(document.getElementById('shopTrendChart'), {
         type: 'line',
-        plugins: [hoverDetectPlugin],
         data: { labels: xLabels, datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             animation: { duration: 500 },
-            interaction: { mode: 'index', intersect: false },
+            events: ['click'],
+            interaction: { mode: 'nearest', intersect: true },
             plugins: {
                 legend: { display: false },
                 tooltip: {
                     backgroundColor: 'rgba(30,30,30,.92)',
                     titleFont: { weight: '700' },
-                    // Hover on dot → show only that dataset; hover on axis → show all non-zero sorted ↓
-                    filter: item => _trendHoverDs !== null
-                        ? item.datasetIndex === _trendHoverDs
-                        : item.raw > 0,
+                    filter: item => item.raw > 0,
                     itemSort: (a, b) => b.raw - a.raw,
                     callbacks: {
                         label: ctx => '  ' + ctx.dataset.label + ': ' + fmtVal(ctx.raw, metric),
@@ -1025,6 +1043,7 @@ function syncDotColors() {
 /* ── Line chart event listeners ── */
 document.querySelectorAll('.shop-check').forEach(cb => cb.addEventListener('change', buildChart));
 document.getElementById('cbAvg').addEventListener('change', buildChart);
+document.getElementById('cbAvgAll').addEventListener('change', buildChart);
 document.querySelectorAll('input[name="xaxis"]').forEach(r => r.addEventListener('change', buildChart));
 document.getElementById('metricSelect').addEventListener('change', buildChart);
 
@@ -1219,9 +1238,8 @@ if (btnPDF) {
         btnPDF.disabled = true;
         btnPDF.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
         try {
-            const { default: html2pdf } = await import('https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js');
             const el = document.querySelector('main .container-fluid');
-            await html2pdf().set({
+            await window.html2pdf().set({
                 margin: [8, 6, 8, 6],
                 filename: 'Sales_Analytics_Charts.pdf',
                 image: { type: 'jpeg', quality: 0.95 },
