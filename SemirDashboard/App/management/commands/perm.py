@@ -52,9 +52,16 @@ class Command(BaseCommand):
             raise CommandError(f'{flag} is required for this action.')
 
     # ------------------------------------------------------------------
+    # When a codename is renamed/split, map old → list of new codenames.
+    # _sync() will auto-migrate any role (including custom) that held the old key.
+    PERM_RENAMES = {
+        'page_cnv': ['page_cnv_sync', 'page_cnv_comparison'],
+    }
+
+    # ------------------------------------------------------------------
     def _sync(self):
         """Sync admin + viewer roles with ADMIN_PERMISSIONS / VIEWER_PERMISSIONS in permissions.py.
-        Also removes obsolete codenames from custom roles."""
+        Also removes obsolete codenames from custom roles and applies PERM_RENAMES migrations."""
         from App.models import Role, UserProfile
         from App.permissions import ADMIN_PERMISSIONS, VIEWER_PERMISSIONS, PERMISSION_DEFS
 
@@ -82,17 +89,36 @@ class Command(BaseCommand):
                 if removed:
                     self.stdout.write(self.style.WARNING(f'  updated  {role_name} -{removed}'))
 
-        # Custom roles: strip codenames that no longer exist in PERMISSION_DEFS
+        # Custom roles: apply renames then strip any remaining obsolete codenames
         for role in Role.objects.filter(is_system=False):
-            old   = set(role.permissions or [])
-            clean = [p for p in (role.permissions or []) if p in valid]
-            removed = old - set(clean)
+            perms   = list(role.permissions or [])
+            changed = False
+
+            # Step 1: apply PERM_RENAMES (old codename → new codenames)
+            for old_code, new_codes in self.PERM_RENAMES.items():
+                if old_code in perms:
+                    perms.remove(old_code)
+                    for nc in new_codes:
+                        if nc not in perms:
+                            perms.append(nc)
+                    changed = True
+                    self.stdout.write(self.style.SUCCESS(
+                        f'  migrated {role.name}: {old_code} -> {new_codes}'
+                    ))
+
+            # Step 2: strip codenames no longer in PERMISSION_DEFS
+            clean   = [p for p in perms if p in valid]
+            removed = set(perms) - set(clean)
             if removed:
-                role.permissions = clean
-                role.save()
+                perms   = clean
+                changed = True
                 self.stdout.write(self.style.WARNING(
                     f'  cleaned  {role.name} — removed obsolete: {sorted(removed)}'
                 ))
+
+            if changed:
+                role.permissions = perms
+                role.save()
             else:
                 self.stdout.write(f'  OK       {role.name} (custom) — no obsolete perms')
 

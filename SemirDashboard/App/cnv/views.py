@@ -16,7 +16,7 @@ from django.utils import timezone
 from App.models import Customer as POSCustomer
 from App.models_cnv import CNVCustomer, CNVOrder, CNVSyncLog
 
-@requires_perm('page_cnv')
+@requires_perm('page_cnv_sync')
 def sync_status(request):
     """
     CNV Sync Status Dashboard
@@ -59,7 +59,7 @@ def sync_status(request):
     return render(request, 'cnv/sync_status.html', context)
 
 
-@requires_perm('page_cnv')
+@requires_perm('page_cnv_comparison')
 def customer_comparison(request):
     """
     Compare POS System vs CNV Loyalty customers
@@ -607,7 +607,7 @@ def export_customer_comparison(request):
     return response
 
 
-@requires_perm('page_cnv')
+@requires_perm('page_cnv_sync')
 def sync_cnv_points(request):
     """
     AJAX endpoint: sync points for a list of CNV customer IDs.
@@ -670,7 +670,7 @@ def sync_cnv_points(request):
 # MANUAL SYNC TRIGGERS
 # ============================================================================
 
-@requires_perm('page_cnv')
+@requires_perm('page_cnv_sync')
 @require_POST
 def trigger_sync(request):
     """
@@ -710,7 +710,7 @@ def trigger_sync(request):
     })
 
 
-@requires_perm('page_cnv')
+@requires_perm('page_cnv_sync')
 @require_POST
 def trigger_zalo_sync(request):
     """
