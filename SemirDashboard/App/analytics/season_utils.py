@@ -6,6 +6,7 @@ Pure functions with no database or model dependencies.
 
 Version: 3.3
 """
+import datetime
 
 # Season definitions
 SEASON_DEFS = [
@@ -152,5 +153,46 @@ def get_session_for_range(date_from, date_to):
     for label, m_list in SEASON_DEFS:
         if months.issubset(set(m_list)):
             return label
-    
+
     return None
+
+
+def get_week_info(d):
+    """Returns (week_sort_key, week_display_label) for a date.
+    Week 1 starts on the first Monday of the year.
+    week_sort_key format: 'YYYY-WNN' (sortable)
+    week_label format: 'Week N (d/m-d/m)'
+    """
+    if not d:
+        return ('Unknown', 'Unknown')
+    year = d.year
+    jan1 = datetime.date(year, 1, 1)
+    days_until_monday = (7 - jan1.weekday()) % 7
+    first_monday = jan1 + datetime.timedelta(days=days_until_monday)
+
+    if d < first_monday:
+        # Days before first Monday: belongs to previous year's last week
+        pyear = year - 1
+        pjan1 = datetime.date(pyear, 1, 1)
+        pdays = (7 - pjan1.weekday()) % 7
+        pfirst_monday = pjan1 + datetime.timedelta(days=pdays)
+        diff = (d - pfirst_monday).days
+        wn = diff // 7 + 1
+        ws = pfirst_monday + datetime.timedelta(weeks=wn - 1)
+        we = ws + datetime.timedelta(days=6)
+        return (f"{pyear}-W{wn:02d}", f"Week {wn} ({ws.day}/{ws.month}-{we.day}/{we.month})")
+
+    diff = (d - first_monday).days
+    wn = diff // 7 + 1
+    ws = first_monday + datetime.timedelta(weeks=wn - 1)
+    we = ws + datetime.timedelta(days=6)
+    return (f"{year}-W{wn:02d}", f"Week {wn} ({ws.day}/{ws.month}-{we.day}/{we.month})")
+
+
+def week_sort_key(key):
+    """Sort key for week sort keys 'YYYY-WNN'."""
+    try:
+        yr, wn = key.split('-W')
+        return (int(yr), int(wn))
+    except (ValueError, AttributeError, IndexError):
+        return (9999, 99)

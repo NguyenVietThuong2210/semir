@@ -13,6 +13,7 @@ PERMISSION_DEFS = [
     ('page_cnv_sync',        'CNV Sync Status',               'Pages'),
     ('page_cnv_comparison',  'Customer Analytics',            'Pages'),
     ('download_analytics',   'Export Analytics (Excel)',      'Downloads'),
+    ('download_chart_pdf',   'Download Charts PDF',           'Downloads'),
     ('download_coupons',     'Export Coupons (Excel)',        'Downloads'),
     ('download_cnv',         'Export CNV Comparison (Excel)', 'Downloads'),
     ('manage_users',         'User Management',               'Admin'),

@@ -23,12 +23,13 @@ from .customer_utils import (
     get_customer_info,
     build_customer_purchase_map,
 )
-from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key
+from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key
 from .aggregators import (
     aggregate_by_grade,
     aggregate_by_season,
     aggregate_by_month,
     aggregate_by_year,
+    aggregate_by_week,
     aggregate_by_shop,
     calculate_buyer_without_info,
 )
@@ -214,7 +215,9 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     all_session_keys = sorted([s['session'] for s in session_stats], key=session_sort_key)
     all_month_keys = sorted([m['month'] for m in month_stats], key=month_sort_key)
     all_year_keys = sorted([y['year'] for y in year_stats], key=year_sort_key)
-    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys, new_members_in_period, all_month_keys, all_year_keys)
+    week_stats = aggregate_by_week(customer_purchases, get_customer_info, new_members_in_period)
+    all_week_keys = sorted([w['week_sort'] for w in week_stats], key=week_sort_key)
+    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys, new_members_in_period, all_month_keys, all_year_keys, all_week_keys)
     
     buyer_without_info_stats = calculate_buyer_without_info(
         vip_0_purchases,
@@ -256,6 +259,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         'by_session': session_stats,
         'by_month': month_stats,
         'by_year': year_stats,
+        'by_week': week_stats,
         'by_shop': shop_stats,
         'customer_details': customer_details,
         'buyer_without_info_stats': buyer_without_info_stats,

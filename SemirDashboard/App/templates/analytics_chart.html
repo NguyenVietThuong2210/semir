@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load custom_filters %}
-{% block title %}Overview Charts{% endblock %}
+{% load perm_tags %}
+{% block title %}Sales Analytics Charts{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -107,11 +108,19 @@
 {% block content %}
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-pie-chart"></i> Overview Charts</h2>
-    <a href="{% url 'analytics_dashboard' %}?{% if start_date %}start_date={{ start_date }}&{% endif %}{% if end_date %}end_date={{ end_date }}&{% endif %}{% if shop_group %}shop_group={{ shop_group }}{% endif %}"
-       class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-table"></i> Switch to Table View
-    </a>
+    <h2><i class="bi bi-pie-chart"></i> Sales Analytics Charts</h2>
+    <div class="d-flex gap-2">
+        {% check_perm 'download_chart_pdf' as can_dl %}
+        {% if can_dl %}
+        <button id="btnDownloadPDF" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-file-pdf"></i> Download PDF
+        </button>
+        {% endif %}
+        <a href="{% url 'analytics_dashboard' %}?{% if start_date %}start_date={{ start_date }}&{% endif %}{% if end_date %}end_date={{ end_date }}&{% endif %}{% if shop_group %}shop_group={{ shop_group }}{% endif %}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-table"></i> Switch to Table View
+        </a>
+    </div>
 </div>
 
 <!-- ═══════════════════════════════════════
@@ -407,6 +416,11 @@
                                value="year" id="xYear">
                         <label class="form-check-label" for="xYear">By Year</label>
                     </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="xaxis"
+                               value="week" id="xWeek">
+                        <label class="form-check-label" for="xWeek">By Week</label>
+                    </div>
                     <hr class="my-2">
                     <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
                     <select class="form-select form-select-sm mt-1" id="metricSelect">
@@ -503,6 +517,11 @@
                                value="year" id="barXYear">
                         <label class="form-check-label" for="barXYear">By Year</label>
                     </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="barXaxis"
+                               value="week" id="barXWeek">
+                        <label class="form-check-label" for="barXWeek">By Week</label>
+                    </div>
                     <hr class="my-2">
                     <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
                     <select class="form-select form-select-sm mt-1" id="barMetricSelect">
@@ -579,6 +598,11 @@
                         <input class="form-check-input" type="radio" name="compXaxis"
                                value="season" id="compXSeason">
                         <label class="form-check-label" for="compXSeason">By Season</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="compXaxis"
+                               value="week" id="compXWeek">
+                        <label class="form-check-label" for="compXWeek">By Week</label>
                     </div>
                     <hr class="my-2">
                     <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
@@ -726,12 +750,21 @@ let trendChart = null;
 function getXLabels(xAxis) {
     if (xAxis === 'month')  return CD.month_stats.map(d => d.month);
     if (xAxis === 'season') return CD.session_stats.map(d => d.session);
+    if (xAxis === 'week')   return CD.week_stats.map(d => d.week_label);
     return CD.year_stats.map(d => d.year);
 }
 
 function getShopSeriesData(shop, xAxis, xLabels, metric) {
-    const byKey  = xAxis === 'month' ? 'by_month' : (xAxis === 'season' ? 'by_session' : 'by_year');
-    const timeKey = xAxis === 'season' ? 'session' : (xAxis === 'year' ? 'year' : 'month');
+    let byKey, timeKey;
+    if (xAxis === 'week') {
+        byKey = 'by_week'; timeKey = 'week_label';
+    } else if (xAxis === 'month') {
+        byKey = 'by_month'; timeKey = 'month';
+    } else if (xAxis === 'season') {
+        byKey = 'by_session'; timeKey = 'session';
+    } else {
+        byKey = 'by_year'; timeKey = 'year';
+    }
     const rows = shop[byKey] || [];
     return xLabels.map(lbl => {
         const row = rows.find(r => r[timeKey] === lbl);
@@ -765,6 +798,27 @@ const hoverDetectPlugin = {
         _trendHoverDs = pts.length ? pts[0].datasetIndex : null;
     },
 };
+
+// Manage hover highlight on mousemove — make hovered line thicker
+function attachLineHighlight(chart) {
+    const canvas = chart.canvas;
+    canvas.addEventListener('mousemove', function(e) {
+        const pts = chart.getElementsAtEventForMode(e, 'nearest', { intersect: false }, true);
+        const hoveredDs = pts.length ? pts[0].datasetIndex : null;
+        chart.data.datasets.forEach((ds, i) => {
+            if (!('_origBorderWidth' in ds)) ds._origBorderWidth = ds.borderWidth ?? 2;
+            const orig = ds._origBorderWidth;
+            ds.borderWidth = (hoveredDs !== null && i === hoveredDs) ? orig * 2 : orig;
+        });
+        chart.update('none');
+    });
+    canvas.addEventListener('mouseleave', function() {
+        chart.data.datasets.forEach(ds => {
+            if ('_origBorderWidth' in ds) ds.borderWidth = ds._origBorderWidth;
+        });
+        chart.update('none');
+    });
+}
 
 function buildChart() {
     const selectedShops = [...document.querySelectorAll('.shop-check:checked')]
@@ -847,12 +901,12 @@ function buildChart() {
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(0,0,0,.05)' },
+                    grid: { color: 'rgba(0,0,0,.12)' },
                     ticks: { font: { size: 11 } },
                 },
                 y: {
                     beginAtZero: true,
-                    grid: { color: 'rgba(0,0,0,.05)' },
+                    grid: { color: 'rgba(0,0,0,.12)' },
                     title: { display: true, text: yLabel(metric), font: { size: 11 } },
                     ticks: {
                         font: { size: 11 },
@@ -865,6 +919,7 @@ function buildChart() {
         },
     });
 
+    attachLineHighlight(trendChart);
     updateLegend(datasets);
     syncDotColors();
 }
@@ -877,8 +932,9 @@ let barChart = null;
 const BAR_GRADIENT_COLOR = '#0047B3';
 
 function getGlobalRows(xAxis) {
-    if (xAxis === 'month')  return { rows: CD.month_stats,   key: 'month'   };
-    if (xAxis === 'season') return { rows: CD.session_stats, key: 'session' };
+    if (xAxis === 'month')  return { rows: CD.month_stats,   key: 'month'     };
+    if (xAxis === 'season') return { rows: CD.session_stats, key: 'session'   };
+    if (xAxis === 'week')   return { rows: CD.week_stats,    key: 'week_label' };
     return { rows: CD.year_stats, key: 'year' };
 }
 
@@ -888,8 +944,8 @@ function buildBarChart() {
     const xLabels       = getXLabels(xAxis);
     const isAmount      = ['returning_amount','total_amount','total_amount_with_vip0'].includes(metric);
     const selectedShops = [...document.querySelectorAll('.bar-shop-check:checked')].map(el => el.value);
-    const byKey         = xAxis === 'month' ? 'by_month' : (xAxis === 'season' ? 'by_session' : 'by_year');
-    const timeKey       = xAxis === 'season' ? 'session' : (xAxis === 'year' ? 'year' : 'month');
+    const byKey         = xAxis === 'week' ? 'by_week' : (xAxis === 'month' ? 'by_month' : (xAxis === 'season' ? 'by_session' : 'by_year'));
+    const timeKey       = xAxis === 'week' ? 'week_label' : (xAxis === 'season' ? 'session' : (xAxis === 'year' ? 'year' : 'month'));
 
     // Sum all selected shops per time period → single blue bar
     const values = xLabels.map(lbl =>
@@ -936,7 +992,7 @@ function buildBarChart() {
                 },
                 y: {
                     beginAtZero: true,
-                    grid: { color: 'rgba(0,0,0,.05)' },
+                    grid: { color: 'rgba(0,0,0,.12)' },
                     title: { display: true, text: yLabel(metric), font: { size: 11 } },
                     ticks: {
                         font: { size: 11 },
@@ -1029,39 +1085,72 @@ function buildComparisonChart() {
     const metric        = document.getElementById('compMetricSelect').value;
     const selectedShops = [...document.querySelectorAll('.comp-shop-check:checked')].map(el => el.value);
 
-    // Aggregate using same shop_stats data as bar chart 1 — full metric support
-    const yearPeriodData = {};
-    selectedShops.forEach(name => {
-        const shop = CD.shop_stats.find(s => s.shop_name === name);
-        if (!shop) return;
-        (shop.by_month || []).forEach(row => {
-            const [yr, moStr] = row.month.split('-');
-            const mo = parseInt(moStr);
-            const period = xAxis === 'month' ? mo : monthToSeason(mo);
-            if (!period) return;
-            if (!yearPeriodData[yr]) yearPeriodData[yr] = {};
-            yearPeriodData[yr][period] = (yearPeriodData[yr][period] || 0) + (row[metric] || 0);
+    let xLabels, datasets;
+
+    if (xAxis === 'week') {
+        // Group by year+weekNum from by_week data
+        const yearWeekData = {};
+        selectedShops.forEach(name => {
+            const shop = CD.shop_stats.find(s => s.shop_name === name);
+            if (!shop) return;
+            (shop.by_week || []).forEach(row => {
+                const yr = row.week_sort.substring(0, 4);
+                const wn = parseInt(row.week_sort.substring(6));
+                if (!yearWeekData[yr]) yearWeekData[yr] = {};
+                yearWeekData[yr][wn] = (yearWeekData[yr][wn] || 0) + (row[metric] || 0);
+            });
         });
-    });
+        const allWeekNums = [...new Set(
+            Object.values(yearWeekData).flatMap(m => Object.keys(m).map(Number))
+        )].sort((a, b) => a - b);
+        xLabels = allWeekNums.map(wn => `W${wn}`);
+        const years = Object.keys(yearWeekData).sort();
+        datasets = years.map((yr, i) => {
+            const color = COMP_YEAR_PALETTE[i % COMP_YEAR_PALETTE.length];
+            return {
+                label: yr,
+                data: allWeekNums.map(wn => yearWeekData[yr][wn] || 0),
+                backgroundColor: color + 'cc',
+                borderColor: color,
+                borderWidth: 1,
+                borderRadius: 4,
+                borderSkipped: false,
+            };
+        });
+    } else {
+        // Aggregate using same shop_stats data — full metric support
+        const yearPeriodData = {};
+        selectedShops.forEach(name => {
+            const shop = CD.shop_stats.find(s => s.shop_name === name);
+            if (!shop) return;
+            (shop.by_month || []).forEach(row => {
+                const [yr, moStr] = row.month.split('-');
+                const mo = parseInt(moStr);
+                const period = xAxis === 'month' ? mo : monthToSeason(mo);
+                if (!period) return;
+                if (!yearPeriodData[yr]) yearPeriodData[yr] = {};
+                yearPeriodData[yr][period] = (yearPeriodData[yr][period] || 0) + (row[metric] || 0);
+            });
+        });
 
-    const xLabels = xAxis === 'month' ? MONTH_LABELS : SEASON_LABELS;
-    const years   = Object.keys(yearPeriodData).sort();
-
-    const datasets = years.map((yr, i) => {
-        const color = COMP_YEAR_PALETTE[i % COMP_YEAR_PALETTE.length];
-        const data  = xAxis === 'month'
-            ? Array.from({length: 12}, (_, j) => yearPeriodData[yr][j + 1] || 0)
-            : SEASON_LABELS.map(s => yearPeriodData[yr][s] || 0);
-        return {
-            label: yr,
-            data,
-            backgroundColor: color + 'cc',
-            borderColor: color,
-            borderWidth: 1,
-            borderRadius: 4,
-            borderSkipped: false,
-        };
-    });
+        xLabels = xAxis === 'month' ? MONTH_LABELS : SEASON_LABELS;
+        const years = Object.keys(yearPeriodData).sort();
+        datasets = years.map((yr, i) => {
+            const color = COMP_YEAR_PALETTE[i % COMP_YEAR_PALETTE.length];
+            const data = xAxis === 'month'
+                ? Array.from({length: 12}, (_, j) => yearPeriodData[yr][j + 1] || 0)
+                : SEASON_LABELS.map(s => yearPeriodData[yr][s] || 0);
+            return {
+                label: yr,
+                data,
+                backgroundColor: color + 'cc',
+                borderColor: color,
+                borderWidth: 1,
+                borderRadius: 4,
+                borderSkipped: false,
+            };
+        });
+    }
 
     if (compChart) compChart.destroy();
     compChart = new Chart(document.getElementById('comparisonBarChart'), {
@@ -1086,7 +1175,7 @@ function buildComparisonChart() {
                 x: { grid: { display: false }, ticks: { font: { size: 11 } } },
                 y: {
                     beginAtZero: true,
-                    grid: { color: 'rgba(0,0,0,.05)' },
+                    grid: { color: 'rgba(0,0,0,.12)' },
                     title: { display: true, text: yLabel(metric), font: { size: 11 } },
                     ticks: {
                         font: { size: 11 },
@@ -1120,6 +1209,33 @@ document.getElementById('btnCompSelTop5').addEventListener('click', () => {
 buildChart();
 buildBarChart();
 buildComparisonChart();
+
+/* ══════════════════════════════════════════════
+   PDF DOWNLOAD
+══════════════════════════════════════════════ */
+const btnPDF = document.getElementById('btnDownloadPDF');
+if (btnPDF) {
+    btnPDF.addEventListener('click', async function() {
+        btnPDF.disabled = true;
+        btnPDF.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+        try {
+            const { default: html2pdf } = await import('https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js');
+            const el = document.querySelector('main .container-fluid');
+            await html2pdf().set({
+                margin: [8, 6, 8, 6],
+                filename: 'Sales_Analytics_Charts.pdf',
+                image: { type: 'jpeg', quality: 0.95 },
+                html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['avoid-all', 'css'] },
+            }).from(el).save();
+        } catch(e) {
+            alert('PDF generation failed: ' + e.message);
+        }
+        btnPDF.disabled = false;
+        btnPDF.innerHTML = '<i class="bi bi-file-pdf"></i> Download PDF';
+    });
+}
 
 /* ══════════════════════════════════════════════
    Quick date buttons (copy from analytics page)

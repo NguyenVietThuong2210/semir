@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from .calculations import calculate_return_visits, create_empty_bucket
 from .customer_utils import GRADE_ORDER, get_all_time_grade_counts
-from .season_utils import session_sort_key, month_sort_key, year_sort_key
+from .season_utils import session_sort_key, month_sort_key, year_sort_key, week_sort_key
 
 logger = logging.getLogger('customer_analytics')
 
@@ -253,6 +253,88 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
     return month_stats
 
 
+def aggregate_by_week(customer_purchases, get_customer_info_fn, new_members=None):
+    """
+    Aggregate customer data by week (week starting on first Monday of year).
+    Same logic as aggregate_by_month but uses 'week_sort' and 'week_label' fields.
+    Each row: {week_sort, week_label, total_customers, new_customers, ...}
+    """
+    week_buckets = defaultdict(create_empty_bucket)
+    week_vip0_invoices = defaultdict(int)
+    week_vip0_amount = defaultdict(lambda: Decimal(0))
+    week_returning_invoices = defaultdict(int)
+    week_returning_amount = defaultdict(lambda: Decimal(0))
+    week_new = defaultdict(int)
+    week_labels = {}  # week_sort -> week_label
+
+    for vip_id, purchases in customer_purchases.items():
+        if vip_id == '0':
+            by_week = defaultdict(list)
+            for p in purchases:
+                by_week[p['week_sort']].append(p)
+                week_labels[p['week_sort']] = p['week_label']
+            for wk, wp in by_week.items():
+                week_vip0_invoices[wk] += len(wp)
+                week_vip0_amount[wk] += sum(p['amount'] for p in wp)
+            continue
+
+        all_purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        _, reg_date, _ = get_customer_info_fn(vip_id, all_purchases_sorted[0]['customer'])
+
+        by_week = defaultdict(list)
+        for p in purchases:
+            by_week[p['week_sort']].append(p)
+            week_labels[p['week_sort']] = p['week_label']
+
+        for wk, wp in by_week.items():
+            wp_sorted = sorted(wp, key=lambda x: x['date'])
+            week_first_date = wp_sorted[0]['date']
+            wp_amount = sum(p['amount'] for p in wp)
+
+            week_buckets[wk]['active'] += 1
+            week_buckets[wk]['invoices'] += len(wp)
+            week_buckets[wk]['amount'] += wp_amount
+
+            _, is_ret_in_week = calculate_return_visits(wp_sorted, reg_date)
+            has_prior_purchases = any(p['date'] < week_first_date for p in all_purchases_sorted)
+
+            if is_ret_in_week or has_prior_purchases:
+                week_buckets[wk]['returning'] += 1
+                week_returning_invoices[wk] += len(wp)
+                week_returning_amount[wk] += wp_amount
+
+            if new_members and vip_id in new_members:
+                week_new[wk] += 1
+
+    all_week_keys_union = set(week_buckets.keys()) | set(week_vip0_invoices.keys())
+    week_stats = []
+    for key in sorted(all_week_keys_union, key=week_sort_key):
+        s = week_buckets[key]
+        ac = s['active']
+        rc = s['returning']
+        vip0_inv = week_vip0_invoices.get(key, 0)
+        vip0_amt = week_vip0_amount.get(key, Decimal(0))
+        new_c = week_new.get(key, 0)
+        week_stats.append({
+            'week_sort':  key,
+            'week_label': week_labels.get(key, key),
+            'total_customers': ac,
+            'new_customers': new_c,
+            'new_rate': round(new_c / ac * 100, 2) if ac else 0,
+            'returning_customers': rc,
+            'return_rate': round(rc / ac * 100 if ac else 0, 2),
+            'returning_invoices': week_returning_invoices.get(key, 0),
+            'returning_amount': float(week_returning_amount.get(key, Decimal(0))),
+            'total_invoices': s['invoices'],
+            'total_amount': float(s['amount']),
+            'total_invoices_with_vip0': s['invoices'] + vip0_inv,
+            'total_amount_with_vip0': float(s['amount'] + vip0_amt),
+        })
+
+    logger.info("week_stats: %d rows", len(week_stats))
+    return week_stats
+
+
 def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None):
     """
     Aggregate customer data by calendar year (YYYY).
@@ -331,7 +413,7 @@ def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None
     return year_stats
 
 
-def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys, new_members=None, all_month_keys=None, all_year_keys=None):
+def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys, new_members=None, all_month_keys=None, all_year_keys=None, all_week_keys=None):
     """
     Aggregate customer data by shop with sub-breakdowns.
 
@@ -383,7 +465,14 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
     shop_year_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
     shop_year_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
     shop_year_new = defaultdict(lambda: defaultdict(int))
-    
+
+    # Week tracking per shop
+    shop_week = defaultdict(lambda: defaultdict(create_empty_bucket))
+    shop_week_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
+    shop_week_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
+    shop_week_new = defaultdict(lambda: defaultdict(int))
+    shop_week_labels = {}  # week_sort -> week_label
+
     for vip_id, purchases in customer_purchases.items():
         # Track VIP 0
         if vip_id == '0':
@@ -403,6 +492,9 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                     shop_month_vip0[sh][p['month']]['amount'] += amt
                     shop_year_vip0[sh][p['year']]['invoices'] += 1
                     shop_year_vip0[sh][p['year']]['amount'] += amt
+                    shop_week_vip0[sh][p['week_sort']]['invoices'] += 1
+                    shop_week_vip0[sh][p['week_sort']]['amount'] += amt
+                    shop_week_labels[p['week_sort']] = p['week_label']
             continue
         
         # Get customer info from the EARLIEST purchase (order-independent)
@@ -444,14 +536,17 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             shop_grade[sh][grade]['invoices'] += len(sh_p)
             shop_grade[sh][grade]['amount'] += sh_amount
 
-            # Single pass: build session, month, and year groups simultaneously
+            # Single pass: build session, month, year, and week groups simultaneously
             by_sess_shop = defaultdict(list)
             by_month_shop = defaultdict(list)
             by_year_shop = defaultdict(list)
+            by_week_shop = defaultdict(list)
             for p in sh_p:
                 by_sess_shop[p['session']].append(p)
                 by_month_shop[p['month']].append(p)
                 by_year_shop[p['year']].append(p)
+                by_week_shop[p['week_sort']].append(p)
+                shop_week_labels[p['week_sort']] = p['week_label']
 
             # Shop → By Session
             for sk, sp in by_sess_shop.items():
@@ -515,6 +610,27 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
 
                 if new_members and vip_id in new_members:
                     shop_year_new[sh][yk] += 1
+
+            # Shop → By Week
+            for wk, wp in by_week_shop.items():
+                wp_sorted = sorted(wp, key=lambda x: x['date'])
+                week_first_date = wp_sorted[0]['date']
+                wp_amount = sum(p['amount'] for p in wp)
+
+                shop_week[sh][wk]['active'] += 1
+                shop_week[sh][wk]['invoices'] += len(wp)
+                shop_week[sh][wk]['amount'] += wp_amount
+
+                _, is_ret_in_week = calculate_return_visits(wp_sorted, reg_date)
+                has_prior_week = any(p['date'] < week_first_date for p in sh_p_sorted)
+
+                if is_ret_in_week or has_prior_week:
+                    shop_week[sh][wk]['returning'] += 1
+                    shop_week_returning[sh][wk]['invoices'] += len(wp)
+                    shop_week_returning[sh][wk]['amount'] += wp_amount
+
+                if new_members and vip_id in new_members:
+                    shop_week_new[sh][wk] += 1
 
     # Build shop stats list
     shop_stats = []
@@ -622,6 +738,33 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_amount_with_vip0': float(yd['amount'] + vip0_yr['amount']),
             })
 
+        # By week list
+        by_week_list = []
+        for key in (all_week_keys or sorted(shop_week[sh].keys(), key=week_sort_key)):
+            wd = shop_week[sh].get(key)
+            if wd is None:
+                wd = create_empty_bucket()
+            vip0_wk = shop_week_vip0[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
+            ret_wk = shop_week_returning[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
+            a = wd['active']
+            r = wd['returning']
+            wk_new_c = shop_week_new[sh].get(key, 0)
+            by_week_list.append({
+                'week_sort':  key,
+                'week_label': shop_week_labels.get(key, key),
+                'total_customers': a,
+                'new_customers': wk_new_c,
+                'new_rate': round(wk_new_c / a * 100, 2) if a else 0,
+                'returning_customers': r,
+                'return_rate': round(r / a * 100 if a else 0, 2),
+                'returning_invoices': ret_wk['invoices'],
+                'returning_amount': float(ret_wk['amount']),
+                'total_invoices': wd['invoices'],
+                'total_amount': float(wd['amount']),
+                'total_invoices_with_vip0': wd['invoices'] + vip0_wk['invoices'],
+                'total_amount_with_vip0': float(wd['amount'] + vip0_wk['amount']),
+            })
+
         shop_new_c = shop_new.get(sh, 0)
         shop_stats.append({
             'shop_name': sh,
@@ -640,6 +783,7 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             'by_session': by_session_list,
             'by_month': by_month_list,
             'by_year': by_year_list,
+            'by_week': by_week_list,
         })
     
     # Sort by customer count
