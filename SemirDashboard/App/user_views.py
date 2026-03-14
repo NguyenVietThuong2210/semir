@@ -40,13 +40,10 @@ def user_management(request):
             role_id = request.POST.get('role_id')
             try:
                 role = Role.objects.get(pk=role_id)
-                if role.is_system:
-                    messages.error(request, f"System role '{role.name}' cannot be edited manually. Run 'python manage.py perm sync' to update.")
-                else:
-                    selected = request.POST.getlist(f'perm_{role_id}')
-                    role.permissions = selected
-                    role.save()
-                    messages.success(request, f"Permissions saved for role '{role.name}'.")
+                selected = request.POST.getlist(f'perm_{role_id}')
+                role.permissions = selected
+                role.save()
+                messages.success(request, f"Permissions saved for role '{role.name}'.")
             except Role.DoesNotExist:
                 messages.error(request, "Role not found.")
             return redirect('user_management')
