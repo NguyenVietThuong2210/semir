@@ -329,6 +329,8 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
         current_row += 1
 
         for s in shop.get('by_session', []):
+            if not s.get('total_invoices_with_vip0', 0):
+                continue
             ws.cell(row=current_row, column=1, value=s['session'])
             ws.cell(row=current_row, column=2, value=s['total_customers'])
             ws.cell(row=current_row, column=3, value=s.get('new_customers', 0))
@@ -360,7 +362,7 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
         current_row += 1
 
         for m in shop.get('by_month', []):
-            if not m['total_customers']:
+            if not m.get('total_invoices_with_vip0', 0):
                 continue
             ws.cell(row=current_row, column=1, value=m['month'])
             ws.cell(row=current_row, column=2, value=m['total_customers'])
@@ -393,7 +395,7 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
         current_row += 1
 
         for w in shop.get('by_week', []):
-            if not w['total_customers']:
+            if not w.get('total_invoices_with_vip0', 0):
                 continue
             ws.cell(row=current_row, column=1, value=w['week_label'])
             ws.cell(row=current_row, column=2, value=w['total_customers'])
@@ -425,18 +427,24 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
 def _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_align):
     """By Grade - All Shops comparison."""
     ws = wb.create_sheet("By Grade - All Shops")
-    
+
     all_grades = set()
     for shop in data['by_shop']:
         for g in shop.get('by_grade', []):
             all_grades.add(g['grade'])
-    
+
     GRADE_ORDER = {'No Grade': 0, 'Member': 1, 'Silver': 2, 'Gold': 3, 'Diamond': 4}
     sorted_grades = sorted(all_grades, key=lambda x: GRADE_ORDER.get(x, 99))
     sorted_shops = sorted(data['by_shop'], key=lambda x: x['shop_name'])
-    
+
+    # Pre-build lookup: {shop_name: {grade: g_data}} — O(1) per lookup vs O(n) next()
+    shop_grade_map = {
+        shop['shop_name']: {g['grade']: g for g in shop.get('by_grade', [])}
+        for shop in sorted_shops
+    }
+
     current_row = 1
-    
+
     for grade in sorted_grades:
         ws.cell(row=current_row, column=1, value=f"GRADE: {grade}")
         ws.cell(row=current_row, column=1).font = Font(bold=True, size=12)
@@ -451,8 +459,8 @@ def _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_al
         current_row += 1
 
         for shop in sorted_shops:
-            g = next((g for g in shop.get('by_grade', []) if g['grade'] == grade), None)
-            if g and g['total_customers'] > 0:
+            g = shop_grade_map[shop['shop_name']].get(grade)
+            if g and g.get('total_invoices', 0) > 0:
                 ws.cell(row=current_row, column=1, value=shop['shop_name'])
                 ws.cell(row=current_row, column=2, value=g['total_customers'])
                 ws.cell(row=current_row, column=3, value=g['returning_customers'])
@@ -475,12 +483,18 @@ def _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_al
 def _create_season_comparison_sheet(wb, data, header_fill, header_font, header_align):
     """By Season - All Shops comparison."""
     ws = wb.create_sheet("By Season - All Shops")
-    
+
     all_seasons = [s['session'] for s in data['by_session']]
     sorted_shops = sorted(data['by_shop'], key=lambda x: x['shop_name'])
-    
+
+    # Pre-build lookup: {shop_name: {season: s_data}}
+    shop_session_map = {
+        shop['shop_name']: {s['session']: s for s in shop.get('by_session', [])}
+        for shop in sorted_shops
+    }
+
     current_row = 1
-    
+
     for season in all_seasons:
         ws.cell(row=current_row, column=1, value=f"SEASON: {season}")
         ws.cell(row=current_row, column=1).font = Font(bold=True, size=12)
@@ -495,7 +509,7 @@ def _create_season_comparison_sheet(wb, data, header_fill, header_font, header_a
         current_row += 1
 
         for shop in sorted_shops:
-            s = next((s for s in shop.get('by_session', []) if s['session'] == season), None)
+            s = shop_session_map[shop['shop_name']].get(season)
             if s and s.get('total_invoices_with_vip0', 0) > 0:
                 ws.cell(row=current_row, column=1, value=shop['shop_name'])
                 ws.cell(row=current_row, column=2, value=s['total_customers'])
@@ -528,6 +542,12 @@ def _create_month_comparison_sheet(wb, data, header_fill, header_font, header_al
     all_months = [m['month'] for m in data.get('by_month', [])]
     sorted_shops = sorted(data['by_shop'], key=lambda x: x['shop_name'])
 
+    # Pre-build lookup: {shop_name: {month: m_data}}
+    shop_month_map = {
+        shop['shop_name']: {m['month']: m for m in shop.get('by_month', [])}
+        for shop in sorted_shops
+    }
+
     current_row = 1
 
     for month in all_months:
@@ -543,7 +563,7 @@ def _create_month_comparison_sheet(wb, data, header_fill, header_font, header_al
         current_row += 1
 
         for shop in sorted_shops:
-            m = next((m for m in shop.get('by_month', []) if m['month'] == month), None)
+            m = shop_month_map[shop['shop_name']].get(month)
             if m and m.get('total_invoices_with_vip0', 0) > 0:
                 ws.cell(row=current_row, column=1, value=shop['shop_name'])
                 ws.cell(row=current_row, column=2, value=m['total_customers'])
@@ -613,6 +633,12 @@ def _create_week_comparison_sheet(wb, data, header_fill, header_font, header_ali
     all_weeks = [w['week_label'] for w in data.get('by_week', [])]
     sorted_shops = sorted(data['by_shop'], key=lambda x: x['shop_name'])
 
+    # Pre-build lookup: {shop_name: {week_label: w_data}}
+    shop_week_map = {
+        shop['shop_name']: {w['week_label']: w for w in shop.get('by_week', [])}
+        for shop in sorted_shops
+    }
+
     current_row = 1
 
     for week_label in all_weeks:
@@ -628,7 +654,7 @@ def _create_week_comparison_sheet(wb, data, header_fill, header_font, header_ali
         current_row += 1
 
         for shop in sorted_shops:
-            w = next((w for w in shop.get('by_week', []) if w['week_label'] == week_label), None)
+            w = shop_week_map[shop['shop_name']].get(week_label)
             if w and w.get('total_invoices_with_vip0', 0) > 0:
                 ws.cell(row=current_row, column=1, value=shop['shop_name'])
                 ws.cell(row=current_row, column=2, value=w['total_customers'])
@@ -675,7 +701,8 @@ def _create_details_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=5, value=str(c['first_purchase_date']))
         ws.cell(row=row_num, column=6, value=c['total_purchases'])
         ws.cell(row=row_num, column=7, value=c['return_visits'])
-        ws.cell(row=row_num, column=8, value=f"{c['total_spent']:,.0f}")
+        ws.cell(row=row_num, column=8, value=c['total_spent'])
+        ws.cell(row=row_num, column=8).number_format = '#,##0'
     
     for col in range(1, 9):
         ws.column_dimensions[get_column_letter(col)].width = 18
@@ -759,8 +786,7 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
     """
     from openpyxl.styles import Font, PatternFill, Alignment
     from collections import defaultdict
-    from App.analytics.season_utils import get_session_key
-    from App.analytics.customer_utils import get_customer_info  # CRITICAL IMPORT
+    from App.analytics.customer_utils import get_customer_info
     
     customer_purchases = data.get('customer_purchases', {})
     
@@ -839,82 +865,92 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
     ws_shop[f'B{row}'].font = Font(bold=True, size=12, color="FF0000")
     row += 2
     
-    # Find shop problem customers
+    # Single pass: compute both shop_problems and season_problems simultaneously.
+    # purchases lists are already sorted by build_customer_purchase_map — no re-sort needed.
     shop_problems = []
-    
+    season_problems = []
+
     for vip_id, purchases in customer_purchases.items():
         if vip_id == '0' or not purchases:
             continue
-        
-        purchases_sorted = sorted(purchases, key=lambda x: x['date'])
 
-        # Get customer info from the EARLIEST purchase (order-independent)
-        customer_obj = purchases_sorted[0].get('customer') if purchases else None
+        # purchases already sorted; use directly
+        customer_obj = purchases[0].get('customer')
         grade, reg_date, name = get_customer_info(vip_id, customer_obj)
 
-        # Global calculation
-        global_rv, global_is_ret = calculate_return_visits_local(purchases_sorted, reg_date)
-
+        global_rv, global_is_ret = calculate_return_visits_local(purchases, reg_date)
         if not global_is_ret:
             continue
 
         global_ret_inv = len(purchases)
 
-        # Shop calculation
-        shop_total = 0
+        # Build per-shop and per-season sub-lists in one scan (sub-lists inherit sort order)
         by_shop = defaultdict(list)
-        
+        by_season = defaultdict(list)
         for p in purchases:
-            shop = p.get('shop', 'Unknown')
-            by_shop[shop].append(p)
-        
-        for shop, shop_purch in by_shop.items():
-            shop_sorted = sorted(shop_purch, key=lambda x: x['date'])
-            _, is_ret = calculate_return_visits_local(shop_sorted, reg_date)
-            
+            by_shop[p.get('shop', 'Unknown')].append(p)
+            by_season[p.get('session', 'Unknown')].append(p)
+
+        # ── Shop diff ──────────────────────────────────────────────────────────
+        shop_total = 0
+        for shop_purch in by_shop.values():
+            _, is_ret = calculate_return_visits_local(shop_purch, reg_date)
             if is_ret:
                 shop_total += len(shop_purch)
-        
-        diff = global_ret_inv - shop_total
-        
-        if diff > 0:
-            # Find reg day purchases
+
+        cust_shop_diff = global_ret_inv - shop_total
+        if cust_shop_diff > 0:
             reg_date_cmp = to_date(reg_date)
             if reg_date_cmp:
                 reg_day_purch = [p for p in purchases if to_date(p['date']) == reg_date_cmp]
-                reg_day_shops = set([p.get('shop', 'Unknown') for p in reg_day_purch])
+                reg_day_shops = {p.get('shop', 'Unknown') for p in reg_day_purch}
             else:
                 reg_day_purch = []
                 reg_day_shops = set()
-            
-            # Determine pattern
+
             if len(reg_day_shops) >= 2:
                 pattern = "Multi-shop reg day"
             elif len(reg_day_purch) >= 1 and len(by_shop) >= 2:
                 pattern = "Reg day → other shops"
             else:
                 pattern = "Other"
-            
-            # Build shop details — sort by first purchase date (chronological)
+
+            # sub-lists already in date order; first element is earliest
             shop_details = []
-            by_shop_sorted = sorted(by_shop.items(), key=lambda kv: min(p['date'] for p in kv[1]))
-            for shop, shop_purch in by_shop_sorted[:3]:
-                shop_sorted_temp = sorted(shop_purch, key=lambda x: x['date'])
-                _, shop_is_ret = calculate_return_visits_local(shop_sorted_temp, reg_date)
-                shop_details.append(f"{shop[:25]}({len(shop_purch)},ret={shop_is_ret})")
-            
+            by_shop_sorted = sorted(by_shop.items(), key=lambda kv: kv[1][0]['date'])
+            for sh, sh_purch in by_shop_sorted[:3]:
+                _, sh_is_ret = calculate_return_visits_local(sh_purch, reg_date)
+                shop_details.append(f"{sh[:25]}({len(sh_purch)},ret={sh_is_ret})")
+
             shop_problems.append({
-                'vip_id': vip_id,
-                'name': name,
-                'reg_date': reg_date,
-                'total_purchases': len(purchases),
-                'global_ret_inv': global_ret_inv,
-                'shop_total': shop_total,
-                'difference': diff,
-                'pattern': pattern,
-                'details': "; ".join(shop_details)
+                'vip_id': vip_id, 'name': name, 'reg_date': reg_date,
+                'total_purchases': global_ret_inv, 'global_ret_inv': global_ret_inv,
+                'shop_total': shop_total, 'difference': cust_shop_diff,
+                'pattern': pattern, 'details': "; ".join(shop_details),
             })
-    
+
+        # ── Season diff ────────────────────────────────────────────────────────
+        season_total = 0
+        for season_purch in by_season.values():
+            _, is_ret = calculate_return_visits_local(season_purch, reg_date)
+            if is_ret:
+                season_total += len(season_purch)
+
+        cust_season_diff = global_ret_inv - season_total
+        if cust_season_diff > 0:
+            season_details = []
+            by_season_sorted = sorted(by_season.items(), key=lambda kv: kv[1][0]['date'])
+            for ssn, ssn_purch in by_season_sorted[:3]:
+                _, ssn_is_ret = calculate_return_visits_local(ssn_purch, reg_date)
+                season_details.append(f"{ssn}({len(ssn_purch)},ret={ssn_is_ret})")
+
+            season_problems.append({
+                'vip_id': vip_id, 'name': name, 'reg_date': reg_date,
+                'total_purchases': global_ret_inv, 'global_ret_inv': global_ret_inv,
+                'season_total': season_total, 'difference': cust_season_diff,
+                'num_seasons': len(by_season), 'details': "; ".join(season_details),
+            })
+
     shop_problems.sort(key=lambda x: x['difference'], reverse=True)
     
     # Pattern summary
@@ -1005,65 +1041,6 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
     ws_season[f'B{row}'] = season_diff
     ws_season[f'B{row}'].font = Font(bold=True, size=12, color="FF0000")
     row += 2
-    
-    # Find season problem customers
-    season_problems = []
-    
-    for vip_id, purchases in customer_purchases.items():
-        if vip_id == '0' or not purchases:
-            continue
-        
-        purchases_sorted = sorted(purchases, key=lambda x: x['date'])
-
-        # Get customer info from the EARLIEST purchase (order-independent)
-        customer_obj = purchases_sorted[0].get('customer') if purchases else None
-        grade, reg_date, name = get_customer_info(vip_id, customer_obj)
-        
-        # Global calculation
-        global_rv, global_is_ret = calculate_return_visits_local(purchases_sorted, reg_date)
-        
-        if not global_is_ret:
-            continue
-        
-        global_ret_inv = len(purchases)
-        
-        # Season calculation
-        season_total = 0
-        by_season = defaultdict(list)
-        
-        for p in purchases:
-            season = get_session_key(p['date'])
-            by_season[season].append(p)
-        
-        for season, season_purch in by_season.items():
-            season_sorted = sorted(season_purch, key=lambda x: x['date'])
-            _, is_ret = calculate_return_visits_local(season_sorted, reg_date)
-            
-            if is_ret:
-                season_total += len(season_purch)
-        
-        diff = global_ret_inv - season_total
-        
-        if diff > 0:
-            # Build season details — sort by first purchase date (chronological)
-            season_details = []
-            by_season_sorted = sorted(by_season.items(), key=lambda kv: min(p['date'] for p in kv[1]))
-            for season, season_purch in by_season_sorted[:3]:
-                season_sorted_temp = sorted(season_purch, key=lambda x: x['date'])
-                _, season_is_ret = calculate_return_visits_local(season_sorted_temp, reg_date)
-                season_details.append(f"{season}({len(season_purch)},ret={season_is_ret})")
-            
-            season_problems.append({
-                'vip_id': vip_id,
-                'name': name,
-                'reg_date': reg_date,
-                'total_purchases': len(purchases),
-                'global_ret_inv': global_ret_inv,
-                'season_total': season_total,
-                'difference': diff,
-                'num_seasons': len(by_season),
-                'details': "; ".join(season_details)
-            })
     
     season_problems.sort(key=lambda x: x['difference'], reverse=True)
     

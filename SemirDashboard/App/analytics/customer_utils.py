@@ -152,6 +152,9 @@ def build_customer_purchase_map(sales_list):
             'week_label': _wk[1],
         })
     
+    # Sort each customer's purchases by date once — all aggregators rely on this
+    for lst in customer_purchases.values():
+        lst.sort(key=lambda x: x['date'])
     return customer_purchases
 
 
