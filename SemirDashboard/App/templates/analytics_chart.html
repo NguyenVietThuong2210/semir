@@ -102,6 +102,9 @@
     padding:1rem;
     box-shadow:0 1px 4px rgba(0,0,0,.07);
 }
+.click-info-panel {
+    font-size:.8rem; max-height:240px; overflow-y:auto;
+}
 </style>
 {% endblock %}
 
@@ -551,6 +554,14 @@
                 </div>
             </div>
 
+            <!-- Bar click info panel -->
+            <div class="col-lg-5 col-md-4 d-none d-md-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Details</div>
+                    <div id="barInfoPanel" class="mt-1 click-info-panel"></div>
+                </div>
+            </div>
+
         </div>
         <div class="bar-chart-wrap">
             <canvas id="sessionBarChart"></canvas>
@@ -630,6 +641,14 @@
                             <option value="total_amount_with_vip0">Total Amount</option>
                         </optgroup>
                     </select>
+                </div>
+            </div>
+
+            <!-- Comp click info panel -->
+            <div class="col-lg-5 col-md-4 d-none d-md-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Details</div>
+                    <div id="compInfoPanel" class="mt-1 click-info-panel"></div>
                 </div>
             </div>
 
@@ -791,6 +810,42 @@ function updateLegend(datasets) {
     ).join('');
 }
 
+// Shared: render a click-detail card into any panel
+// rows = [{label, color, value}], sorted descending before calling
+// showPct: show percentage column (for bar/comp charts)
+// onClose: callback when ✕ is clicked
+function renderClickCard(panelId, lbl, rows, metric, showPct, onClose) {
+    const total = rows.reduce((s, r) => s + r.value, 0);
+    const panel = document.getElementById(panelId);
+    panel.innerHTML =
+        `<div style="display:flex;justify-content:space-between;align-items:center;
+                     border-bottom:2px solid #0047B3;padding-bottom:4px;margin-bottom:5px;">
+            <strong style="font-size:.82rem;color:#0047B3;">${lbl}</strong>
+            <span id="_closeCard_${panelId}"
+                  style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;
+                         border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
+         </div>` +
+        rows.map(r =>
+            `<div style="display:flex;align-items:center;margin-bottom:3px;">
+                <div style="width:80%;display:flex;align-items:center;min-width:0;overflow:hidden;">
+                    <span style="display:inline-block;width:20px;height:2.5px;background:${r.color};
+                                 margin-right:5px;flex-shrink:0;border-radius:2px;"></span>
+                    <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;
+                                 white-space:nowrap;" title="${r.label}">${r.label}</span>
+                </div>
+                <div style="width:20%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;
+                             flex-shrink:0;padding-left:4px;">
+                    ${fmtVal(r.value, metric)}
+                    ${showPct && total > 0
+                        ? `<div style="font-weight:400;color:#888;font-size:.7rem;">${(r.value/total*100).toFixed(1)}%</div>`
+                        : ''}
+                </div>
+             </div>`
+        ).join('');
+    document.getElementById('_closeCard_' + panelId)
+        .addEventListener('click', onClose);
+}
+
 const AVG_COLOR     = '#2C3E50';
 const AVG_ALL_COLOR = '#6c757d';
 
@@ -907,7 +962,6 @@ function buildChart() {
             interaction: { mode: 'nearest', intersect: true },
             onClick: function(evt, elements) {
                 if (!elements.length) {
-                    // click on empty area → restore normal legend
                     updateLegend(trendChart.data.datasets);
                     return;
                 }
@@ -917,32 +971,8 @@ function buildChart() {
                     .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
                     .filter(r => r.value > 0)
                     .sort((a, b) => b.value - a.value);
-                const panel = document.getElementById('legendPanel');
-                panel.innerHTML =
-                    `<div style="display:flex;justify-content:space-between;align-items:center;
-                                 border-bottom:2px solid #0047B3;padding-bottom:4px;margin-bottom:5px;">
-                        <strong style="font-size:.82rem;color:#0047B3;">${lbl}</strong>
-                        <span id="btnCloseLegend"
-                              style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;
-                                     border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
-                     </div>` +
-                    rows.map(r =>
-                        `<div style="display:flex;align-items:center;justify-content:space-between;
-                                     margin-bottom:3px;">
-                            <div style="display:flex;align-items:center;min-width:0;">
-                                <span style="display:inline-block;width:20px;height:2.5px;
-                                             background:${r.color};margin-right:5px;
-                                             flex-shrink:0;border-radius:2px;"></span>
-                                <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;
-                                             white-space:nowrap;max-width:155px;"
-                                      title="${r.label}">${r.label}</span>
-                            </div>
-                            <span style="font-size:.76rem;font-weight:700;color:#2C3E50;
-                                         margin-left:6px;flex-shrink:0;">${fmtVal(r.value, metric)}</span>
-                         </div>`
-                    ).join('');
-                document.getElementById('btnCloseLegend')
-                    .addEventListener('click', () => updateLegend(trendChart.data.datasets));
+                renderClickCard('legendPanel', lbl, rows, metric, false,
+                    () => updateLegend(trendChart.data.datasets));
             },
             plugins: {
                 legend: { display: false },
@@ -1033,6 +1063,22 @@ function buildBarChart() {
             responsive: true,
             maintainAspectRatio: false,
             animation: { duration: 500 },
+            onClick: function(evt, elements) {
+                if (!elements.length) { document.getElementById('barInfoPanel').innerHTML = ''; return; }
+                const di  = elements[0].index;
+                const lbl = barChart.data.labels[di];
+                const rows = selectedShops
+                    .map(name => {
+                        const shop = CD.shop_stats.find(s => s.shop_name === name);
+                        if (!shop) return null;
+                        const row = (shop[byKey] || []).find(r => r[timeKey] === lbl);
+                        return { label: name, color: BAR_GRADIENT_COLOR, value: row ? (row[metric] ?? 0) : 0 };
+                    })
+                    .filter(r => r && r.value > 0)
+                    .sort((a, b) => b.value - a.value);
+                renderClickCard('barInfoPanel', lbl, rows, metric, true,
+                    () => { document.getElementById('barInfoPanel').innerHTML = ''; });
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -1219,6 +1265,17 @@ function buildComparisonChart() {
             maintainAspectRatio: false,
             animation: { duration: 500 },
             interaction: { mode: 'index', intersect: false },
+            onClick: function(evt, elements) {
+                if (!elements.length) { document.getElementById('compInfoPanel').innerHTML = ''; return; }
+                const di  = elements[0].index;
+                const lbl = compChart.data.labels[di];
+                const rows = compChart.data.datasets
+                    .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
+                    .filter(r => r.value > 0)
+                    .sort((a, b) => b.value - a.value);
+                renderClickCard('compInfoPanel', lbl, rows, metric, true,
+                    () => { document.getElementById('compInfoPanel').innerHTML = ''; });
+            },
             plugins: {
                 legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
                 tooltip: {
@@ -1338,24 +1395,65 @@ if (btnPDF) {
                 return y + imgH;
             }
 
-            // draw selected-shop list in 2 columns below a chart
+            // Draw shop list as a canvas image (browser system font → correct Unicode rendering)
+            // Returns bottom Y after the image, or startY if nothing drawn
             function addShopList(datasets, startY) {
-                if (!datasets || !datasets.length) return;
-                const rowH = 5, colW = CW / 2;
-                let col = 0, cx = M, cy = startY + 3;
-                doc.setFontSize(7);
-                datasets.forEach(ds => {
-                    if (cy + rowH > PH - 6) return;          // overflow guard
-                    const [r, g, b] = hexRgb(ds.borderColor || '#999');
-                    doc.setFillColor(r, g, b);
-                    doc.rect(cx, cy - 1.5, 10, 2, 'F');      // colored bar
-                    doc.setTextColor(40);
-                    const name = ds.label.length > 38 ? ds.label.slice(0,36) + '…' : ds.label;
-                    doc.text(name, cx + 12, cy);
-                    col++;
-                    if (col % 2 === 0) { col = 0; cx = M;      cy += rowH; }
-                    else               {           cx = M + colW;           }
+                if (!datasets || !datasets.length) return startY;
+
+                const COLS   = 2;
+                const PX_W   = 1100;          // canvas pixel width (matches PDF content width scale)
+                const COL_W  = PX_W / COLS;
+                const ROW_H  = 26;
+                const PAD_X  = 10;
+                const DOT_W  = 22, DOT_H = 4, DOT_R = 2;  // color bar dims
+                const FONT   = '13px system-ui,-apple-system,Arial,sans-serif';
+                const MAX_CH = 42;
+
+                const rows   = Math.ceil(datasets.length / COLS);
+                const CVS_H  = rows * ROW_H + 10;
+
+                const cvs    = document.createElement('canvas');
+                cvs.width    = PX_W;
+                cvs.height   = CVS_H;
+                const ctx    = cvs.getContext('2d');
+
+                // background
+                ctx.fillStyle = '#f8f9fa';
+                ctx.fillRect(0, 0, PX_W, CVS_H);
+                // top border
+                ctx.strokeStyle = '#0047B3';
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(PX_W, 0); ctx.stroke();
+
+                datasets.forEach((ds, i) => {
+                    const col  = i % COLS;
+                    const row  = Math.floor(i / COLS);
+                    const x    = col * COL_W + PAD_X;
+                    const y    = row * ROW_H + ROW_H * 0.72 + 6;
+
+                    // color bar
+                    const [r, g, b] = hexRgb(ds.borderColor || '#aaa');
+                    ctx.fillStyle   = `rgb(${r},${g},${b})`;
+                    ctx.fillRect(x, y - DOT_H - 1, DOT_W, DOT_H);
+
+                    // shop name
+                    ctx.fillStyle = '#2C3E50';
+                    ctx.font      = FONT;
+                    const raw  = ds.label || '';
+                    const name = raw.length > MAX_CH ? raw.slice(0, MAX_CH - 1) + '…' : raw;
+                    ctx.fillText(name, x + DOT_W + 8, y);
                 });
+
+                const png   = cvs.toDataURL('image/png');
+                const imgW  = CW;
+                const imgH  = imgW * (CVS_H / PX_W);
+                const imgY  = startY + 3;
+
+                if (imgY + imgH <= PH - M) {
+                    doc.addImage(png, 'PNG', M, imgY, imgW, imgH);
+                    return imgY + imgH;
+                }
+                return startY;
             }
 
             /* ─────────────────────────────────────────
@@ -1401,7 +1499,8 @@ if (btnPDF) {
             doc.text('Time Axis: ' + xAxisLbl + '   |   Metric: ' + metricLbl, M, y);
             y += 4;
             const trendDs   = trendChart ? trendChart.data.datasets : [];
-            const chartMaxH = PH - y - M - (trendDs.length > 0 ? Math.ceil(trendDs.length / 2) * 5 + 6 : 0);
+            const trendListH = trendDs.length > 0 ? (Math.ceil(trendDs.length / 2) * 26 + 13) * CW / 1100 : 0;
+            const chartMaxH = PH - y - M - trendListH - 3;
             const trendBot  = addChartImage(getCanvasPng('shopTrendChart'), 'shopTrendChart', M, y, CW, chartMaxH);
             addShopList(trendDs, trendBot);
 
@@ -1422,7 +1521,8 @@ if (btnPDF) {
                     [...document.querySelectorAll('.bar-shop-check')].indexOf(el) % SHOP_PALETTE.length
                 ],
             }));
-            const barMaxH   = PH - y - M - (barShops.length > 0 ? Math.ceil(barShops.length / 2) * 5 + 6 : 0);
+            const barListH  = barShops.length > 0 ? (Math.ceil(barShops.length / 2) * 26 + 13) * CW / 1100 : 0;
+            const barMaxH   = PH - y - M - barListH - 3;
             const barBot    = addChartImage(getCanvasPng('sessionBarChart'), 'sessionBarChart', M, y, CW, barMaxH);
             addShopList(barShops, barBot);
 
@@ -1443,7 +1543,8 @@ if (btnPDF) {
                     [...document.querySelectorAll('.comp-shop-check')].indexOf(el) % SHOP_PALETTE.length
                 ],
             }));
-            const compMaxH  = PH - y - M - (compShops.length > 0 ? Math.ceil(compShops.length / 2) * 5 + 6 : 0);
+            const compListH = compShops.length > 0 ? (Math.ceil(compShops.length / 2) * 26 + 13) * CW / 1100 : 0;
+            const compMaxH  = PH - y - M - compListH - 3;
             const compBot   = addChartImage(getCanvasPng('comparisonBarChart'), 'comparisonBarChart', M, y, CW, compMaxH);
             addShopList(compShops, compBot);
 
