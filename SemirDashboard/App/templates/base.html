@@ -1,4 +1,5 @@
 {% load static %}
+{% load perm_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,8 +13,8 @@
         body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
         .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; box-shadow: 0 2px 8px rgba(102,126,234,.3); }
         .navbar-brand { font-weight:600; font-size:1.3rem; }
-        .nav-link { color:rgba(255,255,255,.9)!important; transition:color .2s; font-size:.93rem; }
-        .nav-link:hover, .nav-link.active { color:#fff!important; font-weight:500; }
+        .navbar .nav-link { color:rgba(255,255,255,.9)!important; transition:color .2s; font-size:.93rem; }
+        .navbar .nav-link:hover, .navbar .nav-link.active { color:#fff!important; font-weight:500; }
         .card { border:none; box-shadow:0 1px 3px rgba(0,0,0,.08); border-radius:8px; }
         .card-header { background:#fff; border-bottom:2px solid var(--primary); font-weight:600; }
         .btn-primary { background:var(--primary); border:none; transition:all .2s; }
@@ -27,11 +28,11 @@
         .dropdown-item { padding:.65rem 1.25rem; transition:background .15s; }
         .dropdown-item:hover { background:rgba(102,126,234,.1); }
         .dropdown-divider { margin: 0.5rem 0; }
-        .dropdown-header { 
-            font-size: 0.75rem; 
-            font-weight: 700; 
-            text-transform: uppercase; 
-            color: #6c757d; 
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #6c757d;
             padding: 0.5rem 1.25rem 0.25rem;
         }
         .page-link { position:relative; padding:.4rem 0; margin:0 .75rem; }
@@ -66,9 +67,11 @@
                             <i class="bi bi-house"></i> Home
                         </a>
                     </li>
-                    
+
                     {% if user.is_authenticated %}
-                    
+
+                    {% check_perm 'page_upload' as can_upload %}
+                    {% if can_upload %}
                     <!-- Upload Dropdown -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button" data-bs-toggle="dropdown">
@@ -93,55 +96,76 @@
                             </li>
                         </ul>
                     </li>
-                    
-                    <!-- Analytics Dropdown -->
+                    {% endif %}
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-bar-chart-line"></i> Analytics
                         </a>
                         <ul class="dropdown-menu">
-                            <li><h6 class="dropdown-header">Analytics & Reports</h6></li>
+                            <li><h6 class="dropdown-header">Analytics &amp; Reports</h6></li>
+                            {% check_perm 'page_analytics' as can_analytics %}
+                            {% if can_analytics %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'analytics_dashboard' %}">
                                     <i class="bi bi-graph-up"></i> Sales Analytics
                                 </a>
                             </li>
+                            {% endif %}
+                            {% check_perm 'page_chart' as can_chart %}
+                            {% if can_chart %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'analytics_chart' %}">
                                     <i class="bi bi-pie-chart"></i> Overview Chart
                                 </a>
                             </li>
+                            {% endif %}
+                            {% check_perm 'page_cnv' as can_cnv %}
+                            {% if can_cnv %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'cnv:customer_comparison' %}">
                                     <i class="bi bi-people-fill"></i> Customer Analytics
                                 </a>
                             </li>
+                            {% endif %}
+                            {% check_perm 'page_coupons' as can_coupons %}
+                            {% if can_coupons %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'coupon_dashboard' %}">
                                     <i class="bi bi-ticket-perforated"></i> Coupon Analytics
                                 </a>
                             </li>
+                            {% endif %}
+                            {% check_perm 'page_customer_detail' as can_cust %}
+                            {% if can_cust %}
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <a class="dropdown-item" href="{% url 'customer_detail' %}">
                                     <i class="bi bi-person-circle"></i> Customer Detail
                                 </a>
                             </li>
+                            {% endif %}
                         </ul>
                     </li>
-                    
-                    <!-- Additional Tools Dropdown -->
+
+                    <!-- Tools Dropdown -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-tools"></i> Tools
                         </a>
                         <ul class="dropdown-menu">
                             <li><h6 class="dropdown-header">Additional Tools</h6></li>
+                            {% check_perm 'page_formulas' as can_formulas %}
+                            {% if can_formulas %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'formulas' %}">
                                     <i class="bi bi-calculator"></i> Formulas
                                 </a>
                             </li>
+                            {% endif %}
+                            {% check_perm 'page_cnv' as can_cnv_tools %}
+                            {% if can_cnv_tools %}
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">CNV Loyalty</h6></li>
                             <li>
@@ -149,13 +173,34 @@
                                     <i class="bi bi-arrow-repeat"></i> Sync Status
                                 </a>
                             </li>
+                            {% endif %}
+                            {% check_perm 'manage_users' as can_manage %}
+                            {% if can_manage %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Admin</h6></li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'user_management' %}">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'register' %}">
+                                    <i class="bi bi-person-plus"></i> Register User
+                                </a>
+                            </li>
+                            {% endif %}
                         </ul>
                     </li>
-                    
+
                     <!-- User Dropdown -->
                     <li class="nav-item dropdown ms-2">
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-person-circle"></i> {{ user.username }}
+                            {% with role_name=user.profile.role.name %}
+                            {% if role_name %}
+                                <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">{{ role_name }}</span>
+                            {% endif %}
+                            {% endwith %}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
@@ -168,16 +213,11 @@
                             </li>
                         </ul>
                     </li>
-                    
+
                     {% else %}
                     <li class="nav-item">
                         <a class="nav-link page-link" href="{% url 'login' %}">
                             <i class="bi bi-box-arrow-in-right"></i> Login
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link page-link" href="{% url 'register' %}">
-                            <i class="bi bi-person-plus"></i> Register
                         </a>
                     </li>
                     {% endif %}

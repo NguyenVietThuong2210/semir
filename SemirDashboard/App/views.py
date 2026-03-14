@@ -11,9 +11,9 @@ import logging
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponse
-from django.contrib.auth.decorators import login_required
 from django.db.models import Min, Max, Count
 from datetime import datetime
+from App.permissions import requires_perm, user_has_perm
 
 from App.analytics.core import calculate_return_rate_analytics
 from App.analytics.coupon_analytics import calculate_coupon_analytics, export_coupon_to_excel
@@ -51,7 +51,7 @@ def home(request):
     return render(request, 'home.html')
 
 
-@login_required
+@requires_perm('page_upload')
 def upload_customers(request):
     """
     Upload customer data from Excel/CSV file.
@@ -92,7 +92,7 @@ def upload_customers(request):
     })
 
 
-@login_required
+@requires_perm('page_upload')
 def upload_used_points(request):
     """Upload used_points and used_points_note for existing POS customers."""
     if request.method == 'POST':
@@ -117,7 +117,7 @@ def upload_used_points(request):
     return redirect('upload_customers')
 
 
-@login_required
+@requires_perm('page_upload')
 def upload_sales(request):
     """
     Upload sales transaction data from Excel/CSV file.
@@ -155,7 +155,7 @@ def upload_sales(request):
     })
 
 
-@login_required
+@requires_perm('page_upload')
 def upload_coupons(request):
     """Upload coupon data from Excel/CSV file."""
     if request.method == 'POST' and request.FILES.get('file'):
@@ -174,7 +174,7 @@ def upload_coupons(request):
     return render(request, 'upload_coupons.html')
 
 
-@login_required
+@requires_perm('page_analytics')
 def analytics_dashboard(request):
     """
     Main analytics dashboard showing return visit rate statistics.
@@ -224,7 +224,7 @@ def analytics_dashboard(request):
     })
 
 
-@login_required
+@requires_perm('page_chart')
 def analytics_chart(request):
     """Overview chart page — donut summaries + interactive shop trend line chart."""
     start_date = request.GET.get('start_date', '')
@@ -278,7 +278,7 @@ def analytics_chart(request):
     })
 
 
-@login_required
+@requires_perm('download_analytics')
 def export_analytics(request):
     """Export analytics data to Excel file."""
     start_date = request.GET.get('start_date', '')
@@ -309,7 +309,7 @@ def export_analytics(request):
     return resp
 
 
-@login_required
+@requires_perm('page_coupons')
 def coupon_dashboard(request):
     """
     Coupon analytics dashboard.
@@ -346,7 +346,7 @@ def coupon_dashboard(request):
     })
 
 
-@login_required
+@requires_perm('download_coupons')
 def export_coupons(request):
     """Export coupon analytics to Excel file with shop group filter support."""
     start_date       = request.GET.get('start_date', '')
@@ -379,14 +379,14 @@ def export_coupons(request):
     return resp
 
 
-@login_required
+@requires_perm('page_formulas')
 def formulas_page(request):
     """Display formulas and definitions used in analytics."""
     return render(request, 'formulas.html')
 
 # Add this to views.py
 
-@login_required
+@requires_perm('page_customer_detail')
 def customer_detail(request):
     """
     Customer Detail Analytics - Search and view individual customer info.

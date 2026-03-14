@@ -1,64 +1,74 @@
 {% extends 'base.html' %}
 
-{% block title %}Register - Customer Analytics{% endblock %}
+{% block title %}Add User{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-6">
-        <div class="card shadow">
-            <div class="card-header text-center">
-                <h4><i class="bi bi-person-plus"></i> Create Account</h4>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-person-plus"></i> Add New User</h2>
+    <a href="{% url 'user_management' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i> Back to User Management
+    </a>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person-badge me-1"></i> Account Details
             </div>
             <div class="card-body p-4">
                 <form method="post">
                     {% csrf_token %}
-                    
+
                     <div class="mb-3">
-                        <label for="id_username" class="form-label">Username</label>
+                        <label for="id_username" class="form-label fw-semibold">Username</label>
                         <input type="text" class="form-control" name="username" id="id_username" required autofocus>
-                        <div class="form-text">Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.</div>
+                        <div class="form-text">150 characters or fewer. Letters, digits and @/./+/-/_ only.</div>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="id_password1" class="form-label">Password</label>
+                        <label for="id_password1" class="form-label fw-semibold">Password</label>
                         <input type="password" class="form-control" name="password1" id="id_password1" required>
-                        <div class="form-text">
-                            Your password must contain at least 8 characters and cannot be entirely numeric.
-                        </div>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="id_password2" class="form-label">Confirm Password</label>
+                        <label for="id_password2" class="form-label fw-semibold">Confirm Password</label>
                         <input type="password" class="form-control" name="password2" id="id_password2" required>
-                        <div class="form-text">Enter the same password as before, for verification.</div>
                     </div>
-                    
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-success btn-lg">
-                            <i class="bi bi-person-check"></i> Create Account
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-person-check me-1"></i> Create Account
                         </button>
+                        <a href="{% url 'user_management' %}" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
-                
-                <hr>
-                
-                <div class="text-center">
-                    <p class="mb-0">Already have an account? <a href="{% url 'login' %}">Login here</a></p>
-                </div>
             </div>
         </div>
-        
-        <div class="card mt-3">
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
             <div class="card-body">
-                <h6><i class="bi bi-info-circle"></i> Password Requirements:</h6>
-                <ul class="small mb-0">
-                    <li>Minimum 8 characters</li>
-                    <li>Cannot be too similar to username</li>
-                    <li>Cannot be entirely numeric</li>
-                    <li>Cannot be a commonly used password</li>
+                <h6 class="fw-semibold"><i class="bi bi-info-circle me-1"></i> Notes</h6>
+                <ul class="small mb-0 text-muted">
+                    <li>New users are automatically assigned the <strong>viewer</strong> role.</li>
+                    <li>You can change their role from User Management after creation.</li>
+                    <li>Password must be at least 8 characters and not entirely numeric.</li>
                 </ul>
             </div>
         </div>
     </div>
 </div>
+
 {% endblock %}

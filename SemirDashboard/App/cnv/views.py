@@ -7,8 +7,8 @@ import threading
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
 from django.db.models import Q
+from App.permissions import requires_perm
 from django.views.decorators.http import require_POST
 from datetime import datetime
 from django.utils import timezone
@@ -16,7 +16,7 @@ from django.utils import timezone
 from App.models import Customer as POSCustomer
 from App.models_cnv import CNVCustomer, CNVOrder, CNVSyncLog
 
-@login_required
+@requires_perm('page_cnv')
 def sync_status(request):
     """
     CNV Sync Status Dashboard
@@ -59,7 +59,7 @@ def sync_status(request):
     return render(request, 'cnv/sync_status.html', context)
 
 
-@login_required
+@requires_perm('page_cnv')
 def customer_comparison(request):
     """
     Compare POS System vs CNV Loyalty customers
@@ -409,7 +409,7 @@ def customer_comparison(request):
     return render(request, 'cnv/customer_comparison.html', context)
 
 
-@login_required
+@requires_perm('download_cnv')
 def export_customer_comparison(request):
     """
     Export Customer Analytics (POS vs CNV comparison) to Excel.
@@ -607,7 +607,7 @@ def export_customer_comparison(request):
     return response
 
 
-@login_required
+@requires_perm('page_cnv')
 def sync_cnv_points(request):
     """
     AJAX endpoint: sync points for a list of CNV customer IDs.
@@ -670,7 +670,7 @@ def sync_cnv_points(request):
 # MANUAL SYNC TRIGGERS
 # ============================================================================
 
-@login_required
+@requires_perm('page_cnv')
 @require_POST
 def trigger_sync(request):
     """
@@ -710,7 +710,7 @@ def trigger_sync(request):
     })
 
 
-@login_required
+@requires_perm('page_cnv')
 @require_POST
 def trigger_zalo_sync(request):
     """
