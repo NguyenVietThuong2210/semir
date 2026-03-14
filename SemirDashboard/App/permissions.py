@@ -22,8 +22,7 @@ PERMISSION_DEFS = [
 ALL_PERMISSIONS   = [p[0] for p in PERMISSION_DEFS]
 ADMIN_PERMISSIONS = ALL_PERMISSIONS
 VIEWER_PERMISSIONS = [
-    'page_analytics', 'page_chart', 'page_coupons',
-    'page_customer_detail', 'page_formulas', 'page_cnv_sync', 'page_cnv_comparison',
+    'page_analytics',
 ]
 
 
