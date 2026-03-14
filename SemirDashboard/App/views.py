@@ -210,6 +210,7 @@ def analytics_dashboard(request):
         'grade_stats':        data['by_grade'],
         'session_stats':      data['by_session'],
         'month_stats':        data['by_month'],
+        'week_stats':         data['by_week'],
         'shop_stats':         data['by_shop'],
         'by_shop':            data['by_shop'],  # For comparison tabs
         'customer_details':   data['customer_details'][:100],
@@ -217,8 +218,8 @@ def analytics_dashboard(request):
         'buyer_without_info_stats': data.get('buyer_without_info_stats', {}),
         'start_date':         start_date,
         'end_date':           end_date,
-        'shop_group':         shop_group,  # New: pass to template
-        'currency':           'VND',  # Add currency variable
+        'shop_group':         shop_group,
+        'currency':           'VND',
         'quick_btns':         QUICK_BTNS,
         'year_btns':          YEAR_BTNS,
     })
