@@ -905,6 +905,45 @@ function buildChart() {
             animation: { duration: 500 },
             events: ['click'],
             interaction: { mode: 'nearest', intersect: true },
+            onClick: function(evt, elements) {
+                if (!elements.length) {
+                    // click on empty area → restore normal legend
+                    updateLegend(trendChart.data.datasets);
+                    return;
+                }
+                const di   = elements[0].index;
+                const lbl  = trendChart.data.labels[di];
+                const rows = trendChart.data.datasets
+                    .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
+                    .filter(r => r.value > 0)
+                    .sort((a, b) => b.value - a.value);
+                const panel = document.getElementById('legendPanel');
+                panel.innerHTML =
+                    `<div style="display:flex;justify-content:space-between;align-items:center;
+                                 border-bottom:2px solid #0047B3;padding-bottom:4px;margin-bottom:5px;">
+                        <strong style="font-size:.82rem;color:#0047B3;">${lbl}</strong>
+                        <span id="btnCloseLegend"
+                              style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;
+                                     border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
+                     </div>` +
+                    rows.map(r =>
+                        `<div style="display:flex;align-items:center;justify-content:space-between;
+                                     margin-bottom:3px;">
+                            <div style="display:flex;align-items:center;min-width:0;">
+                                <span style="display:inline-block;width:20px;height:2.5px;
+                                             background:${r.color};margin-right:5px;
+                                             flex-shrink:0;border-radius:2px;"></span>
+                                <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;
+                                             white-space:nowrap;max-width:155px;"
+                                      title="${r.label}">${r.label}</span>
+                            </div>
+                            <span style="font-size:.76rem;font-weight:700;color:#2C3E50;
+                                         margin-left:6px;flex-shrink:0;">${fmtVal(r.value, metric)}</span>
+                         </div>`
+                    ).join('');
+                document.getElementById('btnCloseLegend')
+                    .addEventListener('click', () => updateLegend(trendChart.data.datasets));
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -1282,14 +1321,41 @@ if (btnPDF) {
                 return 27; // Y start for content
             }
 
-            // helper: add one chart image, maintaining aspect ratio, max height clipped
+            // parse '#rrggbb' → [r,g,b]
+            function hexRgb(hex) {
+                const h = hex.replace('#','');
+                return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+            }
+
+            // add chart image; returns bottom Y of the image
             function addChartImage(png, canvasId, x, y, maxW, maxH) {
-                if (!png) return;
+                if (!png) return y;
                 const c = document.getElementById(canvasId);
                 const ratio = c.height / c.width;
                 const imgH  = Math.min(maxW * ratio, maxH);
                 const imgW  = imgH / ratio;
                 doc.addImage(png, 'PNG', x, y, imgW, imgH);
+                return y + imgH;
+            }
+
+            // draw selected-shop list in 2 columns below a chart
+            function addShopList(datasets, startY) {
+                if (!datasets || !datasets.length) return;
+                const rowH = 5, colW = CW / 2;
+                let col = 0, cx = M, cy = startY + 3;
+                doc.setFontSize(7);
+                datasets.forEach(ds => {
+                    if (cy + rowH > PH - 6) return;          // overflow guard
+                    const [r, g, b] = hexRgb(ds.borderColor || '#999');
+                    doc.setFillColor(r, g, b);
+                    doc.rect(cx, cy - 1.5, 10, 2, 'F');      // colored bar
+                    doc.setTextColor(40);
+                    const name = ds.label.length > 38 ? ds.label.slice(0,36) + '…' : ds.label;
+                    doc.text(name, cx + 12, cy);
+                    col++;
+                    if (col % 2 === 0) { col = 0; cx = M;      cy += rowH; }
+                    else               {           cx = M + colW;           }
+                });
             }
 
             /* ─────────────────────────────────────────
@@ -1334,8 +1400,10 @@ if (btnPDF) {
             doc.setFontSize(8); doc.setTextColor(100);
             doc.text('Time Axis: ' + xAxisLbl + '   |   Metric: ' + metricLbl, M, y);
             y += 4;
-            addChartImage(getCanvasPng('shopTrendChart'), 'shopTrendChart',
-                          M, y, CW, PH - y - M);
+            const trendDs   = trendChart ? trendChart.data.datasets : [];
+            const chartMaxH = PH - y - M - (trendDs.length > 0 ? Math.ceil(trendDs.length / 2) * 5 + 6 : 0);
+            const trendBot  = addChartImage(getCanvasPng('shopTrendChart'), 'shopTrendChart', M, y, CW, chartMaxH);
+            addShopList(trendDs, trendBot);
 
             /* ─────────────────────────────────────────
                PAGE 3 — Bar Chart
@@ -1348,8 +1416,15 @@ if (btnPDF) {
             doc.setFontSize(8); doc.setTextColor(100);
             doc.text('Time Axis: ' + barXLbl + '   |   Metric: ' + barMetLbl, M, y);
             y += 4;
-            addChartImage(getCanvasPng('sessionBarChart'), 'sessionBarChart',
-                          M, y, CW, PH - y - M);
+            const barShops  = [...document.querySelectorAll('.bar-shop-check:checked')].map(el => ({
+                label: el.value,
+                borderColor: SHOP_PALETTE[
+                    [...document.querySelectorAll('.bar-shop-check')].indexOf(el) % SHOP_PALETTE.length
+                ],
+            }));
+            const barMaxH   = PH - y - M - (barShops.length > 0 ? Math.ceil(barShops.length / 2) * 5 + 6 : 0);
+            const barBot    = addChartImage(getCanvasPng('sessionBarChart'), 'sessionBarChart', M, y, CW, barMaxH);
+            addShopList(barShops, barBot);
 
             /* ─────────────────────────────────────────
                PAGE 4 — Year-over-Year Comparison
@@ -1362,8 +1437,15 @@ if (btnPDF) {
             doc.setFontSize(8); doc.setTextColor(100);
             doc.text('Time Axis: ' + compXLbl + '   |   Metric: ' + compMetLbl, M, y);
             y += 4;
-            addChartImage(getCanvasPng('comparisonBarChart'), 'comparisonBarChart',
-                          M, y, CW, PH - y - M);
+            const compShops = [...document.querySelectorAll('.comp-shop-check:checked')].map(el => ({
+                label: el.value,
+                borderColor: SHOP_PALETTE[
+                    [...document.querySelectorAll('.comp-shop-check')].indexOf(el) % SHOP_PALETTE.length
+                ],
+            }));
+            const compMaxH  = PH - y - M - (compShops.length > 0 ? Math.ceil(compShops.length / 2) * 5 + 6 : 0);
+            const compBot   = addChartImage(getCanvasPng('comparisonBarChart'), 'comparisonBarChart', M, y, CW, compMaxH);
+            addShopList(compShops, compBot);
 
             doc.save('Sales_Analytics_Charts.pdf');
 
