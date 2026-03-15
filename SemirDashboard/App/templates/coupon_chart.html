@@ -413,7 +413,7 @@
                     <label for="cbShopAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox" id="cbShopAvg" value="__avg__" style="flex-shrink:0;">
                         <span class="shop-dot" id="dotShopAvg" style="background:#2C3E50;flex-shrink:0;"></span>
-                        <span class="fw-semibold" style="font-size:.85rem;">AVG (selected)</span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (average of selected)</span>
                     </label>
                     <!-- dynamic shop rows appended by JS -->
                 </div>
@@ -492,7 +492,7 @@
                     <label for="cbCampAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox" id="cbCampAvg" value="__avg__" style="flex-shrink:0;">
                         <span class="shop-dot" id="dotCampAvg" style="background:#2C3E50;flex-shrink:0;"></span>
-                        <span class="fw-semibold" style="font-size:.85rem;">AVG (selected)</span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (average of selected)</span>
                     </label>
                     <!-- dynamic campaign rows by JS -->
                 </div>
@@ -591,9 +591,9 @@
         const el = document.getElementById(panelId);
         if (!el) return;
         el.innerHTML = datasets.map(ds =>
-            `<div class="d-flex align-items-center mb-1">
+            `<div class="d-flex align-items-center mb-1" title="${ds._fullLabel || ds.label}">
                <span style="display:inline-block;width:24px;height:3px;background:${ds.borderColor};border-radius:2px;margin-right:6px;flex-shrink:0;"></span>
-               <span style="font-size:.8rem;word-break:break-word;">${ds.label}</span>
+               <span style="font-size:.8rem;word-break:break-word;white-space:normal;">${ds._fullLabel || ds.label}</span>
              </div>`
         ).join('');
     }
@@ -708,7 +708,7 @@
                     if (!entityVals.length) return 0;
                     return +(entityVals.reduce((a, b) => a + b, 0) / entityVals.length).toFixed(1);
                 });
-                datasets.push({ label: 'AVG (all)', data: vals, borderColor: AVG_ALL_COLOR, backgroundColor: 'transparent', borderWidth: 2.5, borderDash: [4, 4], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
+                datasets.push({ label: 'AVG (all)', _fullLabel: 'AVG (all)', data: vals, borderColor: AVG_ALL_COLOR, backgroundColor: 'transparent', pointBackgroundColor: AVG_ALL_COLOR, borderWidth: 2.5, borderDash: [4, 4], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
                 return;
             }
             if (sel === '__avg__') {
@@ -722,7 +722,7 @@
                     if (!entityVals.length) return 0;
                     return +(entityVals.reduce((a, b) => a + b, 0) / entityVals.length).toFixed(1);
                 });
-                datasets.push({ label: 'AVG (selected)', data: vals, borderColor: AVG_SEL_COLOR, backgroundColor: 'transparent', borderWidth: 2.5, borderDash: [6, 3], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
+                datasets.push({ label: 'AVG (average of selected)', _fullLabel: 'AVG (average of selected)', data: vals, borderColor: AVG_SEL_COLOR, backgroundColor: 'transparent', pointBackgroundColor: AVG_SEL_COLOR, borderWidth: 2.5, borderDash: [6, 3], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
                 return;
             }
             if (!series[sel]) return;
@@ -732,8 +732,10 @@
                 return isPct ? (totals[tk] ? +(raw / totals[tk] * 100).toFixed(1) : 0) : raw;
             });
             datasets.push({
-                label: sel.length > 35 ? sel.slice(0, 33) + '…' : sel,
+                label: sel,
+                _fullLabel: sel,
                 data: vals, borderColor: color, backgroundColor: color + '18',
+                pointBackgroundColor: color,
                 borderWidth: 2,
                 pointRadius: vals.map(v => v > 0 ? 4 : 0),
                 pointHoverRadius: 6, pointHitRadius: 8,
@@ -915,9 +917,15 @@
 
     // ── Campaign checklist filter in filter bar ───────────────────────────────────
     (function buildChartCpnFilter() {
-        if (!CAMPAIGNS.length) return;
         const row = document.getElementById('chartCpnFilterRow');
         const list = document.getElementById('chartCpnFilterList');
+        row.style.display = '';  // always show
+
+        if (!CAMPAIGNS.length) {
+            list.innerHTML = '<span class="text-muted small fst-italic">No campaigns configured.</span>';
+            return;
+        }
+
         const fld = document.getElementById('fieldPrefix');
         const form = document.getElementById('chartFilterForm');
         const cur = (fld.value || '').trim();
@@ -947,7 +955,6 @@
             const subtitle = (c.prefix_list || (c.prefix ? c.prefix.split(',').map(p => p.trim()) : [])).join(', ');
             list.appendChild(makePill(c.name, prefixVal, isActive, subtitle));
         });
-        row.style.display = '';
     })();
 
     // ── Quick filter date buttons ─────────────────────────────────────────────────

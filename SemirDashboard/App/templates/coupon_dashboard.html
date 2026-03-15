@@ -637,9 +637,15 @@
     // ── Campaign checklist filter ──────────────────────────────────────────────
     (function buildCpnFilter() {
         const cpns = JSON.parse(document.getElementById('__cpnFilterData').textContent);
-        if (!cpns.length) return;
         const row = document.getElementById('cpnFilterRow');
         const list = document.getElementById('cpnFilterList');
+        row.style.display = '';  // always show the filter row
+
+        if (!cpns.length) {
+            list.innerHTML = '<span class="text-muted small fst-italic">No campaigns configured. Go to Upload Coupons to add campaigns.</span>';
+            return;
+        }
+
         const fld = document.getElementById('fieldPrefix');
         const form = document.getElementById('couponFilterForm');
         const cur = (fld.value || '').trim();
@@ -662,17 +668,13 @@
             return a;
         }
 
-        // "All" pill
         list.appendChild(makePill('✕ All', '', !cur, 'Show all campaigns'));
-
         cpns.forEach(function(c) {
             const prefixVal = c.prefix || '';
             const isActive = cur && prefixVal && cur.toLowerCase() === prefixVal.toLowerCase();
             const subtitle = (c.prefix_list || []).join(', ');
             list.appendChild(makePill(c.name, prefixVal, isActive, subtitle));
         });
-
-        row.style.display = '';
     })();
 </script>
 {% endblock %}

@@ -138,7 +138,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-success" id="btnAddSave">
+        <button type="button" class="btn btn-success" id="btnAddSave">
           <i class="bi bi-check-lg"></i> Save
         </button>
       </div>
@@ -172,7 +172,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-primary" id="btnEditSave">
+        <button type="button" class="btn btn-primary" id="btnEditSave">
           <i class="bi bi-check-lg"></i> Save
         </button>
       </div>
@@ -194,9 +194,9 @@
   window.addEventListener('load', hideLoading);
 
   // Campaign management JS — guarded by element existence.
-  // btnAddSave is only rendered when user has manage_campaigns permission (if can_manage in template).
+  // btnAddSave is only rendered when user has manage_campaigns permission.
   // No JSON permission check needed — if the element doesn't exist, the block is skipped entirely.
-  (function () {
+  document.addEventListener('DOMContentLoaded', function () {
     var btnAdd = document.getElementById('btnAddSave');
     if (!btnAdd) return; // no permission = elements not in DOM
 
@@ -322,6 +322,6 @@
     };
 
     loadCampaigns();
-  }()); // end campaign management block
+  }); // end campaign management block (DOMContentLoaded)
 </script>
 {% endblock %}
