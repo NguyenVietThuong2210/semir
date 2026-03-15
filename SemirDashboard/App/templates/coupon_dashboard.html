@@ -141,19 +141,6 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-ticket-perforated"></i> Coupon Analytics</h2>
     <div class="d-flex gap-2 flex-wrap">
-        {% check_perm 'page_coupon_chart' as can_coupon_chart %}
-        {% if can_coupon_chart %}
-        <a href="{% url 'coupon_chart' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}"
-            class="btn btn-outline-info btn-sm">
-            <i class="bi bi-pie-chart"></i> Charts
-        </a>
-        {% endif %}
-        {% check_perm 'page_upload' as can_upload %}
-        {% if can_upload %}
-        <a href="{% url 'upload_coupons' %}" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-upload"></i> Upload
-        </a>
-        {% endif %}
         {% check_perm 'download_coupons' as can_dl_coupons %}
         {% if can_dl_coupons %}
         <a href="{% url 'export_coupons' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}"
@@ -165,9 +152,6 @@
             <i class="bi bi-file-excel"></i> Export Excel
         </button>
         {% endif %}
-        <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-house"></i> Home
-        </a>
     </div>
 </div>
 
@@ -222,12 +206,6 @@
                 <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
                 <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
             </div>
-        </div>
-
-        <!-- Campaign quick-pick badges (populated by JS) -->
-        <div class="mt-2 pt-2 border-top" id="campaignPickRow" style="display:none">
-            <small class="text-muted me-1"><i class="bi bi-tags"></i> Campaign:</small>
-            <span id="campaignBadges"></span>
         </div>
 
         {% if start_date or end_date or coupon_id_prefix or shop_group %}
@@ -592,15 +570,6 @@
     </div>
 </div>
 
-<div class="text-center mb-4">
-    <a href="{% url 'analytics_dashboard' %}" class="btn btn-outline-secondary me-2 page-link">
-        <i class="bi bi-bar-chart"></i> Customer Analytics
-    </a>
-    <a href="{% url 'home' %}" class="btn btn-outline-secondary page-link">
-        <i class="bi bi-house"></i> Home
-    </a>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -656,43 +625,5 @@
         showLoading('Loading coupon data...');
     });
 
-    // ── Campaign badge picker ──────────────────────────────────────────────────
-    (async function loadCampaignBadges() {
-        try {
-            const r = await fetch("{% url 'manage_campaigns' %}");
-            const data = await r.json();
-            const campaigns = data.campaigns || [];
-            if (!campaigns.length) return;
-            const row = document.getElementById('campaignPickRow');
-            const badgesEl = document.getElementById('campaignBadges');
-            const fld = document.getElementById('fieldPrefix');
-            // "All" clear badge
-            const allBadge = document.createElement('a');
-            allBadge.href = '#';
-            allBadge.className = 'badge bg-secondary text-white text-decoration-none me-1';
-            allBadge.textContent = '× All';
-            allBadge.addEventListener('click', e => { e.preventDefault(); fld.value = ''; showLoading('Loading...'); document.getElementById('couponFilterForm').submit(); });
-            badgesEl.appendChild(allBadge);
-            campaigns.forEach(c => {
-                const prefixes = c.prefix_list || [c.prefix];
-                prefixes.forEach(p => {
-                    const badge = document.createElement('a');
-                    badge.href = '#';
-                    const active = fld.value.trim().toUpperCase() === p.toUpperCase();
-                    badge.className = 'badge text-decoration-none me-1 ' + (active ? 'bg-primary' : 'bg-light text-dark border');
-                    badge.title = c.name;
-                    badge.textContent = p;
-                    badge.addEventListener('click', e => {
-                        e.preventDefault();
-                        fld.value = p;
-                        showLoading('Loading coupon data...');
-                        document.getElementById('couponFilterForm').submit();
-                    });
-                    badgesEl.appendChild(badge);
-                });
-            });
-            row.style.display = '';
-        } catch (e) { /* silently skip */ }
-    })();
 </script>
 {% endblock %}

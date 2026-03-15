@@ -274,12 +274,6 @@
                 {% endfor %}
             </div>
         </div>
-        <!-- Campaign badge picker -->
-        <div class="mt-2 pt-2 border-top" id="chartCampaignPickRow" style="display:none">
-            <small class="text-muted me-1"><i class="bi bi-tags"></i> Campaign:</small>
-            <span id="chartCampaignBadges"></span>
-        </div>
-
         {% if start_date and end_date %}
         <div class="alert alert-info mt-2 mb-0 py-2">
             <i class="bi bi-funnel-fill"></i>
@@ -608,7 +602,6 @@
                     </div>
                     <div style="width:20%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;flex-shrink:0;padding-left:4px;">
                         ${fmtVal(r.value, metric)}
-                        ${total > 0 ? `<div style="font-weight:400;color:#888;font-size:.7rem;">${(r.value/total*100).toFixed(1)}%</div>` : ''}
                     </div>
                  </div>`
             ).join('');
@@ -694,11 +687,12 @@
                 const all = Object.keys(series);
                 if (!all.length) return;
                 const vals = timeLabels.map(tk => {
-                    const nonZero = all.map(e => ((series[e][tk] || {})[rawField] || 0)).filter(v => v > 0);
-                    if (!nonZero.length) return 0;
-                    const sum = nonZero.reduce((a, b) => a + b, 0);
-                    if (isPct) return totals[tk] ? +(sum / totals[tk] * 100).toFixed(1) : 0;
-                    return +(sum / nonZero.length).toFixed(1);
+                    const entityVals = all.map(e => {
+                        const raw = (series[e][tk] || {})[rawField] || 0;
+                        return isPct ? (totals[tk] ? raw / totals[tk] * 100 : 0) : raw;
+                    }).filter(v => v > 0);
+                    if (!entityVals.length) return 0;
+                    return +(entityVals.reduce((a, b) => a + b, 0) / entityVals.length).toFixed(1);
                 });
                 datasets.push({ label: 'AVG (all)', data: vals, borderColor: AVG_ALL_COLOR, backgroundColor: 'transparent', borderWidth: 2.5, borderDash: [4, 4], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
                 return;
@@ -707,11 +701,12 @@
                 const selE = selected.filter(s => s !== '__avg_all__' && s !== '__avg__').filter(e => series[e]);
                 if (!selE.length) return;
                 const vals = timeLabels.map(tk => {
-                    const nonZero = selE.map(e => ((series[e][tk] || {})[rawField] || 0)).filter(v => v > 0);
-                    if (!nonZero.length) return 0;
-                    const sum = nonZero.reduce((a, b) => a + b, 0);
-                    if (isPct) return totals[tk] ? +(sum / totals[tk] * 100).toFixed(1) : 0;
-                    return +(sum / nonZero.length).toFixed(1);
+                    const entityVals = selE.map(e => {
+                        const raw = (series[e][tk] || {})[rawField] || 0;
+                        return isPct ? (totals[tk] ? raw / totals[tk] * 100 : 0) : raw;
+                    }).filter(v => v > 0);
+                    if (!entityVals.length) return 0;
+                    return +(entityVals.reduce((a, b) => a + b, 0) / entityVals.length).toFixed(1);
                 });
                 datasets.push({ label: 'AVG (selected)', data: vals, borderColor: AVG_SEL_COLOR, backgroundColor: 'transparent', borderWidth: 2.5, borderDash: [6, 3], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
                 return;
@@ -902,41 +897,6 @@
     document.getElementById('dotCampAvg').style.background = AVG_SEL_COLOR;
 
     refreshCampChart();
-
-    // ── Campaign badge picker (same as dashboard) ────────────────────────────────
-    (function () {
-        if (!CAMPAIGNS.length) return;
-        const row = document.getElementById('chartCampaignPickRow');
-        const badgesEl = document.getElementById('chartCampaignBadges');
-        const fld = document.getElementById('fieldPrefix');
-        const form = document.getElementById('chartFilterForm');
-        // "All" clear badge
-        const allBadge = document.createElement('a');
-        allBadge.href = '#';
-        allBadge.className = 'badge bg-secondary text-white text-decoration-none me-1';
-        allBadge.textContent = '× All';
-        allBadge.addEventListener('click', e => { e.preventDefault(); fld.value = ''; showLoading('Loading...'); form.submit(); });
-        badgesEl.appendChild(allBadge);
-        CAMPAIGNS.forEach(c => {
-            const prefixes = c.prefix_list || (c.prefix ? c.prefix.split(',').map(p => p.trim()).filter(Boolean) : []);
-            prefixes.forEach(p => {
-                const badge = document.createElement('a');
-                badge.href = '#';
-                const cur = (fld.value || '').trim().toUpperCase();
-                badge.className = 'badge text-decoration-none me-1 ' + (cur === p.toUpperCase() ? 'bg-primary' : 'bg-light text-dark border');
-                badge.title = c.name;
-                badge.textContent = p;
-                badge.addEventListener('click', e => {
-                    e.preventDefault();
-                    fld.value = p;
-                    showLoading('Loading chart data…');
-                    form.submit();
-                });
-                badgesEl.appendChild(badge);
-            });
-        });
-        row.style.display = '';
-    })();
 
     // ── Quick filter date buttons ─────────────────────────────────────────────────
     function _fmt(d) {
