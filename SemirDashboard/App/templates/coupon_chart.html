@@ -905,7 +905,7 @@
         const btype = getCampXAxis();
         const metric = getCampMetric();
         const series = CAMP_SERIES[btype] || {};
-        const labels = (TREND.time_labels || {})[btype] || [];
+        const labels = (TREND.time_labels_camp || TREND.time_labels || {})[btype] || [];
         campChart = buildTrendChart('campTrendChart', 'campLegendPanel', series, labels, getCampSelected(), metric, getColor, btype, TOTAL_BY_TIME);
     }
 
