@@ -915,11 +915,11 @@
 
     refreshCampChart();
 
-    // ── Campaign checklist filter in filter bar ───────────────────────────────────
+    // ── Campaign multi-select checkbox filter ─────────────────────────────────
     (function buildChartCpnFilter() {
         const row = document.getElementById('chartCpnFilterRow');
         const list = document.getElementById('chartCpnFilterList');
-        row.style.display = '';  // always show
+        row.style.display = '';
 
         if (!CAMPAIGNS.length) {
             list.innerHTML = '<span class="text-muted small fst-italic">No campaigns configured.</span>';
@@ -927,33 +927,72 @@
         }
 
         const fld = document.getElementById('fieldPrefix');
-        const form = document.getElementById('chartFilterForm');
-        const cur = (fld.value || '').trim();
+        const curParts = (fld.value || '').split(',').map(function(p) { return p.trim().toLowerCase(); }).filter(Boolean);
 
-        function makePill(label, prefixVal, active, title) {
-            const a = document.createElement('a');
-            a.href = '#';
-            a.title = title || label;
-            a.className = 'badge text-decoration-none px-2 py-1 ' +
-                (active ? 'bg-primary text-white' : 'bg-white text-dark border');
-            a.style.cursor = 'pointer';
-            a.style.fontSize = '.82rem';
-            a.textContent = label;
-            a.addEventListener('click', function(e) {
-                e.preventDefault();
-                fld.value = prefixVal;
-                showLoading('Loading chart data…');
-                form.submit();
-            });
-            return a;
+        function getPfxList(c) {
+            return (c.prefix_list && c.prefix_list.length)
+                ? c.prefix_list
+                : (c.prefix || '').split(',').map(function(p) { return p.trim(); }).filter(Boolean);
         }
 
-        list.appendChild(makePill('✕ All', '', !cur, 'Show all campaigns'));
+        function isCampaignActive(c) {
+            if (!curParts.length) return false;
+            return getPfxList(c).some(function(p) { return curParts.indexOf(p.toLowerCase()) !== -1; });
+        }
+
+        function updateField() {
+            var vals = [];
+            list.querySelectorAll('input[data-cpn-cb]:checked').forEach(function(cb) {
+                cb.dataset.cpnPfx.split(',').forEach(function(p) {
+                    var t = p.trim();
+                    if (t && vals.indexOf(t) === -1) vals.push(t);
+                });
+            });
+            fld.value = vals.join(',');
+        }
+
+        // "Clear all" link
+        var clearA = document.createElement('a');
+        clearA.href = '#';
+        clearA.style.cssText = 'font-size:.8rem;color:#6c757d;text-decoration:none;margin-right:4px;align-self:center;';
+        clearA.textContent = 'Clear all';
+        clearA.addEventListener('click', function(e) {
+            e.preventDefault();
+            list.querySelectorAll('input[data-cpn-cb]').forEach(function(cb) {
+                cb.checked = false;
+                cb.closest('label').style.background = '#fff';
+                cb.closest('label').style.color = '#212529';
+                cb.closest('label').style.borderColor = '#dee2e6';
+            });
+            fld.value = '';
+        });
+        list.appendChild(clearA);
+
         CAMPAIGNS.forEach(function(c) {
-            const prefixVal = c.prefix || '';
-            const isActive = cur && prefixVal && cur.toLowerCase() === prefixVal.toLowerCase();
-            const subtitle = (c.prefix_list || (c.prefix ? c.prefix.split(',').map(p => p.trim()) : [])).join(', ');
-            list.appendChild(makePill(c.name, prefixVal, isActive, subtitle));
+            var pfxVal = c.prefix || '';
+            var pfxList = getPfxList(c);
+            var checked = isCampaignActive(c);
+
+            var lbl = document.createElement('label');
+            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#0d6efd' : '#dee2e6') + ';background:' + (checked ? '#0d6efd' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
+            lbl.title = pfxList.join(', ');
+
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.setAttribute('data-cpn-cb', '1');
+            cb.dataset.cpnPfx = pfxVal;
+            cb.checked = checked;
+            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#0d6efd;';
+            cb.addEventListener('change', function() {
+                lbl.style.background = cb.checked ? '#0d6efd' : '#fff';
+                lbl.style.color = cb.checked ? '#fff' : '#212529';
+                lbl.style.borderColor = cb.checked ? '#0d6efd' : '#dee2e6';
+                updateField();
+            });
+
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(' ' + c.name));
+            list.appendChild(lbl);
         });
     })();
 
