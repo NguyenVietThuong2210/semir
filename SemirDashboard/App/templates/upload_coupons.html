@@ -128,8 +128,8 @@
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">Coupon ID Prefix <span class="text-danger">*</span></label>
-          <input type="text" class="form-control" id="addPrefix" placeholder="e.g. SEMIR50K">
-          <div class="form-text">All coupons whose ID starts with this prefix belong to this campaign.</div>
+          <input type="text" class="form-control" id="addPrefix" placeholder="e.g. SEMIR50K or SEMIR50K, SEMIR60K">
+          <div class="form-text">One or more prefixes (comma-separated). Coupons whose ID starts with any prefix belong to this campaign.</div>
         </div>
         <div class="mb-3">
           <label class="form-label">Detail / Notes</label>
@@ -162,8 +162,8 @@
           <input type="text" class="form-control" id="editName">
         </div>
         <div class="mb-3">
-          <label class="form-label fw-semibold">Coupon ID Prefix <span class="text-danger">*</span></label>
-          <input type="text" class="form-control" id="editPrefix">
+          <label class="form-label fw-semibold">Coupon ID Prefix(es) <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="editPrefix" placeholder="e.g. SEMIR50K or SEMIR50K, SEMIR60K">
         </div>
         <div class="mb-3">
           <label class="form-label">Detail / Notes</label>
@@ -206,6 +206,9 @@
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify(body)
     });
+    if (!r.ok && r.status !== 400 && r.status !== 404) {
+      throw new Error('Server error ' + r.status);
+    }
     return r.json();
   }
 
@@ -218,7 +221,7 @@
     tbody.innerHTML = campaigns.map(c => `
     <tr class="campaign-row">
       <td><strong>${escHtml(c.name)}</strong><br><small class="text-muted">${c.created_at || ''}</small></td>
-      <td><code>${escHtml(c.prefix)}</code></td>
+      <td>${(c.prefix_list || [c.prefix]).map(p => `<code class="me-1">${escHtml(p)}</code>`).join('')}</td>
       <td><small>${escHtml(c.detail || '—')}</small></td>
       <td>
         <button class="btn btn-sm btn-outline-primary me-1" onclick="openEdit(${c.id})" title="Edit">
@@ -255,17 +258,21 @@
     const prefix = document.getElementById('addPrefix').value.trim();
     const detail = document.getElementById('addDetail').value.trim();
     document.getElementById('addAlert').classList.add('d-none');
-    if (!name || !prefix) { showAlert('addAlert', 'Name and prefix are required.'); return; }
-    const res = await apiCampaign({ action: 'create', name, prefix, detail });
-    if (res.ok) {
-      bootstrap.Modal.getInstance(document.getElementById('modalAddCampaign')).hide();
-      document.getElementById('addName').value = '';
-      document.getElementById('addPrefix').value = '';
-      document.getElementById('addDetail').value = '';
-      await loadCampaigns();
-      showAlert('campaignAlert', 'Campaign created.', 'success');
-    } else {
-      showAlert('addAlert', res.error || 'Error');
+    if (!name || !prefix) { showAlert('addAlert', 'Name and at least one prefix are required.'); return; }
+    try {
+      const res = await apiCampaign({ action: 'create', name, prefix, detail });
+      if (res.ok) {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAddCampaign')).hide();
+        document.getElementById('addName').value = '';
+        document.getElementById('addPrefix').value = '';
+        document.getElementById('addDetail').value = '';
+        await loadCampaigns();
+        showAlert('campaignAlert', 'Campaign created.', 'success');
+      } else {
+        showAlert('addAlert', res.error || 'Error saving campaign.');
+      }
+    } catch (e) {
+      showAlert('addAlert', 'Request failed: ' + e.message);
     }
   });
 
@@ -287,14 +294,18 @@
     const prefix = document.getElementById('editPrefix').value.trim();
     const detail = document.getElementById('editDetail').value.trim();
     document.getElementById('editAlert').classList.add('d-none');
-    if (!name || !prefix) { showAlert('editAlert', 'Name and prefix are required.'); return; }
-    const res = await apiCampaign({ action: 'update', id, name, prefix, detail });
-    if (res.ok) {
-      bootstrap.Modal.getInstance(document.getElementById('modalEditCampaign')).hide();
-      await loadCampaigns();
-      showAlert('campaignAlert', 'Campaign updated.', 'success');
-    } else {
-      showAlert('editAlert', res.error || 'Error');
+    if (!name || !prefix) { showAlert('editAlert', 'Name and at least one prefix are required.'); return; }
+    try {
+      const res = await apiCampaign({ action: 'update', id, name, prefix, detail });
+      if (res.ok) {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditCampaign')).hide();
+        await loadCampaigns();
+        showAlert('campaignAlert', 'Campaign updated.', 'success');
+      } else {
+        showAlert('editAlert', res.error || 'Error saving campaign.');
+      }
+    } catch (e) {
+      showAlert('editAlert', 'Request failed: ' + e.message);
     }
   });
 

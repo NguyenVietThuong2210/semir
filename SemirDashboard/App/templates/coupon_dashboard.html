@@ -158,11 +158,11 @@
         {% if can_dl_coupons %}
         <a href="{% url 'export_coupons' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}"
             class="btn btn-success btn-sm">
-            <i class="bi bi-download"></i> Export Excel
+            <i class="bi bi-file-excel"></i> Export Excel
         </a>
         {% else %}
         <button class="btn btn-success btn-sm" disabled title="No export permission">
-            <i class="bi bi-download"></i> Export Excel
+            <i class="bi bi-file-excel"></i> Export Excel
         </button>
         {% endif %}
         <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
@@ -188,17 +188,8 @@
                     <i class="bi bi-search"></i> Coupon ID Prefix
                     <small class="text-muted">(e.g. SEMIR50K)</small>
                 </label>
-                <div class="input-group">
-                    <input type="text" class="form-control" id="fieldPrefix" name="coupon_id_prefix"
-                        value="{{ coupon_id_prefix }}" placeholder="Free text or pick campaign →">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
-                        title="Pick from campaigns" id="btnCampaignPick">
-                        <i class="bi bi-tags"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" id="campaignDropdown">
-                        <li><span class="dropdown-item text-muted small">Loading campaigns…</span></li>
-                    </ul>
-                </div>
+                <input type="text" class="form-control" id="fieldPrefix" name="coupon_id_prefix"
+                    value="{{ coupon_id_prefix }}" placeholder="Free text filter…">
             </div>
             <div class="col-md-2">
                 <label class="form-label"><i class="bi bi-building"></i> Shop Group</label>
@@ -231,6 +222,12 @@
                 <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
                 <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
             </div>
+        </div>
+
+        <!-- Campaign quick-pick badges (populated by JS) -->
+        <div class="mt-2 pt-2 border-top" id="campaignPickRow" style="display:none">
+            <small class="text-muted me-1"><i class="bi bi-tags"></i> Campaign:</small>
+            <span id="campaignBadges"></span>
         </div>
 
         {% if start_date or end_date or coupon_id_prefix or shop_group %}
@@ -659,39 +656,43 @@
         showLoading('Loading coupon data...');
     });
 
-    // ── Campaign dropdown for prefix filter ──────────────────────────────────────
-    (async function loadCampaignDropdown() {
-        const dd = document.getElementById('campaignDropdown');
-        const fld = document.getElementById('fieldPrefix');
+    // ── Campaign badge picker ──────────────────────────────────────────────────
+    (async function loadCampaignBadges() {
         try {
             const r = await fetch("{% url 'manage_campaigns' %}");
             const data = await r.json();
             const campaigns = data.campaigns || [];
-            if (!campaigns.length) {
-                dd.innerHTML = '<li><span class="dropdown-item text-muted small">No campaigns defined.</span></li>';
-                return;
-            }
-            dd.innerHTML = `<li><h6 class="dropdown-header">Pick Campaign (sets prefix)</h6></li>
-            <li><a class="dropdown-item small" href="#" data-prefix="">
-                <i class="bi bi-x-circle"></i> Clear prefix (all coupons)
-            </a></li>
-            <li><hr class="dropdown-divider"></li>` +
-                campaigns.map(c =>
-                    `<li><a class="dropdown-item small" href="#" data-prefix="${c.prefix}">
-                    <strong>${c.name}</strong> <code class="ms-1">${c.prefix}</code>
-                </a></li>`
-                ).join('');
-            dd.querySelectorAll('[data-prefix]').forEach(a => {
-                a.addEventListener('click', e => {
-                    e.preventDefault();
-                    fld.value = a.dataset.prefix;
-                    showLoading('Loading coupon data...');
-                    document.getElementById('couponFilterForm').submit();
+            if (!campaigns.length) return;
+            const row = document.getElementById('campaignPickRow');
+            const badgesEl = document.getElementById('campaignBadges');
+            const fld = document.getElementById('fieldPrefix');
+            // "All" clear badge
+            const allBadge = document.createElement('a');
+            allBadge.href = '#';
+            allBadge.className = 'badge bg-secondary text-white text-decoration-none me-1';
+            allBadge.textContent = '× All';
+            allBadge.addEventListener('click', e => { e.preventDefault(); fld.value = ''; showLoading('Loading...'); document.getElementById('couponFilterForm').submit(); });
+            badgesEl.appendChild(allBadge);
+            campaigns.forEach(c => {
+                const prefixes = c.prefix_list || [c.prefix];
+                prefixes.forEach(p => {
+                    const badge = document.createElement('a');
+                    badge.href = '#';
+                    const active = fld.value.trim().toUpperCase() === p.toUpperCase();
+                    badge.className = 'badge text-decoration-none me-1 ' + (active ? 'bg-primary' : 'bg-light text-dark border');
+                    badge.title = c.name;
+                    badge.textContent = p;
+                    badge.addEventListener('click', e => {
+                        e.preventDefault();
+                        fld.value = p;
+                        showLoading('Loading coupon data...');
+                        document.getElementById('couponFilterForm').submit();
+                    });
+                    badgesEl.appendChild(badge);
                 });
             });
-        } catch (e) {
-            dd.innerHTML = '<li><span class="dropdown-item text-muted small">Could not load campaigns.</span></li>';
-        }
+            row.style.display = '';
+        } catch (e) { /* silently skip */ }
     })();
 </script>
 {% endblock %}
