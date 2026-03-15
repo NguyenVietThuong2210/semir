@@ -559,6 +559,10 @@
     // ── Data from server ──────────────────────────────────────────────────────────
     const TREND = JSON.parse(document.getElementById('__trendData').textContent);
     const CAMPAIGNS = JSON.parse(document.getElementById('__campaigns').textContent);
+    // week_label_map: "2025-W01" → "Week 1 (1/1-7/1)" — for human-readable X axis
+    const WEEK_LABEL_MAP = TREND.week_label_map || {};
+    // total_by_time: correct denominator for pct_of_used (total used per bucket, all coupons)
+    const TOTAL_BY_TIME = TREND.total_by_time || {};
 
     // Palette (same as Sales Analytics Charts)
     const PALETTE = [
@@ -665,31 +669,32 @@
     mkDonut('dChart4', 'dPct4', pd.total_coupon_amount, pd.unique_invoice_amount, '#6f42c1');
 
     // ── Generic trend chart builder ───────────────────────────────────────────────
-    function buildTrendChart(canvasId, legendPanelId, series, timeLabels, selected, metric, colorFn) {
+    // btype: 'week' | 'month' | 'season' | 'year' — used for display-label translation
+    // and correct pct_of_used denominator from TOTAL_BY_TIME
+    function buildTrendChart(canvasId, legendPanelId, series, timeLabels, selected, metric, colorFn, btype) {
         const ctx = document.getElementById(canvasId).getContext('2d');
         const isAmt = metric.includes('amount');
         const isPct = metric === 'pct_of_used';
 
-        // total per time key (for % metric)
+        // X-axis display labels: week sort keys → "Week N (d/m-d/m)", others unchanged
+        const displayLabels = btype === 'week'
+            ? timeLabels.map(tk => WEEK_LABEL_MAP[tk] || tk)
+            : timeLabels;
+
+        // Denominator for pct_of_used: total used coupons per bucket (all coupons, not just series)
+        // This gives correct % regardless of how many campaigns a coupon matches
+        const totalRef = (TOTAL_BY_TIME[btype]) || {};
         const totals = {};
         timeLabels.forEach(tk => {
-            let s = 0;
-            Object.values(series).forEach(d => { s += (d[tk] || {})[isPct ? 'used' : metric] || 0; });
-            totals[tk] = s;
+            totals[tk] = totalRef[tk] !== undefined
+                ? totalRef[tk]
+                : Object.values(series).reduce((s, d) => s + ((d[tk] || {})['used'] || 0), 0);
         });
 
         const datasets = [];
         let ci = 0;
 
         const rawField = isPct ? 'used' : metric;
-
-        function getVals(entities) {
-            return timeLabels.map(tk => {
-                const sum = entities.reduce((a, e) => a + ((series[e] && series[e][tk] || {})[rawField] || 0), 0);
-                if (isPct) return totals[tk] ? +(sum / totals[tk] * 100).toFixed(1) : 0;
-                return sum;
-            });
-        }
 
         selected.forEach(sel => {
             if (sel === '__avg_all__') {
@@ -738,7 +743,7 @@
 
         const chart = new Chart(ctx, {
             type: 'line',
-            data: { labels: timeLabels, datasets },
+            data: { labels: displayLabels, datasets },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 animation: { duration: 500 },
@@ -830,7 +835,7 @@
         const metric = getShopMetric();
         const series = SHOP_SERIES[btype] || {};
         const labels = (TREND.time_labels || {})[btype] || [];
-        shopChart = buildTrendChart('shopTrendChart', 'shopLegendPanel', series, labels, getShopSelected(), metric, getColor);
+        shopChart = buildTrendChart('shopTrendChart', 'shopLegendPanel', series, labels, getShopSelected(), metric, getColor, btype);
     }
 
     buildShopList();
@@ -892,7 +897,7 @@
         const metric = getCampMetric();
         const series = CAMP_SERIES[btype] || {};
         const labels = (TREND.time_labels || {})[btype] || [];
-        campChart = buildTrendChart('campTrendChart', 'campLegendPanel', series, labels, getCampSelected(), metric, getColor);
+        campChart = buildTrendChart('campTrendChart', 'campLegendPanel', series, labels, getCampSelected(), metric, getColor, btype);
     }
 
     buildCampList();

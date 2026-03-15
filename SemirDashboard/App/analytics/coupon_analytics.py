@@ -476,7 +476,10 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
     Bucket types: week (YYYY-Www), month (YYYY-MM), season (M2-4 2025 …), year (YYYY)
     """
     from collections import defaultdict
-    from App.analytics.season_utils import get_session_key
+    from App.analytics.season_utils import (
+        get_session_key, get_week_info,
+        week_sort_key, session_sort_key,
+    )
     from App.models import CouponCampaign
 
     # ── Filtered queryset (same shop/date logic, no prefix) ──────────────────
@@ -514,6 +517,8 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
     if not coupon_rows:
         return {
             "time_labels": {"week": [], "month": [], "season": [], "year": []},
+            "week_label_map": {},
+            "total_by_time": {"week": {}, "month": {}, "season": {}, "year": {}},
             "shops": [],
             "shop_series": {},
             "campaigns": [],
@@ -536,8 +541,13 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
     campaigns = list(CouponCampaign.objects.values("name", "prefix"))
 
     # ── Bucket key helpers ────────────────────────────────────────────────────
+    # week: sort key = "YYYY-W01"; display label collected in week_label_map
+    week_label_map = {}  # sort_key → "Week N (d/m-d/m)"
+
     def _week(d):
-        return f"{d.year}-W{d.isocalendar()[1]:02d}"
+        sort_key, display_label = get_week_info(d)
+        week_label_map[sort_key] = display_label
+        return sort_key
 
     def _month(d):
         return f"{d.year}-{d.month:02d}"
@@ -558,6 +568,8 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
     campaign_agg = {
         b: defaultdict(lambda: defaultdict(_new_bucket)) for b in bucket_fns
     }
+    # total used per bucket (all coupons, for correct pct_of_used denominator)
+    total_agg = {b: defaultdict(int) for b in bucket_fns}
 
     for row in coupon_rows:
         d = row["using_date"]
@@ -583,10 +595,12 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
                 if p.strip()
             )
         ]
-        # Skip coupons that match no campaign (Task 9: no (No Campaign) line)
 
         for btype, fn in bucket_fns.items():
             tkey = fn(d)
+
+            # Total used per bucket (all coupons regardless of campaign match)
+            total_agg[btype][tkey] += 1
 
             # Shop bucket
             sb = shop_agg[btype][shop][tkey]
@@ -596,7 +610,7 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
                 sb["_seen"].add(dk)
                 sb["unique_amount"] += inv_amt
 
-            # Campaign buckets
+            # Campaign buckets (skip unmatched coupons — no "(No Campaign)" line)
             for camp in matched:
                 cb = campaign_agg[btype][camp][tkey]
                 cb["used"] += 1
@@ -605,13 +619,18 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
                     cb["_seen"].add(dk)
                     cb["unique_amount"] += inv_amt
 
-    # ── Collect sorted time labels ────────────────────────────────────────────
+    # ── Collect sorted time labels (correct chronological order per type) ─────
     time_labels = {}
     for btype in bucket_fns:
         all_keys = set()
         for entity_d in shop_agg[btype].values():
             all_keys.update(entity_d.keys())
-        time_labels[btype] = sorted(all_keys)
+        if btype == "week":
+            time_labels[btype] = sorted(all_keys, key=week_sort_key)
+        elif btype == "season":
+            time_labels[btype] = sorted(all_keys, key=session_sort_key)
+        else:
+            time_labels[btype] = sorted(all_keys)
 
     # ── Serialise (remove _seen sets) ─────────────────────────────────────────
     def _serialise(agg):
@@ -632,8 +651,13 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
     all_shops = sorted(shop_series.get("month", {}).keys())
     all_campaigns = sorted(campaign_series.get("month", {}).keys())
 
+    # Serialise total_agg
+    total_by_time = {btype: dict(total_agg[btype]) for btype in bucket_fns}
+
     return {
         "time_labels": time_labels,
+        "week_label_map": week_label_map,
+        "total_by_time": total_by_time,
         "shops": all_shops,
         "shop_series": shop_series,
         "campaigns": all_campaigns,
