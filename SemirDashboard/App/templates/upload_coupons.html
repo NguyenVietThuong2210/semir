@@ -184,16 +184,19 @@
 {% endblock %}
 
 {% block extra_js %}
+{# Inject server values as JSON to avoid IDE JS-lint false positives #}
+<script type="application/json" id="__canManage">{% if can_manage %}true{% else %}false{% endif %}</script>
+<script type="application/json" id="__campaignsUrl">"{% url 'manage_campaigns' %}"</script>
+<script type="application/json" id="__csrf">"{{ csrf_token }}"</script>
 <script>
   document.getElementById('uploadForm').addEventListener('submit', function () {
     showLoading('Importing coupon data…');
   });
   window.addEventListener('load', hideLoading);
 
-  {% check_perm 'manage_campaigns' as can_manage %}
-  {% if can_manage %}
-  const CAMPAIGNS_URL = "{% url 'manage_campaigns' %}";
-  const CSRF = "{{ csrf_token }}";
+  if (JSON.parse(document.getElementById('__canManage').textContent)) {
+  const CAMPAIGNS_URL = JSON.parse(document.getElementById('__campaignsUrl').textContent);
+  const CSRF = JSON.parse(document.getElementById('__csrf').textContent);
 
   let campaigns = [];
 
@@ -308,6 +311,6 @@
   }
 
   loadCampaigns();
-  {% endif %}
+  } // end if canManage
 </script>
 {% endblock %}
