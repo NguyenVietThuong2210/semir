@@ -451,6 +451,11 @@ def coupon_dashboard(request):
 
     data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
 
+    from .models import CouponCampaign as _CC
+    _campaigns = list(_CC.objects.values("id", "name", "prefix"))
+    for _c in _campaigns:
+        _c["prefix_list"] = [p.strip() for p in (_c["prefix"] or "").split(",") if p.strip()]
+
     return render(
         request,
         "coupon_dashboard.html",
@@ -465,6 +470,7 @@ def coupon_dashboard(request):
             "coupon_id_prefix": coupon_id_prefix,
             "shop_group": shop_group,
             "quick_btns": QUICK_BTNS,
+            "campaigns_json": json.dumps(_campaigns),
         },
     )
 

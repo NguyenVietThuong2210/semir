@@ -274,6 +274,14 @@
                 {% endfor %}
             </div>
         </div>
+        <!-- Campaign checklist filter (populated by JS from CAMPAIGNS) -->
+        <div class="mt-2 pt-2 border-top" id="chartCpnFilterRow" style="display:none">
+            <small class="text-muted d-block mb-1"><i class="bi bi-tags"></i> Filter by Campaign:</small>
+            <div id="chartCpnFilterList"
+                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid #dee2e6;border-radius:8px;padding:.4rem .5rem;background:#fafbfc;">
+            </div>
+        </div>
+
         {% if start_date and end_date %}
         <div class="alert alert-info mt-2 mb-0 py-2">
             <i class="bi bi-funnel-fill"></i>
@@ -473,6 +481,7 @@
                 <div class="shop-select-actions d-flex gap-1">
                     <button class="btn btn-outline-secondary btn-sm" id="campSelAll">All</button>
                     <button class="btn btn-outline-secondary btn-sm" id="campSelNone">None</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="campSelTop5">Top 5</button>
                 </div>
                 <div class="shop-checklist" id="campChecklist">
                     <label for="cbCampAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
@@ -580,7 +589,7 @@
         el.innerHTML = datasets.map(ds =>
             `<div class="d-flex align-items-center mb-1">
                <span style="display:inline-block;width:24px;height:3px;background:${ds.borderColor};border-radius:2px;margin-right:6px;flex-shrink:0;"></span>
-               <span class="text-truncate" title="${ds.label}" style="max-width:220px;">${ds.label}</span>
+               <span style="font-size:.8rem;word-break:break-word;">${ds.label}</span>
              </div>`
         ).join('');
     }
@@ -890,6 +899,7 @@
 
     document.getElementById('campSelAll').onclick = () => { document.querySelectorAll('.camp-check').forEach(c => c.checked = true); refreshCampChart(); };
     document.getElementById('campSelNone').onclick = () => { document.querySelectorAll('.camp-check').forEach(c => c.checked = false); refreshCampChart(); };
+    document.getElementById('campSelTop5').onclick = () => { document.querySelectorAll('.camp-check').forEach((c, i) => c.checked = i < 5); refreshCampChart(); };
     document.querySelectorAll('input[name="campXAxis"]').forEach(r => r.addEventListener('change', refreshCampChart));
     document.getElementById('campMetric').addEventListener('change', refreshCampChart);
     document.getElementById('campChecklist').addEventListener('change', refreshCampChart);
@@ -897,6 +907,43 @@
     document.getElementById('dotCampAvg').style.background = AVG_SEL_COLOR;
 
     refreshCampChart();
+
+    // ── Campaign checklist filter in filter bar ───────────────────────────────────
+    (function buildChartCpnFilter() {
+        if (!CAMPAIGNS.length) return;
+        const row = document.getElementById('chartCpnFilterRow');
+        const list = document.getElementById('chartCpnFilterList');
+        const fld = document.getElementById('fieldPrefix');
+        const form = document.getElementById('chartFilterForm');
+        const cur = (fld.value || '').trim();
+
+        function makePill(label, prefixVal, active, title) {
+            const a = document.createElement('a');
+            a.href = '#';
+            a.title = title || label;
+            a.className = 'badge text-decoration-none px-2 py-1 ' +
+                (active ? 'bg-primary text-white' : 'bg-white text-dark border');
+            a.style.cursor = 'pointer';
+            a.style.fontSize = '.82rem';
+            a.textContent = label;
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                fld.value = prefixVal;
+                showLoading('Loading chart data…');
+                form.submit();
+            });
+            return a;
+        }
+
+        list.appendChild(makePill('✕ All', '', !cur, 'Show all campaigns'));
+        CAMPAIGNS.forEach(function(c) {
+            const prefixVal = c.prefix || '';
+            const isActive = cur && prefixVal && cur.toLowerCase() === prefixVal.toLowerCase();
+            const subtitle = (c.prefix_list || (c.prefix ? c.prefix.split(',').map(p => p.trim()) : [])).join(', ');
+            list.appendChild(makePill(c.name, prefixVal, isActive, subtitle));
+        });
+        row.style.display = '';
+    })();
 
     // ── Quick filter date buttons ─────────────────────────────────────────────────
     function _fmt(d) {

@@ -184,9 +184,7 @@
 {% endblock %}
 
 {% block extra_js %}
-{% check_perm 'manage_campaigns' as can_manage_js %}
 {# Inject server values as JSON to avoid IDE JS-lint false positives #}
-<script type="application/json" id="__canManage">{% if can_manage_js %}true{% else %}false{% endif %}</script>
 <script type="application/json" id="__campaignsUrl">"{% url 'manage_campaigns' %}"</script>
 <script type="application/json" id="__csrf">"{{ csrf_token }}"</script>
 <script>
@@ -195,134 +193,135 @@
   });
   window.addEventListener('load', hideLoading);
 
-  if (JSON.parse(document.getElementById('__canManage').textContent)) {
-  const CAMPAIGNS_URL = JSON.parse(document.getElementById('__campaignsUrl').textContent);
-  const CSRF = JSON.parse(document.getElementById('__csrf').textContent);
+  // Campaign management JS — guarded by element existence.
+  // btnAddSave is only rendered when user has manage_campaigns permission ({% if can_manage %} in template).
+  // No JSON permission check needed — if the element doesn't exist, the block is skipped entirely.
+  (function () {
+    var btnAdd = document.getElementById('btnAddSave');
+    if (!btnAdd) return; // no permission = elements not in DOM
 
-  let campaigns = [];
+    var CAMPAIGNS_URL = JSON.parse(document.getElementById('__campaignsUrl').textContent);
+    var CSRF = JSON.parse(document.getElementById('__csrf').textContent);
 
-  async function apiCampaign(body) {
-    const r = await fetch(CAMPAIGNS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify(body)
+    var campaigns = [];
+
+    function escHtml(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function showAlert(elId, msg, type) {
+      var el = document.getElementById(elId);
+      el.className = 'alert alert-' + (type || 'danger') + ' py-2';
+      el.textContent = msg;
+      el.classList.remove('d-none');
+    }
+
+    function renderTable() {
+      var tbody = document.getElementById('campaignTbody');
+      if (!campaigns.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No campaigns yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = campaigns.map(function(c) {
+        var prefixes = (c.prefix_list && c.prefix_list.length) ? c.prefix_list : [c.prefix];
+        return '<tr class="campaign-row">' +
+          '<td><strong>' + escHtml(c.name) + '</strong><br><small class="text-muted">' + (c.created_at || '') + '</small></td>' +
+          '<td>' + prefixes.map(function(p){ return '<code class="me-1">' + escHtml(p) + '</code>'; }).join('') + '</td>' +
+          '<td><small>' + escHtml(c.detail || '—') + '</small></td>' +
+          '<td>' +
+            '<button class="btn btn-sm btn-outline-primary me-1" onclick="__cpnEdit(' + c.id + ')" title="Edit"><i class="bi bi-pencil"></i></button>' +
+            '<button class="btn btn-sm btn-outline-danger" onclick="__cpnDel(' + c.id + ',\'' + escHtml(c.name).replace(/'/g,"\\'") + '\')"><i class="bi bi-trash"></i></button>' +
+          '</td></tr>';
+      }).join('');
+    }
+
+    function loadCampaigns() {
+      fetch(CAMPAIGNS_URL)
+        .then(function(r) { return r.json(); })
+        .then(function(data) { campaigns = data.campaigns || []; renderTable(); })
+        .catch(function(e) {
+          document.getElementById('campaignTbody').innerHTML =
+            '<tr><td colspan="4" class="text-center text-danger py-3">Failed to load: ' + e.message + '</td></tr>';
+        });
+    }
+
+    function apiCampaign(body) {
+      return fetch(CAMPAIGNS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(body)
+      }).then(function(r) {
+        if (!r.ok && r.status !== 400 && r.status !== 404) throw new Error('Server error ' + r.status);
+        return r.json();
+      });
+    }
+
+    // Add
+    btnAdd.addEventListener('click', function() {
+      var name   = document.getElementById('addName').value.trim();
+      var prefix = document.getElementById('addPrefix').value.trim();
+      var detail = document.getElementById('addDetail').value.trim();
+      document.getElementById('addAlert').classList.add('d-none');
+      if (!name || !prefix) { showAlert('addAlert', 'Name and at least one prefix are required.'); return; }
+      apiCampaign({ action: 'create', name: name, prefix: prefix, detail: detail })
+        .then(function(res) {
+          if (res.ok) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAddCampaign')).hide();
+            document.getElementById('addName').value = '';
+            document.getElementById('addPrefix').value = '';
+            document.getElementById('addDetail').value = '';
+            loadCampaigns();
+            showAlert('campaignAlert', 'Campaign created.', 'success');
+          } else {
+            showAlert('addAlert', res.error || 'Error saving campaign.');
+          }
+        })
+        .catch(function(e) { showAlert('addAlert', 'Request failed: ' + e.message); });
     });
-    if (!r.ok && r.status !== 400 && r.status !== 404) {
-      throw new Error('Server error ' + r.status);
-    }
-    return r.json();
-  }
 
-  function renderTable() {
-    const tbody = document.getElementById('campaignTbody');
-    if (!campaigns.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No campaigns yet.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = campaigns.map(c => `
-    <tr class="campaign-row">
-      <td><strong>${escHtml(c.name)}</strong><br><small class="text-muted">${c.created_at || ''}</small></td>
-      <td>${(c.prefix_list || [c.prefix]).map(p => `<code class="me-1">${escHtml(p)}</code>`).join('')}</td>
-      <td><small>${escHtml(c.detail || '—')}</small></td>
-      <td>
-        <button class="btn btn-sm btn-outline-primary me-1" onclick="openEdit(${c.id})" title="Edit">
-          <i class="bi bi-pencil"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteCampaign(${c.id}, '${escHtml(c.name).replace(/'/g, "\\'")}')">
-          <i class="bi bi-trash"></i>
-        </button>
-      </td>
-    </tr>`).join('');
-  }
+    // Edit open — exposed as global so onclick= attribute works
+    window.__cpnEdit = function(id) {
+      var c = campaigns.find(function(x) { return x.id === id; });
+      if (!c) return;
+      document.getElementById('editId').value = c.id;
+      document.getElementById('editName').value = c.name;
+      document.getElementById('editPrefix').value = c.prefix;
+      document.getElementById('editDetail').value = c.detail || '';
+      document.getElementById('editAlert').classList.add('d-none');
+      new bootstrap.Modal(document.getElementById('modalEditCampaign')).show();
+    };
 
-  function escHtml(s) {
-    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
+    document.getElementById('btnEditSave').addEventListener('click', function() {
+      var id     = parseInt(document.getElementById('editId').value, 10);
+      var name   = document.getElementById('editName').value.trim();
+      var prefix = document.getElementById('editPrefix').value.trim();
+      var detail = document.getElementById('editDetail').value.trim();
+      document.getElementById('editAlert').classList.add('d-none');
+      if (!name || !prefix) { showAlert('editAlert', 'Name and at least one prefix are required.'); return; }
+      apiCampaign({ action: 'update', id: id, name: name, prefix: prefix, detail: detail })
+        .then(function(res) {
+          if (res.ok) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditCampaign')).hide();
+            loadCampaigns();
+            showAlert('campaignAlert', 'Campaign updated.', 'success');
+          } else {
+            showAlert('editAlert', res.error || 'Error saving campaign.');
+          }
+        })
+        .catch(function(e) { showAlert('editAlert', 'Request failed: ' + e.message); });
+    });
 
-  async function loadCampaigns() {
-    const r = await fetch(CAMPAIGNS_URL);
-    const data = await r.json();
-    campaigns = data.campaigns || [];
-    renderTable();
-  }
+    // Delete — exposed as global
+    window.__cpnDel = function(id, name) {
+      if (!confirm('Delete campaign "' + name + '"?')) return;
+      apiCampaign({ action: 'delete', id: id })
+        .then(function(res) {
+          if (res.ok) { loadCampaigns(); showAlert('campaignAlert', 'Campaign deleted.', 'warning'); }
+          else { alert(res.error || 'Error deleting campaign'); }
+        });
+    };
 
-  function showAlert(elId, msg, type = 'danger') {
-    const el = document.getElementById(elId);
-    el.className = `alert alert-${type} py-2`;
-    el.textContent = msg;
-    el.classList.remove('d-none');
-  }
-
-  // Add
-  document.getElementById('btnAddSave').addEventListener('click', async () => {
-    const name = document.getElementById('addName').value.trim();
-    const prefix = document.getElementById('addPrefix').value.trim();
-    const detail = document.getElementById('addDetail').value.trim();
-    document.getElementById('addAlert').classList.add('d-none');
-    if (!name || !prefix) { showAlert('addAlert', 'Name and at least one prefix are required.'); return; }
-    try {
-      const res = await apiCampaign({ action: 'create', name, prefix, detail });
-      if (res.ok) {
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAddCampaign')).hide();
-        document.getElementById('addName').value = '';
-        document.getElementById('addPrefix').value = '';
-        document.getElementById('addDetail').value = '';
-        await loadCampaigns();
-        showAlert('campaignAlert', 'Campaign created.', 'success');
-      } else {
-        showAlert('addAlert', res.error || 'Error saving campaign.');
-      }
-    } catch (e) {
-      showAlert('addAlert', 'Request failed: ' + e.message);
-    }
-  });
-
-  // Edit open
-  function openEdit(id) {
-    const c = campaigns.find(x => x.id === id);
-    if (!c) return;
-    document.getElementById('editId').value = c.id;
-    document.getElementById('editName').value = c.name;
-    document.getElementById('editPrefix').value = c.prefix;
-    document.getElementById('editDetail').value = c.detail || '';
-    document.getElementById('editAlert').classList.add('d-none');
-    new bootstrap.Modal(document.getElementById('modalEditCampaign')).show();
-  }
-
-  document.getElementById('btnEditSave').addEventListener('click', async () => {
-    const id = parseInt(document.getElementById('editId').value);
-    const name = document.getElementById('editName').value.trim();
-    const prefix = document.getElementById('editPrefix').value.trim();
-    const detail = document.getElementById('editDetail').value.trim();
-    document.getElementById('editAlert').classList.add('d-none');
-    if (!name || !prefix) { showAlert('editAlert', 'Name and at least one prefix are required.'); return; }
-    try {
-      const res = await apiCampaign({ action: 'update', id, name, prefix, detail });
-      if (res.ok) {
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditCampaign')).hide();
-        await loadCampaigns();
-        showAlert('campaignAlert', 'Campaign updated.', 'success');
-      } else {
-        showAlert('editAlert', res.error || 'Error saving campaign.');
-      }
-    } catch (e) {
-      showAlert('editAlert', 'Request failed: ' + e.message);
-    }
-  });
-
-  // Delete
-  async function deleteCampaign(id, name) {
-    if (!confirm(`Delete campaign "${name}"?`)) return;
-    const res = await apiCampaign({ action: 'delete', id });
-    if (res.ok) {
-      await loadCampaigns();
-      showAlert('campaignAlert', 'Campaign deleted.', 'warning');
-    } else {
-      alert(res.error || 'Error deleting campaign');
-    }
-  }
-
-  loadCampaigns();
-  } // end if canManage
+    loadCampaigns();
+  }()); // end campaign management block
 </script>
 {% endblock %}
