@@ -638,10 +638,10 @@ def coupon_chart(request):
     _trend_ver_key = "cpn_trend_ver"
     _trend_ttl = 600
     trend_v = cache.get(_trend_ver_key, 0)
-    trend_cache_key = f"cpn_trend:{trend_v}:{date_from}:{date_to}:{shop_group}"
+    trend_cache_key = f"cpn_trend:{trend_v}:{date_from}:{date_to}:{shop_group}:{coupon_id_prefix}"
     trend_data = cache.get(trend_cache_key)
     if trend_data is None:
-        trend_data = calculate_coupon_trend_data(date_from, date_to, shop_group)
+        trend_data = calculate_coupon_trend_data(date_from, date_to, shop_group, coupon_id_prefix)
         cache.set(trend_cache_key, trend_data, _trend_ttl)
         logger.info("coupon trend cache MISS (%s)", trend_cache_key)
     else:

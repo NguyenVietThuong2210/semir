@@ -561,8 +561,10 @@
     const CAMPAIGNS = JSON.parse(document.getElementById('__campaigns').textContent);
     // week_label_map: "2025-W01" → "Week 1 (1/1-7/1)" — for human-readable X axis
     const WEEK_LABEL_MAP = TREND.week_label_map || {};
-    // total_by_time: correct denominator for pct_of_used (total used per bucket, all coupons)
+    // total_by_time: denominator for campaign chart (all coupons, no prefix filter)
     const TOTAL_BY_TIME = TREND.total_by_time || {};
+    // total_by_time_shop: denominator for shop chart (prefix-filtered)
+    const TOTAL_BY_TIME_SHOP = TREND.total_by_time_shop || TOTAL_BY_TIME;
 
     // Palette (same as Sales Analytics Charts)
     const PALETTE = [
@@ -670,8 +672,8 @@
 
     // ── Generic trend chart builder ───────────────────────────────────────────────
     // btype: 'week' | 'month' | 'season' | 'year' — used for display-label translation
-    // and correct pct_of_used denominator from TOTAL_BY_TIME
-    function buildTrendChart(canvasId, legendPanelId, series, timeLabels, selected, metric, colorFn, btype) {
+    // and correct pct_of_used denominator passed per-chart
+    function buildTrendChart(canvasId, legendPanelId, series, timeLabels, selected, metric, colorFn, btype, totalByTime) {
         const ctx = document.getElementById(canvasId).getContext('2d');
         const isAmt = metric.includes('amount');
         const isPct = metric === 'pct_of_used';
@@ -681,9 +683,8 @@
             ? timeLabels.map(tk => WEEK_LABEL_MAP[tk] || tk)
             : timeLabels;
 
-        // Denominator for pct_of_used: total used coupons per bucket (all coupons, not just series)
-        // This gives correct % regardless of how many campaigns a coupon matches
-        const totalRef = (TOTAL_BY_TIME[btype]) || {};
+        // Denominator for pct_of_used: caller passes the correct total for this chart
+        const totalRef = ((totalByTime || TOTAL_BY_TIME)[btype]) || {};
         const totals = {};
         timeLabels.forEach(tk => {
             totals[tk] = totalRef[tk] !== undefined
@@ -806,7 +807,13 @@
         const cl = document.getElementById('shopChecklist');
         // remove existing shop rows (keep avg rows = first 2 labels)
         cl.querySelectorAll('.shop-item').forEach(el => el.remove());
-        ALL_SHOPS.forEach((shop, i) => {
+        // only show shops that have data in the current filtered series
+        const seriesShops = new Set();
+        Object.values(SHOP_SERIES).forEach(function(byShop) {
+            Object.keys(byShop).forEach(function(s) { seriesShops.add(s); });
+        });
+        const visibleShops = ALL_SHOPS.filter(s => seriesShops.has(s));
+        visibleShops.forEach((shop, i) => {
             const color = getColor(i);
             const lbl = document.createElement('label');
             lbl.className = 'form-check d-flex align-items-center gap-1 shop-item';
@@ -837,7 +844,7 @@
         const metric = getShopMetric();
         const series = SHOP_SERIES[btype] || {};
         const labels = (TREND.time_labels || {})[btype] || [];
-        shopChart = buildTrendChart('shopTrendChart', 'shopLegendPanel', series, labels, getShopSelected(), metric, getColor, btype);
+        shopChart = buildTrendChart('shopTrendChart', 'shopLegendPanel', series, labels, getShopSelected(), metric, getColor, btype, TOTAL_BY_TIME_SHOP);
     }
 
     buildShopList();
@@ -899,7 +906,7 @@
         const metric = getCampMetric();
         const series = CAMP_SERIES[btype] || {};
         const labels = (TREND.time_labels || {})[btype] || [];
-        campChart = buildTrendChart('campTrendChart', 'campLegendPanel', series, labels, getCampSelected(), metric, getColor, btype);
+        campChart = buildTrendChart('campTrendChart', 'campLegendPanel', series, labels, getCampSelected(), metric, getColor, btype, TOTAL_BY_TIME);
     }
 
     buildCampList();
