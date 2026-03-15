@@ -220,9 +220,6 @@
             class="btn btn-outline-primary btn-sm">
             <i class="bi bi-table"></i> Switch to Table View
         </a>
-        <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-house"></i> Home
-        </a>
     </div>
 </div>
 
@@ -240,16 +237,8 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label"><i class="bi bi-search"></i> Coupon ID Prefix</label>
-                <div class="input-group">
-                    <input type="text" class="form-control" name="coupon_id_prefix" id="fieldPrefix"
-                        value="{{ coupon_id_prefix }}" placeholder="Free text or pick →">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-tags"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" id="campaignPickDd">
-                        <li><span class="dropdown-item text-muted small">Loading…</span></li>
-                    </ul>
-                </div>
+                <input type="text" class="form-control" name="coupon_id_prefix" id="fieldPrefix"
+                    value="{{ coupon_id_prefix }}" placeholder="Free text filter…">
             </div>
             <div class="col-md-2">
                 <label class="form-label"><i class="bi bi-building"></i> Shop Group</label>
@@ -285,6 +274,12 @@
                 {% endfor %}
             </div>
         </div>
+        <!-- Campaign badge picker -->
+        <div class="mt-2 pt-2 border-top" id="chartCampaignPickRow" style="display:none">
+            <small class="text-muted me-1"><i class="bi bi-tags"></i> Campaign:</small>
+            <span id="chartCampaignBadges"></span>
+        </div>
+
         {% if start_date and end_date %}
         <div class="alert alert-info mt-2 mb-0 py-2">
             <i class="bi bi-funnel-fill"></i>
@@ -408,13 +403,13 @@
                     <button class="btn btn-outline-secondary btn-sm" id="shopSelTop5">Top 5</button>
                 </div>
                 <div class="shop-checklist" id="shopChecklist">
-                    <label for="cbShopAvgAll" class="form-check d-flex align-items-center gap-1 avg-row">
-                        <input class="form-check-input" type="checkbox" id="cbShopAvgAll" value="__avg_all__">
+                    <label for="cbShopAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbShopAvgAll" value="__avg_all__" style="flex-shrink:0;">
                         <span class="shop-dot" id="dotShopAvgAll" style="background:#6c757d;flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (all shops)</span>
                     </label>
-                    <label for="cbShopAvg" class="form-check d-flex align-items-center gap-1 avg-row">
-                        <input class="form-check-input" type="checkbox" id="cbShopAvg" value="__avg__">
+                    <label for="cbShopAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbShopAvg" value="__avg__" style="flex-shrink:0;">
                         <span class="shop-dot" id="dotShopAvg" style="background:#2C3E50;flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (selected)</span>
                     </label>
@@ -422,38 +417,44 @@
                 </div>
             </div>
 
-            <!-- X-axis + Metric -->
-            <div class="col-lg-4 col-md-4">
-                <div class="xaxis-card mb-2">
-                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
-                    <div class="btn-group w-100">
-                        <input type="radio" class="btn-check" name="shopXAxis" id="sxWeek" value="week"
-                            autocomplete="off">
-                        <label class="btn btn-outline-primary btn-sm" for="sxWeek">Week</label>
-                        <input type="radio" class="btn-check" name="shopXAxis" id="sxMonth" value="month"
-                            autocomplete="off" checked>
-                        <label class="btn btn-outline-primary btn-sm" for="sxMonth">Month</label>
-                        <input type="radio" class="btn-check" name="shopXAxis" id="sxSeason" value="season"
-                            autocomplete="off">
-                        <label class="btn btn-outline-primary btn-sm" for="sxSeason">Season</label>
-                        <input type="radio" class="btn-check" name="shopXAxis" id="sxYear" value="year"
-                            autocomplete="off">
-                        <label class="btn btn-outline-primary btn-sm" for="sxYear">Year</label>
-                    </div>
-                </div>
+            <!-- Time Axis (radio) + Metric -->
+            <div class="col-lg-3 col-md-3">
                 <div class="metric-select-card">
-                    <div class="control-label"><i class="bi bi-bar-chart"></i> Metric (Y)</div>
-                    <select class="form-select form-select-sm" id="shopMetric">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="shopXAxis" id="sxWeek" value="week">
+                        <label class="form-check-label" for="sxWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="shopXAxis" id="sxMonth" value="month" checked>
+                        <label class="form-check-label" for="sxMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="shopXAxis" id="sxSeason" value="season">
+                        <label class="form-check-label" for="sxSeason">By Season</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="shopXAxis" id="sxYear" value="year">
+                        <label class="form-check-label" for="sxYear">By Year</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label mt-1"><i class="bi bi-bar-chart"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm mt-1" id="shopMetric">
                         <option value="used">Used Coupons</option>
-                        <option value="pct_of_used">% Used / All Used (Period)</option>
+                        <option value="pct_of_used">% Used / Used All</option>
                         <option value="coupon_amount">Coupon Amount (VND)</option>
                         <option value="unique_amount">Total Amount Unique (VND)</option>
                     </select>
                 </div>
             </div>
 
-            <!-- Chart -->
-            <div class="col-lg-4 col-md-3 d-none d-md-block"></div>
+            <!-- Legend panel -->
+            <div class="col-lg-5 col-md-4 d-none d-md-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Legend</div>
+                    <div id="shopLegendPanel" class="mt-1" style="font-size:.8rem;max-height:220px;overflow-y:auto;"></div>
+                </div>
+            </div>
         </div>
 
         <div class="trend-chart-wrap">
@@ -480,13 +481,13 @@
                     <button class="btn btn-outline-secondary btn-sm" id="campSelNone">None</button>
                 </div>
                 <div class="shop-checklist" id="campChecklist">
-                    <label for="cbCampAvgAll" class="form-check d-flex align-items-center gap-1 avg-row">
-                        <input class="form-check-input" type="checkbox" id="cbCampAvgAll" value="__avg_all__">
+                    <label for="cbCampAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbCampAvgAll" value="__avg_all__" style="flex-shrink:0;">
                         <span class="shop-dot" id="dotCampAvgAll" style="background:#6c757d;flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (all campaigns)</span>
                     </label>
-                    <label for="cbCampAvg" class="form-check d-flex align-items-center gap-1 avg-row">
-                        <input class="form-check-input" type="checkbox" id="cbCampAvg" value="__avg__">
+                    <label for="cbCampAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbCampAvg" value="__avg__" style="flex-shrink:0;">
                         <span class="shop-dot" id="dotCampAvg" style="background:#2C3E50;flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (selected)</span>
                     </label>
@@ -494,37 +495,44 @@
                 </div>
             </div>
 
-            <!-- X-axis + Metric -->
-            <div class="col-lg-4 col-md-4">
-                <div class="xaxis-card mb-2">
-                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
-                    <div class="btn-group w-100">
-                        <input type="radio" class="btn-check" name="campXAxis" id="cxWeek" value="week"
-                            autocomplete="off">
-                        <label class="btn btn-outline-secondary btn-sm" for="cxWeek">Week</label>
-                        <input type="radio" class="btn-check" name="campXAxis" id="cxMonth" value="month"
-                            autocomplete="off" checked>
-                        <label class="btn btn-outline-secondary btn-sm" for="cxMonth">Month</label>
-                        <input type="radio" class="btn-check" name="campXAxis" id="cxSeason" value="season"
-                            autocomplete="off">
-                        <label class="btn btn-outline-secondary btn-sm" for="cxSeason">Season</label>
-                        <input type="radio" class="btn-check" name="campXAxis" id="cxYear" value="year"
-                            autocomplete="off">
-                        <label class="btn btn-outline-secondary btn-sm" for="cxYear">Year</label>
-                    </div>
-                </div>
+            <!-- Time Axis (radio) + Metric -->
+            <div class="col-lg-3 col-md-3">
                 <div class="metric-select-card">
-                    <div class="control-label"><i class="bi bi-bar-chart"></i> Metric (Y)</div>
-                    <select class="form-select form-select-sm" id="campMetric">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="campXAxis" id="cxWeek" value="week">
+                        <label class="form-check-label" for="cxWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="campXAxis" id="cxMonth" value="month" checked>
+                        <label class="form-check-label" for="cxMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="campXAxis" id="cxSeason" value="season">
+                        <label class="form-check-label" for="cxSeason">By Season</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="campXAxis" id="cxYear" value="year">
+                        <label class="form-check-label" for="cxYear">By Year</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label mt-1"><i class="bi bi-bar-chart"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm mt-1" id="campMetric">
                         <option value="used">Used Coupons</option>
-                        <option value="pct_of_used">% Used / All Used (Period)</option>
+                        <option value="pct_of_used">% Used / Used All</option>
                         <option value="coupon_amount">Coupon Amount (VND)</option>
                         <option value="unique_amount">Total Amount Unique (VND)</option>
                     </select>
                 </div>
             </div>
 
-            <div class="col-lg-4 col-md-3 d-none d-md-block"></div>
+            <!-- Legend panel -->
+            <div class="col-lg-5 col-md-4 d-none d-md-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Legend</div>
+                    <div id="campLegendPanel" class="mt-1" style="font-size:.8rem;max-height:220px;overflow-y:auto;"></div>
+                </div>
+            </div>
         </div>
 
         <div class="trend-chart-wrap">
@@ -549,16 +557,81 @@
     const TREND = JSON.parse(document.getElementById('__trendData').textContent);
     const CAMPAIGNS = JSON.parse(document.getElementById('__campaigns').textContent);
 
-    // Palette
+    // Palette (same as Sales Analytics Charts)
     const PALETTE = [
-        '#0d6efd', '#198754', '#dc3545', '#fd7e14', '#6f42c1', '#20c997',
-        '#e83e8c', '#ffc107', '#0dcaf0', '#6c757d', '#343a40', '#4e9bcd',
-        '#7952b3', '#28a745', '#e65c00', '#00b4d8', '#9b59b6', '#f39c12',
+        '#e6194B','#3cb44b','#4363d8','#f58231','#911eb4',
+        '#42d4f4','#f032e6','#469990','#9A6324','#800000',
+        '#dcbeff','#aaffc3','#808000','#ffd8b1','#000075',
+        '#a9a9a9','#ffe119','#fabebe',
     ];
     function getColor(i) { return PALETTE[i % PALETTE.length]; }
 
     const AVG_ALL_COLOR = '#6c757d';
     const AVG_SEL_COLOR = '#2C3E50';
+
+    // ── Format helpers ────────────────────────────────────────────────────────────
+    function fmtVal(v, metric) {
+        if (metric === 'pct_of_used') return v.toFixed(1) + '%';
+        if (metric.includes('amount')) return Math.round(v).toLocaleString() + ' VND';
+        return Math.round(v).toLocaleString();
+    }
+    function yLabel(metric) {
+        return { used: 'Used Coupons', pct_of_used: '% Used / Used All', coupon_amount: 'Coupon Amount (VND)', unique_amount: 'Total Amount Unique (VND)' }[metric] || metric;
+    }
+
+    // ── Legend panel ──────────────────────────────────────────────────────────────
+    function updateLegendPanel(panelId, datasets) {
+        const el = document.getElementById(panelId);
+        if (!el) return;
+        el.innerHTML = datasets.map(ds =>
+            `<div class="d-flex align-items-center mb-1">
+               <span style="display:inline-block;width:24px;height:3px;background:${ds.borderColor};border-radius:2px;margin-right:6px;flex-shrink:0;"></span>
+               <span class="text-truncate" title="${ds.label}" style="max-width:220px;">${ds.label}</span>
+             </div>`
+        ).join('');
+    }
+
+    // ── Click card ────────────────────────────────────────────────────────────────
+    function renderClickCard(panelId, lbl, rows, metric, onClose) {
+        const total = rows.reduce((s, r) => s + r.value, 0);
+        const el = document.getElementById(panelId);
+        el.innerHTML =
+            `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #6F42C1;padding-bottom:4px;margin-bottom:5px;">
+                <strong style="font-size:.82rem;color:#6F42C1;">${lbl}</strong>
+                <span id="_closeCard_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
+             </div>` +
+            rows.map(r =>
+                `<div style="display:flex;align-items:center;margin-bottom:3px;">
+                    <div style="width:80%;display:flex;align-items:center;min-width:0;overflow:hidden;">
+                        <span style="display:inline-block;width:20px;height:2.5px;background:${r.color};margin-right:5px;flex-shrink:0;border-radius:2px;"></span>
+                        <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.label}">${r.label}</span>
+                    </div>
+                    <div style="width:20%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;flex-shrink:0;padding-left:4px;">
+                        ${fmtVal(r.value, metric)}
+                        ${total > 0 ? `<div style="font-weight:400;color:#888;font-size:.7rem;">${(r.value/total*100).toFixed(1)}%</div>` : ''}
+                    </div>
+                 </div>`
+            ).join('');
+        document.getElementById('_closeCard_' + panelId).addEventListener('click', onClose);
+    }
+
+    // ── Line highlight on hover ───────────────────────────────────────────────────
+    function attachLineHighlight(chart) {
+        const canvas = chart.canvas;
+        canvas.addEventListener('mousemove', function(e) {
+            const pts = chart.getElementsAtEventForMode(e, 'nearest', { intersect: false }, true);
+            const hovered = pts.length ? pts[0].datasetIndex : null;
+            chart.data.datasets.forEach((ds, i) => {
+                if (!('_origBW' in ds)) ds._origBW = ds.borderWidth ?? 2;
+                ds.borderWidth = (hovered !== null && i === hovered) ? ds._origBW * 2 : ds._origBW;
+            });
+            chart.update('none');
+        });
+        canvas.addEventListener('mouseleave', function() {
+            chart.data.datasets.forEach(ds => { if ('_origBW' in ds) ds.borderWidth = ds._origBW; });
+            chart.update('none');
+        });
+    }
 
     // ── Donut helpers ─────────────────────────────────────────────────────────────
     function mkDonut(id, pctId, val, total, color) {
@@ -590,86 +663,122 @@
     mkDonut('dChart4', 'dPct4', pd.total_coupon_amount, pd.unique_invoice_amount, '#6f42c1');
 
     // ── Generic trend chart builder ───────────────────────────────────────────────
-    function buildTrendChart(canvasId, series, timeLabels, selected, metric, colorFn) {
+    function buildTrendChart(canvasId, legendPanelId, series, timeLabels, selected, metric, colorFn) {
         const ctx = document.getElementById(canvasId).getContext('2d');
+        const isAmt = metric.includes('amount');
+        const isPct = metric === 'pct_of_used';
 
         // total per time key (for % metric)
         const totals = {};
         timeLabels.forEach(tk => {
             let s = 0;
-            Object.values(series).forEach(entityData => { s += (entityData[tk] || {})[metric === 'pct_of_used' ? 'used' : metric] || 0; });
+            Object.values(series).forEach(d => { s += (d[tk] || {})[isPct ? 'used' : metric] || 0; });
             totals[tk] = s;
         });
 
         const datasets = [];
         let ci = 0;
 
+        const rawField = isPct ? 'used' : metric;
+
+        function getVals(entities) {
+            return timeLabels.map(tk => {
+                const sum = entities.reduce((a, e) => a + ((series[e] && series[e][tk] || {})[rawField] || 0), 0);
+                if (isPct) return totals[tk] ? +(sum / totals[tk] * 100).toFixed(1) : 0;
+                return sum;
+            });
+        }
+
         selected.forEach(sel => {
             if (sel === '__avg_all__') {
+                const all = Object.keys(series);
+                if (!all.length) return;
                 const vals = timeLabels.map(tk => {
-                    const allEntities = Object.keys(series);
-                    if (!allEntities.length) return 0;
-                    const sum = allEntities.reduce((a, e) => a + ((series[e][tk] || {})[metric === 'pct_of_used' ? 'used' : metric] || 0), 0);
-                    if (metric === 'pct_of_used') return totals[tk] ? Math.round(sum / totals[tk] * 100) : 0;
-                    return Math.round(sum / allEntities.length);
+                    const nonZero = all.map(e => ((series[e][tk] || {})[rawField] || 0)).filter(v => v > 0);
+                    if (!nonZero.length) return 0;
+                    const sum = nonZero.reduce((a, b) => a + b, 0);
+                    if (isPct) return totals[tk] ? +(sum / totals[tk] * 100).toFixed(1) : 0;
+                    return +(sum / nonZero.length).toFixed(1);
                 });
-                datasets.push({ label: 'AVG (all)', data: vals, borderColor: AVG_ALL_COLOR, backgroundColor: AVG_ALL_COLOR + '30', tension: .35, borderDash: [6, 3], pointRadius: 3 });
+                datasets.push({ label: 'AVG (all)', data: vals, borderColor: AVG_ALL_COLOR, backgroundColor: 'transparent', borderWidth: 2.5, borderDash: [4, 4], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
                 return;
             }
             if (sel === '__avg__') {
-                const selEntities = selected.filter(s => s !== '__avg_all__' && s !== '__avg__');
-                if (!selEntities.length) return;
+                const selE = selected.filter(s => s !== '__avg_all__' && s !== '__avg__').filter(e => series[e]);
+                if (!selE.length) return;
                 const vals = timeLabels.map(tk => {
-                    const sum = selEntities.reduce((a, e) => a + ((series[e] && series[e][tk] || {})[metric === 'pct_of_used' ? 'used' : metric] || 0), 0);
-                    if (metric === 'pct_of_used') return totals[tk] ? Math.round(sum / totals[tk] * 100) : 0;
-                    return Math.round(sum / selEntities.length);
+                    const nonZero = selE.map(e => ((series[e][tk] || {})[rawField] || 0)).filter(v => v > 0);
+                    if (!nonZero.length) return 0;
+                    const sum = nonZero.reduce((a, b) => a + b, 0);
+                    if (isPct) return totals[tk] ? +(sum / totals[tk] * 100).toFixed(1) : 0;
+                    return +(sum / nonZero.length).toFixed(1);
                 });
-                datasets.push({ label: 'AVG (selected)', data: vals, borderColor: AVG_SEL_COLOR, backgroundColor: AVG_SEL_COLOR + '30', tension: .35, borderDash: [4, 2], pointRadius: 3 });
+                datasets.push({ label: 'AVG (selected)', data: vals, borderColor: AVG_SEL_COLOR, backgroundColor: 'transparent', borderWidth: 2.5, borderDash: [6, 3], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
                 return;
             }
             if (!series[sel]) return;
             const color = colorFn(ci++);
             const vals = timeLabels.map(tk => {
-                const raw = ((series[sel][tk] || {})[metric === 'pct_of_used' ? 'used' : metric]) || 0;
-                if (metric === 'pct_of_used') return totals[tk] ? +(raw / totals[tk] * 100).toFixed(1) : 0;
-                return raw;
+                const raw = (series[sel][tk] || {})[rawField] || 0;
+                return isPct ? (totals[tk] ? +(raw / totals[tk] * 100).toFixed(1) : 0) : raw;
             });
             datasets.push({
-                label: sel.length > 30 ? sel.slice(0, 28) + '…' : sel,
-                data: vals, borderColor: color,
-                backgroundColor: color + '18', tension: .35, pointRadius: 3, fill: false,
+                label: sel.length > 35 ? sel.slice(0, 33) + '…' : sel,
+                data: vals, borderColor: color, backgroundColor: color + '18',
+                borderWidth: 2,
+                pointRadius: vals.map(v => v > 0 ? 4 : 0),
+                pointHoverRadius: 6, pointHitRadius: 8,
+                tension: .35, fill: false,
             });
         });
 
-        return new Chart(ctx, {
+        const chart = new Chart(ctx, {
             type: 'line',
             data: { labels: timeLabels, datasets },
             options: {
                 responsive: true, maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
+                animation: { duration: 500 },
+                events: ['click', 'mousemove', 'mouseout'],
+                interaction: { mode: 'nearest', intersect: true },
+                onClick(evt, elements) {
+                    if (!elements.length) { updateLegendPanel(legendPanelId, datasets); return; }
+                    const di = elements[0].index;
+                    const lbl = chart.data.labels[di];
+                    const rows = datasets
+                        .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
+                        .filter(r => r.value > 0)
+                        .sort((a, b) => b.value - a.value);
+                    renderClickCard(legendPanelId, lbl, rows, metric, () => updateLegendPanel(legendPanelId, datasets));
+                },
                 plugins: {
-                    legend: { position: 'bottom', labels: { boxWidth: 14, font: { size: 11 } } },
+                    legend: { display: false },
                     tooltip: {
+                        backgroundColor: 'rgba(30,30,30,.92)',
+                        titleFont: { weight: '700' },
+                        filter: item => item.raw > 0,
+                        itemSort: (a, b) => b.raw - a.raw,
                         callbacks: {
-                            label: ctx => {
-                                const v = ctx.parsed.y;
-                                if (metric === 'pct_of_used') return ` ${ctx.dataset.label}: ${v.toFixed(1)}%`;
-                                if (metric.includes('amount')) return ` ${ctx.dataset.label}: ${v.toLocaleString()} VND`;
-                                return ` ${ctx.dataset.label}: ${v.toLocaleString()}`;
-                            }
-                        }
-                    }
+                            label: ctx => '  ' + ctx.dataset.label + ': ' + fmtVal(ctx.raw, metric),
+                        },
+                    },
                 },
                 scales: {
+                    x: { grid: { color: 'rgba(0,0,0,.12)' }, ticks: { font: { size: 11 } } },
                     y: {
                         beginAtZero: true,
+                        grid: { color: 'rgba(0,0,0,.12)' },
+                        title: { display: true, text: yLabel(metric), font: { size: 11 } },
                         ticks: {
-                            callback: v => metric.includes('amount') ? (v / 1000000).toFixed(1) + 'M' : metric === 'pct_of_used' ? v + '%' : v
-                        }
-                    }
-                }
-            }
+                            font: { size: 11 },
+                            callback: v => isPct ? v.toFixed(1) + '%' : isAmt ? (v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v.toLocaleString()) : v.toLocaleString(),
+                        },
+                    },
+                },
+            },
         });
+        attachLineHighlight(chart);
+        updateLegendPanel(legendPanelId, datasets);
+        return chart;
     }
 
     // ── SHOP TREND ────────────────────────────────────────────────────────────────
@@ -717,7 +826,7 @@
         const metric = getShopMetric();
         const series = SHOP_SERIES[btype] || {};
         const labels = (TREND.time_labels || {})[btype] || [];
-        shopChart = buildTrendChart('shopTrendChart', series, labels, getShopSelected(), metric, getColor);
+        shopChart = buildTrendChart('shopTrendChart', 'shopLegendPanel', series, labels, getShopSelected(), metric, getColor);
     }
 
     buildShopList();
@@ -779,7 +888,7 @@
         const metric = getCampMetric();
         const series = CAMP_SERIES[btype] || {};
         const labels = (TREND.time_labels || {})[btype] || [];
-        campChart = buildTrendChart('campTrendChart', series, labels, getCampSelected(), metric, getColor);
+        campChart = buildTrendChart('campTrendChart', 'campLegendPanel', series, labels, getCampSelected(), metric, getColor);
     }
 
     buildCampList();
@@ -794,29 +903,39 @@
 
     refreshCampChart();
 
-    // ── Campaign dropdown for prefix filter ──────────────────────────────────────
+    // ── Campaign badge picker (same as dashboard) ────────────────────────────────
     (function () {
-        const dd = document.getElementById('campaignPickDd');
+        if (!CAMPAIGNS.length) return;
+        const row = document.getElementById('chartCampaignPickRow');
+        const badgesEl = document.getElementById('chartCampaignBadges');
         const fld = document.getElementById('fieldPrefix');
-        if (!CAMPAIGNS.length) {
-            dd.innerHTML = '<li><span class="dropdown-item text-muted small">No campaigns defined.</span></li>';
-            return;
-        }
-        dd.innerHTML = `<li><h6 class="dropdown-header">Pick Campaign (sets prefix)</h6></li>
-        <li><a class="dropdown-item small" href="#" data-prefix=""><i class="bi bi-x-circle"></i> Clear prefix</a></li>
-        <li><hr class="dropdown-divider"></li>` +
-            CAMPAIGNS.map(c =>
-                `<li><a class="dropdown-item small" href="#" data-prefix="${c.prefix}">
-                <strong>${c.name}</strong> <code class="ms-1">${c.prefix}</code>
-            </a></li>`
-            ).join('');
-        dd.querySelectorAll('[data-prefix]').forEach(a => {
-            a.addEventListener('click', e => {
-                e.preventDefault();
-                fld.value = a.dataset.prefix;
-                document.getElementById('chartFilterForm').submit();
+        const form = document.getElementById('chartFilterForm');
+        // "All" clear badge
+        const allBadge = document.createElement('a');
+        allBadge.href = '#';
+        allBadge.className = 'badge bg-secondary text-white text-decoration-none me-1';
+        allBadge.textContent = '× All';
+        allBadge.addEventListener('click', e => { e.preventDefault(); fld.value = ''; showLoading('Loading...'); form.submit(); });
+        badgesEl.appendChild(allBadge);
+        CAMPAIGNS.forEach(c => {
+            const prefixes = c.prefix_list || (c.prefix ? c.prefix.split(',').map(p => p.trim()).filter(Boolean) : []);
+            prefixes.forEach(p => {
+                const badge = document.createElement('a');
+                badge.href = '#';
+                const cur = (fld.value || '').trim().toUpperCase();
+                badge.className = 'badge text-decoration-none me-1 ' + (cur === p.toUpperCase() ? 'bg-primary' : 'bg-light text-dark border');
+                badge.title = c.name;
+                badge.textContent = p;
+                badge.addEventListener('click', e => {
+                    e.preventDefault();
+                    fld.value = p;
+                    showLoading('Loading chart data…');
+                    form.submit();
+                });
+                badgesEl.appendChild(badge);
             });
         });
+        row.style.display = '';
     })();
 
     // ── Quick filter date buttons ─────────────────────────────────────────────────
@@ -970,7 +1089,8 @@
                 /* Page 2 — Shop Trends */
                 doc.addPage();
                 y = pageHeader('Shop Trends');
-                const shopXLbl = document.querySelector('input[name="shopXAxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
+                const _shopXEl = document.querySelector('input[name="shopXAxis"]:checked');
+                const shopXLbl = (_shopXEl ? document.querySelector(`label[for="${_shopXEl.id}"]`)?.textContent?.trim() : '') || '';
                 const shopMetLbl = document.getElementById('shopMetric')?.selectedOptions[0]?.text || '';
                 doc.setFontSize(8); doc.setTextColor(100);
                 doc.text('Time Axis: ' + shopXLbl + '   |   Metric: ' + shopMetLbl, M, y); y += 5;
@@ -982,7 +1102,8 @@
                 /* Page 3 — Campaign Trends */
                 doc.addPage();
                 y = pageHeader('Campaign Trends');
-                const campXLbl = document.querySelector('input[name="campXAxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
+                const _campXEl = document.querySelector('input[name="campXAxis"]:checked');
+                const campXLbl = (_campXEl ? document.querySelector(`label[for="${_campXEl.id}"]`)?.textContent?.trim() : '') || '';
                 const campMetLbl = document.getElementById('campMetric')?.selectedOptions[0]?.text || '';
                 doc.setFontSize(8); doc.setTextColor(100);
                 doc.text('Time Axis: ' + campXLbl + '   |   Metric: ' + campMetLbl, M, y); y += 5;

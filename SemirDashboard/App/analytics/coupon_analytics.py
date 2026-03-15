@@ -564,15 +564,18 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
             inv_amt = float(row["face_value"])
         cpn_amt = float(calc_coupon_amount(row["face_value"], inv_amt))
 
-        # Campaign matching
+        # Campaign matching — each campaign may have comma-separated prefixes
         coupon_id_upper = row["coupon_id"].upper()
         matched = [
             c["name"]
             for c in campaigns
-            if coupon_id_upper.startswith(c["prefix"].upper())
+            if any(
+                coupon_id_upper.startswith(p.strip().upper())
+                for p in c["prefix"].split(",")
+                if p.strip()
+            )
         ]
-        if not matched:
-            matched = ["(No Campaign)"]
+        # Skip coupons that match no campaign (Task 9: no (No Campaign) line)
 
         for btype, fn in bucket_fns.items():
             tkey = fn(d)

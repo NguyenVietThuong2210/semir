@@ -532,6 +532,8 @@ def manage_campaigns(request):
         for c in campaigns:
             if c["created_at"]:
                 c["created_at"] = c["created_at"].strftime("%Y-%m-%d")
+            # Expose individual prefixes as a list for frontend display
+            c["prefix_list"] = [p.strip() for p in (c["prefix"] or "").split(",") if p.strip()]
         return JsonResponse({"campaigns": campaigns})
 
     if request.method == "POST":
@@ -542,13 +544,18 @@ def manage_campaigns(request):
 
         action = body.get("action")
 
+        def _clean_prefix(raw):
+            """Normalise comma-separated prefixes: strip whitespace, upper-case each, deduplicate."""
+            parts = [p.strip().upper() for p in (raw or "").split(",") if p.strip()]
+            return ",".join(dict.fromkeys(parts))  # deduplicate, keep order
+
         if action == "create":
             name = (body.get("name") or "").strip()
-            prefix = (body.get("prefix") or "").strip()
+            prefix = _clean_prefix(body.get("prefix"))
             detail = (body.get("detail") or "").strip()
             if not name or not prefix:
                 return JsonResponse(
-                    {"error": "Name and prefix are required"}, status=400
+                    {"error": "Name and at least one prefix are required"}, status=400
                 )
             if CouponCampaign.objects.filter(name=name).exists():
                 return JsonResponse(
@@ -565,7 +572,7 @@ def manage_campaigns(request):
         if action == "update":
             pk = body.get("id")
             name = (body.get("name") or "").strip()
-            prefix = (body.get("prefix") or "").strip()
+            prefix = _clean_prefix(body.get("prefix"))
             detail = (body.get("detail") or "").strip()
             if not pk or not name or not prefix:
                 return JsonResponse(

@@ -119,7 +119,7 @@ class CouponCampaign(models.Model):
     """Named coupon campaign grouping coupons by ID prefix."""
 
     name = models.CharField(max_length=200, unique=True)
-    prefix = models.CharField(max_length=100)
+    prefix = models.TextField()          # comma-separated prefixes, e.g. "ABC,DEF,XYZ"
     detail = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
