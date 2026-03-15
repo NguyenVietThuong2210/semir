@@ -1,0 +1,1003 @@
+{% extends 'base.html' %}
+{% load custom_filters perm_tags %}
+{% block title %}Coupon Analytics Charts{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --c-coupon: #6F42C1;
+        --c-used: #198754;
+        --c-amt: #0d6efd;
+    }
+
+    .filter-card {
+        background: #fff;
+        border-radius: 10px;
+    }
+
+    /* Donut cards */
+    .donut-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+        padding: 1.1rem .75rem .9rem;
+        text-align: center;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .donut-title {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: #6c757d;
+        margin-bottom: .6rem;
+        line-height: 1.3;
+    }
+
+    .donut-wrapper {
+        position: relative;
+        width: 140px;
+        height: 140px;
+        margin: auto;
+        flex-shrink: 0;
+    }
+
+    .donut-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        text-align: center;
+        line-height: 1.15;
+    }
+
+    .donut-pct {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #2C3E50;
+        display: block;
+    }
+
+    .donut-sub {
+        font-size: .62rem;
+        color: #6c757d;
+        display: block;
+    }
+
+    .donut-footer {
+        margin-top: .55rem;
+        font-size: .72rem;
+        color: #495057;
+    }
+
+    .donut-footer strong {
+        font-weight: 700;
+    }
+
+    .row-section-label {
+        font-size: .75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        padding: .3rem .6rem;
+        border-radius: 4px;
+        display: inline-block;
+        margin-bottom: .5rem;
+    }
+
+    .label-period {
+        background: rgba(111, 66, 193, .1);
+        color: #6F42C1;
+    }
+
+    .label-alltime {
+        background: rgba(13, 110, 253, .1);
+        color: #0047B3;
+    }
+
+    /* Trend section */
+    .chart-section-header {
+        font-size: .85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: .4rem;
+        margin-bottom: 1rem;
+    }
+
+    .shop-checklist {
+        max-height: 280px;
+        overflow-y: auto;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        padding: .4rem .5rem;
+        background: #fafbfc;
+    }
+
+    .shop-checklist .form-check {
+        padding: .4rem .5rem;
+        border-bottom: 1px solid #f0f0f0;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background .12s;
+        margin-bottom: 0;
+    }
+
+    .shop-checklist .form-check:hover {
+        background: rgba(111, 66, 193, .06);
+    }
+
+    .shop-checklist .form-check:last-child {
+        border-bottom: none;
+    }
+
+    .shop-checklist .form-check-input {
+        cursor: pointer;
+        width: 1.1em;
+        height: 1.1em;
+        margin-top: .15em;
+        float: none;
+        margin-left: 0;
+    }
+
+    .shop-checklist .form-check-label {
+        cursor: pointer;
+        width: 100%;
+        font-size: .85rem;
+    }
+
+    .shop-checklist .avg-row {
+        background: rgba(111, 66, 193, .08);
+        border-bottom: 2px solid #dee2e6 !important;
+        border-radius: 5px;
+        margin-bottom: .2rem;
+    }
+
+    .shop-dot {
+        display: inline-block;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        margin-right: 4px;
+        flex-shrink: 0;
+    }
+
+    .metric-select-card,
+    .xaxis-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: .75rem 1rem;
+        height: 100%;
+    }
+
+    .control-label {
+        font-size: .8rem;
+        font-weight: 700;
+        color: #495057;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        margin-bottom: .5rem;
+    }
+
+    .trend-chart-wrap {
+        position: relative;
+        height: 420px;
+        background: #fff;
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .07);
+    }
+
+    .shop-select-actions {
+        margin-bottom: .4rem;
+    }
+
+    .shop-select-actions button {
+        font-size: .78rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-pie-chart"></i> Coupon Analytics Charts</h2>
+    <div class="d-flex gap-2">
+        {% check_perm 'download_coupon_chart_pdf' as can_dl_pdf %}
+        {% if can_dl_pdf %}
+        <button id="btnDownloadPDF" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-file-pdf"></i> Download PDF
+        </button>
+        {% endif %}
+        <a href="{% url 'coupon_dashboard' %}?{% if start_date %}start_date={{ start_date }}&{% endif %}{% if end_date %}end_date={{ end_date }}&{% endif %}{% if coupon_id_prefix %}coupon_id_prefix={{ coupon_id_prefix }}&{% endif %}{% if shop_group %}shop_group={{ shop_group }}{% endif %}"
+            class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-table"></i> Switch to Table View
+        </a>
+        <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-house"></i> Home
+        </a>
+    </div>
+</div>
+
+<!-- ═══ FILTER BAR ═══ -->
+<div class="card filter-card mb-3">
+    <div class="card-body">
+        <form method="get" id="chartFilterForm" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label"><i class="bi bi-calendar"></i> Start Date</label>
+                <input type="date" class="form-control" name="start_date" id="fieldStartDate" value="{{ start_date }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label"><i class="bi bi-calendar"></i> End Date</label>
+                <input type="date" class="form-control" name="end_date" id="fieldEndDate" value="{{ end_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-search"></i> Coupon ID Prefix</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" name="coupon_id_prefix" id="fieldPrefix"
+                        value="{{ coupon_id_prefix }}" placeholder="Free text or pick →">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-tags"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="campaignPickDd">
+                        <li><span class="dropdown-item text-muted small">Loading…</span></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label"><i class="bi bi-building"></i> Shop Group</label>
+                <select class="form-select" name="shop_group">
+                    <option value="">All Shops</option>
+                    <option value="Bala Group" {% if shop_group=='Bala Group' %}selected{% endif %}>Bala Group</option>
+                    <option value="Semir Group" {% if shop_group=='Semir Group' %}selected{% endif %}>Semir Group
+                    </option>
+                    <option value="Others Group" {% if shop_group=='Others Group' %}selected{% endif %}>Others Group
+                    </option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2 align-items-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel"></i> Apply
+                </button>
+                <a href="{% url 'coupon_chart' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+            </div>
+        </form>
+        <div class="mt-2 pt-2 border-top">
+            <small class="text-muted me-2">Quick:</small>
+            <div class="btn-group btn-group-sm flex-wrap">
+                {% for label, days in quick_btns %}
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="{{ days }}">{{ label }}</button>
+                {% endfor %}
+                <button class="btn btn-outline-secondary" id="btnThisMonth">This Month</button>
+                <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
+                <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
+                {% for year in year_btns %}
+                <button class="btn btn-outline-secondary quick-year-btn" data-year="{{ year }}">Year {{ year }}</button>
+                {% endfor %}
+            </div>
+        </div>
+        {% if start_date and end_date %}
+        <div class="alert alert-info mt-2 mb-0 py-2">
+            <i class="bi bi-funnel-fill"></i>
+            Period: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong>
+            {% if coupon_id_prefix %} | Prefix: <strong>{{ coupon_id_prefix }}</strong>{% endif %}
+            {% if shop_group %} | Shop Group: <strong>{{ shop_group }}</strong>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ═══ SECTION 1 — OVERVIEW PIES ═══ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-pie-chart-fill text-primary"></i>
+        <strong>Session Overview</strong>
+        <small class="text-muted ms-2">Coupon usage metrics — period vs all-time</small>
+    </div>
+    <div class="card-body">
+
+        <!-- All Time -->
+        <div class="mb-1">
+            <span class="row-section-label label-alltime"><i class="bi bi-infinity"></i> All Time</span>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Used (All Time)<br>vs Total Coupons</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart1"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct1">—</span>
+                            <span class="donut-sub">used rate</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>{{ all_time.used }}</strong> / {{ all_time.total }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Coupon Amount (AT)<br>vs Invoice Amount (AT)</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart2"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct2">—</span>
+                            <span class="donut-sub">of invoice</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>{{ all_time.total_coupon_amount|floatformat:0 }}</strong>
+                        / {{ all_time.unique_invoice_amount|floatformat:0 }} VND
+                    </div>
+                </div>
+            </div>
+            <!-- spacer cols on larger screens -->
+            <div class="col-6 col-md-3 d-none d-md-block"></div>
+            <div class="col-6 col-md-3 d-none d-md-block"></div>
+        </div>
+
+        <!-- Period -->
+        <div class="mb-1">
+            <span class="row-section-label label-period"><i class="bi bi-calendar-range"></i> Period Filter</span>
+        </div>
+        <div class="row g-3">
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Used (Period)<br>vs Total Coupons</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart3"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct3">—</span>
+                            <span class="donut-sub">used rate</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>{{ period.used }}</strong> / {{ period.total }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Coupon Amount (Period)<br>vs Invoice Amount (Period)</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart4"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct4">—</span>
+                            <span class="donut-sub">of invoice</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>{{ period.total_coupon_amount|floatformat:0 }}</strong>
+                        / {{ period.unique_invoice_amount|floatformat:0 }} VND
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3 d-none d-md-block"></div>
+            <div class="col-6 col-md-3 d-none d-md-block"></div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ═══ SECTION 2 — SHOP TRENDS ═══ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-graph-up text-primary"></i>
+        <strong>Shop Trends</strong>
+        <small class="text-muted ms-2">Compare shops across time periods</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+
+            <!-- Shop checklist -->
+            <div class="col-lg-4 col-md-5">
+                <div class="control-label"><i class="bi bi-shop"></i> Select Shops</div>
+                <div class="shop-select-actions d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm" id="shopSelAll">All</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="shopSelNone">None</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="shopSelTop5">Top 5</button>
+                </div>
+                <div class="shop-checklist" id="shopChecklist">
+                    <label for="cbShopAvgAll" class="form-check d-flex align-items-center gap-1 avg-row">
+                        <input class="form-check-input" type="checkbox" id="cbShopAvgAll" value="__avg_all__">
+                        <span class="shop-dot" id="dotShopAvgAll" style="background:#6c757d;flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (all shops)</span>
+                    </label>
+                    <label for="cbShopAvg" class="form-check d-flex align-items-center gap-1 avg-row">
+                        <input class="form-check-input" type="checkbox" id="cbShopAvg" value="__avg__">
+                        <span class="shop-dot" id="dotShopAvg" style="background:#2C3E50;flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (selected)</span>
+                    </label>
+                    <!-- dynamic shop rows appended by JS -->
+                </div>
+            </div>
+
+            <!-- X-axis + Metric -->
+            <div class="col-lg-4 col-md-4">
+                <div class="xaxis-card mb-2">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="btn-group w-100">
+                        <input type="radio" class="btn-check" name="shopXAxis" id="sxWeek" value="week"
+                            autocomplete="off">
+                        <label class="btn btn-outline-primary btn-sm" for="sxWeek">Week</label>
+                        <input type="radio" class="btn-check" name="shopXAxis" id="sxMonth" value="month"
+                            autocomplete="off" checked>
+                        <label class="btn btn-outline-primary btn-sm" for="sxMonth">Month</label>
+                        <input type="radio" class="btn-check" name="shopXAxis" id="sxSeason" value="season"
+                            autocomplete="off">
+                        <label class="btn btn-outline-primary btn-sm" for="sxSeason">Season</label>
+                        <input type="radio" class="btn-check" name="shopXAxis" id="sxYear" value="year"
+                            autocomplete="off">
+                        <label class="btn btn-outline-primary btn-sm" for="sxYear">Year</label>
+                    </div>
+                </div>
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-bar-chart"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm" id="shopMetric">
+                        <option value="used">Used Coupons</option>
+                        <option value="pct_of_used">% Used / All Used (Period)</option>
+                        <option value="coupon_amount">Coupon Amount (VND)</option>
+                        <option value="unique_amount">Total Amount Unique (VND)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="col-lg-4 col-md-3 d-none d-md-block"></div>
+        </div>
+
+        <div class="trend-chart-wrap">
+            <canvas id="shopTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SECTION 3 — CAMPAIGN TRENDS ═══ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-tags text-primary"></i>
+        <strong>Campaign Trends</strong>
+        <small class="text-muted ms-2">Compare campaigns across time periods (all coupons, no prefix filter)</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+
+            <!-- Campaign checklist -->
+            <div class="col-lg-4 col-md-5">
+                <div class="control-label"><i class="bi bi-tag"></i> Select Campaigns</div>
+                <div class="shop-select-actions d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm" id="campSelAll">All</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="campSelNone">None</button>
+                </div>
+                <div class="shop-checklist" id="campChecklist">
+                    <label for="cbCampAvgAll" class="form-check d-flex align-items-center gap-1 avg-row">
+                        <input class="form-check-input" type="checkbox" id="cbCampAvgAll" value="__avg_all__">
+                        <span class="shop-dot" id="dotCampAvgAll" style="background:#6c757d;flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (all campaigns)</span>
+                    </label>
+                    <label for="cbCampAvg" class="form-check d-flex align-items-center gap-1 avg-row">
+                        <input class="form-check-input" type="checkbox" id="cbCampAvg" value="__avg__">
+                        <span class="shop-dot" id="dotCampAvg" style="background:#2C3E50;flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (selected)</span>
+                    </label>
+                    <!-- dynamic campaign rows by JS -->
+                </div>
+            </div>
+
+            <!-- X-axis + Metric -->
+            <div class="col-lg-4 col-md-4">
+                <div class="xaxis-card mb-2">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="btn-group w-100">
+                        <input type="radio" class="btn-check" name="campXAxis" id="cxWeek" value="week"
+                            autocomplete="off">
+                        <label class="btn btn-outline-secondary btn-sm" for="cxWeek">Week</label>
+                        <input type="radio" class="btn-check" name="campXAxis" id="cxMonth" value="month"
+                            autocomplete="off" checked>
+                        <label class="btn btn-outline-secondary btn-sm" for="cxMonth">Month</label>
+                        <input type="radio" class="btn-check" name="campXAxis" id="cxSeason" value="season"
+                            autocomplete="off">
+                        <label class="btn btn-outline-secondary btn-sm" for="cxSeason">Season</label>
+                        <input type="radio" class="btn-check" name="campXAxis" id="cxYear" value="year"
+                            autocomplete="off">
+                        <label class="btn btn-outline-secondary btn-sm" for="cxYear">Year</label>
+                    </div>
+                </div>
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-bar-chart"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm" id="campMetric">
+                        <option value="used">Used Coupons</option>
+                        <option value="pct_of_used">% Used / All Used (Period)</option>
+                        <option value="coupon_amount">Coupon Amount (VND)</option>
+                        <option value="unique_amount">Total Amount Unique (VND)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-3 d-none d-md-block"></div>
+        </div>
+
+        <div class="trend-chart-wrap">
+            <canvas id="campTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+{# Inject server data as JSON — avoids IDE JS-lint false positives #}
+<script type="application/json" id="__trendData">{{ trend_data_json|safe }}</script>
+<script type="application/json" id="__campaigns">{{ campaigns_json|safe }}</script>
+<script type="application/json" id="__allTime">{{ all_time_json|safe }}</script>
+<script type="application/json" id="__period">{{ period_json|safe }}</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+    // ── Data from server ──────────────────────────────────────────────────────────
+    const TREND = JSON.parse(document.getElementById('__trendData').textContent);
+    const CAMPAIGNS = JSON.parse(document.getElementById('__campaigns').textContent);
+
+    // Palette
+    const PALETTE = [
+        '#0d6efd', '#198754', '#dc3545', '#fd7e14', '#6f42c1', '#20c997',
+        '#e83e8c', '#ffc107', '#0dcaf0', '#6c757d', '#343a40', '#4e9bcd',
+        '#7952b3', '#28a745', '#e65c00', '#00b4d8', '#9b59b6', '#f39c12',
+    ];
+    function getColor(i) { return PALETTE[i % PALETTE.length]; }
+
+    const AVG_ALL_COLOR = '#6c757d';
+    const AVG_SEL_COLOR = '#2C3E50';
+
+    // ── Donut helpers ─────────────────────────────────────────────────────────────
+    function mkDonut(id, pctId, val, total, color) {
+        const pct = total > 0 ? Math.round(val / total * 100) : 0;
+        document.getElementById(pctId).textContent = pct + '%';
+        const ctx = document.getElementById(id).getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [val, Math.max(0, total - val)],
+                    backgroundColor: [color, '#e9ecef'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                cutout: '72%', responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } }
+            }
+        });
+    }
+
+    const at = JSON.parse(document.getElementById('__allTime').textContent);
+    const pd = JSON.parse(document.getElementById('__period').textContent);
+
+    mkDonut('dChart1', 'dPct1', at.used, at.total, '#198754');
+    mkDonut('dChart2', 'dPct2', at.total_coupon_amount, at.unique_invoice_amount, '#6f42c1');
+    mkDonut('dChart3', 'dPct3', pd.used, pd.total, '#198754');
+    mkDonut('dChart4', 'dPct4', pd.total_coupon_amount, pd.unique_invoice_amount, '#6f42c1');
+
+    // ── Generic trend chart builder ───────────────────────────────────────────────
+    function buildTrendChart(canvasId, series, timeLabels, selected, metric, colorFn) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+
+        // total per time key (for % metric)
+        const totals = {};
+        timeLabels.forEach(tk => {
+            let s = 0;
+            Object.values(series).forEach(entityData => { s += (entityData[tk] || {})[metric === 'pct_of_used' ? 'used' : metric] || 0; });
+            totals[tk] = s;
+        });
+
+        const datasets = [];
+        let ci = 0;
+
+        selected.forEach(sel => {
+            if (sel === '__avg_all__') {
+                const vals = timeLabels.map(tk => {
+                    const allEntities = Object.keys(series);
+                    if (!allEntities.length) return 0;
+                    const sum = allEntities.reduce((a, e) => a + ((series[e][tk] || {})[metric === 'pct_of_used' ? 'used' : metric] || 0), 0);
+                    if (metric === 'pct_of_used') return totals[tk] ? Math.round(sum / totals[tk] * 100) : 0;
+                    return Math.round(sum / allEntities.length);
+                });
+                datasets.push({ label: 'AVG (all)', data: vals, borderColor: AVG_ALL_COLOR, backgroundColor: AVG_ALL_COLOR + '30', tension: .35, borderDash: [6, 3], pointRadius: 3 });
+                return;
+            }
+            if (sel === '__avg__') {
+                const selEntities = selected.filter(s => s !== '__avg_all__' && s !== '__avg__');
+                if (!selEntities.length) return;
+                const vals = timeLabels.map(tk => {
+                    const sum = selEntities.reduce((a, e) => a + ((series[e] && series[e][tk] || {})[metric === 'pct_of_used' ? 'used' : metric] || 0), 0);
+                    if (metric === 'pct_of_used') return totals[tk] ? Math.round(sum / totals[tk] * 100) : 0;
+                    return Math.round(sum / selEntities.length);
+                });
+                datasets.push({ label: 'AVG (selected)', data: vals, borderColor: AVG_SEL_COLOR, backgroundColor: AVG_SEL_COLOR + '30', tension: .35, borderDash: [4, 2], pointRadius: 3 });
+                return;
+            }
+            if (!series[sel]) return;
+            const color = colorFn(ci++);
+            const vals = timeLabels.map(tk => {
+                const raw = ((series[sel][tk] || {})[metric === 'pct_of_used' ? 'used' : metric]) || 0;
+                if (metric === 'pct_of_used') return totals[tk] ? +(raw / totals[tk] * 100).toFixed(1) : 0;
+                return raw;
+            });
+            datasets.push({
+                label: sel.length > 30 ? sel.slice(0, 28) + '…' : sel,
+                data: vals, borderColor: color,
+                backgroundColor: color + '18', tension: .35, pointRadius: 3, fill: false,
+            });
+        });
+
+        return new Chart(ctx, {
+            type: 'line',
+            data: { labels: timeLabels, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 14, font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const v = ctx.parsed.y;
+                                if (metric === 'pct_of_used') return ` ${ctx.dataset.label}: ${v.toFixed(1)}%`;
+                                if (metric.includes('amount')) return ` ${ctx.dataset.label}: ${v.toLocaleString()} VND`;
+                                return ` ${ctx.dataset.label}: ${v.toLocaleString()}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: v => metric.includes('amount') ? (v / 1000000).toFixed(1) + 'M' : metric === 'pct_of_used' ? v + '%' : v
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // ── SHOP TREND ────────────────────────────────────────────────────────────────
+    const SHOP_SERIES = TREND.shop_series || {};
+    const ALL_SHOPS = TREND.shops || [];
+
+    let shopChart = null;
+    let shopChecked = new Set();
+
+    function getShopXAxis() { return document.querySelector('input[name="shopXAxis"]:checked').value; }
+    function getShopMetric() { return document.getElementById('shopMetric').value; }
+
+    function buildShopList() {
+        const cl = document.getElementById('shopChecklist');
+        // remove existing shop rows (keep avg rows = first 2 labels)
+        cl.querySelectorAll('.shop-item').forEach(el => el.remove());
+        ALL_SHOPS.forEach((shop, i) => {
+            const color = getColor(i);
+            const lbl = document.createElement('label');
+            lbl.className = 'form-check d-flex align-items-center gap-1 shop-item';
+            lbl.setAttribute('for', `sc_s${i}`);
+            lbl.innerHTML = `
+            <input class="form-check-input shop-check-s" type="checkbox" id="sc_s${i}" value="${shop.replace(/"/g, '&quot;')}">
+            <span class="shop-dot" style="background:${color};flex-shrink:0;"></span>
+            <span style="font-size:.85rem;">${shop}</span>`;
+            cl.appendChild(lbl);
+            if (i < 5) {
+                lbl.querySelector('input').checked = true;
+                shopChecked.add(shop);
+            }
+        });
+    }
+
+    function getShopSelected() {
+        const sel = [];
+        if (document.getElementById('cbShopAvgAll').checked) sel.push('__avg_all__');
+        if (document.getElementById('cbShopAvg').checked) sel.push('__avg__');
+        document.querySelectorAll('.shop-check-s:checked').forEach(cb => sel.push(cb.value));
+        return sel;
+    }
+
+    function refreshShopChart() {
+        if (shopChart) shopChart.destroy();
+        const btype = getShopXAxis();
+        const metric = getShopMetric();
+        const series = SHOP_SERIES[btype] || {};
+        const labels = (TREND.time_labels || {})[btype] || [];
+        shopChart = buildTrendChart('shopTrendChart', series, labels, getShopSelected(), metric, getColor);
+    }
+
+    buildShopList();
+
+    document.getElementById('shopSelAll').onclick = () => { document.querySelectorAll('.shop-check-s').forEach(c => c.checked = true); refreshShopChart(); };
+    document.getElementById('shopSelNone').onclick = () => { document.querySelectorAll('.shop-check-s').forEach(c => c.checked = false); refreshShopChart(); };
+    document.getElementById('shopSelTop5').onclick = () => {
+        document.querySelectorAll('.shop-check-s').forEach((c, i) => c.checked = i < 5);
+        refreshShopChart();
+    };
+    document.querySelectorAll('input[name="shopXAxis"]').forEach(r => r.addEventListener('change', refreshShopChart));
+    document.getElementById('shopMetric').addEventListener('change', refreshShopChart);
+    document.getElementById('shopChecklist').addEventListener('change', refreshShopChart);
+    // AVG dots
+    document.getElementById('dotShopAvgAll').style.background = AVG_ALL_COLOR;
+    document.getElementById('dotShopAvg').style.background = AVG_SEL_COLOR;
+
+    refreshShopChart();
+
+    // ── CAMPAIGN TREND ────────────────────────────────────────────────────────────
+    const CAMP_SERIES = TREND.campaign_series || {};
+    const ALL_CAMPS = TREND.campaigns || [];
+
+    let campChart = null;
+
+    function getCampXAxis() { return document.querySelector('input[name="campXAxis"]:checked').value; }
+    function getCampMetric() { return document.getElementById('campMetric').value; }
+
+    function buildCampList() {
+        const cl = document.getElementById('campChecklist');
+        cl.querySelectorAll('.camp-item').forEach(el => el.remove());
+        ALL_CAMPS.forEach((camp, i) => {
+            const color = getColor(i);
+            const lbl = document.createElement('label');
+            lbl.className = 'form-check d-flex align-items-center gap-1 camp-item';
+            lbl.setAttribute('for', `sc_c${i}`);
+            // Find matching campaign detail from CAMPAIGNS list
+            const ci = CAMPAIGNS.find(c => c.name === camp);
+            const subtitle = ci ? ` <code style="font-size:.75rem;">${ci.prefix}</code>` : '';
+            lbl.innerHTML = `
+            <input class="form-check-input camp-check" type="checkbox" id="sc_c${i}" value="${camp.replace(/"/g, '&quot;')}" checked>
+            <span class="shop-dot" style="background:${color};flex-shrink:0;"></span>
+            <span style="font-size:.85rem;">${camp}${subtitle}</span>`;
+            cl.appendChild(lbl);
+        });
+    }
+
+    function getCampSelected() {
+        const sel = [];
+        if (document.getElementById('cbCampAvgAll').checked) sel.push('__avg_all__');
+        if (document.getElementById('cbCampAvg').checked) sel.push('__avg__');
+        document.querySelectorAll('.camp-check:checked').forEach(cb => sel.push(cb.value));
+        return sel;
+    }
+
+    function refreshCampChart() {
+        if (campChart) campChart.destroy();
+        const btype = getCampXAxis();
+        const metric = getCampMetric();
+        const series = CAMP_SERIES[btype] || {};
+        const labels = (TREND.time_labels || {})[btype] || [];
+        campChart = buildTrendChart('campTrendChart', series, labels, getCampSelected(), metric, getColor);
+    }
+
+    buildCampList();
+
+    document.getElementById('campSelAll').onclick = () => { document.querySelectorAll('.camp-check').forEach(c => c.checked = true); refreshCampChart(); };
+    document.getElementById('campSelNone').onclick = () => { document.querySelectorAll('.camp-check').forEach(c => c.checked = false); refreshCampChart(); };
+    document.querySelectorAll('input[name="campXAxis"]').forEach(r => r.addEventListener('change', refreshCampChart));
+    document.getElementById('campMetric').addEventListener('change', refreshCampChart);
+    document.getElementById('campChecklist').addEventListener('change', refreshCampChart);
+    document.getElementById('dotCampAvgAll').style.background = AVG_ALL_COLOR;
+    document.getElementById('dotCampAvg').style.background = AVG_SEL_COLOR;
+
+    refreshCampChart();
+
+    // ── Campaign dropdown for prefix filter ──────────────────────────────────────
+    (function () {
+        const dd = document.getElementById('campaignPickDd');
+        const fld = document.getElementById('fieldPrefix');
+        if (!CAMPAIGNS.length) {
+            dd.innerHTML = '<li><span class="dropdown-item text-muted small">No campaigns defined.</span></li>';
+            return;
+        }
+        dd.innerHTML = `<li><h6 class="dropdown-header">Pick Campaign (sets prefix)</h6></li>
+        <li><a class="dropdown-item small" href="#" data-prefix=""><i class="bi bi-x-circle"></i> Clear prefix</a></li>
+        <li><hr class="dropdown-divider"></li>` +
+            CAMPAIGNS.map(c =>
+                `<li><a class="dropdown-item small" href="#" data-prefix="${c.prefix}">
+                <strong>${c.name}</strong> <code class="ms-1">${c.prefix}</code>
+            </a></li>`
+            ).join('');
+        dd.querySelectorAll('[data-prefix]').forEach(a => {
+            a.addEventListener('click', e => {
+                e.preventDefault();
+                fld.value = a.dataset.prefix;
+                document.getElementById('chartFilterForm').submit();
+            });
+        });
+    })();
+
+    // ── Quick filter date buttons ─────────────────────────────────────────────────
+    function _fmt(d) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function _submitDates(s, e) {
+        document.getElementById('fieldStartDate').value = s;
+        document.getElementById('fieldEndDate').value = e;
+        document.getElementById('chartFilterForm').submit();
+    }
+    document.querySelectorAll('.quick-days-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const days = parseInt(this.dataset.days, 10);
+            const end = new Date(), start = new Date();
+            start.setDate(start.getDate() - days);
+            _submitDates(_fmt(start), _fmt(end));
+        });
+    });
+    document.querySelectorAll('.quick-year-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const y = parseInt(this.dataset.year, 10);
+            _submitDates(y + '-01-01', y + '-12-31');
+        });
+    });
+    document.getElementById('btnThisMonth').addEventListener('click', () => {
+        const n = new Date();
+        _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth(), 1)), _fmt(new Date(n.getFullYear(), n.getMonth() + 1, 0)));
+    });
+    document.getElementById('btnLastMonth').addEventListener('click', () => {
+        const n = new Date();
+        _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth() - 1, 1)), _fmt(new Date(n.getFullYear(), n.getMonth(), 0)));
+    });
+    document.getElementById('btnThisYear').addEventListener('click', () => {
+        const y = new Date().getFullYear();
+        _submitDates(y + '-01-01', y + '-12-31');
+    });
+    document.getElementById('chartFilterForm').addEventListener('submit', () => showLoading('Loading chart data…'));
+
+    // ── PDF Download ──────────────────────────────────────────────────────────────
+    function getCanvasPng(id) {
+        const c = document.getElementById(id);
+        if (!c) return null;
+        const tmp = document.createElement('canvas');
+        tmp.width = c.width; tmp.height = c.height;
+        const ctx = tmp.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, tmp.width, tmp.height);
+        ctx.drawImage(c, 0, 0);
+        return tmp.toDataURL('image/png');
+    }
+
+    const btnPDF = document.getElementById('btnDownloadPDF');
+    if (btnPDF) {
+        btnPDF.addEventListener('click', function () {
+            btnPDF.disabled = true;
+            btnPDF.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+            try {
+                const { jsPDF } = window.jspdf;
+                const PW = 297, PH = 210, M = 10;
+                const CW = PW - M * 2;
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+                const sd = document.getElementById('fieldStartDate').value;
+                const ed = document.getElementById('fieldEndDate').value;
+                const sg = document.querySelector('[name="shop_group"]').value;
+                const pfx = document.getElementById('fieldPrefix').value;
+                const parts = [];
+                if (sd && ed) parts.push('Period: ' + sd + ' → ' + ed);
+                if (pfx) parts.push('Prefix: ' + pfx);
+                if (sg) parts.push('Shop Group: ' + sg);
+                const filterStr = parts.join('  |  ') || 'All data (no filter)';
+                const now = new Date().toLocaleString('en-GB');
+
+                function pageHeader(title) {
+                    doc.setFontSize(14); doc.setTextColor(0, 71, 179);
+                    doc.text(title, M, 14);
+                    doc.setFontSize(8); doc.setTextColor(110);
+                    doc.text(filterStr + '   |   Generated: ' + now, M, 20);
+                    doc.setDrawColor(0, 71, 179); doc.setLineWidth(0.4);
+                    doc.line(M, 23, PW - M, 23);
+                    return 27;
+                }
+
+                function addChartImage(png, canvasId, x, y, maxW, maxH) {
+                    if (!png) return y;
+                    const c = document.getElementById(canvasId);
+                    const ratio = c.height / c.width;
+                    const imgH = Math.min(maxW * ratio, maxH);
+                    const imgW = imgH / ratio;
+                    doc.addImage(png, 'PNG', x, y, imgW, imgH);
+                    return y + imgH;
+                }
+
+                function addLegend(datasets, startY) {
+                    if (!datasets || !datasets.length) return startY;
+                    const COLS = 2, PX_W = 1100, COL_W = PX_W / COLS;
+                    const ROW_H = 26, PAD_X = 10;
+                    const rows = Math.ceil(datasets.length / COLS);
+                    const CVS_H = rows * ROW_H + 10;
+                    const cvs = document.createElement('canvas');
+                    cvs.width = PX_W; cvs.height = CVS_H;
+                    const ctx = cvs.getContext('2d');
+                    ctx.fillStyle = '#f8f9fa';
+                    ctx.fillRect(0, 0, PX_W, CVS_H);
+                    ctx.strokeStyle = '#6F42C1'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(PX_W, 0); ctx.stroke();
+                    datasets.forEach((ds, i) => {
+                        const col = i % COLS, row = Math.floor(i / COLS);
+                        const x = col * COL_W + PAD_X;
+                        const y = row * ROW_H + ROW_H * 0.72 + 6;
+                        const hex = (ds.borderColor || '#aaa').replace('#', '');
+                        const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+                        ctx.fillStyle = `rgb(${r},${g},${b})`;
+                        ctx.fillRect(x, y - 5, 22, 4);
+                        ctx.fillStyle = '#2C3E50';
+                        ctx.font = '13px system-ui,-apple-system,Arial,sans-serif';
+                        const raw = ds.label || '';
+                        ctx.fillText(raw.length > 42 ? raw.slice(0, 41) + '…' : raw, x + 30, y);
+                    });
+                    const imgW = CW, imgH = imgW * (CVS_H / PX_W);
+                    if (startY + 3 + imgH <= PH - M) {
+                        doc.addImage(cvs.toDataURL('image/png'), 'PNG', M, startY + 3, imgW, imgH);
+                        return startY + 3 + imgH;
+                    }
+                    return startY;
+                }
+
+                /* Page 1 — Overview Pies */
+                let y = pageHeader('Coupon Analytics Charts — Overview');
+                const donutIds = ['dChart1', 'dChart2', 'dChart3', 'dChart4'];
+                const donutLabels = [
+                    'Used / Total\n(All Time)', 'Coupon Amt / Invoice Amt\n(All Time)',
+                    'Used / Total\n(Period)', 'Coupon Amt / Invoice Amt\n(Period)',
+                ];
+                const dSize = 50;
+                const dGap = (CW - dSize * 4) / 3;
+                let dx = M;
+                donutIds.forEach((id, i) => {
+                    const png = getCanvasPng(id);
+                    if (png) {
+                        doc.addImage(png, 'PNG', dx, y, dSize, dSize);
+                        doc.setFontSize(7); doc.setTextColor(90);
+                        donutLabels[i].split('\n').forEach((line, li) => {
+                            doc.text(line, dx + dSize / 2, y + dSize + 5 + li * 4.5, { align: 'center' });
+                        });
+                    }
+                    dx += dSize + dGap;
+                });
+
+                /* Page 2 — Shop Trends */
+                doc.addPage();
+                y = pageHeader('Shop Trends');
+                const shopXLbl = document.querySelector('input[name="shopXAxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
+                const shopMetLbl = document.getElementById('shopMetric')?.selectedOptions[0]?.text || '';
+                doc.setFontSize(8); doc.setTextColor(100);
+                doc.text('Time Axis: ' + shopXLbl + '   |   Metric: ' + shopMetLbl, M, y); y += 5;
+                const shopDs = shopChart ? shopChart.data.datasets : [];
+                const shopListH = shopDs.length > 0 ? (Math.ceil(shopDs.length / 2) * 26 + 13) * CW / 1100 : 0;
+                const shopChartBot = addChartImage(getCanvasPng('shopTrendChart'), 'shopTrendChart', M, y, CW, PH - y - M - shopListH - 3);
+                addLegend(shopDs, shopChartBot);
+
+                /* Page 3 — Campaign Trends */
+                doc.addPage();
+                y = pageHeader('Campaign Trends');
+                const campXLbl = document.querySelector('input[name="campXAxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
+                const campMetLbl = document.getElementById('campMetric')?.selectedOptions[0]?.text || '';
+                doc.setFontSize(8); doc.setTextColor(100);
+                doc.text('Time Axis: ' + campXLbl + '   |   Metric: ' + campMetLbl, M, y); y += 5;
+                const campDs = campChart ? campChart.data.datasets : [];
+                const campListH = campDs.length > 0 ? (Math.ceil(campDs.length / 2) * 26 + 13) * CW / 1100 : 0;
+                const campChartBot = addChartImage(getCanvasPng('campTrendChart'), 'campTrendChart', M, y, CW, PH - y - M - campListH - 3);
+                addLegend(campDs, campChartBot);
+
+                doc.save('Coupon_Analytics_Charts.pdf');
+            } catch (e) {
+                alert('PDF generation failed: ' + e.message);
+            }
+            btnPDF.disabled = false;
+            btnPDF.innerHTML = '<i class="bi bi-file-pdf"></i> Download PDF';
+        });
+    }
+</script>
+{% endblock %}

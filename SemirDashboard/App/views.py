@@ -48,7 +48,9 @@ def _invalidate_analytics_cache():
 def _invalidate_coupon_cache():
     v = cache.get(_COUPON_VER_KEY, 0)
     cache.set(_COUPON_VER_KEY, v + 1, 86400 * 30)
-    logger.info("coupon cache invalidated (ver→%d)", v + 1)
+    tv = cache.get("cpn_trend_ver", 0)
+    cache.set("cpn_trend_ver", tv + 1, 86400 * 30)
+    logger.info("coupon cache invalidated (ver→%d, trend_ver→%d)", v + 1, tv + 1)
 
 
 # ── Data helpers (cache get-or-compute) ───────────────────────────────────────
@@ -507,7 +509,151 @@ def formulas_page(request):
     return render(request, "formulas.html")
 
 
-# Add this to views.py
+# ── Coupon Campaign CRUD ──────────────────────────────────────────────────────
+
+
+@requires_perm("manage_campaigns")
+def manage_campaigns(request):
+    """
+    AJAX + page endpoint for CouponCampaign CRUD.
+    GET  → JSON list of all campaigns.
+    POST → action=create|update|delete.
+    """
+    import json
+    from django.http import JsonResponse
+    from .models import CouponCampaign
+
+    if request.method == "GET":
+        campaigns = list(
+            CouponCampaign.objects.values(
+                "id", "name", "prefix", "detail", "created_at"
+            )
+        )
+        for c in campaigns:
+            if c["created_at"]:
+                c["created_at"] = c["created_at"].strftime("%Y-%m-%d")
+        return JsonResponse({"campaigns": campaigns})
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body)
+        except Exception:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        action = body.get("action")
+
+        if action == "create":
+            name = (body.get("name") or "").strip()
+            prefix = (body.get("prefix") or "").strip()
+            detail = (body.get("detail") or "").strip()
+            if not name or not prefix:
+                return JsonResponse(
+                    {"error": "Name and prefix are required"}, status=400
+                )
+            if CouponCampaign.objects.filter(name=name).exists():
+                return JsonResponse(
+                    {"error": f"Campaign '{name}' already exists"}, status=400
+                )
+            c = CouponCampaign.objects.create(
+                name=name, prefix=prefix, detail=detail or None
+            )
+            _invalidate_coupon_cache()
+            return JsonResponse(
+                {"ok": True, "id": c.pk, "name": c.name, "prefix": c.prefix}
+            )
+
+        if action == "update":
+            pk = body.get("id")
+            name = (body.get("name") or "").strip()
+            prefix = (body.get("prefix") or "").strip()
+            detail = (body.get("detail") or "").strip()
+            if not pk or not name or not prefix:
+                return JsonResponse(
+                    {"error": "id, name and prefix are required"}, status=400
+                )
+            try:
+                c = CouponCampaign.objects.get(pk=pk)
+            except CouponCampaign.DoesNotExist:
+                return JsonResponse({"error": "Campaign not found"}, status=404)
+            if CouponCampaign.objects.filter(name=name).exclude(pk=pk).exists():
+                return JsonResponse(
+                    {"error": f"Name '{name}' already in use"}, status=400
+                )
+            c.name = name
+            c.prefix = prefix
+            c.detail = detail or None
+            c.save()
+            _invalidate_coupon_cache()
+            return JsonResponse({"ok": True})
+
+        if action == "delete":
+            pk = body.get("id")
+            if not pk:
+                return JsonResponse({"error": "id required"}, status=400)
+            deleted, _ = CouponCampaign.objects.filter(pk=pk).delete()
+            if not deleted:
+                return JsonResponse({"error": "Campaign not found"}, status=404)
+            _invalidate_coupon_cache()
+            return JsonResponse({"ok": True})
+
+        return JsonResponse({"error": "Unknown action"}, status=400)
+
+    return JsonResponse({"error": "Method not allowed"}, status=405)
+
+
+# ── Coupon Analytics Chart ────────────────────────────────────────────────────
+
+
+@requires_perm("page_coupon_chart")
+def coupon_chart(request):
+    """Coupon analytics chart page — overview pies + shop/campaign trend lines."""
+    from .analytics.coupon_analytics import calculate_coupon_trend_data
+    from .models import CouponCampaign
+
+    start_date = request.GET.get("start_date", "")
+    end_date = request.GET.get("end_date", "")
+    coupon_id_prefix = request.GET.get("coupon_id_prefix", "").strip()
+    shop_group = request.GET.get("shop_group", "").strip()
+
+    date_from = _parse_date(start_date, "start date", request)
+    date_to = _parse_date(end_date, "end date", request)
+
+    # Overview pies reuse the cached coupon data
+    data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
+
+    # Trend data (shop×time, campaign×time) — separate cache
+    _trend_ver_key = "cpn_trend_ver"
+    _trend_ttl = 600
+    trend_v = cache.get(_trend_ver_key, 0)
+    trend_cache_key = f"cpn_trend:{trend_v}:{date_from}:{date_to}:{shop_group}"
+    trend_data = cache.get(trend_cache_key)
+    if trend_data is None:
+        trend_data = calculate_coupon_trend_data(date_from, date_to, shop_group)
+        cache.set(trend_cache_key, trend_data, _trend_ttl)
+        logger.info("coupon trend cache MISS (%s)", trend_cache_key)
+    else:
+        logger.info("coupon trend cache HIT (%s)", trend_cache_key)
+
+    campaigns = list(CouponCampaign.objects.values("id", "name", "prefix"))
+
+    return render(
+        request,
+        "coupon_chart.html",
+        {
+            "all_time": data["all_time"],
+            "period": data["period"],
+            "all_time_json": json.dumps(data["all_time"]),
+            "period_json": json.dumps(data["period"]),
+            "trend_data_json": json.dumps(trend_data),
+            "campaigns_json": json.dumps(campaigns),
+            "start_date": start_date,
+            "end_date": end_date,
+            "coupon_id_prefix": coupon_id_prefix,
+            "shop_group": shop_group,
+            "quick_btns": QUICK_BTNS,
+            "year_btns": YEAR_BTNS,
+        },
+    )
 
 
 @requires_perm("page_customer_detail")
