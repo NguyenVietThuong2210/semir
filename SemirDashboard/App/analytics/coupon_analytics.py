@@ -466,11 +466,11 @@ def calculate_coupon_analytics(
     }
 
 
-def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
+def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None, coupon_id_prefix=None):
     """
     Compute time-series trend data for the coupon chart page.
 
-    Groups ALL used coupons (no prefix filter) by shop×time and campaign×time.
+    Groups used coupons (filtered by prefix if given) by shop×time and campaign×time.
     Returns serialisable plain dicts — safe to cache in Redis.
 
     Bucket types: week (YYYY-Www), month (YYYY-MM), season (M2-4 2025 …), year (YYYY)
@@ -482,19 +482,19 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
     )
     from App.models import CouponCampaign
 
-    # ── Filtered queryset (same shop/date logic, no prefix) ──────────────────
-    qs = Coupon.objects.all()
+    # ── Base queryset: date + shop_group only (used for campaign series) ─────
+    qs_base = Coupon.objects.all()
     if shop_group:
         if shop_group == "Bala Group":
-            qs = qs.filter(
+            qs_base = qs_base.filter(
                 Q(using_shop__icontains="Bala") | Q(using_shop__icontains="巴拉")
             )
         elif shop_group == "Semir Group":
-            qs = qs.filter(
+            qs_base = qs_base.filter(
                 Q(using_shop__icontains="Semir") | Q(using_shop__icontains="森马")
             )
         elif shop_group == "Others Group":
-            qs = qs.exclude(
+            qs_base = qs_base.exclude(
                 Q(using_shop__icontains="Bala")
                 | Q(using_shop__icontains="巴拉")
                 | Q(using_shop__icontains="Semir")
@@ -506,19 +506,32 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
         usage_filter &= Q(using_date__gte=date_from)
     if date_to:
         usage_filter &= Q(using_date__lte=date_to)
-    period_qs = qs.filter(usage_filter)
+    period_qs_all = qs_base.filter(usage_filter)  # for campaign series (no prefix)
+
+    # ── Shop queryset: additionally filtered by prefix (chart 1 only) ────────
+    qs_shop = qs_base
+    if coupon_id_prefix:
+        _prefixes = [p.strip() for p in coupon_id_prefix.split(",") if p.strip()]
+        if len(_prefixes) == 1:
+            qs_shop = qs_shop.filter(coupon_id__istartswith=_prefixes[0])
+        elif _prefixes:
+            _pq = Q()
+            for _p in _prefixes:
+                _pq |= Q(coupon_id__istartswith=_p)
+            qs_shop = qs_shop.filter(_pq)
+    period_qs_shop = qs_shop.filter(usage_filter)  # for shop series (with prefix)
 
     # ── Bulk fetch coupon rows ────────────────────────────────────────────────
-    coupon_rows = list(
-        period_qs.values(
-            "coupon_id", "using_shop", "using_date", "face_value", "docket_number"
-        )
-    )
-    if not coupon_rows:
+    _fields = ("coupon_id", "using_shop", "using_date", "face_value", "docket_number")
+    coupon_rows_all = list(period_qs_all.values(*_fields))   # campaign data
+    coupon_rows_shop = list(period_qs_shop.values(*_fields))  # shop data
+
+    if not coupon_rows_all and not coupon_rows_shop:
         return {
             "time_labels": {"week": [], "month": [], "season": [], "year": []},
             "week_label_map": {},
             "total_by_time": {"week": {}, "month": {}, "season": {}, "year": {}},
+            "total_by_time_shop": {"week": {}, "month": {}, "season": {}, "year": {}},
             "shops": [],
             "shop_series": {},
             "campaigns": [],
@@ -526,14 +539,13 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
             "campaign_list": [],
         }
 
-    # Bulk-fetch invoice amounts
-    docket_numbers = list(
-        {r["docket_number"] for r in coupon_rows if r["docket_number"]}
-    )
+    # Bulk-fetch invoice amounts for both row sets
+    all_dockets = {r["docket_number"] for r in coupon_rows_all if r["docket_number"]} | \
+                  {r["docket_number"] for r in coupon_rows_shop if r["docket_number"]}
     txn_map = {
         t["invoice_number"]: float(t["sales_amount"] or 0)
         for t in SalesTransaction.objects.filter(
-            invoice_number__in=docket_numbers
+            invoice_number__in=list(all_dockets)
         ).values("invoice_number", "sales_amount")
     }
 
@@ -568,23 +580,41 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
     campaign_agg = {
         b: defaultdict(lambda: defaultdict(_new_bucket)) for b in bucket_fns
     }
-    # total used per bucket (all coupons, for correct pct_of_used denominator)
-    total_agg = {b: defaultdict(int) for b in bucket_fns}
+    # separate totals: shop uses prefix-filtered rows, campaign uses all rows
+    total_agg_shop = {b: defaultdict(int) for b in bucket_fns}
+    total_agg_camp = {b: defaultdict(int) for b in bucket_fns}
 
-    for row in coupon_rows:
+    def _row_amounts(row):
+        inv_amt = txn_map.get(row["docket_number"], 0.0) if row["docket_number"] else 0.0
+        if not inv_amt and row["face_value"] and float(row["face_value"]) > 1:
+            inv_amt = float(row["face_value"])
+        return inv_amt, float(calc_coupon_amount(row["face_value"], inv_amt))
+
+    # ── Chart 1: shop series (prefix-filtered) ────────────────────────────────
+    for row in coupon_rows_shop:
         d = row["using_date"]
         if not d:
             continue
         shop = row["using_shop"] or "Unknown"
         dk = row["docket_number"] or f'__no_{row["coupon_id"]}'
-        inv_amt = (
-            txn_map.get(row["docket_number"], 0.0) if row["docket_number"] else 0.0
-        )
-        if not inv_amt and row["face_value"] and float(row["face_value"]) > 1:
-            inv_amt = float(row["face_value"])
-        cpn_amt = float(calc_coupon_amount(row["face_value"], inv_amt))
+        inv_amt, cpn_amt = _row_amounts(row)
+        for btype, fn in bucket_fns.items():
+            tkey = fn(d)
+            total_agg_shop[btype][tkey] += 1
+            sb = shop_agg[btype][shop][tkey]
+            sb["used"] += 1
+            sb["coupon_amount"] += cpn_amt
+            if dk not in sb["_seen"]:
+                sb["_seen"].add(dk)
+                sb["unique_amount"] += inv_amt
 
-        # Campaign matching — each campaign may have comma-separated prefixes
+    # ── Chart 2: campaign series (all coupons, no prefix filter) ─────────────
+    for row in coupon_rows_all:
+        d = row["using_date"]
+        if not d:
+            continue
+        dk = row["docket_number"] or f'__no_{row["coupon_id"]}'
+        inv_amt, cpn_amt = _row_amounts(row)
         coupon_id_upper = row["coupon_id"].upper()
         matched = [
             c["name"]
@@ -595,23 +625,11 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
                 if p.strip()
             )
         ]
-
+        camp_targets = matched if matched else ["(No Campaign)"]
         for btype, fn in bucket_fns.items():
             tkey = fn(d)
-
-            # Total used per bucket (all coupons regardless of campaign match)
-            total_agg[btype][tkey] += 1
-
-            # Shop bucket
-            sb = shop_agg[btype][shop][tkey]
-            sb["used"] += 1
-            sb["coupon_amount"] += cpn_amt
-            if dk not in sb["_seen"]:
-                sb["_seen"].add(dk)
-                sb["unique_amount"] += inv_amt
-
-            # Campaign buckets (skip unmatched coupons — no "(No Campaign)" line)
-            for camp in matched:
+            total_agg_camp[btype][tkey] += 1
+            for camp in camp_targets:
                 cb = campaign_agg[btype][camp][tkey]
                 cb["used"] += 1
                 cb["coupon_amount"] += cpn_amt
@@ -651,13 +669,14 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None):
     all_shops = sorted(shop_series.get("month", {}).keys())
     all_campaigns = sorted(campaign_series.get("month", {}).keys())
 
-    # Serialise total_agg
-    total_by_time = {btype: dict(total_agg[btype]) for btype in bucket_fns}
+    total_by_time = {btype: dict(total_agg_camp[btype]) for btype in bucket_fns}
+    total_by_time_shop = {btype: dict(total_agg_shop[btype]) for btype in bucket_fns}
 
     return {
         "time_labels": time_labels,
         "week_label_map": week_label_map,
         "total_by_time": total_by_time,
+        "total_by_time_shop": total_by_time_shop,
         "shops": all_shops,
         "shop_series": shop_series,
         "campaigns": all_campaigns,
