@@ -805,7 +805,7 @@ function updateLegend(datasets) {
     panel.innerHTML = datasets.map(ds =>
         `<div class="d-flex align-items-center mb-1">
            <span style="display:inline-block;width:24px;height:3px;background:${ds.borderColor};border-radius:2px;margin-right:6px;flex-shrink:0;"></span>
-           <span class="text-truncate" title="${ds.label}" style="max-width:220px;">${ds.label}</span>
+           <span title="${ds.label}" style="word-break:break-word;white-space:normal;">${ds.label}</span>
          </div>`
     ).join('');
 }
