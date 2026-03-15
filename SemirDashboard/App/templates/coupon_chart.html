@@ -1075,11 +1075,11 @@
                 const filterStr = parts.join('  |  ') || 'All data (no filter)';
                 const now = new Date().toLocaleString('en-GB');
 
-                function pageHeader(title) {
+                function pageHeader(title, subtitle) {
                     doc.setFontSize(14); doc.setTextColor(0, 71, 179);
                     doc.text(title, M, 14);
                     doc.setFontSize(8); doc.setTextColor(110);
-                    doc.text(filterStr + '   |   Generated: ' + now, M, 20);
+                    doc.text((subtitle || filterStr) + '   |   Generated: ' + now, M, 20);
                     doc.setDrawColor(0, 71, 179); doc.setLineWidth(0.4);
                     doc.line(M, 23, PW - M, 23);
                     return 27;
@@ -1166,7 +1166,7 @@
 
                 /* Page 3 — Campaign Trends */
                 doc.addPage();
-                y = pageHeader('Campaign Trends');
+                y = pageHeader('Campaign Trends', 'All coupons — no filter applied');
                 const _campXEl = document.querySelector('input[name="campXAxis"]:checked');
                 const campXLbl = (_campXEl ? document.querySelector(`label[for="${_campXEl.id}"]`)?.textContent?.trim() : '') || '';
                 const campMetLbl = document.getElementById('campMetric')?.selectedOptions[0]?.text || '';
