@@ -144,12 +144,12 @@
         {% check_perm 'download_coupons' as can_dl_coupons %}
         {% if can_dl_coupons %}
         <a href="{% url 'export_coupons' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}"
-            class="btn btn-success btn-sm">
-            <i class="bi bi-file-excel"></i> Export Excel
+            class="btn btn-success">
+            <i class="bi bi-download"></i> Export to Excel
         </a>
         {% else %}
-        <button class="btn btn-success btn-sm" disabled title="No export permission">
-            <i class="bi bi-file-excel"></i> Export Excel
+        <button class="btn btn-success" disabled title="No export permission">
+            <i class="bi bi-download"></i> Export to Excel
         </button>
         {% endif %}
     </div>
@@ -205,6 +205,14 @@
                 <button class="btn btn-outline-secondary" id="btnThisMonth">This Month</button>
                 <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
                 <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
+            </div>
+        </div>
+
+        <!-- Campaign checklist filter (populated by JS) -->
+        <div class="mt-2 pt-2 border-top" id="cpnFilterRow" style="display:none">
+            <small class="text-muted d-block mb-1"><i class="bi bi-tags"></i> Filter by Campaign:</small>
+            <div id="cpnFilterList"
+                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid #dee2e6;border-radius:8px;padding:.4rem .5rem;background:#fafbfc;">
             </div>
         </div>
 
@@ -573,6 +581,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script type="application/json" id="__cpnFilterData">{{ campaigns_json|safe }}</script>
 <script>
     function _fmt(d) {
         return d.getFullYear() + '-'
@@ -625,5 +634,45 @@
         showLoading('Loading coupon data...');
     });
 
+    // ── Campaign checklist filter ──────────────────────────────────────────────
+    (function buildCpnFilter() {
+        const cpns = JSON.parse(document.getElementById('__cpnFilterData').textContent);
+        if (!cpns.length) return;
+        const row = document.getElementById('cpnFilterRow');
+        const list = document.getElementById('cpnFilterList');
+        const fld = document.getElementById('fieldPrefix');
+        const form = document.getElementById('couponFilterForm');
+        const cur = (fld.value || '').trim();
+
+        function makePill(label, prefixVal, active, title) {
+            const a = document.createElement('a');
+            a.href = '#';
+            a.title = title || label;
+            a.className = 'badge text-decoration-none px-2 py-1 ' +
+                (active ? 'bg-primary text-white' : 'bg-white text-dark border');
+            a.style.cursor = 'pointer';
+            a.style.fontSize = '.82rem';
+            a.textContent = label;
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                fld.value = prefixVal;
+                showLoading('Loading coupon data...');
+                form.submit();
+            });
+            return a;
+        }
+
+        // "All" pill
+        list.appendChild(makePill('✕ All', '', !cur, 'Show all campaigns'));
+
+        cpns.forEach(function(c) {
+            const prefixVal = c.prefix || '';
+            const isActive = cur && prefixVal && cur.toLowerCase() === prefixVal.toLowerCase();
+            const subtitle = (c.prefix_list || []).join(', ');
+            list.appendChild(makePill(c.name, prefixVal, isActive, subtitle));
+        });
+
+        row.style.display = '';
+    })();
 </script>
 {% endblock %}

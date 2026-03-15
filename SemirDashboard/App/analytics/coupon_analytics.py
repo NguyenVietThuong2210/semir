@@ -120,10 +120,18 @@ def calculate_coupon_analytics(
     else:
         period_qs = qs
 
-    # Filter by coupon ID prefix if specified
+    # Filter by coupon ID prefix if specified (supports comma-separated multi-prefix OR logic)
     if coupon_id_prefix:
-        qs = qs.filter(coupon_id__istartswith=coupon_id_prefix)
-        period_qs = period_qs.filter(coupon_id__istartswith=coupon_id_prefix)
+        _prefixes = [p.strip() for p in coupon_id_prefix.split(",") if p.strip()]
+        if len(_prefixes) == 1:
+            qs = qs.filter(coupon_id__istartswith=_prefixes[0])
+            period_qs = period_qs.filter(coupon_id__istartswith=_prefixes[0])
+        elif _prefixes:
+            _pq = Q()
+            for _p in _prefixes:
+                _pq |= Q(coupon_id__istartswith=_p)
+            qs = qs.filter(_pq)
+            period_qs = period_qs.filter(_pq)
 
     # All-time stats - counts only (amounts calculated below)
     all_time_total = qs.count()
