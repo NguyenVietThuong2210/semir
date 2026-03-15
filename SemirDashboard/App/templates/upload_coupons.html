@@ -184,8 +184,9 @@
 {% endblock %}
 
 {% block extra_js %}
+{% check_perm 'manage_campaigns' as can_manage_js %}
 {# Inject server values as JSON to avoid IDE JS-lint false positives #}
-<script type="application/json" id="__canManage">{% if can_manage %}true{% else %}false{% endif %}</script>
+<script type="application/json" id="__canManage">{% if can_manage_js %}true{% else %}false{% endif %}</script>
 <script type="application/json" id="__campaignsUrl">"{% url 'manage_campaigns' %}"</script>
 <script type="application/json" id="__csrf">"{{ csrf_token }}"</script>
 <script>
