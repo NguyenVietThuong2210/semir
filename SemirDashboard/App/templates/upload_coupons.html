@@ -1,15 +1,44 @@
 {% extends 'base.html' %}
+{% load perm_tags %}
 {% block title %}Upload Coupons{% endblock %}
+
+{% block extra_css %}
+<style>
+  #campaignTable td,
+  #campaignTable th {
+    vertical-align: middle;
+  }
+
+  .campaign-row td {
+    font-size: .9rem;
+  }
+
+  .edit-inline {
+    display: none;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 
-<!-- Page Header -->
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-ticket-perforated"></i> Upload Coupon Data</h2>
+  <h2><i class="bi bi-ticket-perforated"></i> Upload Coupon Data</h2>
+  <div class="d-flex gap-2">
+    <a href="{% url 'coupon_dashboard' %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-bar-chart"></i> Coupon Analytics
+    </a>
+    <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-house"></i> Home
+    </a>
+  </div>
 </div>
 
-<div class="row justify-content-center">
-  <div class="col-md-7">
+<div class="row g-3">
+
+  <!-- ── Left: Upload form ── -->
+  <div class="col-md-5">
     <div class="card shadow-sm">
+      <div class="card-header"><i class="bi bi-cloud-upload"></i> Import Coupon File</div>
       <div class="card-body">
         <form method="post" enctype="multipart/form-data" id="uploadForm">
           {% csrf_token %}
@@ -25,9 +54,6 @@
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-upload"></i> Upload
           </button>
-          <a href="{% url 'coupon_dashboard' %}" class="btn btn-outline-secondary ms-2">
-            <i class="bi bi-bar-chart"></i> View Coupon Dashboard
-          </a>
         </form>
       </div>
     </div>
@@ -38,19 +64,250 @@
         <ul class="small mb-0">
           <li><strong>Used</strong>: 1 = used, 0 = not used</li>
           <li><strong>Docket Number</strong>: same as Invoice Number in sales data</li>
-          <li><strong>Creator / Member ID / Name / Phone</strong>: admin info stored as text only</li>
           <li>Duplicate <strong>Coupon ID</strong> rows will be updated (not duplicated)</li>
         </ul>
       </div>
     </div>
   </div>
+
+  <!-- ── Right: Campaign management ── -->
+  {% check_perm 'manage_campaigns' as can_manage %}
+  {% if can_manage %}
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-tags"></i> Coupon Campaigns</span>
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddCampaign">
+          <i class="bi bi-plus-lg"></i> New Campaign
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div id="campaignAlert" class="alert mx-3 mt-3 mb-0 py-2 d-none"></div>
+        <table class="table table-hover mb-0" id="campaignTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Prefix</th>
+              <th>Detail</th>
+              <th style="width:90px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="campaignTbody">
+            <tr>
+              <td colspan="4" class="text-center text-muted py-3">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-md-7">
+    <div class="alert alert-info">
+      <i class="bi bi-lock"></i> Campaign management requires Admin permission.
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- /row -->
+
+<!-- ── Add Campaign Modal ── -->
+{% if can_manage %}
+<div class="modal fade" id="modalAddCampaign" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle"></i> New Campaign</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="addAlert" class="alert d-none py-2"></div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Campaign Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="addName" placeholder="e.g. Semir 50K Campaign">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Coupon ID Prefix <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="addPrefix" placeholder="e.g. SEMIR50K">
+          <div class="form-text">All coupons whose ID starts with this prefix belong to this campaign.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Detail / Notes</label>
+          <textarea class="form-control" id="addDetail" rows="2" placeholder="Optional description…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success" id="btnAddSave">
+          <i class="bi bi-check-lg"></i> Save
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
+
+<!-- ── Edit Campaign Modal ── -->
+<div class="modal fade" id="modalEditCampaign" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Campaign</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="editAlert" class="alert d-none py-2"></div>
+        <input type="hidden" id="editId">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Campaign Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="editName">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Coupon ID Prefix <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="editPrefix">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Detail / Notes</label>
+          <textarea class="form-control" id="editDetail" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="btnEditSave">
+          <i class="bi bi-check-lg"></i> Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}
+
 {% block extra_js %}
 <script>
-document.getElementById('uploadForm').addEventListener('submit', function(){
-  showLoading('Importing coupon data…');
-});
-window.addEventListener('load', hideLoading);
+  document.getElementById('uploadForm').addEventListener('submit', function () {
+    showLoading('Importing coupon data…');
+  });
+  window.addEventListener('load', hideLoading);
+
+  {% check_perm 'manage_campaigns' as can_manage %}
+  {% if can_manage %}
+  const CAMPAIGNS_URL = "{% url 'manage_campaigns' %}";
+  const CSRF = "{{ csrf_token }}";
+
+  let campaigns = [];
+
+  async function apiCampaign(body) {
+    const r = await fetch(CAMPAIGNS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify(body)
+    });
+    return r.json();
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('campaignTbody');
+    if (!campaigns.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No campaigns yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = campaigns.map(c => `
+    <tr class="campaign-row">
+      <td><strong>${escHtml(c.name)}</strong><br><small class="text-muted">${c.created_at || ''}</small></td>
+      <td><code>${escHtml(c.prefix)}</code></td>
+      <td><small>${escHtml(c.detail || '—')}</small></td>
+      <td>
+        <button class="btn btn-sm btn-outline-primary me-1" onclick="openEdit(${c.id})" title="Edit">
+          <i class="bi bi-pencil"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteCampaign(${c.id}, '${escHtml(c.name).replace(/'/g, "\\'")}')">
+          <i class="bi bi-trash"></i>
+        </button>
+      </td>
+    </tr>`).join('');
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  async function loadCampaigns() {
+    const r = await fetch(CAMPAIGNS_URL);
+    const data = await r.json();
+    campaigns = data.campaigns || [];
+    renderTable();
+  }
+
+  function showAlert(elId, msg, type = 'danger') {
+    const el = document.getElementById(elId);
+    el.className = `alert alert-${type} py-2`;
+    el.textContent = msg;
+    el.classList.remove('d-none');
+  }
+
+  // Add
+  document.getElementById('btnAddSave').addEventListener('click', async () => {
+    const name = document.getElementById('addName').value.trim();
+    const prefix = document.getElementById('addPrefix').value.trim();
+    const detail = document.getElementById('addDetail').value.trim();
+    document.getElementById('addAlert').classList.add('d-none');
+    if (!name || !prefix) { showAlert('addAlert', 'Name and prefix are required.'); return; }
+    const res = await apiCampaign({ action: 'create', name, prefix, detail });
+    if (res.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('modalAddCampaign')).hide();
+      document.getElementById('addName').value = '';
+      document.getElementById('addPrefix').value = '';
+      document.getElementById('addDetail').value = '';
+      await loadCampaigns();
+      showAlert('campaignAlert', 'Campaign created.', 'success');
+    } else {
+      showAlert('addAlert', res.error || 'Error');
+    }
+  });
+
+  // Edit open
+  function openEdit(id) {
+    const c = campaigns.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('editId').value = c.id;
+    document.getElementById('editName').value = c.name;
+    document.getElementById('editPrefix').value = c.prefix;
+    document.getElementById('editDetail').value = c.detail || '';
+    document.getElementById('editAlert').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('modalEditCampaign')).show();
+  }
+
+  document.getElementById('btnEditSave').addEventListener('click', async () => {
+    const id = parseInt(document.getElementById('editId').value);
+    const name = document.getElementById('editName').value.trim();
+    const prefix = document.getElementById('editPrefix').value.trim();
+    const detail = document.getElementById('editDetail').value.trim();
+    document.getElementById('editAlert').classList.add('d-none');
+    if (!name || !prefix) { showAlert('editAlert', 'Name and prefix are required.'); return; }
+    const res = await apiCampaign({ action: 'update', id, name, prefix, detail });
+    if (res.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('modalEditCampaign')).hide();
+      await loadCampaigns();
+      showAlert('campaignAlert', 'Campaign updated.', 'success');
+    } else {
+      showAlert('editAlert', res.error || 'Error');
+    }
+  });
+
+  // Delete
+  async function deleteCampaign(id, name) {
+    if (!confirm(`Delete campaign "${name}"?`)) return;
+    const res = await apiCampaign({ action: 'delete', id });
+    if (res.ok) {
+      await loadCampaigns();
+      showAlert('campaignAlert', 'Campaign deleted.', 'warning');
+    } else {
+      alert(res.error || 'Error deleting campaign');
+    }
+  }
+
+  loadCampaigns();
+  {% endif %}
 </script>
 {% endblock %}

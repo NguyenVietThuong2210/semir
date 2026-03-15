@@ -26,10 +26,10 @@ class Customer(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('vip_id', 'phone')
+        unique_together = ("vip_id", "phone")
         indexes = [
-            models.Index(fields=['vip_id', 'phone']),
-            models.Index(fields=['registration_date']),
+            models.Index(fields=["vip_id", "phone"]),
+            models.Index(fields=["registration_date"]),
         ]
 
     def __str__(self):
@@ -48,18 +48,32 @@ class SalesTransaction(models.Model):
     quantity = models.IntegerField()
     settlement_amount = models.DecimalField(max_digits=12, decimal_places=2)
     sales_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    tag_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    per_customer_transaction = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    discount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    rounding = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
+    tag_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
+    per_customer_transaction = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
+    discount = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
+    rounding = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['sales_date', 'invoice_number']
+        ordering = ["sales_date", "invoice_number"]
         indexes = [
-            models.Index(fields=['vip_id', 'sales_date']),
-            models.Index(fields=['sales_date']),
+            models.Index(fields=["vip_id", "sales_date"]),
+            models.Index(fields=["sales_date"]),
         ]
 
     def __str__(self):
@@ -67,54 +81,76 @@ class SalesTransaction(models.Model):
 
 
 class Coupon(models.Model):
-    department      = models.CharField(max_length=1000, blank=True, null=True)
-    creator         = models.CharField(max_length=1000, blank=True, null=True)
+    department = models.CharField(max_length=1000, blank=True, null=True)
+    creator = models.CharField(max_length=1000, blank=True, null=True)
     document_number = models.CharField(max_length=1000, blank=True, null=True)
-    coupon_id       = models.CharField(max_length=1000, db_index=True)
-    face_value      = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    used            = models.IntegerField(default=0)   # 0=unused, 1=used
-    begin_date      = models.DateField(blank=True, null=True)
-    end_date        = models.DateField(blank=True, null=True)
-    using_shop      = models.CharField(max_length=1000, blank=True, null=True)
-    using_date      = models.DateField(blank=True, null=True)
-    push            = models.CharField(max_length=1000, blank=True, null=True)
-    member_id       = models.CharField(max_length=1000, blank=True, null=True)
-    member_name     = models.CharField(max_length=1000, blank=True, null=True)
-    member_phone    = models.CharField(max_length=1000, blank=True, null=True)
-    docket_number   = models.CharField(max_length=1000, blank=True, null=True, db_index=True)
-    created_at      = models.DateTimeField(auto_now_add=True)
-    updated_at      = models.DateTimeField(auto_now=True)
+    coupon_id = models.CharField(max_length=1000, db_index=True)
+    face_value = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
+    used = models.IntegerField(default=0)  # 0=unused, 1=used
+    begin_date = models.DateField(blank=True, null=True)
+    end_date = models.DateField(blank=True, null=True)
+    using_shop = models.CharField(max_length=1000, blank=True, null=True)
+    using_date = models.DateField(blank=True, null=True)
+    push = models.CharField(max_length=1000, blank=True, null=True)
+    member_id = models.CharField(max_length=1000, blank=True, null=True)
+    member_name = models.CharField(max_length=1000, blank=True, null=True)
+    member_phone = models.CharField(max_length=1000, blank=True, null=True)
+    docket_number = models.CharField(
+        max_length=1000, blank=True, null=True, db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes = [
-            models.Index(fields=['coupon_id']),
-            models.Index(fields=['docket_number']),
-            models.Index(fields=['using_date']),
-            models.Index(fields=['used']),
+            models.Index(fields=["coupon_id"]),
+            models.Index(fields=["docket_number"]),
+            models.Index(fields=["using_date"]),
+            models.Index(fields=["used"]),
         ]
 
     def __str__(self):
         return f"{self.coupon_id} ({'Used' if self.used else 'Unused'})"
 
 
+class CouponCampaign(models.Model):
+    """Named coupon campaign grouping coupons by ID prefix."""
+
+    name = models.CharField(max_length=200, unique=True)
+    prefix = models.CharField(max_length=100)
+    detail = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.prefix})"
+
+
 from django.contrib.auth.models import User
 
 
 class Role(models.Model):
-    name        = models.CharField(max_length=100, unique=True)
-    permissions = models.JSONField(default=list)   # list of permission codenames
-    is_system   = models.BooleanField(default=False)  # admin/viewer cannot be deleted
+    name = models.CharField(max_length=100, unique=True)
+    permissions = models.JSONField(default=list)  # list of permission codenames
+    is_system = models.BooleanField(default=False)  # admin/viewer cannot be deleted
 
     def __str__(self):
         return self.name
 
     class Meta:
-        ordering = ['name']
+        ordering = ["name"]
 
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    role = models.ForeignKey(
+        Role, on_delete=models.SET_NULL, null=True, blank=True, related_name="users"
+    )
 
     def __str__(self):
         return f"{self.user.username} ({self.role})"

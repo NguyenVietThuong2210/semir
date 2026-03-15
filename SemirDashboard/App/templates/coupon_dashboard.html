@@ -4,41 +4,135 @@
 
 {% block extra_css %}
 <style>
-.dark-tabs .nav-link {
-    background:#2c3e50; color:#bdc3c7;
-    border:1px solid #1a252f; border-radius:6px 6px 0 0;
-    margin-right:3px; font-weight:500; font-size:.9rem;
-}
-.dark-tabs .nav-link:hover  { background:#34495e; color:#ecf0f1; }
-.dark-tabs .nav-link.active { background:#366092; color:#fff; border-color:#366092; }
-.dark-tabs { border-bottom:none; }
+    .dark-tabs .nav-link {
+        background: #2c3e50;
+        color: #bdc3c7;
+        border: 1px solid #1a252f;
+        border-radius: 6px 6px 0 0;
+        margin-right: 3px;
+        font-weight: 500;
+        font-size: .9rem;
+    }
 
-.stat-card { min-height:120px; border-radius:10px; }
-.stat-card .card-body { display:flex; flex-direction:column; justify-content:space-between; }
-.stat-value { font-size:1.7rem; font-weight:700; margin:4px 0; }
-.stat-label { font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; }
+    .dark-tabs .nav-link:hover {
+        background: #34495e;
+        color: #ecf0f1;
+    }
 
-td.c-green { background:rgba(25,135,84,.08)!important;  color:#000!important; }
-td.c-amber { background:rgba(255,193,7,.12)!important;  color:#000!important; }
-td.c-gray  { background:#f0f2f5!important;               color:#000!important; }
-td.c-blue  { background:rgba(13,110,253,.07)!important;  color:#000!important; }
+    .dark-tabs .nav-link.active {
+        background: #366092;
+        color: #fff;
+        border-color: #366092;
+    }
 
-.tbl-hdr-shop { background:#366092!important; color:#fff!important; }
-.tbl-hdr-used { background:#198754!important; color:#fff!important; }
-.tbl-hdr-cnv  { background:#e6a817!important; color:#fff!important; }
-.tbl-hdr-pct  { background:#0d6efd!important; color:#fff!important; }
-.tbl-hdr-pct2 { background:#0a7a9a!important; color:#fff!important; }
-.tbl-hdr-amt  { background:#198754!important; color:#fff!important; }
-.tbl-hdr-gray { background:#366092!important; color:#fff!important; }
-.tbl-hdr-red  { background:#198754!important; color:#fff!important; }
+    .dark-tabs {
+        border-bottom: none;
+    }
 
-/* Row cell background tints */
-td.cell-shop { background:rgba(54,96,146,.07)!important; }
-td.cell-used { background:rgba(25,135,84,.07)!important; }
-td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
+    .stat-card {
+        min-height: 120px;
+        border-radius: 10px;
+    }
 
-.badge.bg-warning { color:#000!important; }
-.amount-vnd { white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .stat-card .card-body {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .stat-value {
+        font-size: 1.7rem;
+        font-weight: 700;
+        margin: 4px 0;
+    }
+
+    .stat-label {
+        font-size: .75rem;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+    }
+
+    td.c-green {
+        background: rgba(25, 135, 84, .08) !important;
+        color: #000 !important;
+    }
+
+    td.c-amber {
+        background: rgba(255, 193, 7, .12) !important;
+        color: #000 !important;
+    }
+
+    td.c-gray {
+        background: #f0f2f5 !important;
+        color: #000 !important;
+    }
+
+    td.c-blue {
+        background: rgba(13, 110, 253, .07) !important;
+        color: #000 !important;
+    }
+
+    .tbl-hdr-shop {
+        background: #366092 !important;
+        color: #fff !important;
+    }
+
+    .tbl-hdr-used {
+        background: #198754 !important;
+        color: #fff !important;
+    }
+
+    .tbl-hdr-cnv {
+        background: #e6a817 !important;
+        color: #fff !important;
+    }
+
+    .tbl-hdr-pct {
+        background: #0d6efd !important;
+        color: #fff !important;
+    }
+
+    .tbl-hdr-pct2 {
+        background: #0a7a9a !important;
+        color: #fff !important;
+    }
+
+    .tbl-hdr-amt {
+        background: #198754 !important;
+        color: #fff !important;
+    }
+
+    .tbl-hdr-gray {
+        background: #366092 !important;
+        color: #fff !important;
+    }
+
+    .tbl-hdr-red {
+        background: #198754 !important;
+        color: #fff !important;
+    }
+
+    /* Row cell background tints */
+    td.cell-shop {
+        background: rgba(54, 96, 146, .07) !important;
+    }
+
+    td.cell-used {
+        background: rgba(25, 135, 84, .07) !important;
+    }
+
+    td.cell-cnv {
+        background: rgba(230, 168, 23, .10) !important;
+    }
+
+    .badge.bg-warning {
+        color: #000 !important;
+    }
+
+    .amount-vnd {
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
 </style>
 {% endblock %}
 
@@ -46,24 +140,34 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-ticket-perforated"></i> Coupon Analytics</h2>
-    <div>
+    <div class="d-flex gap-2 flex-wrap">
+        {% check_perm 'page_coupon_chart' as can_coupon_chart %}
+        {% if can_coupon_chart %}
+        <a href="{% url 'coupon_chart' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}"
+            class="btn btn-outline-info btn-sm">
+            <i class="bi bi-pie-chart"></i> Charts
+        </a>
+        {% endif %}
         {% check_perm 'page_upload' as can_upload %}
         {% if can_upload %}
-        <a href="{% url 'upload_coupons' %}" class="btn btn-outline-primary me-2 page-link">
-            <i class="bi bi-upload"></i> Upload Coupons
+        <a href="{% url 'upload_coupons' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-upload"></i> Upload
         </a>
         {% endif %}
         {% check_perm 'download_coupons' as can_dl_coupons %}
         {% if can_dl_coupons %}
         <a href="{% url 'export_coupons' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}"
-           class="btn btn-success">
-            <i class="bi bi-download"></i> Export to Excel
+            class="btn btn-success btn-sm">
+            <i class="bi bi-download"></i> Export Excel
         </a>
         {% else %}
-        <button class="btn btn-success" disabled title="You do not have export permission">
-            <i class="bi bi-download"></i> Export to Excel
+        <button class="btn btn-success btn-sm" disabled title="No export permission">
+            <i class="bi bi-download"></i> Export Excel
         </button>
         {% endif %}
+        <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-house"></i> Home
+        </a>
     </div>
 </div>
 
@@ -84,17 +188,27 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                     <i class="bi bi-search"></i> Coupon ID Prefix
                     <small class="text-muted">(e.g. SEMIR50K)</small>
                 </label>
-                <input type="text" class="form-control" id="fieldPrefix" name="coupon_id_prefix"
-                       value="{{ coupon_id_prefix }}"
-                       placeholder="Leave blank = all coupons">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="fieldPrefix" name="coupon_id_prefix"
+                        value="{{ coupon_id_prefix }}" placeholder="Free text or pick campaign →">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
+                        title="Pick from campaigns" id="btnCampaignPick">
+                        <i class="bi bi-tags"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="campaignDropdown">
+                        <li><span class="dropdown-item text-muted small">Loading campaigns…</span></li>
+                    </ul>
+                </div>
             </div>
             <div class="col-md-2">
                 <label class="form-label"><i class="bi bi-building"></i> Shop Group</label>
                 <select class="form-select" id="fieldShopGroup" name="shop_group">
                     <option value="">All Shop Groups</option>
-                    <option value="Bala Group" {% if shop_group == "Bala Group" %}selected{% endif %}>Bala Group</option>
-                    <option value="Semir Group" {% if shop_group == "Semir Group" %}selected{% endif %}>Semir Group</option>
-                    <option value="Others Group" {% if shop_group == "Others Group" %}selected{% endif %}>Others Group</option>
+                    <option value="Bala Group" {% if shop_group=="Bala Group" %}selected{% endif %}>Bala Group</option>
+                    <option value="Semir Group" {% if shop_group=="Semir Group" %}selected{% endif %}>Semir Group
+                    </option>
+                    <option value="Others Group" {% if shop_group=="Others Group" %}selected{% endif %}>Others Group
+                    </option>
                 </select>
             </div>
             <div class="col-md-3 d-flex align-items-end gap-2">
@@ -209,7 +323,8 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                 <div class="stat-value amount-vnd" style="color:#0d6efd;font-size:1.15rem">
                     {{ s.unique_invoice_amount|vnd }} VND
                 </div>
-                <small class="text-muted">Deduped invoices — {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
+                <small class="text-muted">Deduped invoices — {{ s.duplicate_invoice_count }} duplicate invoice{{
+                    s.duplicate_invoice_count|pluralize }}</small>
             </div>
         </div>
     </div>
@@ -278,7 +393,8 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                 <div class="stat-value amount-vnd" style="color:#0d6efd;font-size:1.15rem">
                     {{ s.unique_invoice_amount|vnd }} VND
                 </div>
-                <small class="text-muted">Deduped — {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
+                <small class="text-muted">Deduped — {{ s.duplicate_invoice_count }} duplicate invoice{{
+                    s.duplicate_invoice_count|pluralize }}</small>
             </div>
         </div>
     </div>
@@ -386,14 +502,16 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                     </thead>
                     <tbody>
                         {% for d in details %}
-                        <tr {% if d.note %}class="table-warning"{% endif %}>
+                        <tr {% if d.note %}class="table-warning" {% endif %}>
                             <td class="cell-shop"><strong>{{ d.coupon_id }}</strong></td>
                             <td class="cell-shop">{{ d.creator|default:"-" }}</td>
                             <td class="text-end cell-shop">{{ d.face_value_display }}</td>
                             <td class="cell-shop">{{ d.using_shop|default:"-" }}</td>
                             <td class="cell-shop">{{ d.using_date|default:"-" }}</td>
                             <td class="cell-used">{{ d.vip_id|default:"-" }}</td>
-                            <td class="cell-used" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ d.customer_name }}">{{ d.customer_name|default:"-" }}</td>
+                            <td class="cell-used"
+                                style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                title="{{ d.customer_name }}">{{ d.customer_name|default:"-" }}</td>
                             <td class="cell-used">{{ d.customer_phone|default:"-" }}</td>
                             <td class="cell-used">{{ d.sales_day|default:"-" }}</td>
                             <td class="cell-used">{{ d.inv_shop|default:"-" }}</td>
@@ -407,11 +525,15 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
                                 {% endif %}
                             </td>
                             <td class="cell-cnv">{{ d.cnv_id|default:"-" }}</td>
-                            <td class="cell-cnv">{% if d.cnv_points != '' %}{{ d.cnv_points|floatformat:0 }}{% else %}-{% endif %}</td>
-                            <td class="cell-cnv">{% if d.cnv_total_points != '' %}{{ d.cnv_total_points|floatformat:0 }}{% else %}-{% endif %}</td>
+                            <td class="cell-cnv">{% if d.cnv_points != '' %}{{ d.cnv_points|floatformat:0 }}{% else
+                                %}-{% endif %}</td>
+                            <td class="cell-cnv">{% if d.cnv_total_points != '' %}{{ d.cnv_total_points|floatformat:0
+                                }}{% else %}-{% endif %}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="16" class="text-center text-muted py-3">No data</td></tr>
+                        <tr>
+                            <td colspan="16" class="text-center text-muted py-3">No data</td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -486,55 +608,90 @@ td.cell-cnv  { background:rgba(230,168,23,.10)!important; }
 
 {% block extra_js %}
 <script>
-function _fmt(d) {
-    return d.getFullYear() + '-'
-        + String(d.getMonth() + 1).padStart(2, '0') + '-'
-        + String(d.getDate()).padStart(2, '0');
-}
+    function _fmt(d) {
+        return d.getFullYear() + '-'
+            + String(d.getMonth() + 1).padStart(2, '0') + '-'
+            + String(d.getDate()).padStart(2, '0');
+    }
 
-/*
- * _submitDates sets only the date fields then submits.
- * The prefix and shop_group fields retain their values - we do NOT touch them.
- */
-function _submitDates(s, e) {
-    document.getElementById('fieldStartDate').value = s;
-    document.getElementById('fieldEndDate').value   = e;
-    showLoading('Loading coupon data...');
-    document.getElementById('couponFilterForm').submit();
-}
+    /*
+     * _submitDates sets only the date fields then submits.
+     * The prefix and shop_group fields retain their values - we do NOT touch them.
+     */
+    function _submitDates(s, e) {
+        document.getElementById('fieldStartDate').value = s;
+        document.getElementById('fieldEndDate').value = e;
+        showLoading('Loading coupon data...');
+        document.getElementById('couponFilterForm').submit();
+    }
 
-document.querySelectorAll('.quick-days-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        var days = this.dataset.days;
-        // Check if it's a year (2025, 2026) or number of days
-        if (days === '2025' || days === '2026') {
-            // Year button - set to full year
-            var year = parseInt(days, 10);
-            _submitDates(year + '-01-01', year + '-12-31');
-        } else {
-            // Days button - calculate date range
-            var n = parseInt(days, 10), end = new Date(), start = new Date();
-            start.setDate(start.getDate() - n);
-            _submitDates(_fmt(start), _fmt(end));
-        }
+    document.querySelectorAll('.quick-days-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var days = this.dataset.days;
+            // Check if it's a year (2025, 2026) or number of days
+            if (days === '2025' || days === '2026') {
+                // Year button - set to full year
+                var year = parseInt(days, 10);
+                _submitDates(year + '-01-01', year + '-12-31');
+            } else {
+                // Days button - calculate date range
+                var n = parseInt(days, 10), end = new Date(), start = new Date();
+                start.setDate(start.getDate() - n);
+                _submitDates(_fmt(start), _fmt(end));
+            }
+        });
     });
-});
-document.getElementById('btnThisMonth').addEventListener('click', function() {
-    var n = new Date();
-    _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth(), 1)),
-                 _fmt(new Date(n.getFullYear(), n.getMonth() + 1, 0)));
-});
-document.getElementById('btnLastMonth').addEventListener('click', function() {
-    var n = new Date();
-    _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth() - 1, 1)),
-                 _fmt(new Date(n.getFullYear(), n.getMonth(), 0)));
-});
-document.getElementById('btnThisYear').addEventListener('click', function() {
-    var y = new Date().getFullYear();
-    _submitDates(y + '-01-01', y + '-12-31');
-});
-document.getElementById('couponFilterForm').addEventListener('submit', function() {
-    showLoading('Loading coupon data...');
-});
+    document.getElementById('btnThisMonth').addEventListener('click', function () {
+        var n = new Date();
+        _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth(), 1)),
+            _fmt(new Date(n.getFullYear(), n.getMonth() + 1, 0)));
+    });
+    document.getElementById('btnLastMonth').addEventListener('click', function () {
+        var n = new Date();
+        _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth() - 1, 1)),
+            _fmt(new Date(n.getFullYear(), n.getMonth(), 0)));
+    });
+    document.getElementById('btnThisYear').addEventListener('click', function () {
+        var y = new Date().getFullYear();
+        _submitDates(y + '-01-01', y + '-12-31');
+    });
+    document.getElementById('couponFilterForm').addEventListener('submit', function () {
+        showLoading('Loading coupon data...');
+    });
+
+    // ── Campaign dropdown for prefix filter ──────────────────────────────────────
+    (async function loadCampaignDropdown() {
+        const dd = document.getElementById('campaignDropdown');
+        const fld = document.getElementById('fieldPrefix');
+        try {
+            const r = await fetch("{% url 'manage_campaigns' %}");
+            const data = await r.json();
+            const campaigns = data.campaigns || [];
+            if (!campaigns.length) {
+                dd.innerHTML = '<li><span class="dropdown-item text-muted small">No campaigns defined.</span></li>';
+                return;
+            }
+            dd.innerHTML = `<li><h6 class="dropdown-header">Pick Campaign (sets prefix)</h6></li>
+            <li><a class="dropdown-item small" href="#" data-prefix="">
+                <i class="bi bi-x-circle"></i> Clear prefix (all coupons)
+            </a></li>
+            <li><hr class="dropdown-divider"></li>` +
+                campaigns.map(c =>
+                    `<li><a class="dropdown-item small" href="#" data-prefix="${c.prefix}">
+                    <strong>${c.name}</strong> <code class="ms-1">${c.prefix}</code>
+                </a></li>`
+                ).join('');
+            dd.querySelectorAll('[data-prefix]').forEach(a => {
+                a.addEventListener('click', e => {
+                    e.preventDefault();
+                    fld.value = a.dataset.prefix;
+                    showLoading('Loading coupon data...');
+                    document.getElementById('couponFilterForm').submit();
+                });
+            });
+        } catch (e) {
+            dd.innerHTML = '<li><span class="dropdown-item text-muted small">Could not load campaigns.</span></li>';
+        }
+    })();
 </script>
 {% endblock %}

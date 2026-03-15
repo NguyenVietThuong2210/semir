@@ -4,25 +4,28 @@ from django.shortcuts import redirect
 from django.contrib import messages
 
 PERMISSION_DEFS = [
-    ('page_analytics',       'Analytics Dashboard',           'Pages'),
-    ('page_chart',           'Overview Charts',               'Pages'),
-    ('page_coupons',         'Coupon Dashboard',              'Pages'),
-    ('page_customer_detail', 'Customer Detail',               'Pages'),
-    ('page_upload',          'Upload Data',                   'Pages'),
-    ('page_formulas',        'Formulas',                      'Pages'),
-    ('page_cnv_sync',        'CNV Sync Status',               'Pages'),
-    ('page_cnv_comparison',  'Customer Analytics',            'Pages'),
-    ('download_analytics',   'Export Analytics (Excel)',      'Downloads'),
-    ('download_chart_pdf',   'Download Charts PDF',           'Downloads'),
-    ('download_coupons',     'Export Coupons (Excel)',        'Downloads'),
-    ('download_cnv',         'Export CNV Comparison (Excel)', 'Downloads'),
-    ('manage_users',         'User Management',               'Admin'),
+    ("page_analytics", "Analytics Dashboard", "Pages"),
+    ("page_chart", "Overview Charts", "Pages"),
+    ("page_coupons", "Coupon Dashboard", "Pages"),
+    ("page_customer_detail", "Customer Detail", "Pages"),
+    ("page_upload", "Upload Data", "Pages"),
+    ("page_formulas", "Formulas", "Pages"),
+    ("page_cnv_sync", "CNV Sync Status", "Pages"),
+    ("page_cnv_comparison", "Customer Analytics", "Pages"),
+    ("download_analytics", "Export Analytics (Excel)", "Downloads"),
+    ("download_chart_pdf", "Download Charts PDF", "Downloads"),
+    ("download_coupons", "Export Coupons (Excel)", "Downloads"),
+    ("download_coupon_chart_pdf", "Download Coupon Charts PDF", "Downloads"),
+    ("download_cnv", "Export CNV Comparison (Excel)", "Downloads"),
+    ("manage_users", "User Management", "Admin"),
+    ("manage_campaigns", "Manage Coupon Campaigns", "Admin"),
+    ("page_coupon_chart", "Coupon Analytics Charts", "Pages"),
 ]
 
-ALL_PERMISSIONS   = [p[0] for p in PERMISSION_DEFS]
+ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]
 ADMIN_PERMISSIONS = ALL_PERMISSIONS
 VIEWER_PERMISSIONS = [
-    'page_analytics',
+    "page_analytics",
 ]
 
 
@@ -46,8 +49,12 @@ def requires_perm(codename):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
             if not user_has_perm(request.user, codename):
-                messages.error(request, 'You do not have permission to access this page.')
-                return redirect('home')
+                messages.error(
+                    request, "You do not have permission to access this page."
+                )
+                return redirect("home")
             return view_func(request, *args, **kwargs)
+
         return wrapper
+
     return decorator
