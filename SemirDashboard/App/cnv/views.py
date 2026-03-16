@@ -9,7 +9,7 @@ import threading
 
 from django.conf import settings
 from django.core.cache import cache
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.db.models import Count, Q
 from django.db.models.functions import ExtractYear, ExtractMonth, ExtractWeek
@@ -815,6 +815,8 @@ def _compute_customer_chart_data(date_from=None, date_to=None):
 @requires_perm("page_customer_chart")
 def customer_chart(request):
     """Customer Analytics Charts — donut overview + bar chart + YOY comparison."""
+    if not getattr(settings, "SHOW_CUSTOMER_CHART", False):
+        raise Http404
     start_date = request.GET.get("start_date", "")
     end_date   = request.GET.get("end_date", "")
 
