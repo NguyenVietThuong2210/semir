@@ -284,7 +284,10 @@
         <p>Formulas reference and CNV sync management</p>
     </div>
     
+    {% check_perm 'page_formulas' as can_formulas %}
+    {% check_perm 'page_cnv_sync' as can_cnv_sync %}
     <div class="row g-3 mb-5">
+        {% if can_formulas %}
         <!-- Formulas -->
         <div class="col-md-6">
             <div class="card action-card" style="border-top:4px solid #4facfe">
@@ -300,7 +303,9 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
+        {% if can_cnv_sync %}
         <!-- CNV Sync Status -->
         <div class="col-md-6">
             <div class="card action-card" style="border-top:4px solid #00f2fe">
@@ -316,6 +321,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
