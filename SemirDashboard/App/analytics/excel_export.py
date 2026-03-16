@@ -62,39 +62,6 @@ def export_analytics_to_excel(data, date_from=None, date_to=None, shop_group=Non
     return wb
 
 
-# Tab name → (sheet creator functions, display title)
-_TAB_SHEETS = {
-    "grade":      ([_create_grade_sheet],                          "By VIP Grade"),
-    "season":     ([_create_season_sheet],                         "By Season"),
-    "month":      ([_create_month_sheet],                          "By Month"),
-    "week":       ([_create_week_sheet],                           "By Week"),
-    "shop":       ([_create_shop_sheet, _create_shop_detail_sheet],"By Shop"),
-    "grade_all":  ([_create_grade_comparison_sheet],               "By Grade - All Shops"),
-    "season_all": ([_create_season_comparison_sheet],              "By Season - All Shops"),
-    "month_all":  ([_create_month_comparison_sheet],               "By Month - All Shops"),
-    "week_all":   ([_create_week_comparison_sheet],                "By Week - All Shops"),
-}
-
-
-def export_tab_to_excel(tab, data, date_from=None, date_to=None, shop_group=None):
-    """Export a single analytics tab to Excel (Overview + tab sheet(s))."""
-    if tab not in _TAB_SHEETS:
-        return None
-
-    wb = Workbook()
-    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-    header_font = Font(bold=True, color="FFFFFF")
-    header_align = Alignment(horizontal="center", vertical="center")
-
-    _create_overview_sheet(wb, data, header_fill, header_font, header_align, date_from, date_to, shop_group)
-
-    creators, _ = _TAB_SHEETS[tab]
-    for fn in creators:
-        fn(wb, data, header_fill, header_font, header_align)
-
-    return wb
-
-
 def _create_overview_sheet(wb, data, header_fill, header_font, header_align, date_from=None, date_to=None, shop_group=None):
     """Overview sheet with filter information."""
     ws = wb.active
@@ -1661,4 +1628,53 @@ def export_customer_comparison_to_excel(
     for col, w in zip('ABCDEFGHIJKL', [15, 15, 25, 12, 30, 12, 10, 12, 12, 15, 15, 16]):
         ws_cnv_all_full.column_dimensions[col].width = w
 
+
+# ── Per-tab export ─────────────────────────────────────────────────────────────
+# Must be defined AFTER all _create_* functions.
+
+_TAB_SHEETS = {
+    "grade":      ([_create_grade_sheet],                           "By VIP Grade"),
+    "season":     ([_create_season_sheet],                          "By Season"),
+    "month":      ([_create_month_sheet],                           "By Month"),
+    "week":       ([_create_week_sheet],                            "By Week"),
+    "shop":       ([_create_shop_sheet, _create_shop_detail_sheet], "By Shop"),
+    "grade_all":  ([_create_grade_comparison_sheet],                "By Grade - All Shops"),
+    "season_all": ([_create_season_comparison_sheet],               "By Season - All Shops"),
+    "month_all":  ([_create_month_comparison_sheet],                "By Month - All Shops"),
+    "week_all":   ([_create_week_comparison_sheet],                 "By Week - All Shops"),
+}
+
+
+def _prepend_filter_info(wb, date_from=None, date_to=None, shop_group=None):
+    """Insert a filter-info row at the top of every sheet in the workbook."""
+    parts = []
+    if date_from and date_to:
+        parts.append(f"Period: {date_from} → {date_to}")
+    if shop_group:
+        parts.append(f"Shop Group: {shop_group}")
+    if not parts:
+        return
+    line = "  |  ".join(parts)
+    for ws in wb.worksheets:
+        ws.insert_rows(1)
+        ws["A1"] = line
+        ws["A1"].font = Font(italic=True, color="888888", size=9)
+
+
+def export_tab_to_excel(tab, data, date_from=None, date_to=None, shop_group=None):
+    """Export a single analytics tab to Excel (tab sheet(s) only, with filter row)."""
+    if tab not in _TAB_SHEETS:
+        return None
+
+    wb = Workbook()
+    wb.remove(wb.active)  # drop default blank sheet
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    header_align = Alignment(horizontal="center", vertical="center")
+
+    creators, _ = _TAB_SHEETS[tab]
+    for fn in creators:
+        fn(wb, data, header_fill, header_font, header_align)
+
+    _prepend_filter_info(wb, date_from=date_from, date_to=date_to, shop_group=shop_group)
     return wb

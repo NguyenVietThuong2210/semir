@@ -842,15 +842,33 @@ def export_coupon_to_excel(
     return wb
 
 
-def export_coupon_tab_to_excel(
-    tab, data, date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None
-):
-    """Export a single coupon tab to Excel (Summary + tab sheet)."""
+def _prepend_coupon_filter_info(wb, date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None):
+    """Insert a filter-info row at the top of every sheet in the workbook."""
+    parts = []
+    if date_from and date_to:
+        parts.append(f"Period: {date_from} → {date_to}")
+    if coupon_id_prefix:
+        parts.append(f"Prefix: {coupon_id_prefix}")
+    if shop_group:
+        parts.append(f"Shop Group: {shop_group}")
+    if not parts:
+        return
+    line = "  |  ".join(parts)
+    for ws in wb.worksheets:
+        ws.insert_rows(1)
+        ws["A1"] = line
+        ws["A1"].font = Font(italic=True, color="888888", size=9)
+
+
+def export_coupon_tab_to_excel(tab, data, date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None):
+    """Export a single coupon tab to Excel (tab sheet only, with filter row)."""
     if tab not in _COUPON_TAB_SHEETS:
         return None
     wb = Workbook()
+    wb.remove(wb.active)  # drop default blank sheet
     hf, font, align = _coupon_wb_styles()
-    _build_coupon_summary_ws(wb, data, date_from, date_to, coupon_id_prefix, shop_group)
     fn, _ = _COUPON_TAB_SHEETS[tab]
     fn(wb, data, hf, font, align)
+    _prepend_coupon_filter_info(wb, date_from=date_from, date_to=date_to,
+                                coupon_id_prefix=coupon_id_prefix, shop_group=shop_group)
     return wb
