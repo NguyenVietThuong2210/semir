@@ -1678,3 +1678,156 @@ def export_tab_to_excel(tab, data, date_from=None, date_to=None, shop_group=None
 
     _prepend_filter_info(wb, date_from=date_from, date_to=date_to, shop_group=shop_group)
     return wb
+
+
+# ── CNV per-tab export ────────────────────────────────────────────────────────
+
+def _cnv_hdr(ws, headers, fill, font, align):
+    for i, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=i, value=h)
+        c.fill = fill; c.font = font; c.alignment = align
+
+
+def _build_cnv_used_points_ws(wb, data, hf, font, align):
+    ws = wb.create_sheet("CNV Used Points")
+    _cnv_hdr(ws, ["Customer ID", "Phone", "Full Name", "Level", "Email",
+                  "Reg Date", "Points", "Used Pts", "Total Pts", "In POS"], hf, font, align)
+    for r, c in enumerate(data.get("cnv_used_points_list") or [], 2):
+        ws.cell(r, 1, c.get("cnv_id", ""))
+        ws.cell(r, 2, c.get("phone", ""))
+        ws.cell(r, 3, f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip())
+        ws.cell(r, 4, c.get("level_name", ""))
+        ws.cell(r, 5, c.get("email", "") or "")
+        ws.cell(r, 6, str(c["cnv_created_at"].date()) if c.get("cnv_created_at") else "")
+        ws.cell(r, 7, c.get("points") or 0)
+        ws.cell(r, 8, c.get("used_points") or 0)
+        ws.cell(r, 9, c.get("total_points") or 0)
+        ws.cell(r, 10, "Yes" if c.get("in_pos") else "No")
+    for col, w in zip("ABCDEFGHIJ", [14, 14, 22, 10, 28, 12, 10, 10, 10, 8]):
+        ws.column_dimensions[col].width = w
+
+
+def _build_mismatch_ws(wb, data, key, title, hf, font, align):
+    ws = wb.create_sheet(title)
+    _cnv_hdr(ws, ["Phone", "POS VIP ID", "POS Name", "POS Grade", "POS Pts", "POS Used Pts",
+                  "CNV ID", "CNV Name", "CNV Level", "CNV Pts", "CNV Total Pts", "CNV Used Pts", "Diff"],
+             hf, font, align)
+    for r, c in enumerate(data.get(key) or [], 2):
+        ws.cell(r, 1, c.get("phone", ""))
+        ws.cell(r, 2, c.get("pos_vip_id", ""))
+        ws.cell(r, 3, c.get("pos_name", ""))
+        ws.cell(r, 4, c.get("pos_grade", ""))
+        ws.cell(r, 5, c.get("pos_points") or 0)
+        ws.cell(r, 6, c.get("pos_used_points") or 0)
+        ws.cell(r, 7, c.get("cnv_id", ""))
+        ws.cell(r, 8, c.get("cnv_name", ""))
+        ws.cell(r, 9, c.get("cnv_level", ""))
+        ws.cell(r, 10, c.get("cnv_points") or 0)
+        ws.cell(r, 11, c.get("cnv_total_points") or 0)
+        ws.cell(r, 12, c.get("cnv_used_points") or 0)
+        ws.cell(r, 13, c.get("diff") or 0)
+    for col, w in zip("ABCDEFGHIJKLM", [14, 12, 22, 10, 10, 12, 14, 22, 10, 10, 12, 12, 10]):
+        ws.column_dimensions[col].width = w
+
+
+def _build_zalo_ws(wb, data, key, title, hf, font, align):
+    ws = wb.create_sheet(title)
+    _cnv_hdr(ws, ["Customer ID", "Phone", "Full Name", "Level", "Email",
+                  "Reg Date", "Points", "Zalo App ID", "Zalo OA ID", "In POS"], hf, font, align)
+    for r, c in enumerate(data.get(key) or [], 2):
+        ws.cell(r, 1, c.get("cnv_id", ""))
+        ws.cell(r, 2, c.get("phone", ""))
+        ws.cell(r, 3, f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip())
+        ws.cell(r, 4, c.get("level_name", ""))
+        ws.cell(r, 5, c.get("email", "") or "")
+        ws.cell(r, 6, str(c["cnv_created_at"].date()) if c.get("cnv_created_at") else "")
+        ws.cell(r, 7, c.get("points") or 0)
+        ws.cell(r, 8, c.get("zalo_app_id", "") or "")
+        ws.cell(r, 9, c.get("zalo_oa_id", "") or "")
+        ws.cell(r, 10, "Yes" if c.get("in_pos") else "No")
+    for col, w in zip("ABCDEFGHIJ", [14, 14, 22, 10, 28, 12, 10, 20, 20, 8]):
+        ws.column_dimensions[col].width = w
+
+
+def _build_pos_only_ws(wb, data, key, title, hf, font, align):
+    ws = wb.create_sheet(title)
+    _cnv_hdr(ws, ["VIP ID", "Phone", "Name", "Grade", "Email", "Reg Date", "Points"],
+             hf, font, align)
+    for r, c in enumerate(data.get(key) or [], 2):
+        ws.cell(r, 1, c.get("vip_id", ""))
+        ws.cell(r, 2, c.get("phone", ""))
+        ws.cell(r, 3, c.get("name", ""))
+        ws.cell(r, 4, c.get("vip_grade", ""))
+        ws.cell(r, 5, c.get("email", "") or "")
+        ws.cell(r, 6, str(c["registration_date"]) if c.get("registration_date") else "")
+        ws.cell(r, 7, c.get("points") or 0)
+    for col, w in zip("ABCDEFG", [12, 14, 22, 10, 28, 12, 10]):
+        ws.column_dimensions[col].width = w
+
+
+def _build_cnv_only_ws(wb, data, key, title, hf, font, align):
+    ws = wb.create_sheet(title)
+    _cnv_hdr(ws, ["Customer ID", "Phone", "Full Name", "Level", "Email",
+                  "Reg Date", "Points", "Used Pts", "Total Pts"], hf, font, align)
+    for r, c in enumerate(data.get(key) or [], 2):
+        ws.cell(r, 1, c.get("cnv_id", ""))
+        ws.cell(r, 2, c.get("phone", ""))
+        ws.cell(r, 3, f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip())
+        ws.cell(r, 4, c.get("level_name", ""))
+        ws.cell(r, 5, c.get("email", "") or "")
+        ws.cell(r, 6, str(c["cnv_created_at"].date()) if c.get("cnv_created_at") else "")
+        ws.cell(r, 7, c.get("points") or 0)
+        ws.cell(r, 8, c.get("used_points") or 0)
+        ws.cell(r, 9, c.get("total_points") or 0)
+    for col, w in zip("ABCDEFGHI", [14, 14, 22, 10, 28, 12, 10, 10, 10]):
+        ws.column_dimensions[col].width = w
+
+
+_CNV_TAB_SHEETS = {
+    "points":  ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
+    "zalo":    ["zalo_mini_app",   "zalo_oa"],
+    "pos_cnv": ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
+}
+
+
+def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
+    """Export a single CNV customer-comparison tab (1 sheet per table)."""
+    if tab not in _CNV_TAB_SHEETS:
+        return None
+
+    wb = Workbook()
+    wb.remove(wb.active)
+    hf  = PatternFill(start_color="2c3e50", end_color="2c3e50", fill_type="solid")
+    fnt = Font(bold=True, color="FFFFFF")
+    aln = Alignment(horizontal="center", vertical="center")
+
+    builders = {
+        "cnv_used_points":     lambda: _build_cnv_used_points_ws(wb, data, hf, fnt, aln),
+        "points_mismatch":     lambda: _build_mismatch_ws(wb, data, "points_mismatch",       "Points Mismatch",       hf, fnt, aln),
+        "total_points_mismatch": lambda: _build_mismatch_ws(wb, data, "total_points_mismatch", "Total Points Mismatch", hf, fnt, aln),
+        "zalo_mini_app":       lambda: _build_zalo_ws(wb, data, "zalo_mini_app_list", "Zalo Mini App", hf, fnt, aln),
+        "zalo_oa":             lambda: _build_zalo_ws(wb, data, "zalo_oa_list",       "Zalo Follow OA",  hf, fnt, aln),
+        "pos_only_all":        lambda: _build_pos_only_ws(wb, data, "pos_only_all",    "POS Only - All Time",    hf, fnt, aln),
+        "cnv_only_all":        lambda: _build_cnv_only_ws(wb, data, "cnv_only_all",    "CNV Only - All Time",    hf, fnt, aln),
+        "pos_only_period":     lambda: _build_pos_only_ws(wb, data, "pos_only_period", "POS Only - Period",      hf, fnt, aln),
+        "cnv_only_period":     lambda: _build_cnv_only_ws(wb, data, "cnv_only_period", "CNV Only - Period",      hf, fnt, aln),
+    }
+
+    for key in _CNV_TAB_SHEETS[tab]:
+        # skip period sheets if no data (no date filter applied)
+        if key.endswith("_period") and not data.get(key):
+            continue
+        builders[key]()
+
+    # filter info row
+    parts = []
+    if date_from and date_to:
+        parts.append(f"Period: {date_from} → {date_to}")
+    if parts:
+        line = "  |  ".join(parts)
+        for ws in wb.worksheets:
+            ws.insert_rows(1)
+            ws["A1"] = line
+            ws["A1"].font = Font(italic=True, color="888888", size=9)
+
+    return wb
