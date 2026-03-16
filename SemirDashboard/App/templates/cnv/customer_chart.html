@@ -1,0 +1,941 @@
+{% extends 'base.html' %}
+{% load perm_tags %}
+{% block title %}Customer Analytics Charts{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ─── Donut cards ─────────────────────────────────────── */
+.donut-card {
+    background:#fff; border-radius:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+    padding:1.1rem .75rem .9rem;
+    text-align:center; height:100%;
+    display:flex; flex-direction:column; align-items:center;
+}
+.donut-title {
+    font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.5px; color:#6c757d; margin-bottom:.6rem; line-height:1.3;
+}
+.donut-wrapper {
+    position:relative; width:140px; height:140px; margin:auto; flex-shrink:0;
+}
+.donut-center {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    pointer-events:none; text-align:center; line-height:1.15;
+}
+.donut-pct   { font-size:1.35rem; font-weight:700; color:#2C3E50; display:block; }
+.donut-sub   { font-size:.62rem; color:#6c757d; display:block; }
+.donut-footer { margin-top:.55rem; font-size:.72rem; color:#495057; }
+.donut-footer strong { font-weight:700; }
+
+/* ─── Chart controls ──────────────────────────────────── */
+.filter-card { background:#fff; border-radius:10px; }
+.metric-select-card {
+    background:#f8f9fa; border-radius:8px; padding:.75rem 1rem; height:100%;
+}
+.control-label {
+    font-size:.8rem; font-weight:700; color:#495057;
+    text-transform:uppercase; letter-spacing:.4px; margin-bottom:.5rem;
+}
+.line-chart-wrap {
+    position:relative; height:420px;
+    background:#fff; border-radius:10px;
+    padding:1rem; box-shadow:0 1px 4px rgba(0,0,0,.07);
+}
+.bar-chart-wrap {
+    position:relative; height:360px;
+    background:#fff; border-radius:10px;
+    padding:1rem; box-shadow:0 1px 4px rgba(0,0,0,.07);
+}
+.click-info-panel { font-size:.8rem; max-height:240px; overflow-y:auto; }
+.metric-check-list .form-check { margin-bottom:.3rem; }
+.metric-check-list .form-check-label { font-size:.85rem; display:flex; align-items:center; gap:.4rem; }
+.metric-dot {
+    display:inline-block; width:16px; height:3px;
+    border-radius:2px; flex-shrink:0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Page header -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-people"></i> Customer Analytics Charts</h2>
+    <div class="d-flex gap-2">
+        {% check_perm 'download_customer_chart_pdf' as can_dl_pdf %}
+        {% if can_dl_pdf %}
+        <button id="btnDownloadPDF" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-file-pdf"></i> Download PDF
+        </button>
+        {% endif %}
+        <a href="{% url 'cnv:customer_comparison' %}?{% if start_date %}start_date={{ start_date }}&{% endif %}{% if end_date %}end_date={{ end_date }}{% endif %}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-table"></i> Switch to Table View
+        </a>
+    </div>
+</div>
+
+<!-- ═══════════════════ FILTER BAR ═══════════════════ -->
+<div class="card filter-card mb-3">
+    <div class="card-body">
+        <form method="get" id="dateFilterForm" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label"><i class="bi bi-calendar"></i> Start Date</label>
+                <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label"><i class="bi bi-calendar"></i> End Date</label>
+                <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="bi bi-funnel"></i> Apply
+                </button>
+                <a href="{% url 'cnv:customer_chart' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+            </div>
+        </form>
+        <div class="mt-2 pt-2 border-top">
+            <small class="text-muted me-2">Quick:</small>
+            <div class="btn-group btn-group-sm flex-wrap" id="quickBtnGroup">
+                {% for label, days in quick_btns %}
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="{{ days }}">{{ label }}</button>
+                {% endfor %}
+                <button class="btn btn-outline-secondary" id="btnThisMonth">This Month</button>
+                <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
+                <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
+                {% for year in year_btns %}
+                <button class="btn btn-outline-secondary quick-year-btn" data-year="{{ year }}">Year {{ year }}</button>
+                {% endfor %}
+            </div>
+        </div>
+        {% if start_date and end_date %}
+        <div class="alert alert-info mt-2 mb-0 py-2">
+            <i class="bi bi-funnel-fill"></i>
+            Period: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong>
+            <small class="text-muted ms-2">· Overview donuts always show all-time totals</small>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ═══════════════════ SECTION 1: OVERVIEW DONUTS ═══════════════════ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-pie-chart text-primary"></i>
+        <strong>Overview</strong>
+        <small class="text-muted ms-2">All-time CNV &amp; POS customer metrics</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <!-- Donut 1: Active Zalo / CNV -->
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Active Zalo<br>/ Total CNV</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart1"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct1">—</span>
+                            <span class="donut-sub">of CNV</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>{{ overview.active_zalo }}</strong> / {{ overview.total_cnv }}
+                    </div>
+                </div>
+            </div>
+            <!-- Donut 2: Follow OA / CNV -->
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Follow OA<br>/ Total CNV</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart2"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct2">—</span>
+                            <span class="donut-sub">of CNV</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>{{ overview.follow_oa }}</strong> / {{ overview.total_cnv }}
+                    </div>
+                </div>
+            </div>
+            <!-- Donut 3: CNV Only / Total CNV -->
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">CNV Only (Not in POS)<br>/ Total CNV</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart3"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct3">—</span>
+                            <span class="donut-sub">of CNV</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>{{ overview.cnv_only }}</strong> / {{ overview.total_cnv }}
+                    </div>
+                </div>
+            </div>
+            <!-- Donut 4: POS Only / Total POS -->
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">POS Only (Not in CNV)<br>/ Total POS</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart4"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct4">—</span>
+                            <span class="donut-sub">of POS</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>{{ overview.pos_only }}</strong> / {{ overview.total_pos }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ SECTION 2: LINE CHART ═══════════════════ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-graph-up text-primary"></i>
+        <strong>Trend Lines</strong>
+        <small class="text-muted ms-2">Select metrics to compare over time</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <!-- Left: metric checkboxes -->
+            <div class="col-lg-4 col-md-5">
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-check2-square"></i> Metrics (Lines)</div>
+                    <div class="metric-check-list mt-1">
+                        <div class="form-check">
+                            <input class="form-check-input line-metric-cb" type="checkbox" id="lcb_pos" value="new_pos_users" checked>
+                            <label class="form-check-label" for="lcb_pos">
+                                <span class="metric-dot" style="background:#E53935;"></span>New User (POS)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input line-metric-cb" type="checkbox" id="lcb_cnv" value="new_cnv_users" checked>
+                            <label class="form-check-label" for="lcb_cnv">
+                                <span class="metric-dot" style="background:#0047B3;"></span>New User (CNV)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input line-metric-cb" type="checkbox" id="lcb_zalo" value="active_zalo" checked>
+                            <label class="form-check-label" for="lcb_zalo">
+                                <span class="metric-dot" style="background:#2E7D32;"></span>User Active Zalo
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input line-metric-cb" type="checkbox" id="lcb_oa" value="follow_oa" checked>
+                            <label class="form-check-label" for="lcb_oa">
+                                <span class="metric-dot" style="background:#F57C00;"></span>User Follow OA
+                            </label>
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="lineXaxis" value="week" id="lineXWeek">
+                        <label class="form-check-label" for="lineXWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="lineXaxis" value="month" id="lineXMonth" checked>
+                        <label class="form-check-label" for="lineXMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="lineXaxis" value="season" id="lineXSeason">
+                        <label class="form-check-label" for="lineXSeason">By Season (SS/AW)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="lineXaxis" value="year" id="lineXYear">
+                        <label class="form-check-label" for="lineXYear">By Year</label>
+                    </div>
+                </div>
+            </div>
+            <!-- Right: legend panel -->
+            <div class="col-lg-8 col-md-7 d-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Details</div>
+                    <div id="lineInfoPanel" class="mt-1 click-info-panel"></div>
+                </div>
+            </div>
+        </div>
+        <div class="line-chart-wrap">
+            <canvas id="custLineChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ SECTION 3: BAR CHART ═══════════════════ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-bar-chart-fill text-primary"></i>
+        <strong>Bar Chart</strong>
+        <small class="text-muted ms-2">Customer registrations &amp; Zalo engagement over time</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <!-- Controls: time axis + metric -->
+            <div class="col-lg-4 col-md-5">
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="barXaxis" value="week" id="barXWeek">
+                        <label class="form-check-label" for="barXWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="barXaxis" value="month" id="barXMonth" checked>
+                        <label class="form-check-label" for="barXMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="barXaxis" value="season" id="barXSeason">
+                        <label class="form-check-label" for="barXSeason">By Season (SS/AW)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="barXaxis" value="year" id="barXYear">
+                        <label class="form-check-label" for="barXYear">By Year</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm mt-1" id="barMetricSelect">
+                        <option value="new_pos_users">New User (POS)</option>
+                        <option value="new_cnv_users">New User (CNV)</option>
+                        <option value="active_zalo">User Active Zalo</option>
+                        <option value="follow_oa">User Follow OA</option>
+                    </select>
+                </div>
+            </div>
+            <!-- Details panel -->
+            <div class="col-lg-8 col-md-7 d-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Details</div>
+                    <div id="barInfoPanel" class="mt-1 click-info-panel"></div>
+                </div>
+            </div>
+        </div>
+        <div class="bar-chart-wrap">
+            <canvas id="custBarChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ SECTION 4: YEAR-OVER-YEAR ═══════════════════ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-bar-chart-steps text-primary"></i>
+        <strong>Year-over-Year Comparison</strong>
+        <small class="text-muted ms-2">Each color = one year · uses all-time data</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <!-- Controls: time axis + metric -->
+            <div class="col-lg-4 col-md-5">
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="yoyXaxis" value="week" id="yoyXWeek">
+                        <label class="form-check-label" for="yoyXWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="yoyXaxis" value="month" id="yoyXMonth" checked>
+                        <label class="form-check-label" for="yoyXMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="yoyXaxis" value="season" id="yoyXSeason">
+                        <label class="form-check-label" for="yoyXSeason">By Season (SS/AW)</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm mt-1" id="yoyMetricSelect">
+                        <option value="new_pos_users">New User (POS)</option>
+                        <option value="new_cnv_users">New User (CNV)</option>
+                        <option value="active_zalo">User Active Zalo</option>
+                        <option value="follow_oa">User Follow OA</option>
+                    </select>
+                </div>
+            </div>
+            <!-- Details panel -->
+            <div class="col-lg-8 col-md-7 d-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Details</div>
+                    <div id="yoyInfoPanel" class="mt-1 click-info-panel"></div>
+                </div>
+            </div>
+        </div>
+        <div class="bar-chart-wrap">
+            <canvas id="yoyBarChart"></canvas>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<script id="cd-data" type="application/json">{{ chart_data_json|safe }}</script>
+<script>
+/* ══════════════════════════════════════════════
+   Data from Django
+══════════════════════════════════════════════ */
+const CD = JSON.parse(document.getElementById('cd-data').textContent);
+const OV = CD.overview;
+
+/* ══════════════════════════════════════════════
+   Colours
+══════════════════════════════════════════════ */
+const C_ZALO   = '#0047B3';   // blue  — active zalo
+const C_OA     = '#2E7D32';   // green — follow OA
+const C_CNV    = '#6A1B9A';   // purple— CNV only
+const C_POS    = '#E53935';   // red   — POS only
+const C_NEW    = '#0047B3';   // bar chart new users
+const REST_CLR = '#e9ecef';
+
+const COMP_YEAR_PALETTE = [
+    '#1565C0','#E53935','#2E7D32','#F57C00','#6A1B9A',
+    '#00838F','#AD1457','#558B2F','#4527A0','#BF360C',
+];
+
+const METRIC_COLORS = {
+    new_pos_users: '#E53935',
+    new_cnv_users: '#0047B3',
+    active_zalo:   '#2E7D32',
+    follow_oa:     '#F57C00',
+};
+const METRIC_LABELS = {
+    new_pos_users: 'New User (POS)',
+    new_cnv_users: 'New User (CNV)',
+    active_zalo:   'User Active Zalo',
+    follow_oa:     'User Follow OA',
+};
+
+/* ══════════════════════════════════════════════
+   DONUT CHARTS
+══════════════════════════════════════════════ */
+function makeDonut(canvasId, pctId, value, total, color) {
+    value = Number(value) || 0;
+    total = Number(total) || 0;
+    const rest = Math.max(0, total - value);
+    const pct  = total > 0 ? (value / total * 100).toFixed(1) : '0.0';
+    document.getElementById(pctId).textContent = pct + '%';
+    new Chart(document.getElementById(canvasId), {
+        type: 'doughnut',
+        data: {
+            labels: ['Value','Rest'],
+            datasets: [{ data: [value, rest], backgroundColor: [color, REST_CLR], borderWidth: 0 }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true, cutout: '72%',
+            animation: { duration: 600, easing: 'easeOutQuart' },
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ': ' + Number(ctx.raw).toLocaleString() } },
+            },
+        },
+    });
+}
+
+makeDonut('dChart1','dPct1', OV.active_zalo, OV.total_cnv, C_ZALO);
+makeDonut('dChart2','dPct2', OV.follow_oa,   OV.total_cnv, C_OA);
+makeDonut('dChart3','dPct3', OV.cnv_only,    OV.total_cnv, C_CNV);
+makeDonut('dChart4','dPct4', OV.pos_only,    OV.total_pos, C_POS);
+
+/* ══════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════ */
+function renderClickCard(panelId, lbl, rows, pctMode, onClose) {
+    const total = rows.reduce((s, r) => s + r.value, 0);
+    let yoyMap = null;
+    let displayRows = rows;
+    if (pctMode === 'yoy') {
+        displayRows = [...rows].sort((a, b) => a.label.localeCompare(b.label));
+        yoyMap = {};
+        displayRows.forEach((r, i) => {
+            yoyMap[r.label] = i === 0 ? null
+                : (displayRows[i-1].value > 0
+                    ? (r.value - displayRows[i-1].value) / displayRows[i-1].value * 100
+                    : null);
+        });
+    }
+    const panel = document.getElementById(panelId);
+    panel.innerHTML =
+        `<div style="display:flex;justify-content:space-between;align-items:center;
+                     border-bottom:2px solid #0047B3;padding-bottom:4px;margin-bottom:5px;">
+            <strong style="font-size:.82rem;color:#0047B3;">${lbl}</strong>
+            <span id="_cc_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;
+                  padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
+         </div>` +
+        displayRows.map(r => {
+            let sub = '';
+            if (pctMode === 'share' && total > 0)
+                sub = `<div style="font-size:.7rem;color:#888;">${(r.value/total*100).toFixed(1)}%</div>`;
+            if (pctMode === 'yoy') {
+                const g = yoyMap[r.label];
+                sub = g === null
+                    ? `<div style="font-size:.7rem;color:#aaa;">base</div>`
+                    : `<div style="font-size:.7rem;font-weight:600;color:${g>=0?'#2e7d32':'#c62828'};">${g>=0?'+':''}${g.toFixed(1)}%</div>`;
+            }
+            return `<div style="display:flex;align-items:center;margin-bottom:3px;">
+                <div style="width:75%;display:flex;align-items:center;min-width:0;">
+                    <span style="display:inline-block;width:20px;height:2.5px;background:${r.color};
+                                 margin-right:5px;flex-shrink:0;border-radius:2px;"></span>
+                    <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.label}</span>
+                </div>
+                <div style="width:25%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;padding-left:4px;">
+                    ${r.value.toLocaleString()}${sub}
+                </div>
+            </div>`;
+        }).join('');
+    document.getElementById('_cc_' + panelId).addEventListener('click', onClose);
+}
+
+/* ══════════════════════════════════════════════
+   SHARED: get rows + key for a given xAxis
+   (used by both line chart and bar chart)
+══════════════════════════════════════════════ */
+function getRows(xAxis) {
+    if (xAxis === 'week')   return { rows: CD.week_stats,   key: 'week'   };
+    if (xAxis === 'season') return { rows: CD.season_stats, key: 'season' };
+    if (xAxis === 'year')   return { rows: CD.year_stats,   key: 'year'   };
+    return { rows: CD.month_stats, key: 'month' };
+}
+
+/* ══════════════════════════════════════════════
+   LINE CHART — all selected metrics, filtered data
+══════════════════════════════════════════════ */
+let lineChart = null;
+
+function buildLineChart() {
+    const xAxis    = document.querySelector('input[name="lineXaxis"]:checked').value;
+    const checked  = [...document.querySelectorAll('.line-metric-cb:checked')].map(e => e.value);
+    const { rows, key } = getRows(xAxis);
+    const xLabels  = rows.map(r => r[key]);
+
+    const datasets = checked.map(metric => {
+        const color = METRIC_COLORS[metric];
+        const data  = rows.map(r => r[metric] || 0);
+        return {
+            label: METRIC_LABELS[metric],
+            data,
+            borderColor: color,
+            backgroundColor: color + '18',
+            pointBackgroundColor: color,
+            borderWidth: 2,
+            pointRadius:      data.map(v => v > 0 ? 4 : 0),
+            pointHoverRadius: data.map(v => v > 0 ? 6 : 0),
+            tension: 0.35,
+            fill: false,
+        };
+    });
+
+    if (lineChart) lineChart.destroy();
+    lineChart = new Chart(document.getElementById('custLineChart'), {
+        type: 'line',
+        data: { labels: xLabels, datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 500 },
+            interaction: { mode: 'index', intersect: false },
+            onClick: function(evt, elements) {
+                if (!elements.length) { document.getElementById('lineInfoPanel').innerHTML = ''; return; }
+                const di   = elements[0].index;
+                const lbl  = lineChart.data.labels[di];
+                const rowz = lineChart.data.datasets
+                    .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
+                    .filter(r => r.value > 0).sort((a, b) => b.value - a.value);
+                renderClickCard('lineInfoPanel', lbl, rowz, 'share',
+                    () => { document.getElementById('lineInfoPanel').innerHTML = ''; });
+            },
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
+                tooltip: {
+                    backgroundColor: 'rgba(30,30,30,.92)',
+                    itemSort: (a, b) => b.raw - a.raw,
+                    filter: item => item.raw > 0,
+                    callbacks: { label: ctx => '  ' + ctx.dataset.label + ': ' + ctx.raw.toLocaleString() },
+                },
+            },
+            scales: {
+                x: { grid: { color: 'rgba(0,0,0,.08)' }, ticks: { font: { size: 11 } } },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,.12)' },
+                    ticks: { font: { size: 11 }, callback: v => v.toLocaleString() },
+                },
+            },
+        },
+    });
+}
+
+document.querySelectorAll('.line-metric-cb').forEach(cb => cb.addEventListener('change', buildLineChart));
+document.querySelectorAll('input[name="lineXaxis"]').forEach(r => r.addEventListener('change', buildLineChart));
+
+/* ══════════════════════════════════════════════
+   BAR CHART — single metric, filtered data
+══════════════════════════════════════════════ */
+let barChart = null;
+
+function buildBarChart() {
+    const xAxis  = document.querySelector('input[name="barXaxis"]:checked').value;
+    const metric = document.getElementById('barMetricSelect').value;
+    const { rows, key } = getRows(xAxis);
+    const xLabels = rows.map(r => r[key]);
+    const values  = rows.map(r => r[metric] || 0);
+    const color   = METRIC_COLORS[metric] || '#0047B3';
+
+    if (barChart) barChart.destroy();
+    barChart = new Chart(document.getElementById('custBarChart'), {
+        type: 'bar',
+        data: {
+            labels: xLabels,
+            datasets: [{
+                label: METRIC_LABELS[metric],
+                data: values,
+                backgroundColor: color + 'cc',
+                borderColor: color,
+                borderWidth: 1,
+                borderRadius: 5,
+                borderSkipped: false,
+            }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 500 },
+            onClick: function(evt, elements) {
+                if (!elements.length) { document.getElementById('barInfoPanel').innerHTML = ''; return; }
+                const di  = elements[0].index;
+                const lbl = barChart.data.labels[di];
+                const rows2 = [{ label: METRIC_LABELS[metric], color: color, value: values[di] }];
+                renderClickCard('barInfoPanel', lbl, rows2, 'share',
+                    () => { document.getElementById('barInfoPanel').innerHTML = ''; });
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(30,30,30,.92)',
+                    callbacks: { label: ctx => '  ' + METRIC_LABELS[metric] + ': ' + ctx.raw.toLocaleString() },
+                },
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,.12)' },
+                    title: { display: true, text: METRIC_LABELS[metric], font: { size: 11 } },
+                    ticks: { font: { size: 11 }, callback: v => v.toLocaleString() },
+                },
+            },
+        },
+    });
+}
+
+document.querySelectorAll('input[name="barXaxis"]').forEach(r => r.addEventListener('change', buildBarChart));
+document.getElementById('barMetricSelect').addEventListener('change', buildBarChart);
+
+/* ══════════════════════════════════════════════
+   YEAR-OVER-YEAR BAR CHART — all-time data
+══════════════════════════════════════════════ */
+let yoyChart = null;
+
+const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function buildYOYChart() {
+    const xAxis  = document.querySelector('input[name="yoyXaxis"]:checked').value;
+    const metric = document.getElementById('yoyMetricSelect').value;
+
+    let xLabels, datasets;
+
+    if (xAxis === 'week') {
+        // Group all_week_stats by year → week-number
+        const yearWeekData = {};
+        CD.all_week_stats.forEach(row => {
+            const yr = row.week.slice(0, 4);
+            const wn = parseInt(row.week.slice(6));
+            if (!yearWeekData[yr]) yearWeekData[yr] = {};
+            yearWeekData[yr][wn] = (yearWeekData[yr][wn] || 0) + (row[metric] || 0);
+        });
+        const allWeekNums = [...new Set(
+            Object.values(yearWeekData).flatMap(m => Object.keys(m).map(Number))
+        )].sort((a, b) => a - b);
+        xLabels = allWeekNums.map(wn => `W${String(wn).padStart(2,'0')}`);
+        const years = Object.keys(yearWeekData).sort();
+        datasets = years.map((yr, i) => {
+            const color = COMP_YEAR_PALETTE[i % COMP_YEAR_PALETTE.length];
+            return {
+                label: yr,
+                data: allWeekNums.map(wn => yearWeekData[yr][wn] || 0),
+                backgroundColor: color + 'cc', borderColor: color,
+                borderWidth: 1, borderRadius: 4, borderSkipped: false,
+            };
+        });
+
+    } else if (xAxis === 'month') {
+        // Group all_month_stats by year → month-number (1-12)
+        const yearMonthData = {};
+        CD.all_month_stats.forEach(row => {
+            const yr = row.month.slice(0, 4);
+            const mo = parseInt(row.month.slice(5, 7));
+            if (!yearMonthData[yr]) yearMonthData[yr] = {};
+            yearMonthData[yr][mo] = (yearMonthData[yr][mo] || 0) + (row[metric] || 0);
+        });
+        xLabels = MONTH_LABELS;
+        const years = Object.keys(yearMonthData).sort();
+        datasets = years.map((yr, i) => {
+            const color = COMP_YEAR_PALETTE[i % COMP_YEAR_PALETTE.length];
+            return {
+                label: yr,
+                data: Array.from({length: 12}, (_, j) => yearMonthData[yr][j+1] || 0),
+                backgroundColor: color + 'cc', borderColor: color,
+                borderWidth: 1, borderRadius: 4, borderSkipped: false,
+            };
+        });
+
+    } else {
+        // Season: group all_season_stats by year → SS/AW
+        const yearSeasonData = {};
+        CD.all_season_stats.forEach(row => {
+            const s  = row.season.slice(0, 2);   // "SS" or "AW"
+            const yr = row.season.slice(2);       // "2024"
+            if (!yearSeasonData[yr]) yearSeasonData[yr] = {};
+            yearSeasonData[yr][s] = (yearSeasonData[yr][s] || 0) + (row[metric] || 0);
+        });
+        xLabels = ['SS (Jan-Jun)', 'AW (Jul-Dec)'];
+        const years = Object.keys(yearSeasonData).sort();
+        datasets = years.map((yr, i) => {
+            const color = COMP_YEAR_PALETTE[i % COMP_YEAR_PALETTE.length];
+            return {
+                label: yr,
+                data: ['SS', 'AW'].map(s => yearSeasonData[yr][s] || 0),
+                backgroundColor: color + 'cc', borderColor: color,
+                borderWidth: 1, borderRadius: 4, borderSkipped: false,
+            };
+        });
+    }
+
+    if (yoyChart) yoyChart.destroy();
+    yoyChart = new Chart(document.getElementById('yoyBarChart'), {
+        type: 'bar',
+        data: { labels: xLabels, datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 500 },
+            interaction: { mode: 'index', intersect: false },
+            onClick: function(evt, elements) {
+                if (!elements.length) { document.getElementById('yoyInfoPanel').innerHTML = ''; return; }
+                const di  = elements[0].index;
+                const lbl = yoyChart.data.labels[di];
+                const rows2 = yoyChart.data.datasets
+                    .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
+                    .filter(r => r.value > 0);
+                renderClickCard('yoyInfoPanel', lbl, rows2, 'yoy',
+                    () => { document.getElementById('yoyInfoPanel').innerHTML = ''; });
+            },
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
+                tooltip: {
+                    backgroundColor: 'rgba(30,30,30,.92)',
+                    itemSort: (a, b) => b.raw - a.raw,
+                    callbacks: { label: ctx => '  ' + ctx.dataset.label + ': ' + ctx.raw.toLocaleString() },
+                },
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,.12)' },
+                    title: { display: true, text: METRIC_LABELS[metric], font: { size: 11 } },
+                    ticks: { font: { size: 11 }, callback: v => v.toLocaleString() },
+                },
+            },
+        },
+    });
+}
+
+document.querySelectorAll('input[name="yoyXaxis"]').forEach(r => r.addEventListener('change', buildYOYChart));
+document.getElementById('yoyMetricSelect').addEventListener('change', buildYOYChart);
+
+// Initial render
+buildLineChart();
+buildBarChart();
+buildYOYChart();
+
+/* ══════════════════════════════════════════════
+   PDF DOWNLOAD
+══════════════════════════════════════════════ */
+function getCanvasPng(id) {
+    const c = document.getElementById(id);
+    if (!c || !c.width || !c.height) return null;
+    const tmp = document.createElement('canvas');
+    tmp.width = c.width; tmp.height = c.height;
+    const ctx = tmp.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, tmp.width, tmp.height);
+    ctx.drawImage(c, 0, 0);
+    return tmp.toDataURL('image/png');
+}
+
+const btnPDF = document.getElementById('btnDownloadPDF');
+if (btnPDF) {
+    btnPDF.addEventListener('click', function() {
+        btnPDF.disabled = true;
+        btnPDF.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+        try {
+            const { jsPDF } = window.jspdf;
+            const PW = 297, PH = 210, M = 10;
+            const CW = PW - M * 2;
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+            const sd = document.querySelector('[name=start_date]').value;
+            const ed = document.querySelector('[name=end_date]').value;
+            const filterStr = (sd && ed) ? `Period: ${sd} to ${ed}` : 'All data (no date filter)';
+            const now = new Date().toLocaleString('en-GB');
+
+            function pageHeader(title) {
+                doc.setFontSize(14); doc.setTextColor(0, 71, 179);
+                doc.text(title, M, 14);
+                doc.setFontSize(8); doc.setTextColor(110);
+                doc.text(filterStr + '   |   Generated: ' + now, M, 20);
+                doc.setDrawColor(0, 71, 179); doc.setLineWidth(0.4);
+                doc.line(M, 23, PW - M, 23);
+                return 27;
+            }
+
+            function addChartImage(png, canvasId, x, y, maxW, maxH) {
+                if (!png) return y;
+                const c = document.getElementById(canvasId);
+                const ratio = c.height / c.width;
+                const imgH  = Math.min(maxW * ratio, maxH);
+                const imgW  = imgH / ratio;
+                doc.addImage(png, 'PNG', x, y, imgW, imgH);
+                return y + imgH;
+            }
+
+            /* PAGE 1 — Overview (4 donuts) */
+            let y = pageHeader('Customer Analytics Charts — Overview');
+            const donutIds    = ['dChart1','dChart2','dChart3','dChart4'];
+            const donutLabels = [
+                'Active Zalo / Total CNV', 'Follow OA / Total CNV',
+                'CNV Only / Total CNV',    'POS Only / Total POS',
+            ];
+            const dSize = 42;
+            const dGap  = (CW - dSize * 4) / 3;
+            let dx = M;
+            donutIds.forEach((id, i) => {
+                const png = getCanvasPng(id);
+                if (png) {
+                    doc.addImage(png, 'PNG', dx, y, dSize, dSize);
+                    doc.setFontSize(7); doc.setTextColor(90);
+                    const lines = donutLabels[i].split(' / ');
+                    lines.forEach((line, li) =>
+                        doc.text(line, dx + dSize / 2, y + dSize + 4 + li * 4, { align: 'center' })
+                    );
+                }
+                dx += dSize + dGap;
+            });
+
+            /* PAGE 2 — Line Chart */
+            doc.addPage();
+            y = pageHeader('Customer Analytics Charts — Trend Lines');
+            const lineXLbl = document.querySelector('input[name="lineXaxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
+            const selMetrics = [...document.querySelectorAll('.line-metric-cb:checked')].map(e =>
+                document.querySelector(`label[for="${e.id}"]`)?.textContent?.trim() || e.value
+            ).join(', ');
+            doc.setFontSize(8); doc.setTextColor(100);
+            doc.text('Time Axis: ' + lineXLbl + '   |   Metrics: ' + selMetrics, M, y);
+            y += 4;
+            addChartImage(getCanvasPng('custLineChart'), 'custLineChart', M, y, CW, PH - y - M);
+
+            /* PAGE 3 — Bar Chart */
+            doc.addPage();
+            y = pageHeader('Customer Analytics Charts — Bar Chart');
+            const barXLbl  = document.querySelector('input[name="barXaxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
+            const barMetLbl = document.getElementById('barMetricSelect')?.selectedOptions[0]?.text || '';
+            doc.setFontSize(8); doc.setTextColor(100);
+            doc.text('Time Axis: ' + barXLbl + '   |   Metric: ' + barMetLbl, M, y);
+            y += 4;
+            addChartImage(getCanvasPng('custBarChart'), 'custBarChart', M, y, CW, PH - y - M);
+
+            /* PAGE 4 — YOY Comparison */
+            doc.addPage();
+            y = pageHeader('Customer Analytics Charts — Year-over-Year Comparison');
+            const yoyXLbl   = document.querySelector('input[name="yoyXaxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
+            const yoyMetLbl = document.getElementById('yoyMetricSelect')?.selectedOptions[0]?.text || '';
+            doc.setFontSize(8); doc.setTextColor(100);
+            doc.text('Time Axis: ' + yoyXLbl + '   |   Metric: ' + yoyMetLbl, M, y);
+            y += 4;
+
+            // Legend strip for years
+            const yoyDs = yoyChart ? yoyChart.data.datasets : [];
+            if (yoyDs.length) {
+                const stripH = 8;
+                const cellW  = CW / Math.min(yoyDs.length, 6);
+                yoyDs.slice(0, 12).forEach((ds, i) => {
+                    const cx = M + (i % 6) * cellW;
+                    const cy = y + Math.floor(i / 6) * (stripH + 1);
+                    const h  = ds.borderColor.replace('#','');
+                    const [r, g, b] = [0,2,4].map(o => parseInt(h.slice(o, o+2), 16));
+                    doc.setFillColor(r, g, b); doc.rect(cx, cy + 1, 8, 3, 'F');
+                    doc.setFontSize(7); doc.setTextColor(40);
+                    doc.text(ds.label, cx + 10, cy + 4);
+                });
+                y += Math.ceil(yoyDs.length / 6) * (stripH + 1) + 3;
+            }
+            addChartImage(getCanvasPng('yoyBarChart'), 'yoyBarChart', M, y, CW, PH - y - M);
+
+            doc.save('Customer_Analytics_Charts.pdf');
+        } catch(e) {
+            alert('PDF generation failed: ' + e.message);
+        }
+        btnPDF.disabled = false;
+        btnPDF.innerHTML = '<i class="bi bi-file-pdf"></i> Download PDF';
+    });
+}
+
+/* ══════════════════════════════════════════════
+   Quick date buttons
+══════════════════════════════════════════════ */
+function setDates(from, to) {
+    const fmt = d => d.toISOString().slice(0, 10);
+    document.querySelector('[name=start_date]').value = fmt(from);
+    document.querySelector('[name=end_date]').value   = fmt(to);
+    document.getElementById('dateFilterForm').submit();
+}
+document.querySelectorAll('.quick-days-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const days = parseInt(btn.dataset.days);
+        const to = new Date(), from = new Date();
+        from.setDate(from.getDate() - days);
+        setDates(from, to);
+    });
+});
+document.getElementById('btnThisMonth').addEventListener('click', () => {
+    const n = new Date();
+    setDates(new Date(n.getFullYear(), n.getMonth(), 1),
+             new Date(n.getFullYear(), n.getMonth() + 1, 0));
+});
+document.getElementById('btnLastMonth').addEventListener('click', () => {
+    const n = new Date();
+    const y = n.getMonth() === 0 ? n.getFullYear() - 1 : n.getFullYear();
+    const m = n.getMonth() === 0 ? 11 : n.getMonth() - 1;
+    setDates(new Date(y, m, 1), new Date(y, m + 1, 0));
+});
+document.getElementById('btnThisYear').addEventListener('click', () => {
+    const y = new Date().getFullYear();
+    setDates(new Date(y, 0, 1), new Date(y, 11, 31));
+});
+document.querySelectorAll('.quick-year-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const y = parseInt(btn.dataset.year);
+        setDates(new Date(y, 0, 1), new Date(y, 11, 31));
+    });
+});
+</script>
+{% endblock %}
