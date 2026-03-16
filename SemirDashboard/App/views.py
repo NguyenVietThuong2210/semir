@@ -111,8 +111,10 @@ from App.analytics.core import calculate_return_rate_analytics
 from App.analytics.coupon_analytics import (
     calculate_coupon_analytics,
     export_coupon_to_excel,
+    export_coupon_tab_to_excel,
+    _COUPON_TAB_SHEETS,
 )
-from App.analytics.excel_export import export_analytics_to_excel
+from App.analytics.excel_export import export_analytics_to_excel, export_tab_to_excel, _TAB_SHEETS
 from .forms import CustomerUploadForm, SalesUploadForm, UsedPointsUploadForm
 from .utils import process_customer_file, process_sales_file, process_used_points_file
 from .models import Customer, SalesTransaction, Coupon
@@ -395,10 +397,14 @@ def analytics_chart(request):
 
 @requires_perm("download_analytics")
 def export_analytics(request):
-    """Export analytics data to Excel file."""
+    """Export analytics data to Excel file.
+    If ?tab=<name> is provided, exports only that tab (Overview + tab sheet(s)).
+    Otherwise exports the full workbook.
+    """
     start_date = request.GET.get("start_date", "")
     end_date = request.GET.get("end_date", "")
-    shop_group = request.GET.get("shop_group", "")  # New: include shop_group in export
+    shop_group = request.GET.get("shop_group", "")
+    tab = request.GET.get("tab", "").strip()
 
     date_from = _parse_date(start_date, "start date", request)
     date_to = _parse_date(end_date, "end date", request)
@@ -408,16 +414,18 @@ def export_analytics(request):
         messages.error(request, "No data to export")
         return redirect("analytics_dashboard")
 
-    # Pass filter info to export
-    wb = export_analytics_to_excel(
-        data, date_from=date_from, date_to=date_to, shop_group=shop_group
-    )
+    ts = datetime.now().strftime('%H%M%S')
+    period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
 
-    fn = (
-        f"return_visit_rate_{date_from}_{date_to}_{datetime.now().strftime('%H%M%S')}.xlsx"
-        if date_from and date_to
-        else f"return_visit_rate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    )
+    if tab and tab in _TAB_SHEETS:
+        _, tab_title = _TAB_SHEETS[tab]
+        wb = export_tab_to_excel(tab, data, date_from=date_from, date_to=date_to, shop_group=shop_group)
+        tab_slug = tab_title.replace(" ", "_").replace("-", "").replace("/", "")
+        fn = f"analytics_{tab_slug}_{period}_{ts}.xlsx"
+    else:
+        wb = export_analytics_to_excel(data, date_from=date_from, date_to=date_to, shop_group=shop_group)
+        fn = f"return_visit_rate_{period}_{ts}.xlsx"
+
     resp = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
@@ -477,30 +485,35 @@ def coupon_dashboard(request):
 
 @requires_perm("download_coupons")
 def export_coupons(request):
-    """Export coupon analytics to Excel file with shop group filter support."""
+    """Export coupon analytics to Excel.
+    If ?tab=<name> is provided, exports only that tab (Summary + tab sheet).
+    Otherwise exports the full workbook.
+    """
     start_date = request.GET.get("start_date", "")
     end_date = request.GET.get("end_date", "")
     coupon_id_prefix = request.GET.get("coupon_id_prefix", "").strip()
     shop_group = request.GET.get("shop_group", "").strip()
+    tab = request.GET.get("tab", "").strip()
 
     date_from = _parse_date(start_date, "start date", request)
     date_to = _parse_date(end_date, "end date", request)
 
     data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
 
-    wb = export_coupon_to_excel(
-        data,
-        date_from=date_from,
-        date_to=date_to,
-        coupon_id_prefix=coupon_id_prefix,
-        shop_group=shop_group,
-    )
+    ts = datetime.now().strftime('%H%M%S')
+    period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
 
-    fn = (
-        f"coupon_{date_from}_{date_to}_{datetime.now().strftime('%H%M%S')}.xlsx"
-        if date_from and date_to
-        else f"coupon_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    )
+    if tab and tab in _COUPON_TAB_SHEETS:
+        _, tab_title = _COUPON_TAB_SHEETS[tab]
+        wb = export_coupon_tab_to_excel(tab, data, date_from=date_from, date_to=date_to,
+                                        coupon_id_prefix=coupon_id_prefix, shop_group=shop_group)
+        tab_slug = tab_title.replace(" ", "_").replace("-", "").replace("/", "")
+        fn = f"coupon_{tab_slug}_{period}_{ts}.xlsx"
+    else:
+        wb = export_coupon_to_excel(data, date_from=date_from, date_to=date_to,
+                                    coupon_id_prefix=coupon_id_prefix, shop_group=shop_group)
+        fn = f"coupon_{period}_{ts}.xlsx"
+
     resp = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

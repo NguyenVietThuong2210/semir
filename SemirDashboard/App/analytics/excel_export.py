@@ -58,7 +58,40 @@ def export_analytics_to_excel(data, date_from=None, date_to=None, shop_group=Non
     _create_details_sheet(wb, data, header_fill, header_font, header_align)
     _create_buyer_without_info_sheet(wb, data, header_fill, header_font, header_align)
     _create_reconciliation_sheet(wb, data, header_fill, header_font, header_align)
-    
+
+    return wb
+
+
+# Tab name → (sheet creator functions, display title)
+_TAB_SHEETS = {
+    "grade":      ([_create_grade_sheet],                          "By VIP Grade"),
+    "season":     ([_create_season_sheet],                         "By Season"),
+    "month":      ([_create_month_sheet],                          "By Month"),
+    "week":       ([_create_week_sheet],                           "By Week"),
+    "shop":       ([_create_shop_sheet, _create_shop_detail_sheet],"By Shop"),
+    "grade_all":  ([_create_grade_comparison_sheet],               "By Grade - All Shops"),
+    "season_all": ([_create_season_comparison_sheet],              "By Season - All Shops"),
+    "month_all":  ([_create_month_comparison_sheet],               "By Month - All Shops"),
+    "week_all":   ([_create_week_comparison_sheet],                "By Week - All Shops"),
+}
+
+
+def export_tab_to_excel(tab, data, date_from=None, date_to=None, shop_group=None):
+    """Export a single analytics tab to Excel (Overview + tab sheet(s))."""
+    if tab not in _TAB_SHEETS:
+        return None
+
+    wb = Workbook()
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    header_align = Alignment(horizontal="center", vertical="center")
+
+    _create_overview_sheet(wb, data, header_fill, header_font, header_align, date_from, date_to, shop_group)
+
+    creators, _ = _TAB_SHEETS[tab]
+    for fn in creators:
+        fn(wb, data, header_fill, header_font, header_align)
+
     return wb
 
 
