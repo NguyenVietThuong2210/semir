@@ -411,11 +411,10 @@
 
         <!-- BY SHOP TAB -->
         <div class="tab-pane fade show active p-3" id="shopTab">
-            <p class="text-muted small mb-2">
-                Sorted by Used Coupons (descending).
-                <strong>% Used / Used All</strong> = Used / total USED coupons across all shops.
-                <strong>Total Amount</strong> = unique invoice amounts (deduped).
-            </p>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <p class="text-muted small mb-0">Sorted by Used Coupons (descending). <strong>% Used / Used All</strong> = Used / total USED coupons across all shops. <strong>Total Amount</strong> = unique invoice amounts (deduped).</p>
+                {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=shop&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+            </div>
             {% if by_shop %}
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -455,10 +454,10 @@
 
         <!-- DETAIL TAB -->
         <div class="tab-pane fade p-3" id="detailTab">
-            <p class="text-muted small mb-2">
-                Sorted by Coupon ID (ascending). Customer name + phone from VIP ID lookup.
-                <span class="badge bg-warning text-dark">Warning</span> = shop or date mismatch.
-            </p>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <p class="text-muted small mb-0">Sorted by Coupon ID (ascending). Customer name + phone from VIP ID lookup. <span class="badge bg-warning text-dark">Warning</span> = shop or date mismatch.</p>
+                {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=detail&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+            </div>
             <div class="table-responsive">
                 <table class="table table-sm table-hover align-middle mb-0" style="font-size:.86rem">
                     <thead>
@@ -526,10 +525,10 @@
 
         <!-- DUPLICATE INVOICES TAB -->
         <div class="tab-pane fade p-3" id="dupTab">
-            <p class="text-muted small mb-2">
-                Invoices linked to <strong>more than one coupon</strong> in the current period/filter.
-                The invoice amount is counted only once in <em>Unique Invoice Amount</em>.
-            </p>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <p class="text-muted small mb-0">Invoices linked to <strong>more than one coupon</strong> in the current period/filter. The invoice amount is counted only once in <em>Unique Invoice Amount</em>.</p>
+                {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=dup&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+            </div>
             {% if duplicate_invoices %}
             <div class="table-responsive">
                 <table class="table table-sm table-hover align-middle mb-0" style="font-size:.86rem">

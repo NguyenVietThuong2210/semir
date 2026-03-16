@@ -691,201 +691,166 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None, c
     }
 
 
-def export_coupon_to_excel(
-    data, date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None
-):
-    """
-    Export coupon analytics to Excel workbook.
-
-    Args:
-        data: Coupon analytics dict from calculate_coupon_analytics()
-        date_from: Period start date (for display)
-        date_to: Period end date (for display)
-        coupon_id_prefix: Coupon ID prefix filter (for display)
-        shop_group: Shop group filter (for display)
-
-    Returns:
-        openpyxl Workbook object
-    """
-    wb = Workbook()
-
-    header_fill = PatternFill(
-        start_color="6F42C1", end_color="6F42C1", fill_type="solid"
+def _coupon_wb_styles():
+    """Return shared (header_fill, header_font, header_align) for coupon workbooks."""
+    return (
+        PatternFill(start_color="6F42C1", end_color="6F42C1", fill_type="solid"),
+        Font(bold=True, color="FFFFFF"),
+        Alignment(horizontal="center", vertical="center"),
     )
-    header_font = Font(bold=True, color="FFFFFF")
-    header_align = Alignment(horizontal="center", vertical="center")
 
-    # Summary sheet
+
+def _build_coupon_summary_ws(wb, data, date_from, date_to, coupon_id_prefix, shop_group):
     ws = wb.active
     ws.title = "Summary"
-
     ws["A1"] = "Coupon Analytics Summary"
     ws["A1"].font = Font(bold=True, size=14)
     ws.merge_cells("A1:B1")
 
-    # Display active filters
     row = 3
-    if date_from and date_to:
-        ws[f"A{row}"] = "Period Filter:"
-        ws[f"B{row}"] = f"{date_from} to {date_to}"
-        ws[f"B{row}"].font = Font(bold=True, color="0066CC")
-        row += 1
-
-    if coupon_id_prefix:
-        ws[f"A{row}"] = "Coupon ID Prefix:"
-        ws[f"B{row}"] = coupon_id_prefix
-        ws[f"B{row}"].font = Font(bold=True, color="0066CC")
-        row += 1
-
-    if shop_group:
-        ws[f"A{row}"] = "Shop Group:"
-        ws[f"B{row}"] = shop_group
-        ws[f"B{row}"].font = Font(bold=True, color="0066CC")
-        row += 1
-
-    row += 1
-    ws[f"A{row}"] = "All-Time Statistics"
-    ws[f"A{row}"].font = Font(bold=True)
-    row += 1
-
-    at = data["all_time"]
     for label, value in [
-        ("Total Coupons", at["total"]),
-        ("Used", at["used"]),
-        ("Unused", at["unused"]),
-        ("Usage Rate", f"{at['usage_rate']}%"),
-        ("Total Amount (Invoice)", f"{at['total_amount']:,.0f} VND"),
-        ("Unique Invoice Amount", f"{at['unique_invoice_amount']:,.0f} VND"),
-        ("Total Coupon Amount", f"{at['total_coupon_amount']:,.0f} VND"),
-        ("Duplicate Invoice Count", at["duplicate_invoice_count"]),
+        ("Period Filter:", f"{date_from} to {date_to}" if date_from and date_to else None),
+        ("Coupon ID Prefix:", coupon_id_prefix or None),
+        ("Shop Group:", shop_group or None),
     ]:
-        ws[f"A{row}"] = label
-        ws[f"B{row}"] = value
-        row += 1
+        if value:
+            ws[f"A{row}"] = label
+            ws[f"B{row}"] = value
+            ws[f"B{row}"].font = Font(bold=True, color="0066CC")
+            row += 1
 
-    row += 1
-    ws[f"A{row}"] = "Period Statistics"
-    ws[f"A{row}"].font = Font(bold=True)
-    row += 1
-
-    pd = data["period"]
-    for label, value in [
-        ("Total Coupons", pd["total"]),
-        ("Used", pd["used"]),
-        ("Unused", pd["unused"]),
-        ("Usage Rate", f"{pd['usage_rate']}%"),
-        ("Total Amount (Invoice)", f"{pd['total_amount']:,.0f} VND"),
-        ("Unique Invoice Amount", f"{pd['unique_invoice_amount']:,.0f} VND"),
-        ("Total Coupon Amount", f"{pd['total_coupon_amount']:,.0f} VND"),
-        ("Duplicate Invoice Count", pd["duplicate_invoice_count"]),
-    ]:
-        ws[f"A{row}"] = label
-        ws[f"B{row}"] = value
+    for section_label, section_key in [("All-Time Statistics", "all_time"), ("Period Statistics", "period")]:
         row += 1
+        ws[f"A{row}"] = section_label
+        ws[f"A{row}"].font = Font(bold=True)
+        row += 1
+        d = data[section_key]
+        for label, value in [
+            ("Total Coupons", d["total"]),
+            ("Used", d["used"]),
+            ("Unused", d["unused"]),
+            ("Usage Rate", f"{d['usage_rate']}%"),
+            ("Total Amount (Invoice)", f"{d['total_amount']:,.0f} VND"),
+            ("Unique Invoice Amount", f"{d['unique_invoice_amount']:,.0f} VND"),
+            ("Total Coupon Amount", f"{d['total_coupon_amount']:,.0f} VND"),
+            ("Duplicate Invoice Count", d["duplicate_invoice_count"]),
+        ]:
+            ws[f"A{row}"] = label
+            ws[f"B{row}"] = value
+            row += 1
 
     ws.column_dimensions["A"].width = 25
     ws.column_dimensions["B"].width = 20
 
-    # By Using Shop sheet
-    ws_shop = wb.create_sheet("By Using Shop")
 
-    headers = [
-        "Using Shop",
-        "Total",
-        "Used",
-        "Unused",
-        "Usage Rate",
-        "% of Used (All Shops)",
-        "Coupon Amount",
-        "Total Amount (Unique Invoice)",
-    ]
-    for col_num, header in enumerate(headers, 1):
-        cell = ws_shop.cell(row=1, column=col_num, value=header)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = header_align
+def _build_coupon_shop_ws(wb, data, header_fill, header_font, header_align):
+    ws = wb.create_sheet("By Using Shop")
+    for col_num, header in enumerate([
+        "Using Shop", "Total", "Used", "Unused", "Usage Rate",
+        "% of Used (All Shops)", "Coupon Amount", "Total Amount (Unique Invoice)",
+    ], 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        cell.fill = header_fill; cell.font = header_font; cell.alignment = header_align
 
     for row_num, shop in enumerate(data["by_shop"], 2):
-        ws_shop.cell(row=row_num, column=1, value=shop["shop_name"])
-        ws_shop.cell(row=row_num, column=2, value=shop["total"])
-        ws_shop.cell(row=row_num, column=3, value=shop["used"])
-        ws_shop.cell(row=row_num, column=4, value=shop["unused"])
-        ws_shop.cell(row=row_num, column=5, value=f"{shop['usage_rate']}%")
-        ws_shop.cell(row=row_num, column=6, value=f"{shop['used_pct_of_used']}%")
-        ws_shop.cell(row=row_num, column=7, value=f"{shop['coupon_amount']:,.0f}")
-        ws_shop.cell(row=row_num, column=8, value=f"{shop['total_amount']:,.0f}")
-
+        ws.cell(row=row_num, column=1, value=shop["shop_name"])
+        ws.cell(row=row_num, column=2, value=shop["total"])
+        ws.cell(row=row_num, column=3, value=shop["used"])
+        ws.cell(row=row_num, column=4, value=shop["unused"])
+        ws.cell(row=row_num, column=5, value=f"{shop['usage_rate']}%")
+        ws.cell(row=row_num, column=6, value=f"{shop['used_pct_of_used']}%")
+        ws.cell(row=row_num, column=7, value=f"{shop['coupon_amount']:,.0f}")
+        ws.cell(row=row_num, column=8, value=f"{shop['total_amount']:,.0f}")
     for col in range(1, 9):
-        ws_shop.column_dimensions[get_column_letter(col)].width = 22
+        ws.column_dimensions[get_column_letter(col)].width = 22
 
-    # Details sheet
-    ws_detail = wb.create_sheet("Coupon Details")
 
-    headers = [
-        "Coupon ID",
-        "Creator",
-        "Face Value",
-        "Using Shop",
-        "Using Date",
-        "Docket Number",
-        "VIP ID",
-        "Name",
-        "Phone",
-        "Sales Date",
-        "Invoice Shop",
-        "Amount (Invoice)",
-        "Coupon Amount",
-        "Note",
-        "CNV ID",
-        "CNV Points",
-        "CNV Total Points",
-    ]
-    for col_num, header in enumerate(headers, 1):
-        cell = ws_detail.cell(row=1, column=col_num, value=header)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = header_align
+def _build_coupon_detail_ws(wb, data, header_fill, header_font, header_align):
+    ws = wb.create_sheet("Coupon Details")
+    for col_num, header in enumerate([
+        "Coupon ID", "Creator", "Face Value", "Using Shop", "Using Date",
+        "Docket Number", "VIP ID", "Name", "Phone", "Sales Date",
+        "Invoice Shop", "Amount (Invoice)", "Coupon Amount", "Note",
+        "CNV ID", "CNV Points", "CNV Total Points",
+    ], 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        cell.fill = header_fill; cell.font = header_font; cell.alignment = header_align
 
-    for row_num, detail in enumerate(data["details"], 2):
-        ws_detail.cell(row=row_num, column=1, value=detail["coupon_id"])
-        ws_detail.cell(row=row_num, column=2, value=detail["creator"])
-        ws_detail.cell(row=row_num, column=3, value=detail["face_value_display"])
-        ws_detail.cell(row=row_num, column=4, value=detail["using_shop"])
-        ws_detail.cell(
-            row=row_num,
-            column=5,
-            value=str(detail["using_date"]) if detail["using_date"] else "",
-        )
-        ws_detail.cell(row=row_num, column=6, value=detail["docket_number"])
-        ws_detail.cell(row=row_num, column=7, value=detail["vip_id"])
-        ws_detail.cell(row=row_num, column=8, value=detail["customer_name"])
-        ws_detail.cell(row=row_num, column=9, value=detail["customer_phone"])
-        ws_detail.cell(
-            row=row_num,
-            column=10,
-            value=str(detail["sales_day"]) if detail["sales_day"] else "",
-        )
-        ws_detail.cell(row=row_num, column=11, value=detail["inv_shop"])
-        ws_detail.cell(row=row_num, column=12, value=f"{detail['amount']:,.0f}")
-        ws_detail.cell(row=row_num, column=13, value=f"{detail['coupon_amount']:,.0f}")
-        ws_detail.cell(row=row_num, column=14, value=detail["note"])
-        ws_detail.cell(row=row_num, column=15, value=detail.get("cnv_id") or "")
-        ws_detail.cell(
-            row=row_num,
-            column=16,
-            value=float(detail["cnv_points"]) if detail.get("cnv_points") != "" else "",
-        )
-        ws_detail.cell(
-            row=row_num,
-            column=17,
-            value=(
-                float(detail["cnv_total_points"])
-                if detail.get("cnv_total_points") != ""
-                else ""
-            ),
-        )
-
+    for row_num, d in enumerate(data["details"], 2):
+        ws.cell(row=row_num, column=1, value=d["coupon_id"])
+        ws.cell(row=row_num, column=2, value=d["creator"])
+        ws.cell(row=row_num, column=3, value=d["face_value_display"])
+        ws.cell(row=row_num, column=4, value=d["using_shop"])
+        ws.cell(row=row_num, column=5, value=str(d["using_date"]) if d["using_date"] else "")
+        ws.cell(row=row_num, column=6, value=d["docket_number"])
+        ws.cell(row=row_num, column=7, value=d["vip_id"])
+        ws.cell(row=row_num, column=8, value=d["customer_name"])
+        ws.cell(row=row_num, column=9, value=d["customer_phone"])
+        ws.cell(row=row_num, column=10, value=str(d["sales_day"]) if d["sales_day"] else "")
+        ws.cell(row=row_num, column=11, value=d["inv_shop"])
+        ws.cell(row=row_num, column=12, value=f"{d['amount']:,.0f}")
+        ws.cell(row=row_num, column=13, value=f"{d['coupon_amount']:,.0f}")
+        ws.cell(row=row_num, column=14, value=d["note"])
+        ws.cell(row=row_num, column=15, value=d.get("cnv_id") or "")
+        ws.cell(row=row_num, column=16, value=float(d["cnv_points"]) if d.get("cnv_points") != "" else "")
+        ws.cell(row=row_num, column=17, value=float(d["cnv_total_points"]) if d.get("cnv_total_points") != "" else "")
     for col in range(1, 18):
-        ws_detail.column_dimensions[get_column_letter(col)].width = 18
+        ws.column_dimensions[get_column_letter(col)].width = 18
 
+
+def _build_coupon_dup_ws(wb, data, header_fill, header_font, header_align):
+    ws = wb.create_sheet("Duplicate Invoices")
+    for col_num, header in enumerate([
+        "Invoice No", "Sales Date", "Shop (Invoice)", "Invoice Amt",
+        "Coupon ID", "Using Shop", "Using Date", "Face Value", "Coupon Amt",
+    ], 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        cell.fill = header_fill; cell.font = header_font; cell.alignment = header_align
+
+    for row_num, d in enumerate(data.get("duplicate_invoices", []), 2):
+        ws.cell(row=row_num, column=1, value=d["docket_number"])
+        ws.cell(row=row_num, column=2, value=str(d["sales_date"]) if d["sales_date"] else "")
+        ws.cell(row=row_num, column=3, value=d["shop_name"])
+        ws.cell(row=row_num, column=4, value=f"{d['inv_amount']:,.0f}")
+        ws.cell(row=row_num, column=5, value=d["coupon_id"])
+        ws.cell(row=row_num, column=6, value=d["using_shop"])
+        ws.cell(row=row_num, column=7, value=str(d["using_date"]) if d["using_date"] else "")
+        ws.cell(row=row_num, column=8, value=d["face_value_display"])
+        ws.cell(row=row_num, column=9, value=f"{d['coupon_amount']:,.0f}")
+    for col in range(1, 10):
+        ws.column_dimensions[get_column_letter(col)].width = 22
+
+
+# Tab name → (sheet builder fn, display title)
+_COUPON_TAB_SHEETS = {
+    "shop":   (_build_coupon_shop_ws,   "By Shop"),
+    "detail": (_build_coupon_detail_ws, "Coupon Detail"),
+    "dup":    (_build_coupon_dup_ws,    "Duplicate Invoices"),
+}
+
+
+def export_coupon_to_excel(
+    data, date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None
+):
+    """Export coupon analytics to Excel workbook (all sheets)."""
+    wb = Workbook()
+    hf, font, align = _coupon_wb_styles()
+    _build_coupon_summary_ws(wb, data, date_from, date_to, coupon_id_prefix, shop_group)
+    _build_coupon_shop_ws(wb, data, hf, font, align)
+    _build_coupon_detail_ws(wb, data, hf, font, align)
+    _build_coupon_dup_ws(wb, data, hf, font, align)
+    return wb
+
+
+def export_coupon_tab_to_excel(
+    tab, data, date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None
+):
+    """Export a single coupon tab to Excel (Summary + tab sheet)."""
+    if tab not in _COUPON_TAB_SHEETS:
+        return None
+    wb = Workbook()
+    hf, font, align = _coupon_wb_styles()
+    _build_coupon_summary_ws(wb, data, date_from, date_to, coupon_id_prefix, shop_group)
+    fn, _ = _COUPON_TAB_SHEETS[tab]
+    fn(wb, data, hf, font, align)
     return wb
