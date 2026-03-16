@@ -147,7 +147,7 @@ def _get_cnv_comparison_data(start_date, end_date):
             "registration_date",
             "points",
         )
-        .order_by("-registration_date")[:50]
+        .order_by("-registration_date")
     )
 
     cnv_only_all = list(
@@ -164,7 +164,7 @@ def _get_cnv_comparison_data(start_date, end_date):
             "total_points",
             "used_points",
         )
-        .order_by("-cnv_created_at")[:50]
+        .order_by("-cnv_created_at")
     )
 
     pos_only_period = []
@@ -196,7 +196,7 @@ def _get_cnv_comparison_data(start_date, end_date):
                 "email",
                 "registration_date",
                 "points",
-            ).order_by("-registration_date")[:50]
+            ).order_by("-registration_date")
         )
 
         cnv_only_period_qs = cnv_period.exclude(
@@ -215,7 +215,7 @@ def _get_cnv_comparison_data(start_date, end_date):
                 "points",
                 "total_points",
                 "used_points",
-            ).order_by("-cnv_created_at")[:50]
+            ).order_by("-cnv_created_at")
         )
 
     # Points mismatch — single Python join
@@ -288,7 +288,7 @@ def _get_cnv_comparison_data(start_date, end_date):
             "total_points",
             "used_points",
         )
-        .order_by("-used_points")[:200]
+        .order_by("-used_points")
     )
     cnv_used_points_count = cnv_all.filter(used_points__gt=0).count()
     _used_phones = [r["phone"] for r in cnv_used_qs if r["phone"]]
@@ -351,9 +351,9 @@ def _get_cnv_comparison_data(start_date, end_date):
         "zalo_app_created_at",
     }
     zalo_app_list = list(
-        zalo_app_qs.order_by("-zalo_app_created_at").values(*_zf)[:100]
+        zalo_app_qs.order_by("-zalo_app_created_at").values(*_zf)
     )
-    zalo_oa_list = list(zalo_oa_qs.order_by("-zalo_app_created_at").values(*_zf)[:100])
+    zalo_oa_list = list(zalo_oa_qs.order_by("-zalo_app_created_at").values(*_zf))
     _all_z_phones = {r["phone"] for r in zalo_app_list + zalo_oa_list if r["phone"]}
     _pos_z_phones = (
         set(pos_all.filter(phone__in=_all_z_phones).values_list("phone", flat=True))
@@ -414,8 +414,16 @@ def customer_comparison(request):
         **d,
         "start_date": start_date,
         "end_date": end_date,
-        "points_mismatch": d["points_mismatch"][:100],
+        # UI display limits — download uses full data from cache
+        "points_mismatch":       d["points_mismatch"][:100],
         "total_points_mismatch": d["total_points_mismatch"][:100],
+        "cnv_used_points_list":  d["cnv_used_points_list"][:200],
+        "zalo_mini_app_list":    d["zalo_mini_app_list"][:100],
+        "zalo_oa_list":          d["zalo_oa_list"][:100],
+        "pos_only_all":          d["pos_only_all"][:50],
+        "cnv_only_all":          d["cnv_only_all"][:50],
+        "pos_only_period":       d["pos_only_period"][:50],
+        "cnv_only_period":       d["cnv_only_period"][:50],
         "quick_btns": [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90)],
     }
     return render(request, "cnv/customer_comparison.html", context)
@@ -423,12 +431,16 @@ def customer_comparison(request):
 
 @requires_perm("download_cnv")
 def export_customer_comparison(request):
-    """Export POS vs CNV comparison to Excel — reuses cached comparison data."""
+    """Export POS vs CNV comparison to Excel.
+    If ?tab=<points|zalo|pos_cnv> is given, exports only that tab's sheets.
+    Otherwise exports the full workbook.
+    """
     from App.models import Customer
-    from App.analytics.excel_export import export_customer_comparison_to_excel
+    from App.analytics.excel_export import export_customer_comparison_to_excel, export_cnv_tab_to_excel, _CNV_TAB_SHEETS
 
     start_date = request.GET.get("start_date", "")
     end_date = request.GET.get("end_date", "")
+    tab = request.GET.get("tab", "").strip()
 
     date_from = date_to = None
     try:
@@ -439,42 +451,31 @@ def export_customer_comparison(request):
     except ValueError:
         pass
 
-    # Reuse cached comparison data (heavy mismatch + zalo computation)
     d, _ = _get_cnv_comparison_data(start_date, end_date)
+    ts = datetime.now().strftime('%H%M%S')
+    period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
 
-    # cnv_used_points needs model instances for the export function
-    cnv_used_points_export = list(
-        CNVCustomer.objects.filter(used_points__gt=0).order_by("-used_points")
-    )
-
-    zalo_stats_export = {
-        "zalo_app_all_count": d["zalo_app_all_count"],
-        "zalo_oa_all_count": d["zalo_oa_all_count"],
-        "zalo_app_all_pct": d["zalo_app_all_pct"],
-        "zalo_oa_all_pct": d["zalo_oa_all_pct"],
-        "zalo_app_period_count": d["zalo_app_period_count"],
-        "zalo_oa_period_count": d["zalo_oa_period_count"],
-        "zalo_app_period_pct": d["zalo_app_period_pct"],
-        "zalo_oa_period_pct": d["zalo_oa_period_pct"],
-    }
-
-    wb = export_customer_comparison_to_excel(
-        Customer.objects.all(),
-        CNVCustomer.objects.all(),
-        date_from,
-        date_to,
-        points_mismatch=d["points_mismatch"],
-        total_points_mismatch=d["total_points_mismatch"],
-        cnv_used_points=cnv_used_points_export,
-        zalo_mini_app_list=d["zalo_mini_app_list"],
-        zalo_oa_list=d["zalo_oa_list"],
-        zalo_stats=zalo_stats_export,
-    )
-
-    if date_from and date_to:
-        filename = f"customer_analytics_{date_from}_{date_to}_{datetime.now().strftime('%H%M%S')}.xlsx"
+    if tab and tab in _CNV_TAB_SHEETS:
+        wb = export_cnv_tab_to_excel(tab, d, date_from=date_from, date_to=date_to)
+        filename = f"customer_analytics_{tab}_{period}_{ts}.xlsx"
     else:
-        filename = f"customer_analytics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        cnv_used_points_export = list(
+            CNVCustomer.objects.filter(used_points__gt=0).order_by("-used_points")
+        )
+        zalo_stats_export = {k: d[k] for k in (
+            "zalo_app_all_count", "zalo_oa_all_count", "zalo_app_all_pct", "zalo_oa_all_pct",
+            "zalo_app_period_count", "zalo_oa_period_count", "zalo_app_period_pct", "zalo_oa_period_pct",
+        )}
+        wb = export_customer_comparison_to_excel(
+            Customer.objects.all(), CNVCustomer.objects.all(), date_from, date_to,
+            points_mismatch=d["points_mismatch"],
+            total_points_mismatch=d["total_points_mismatch"],
+            cnv_used_points=cnv_used_points_export,
+            zalo_mini_app_list=d["zalo_mini_app_list"],
+            zalo_oa_list=d["zalo_oa_list"],
+            zalo_stats=zalo_stats_export,
+        )
+        filename = f"customer_analytics_{period}_{ts}.xlsx"
 
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

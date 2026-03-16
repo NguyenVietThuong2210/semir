@@ -303,6 +303,7 @@
 
 <!-- ══ TAB 1: Points Analysis (t1, t2, t3) ══════════════════════════════ -->
 <div class="tab-pane fade show active pt-3" id="tabPoints" role="tabpanel">
+{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_comparison' %}?tab=points{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
 <div class="row g-3">
 
 <div class="col-12">
@@ -334,7 +335,7 @@
                 </tbody>
             </table>
         </div>
-        {% if cnv_used_points_count > 200 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 200 of {{ cnv_used_points_count }} records</small></div>{% endif %}
+        {% if cnv_used_points_count > 200 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 200 of {{ cnv_used_points_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
@@ -375,7 +376,7 @@
                 </tbody>
             </table>
         </div>
-        {% if points_mismatch_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ points_mismatch_count }} records</small></div>{% endif %}
+        {% if points_mismatch_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ points_mismatch_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
@@ -418,7 +419,7 @@
                 </tbody>
             </table>
         </div>
-        {% if total_points_mismatch_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ total_points_mismatch_count }} records</small></div>{% endif %}
+        {% if total_points_mismatch_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ total_points_mismatch_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
@@ -428,6 +429,7 @@
 
 <!-- ══ TAB 2: Zalo (t8, t9) ═════════════════════════════════════════════ -->
 <div class="tab-pane fade pt-3" id="tabZalo" role="tabpanel">
+{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_comparison' %}?tab=zalo{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
 <div class="row g-3">
 
 <div class="col-12">
@@ -459,6 +461,7 @@
                 </tbody>
             </table>
         </div>
+        {% if zalo_app_all_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ zalo_app_all_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
@@ -492,6 +495,7 @@
                 </tbody>
             </table>
         </div>
+        {% if zalo_oa_all_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ zalo_oa_all_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
@@ -501,6 +505,7 @@
 
 <!-- ══ TAB 3: POS vs CNV (t4, t5, t6, t7) ═══════════════════════════════ -->
 <div class="tab-pane fade pt-3" id="tabPOSCNV" role="tabpanel">
+{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_comparison' %}?tab=pos_cnv{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
 <div class="row g-3">
 
 <div class="col-12">
@@ -526,7 +531,7 @@
                 </tbody>
             </table>
         </div>
-        {% if pos_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ pos_only_all_count }} records</small></div>{% endif %}
+        {% if pos_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ pos_only_all_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
@@ -556,7 +561,7 @@
                 </tbody>
             </table>
         </div>
-        {% if cnv_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_all_count }} records</small></div>{% endif %}
+        {% if cnv_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_all_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
@@ -586,7 +591,7 @@
                 </tbody>
             </table>
         </div>
-        {% if pos_only_period_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ pos_only_period_count }} records</small></div>{% endif %}
+        {% if pos_only_period_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ pos_only_period_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
@@ -616,7 +621,7 @@
                 </tbody>
             </table>
         </div>
-        {% if cnv_only_period_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_period_count }} records</small></div>{% endif %}
+        {% if cnv_only_period_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_period_count }} records — download for full data</small></div>{% endif %}
     </div>
 </div>
 </div>
