@@ -1,9 +1,7 @@
 """
 App/cnv/urls.py
 
-URL configuration for CNV sync views.
-Add to your main urls.py:
-    path('cnv/', include('App.cnv.urls')),
+URL configuration for CNV Loyalty integration views.
 """
 from django.urls import path
 from . import views
@@ -11,12 +9,12 @@ from . import views
 app_name = 'cnv'
 
 urlpatterns = [
-    # Page 1: Sync log history
+    # CNV Sync
     path('sync-status/', views.sync_status, name='sync_status'),
 
-    # Page 2: Customer comparison
-    path('customer-comparison/', views.customer_comparison, name='customer_comparison'),
-    path('export-customer-comparison/', views.export_customer_comparison, name='export_customer_comparison'),
+    # Customer Analytics (POS ↔ CNV comparison)
+    path('customer-analytics/', views.customer_analytics, name='customer_analytics'),
+    path('export-customer-analytics/', views.export_customer_analytics, name='export_customer_analytics'),
 
     # AJAX: Sync CNV points for selected customers
     path('sync-cnv-points/', views.sync_cnv_points, name='sync_cnv_points'),

@@ -1102,7 +1102,7 @@ def _create_reconciliation_sheet(wb, data, header_fill, header_font, header_alig
 
 # Add this function to the END of excel_export.py
 
-def export_customer_comparison_to_excel(
+def export_customer_analytics_to_excel(
     pos_customers,
     cnv_customers,
     date_from=None,

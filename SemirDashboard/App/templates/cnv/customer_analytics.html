@@ -135,7 +135,7 @@
     <h2><i class="bi bi-people"></i> Customer Analytics</h2>
     {% check_perm 'download_cnv' as can_dl_cnv %}
     {% if can_dl_cnv %}
-    <a href="{% url 'cnv:export_customer_comparison' %}?{% if start_date and end_date %}start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-success">
+    <a href="{% url 'cnv:export_customer_analytics' %}?{% if start_date and end_date %}start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-success">
         <i class="bi bi-download"></i> Export to Excel
     </a>
     {% else %}
@@ -159,7 +159,7 @@
             </div>
             <div class="col-md-6">
                 <button type="submit" class="btn btn-primary me-2"><i class="bi bi-funnel"></i> Apply</button>
-                <a href="{% url 'cnv:customer_comparison' %}" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Clear</a>
+                <a href="{% url 'cnv:customer_analytics' %}" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Clear</a>
             </div>
         </form>
         <div class="mt-2 pt-2 border-top">
@@ -303,7 +303,7 @@
 
 <!-- ══ TAB 1: Points Analysis (t1, t2, t3) ══════════════════════════════ -->
 <div class="tab-pane fade show active pt-3" id="tabPoints" role="tabpanel">
-{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_comparison' %}?tab=points{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
+{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_analytics' %}?tab=points{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
 <div class="row g-3">
 
 <div class="col-12">
@@ -429,7 +429,7 @@
 
 <!-- ══ TAB 2: Zalo (t8, t9) ═════════════════════════════════════════════ -->
 <div class="tab-pane fade pt-3" id="tabZalo" role="tabpanel">
-{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_comparison' %}?tab=zalo{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
+{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_analytics' %}?tab=zalo{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
 <div class="row g-3">
 
 <div class="col-12">
@@ -505,7 +505,7 @@
 
 <!-- ══ TAB 3: POS vs CNV (t4, t5, t6, t7) ═══════════════════════════════ -->
 <div class="tab-pane fade pt-3" id="tabPOSCNV" role="tabpanel">
-{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_comparison' %}?tab=pos_cnv{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
+{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_analytics' %}?tab=pos_cnv{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
 <div class="row g-3">
 
 <div class="col-12">

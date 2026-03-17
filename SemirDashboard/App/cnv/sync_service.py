@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from App.models_cnv import CNVCustomer, CNVOrder, CNVSyncLog
+from App.cnv.models import CNVCustomer, CNVOrder, CNVSyncLog
 from .api_client import CNVAPIClient
 
 logger = logging.getLogger(__name__)

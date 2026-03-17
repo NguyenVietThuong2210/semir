@@ -6,8 +6,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.models import User
 
-from .permissions import requires_perm, PERMISSION_DEFS
-from .models import Role, UserProfile
+from App.permissions import requires_perm, PERMISSION_DEFS
+from App.models import Role, UserProfile
 
 
 @requires_perm('manage_users')

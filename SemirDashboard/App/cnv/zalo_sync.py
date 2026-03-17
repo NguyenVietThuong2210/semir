@@ -13,7 +13,7 @@ from datetime import datetime, timezone as dt_timezone
 import requests
 from django.utils import timezone
 
-from App.models_cnv import CNVCustomer, CNVSyncLog
+from App.cnv.models import CNVCustomer, CNVSyncLog
 
 logger = logging.getLogger(__name__)
 

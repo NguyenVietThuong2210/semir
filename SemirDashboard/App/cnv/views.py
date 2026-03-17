@@ -16,7 +16,7 @@ from datetime import datetime
 from django.utils import timezone
 
 from App.models import Customer as POSCustomer
-from App.models_cnv import CNVCustomer, CNVOrder, CNVSyncLog
+from App.cnv.models import CNVCustomer, CNVOrder, CNVSyncLog
 
 logger = logging.getLogger("App.cnv")
 
@@ -402,7 +402,7 @@ def _get_cnv_comparison_data(start_date, end_date):
 
 
 @requires_perm("page_cnv_comparison")
-def customer_comparison(request):
+def customer_analytics(request):
     """Compare POS System vs CNV Loyalty customers — served from cache."""
     start_date = request.GET.get("start_date", "")
     end_date = request.GET.get("end_date", "")
@@ -425,17 +425,17 @@ def customer_comparison(request):
         "cnv_only_period":       d["cnv_only_period"][:50],
         "quick_btns": [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90)],
     }
-    return render(request, "cnv/customer_comparison.html", context)
+    return render(request, "cnv/customer_analytics.html", context)
 
 
 @requires_perm("download_cnv")
-def export_customer_comparison(request):
+def export_customer_analytics(request):
     """Export POS vs CNV comparison to Excel.
     If ?tab=<points|zalo|pos_cnv> is given, exports only that tab's sheets.
     Otherwise exports the full workbook.
     """
     from App.models import Customer
-    from App.analytics.excel_export import export_customer_comparison_to_excel, export_cnv_tab_to_excel, _CNV_TAB_SHEETS
+    from App.analytics.excel_export import export_customer_analytics_to_excel, export_cnv_tab_to_excel, _CNV_TAB_SHEETS
 
     start_date = request.GET.get("start_date", "")
     end_date = request.GET.get("end_date", "")
@@ -465,7 +465,7 @@ def export_customer_comparison(request):
             "zalo_app_all_count", "zalo_oa_all_count", "zalo_app_all_pct", "zalo_oa_all_pct",
             "zalo_app_period_count", "zalo_oa_period_count", "zalo_app_period_pct", "zalo_oa_period_pct",
         )}
-        wb = export_customer_comparison_to_excel(
+        wb = export_customer_analytics_to_excel(
             Customer.objects.all(), CNVCustomer.objects.all(), date_from, date_to,
             points_mismatch=d["points_mismatch"],
             total_points_mismatch=d["total_points_mismatch"],

@@ -17,7 +17,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 from App.models import Coupon, Customer, SalesTransaction
-from App.models_cnv import CNVCustomer
+from App.cnv.models import CNVCustomer
 
 
 def calc_coupon_amount(face_value, invoice_amount):
