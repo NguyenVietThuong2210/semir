@@ -20,8 +20,6 @@ PERMISSION_DEFS = [
     ("manage_users", "User Management", "Admin"),
     ("manage_campaigns", "Manage Coupon Campaigns", "Admin"),
     ("page_coupon_chart", "Coupon Analytics Charts", "Pages"),
-    ("page_customer_chart", "Customer Analytics Charts", "Pages"),
-    ("download_customer_chart_pdf", "Download Customer Charts PDF", "Downloads"),
 ]
 
 ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]
