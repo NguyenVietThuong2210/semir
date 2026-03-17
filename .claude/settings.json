@@ -37,7 +37,13 @@
       "Bash(python -c \"import django; import os; os.environ.setdefault\\(''DJANGO_SETTINGS_MODULE'', ''SemirDashboard.settings''\\); django.setup\\(\\); from App.analytics.coupon_analytics import export_coupon_tab_to_excel, _COUPON_TAB_SHEETS; print\\(''COUPON_TAB_SHEETS:'', list\\(_COUPON_TAB_SHEETS.keys\\(\\)\\)\\); print\\(''OK''\\)\")",
       "Bash(find D:New-jouneysemirSemirDashboard -name *.html)",
       "Bash(mkdir -p \"D:/New-jouney/semir/archive/customer_chart\")",
-      "Bash(cp \"D:/New-jouney/semir/SemirDashboard/App/templates/cnv/customer_chart.html\" \"D:/New-jouney/semir/archive/customer_chart/customer_chart.html\")"
+      "Bash(cp \"D:/New-jouney/semir/SemirDashboard/App/templates/cnv/customer_chart.html\" \"D:/New-jouney/semir/archive/customer_chart/customer_chart.html\")",
+      "Bash(grep -E \"\\\\.html$\")",
+      "Bash(grep -E \"^\\(views|utils|models|models_cnv|analytics|auth_views|user_views\\)\\\\.py$\")",
+      "Bash(python manage.py check)",
+      "Bash(python manage.py check --deploy)",
+      "Bash(python manage.py migrate --check)",
+      "Bash(python manage.py makemigrations --check --dry-run)"
     ],
     "additionalDirectories": [
       "D:\\New-jouney\\semir\\archive\\customer_chart"

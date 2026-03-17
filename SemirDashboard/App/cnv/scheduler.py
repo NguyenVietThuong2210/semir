@@ -30,7 +30,7 @@ def sync_cnv_customers_only():
 
     try:
         # Check if already running
-        from App.models_cnv import CNVSyncLog
+        from App.cnv.models import CNVSyncLog
 
         running = CNVSyncLog.objects.filter(
             sync_type="customers", status="running"
@@ -83,7 +83,7 @@ def sync_cnv_orders_only():
 
     try:
         # Check if already running
-        from App.models_cnv import CNVSyncLog
+        from App.cnv.models import CNVSyncLog
 
         running = CNVSyncLog.objects.filter(
             sync_type="orders", status="running"
