@@ -160,7 +160,7 @@
     <div class="card-body">
         <form method="get" id="couponFilterForm" class="row g-2 align-items-end">
             <div class="col-md-2">
-                <label class="form-label"><i class="bi bi-calendar"></i> Start Date (Using Date)</label>
+                <label class="form-label"><i class="bi bi-calendar"></i> Start Date (coupon use date)</label>
                 <input type="date" class="form-control" id="fieldStartDate" name="start_date" value="{{ start_date }}">
             </div>
             <div class="col-md-2">
@@ -255,7 +255,7 @@
             <div class="card-body">
                 <div class="stat-label">Total Coupons (All Time)</div>
                 <div class="stat-value">{{ s.total }}</div>
-                <small class="text-muted">All records in DB</small>
+                <small class="text-muted">All records in system</small>
             </div>
         </div>
     </div>
@@ -284,7 +284,7 @@
                 <div class="stat-value amount-vnd" style="color:#856404;font-size:1.15rem">
                     {{ s.total_amount|vnd }} VND
                 </div>
-                <small class="text-muted">From matched invoices</small>
+                <small class="text-muted">From coupon-linked sales</small>
             </div>
         </div>
     </div>
@@ -306,7 +306,7 @@
                 <div class="stat-value amount-vnd" style="color:#0d6efd;font-size:1.15rem">
                     {{ s.unique_invoice_amount|vnd }} VND
                 </div>
-                <small class="text-muted">Deduped invoices — {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
+                <small class="text-muted">Excl. {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
             </div>
         </div>
     </div>
@@ -353,7 +353,7 @@
                 <div class="stat-value amount-vnd" style="color:#856404;font-size:1.15rem">
                     {{ s.total_amount|vnd }} VND
                 </div>
-                <small class="text-muted">From matched invoices</small>
+                <small class="text-muted">From coupon-linked sales</small>
             </div>
         </div>
     </div>
@@ -375,7 +375,7 @@
                 <div class="stat-value amount-vnd" style="color:#0d6efd;font-size:1.15rem">
                     {{ s.unique_invoice_amount|vnd }} VND
                 </div>
-                <small class="text-muted">Deduped — {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
+                <small class="text-muted">Excl. {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
             </div>
         </div>
     </div>
@@ -412,7 +412,7 @@
         <!-- BY SHOP TAB -->
         <div class="tab-pane fade show active p-3" id="shopTab">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <p class="text-muted small mb-0">Sorted by Used Coupons (descending). <strong>% Used / Used All</strong> = Used / total USED coupons across all shops. <strong>Total Amount</strong> = unique invoice amounts (deduped).</p>
+                <p class="text-muted small mb-0">Sorted by Used Coupons (descending). <strong>% of All Used</strong> = this shop's used coupons as a percentage of all coupons used across all shops. <strong>Total Amount</strong> = unique invoice amounts (after removing duplicates).</p>
                 {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=shop&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
             </div>
             {% if by_shop %}
@@ -422,7 +422,7 @@
                         <tr>
                             <th class="tbl-hdr-shop">Using Shop</th>
                             <th class="text-end tbl-hdr-used">Used Coupons</th>
-                            <th class="text-end tbl-hdr-pct2">% Used / Used All</th>
+                            <th class="text-end tbl-hdr-pct2">% of All Used</th>
                             <th class="text-end tbl-hdr-cnv">Coupon Amount</th>
                             <th class="text-end tbl-hdr-amt">Total Amount (Unique)</th>
                         </tr>
@@ -455,7 +455,7 @@
         <!-- DETAIL TAB -->
         <div class="tab-pane fade p-3" id="detailTab">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <p class="text-muted small mb-0">Sorted by Coupon ID (ascending). Customer name + phone from VIP ID lookup. <span class="badge bg-warning text-dark">Warning</span> = shop or date mismatch.</p>
+                <p class="text-muted small mb-0">Sorted by Coupon ID (ascending). Customer name + phone from VIP ID lookup. <span class="badge bg-warning text-dark">Warning</span> = shop mismatch between coupon's using shop and invoice shop, or invoice not found.</p>
                 {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=detail&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
             </div>
             <div class="table-responsive">
@@ -476,8 +476,8 @@
                             <th class="text-end tbl-hdr-used">Coupon Amt</th>
                             <th class="tbl-hdr-used">Note</th>
                             <th class="tbl-hdr-cnv">CNV ID</th>
-                            <th class="tbl-hdr-cnv">CNV Points</th>
-                            <th class="tbl-hdr-cnv">CNV Total Pts</th>
+                            <th class="tbl-hdr-cnv">CNV Points (Current)</th>
+                            <th class="tbl-hdr-cnv">CNV Total Points</th>
                         </tr>
                     </thead>
                     <tbody>

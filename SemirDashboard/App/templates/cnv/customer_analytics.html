@@ -187,12 +187,12 @@
     <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
         <div class="stat-label opacity-75">Total Customers (POS System)</div>
         <div class="stat-value">{{ total_pos|default:0 }}</div>
-        <small class="opacity-75">From Customer table</small>
+        <small class="opacity-75">In POS system</small>
     </div></div></div>
     <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
         <div class="stat-label opacity-75">Total CNV Customers</div>
         <div class="stat-value">{{ total_cnv|default:0 }}</div>
-        <small class="opacity-75">From CNV Customer table</small>
+        <small class="opacity-75">In CNV Loyalty</small>
     </div></div></div>
     <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
         <div class="stat-label opacity-75">POS Only (Not in CNV)</div>
@@ -215,7 +215,7 @@
     <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
         <div class="stat-label opacity-75">% Active Zalo / CNV</div>
         <div class="stat-value">{{ zalo_app_all_pct|default:0 }}%</div>
-        <small class="opacity-75">zalo_app_id not null</small>
+        <small class="opacity-75">Linked to Zalo Mini App</small>
     </div></div></div>
     <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
         <div class="stat-label opacity-75">Follow Zalo OA</div>
@@ -225,7 +225,7 @@
     <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
         <div class="stat-label opacity-75">% Follow OA / CNV</div>
         <div class="stat-value">{{ zalo_oa_all_pct|default:0 }}%</div>
-        <small class="opacity-75">zalo_oa_id not null</small>
+        <small class="opacity-75">Following Semir Zalo OA</small>
     </div></div></div>
 </div>
 
@@ -258,7 +258,7 @@
     <div class="col"><div class="stat-card card text-white border-0" style="background:#0047B3"><div class="card-body">
         <div class="stat-label opacity-75">Active Zalo Mini App (Period)</div>
         <div class="stat-value">{{ zalo_app_period_count|default:0 }}</div>
-        <small class="opacity-75">by zalo_app_created_at</small>
+        <small class="opacity-75">Activated in period</small>
     </div></div></div>
     <div class="col"><div class="stat-card card text-white border-0" style="background:#0047B3"><div class="card-body">
         <div class="stat-label opacity-75">% Zalo App / CNV</div>
@@ -268,7 +268,7 @@
     <div class="col"><div class="stat-card card text-white border-0" style="background:#0047B3"><div class="card-body">
         <div class="stat-label opacity-75">Follow Zalo OA (Period)</div>
         <div class="stat-value">{{ zalo_oa_period_count|default:0 }}</div>
-        <small class="opacity-75">by zalo_app_created_at</small>
+        <small class="opacity-75">Followed OA in period</small>
     </div></div></div>
     <div class="col"><div class="stat-card card text-white border-0" style="background:#0047B3"><div class="card-body">
         <div class="stat-label opacity-75">% Follow OA / CNV</div>
@@ -316,7 +316,7 @@
         <div class="table-scroll">
             <table class="table table-sm table-hover mb-0 cnv-used-table">
                 <thead class="table-dark"><tr>
-                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th><th>In POS</th>
+                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th><th>In POS</th>
                 </tr></thead>
                 <tbody>
                 {% for c in cnv_used_points_list %}
@@ -356,7 +356,7 @@
             <table class="table table-sm table-hover mb-0 mismatch-table">
                 <thead class="table-dark"><tr>
                     <th>Phone</th><th>POS VIP ID</th><th>POS Name</th><th>POS Grade</th><th>POS Pts</th><th>POS Used Pts</th>
-                    <th>CNV ID</th><th>CNV Name</th><th>CNV Level</th><th>CNV Pts</th><th>Total Pts</th><th>Used Pts</th><th>Diff</th>
+                    <th>CNV ID</th><th>CNV Name</th><th>CNV Level</th><th>CNV Pts</th><th>CNV Total Pts</th><th>CNV Used Pts</th><th>Diff</th>
                 </tr></thead>
                 <tbody>
                 {% for row in points_mismatch %}
@@ -397,7 +397,7 @@
             <table class="table table-sm table-hover mb-0 mismatch-table">
                 <thead class="table-dark"><tr>
                     <th>Phone</th><th>POS VIP ID</th><th>POS Name</th><th>POS Grade</th><th>POS Pts</th><th>POS Used Pts</th>
-                    <th>CNV ID</th><th>CNV Name</th><th>CNV Level</th><th>CNV Pts</th><th>CNV Total Pts</th><th>Used Pts</th><th>Diff</th>
+                    <th>CNV ID</th><th>CNV Name</th><th>CNV Level</th><th>CNV Pts</th><th>CNV Total Pts</th><th>CNV Used Pts</th><th>Diff</th>
                 </tr></thead>
                 <tbody>
                 {% for row in total_points_mismatch %}
@@ -442,7 +442,7 @@
         <div class="table-scroll">
             <table class="table table-sm table-hover mb-0 zalo-table">
                 <thead class="table-dark"><tr>
-                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Mini App</th><th>Follow OA</th><th>In POS</th>
+                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Mini App</th><th>Follow OA</th><th>In POS</th>
                 </tr></thead>
                 <tbody>
                 {% for c in zalo_mini_app_list %}
@@ -476,7 +476,7 @@
         <div class="table-scroll">
             <table class="table table-sm table-hover mb-0 zalo-table">
                 <thead class="table-dark"><tr>
-                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Mini App</th><th>Follow OA</th><th>In POS</th>
+                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Mini App</th><th>Follow OA</th><th>In POS</th>
                 </tr></thead>
                 <tbody>
                 {% for c in zalo_oa_list %}
@@ -546,7 +546,7 @@
         <div class="table-scroll">
             <table class="table table-sm table-hover mb-0 cnv-table">
                 <thead class="table-dark"><tr>
-                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
+                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
                 </tr></thead>
                 <tbody>
                 {% for c in cnv_only_all %}
@@ -606,7 +606,7 @@
         <div class="table-scroll">
             <table class="table table-sm table-hover mb-0 cnv-table">
                 <thead class="table-dark"><tr>
-                    <th>Customer ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
+                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
                 </tr></thead>
                 <tbody>
                 {% for c in cnv_only_period %}

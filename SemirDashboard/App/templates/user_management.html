@@ -126,7 +126,7 @@
                             <i class="bi bi-shield me-1"></i>
                             <strong>{{ role.name }}</strong>
                             {% if role.is_system %}
-                                <span class="badge bg-warning text-dark ms-2">system</span>
+                                <span class="badge bg-warning text-dark ms-2" title="Built-in role — cannot be deleted">Built-in</span>
                             {% endif %}
                             <span class="badge bg-primary ms-1">{{ role.users.count }} user{{ role.users.count|pluralize }}</span>
                         </div>
@@ -142,7 +142,7 @@
                         </form>
                         {% else %}
                         <button type="button" class="btn btn-sm btn-outline-danger disabled"
-                                title="System roles cannot be deleted">
+                                title="Built-in roles cannot be deleted">
                             <i class="bi bi-trash"></i> Delete
                         </button>
                         {% endif %}

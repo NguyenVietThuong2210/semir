@@ -264,7 +264,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                 <div class="card-body">
                     <div class="stat-label">INV(CUS)</div>
                     <div class="stat-value">{{ overview.total_invoices_without_vip0 }}</div>
-                    <small>Excluding VIP ID = 0</small>
+                    <small>VIP customers only</small>
                 </div>
             </div>
         </div>
@@ -276,7 +276,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                     <div class="stat-value amount-vnd" style="font-size:1.2rem">
                         {{ overview.total_amount_without_vip0|vnd }} {{ currency }}
                     </div>
-                    <small>Excluding VIP ID = 0</small>
+                    <small>VIP customers only</small>
                 </div>
             </div>
         </div>
@@ -311,7 +311,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                 <div class="card-body">
                     <div class="stat-label">Total Invoices</div>
                     <div class="stat-value">{{ overview.total_invoices_with_vip0 }}</div>
-                    <small>Including all invoices</small>
+                    <small>All invoices incl. non-VIP</small>
                 </div>
             </div>
         </div>
@@ -323,7 +323,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                     <div class="stat-value amount-vnd" style="font-size:1.3rem">
                         {{ overview.total_amount_with_vip0|vnd }} {{ currency }}
                     </div>
-                    <small>Including all amounts</small>
+                    <small>All amounts incl. non-VIP</small>
                 </div>
             </div>
         </div>
@@ -341,7 +341,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <div class="card-body">
                 <div class="stat-label">Total Customers (All Time)</div>
                 <div class="stat-value">{{ overview.total_customers_in_db }}</div>
-                <small>Registered in DB</small>
+                <small>In system</small>
             </div>
         </div>
     </div>
@@ -351,7 +351,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <div class="card-body">
                 <div class="stat-label">Member Active (All Time)</div>
                 <div class="stat-value">{{ overview.member_active_all_time }}</div>
-                <small>Points &gt; 0</small>
+                <small>Has loyalty points</small>
             </div>
         </div>
     </div>
@@ -361,7 +361,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <div class="card-body">
                 <div class="stat-label">Member Inactive (All Time)</div>
                 <div class="stat-value">{{ overview.member_inactive_all_time }}</div>
-                <small>Points = 0</small>
+                <small>No loyalty points yet</small>
             </div>
         </div>
     </div>
@@ -371,7 +371,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <div class="card-body">
                 <div class="stat-label">Return Visit Rate (All Time)</div>
                 <div class="stat-value">{{ overview.return_rate_all_time }}%</div>
-                <small>Returning / Total DB</small>
+                <small>Returning / Total customers</small>
             </div>
         </div>
     </div>
@@ -462,8 +462,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <th class="col-cnt text-end">Active (Period)</th>
                             <th class="col-cnt text-end">Returning</th>
                             <th class="col-rate text-end">Return Visit Rate</th>
-                            <th class="col-cnt text-end">Total in DB</th>
-                            <th class="col-rate text-end">Return Rate (AT)</th>
+                            <th class="col-cnt text-end">Total (All Time)</th>
+                            <th class="col-rate text-end">Return Visit Rate (All Time)</th>
                             <th class="col-inv text-end">INV(RET)</th>
                             <th class="col-amt text-end">AMT(RET)</th>
                             <th class="col-inv text-end">Total INV</th>
@@ -495,7 +495,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         <!-- BY SEASON TAB -->
         <div class="tab-pane fade p-3" id="sessionTab">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <p class="text-muted small mb-0">Year-aware season windows. Returning within a season = customer has at least 1 return visit in that season.</p>
+                <p class="text-muted small mb-0">4 seasons per year — M2-4 (Feb–Apr) · M5-7 (May–Jul) · M8-10 (Aug–Oct) · M11-1 (Nov–Jan). Returning = customer with at least 1 return visit in that season.</p>
                 {% if can_dl_analytics %}<a href="{% url 'export_analytics' %}?tab=season{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
             </div>
             <div class="table-responsive">
