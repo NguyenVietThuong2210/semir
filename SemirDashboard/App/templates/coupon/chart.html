@@ -214,8 +214,8 @@
     /* column highlight on chart click */
     .tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
     /* row highlight on chart click */
-    .tbl-row-hl > td:first-child { border-left:3px solid #0d6efd !important; background:#dbeafe !important; }
-    .tbl-row-hl > td { background:#eef5ff !important; }
+    .tbl-row-hl > td:first-child { border-left:4px solid #0d6efd !important; background:#93c5fd !important; }
+    .tbl-row-hl > td { background:#bfdbfe !important; }
     .tbl-row-hl > td.tbl-col-hl { background:#ffe066 !important; }
 </style>
 {% endblock %}
@@ -434,7 +434,7 @@
                 <div class="shop-select-actions d-flex gap-1">
                     <button class="btn btn-outline-secondary btn-sm" id="shopSelAll">All</button>
                     <button class="btn btn-outline-secondary btn-sm" id="shopSelNone">None</button>
-                    <button class="btn btn-outline-secondary btn-sm" id="shopSelTop5">Top 5</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="shopSelTop5">First 5</button>
                 </div>
                 <div class="shop-checklist" id="shopChecklist">
                     <label for="cbShopAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
@@ -531,7 +531,7 @@
                 <div class="shop-select-actions d-flex gap-1">
                     <button class="btn btn-outline-secondary btn-sm" id="campSelAll">All</button>
                     <button class="btn btn-outline-secondary btn-sm" id="campSelNone">None</button>
-                    <button class="btn btn-outline-secondary btn-sm" id="campSelTop5">Top 5</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="campSelTop5">First 5</button>
                 </div>
                 <div class="shop-checklist" id="campChecklist">
                     <label for="cbCampAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
@@ -897,6 +897,7 @@
     function getShopMetric() { return document.getElementById('shopMetric').value; }
 
     function buildShopList() {
+        ALL_SHOPS.sort((a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'}));
         const cl = document.getElementById('shopChecklist');
         // remove existing shop rows (keep avg rows = first 2 labels)
         cl.querySelectorAll('.shop-item').forEach(el => el.remove());
@@ -1017,7 +1018,6 @@
         renderDataTable('shopDataWrap', 'shopDataCaption', dispLabels, shopChart.data.datasets, metric, btype === 'week');
     }
 
-    ALL_SHOPS.sort((a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'}));
     buildShopList();
 
     document.getElementById('shopSelAll').onclick = () => { document.querySelectorAll('.shop-check-s').forEach(c => c.checked = true); refreshShopChart(); };
@@ -1045,6 +1045,7 @@
     function getCampMetric() { return document.getElementById('campMetric').value; }
 
     function buildCampList() {
+        ALL_CAMPS.sort((a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'}));
         const cl = document.getElementById('campChecklist');
         cl.querySelectorAll('.camp-item').forEach(el => el.remove());
         ALL_CAMPS.forEach((camp, i) => {
@@ -1082,7 +1083,6 @@
         renderDataTable('campDataWrap', 'campDataCaption', dispLabels, campChart.data.datasets, metric, btype === 'week', 'Campaign');
     }
 
-    ALL_CAMPS.sort((a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'}));
     buildCampList();
 
     document.getElementById('campSelAll').onclick = () => { document.querySelectorAll('.camp-check').forEach(c => c.checked = true); refreshCampChart(); };
