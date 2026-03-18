@@ -202,6 +202,12 @@
     .shop-select-actions button {
         font-size: .78rem;
     }
+
+    /* ─── Chart data tables ─── */
+    .chart-tbl-wrap { overflow-x: auto; }
+    .chart-data-tbl th, .chart-data-tbl td { white-space: nowrap; }
+    .tbl-toggle-btn .bi-chevron-down { transition: transform .2s ease; }
+    .tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform: rotate(180deg); }
 </style>
 {% endblock %}
 
@@ -386,6 +392,23 @@
     </div>
 </div>
 
+<!-- ─── Overview Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Period Overview — Data Table</strong></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#couponOvDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="couponOvDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="couponOvDataWrap" class="chart-tbl-wrap"></div>
+        </div>
+    </div>
+</div>
+
 <!-- ═══ SECTION 2 — SHOP TRENDS ═══ -->
 <div class="card mb-4 border-0 shadow-sm">
     <div class="card-header bg-white">
@@ -465,6 +488,24 @@
     </div>
 </div>
 
+<!-- ─── Shop Trends Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Shop Trends — Data Table</strong>
+            <small class="text-muted ms-2" id="shopDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#shopDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="shopDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="shopDataWrap" class="chart-tbl-wrap"></div>
+        </div>
+    </div>
+</div>
+
 <!-- ═══ SECTION 3 — CAMPAIGN TRENDS ═══ -->
 <div class="card mb-4 border-0 shadow-sm">
     <div class="card-header bg-white">
@@ -540,6 +581,24 @@
 
         <div class="trend-chart-wrap">
             <canvas id="campTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Campaign Trends Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Campaign Trends — Data Table</strong>
+            <small class="text-muted ms-2" id="campDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#campDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="campDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="campDataWrap" class="chart-tbl-wrap"></div>
         </div>
     </div>
 </div>
@@ -838,6 +897,76 @@
         return sel;
     }
 
+    /* ══════════════════════════════════════════════
+       DATA TABLE RENDERING
+    ══════════════════════════════════════════════ */
+    function renderCouponOverviewTable() {
+        const wrap = document.getElementById('couponOvDataWrap');
+        if (!wrap) return;
+        function fmtN(v, isAmt) {
+            v = Number(v) || 0;
+            return isAmt ? v.toLocaleString() + ' VND' : v.toLocaleString();
+        }
+        function pctStr(v, t) { return Number(t) > 0 ? (Number(v) / Number(t) * 100).toFixed(1) + '%' : '—'; }
+        function tr(label, v, t, tLbl, isAmt) {
+            return `<tr><td>${label}</td>
+                <td class="text-end fw-bold">${fmtN(v, isAmt)}</td>
+                <td class="text-end text-muted">${fmtN(t, isAmt)} <small>(${tLbl})</small></td>
+                <td class="text-end fw-bold" style="color:#6f42c1;">${pctStr(v, t)}</td></tr>`;
+        }
+        function divRow(lbl) {
+            return `<tr><td colspan="4" style="background:#f5f0fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;
+        }
+        let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
+            <thead><tr style="background:#2c3e50;color:#fff;">
+                <th>Metric</th><th class="text-end">Value</th><th class="text-end">Reference</th><th class="text-end">Rate</th>
+            </tr></thead><tbody>` +
+            divRow('All Time') +
+            tr('Used Coupons (All Time)', at.used, at.total, 'Total Coupons') +
+            tr('Coupon Amount (All Time)', at.total_coupon_amount, at.unique_invoice_amount, 'Invoice Amount (AT)', true) +
+            divRow('Period Filter') +
+            tr('Used Coupons (Period)', pd.used, pd.total, 'Total Coupons') +
+            tr('Coupon Amount (Period)', pd.total_coupon_amount, pd.unique_invoice_amount, 'Invoice Amount (Period)', true) +
+            `</tbody></table>`;
+        wrap.innerHTML = html;
+    }
+
+    function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, entityLabel) {
+        entityLabel = entityLabel || 'Shop';
+        const wrap = document.getElementById(wrapId);
+        if (!wrap) return;
+        if (!datasets.length || !xLabels.length) {
+            wrap.innerHTML = '<p class="text-muted p-3 mb-0 small">No data to display.</p>';
+            return;
+        }
+        const n = xLabels.length;
+        const minW = isWeek && n > 0 ? 'min-width:' + Math.max(5, Math.floor(70 / n)) + '%;' : 'min-width:70px;';
+        let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
+            <thead><tr style="background:#2c3e50;color:#fff;">
+                <th style="min-width:140px;">${entityLabel}</th>`;
+        xLabels.forEach(lbl => {
+            html += `<th style="${minW}text-align:center;">${lbl}</th>`;
+        });
+        html += `</tr></thead><tbody>`;
+        datasets.forEach((ds, idx) => {
+            const isSpec = ds.label && ds.label.startsWith('AVG');
+            const bg = isSpec ? 'background:#f4f6f8;font-style:italic;' : idx % 2 === 1 ? 'background:#fafbfc;' : '';
+            html += `<tr style="${bg}">`;
+            html += `<td style="white-space:nowrap;font-weight:600;">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ds.borderColor || '#aaa'};margin-right:5px;vertical-align:middle;"></span>
+                ${ds._fullLabel || ds.label}</td>`;
+            (ds.data || []).forEach(v => {
+                const disp = v === 0 ? '<span style="color:#ccc">—</span>' : (v ? fmtVal(v, metric) : '—');
+                html += `<td style="text-align:right;">${disp}</td>`;
+            });
+            html += `</tr>`;
+        });
+        html += `</tbody></table>`;
+        wrap.innerHTML = html;
+        const capEl = document.getElementById(captionId);
+        if (capEl) capEl.textContent = yLabel(metric) + ' · ' + n + (n === 1 ? ' period' : ' periods');
+    }
+
     function refreshShopChart() {
         if (shopChart) shopChart.destroy();
         const btype = getShopXAxis();
@@ -845,6 +974,8 @@
         const series = SHOP_SERIES[btype] || {};
         const labels = (TREND.time_labels || {})[btype] || [];
         shopChart = buildTrendChart('shopTrendChart', 'shopLegendPanel', series, labels, getShopSelected(), metric, getColor, btype, TOTAL_BY_TIME_SHOP);
+        const dispLabels = btype === 'week' ? labels.map(tk => WEEK_LABEL_MAP[tk] || tk) : labels;
+        renderDataTable('shopDataWrap', 'shopDataCaption', dispLabels, shopChart.data.datasets, metric, btype === 'week');
     }
 
     buildShopList();
@@ -907,6 +1038,8 @@
         const series = CAMP_SERIES[btype] || {};
         const labels = (TREND.time_labels_camp || TREND.time_labels || {})[btype] || [];
         campChart = buildTrendChart('campTrendChart', 'campLegendPanel', series, labels, getCampSelected(), metric, getColor, btype, TOTAL_BY_TIME);
+        const dispLabels = btype === 'week' ? labels.map(tk => WEEK_LABEL_MAP[tk] || tk) : labels;
+        renderDataTable('campDataWrap', 'campDataCaption', dispLabels, campChart.data.datasets, metric, btype === 'week', 'Campaign');
     }
 
     buildCampList();
@@ -921,6 +1054,7 @@
     document.getElementById('dotCampAvg').style.background = AVG_SEL_COLOR;
 
     refreshCampChart();
+    renderCouponOverviewTable();
 
     // ── Campaign multi-select checkbox filter ─────────────────────────────────
     (function buildChartCpnFilter() {

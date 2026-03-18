@@ -105,6 +105,12 @@
 .click-info-panel {
     font-size:.8rem; max-height:240px; overflow-y:auto;
 }
+
+/* ─── Chart data tables ─── */
+.chart-tbl-wrap { overflow-x:auto; }
+.chart-data-tbl th, .chart-data-tbl td { white-space:nowrap; }
+.tbl-toggle-btn .bi-chevron-down { transition:transform .2s ease; }
+.tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform:rotate(180deg); }
 </style>
 {% endblock %}
 
@@ -357,6 +363,23 @@
     </div>
 </div>
 
+<!-- ─── Overview Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Period Overview — Data Table</strong></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#ovDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="ovDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="ovDataWrap" class="chart-tbl-wrap"></div>
+        </div>
+    </div>
+</div>
+
 <!-- ═══════════════════════════════════════
      SECTION 2 — SHOP TREND LINE CHART
 ══════════════════════════════════════════ -->
@@ -474,14 +497,32 @@
     </div>
 </div>
 
+<!-- ─── Shop Trends Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Shop Trends — Data Table</strong>
+            <small class="text-muted ms-2" id="trendDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#trendDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="trendDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="trendDataWrap" class="chart-tbl-wrap"></div>
+        </div>
+    </div>
+</div>
+
 <!-- ═══════════════════════════════════════
-     SECTION 3 — BAR CHART (independent controls)
+     SECTION 3 — PERIOD TOTALS (independent controls)
 ══════════════════════════════════════════ -->
 <div class="card mb-4 border-0 shadow-sm">
     <div class="card-header bg-white">
         <i class="bi bi-bar-chart-fill text-primary"></i>
-        <strong>Bar Chart</strong>
-        <small class="text-muted ms-2">Total of selected shops per period</small>
+        <strong>Period Totals</strong>
+        <small class="text-muted ms-2">Combined total across selected shops per time period</small>
     </div>
     <div class="card-body">
         <div class="row g-3 mb-3">
@@ -565,6 +606,24 @@
         </div>
         <div class="bar-chart-wrap">
             <canvas id="sessionBarChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Period Totals Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Period Totals — Data Table</strong>
+            <small class="text-muted ms-2" id="barDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#barDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="barDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="barDataWrap" class="chart-tbl-wrap"></div>
         </div>
     </div>
 </div>
@@ -655,6 +714,24 @@
         </div>
         <div class="bar-chart-wrap">
             <canvas id="comparisonBarChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Year-over-Year Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Year-over-Year — Data Table</strong>
+            <small class="text-muted ms-2" id="compDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#compDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="compDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="compDataWrap" class="chart-tbl-wrap"></div>
         </div>
     </div>
 </div>
@@ -1042,6 +1119,7 @@ function buildChart() {
     attachLineHighlight(trendChart);
     updateLegend(datasets);
     syncDotColors();
+    renderDataTable('trendDataWrap', 'trendDataCaption', xLabels, datasets, metric, xAxis === 'week');
 }
 
 /* ══════════════════════════════════════════════
@@ -1140,6 +1218,19 @@ function buildBarChart() {
             },
         },
     });
+
+    // per-shop breakdown for data table
+    const _tblShopRows = selectedShops.map(sName => {
+        const _sh = CD.shop_stats.find(s => s.shop_name === sName);
+        if (!_sh) return null;
+        const _d = xLabels.map(lbl => {
+            const _r = (_sh[byKey] || []).find(r => r[timeKey] === lbl);
+            return _r ? (_r[metric] ?? 0) : 0;
+        });
+        return { label: sName, data: _d, borderColor: BAR_GRADIENT_COLOR };
+    }).filter(Boolean);
+    _tblShopRows.push({ label: 'Total (selected)', data: values, borderColor: '#2c3e50', _isTotal: true });
+    renderDataTable('barDataWrap', 'barDataCaption', xLabels, _tblShopRows, metric, xAxis === 'week');
 }
 
 /* ── Sync colour dots next to checkboxes ── */
@@ -1332,6 +1423,7 @@ function buildComparisonChart() {
             },
         },
     });
+    renderDataTable('compDataWrap', 'compDataCaption', xLabels, datasets, metric, xAxis === 'week', 'Year');
 }
 
 /* ── Comparison chart event listeners ── */
@@ -1352,10 +1444,85 @@ document.getElementById('btnCompSelTop5').addEventListener('click', () => {
     buildComparisonChart();
 });
 
+/* ══════════════════════════════════════════════
+   DATA TABLE RENDERING
+══════════════════════════════════════════════ */
+function renderOverviewTable() {
+    const wrap = document.getElementById('ovDataWrap');
+    if (!wrap) return;
+    function fmtN(v, isAmt) {
+        v = Number(v) || 0;
+        return isAmt ? v.toLocaleString() + ' VND' : v.toLocaleString();
+    }
+    function pctStr(v, t) { return Number(t) > 0 ? (Number(v) / Number(t) * 100).toFixed(1) + '%' : '—'; }
+    function tr(label, v, t, tLbl, isAmt) {
+        return `<tr><td>${label}</td>
+            <td class="text-end fw-bold">${fmtN(v, isAmt)}</td>
+            <td class="text-end text-muted">${fmtN(t, isAmt)} <small>(${tLbl})</small></td>
+            <td class="text-end fw-bold" style="color:#0047b3;">${pctStr(v, t)}</td></tr>`;
+    }
+    function divRow(lbl) {
+        return `<tr><td colspan="4" style="background:#f0f4fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;
+    }
+    let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
+        <thead><tr style="background:#2c3e50;color:#fff;">
+            <th>Metric</th><th class="text-end">Value</th><th class="text-end">Reference</th><th class="text-end">Rate</th>
+        </tr></thead><tbody>` +
+        divRow('Customer Metrics') +
+        tr('New Members (Period)', OV.new_members_in_period, OV.total_customers_in_db, 'Total DB') +
+        tr('Return Visit Rate (Period)', OV.returning_customers, OV.active_customers, 'Active CUS (Period)') +
+        tr('Active Customers (Period)', OV.active_customers, OV.total_customers_in_db, 'Total DB') +
+        tr('Active Customers (All Time)', OV.member_active_all_time, OV.total_customers_in_db, 'Total DB') +
+        divRow('Invoice & Amount Metrics — Period') +
+        tr('INV(CUS) — VIP members', OV.total_invoices_without_vip0, OV.total_invoices_with_vip0, 'Total INV') +
+        tr('AMT(CUS) — VIP members', OV.total_amount_without_vip0, OV.total_amount_with_vip0, 'Total AMT', true) +
+        tr('INV(RET) — Returning CUS', OV.returning_invoices || 0, OV.total_invoices_with_vip0, 'Total INV') +
+        tr('AMT(RET) — Returning CUS', OV.returning_amount || 0, OV.total_amount_with_vip0, 'Total AMT', true) +
+        `</tbody></table>`;
+    wrap.innerHTML = html;
+}
+
+function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, entityLabel) {
+    entityLabel = entityLabel || 'Shop / Entity';
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    if (!datasets.length || !xLabels.length) {
+        wrap.innerHTML = '<p class="text-muted p-3 mb-0 small">No data to display.</p>';
+        return;
+    }
+    const n = xLabels.length;
+    const minW = isWeek && n > 0 ? 'min-width:' + Math.max(5, Math.floor(70 / n)) + '%;' : 'min-width:70px;';
+    let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
+        <thead><tr style="background:#2c3e50;color:#fff;">
+            <th style="min-width:140px;">${entityLabel}</th>`;
+    xLabels.forEach(lbl => {
+        html += `<th style="${minW}text-align:center;">${lbl}</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+    datasets.forEach((ds, idx) => {
+        const isSpec = ds._isTotal || (ds.label && ds.label.startsWith('AVG'));
+        const bg = ds._isTotal ? 'background:#e8f0fe;' : isSpec ? 'background:#f4f6f8;font-style:italic;' : idx % 2 === 1 ? 'background:#fafbfc;' : '';
+        html += `<tr style="${bg}">`;
+        html += `<td style="white-space:nowrap;font-weight:600;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ds.borderColor || '#aaa'};margin-right:5px;vertical-align:middle;"></span>
+            ${ds.label}</td>`;
+        (ds.data || []).forEach(v => {
+            const disp = v === 0 ? '<span style="color:#ccc">—</span>' : (v ? fmtVal(v, metric) : '—');
+            html += `<td style="text-align:right;">${disp}</td>`;
+        });
+        html += `</tr>`;
+    });
+    html += `</tbody></table>`;
+    wrap.innerHTML = html;
+    const capEl = document.getElementById(captionId);
+    if (capEl) capEl.textContent = yLabel(metric) + ' · ' + n + (n === 1 ? ' period' : ' periods');
+}
+
 // Initial render
 buildChart();
 buildBarChart();
 buildComparisonChart();
+renderOverviewTable();
 
 /* ══════════════════════════════════════════════
    PDF DOWNLOAD
