@@ -213,6 +213,10 @@
     .chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
     /* column highlight on chart click */
     .tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
+    /* row highlight on chart click */
+    .tbl-row-hl > td:first-child { border-left:3px solid #0d6efd !important; background:#dbeafe !important; }
+    .tbl-row-hl > td { background:#eef5ff !important; }
+    .tbl-row-hl > td.tbl-col-hl { background:#ffe066 !important; }
 </style>
 {% endblock %}
 
@@ -737,7 +741,7 @@
     // ── Generic trend chart builder ───────────────────────────────────────────────
     // btype: 'week' | 'month' | 'season' | 'year' — used for display-label translation
     // and correct pct_of_used denominator passed per-chart
-    function highlightTableCol(wrapId, colIndex) {
+    function highlightTableCol(wrapId, colIndex, rowLabel) {
         const wrap = document.getElementById(wrapId);
         if (!wrap) return;
         const collapseEl = wrap.closest('.collapse');
@@ -745,8 +749,15 @@
             bootstrap.Collapse.getOrCreateInstance(collapseEl).show();
         }
         wrap.querySelectorAll('.tbl-col-hl').forEach(el => el.classList.remove('tbl-col-hl'));
+        wrap.querySelectorAll('.tbl-row-hl').forEach(el => el.classList.remove('tbl-row-hl'));
         const nth = colIndex + 2; // col 1 = entity, data starts at col 2
         wrap.querySelectorAll(`thead th:nth-child(${nth}), tbody td:nth-child(${nth})`).forEach(el => el.classList.add('tbl-col-hl'));
+        if (rowLabel) {
+            for (const tr of wrap.querySelectorAll('tbody tr')) {
+                const td = tr.querySelector('td');
+                if (td && td.textContent.trim() === rowLabel.trim()) { tr.classList.add('tbl-row-hl'); break; }
+            }
+        }
         const hdrCell = wrap.querySelector(`thead th:nth-child(${nth})`);
         if (hdrCell) hdrCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
@@ -839,7 +850,10 @@
                         .filter(r => r.value > 0)
                         .sort((a, b) => b.value - a.value);
                     renderClickCard(legendPanelId, lbl, rows, metric, () => updateLegendPanel(legendPanelId, datasets));
-                    if (tableWrapId) highlightTableCol(tableWrapId, di);
+                    if (tableWrapId) {
+                        const ds = datasets[elements[0].datasetIndex];
+                        highlightTableCol(tableWrapId, di, ds ? (ds._fullLabel || ds.label) : undefined);
+                    }
                 },
                 plugins: {
                     legend: { display: false },
