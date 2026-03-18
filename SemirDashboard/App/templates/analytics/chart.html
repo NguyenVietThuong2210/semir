@@ -1499,7 +1499,13 @@ function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, e
         html += `<th style="${minW}text-align:center;">${lbl}</th>`;
     });
     html += `</tr></thead><tbody>`;
-    datasets.forEach((ds, idx) => {
+    // Sort rows: AVG lines first, then shops A-Z, Total row last
+    const _avgDs    = datasets.filter(ds => ds.label && ds.label.startsWith('AVG'));
+    const _totalDs  = datasets.filter(ds => ds._isTotal);
+    const _normalDs = datasets.filter(ds => !ds._isTotal && !(ds.label && ds.label.startsWith('AVG')));
+    _normalDs.sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, {sensitivity: 'base'}));
+    const _sortedDs = [..._avgDs, ..._normalDs, ..._totalDs];
+    _sortedDs.forEach((ds, idx) => {
         const isSpec = ds._isTotal || (ds.label && ds.label.startsWith('AVG'));
         const bg = ds._isTotal ? 'background:#e8f0fe;' : isSpec ? 'background:#f4f6f8;font-style:italic;' : idx % 2 === 1 ? 'background:#fafbfc;' : '';
         html += `<tr style="${bg}">`;
@@ -1518,7 +1524,23 @@ function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, e
     if (capEl) capEl.textContent = yLabel(metric) + ' · ' + n + (n === 1 ? ' period' : ' periods');
 }
 
-// Initial render
+// Sort a shop checklist alphabetically by input value, keeping avg-row labels at top
+function sortChecklistAlpha(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const items = [...container.querySelectorAll('label')].filter(l => !l.classList.contains('avg-row'));
+    items.sort((a, b) => {
+        const va = (a.querySelector('input')?.value || '').trim();
+        const vb = (b.querySelector('input')?.value || '').trim();
+        return va.localeCompare(vb, undefined, {sensitivity: 'base'});
+    });
+    items.forEach(item => container.appendChild(item));
+}
+
+// Initial render — sort checklists first so charts + tables reflect A-Z order
+sortChecklistAlpha('shopChecklist');
+sortChecklistAlpha('barShopChecklist');
+sortChecklistAlpha('compShopChecklist');
 buildChart();
 buildBarChart();
 buildComparisonChart();
@@ -1655,6 +1677,88 @@ if (btnPDF) {
                 return startY;
             }
 
+            // Render the HTML data table for a section onto new PDF page(s)
+            function addTablePage(wrapId, title) {
+                const wrap = document.getElementById(wrapId);
+                if (!wrap) return;
+                const tbl = wrap.querySelector('table');
+                if (!tbl) return;
+
+                const PX_W = 1600, RH = 22, HH = 28, pxMm = PX_W / CW;
+                const ths  = [...tbl.querySelectorAll('thead th')];
+                const FC   = Math.min(280, PX_W * 0.22);
+                const CC   = (PX_W - FC) / Math.max(1, ths.length - 1);
+                const cx   = i => i === 0 ? 0 : FC + (i - 1) * CC;
+                const cw   = i => i === 0 ? FC : CC;
+
+                function renderRows(rows) {
+                    const h   = HH + rows.length * RH + 2;
+                    const cvs = document.createElement('canvas');
+                    cvs.width = PX_W; cvs.height = h;
+                    const ctx = cvs.getContext('2d');
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
+
+                    // header
+                    ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 0, PX_W, HH);
+                    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
+                    ths.forEach((th, i) => {
+                        const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
+                        ctx.textAlign = i === 0 ? 'left' : 'center';
+                        ctx.fillText(t.length > ml ? t.slice(0, ml-1)+'…' : t,
+                                     i === 0 ? cx(0)+6 : cx(i)+cw(i)/2, HH-9);
+                    });
+
+                    // body rows
+                    rows.forEach((tr, ri) => {
+                        const ry  = HH + ri * RH;
+                        const tds = [...tr.querySelectorAll('td')];
+                        const div = tds.length === 1 && tds[0].colSpan > 1;
+                        const st  = tr.getAttribute('style') || '';
+
+                        if (div) {
+                            ctx.fillStyle = '#e8f0fb'; ctx.fillRect(0, ry, PX_W, RH);
+                            ctx.fillStyle = '#495057'; ctx.font = 'bold 11px system-ui,Arial,sans-serif';
+                            ctx.textAlign = 'left'; ctx.fillText(tds[0].textContent.trim(), 6, ry+RH-7);
+                        } else {
+                            if      (st.includes('#e8f0fe'))                           { ctx.fillStyle='#dce9ff'; ctx.fillRect(0,ry,PX_W,RH); }
+                            else if (st.includes('#f4f6f8')||st.includes('italic'))    { ctx.fillStyle='#f5f6f8'; ctx.fillRect(0,ry,PX_W,RH); }
+                            else if (ri % 2 === 1)                                     { ctx.fillStyle='#fafbfc'; ctx.fillRect(0,ry,PX_W,RH); }
+
+                            const itl = st.includes('italic')||st.includes('#f4f6f8');
+                            const bld = st.includes('#e8f0fe');
+                            tds.forEach((td, i) => {
+                                const raw = td.textContent.trim(); if (!raw || raw === '—') return;
+                                const ml  = Math.max(4, Math.floor(cw(i)/7.5));
+                                const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
+                                ctx.fillStyle = bld ? '#0d3a7a' : '#2c3e50';
+                                ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
+                                ctx.textAlign = i === 0 ? 'left' : 'right';
+                                ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);
+                            });
+                        }
+                        ctx.strokeStyle='#e9ecef'; ctx.lineWidth=0.5;
+                        ctx.beginPath(); ctx.moveTo(0,ry+RH); ctx.lineTo(PX_W,ry+RH); ctx.stroke();
+                    });
+
+                    ctx.strokeStyle='#dee2e6'; ctx.lineWidth=1; ctx.strokeRect(0,0,PX_W,h);
+                    return { png: cvs.toDataURL('image/png'), imgH: CW * h / PX_W };
+                }
+
+                doc.addPage();
+                let y = pageHeader(title);
+                const allTrs = [...tbl.querySelectorAll('tbody tr')];
+                let start = 0;
+                while (start < allTrs.length) {
+                    const maxRows = Math.max(1, Math.floor(((PH - M - y) * pxMm - HH - 2) / RH));
+                    const batch   = allTrs.slice(start, start + maxRows);
+                    const { png, imgH } = renderRows(batch);
+                    doc.addImage(png, 'PNG', M, y, CW, imgH);
+                    y += imgH;
+                    start += batch.length;
+                    if (start < allTrs.length) { doc.addPage(); y = pageHeader(title + ' (cont.)'); }
+                }
+            }
+
             /* ─────────────────────────────────────────
                PAGE 1 — Session Overview (8 donuts)
             ───────────────────────────────────────── */
@@ -1685,6 +1789,7 @@ if (btnPDF) {
                 }
                 dx += dSize + dGap;
             });
+            addTablePage('ovDataWrap', 'Period Overview — Data Table');
 
             /* ─────────────────────────────────────────
                PAGE 2 — Shop Trends
@@ -1702,12 +1807,13 @@ if (btnPDF) {
             const chartMaxH = PH - y - M - trendListH - 3;
             const trendBot  = addChartImage(getCanvasPng('shopTrendChart'), 'shopTrendChart', M, y, CW, chartMaxH);
             addShopList(trendDs, trendBot);
+            addTablePage('trendDataWrap', 'Shop Trends — Data Table');
 
             /* ─────────────────────────────────────────
-               PAGE 3 — Bar Chart
+               PAGE 3 — Period Totals
             ───────────────────────────────────────── */
             doc.addPage();
-            y = pageHeader('Bar Chart — Total of Selected Shops');
+            y = pageHeader('Period Totals — Combined Total by Period');
             const barXLbl   = document.querySelector('input[name="barXaxis"]:checked')
                                 ?.nextElementSibling?.textContent?.trim() || '';
             const barMetLbl = document.getElementById('barMetricSelect')?.selectedOptions[0]?.text || '';
@@ -1724,6 +1830,7 @@ if (btnPDF) {
             const barMaxH   = PH - y - M - barListH - 3;
             const barBot    = addChartImage(getCanvasPng('sessionBarChart'), 'sessionBarChart', M, y, CW, barMaxH);
             addShopList(barShops, barBot);
+            addTablePage('barDataWrap', 'Period Totals — Data Table');
 
             /* ─────────────────────────────────────────
                PAGE 4 — Year-over-Year Comparison
@@ -1746,6 +1853,7 @@ if (btnPDF) {
             const compMaxH  = PH - y - M - compListH - 3;
             const compBot   = addChartImage(getCanvasPng('comparisonBarChart'), 'comparisonBarChart', M, y, CW, compMaxH);
             addShopList(compShops, compBot);
+            addTablePage('compDataWrap', 'Year-over-Year — Data Table');
 
             doc.save('Sales_Analytics_Charts.pdf');
 
