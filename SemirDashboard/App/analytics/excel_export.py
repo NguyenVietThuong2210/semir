@@ -1269,13 +1269,13 @@ def export_customer_analytics_to_excel(
     ws_pos_all = wb.create_sheet("POS Only - All Time")
     
     # Header
-    headers = ['VIP ID', 'Phone', 'Name', 'Grade', 'Email', 'Registration Date', 'Points']
+    headers = ['VIP ID', 'Phone', 'Name', 'VIP Grade', 'Email', 'Registration Date', 'Points']
     for col_idx, header in enumerate(headers, 1):
         cell = ws_pos_all.cell(1, col_idx, header)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = header_align
-    
+
     # Data — subquery, no large __in set
     pos_only_customers = pos_base.exclude(
         phone__in=Subquery(cnv_base.values('phone'))
@@ -1306,7 +1306,7 @@ def export_customer_analytics_to_excel(
     ws_cnv_all = wb.create_sheet("CNV Only - All Time")
     
     # Header (8 columns)
-    headers = ['Customer ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points']
+    headers = ['CNV ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points']
     for col_idx, header in enumerate(headers, 1):
         cell = ws_cnv_all.cell(1, col_idx, header)
         cell.fill = header_fill
@@ -1351,7 +1351,7 @@ def export_customer_analytics_to_excel(
 
         if pos_period_qs.exists():
             ws_pos_period = wb.create_sheet("POS Only - Period")
-            headers = ['VIP ID', 'Phone', 'Name', 'Grade', 'Email', 'Registration Date', 'Points']
+            headers = ['VIP ID', 'Phone', 'Name', 'VIP Grade', 'Email', 'Registration Date', 'Points']
             for col_idx, header in enumerate(headers, 1):
                 cell = ws_pos_period.cell(1, col_idx, header)
                 cell.fill = header_fill
@@ -1378,7 +1378,7 @@ def export_customer_analytics_to_excel(
 
         if cnv_period_qs.exists():
             ws_cnv_period = wb.create_sheet("CNV Only - Period")
-            headers = ['Customer ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points']
+            headers = ['CNV ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points']
             for col_idx, header in enumerate(headers, 1):
                 cell = ws_cnv_period.cell(1, col_idx, header)
                 cell.fill = header_fill
@@ -1445,7 +1445,7 @@ def export_customer_analytics_to_excel(
     ws_used = wb.create_sheet("CNV Used Points")
 
     green_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
-    used_headers = ['Customer ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points', 'Total Points']
+    used_headers = ['CNV ID', 'Phone', 'Name', 'Level', 'Email', 'Registration Date', 'Points', 'Used Points', 'Total Points']
     for col_idx, header in enumerate(used_headers, 1):
         cell = ws_used.cell(1, col_idx, header)
         cell.fill = green_fill
@@ -1522,7 +1522,7 @@ def export_customer_analytics_to_excel(
     # ========================================================================
     zalo_blue_fill = PatternFill(start_color="0068FF", end_color="0068FF", fill_type="solid")
     zalo_headers = [
-        'Customer ID', 'Phone', 'Full Name', 'Level', 'Email',
+        'CNV ID', 'Phone', 'Full Name', 'Level', 'Email',
         'Reg Date', 'Points', 'Mini App', 'Follow OA', 'In POS'
     ]
 
@@ -1585,7 +1585,7 @@ def export_customer_analytics_to_excel(
     # ========================================================================
     cnv_all_fill = PatternFill(start_color="1D3557", end_color="1D3557", fill_type="solid")
     cnv_all_headers = [
-        'Customer ID', 'Phone', 'Full Name', 'Level', 'Email',
+        'CNV ID', 'Phone', 'Full Name', 'Level', 'Email',
         'Reg Date', 'Points', 'Used Points', 'Total Points',
         'Zalo App ID', 'Zalo OA ID', 'Zalo Created At'
     ]
@@ -1690,7 +1690,7 @@ def _cnv_hdr(ws, headers, fill, font, align):
 
 def _build_cnv_used_points_ws(wb, data, hf, font, align):
     ws = wb.create_sheet("CNV Used Points")
-    _cnv_hdr(ws, ["Customer ID", "Phone", "Full Name", "Level", "Email",
+    _cnv_hdr(ws, ["CNV ID", "Phone", "Full Name", "Level", "Email",
                   "Reg Date", "Points", "Used Pts", "Total Pts", "In POS"], hf, font, align)
     for r, c in enumerate(data.get("cnv_used_points_list") or [], 2):
         ws.cell(r, 1, c.get("cnv_id", ""))
@@ -1732,7 +1732,7 @@ def _build_mismatch_ws(wb, data, key, title, hf, font, align):
 
 def _build_zalo_ws(wb, data, key, title, hf, font, align):
     ws = wb.create_sheet(title)
-    _cnv_hdr(ws, ["Customer ID", "Phone", "Full Name", "Level", "Email",
+    _cnv_hdr(ws, ["CNV ID", "Phone", "Full Name", "Level", "Email",
                   "Reg Date", "Points", "Zalo App ID", "Zalo OA ID", "In POS"], hf, font, align)
     for r, c in enumerate(data.get(key) or [], 2):
         ws.cell(r, 1, c.get("cnv_id", ""))
@@ -1751,7 +1751,7 @@ def _build_zalo_ws(wb, data, key, title, hf, font, align):
 
 def _build_pos_only_ws(wb, data, key, title, hf, font, align):
     ws = wb.create_sheet(title)
-    _cnv_hdr(ws, ["VIP ID", "Phone", "Name", "Grade", "Email", "Reg Date", "Points"],
+    _cnv_hdr(ws, ["VIP ID", "Phone", "Name", "VIP Grade", "Email", "Reg Date", "Points"],
              hf, font, align)
     for r, c in enumerate(data.get(key) or [], 2):
         ws.cell(r, 1, c.get("vip_id", ""))
@@ -1767,7 +1767,7 @@ def _build_pos_only_ws(wb, data, key, title, hf, font, align):
 
 def _build_cnv_only_ws(wb, data, key, title, hf, font, align):
     ws = wb.create_sheet(title)
-    _cnv_hdr(ws, ["Customer ID", "Phone", "Full Name", "Level", "Email",
+    _cnv_hdr(ws, ["CNV ID", "Phone", "Full Name", "Level", "Email",
                   "Reg Date", "Points", "Used Pts", "Total Pts"], hf, font, align)
     for r, c in enumerate(data.get(key) or [], 2):
         ws.cell(r, 1, c.get("cnv_id", ""))
