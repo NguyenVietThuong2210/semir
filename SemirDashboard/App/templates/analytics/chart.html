@@ -111,6 +111,11 @@
 .chart-data-tbl th, .chart-data-tbl td { white-space:nowrap; }
 .tbl-toggle-btn .bi-chevron-down { transition:transform .2s ease; }
 .tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform:rotate(180deg); }
+/* sticky first column */
+.chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:#2c3e50;box-shadow:2px 0 4px rgba(0,0,0,.12); }
+.chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
+/* column highlight on chart click */
+.tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
 </style>
 {% endblock %}
 
@@ -1083,6 +1088,7 @@ function buildChart() {
                     .sort((a, b) => b.value - a.value);
                 renderClickCard('legendPanel', lbl, rows, metric, false,
                     () => updateLegend(trendChart.data.datasets));
+                highlightTableCol('trendDataWrap', di);
             },
             plugins: {
                 legend: { display: false },
@@ -1189,6 +1195,7 @@ function buildBarChart() {
                     .sort((a, b) => b.value - a.value);
                 renderClickCard('barInfoPanel', lbl, rows, metric, true,
                     () => { document.getElementById('barInfoPanel').innerHTML = ''; });
+                highlightTableCol('barDataWrap', di);
             },
             plugins: {
                 legend: { display: false },
@@ -1398,6 +1405,7 @@ function buildComparisonChart() {
                     .filter(r => r.value > 0);   // order handled by renderClickCard (yoy = asc by label)
                 renderClickCard('compInfoPanel', lbl, rows, metric, true,
                     () => { document.getElementById('compInfoPanel').innerHTML = ''; }, 'yoy');
+                highlightTableCol('compDataWrap', di);
             },
             plugins: {
                 legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
@@ -1482,6 +1490,20 @@ function renderOverviewTable() {
     wrap.innerHTML = html;
 }
 
+function highlightTableCol(wrapId, colIndex) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const collapseEl = wrap.closest('.collapse');
+    if (collapseEl && !collapseEl.classList.contains('show')) {
+        bootstrap.Collapse.getOrCreateInstance(collapseEl).show();
+    }
+    wrap.querySelectorAll('.tbl-col-hl').forEach(el => el.classList.remove('tbl-col-hl'));
+    const nth = colIndex + 2; // col 1 = entity, data starts at col 2
+    wrap.querySelectorAll(`thead th:nth-child(${nth}), tbody td:nth-child(${nth})`).forEach(el => el.classList.add('tbl-col-hl'));
+    const hdrCell = wrap.querySelector(`thead th:nth-child(${nth})`);
+    if (hdrCell) hdrCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+}
+
 function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, entityLabel) {
     entityLabel = entityLabel || 'Shop / Entity';
     const wrap = document.getElementById(wrapId);
@@ -1506,9 +1528,10 @@ function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, e
     _normalDs.sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, {sensitivity: 'base'}));
     const _sortedDs = [..._avgDs, ..._normalDs, ..._totalDs];
     _sortedDs.forEach((ds, idx) => {
-        const isSpec = ds._isTotal || (ds.label && ds.label.startsWith('AVG'));
-        const bg = ds._isTotal ? 'background:#e8f0fe;' : isSpec ? 'background:#f4f6f8;font-style:italic;' : idx % 2 === 1 ? 'background:#fafbfc;' : '';
-        html += `<tr style="${bg}">`;
+        const isAvg = ds.label && ds.label.startsWith('AVG');
+        const bgColor = ds._isTotal ? '#e8f0fe' : isAvg ? '#f4f6f8' : idx % 2 === 1 ? '#fafbfc' : '#ffffff';
+        const fontStyle = isAvg ? 'font-style:italic;' : '';
+        html += `<tr style="background:${bgColor};${fontStyle}">`;
         html += `<td style="white-space:nowrap;font-weight:600;">
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ds.borderColor || '#aaa'};margin-right:5px;vertical-align:middle;"></span>
             ${ds.label}</td>`;
@@ -1677,7 +1700,8 @@ if (btnPDF) {
                 return startY;
             }
 
-            // Render the HTML data table for a section onto new PDF page(s)
+            // Render the HTML data table for a section onto new PDF page(s).
+            // Splits into column-groups if there are too many columns to fit one page width.
             function addTablePage(wrapId, title) {
                 const wrap = document.getElementById(wrapId);
                 if (!wrap) return;
@@ -1685,78 +1709,99 @@ if (btnPDF) {
                 if (!tbl) return;
 
                 const PX_W = 1600, RH = 22, HH = 28, pxMm = PX_W / CW;
-                const ths  = [...tbl.querySelectorAll('thead th')];
-                const FC   = Math.min(280, PX_W * 0.22);
-                const CC   = (PX_W - FC) / Math.max(1, ths.length - 1);
-                const cx   = i => i === 0 ? 0 : FC + (i - 1) * CC;
-                const cw   = i => i === 0 ? FC : CC;
-
-                function renderRows(rows) {
-                    const h   = HH + rows.length * RH + 2;
-                    const cvs = document.createElement('canvas');
-                    cvs.width = PX_W; cvs.height = h;
-                    const ctx = cvs.getContext('2d');
-                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
-
-                    // header
-                    ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 0, PX_W, HH);
-                    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
-                    ths.forEach((th, i) => {
-                        const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
-                        ctx.textAlign = i === 0 ? 'left' : 'center';
-                        ctx.fillText(t.length > ml ? t.slice(0, ml-1)+'…' : t,
-                                     i === 0 ? cx(0)+6 : cx(i)+cw(i)/2, HH-9);
-                    });
-
-                    // body rows
-                    rows.forEach((tr, ri) => {
-                        const ry  = HH + ri * RH;
-                        const tds = [...tr.querySelectorAll('td')];
-                        const div = tds.length === 1 && tds[0].colSpan > 1;
-                        const st  = tr.getAttribute('style') || '';
-
-                        if (div) {
-                            ctx.fillStyle = '#e8f0fb'; ctx.fillRect(0, ry, PX_W, RH);
-                            ctx.fillStyle = '#495057'; ctx.font = 'bold 11px system-ui,Arial,sans-serif';
-                            ctx.textAlign = 'left'; ctx.fillText(tds[0].textContent.trim(), 6, ry+RH-7);
-                        } else {
-                            if      (st.includes('#e8f0fe'))                           { ctx.fillStyle='#dce9ff'; ctx.fillRect(0,ry,PX_W,RH); }
-                            else if (st.includes('#f4f6f8')||st.includes('italic'))    { ctx.fillStyle='#f5f6f8'; ctx.fillRect(0,ry,PX_W,RH); }
-                            else if (ri % 2 === 1)                                     { ctx.fillStyle='#fafbfc'; ctx.fillRect(0,ry,PX_W,RH); }
-
-                            const itl = st.includes('italic')||st.includes('#f4f6f8');
-                            const bld = st.includes('#e8f0fe');
-                            tds.forEach((td, i) => {
-                                const raw = td.textContent.trim(); if (!raw || raw === '—') return;
-                                const ml  = Math.max(4, Math.floor(cw(i)/7.5));
-                                const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
-                                ctx.fillStyle = bld ? '#0d3a7a' : '#2c3e50';
-                                ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
-                                ctx.textAlign = i === 0 ? 'left' : 'right';
-                                ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);
-                            });
-                        }
-                        ctx.strokeStyle='#e9ecef'; ctx.lineWidth=0.5;
-                        ctx.beginPath(); ctx.moveTo(0,ry+RH); ctx.lineTo(PX_W,ry+RH); ctx.stroke();
-                    });
-
-                    ctx.strokeStyle='#dee2e6'; ctx.lineWidth=1; ctx.strokeRect(0,0,PX_W,h);
-                    return { png: cvs.toDataURL('image/png'), imgH: CW * h / PX_W };
-                }
-
-                doc.addPage();
-                let y = pageHeader(title);
+                const allThs = [...tbl.querySelectorAll('thead th')];
+                const FC     = Math.min(280, PX_W * 0.22);   // entity column px width
+                const MIN_CC = 110;                            // min data-column px width ≈ 19 mm
+                const nData  = allThs.length - 1;             // number of data columns
+                const maxDC  = Math.max(1, Math.floor((PX_W - FC) / MIN_CC)); // max data-cols/page
                 const allTrs = [...tbl.querySelectorAll('tbody tr')];
-                let start = 0;
-                while (start < allTrs.length) {
-                    const maxRows = Math.max(1, Math.floor(((PH - M - y) * pxMm - HH - 2) / RH));
-                    const batch   = allTrs.slice(start, start + maxRows);
-                    const { png, imgH } = renderRows(batch);
-                    doc.addImage(png, 'PNG', M, y, CW, imgH);
-                    y += imgH;
-                    start += batch.length;
-                    if (start < allTrs.length) { doc.addPage(); y = pageHeader(title + ' (cont.)'); }
+
+                // Build column groups (each is a slice of data column indices)
+                const colGroups = [];
+                for (let cf = 0; cf < Math.max(nData, 1); cf += maxDC) {
+                    colGroups.push({ cf, ct: Math.min(cf + maxDC, nData) });
                 }
+
+                colGroups.forEach((cg, cgIdx) => {
+                    const nCols  = cg.ct - cg.cf;                    // data cols in this group
+                    const CC     = nCols > 0 ? (PX_W - FC) / nCols : PX_W - FC;
+                    const cx     = i => i === 0 ? 0 : FC + (i - 1) * CC;
+                    const cw     = i => i === 0 ? FC : CC;
+                    // Header cells for this group: entity + subset of data ths
+                    const gThs   = [allThs[0], ...allThs.slice(cg.cf + 1, cg.ct + 1)];
+                    // Column page label (only shown when more than one group)
+                    const cgLbl  = colGroups.length > 1
+                        ? ` — cols ${cg.cf + 1}–${cg.ct} of ${nData}` : '';
+                    const pgTitle = title + cgLbl;
+
+                    function renderRows(rows) {
+                        const h   = HH + rows.length * RH + 2;
+                        const cvs = document.createElement('canvas');
+                        cvs.width = PX_W; cvs.height = h;
+                        const ctx = cvs.getContext('2d');
+                        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
+
+                        // header
+                        ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 0, PX_W, HH);
+                        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
+                        gThs.forEach((th, i) => {
+                            const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
+                            ctx.textAlign = i === 0 ? 'left' : 'center';
+                            ctx.fillText(t.length > ml ? t.slice(0, ml-1)+'…' : t,
+                                         i === 0 ? cx(0)+6 : cx(i)+cw(i)/2, HH-9);
+                        });
+
+                        // body rows
+                        rows.forEach((tr, ri) => {
+                            const ry     = HH + ri * RH;
+                            const allTds = [...tr.querySelectorAll('td')];
+                            const div    = allTds.length === 1 && allTds[0].colSpan > 1;
+                            const st     = tr.getAttribute('style') || '';
+
+                            if (div) {
+                                ctx.fillStyle = '#e8f0fb'; ctx.fillRect(0, ry, PX_W, RH);
+                                ctx.fillStyle = '#495057'; ctx.font = 'bold 11px system-ui,Arial,sans-serif';
+                                ctx.textAlign = 'left'; ctx.fillText(allTds[0].textContent.trim(), 6, ry+RH-7);
+                            } else {
+                                if      (st.includes('#e8f0fe'))                        { ctx.fillStyle='#dce9ff'; ctx.fillRect(0,ry,PX_W,RH); }
+                                else if (st.includes('#f4f6f8')||st.includes('italic')) { ctx.fillStyle='#f5f6f8'; ctx.fillRect(0,ry,PX_W,RH); }
+                                else if (ri % 2 === 1)                                  { ctx.fillStyle='#fafbfc'; ctx.fillRect(0,ry,PX_W,RH); }
+
+                                const itl  = st.includes('italic')||st.includes('#f4f6f8');
+                                const bld  = st.includes('#e8f0fe');
+                                // entity td + subset of data tds
+                                const gTds = [allTds[0], ...allTds.slice(cg.cf + 1, cg.ct + 1)];
+                                gTds.forEach((td, i) => {
+                                    const raw = td.textContent.trim(); if (!raw || raw === '—') return;
+                                    const ml  = Math.max(4, Math.floor(cw(i)/7.5));
+                                    const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
+                                    ctx.fillStyle = bld ? '#0d3a7a' : '#2c3e50';
+                                    ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
+                                    ctx.textAlign = i === 0 ? 'left' : 'right';
+                                    ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);
+                                });
+                            }
+                            ctx.strokeStyle='#e9ecef'; ctx.lineWidth=0.5;
+                            ctx.beginPath(); ctx.moveTo(0,ry+RH); ctx.lineTo(PX_W,ry+RH); ctx.stroke();
+                        });
+
+                        ctx.strokeStyle='#dee2e6'; ctx.lineWidth=1; ctx.strokeRect(0,0,PX_W,h);
+                        return { png: cvs.toDataURL('image/png'), imgH: CW * h / PX_W };
+                    }
+
+                    doc.addPage();
+                    let y    = pageHeader(pgTitle);
+                    let start = 0;
+                    while (start < allTrs.length) {
+                        const maxRows = Math.max(1, Math.floor(((PH - M - y) * pxMm - HH - 2) / RH));
+                        const batch   = allTrs.slice(start, start + maxRows);
+                        const { png, imgH } = renderRows(batch);
+                        doc.addImage(png, 'PNG', M, y, CW, imgH);
+                        y += imgH;
+                        start += batch.length;
+                        if (start < allTrs.length) { doc.addPage(); y = pageHeader(pgTitle + ' (cont.)'); }
+                    }
+                });
             }
 
             /* ─────────────────────────────────────────
