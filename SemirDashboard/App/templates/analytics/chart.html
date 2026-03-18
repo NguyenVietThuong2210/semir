@@ -117,8 +117,8 @@
 /* column highlight on chart click */
 .tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
 /* row highlight on chart click */
-.tbl-row-hl > td:first-child { border-left:3px solid #0d6efd !important; background:#dbeafe !important; }
-.tbl-row-hl > td { background:#eef5ff !important; }
+.tbl-row-hl > td:first-child { border-left:4px solid #0d6efd !important; background:#93c5fd !important; }
+.tbl-row-hl > td { background:#bfdbfe !important; }
 .tbl-row-hl > td.tbl-col-hl { background:#ffe066 !important; }
 </style>
 {% endblock %}
@@ -408,7 +408,7 @@
                 <div class="shop-select-actions d-flex gap-1">
                     <button class="btn btn-outline-secondary btn-sm" id="btnSelAll">All</button>
                     <button class="btn btn-outline-secondary btn-sm" id="btnSelNone">None</button>
-                    <button class="btn btn-outline-secondary btn-sm" id="btnSelTop5">Top 5</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnSelTop5">First 5</button>
                 </div>
                 <div class="shop-checklist" id="shopChecklist">
                     <!-- AVG all shops line -->
@@ -542,7 +542,7 @@
                 <div class="shop-select-actions d-flex gap-1">
                     <button class="btn btn-outline-secondary btn-sm" id="btnBarSelAll">All</button>
                     <button class="btn btn-outline-secondary btn-sm" id="btnBarSelNone">None</button>
-                    <button class="btn btn-outline-secondary btn-sm" id="btnBarSelTop5">Top 5</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnBarSelTop5">First 5</button>
                 </div>
                 <div class="shop-checklist" id="barShopChecklist">
                     {% for shop in shop_stats %}
@@ -655,7 +655,7 @@
                 <div class="shop-select-actions d-flex gap-1">
                     <button class="btn btn-outline-secondary btn-sm" id="btnCompSelAll">All</button>
                     <button class="btn btn-outline-secondary btn-sm" id="btnCompSelNone">None</button>
-                    <button class="btn btn-outline-secondary btn-sm" id="btnCompSelTop5">Top 5</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnCompSelTop5">First 5</button>
                 </div>
                 <div class="shop-checklist" id="compShopChecklist">
                     {% for shop in shop_stats %}
@@ -990,6 +990,7 @@ function attachLineHighlight(chart) {
 }
 
 function buildChart() {
+    sortChecklistAlpha('shopChecklist');
     const selectedShops = [...document.querySelectorAll('.shop-check:checked')]
         .map(el => el.value);
     const showAvg    = document.getElementById('cbAvg').checked;
@@ -1147,6 +1148,7 @@ function getGlobalRows(xAxis) {
 }
 
 function buildBarChart() {
+    sortChecklistAlpha('barShopChecklist');
     const xAxis         = document.querySelector('input[name="barXaxis"]:checked').value;
     const metric        = document.getElementById('barMetricSelect').value;
     const xLabels       = getXLabels(xAxis);
@@ -1320,6 +1322,7 @@ function monthToSeason(m) {
 }
 
 function buildComparisonChart() {
+    sortChecklistAlpha('compShopChecklist');
     const xAxis         = document.querySelector('input[name="compXaxis"]:checked').value;
     const metric        = document.getElementById('compMetricSelect').value;
     const selectedShops = [...document.querySelectorAll('.comp-shop-check:checked')].map(el => el.value);
@@ -1571,10 +1574,7 @@ function sortChecklistAlpha(containerId) {
     items.forEach(item => container.appendChild(item));
 }
 
-// Initial render — sort checklists first so charts + tables reflect A-Z order
-sortChecklistAlpha('shopChecklist');
-sortChecklistAlpha('barShopChecklist');
-sortChecklistAlpha('compShopChecklist');
+// Initial render
 buildChart();
 buildBarChart();
 buildComparisonChart();
