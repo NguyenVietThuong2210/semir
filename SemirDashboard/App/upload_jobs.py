@@ -4,7 +4,12 @@ App/upload_jobs.py — Thread-safe in-memory job store for background uploads.
 import io
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _now_iso() -> str:
+    """Return current UTC time as ISO-8601 with +00:00 so browsers parse it correctly."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 _jobs: dict = {}
 _lock = threading.Lock()
@@ -33,7 +38,7 @@ def create_job(job_type: str, filename: str) -> str:
         "type_label":  JOB_TYPE_LABELS.get(job_type, job_type),
         "filename":    filename,
         "status":      "queued",       # queued | running | done | error
-        "started_at":  datetime.now().isoformat(timespec="seconds"),
+        "started_at":  _now_iso(),
         "finished_at": None,
         "processed":   0,
         "total":       0,

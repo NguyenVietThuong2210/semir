@@ -1,5 +1,5 @@
 {# Shared upload jobs status panel — include on every upload page #}
-<div id="uploadStatusPanel" class="mb-4" style="display:none;">
+<div id="uploadStatusPanel" class="mb-4" style="display:none;" data-persist-visible="1">
   <div class="card border-0 shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
       <span>
@@ -63,6 +63,11 @@
   let _pollTimer = null;
   let _hiddenIds = new Set(JSON.parse(sessionStorage.getItem('uploadHiddenJobs') || '[]'));
 
+  // Restore panel visibility immediately (before first fetch) to avoid flicker
+  if (sessionStorage.getItem('uploadPanelVisible') === '1') {
+    document.getElementById('uploadStatusPanel').style.display = '';
+  }
+
   function saveHidden() {
     sessionStorage.setItem('uploadHiddenJobs', JSON.stringify([..._hiddenIds]));
   }
@@ -96,8 +101,13 @@
     const tpl    = document.getElementById('jobRowTpl');
     const visible = jobs.filter(j => !_hiddenIds.has(j.id));
 
-    if (visible.length === 0) { panel.style.display = 'none'; return; }
+    if (visible.length === 0) {
+      panel.style.display = 'none';
+      sessionStorage.setItem('uploadPanelVisible', '0');
+      return;
+    }
     panel.style.display = '';
+    sessionStorage.setItem('uploadPanelVisible', '1');
 
     // build index of existing rows
     const existing = {};
@@ -198,6 +208,7 @@
     saveHidden();
     if (document.querySelectorAll('.job-row').length === 0) {
       document.getElementById('uploadStatusPanel').style.display = 'none';
+      sessionStorage.setItem('uploadPanelVisible', '0');
     }
   });
 

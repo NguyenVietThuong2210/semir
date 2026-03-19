@@ -1,7 +1,6 @@
 """App/views/upload.py — Data upload views (background thread processing)."""
 import logging
 import threading
-from datetime import datetime
 
 from django.contrib import messages
 from django.db.models import Count, Max, Min
@@ -17,7 +16,7 @@ from App.services import (
     process_sales_file,
     process_used_points_file,
 )
-from App.upload_jobs import NamedBytesIO, create_job, get_recent_jobs, make_progress_fn, update_job
+from App.upload_jobs import NamedBytesIO, _now_iso, create_job, get_recent_jobs, make_progress_fn, update_job
 
 logger = logging.getLogger("customer_analytics")
 
@@ -56,7 +55,7 @@ def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
         update_job(
             job_id,
             status="done",
-            finished_at=datetime.now().isoformat(timespec="seconds"),
+            finished_at=_now_iso(),
             result=result,
         )
         logger.info("Job %s done: %s", job_id, result)
@@ -64,7 +63,7 @@ def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
         update_job(
             job_id,
             status="error",
-            finished_at=datetime.now().isoformat(timespec="seconds"),
+            finished_at=_now_iso(),
             error=str(exc),
         )
         logger.exception("Job %s failed", job_id)
