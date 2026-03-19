@@ -1,19 +1,15 @@
 """
-App/upload_jobs.py — Thread-safe in-memory job store for background uploads.
+App/upload_jobs.py — Upload job store backed by Django cache (Redis).
+Shared across all gunicorn workers.
 """
 import io
 import threading
 import uuid
 from datetime import datetime, timezone
 
-
-def _now_iso() -> str:
-    """Return current UTC time as ISO-8601 with +00:00 so browsers parse it correctly."""
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-_jobs: dict = {}
-_lock = threading.Lock()
+_lock = threading.Lock()   # guards index read-modify-write within a single worker
 _MAX_JOBS = 100
+_JOB_TTL  = 86400          # 24 h
 
 JOB_TYPE_LABELS = {
     "customers":   "Customer Data",
@@ -21,6 +17,18 @@ JOB_TYPE_LABELS = {
     "sales":       "Sales Transactions",
     "coupons":     "Coupon Data",
 }
+
+_INDEX_KEY    = "upload_jobs_index"     # list of {"id": ..., "started_at": ...}
+_JOB_KEY_PFX  = "upload_job:"          # + job_id
+
+
+def _now_iso() -> str:
+    """Return current UTC time as ISO-8601 with +00:00 so browsers parse it correctly."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _jkey(job_id: str) -> str:
+    return f"{_JOB_KEY_PFX}{job_id}"
 
 
 class NamedBytesIO(io.BytesIO):
@@ -31,13 +39,15 @@ class NamedBytesIO(io.BytesIO):
 
 
 def create_job(job_type: str, filename: str) -> str:
+    from django.core.cache import cache
+
     job_id = str(uuid.uuid4())
     job = {
         "id":          job_id,
         "type":        job_type,
         "type_label":  JOB_TYPE_LABELS.get(job_type, job_type),
         "filename":    filename,
-        "status":      "queued",       # queued | running | done | error
+        "status":      "queued",
         "started_at":  _now_iso(),
         "finished_at": None,
         "processed":   0,
@@ -45,34 +55,45 @@ def create_job(job_type: str, filename: str) -> str:
         "result":      None,
         "error":       None,
     }
+    cache.set(_jkey(job_id), job, _JOB_TTL)
+
     with _lock:
-        _jobs[job_id] = job
-        if len(_jobs) > _MAX_JOBS:
-            oldest_keys = sorted(_jobs, key=lambda k: _jobs[k]["started_at"])[: len(_jobs) - _MAX_JOBS]
-            for k in oldest_keys:
-                del _jobs[k]
+        index = cache.get(_INDEX_KEY) or []
+        index.append({"id": job_id, "started_at": job["started_at"]})
+        if len(index) > _MAX_JOBS:
+            index = index[-_MAX_JOBS:]
+        cache.set(_INDEX_KEY, index, _JOB_TTL)
+
     return job_id
 
 
 def update_job(job_id: str, **kwargs) -> None:
+    from django.core.cache import cache
+
     with _lock:
-        if job_id in _jobs:
-            _jobs[job_id].update(kwargs)
+        job = cache.get(_jkey(job_id))
+        if job:
+            job.update(kwargs)
+            cache.set(_jkey(job_id), job, _JOB_TTL)
 
 
 def get_job(job_id: str) -> dict:
-    with _lock:
-        return dict(_jobs.get(job_id, {}))
+    from django.core.cache import cache
+
+    return cache.get(_jkey(job_id)) or {}
 
 
 def get_recent_jobs(limit: int = 20) -> list:
-    with _lock:
-        jobs = sorted(_jobs.values(), key=lambda j: j["started_at"], reverse=True)
-        return [dict(j) for j in jobs[:limit]]
+    from django.core.cache import cache
+
+    index = cache.get(_INDEX_KEY) or []
+    sorted_index = sorted(index, key=lambda x: x["started_at"], reverse=True)[:limit]
+    jobs = [cache.get(_jkey(x["id"])) for x in sorted_index]
+    return [j for j in jobs if j]   # filter expired / missing entries
 
 
 def make_progress_fn(job_id: str):
-    """Return a callback: progress_fn(processed, total) → updates job progress."""
+    """Return a callback: progress_fn(processed, total) → updates job in cache."""
     def _fn(processed: int, total: int):
         update_job(job_id, processed=processed, total=total)
     return _fn
