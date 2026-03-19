@@ -1628,6 +1628,8 @@ def export_customer_analytics_to_excel(
     for col, w in zip('ABCDEFGHIJKL', [15, 15, 25, 12, 30, 12, 10, 12, 12, 15, 15, 16]):
         ws_cnv_all_full.column_dimensions[col].width = w
 
+    return wb
+
 
 # ── Per-tab export ─────────────────────────────────────────────────────────────
 # Must be defined AFTER all _create_* functions.

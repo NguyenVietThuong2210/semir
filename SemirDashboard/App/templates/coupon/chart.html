@@ -1057,7 +1057,7 @@
             const ci = CAMPAIGNS.find(c => c.name === camp);
             const subtitle = ci ? ` <code style="font-size:.75rem;">${ci.prefix}</code>` : '';
             lbl.innerHTML = `
-            <input class="form-check-input camp-check" type="checkbox" id="sc_c${i}" value="${camp.replace(/"/g, '&quot;')}" checked>
+            <input class="form-check-input camp-check" type="checkbox" id="sc_c${i}" value="${camp.replace(/"/g, '&quot;')}" ${i < 5 ? 'checked' : ''}>
             <span class="shop-dot" style="background:${color};flex-shrink:0;"></span>
             <span style="font-size:.85rem;">${camp}${subtitle}</span>`;
             cl.appendChild(lbl);

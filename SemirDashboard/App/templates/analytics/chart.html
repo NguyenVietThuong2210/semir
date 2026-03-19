@@ -430,7 +430,6 @@
                         <input class="form-check-input shop-check" type="checkbox"
                                value="{{ shop.shop_name }}"
                                id="sc_{{ forloop.counter }}"
-                               {% if forloop.counter <= 5 %}checked{% endif %}
                                style="flex-shrink:0;">
                         <span class="shop-dot" id="dot_{{ forloop.counter }}" style="flex-shrink:0;"></span>
                         <span style="font-size:.85rem;">{{ shop.shop_name }}</span>
@@ -550,7 +549,6 @@
                         <input class="form-check-input bar-shop-check" type="checkbox"
                                value="{{ shop.shop_name }}"
                                id="bsc_{{ forloop.counter }}"
-                               {% if forloop.counter <= 5 %}checked{% endif %}
                                style="flex-shrink:0;">
                         <span style="font-size:.85rem;">{{ shop.shop_name }}</span>
                     </label>
@@ -663,7 +661,6 @@
                         <input class="form-check-input comp-shop-check" type="checkbox"
                                value="{{ shop.shop_name }}"
                                id="csc_{{ forloop.counter }}"
-                               {% if forloop.counter <= 5 %}checked{% endif %}
                                style="flex-shrink:0;">
                         <span style="font-size:.85rem;">{{ shop.shop_name }}</span>
                     </label>
@@ -1574,7 +1571,13 @@ function sortChecklistAlpha(containerId) {
     items.forEach(item => container.appendChild(item));
 }
 
-// Initial render
+// Initial render — sort checklists then select first 5 alphabetically
+sortChecklistAlpha('shopChecklist');
+document.querySelectorAll('#shopChecklist .shop-check').forEach((cb, i) => { cb.checked = i < 5; });
+sortChecklistAlpha('barShopChecklist');
+document.querySelectorAll('#barShopChecklist .bar-shop-check').forEach((cb, i) => { cb.checked = i < 5; });
+sortChecklistAlpha('compShopChecklist');
+document.querySelectorAll('#compShopChecklist .comp-shop-check').forEach((cb, i) => { cb.checked = i < 5; });
 buildChart();
 buildBarChart();
 buildComparisonChart();
