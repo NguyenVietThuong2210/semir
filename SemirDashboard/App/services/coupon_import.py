@@ -17,7 +17,7 @@ logger = logging.getLogger('customer_analytics')
 BATCH_SIZE = 5000
 
 
-def process_coupon_file(file):
+def process_coupon_file(file, progress_fn=None):
     """
     OPTIMIZED: Process coupons in batches.
     """
@@ -155,6 +155,9 @@ def process_coupon_file(file):
                     )
                     updated += len(coupons_to_update)
                     logger.info(f"[Batch {batch_num}] Updated {len(coupons_to_update)} coupons")
+
+        if progress_fn:
+            progress_fn(min(batch_end, total_rows), total_rows)
 
     logger.info("=== DONE Coupon Import: created=%d updated=%d errors=%d ===",
                 created, updated, errors)

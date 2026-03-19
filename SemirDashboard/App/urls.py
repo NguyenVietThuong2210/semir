@@ -20,6 +20,8 @@ urlpatterns = [
     path("upload/used-points/", views.upload_used_points, name="upload_used_points"),
     path("upload/sales/",       views.upload_sales,       name="upload_sales"),
     path("upload/coupons/",     views.upload_coupons,     name="upload_coupons"),
+    path("upload/jobs/",                    views.upload_jobs_list,  name="upload_jobs_list"),
+    path("upload/jobs/<str:job_id>/",       views.upload_job_status, name="upload_job_status"),
 
     # ── Sales Analytics ───────────────────────────────────────────────────────
     path("analytics/",         views.analytics_dashboard, name="analytics_dashboard"),

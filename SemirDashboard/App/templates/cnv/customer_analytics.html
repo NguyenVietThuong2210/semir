@@ -282,21 +282,27 @@
 <div class="mt-3" style="background:#1a252f; border-radius:6px 6px 0 0;">
     <ul class="nav dark-tabs px-3 pt-2 flex-wrap" id="caTabNav" role="tablist">
         <li class="nav-item">
-            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button"
+                    data-tab-desc="Points earned, used & mismatches between POS and CNV loyalty system">
                 <i class="bi bi-coin"></i> Points Analysis
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button"
+                    data-tab-desc="CNV customers linked to Zalo Mini App or following Semir Zalo OA">
                 <i class="bi bi-chat-dots-fill"></i> Active Zalo Mini App
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button"
+                    data-tab-desc="Customers present in POS only, CNV only, or both systems — all-time and period">
                 <i class="bi bi-people"></i> POS vs CNV
             </button>
         </li>
     </ul>
+    <div class="px-3 pb-2 pt-1" style="border-top:1px solid rgba(255,255,255,.08);">
+        <small class="text-white-50" id="caTabDesc">Points earned, used &amp; mismatches between POS and CNV loyalty system</small>
+    </div>
 </div>
 
 <div class="tab-content" id="caTabContent">
@@ -750,6 +756,13 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
             rows.forEach(r => r.style.opacity = '1');
             setTimeout(() => { this.innerHTML = origHTML; this.disabled = false; }, 3000);
         }
+    });
+});
+
+// Tab description updater
+document.querySelectorAll('#caTabNav button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', () => {
+        document.getElementById('caTabDesc').textContent = btn.dataset.tabDesc || '';
     });
 });
 </script>
