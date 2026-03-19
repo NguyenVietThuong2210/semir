@@ -90,9 +90,10 @@
     if (!isoStr) return '';
     const d = new Date(isoStr);
     const sec = Math.round((Date.now() - d) / 1000);
-    if (sec < 60)  return `${sec}s ago`;
-    if (sec < 3600) return `${Math.round(sec/60)}m ago`;
-    return `${Math.round(sec/3600)}h ago`;
+    if (sec <= 0)   return 'just now';
+    if (sec < 60)   return `${sec}s ago`;
+    if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+    return `${Math.round(sec / 3600)}h ago`;
   }
 
   function renderJobs(jobs) {
