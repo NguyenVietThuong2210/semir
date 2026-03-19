@@ -18,7 +18,7 @@ logger = logging.getLogger('customer_analytics')
 BATCH_SIZE = 5000
 
 
-def process_customer_file(file):
+def process_customer_file(file, progress_fn=None):
     """
     OPTIMIZED: Process 100k+ customer records in batches.
 
@@ -136,6 +136,9 @@ def process_customer_file(file):
                     updated += len(customers_to_update)
                     logger.info(f"[Batch {batch_num}] Updated {len(customers_to_update)} customers")
 
+        if progress_fn:
+            progress_fn(min(batch_end, total_rows), total_rows)
+
     logger.info("=== DONE Customer Import: created=%d updated=%d errors=%d ===",
                 created, updated, len(errors))
     return {
@@ -146,7 +149,7 @@ def process_customer_file(file):
     }
 
 
-def process_used_points_file(file):
+def process_used_points_file(file, progress_fn=None):
     """
     Process an Excel/CSV file to update Customer.used_points and used_points_note.
 
@@ -196,6 +199,7 @@ def process_used_points_file(file):
 
     BATCH = 2000
 
+    total_records = len(df)
     with transaction.atomic():
         records = df.to_dict('records')
         for i in range(0, len(records), BATCH):
@@ -236,6 +240,9 @@ def process_used_points_file(file):
                 except Exception as e:
                     errors.append(f"Row {total_processed}: {e}")
                     skipped += 1
+
+            if progress_fn:
+                progress_fn(min(i + BATCH, total_records), total_records)
 
     logger.info("=== DONE UsedPoints Import: updated=%d skipped=%d errors=%d ===",
                 updated, skipped, len(errors))

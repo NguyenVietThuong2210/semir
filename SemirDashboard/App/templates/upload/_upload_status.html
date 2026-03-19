@@ -1,0 +1,208 @@
+{# Shared upload jobs status panel — include on every upload page #}
+<div id="uploadStatusPanel" class="mb-4" style="display:none;">
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+      <span>
+        <i class="bi bi-arrow-repeat text-primary me-1"></i>
+        <strong>Upload Jobs</strong>
+        <small class="text-muted ms-2">Auto-refreshes every 3 s while a job is running</small>
+      </span>
+      <button class="btn btn-sm btn-outline-secondary" id="btnClearDone">Clear finished</button>
+    </div>
+    <div class="card-body p-0">
+      <div id="jobsList"></div>
+    </div>
+  </div>
+</div>
+
+<template id="jobRowTpl">
+  <div class="job-row px-3 py-2 border-bottom d-flex align-items-center gap-3" data-job-id="">
+    <div class="flex-shrink-0" style="width:110px;">
+      <span class="badge job-type-badge"></span>
+    </div>
+    <div class="flex-grow-1" style="min-width:0;">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="job-filename small fw-semibold text-truncate" style="max-width:300px;"></span>
+        <span class="job-status-badge ms-2 badge"></span>
+      </div>
+      <div class="progress job-progress" style="height:6px; display:none;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div>
+      </div>
+      <div class="job-result small text-muted mt-1" style="display:none;"></div>
+      <div class="job-error small text-danger mt-1" style="display:none;"></div>
+    </div>
+    <div class="flex-shrink-0 text-muted small job-time" style="width:80px; text-align:right;"></div>
+  </div>
+</template>
+
+<style>
+.job-row:last-child { border-bottom:none !important; }
+</style>
+
+<script>
+(function () {
+  const TYPE_COLORS = {
+    customers:   'primary',
+    used_points: 'info',
+    sales:       'success',
+    coupons:     'warning',
+  };
+  const STATUS_COLORS = {
+    queued:  'secondary',
+    running: 'primary',
+    done:    'success',
+    error:   'danger',
+  };
+  const STATUS_LABELS = {
+    queued:  'Queued',
+    running: 'Running…',
+    done:    'Done',
+    error:   'Error',
+  };
+
+  let _pollTimer = null;
+  let _hiddenIds = new Set(JSON.parse(sessionStorage.getItem('uploadHiddenJobs') || '[]'));
+
+  function saveHidden() {
+    sessionStorage.setItem('uploadHiddenJobs', JSON.stringify([..._hiddenIds]));
+  }
+
+  function fmtResult(result, type) {
+    if (!result) return '';
+    const parts = [];
+    if (result.created   != null) parts.push(`Created: ${result.created.toLocaleString()}`);
+    if (result.updated   != null) parts.push(`Updated: ${result.updated.toLocaleString()}`);
+    if (result.total_processed != null) parts.push(`Total: ${result.total_processed.toLocaleString()}`);
+    if (result.skipped   != null && result.skipped > 0) parts.push(`Skipped: ${result.skipped.toLocaleString()}`);
+    if (result.errors    != null) {
+      const errCount = Array.isArray(result.errors) ? result.errors.length : result.errors;
+      if (errCount > 0) parts.push(`Errors: ${errCount}`);
+    }
+    return parts.join(' · ');
+  }
+
+  function timeAgo(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    const sec = Math.round((Date.now() - d) / 1000);
+    if (sec < 60)  return `${sec}s ago`;
+    if (sec < 3600) return `${Math.round(sec/60)}m ago`;
+    return `${Math.round(sec/3600)}h ago`;
+  }
+
+  function renderJobs(jobs) {
+    const panel  = document.getElementById('uploadStatusPanel');
+    const list   = document.getElementById('jobsList');
+    const tpl    = document.getElementById('jobRowTpl');
+    const visible = jobs.filter(j => !_hiddenIds.has(j.id));
+
+    if (visible.length === 0) { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+
+    // build index of existing rows
+    const existing = {};
+    list.querySelectorAll('.job-row').forEach(el => { existing[el.dataset.jobId] = el; });
+
+    // remove rows no longer in list
+    Object.keys(existing).forEach(id => {
+      if (!visible.find(j => j.id === id)) existing[id].remove();
+    });
+
+    visible.forEach((job, idx) => {
+      let row = existing[job.id];
+      if (!row) {
+        row = tpl.content.cloneNode(true).querySelector('.job-row');
+        row.dataset.jobId = job.id;
+        list.appendChild(row);
+      }
+
+      // type badge
+      const typeBadge = row.querySelector('.job-type-badge');
+      typeBadge.className = `badge bg-${TYPE_COLORS[job.type] || 'secondary'} job-type-badge`;
+      typeBadge.textContent = job.type_label || job.type;
+
+      // filename
+      row.querySelector('.job-filename').textContent = job.filename;
+
+      // status badge
+      const statusBadge = row.querySelector('.job-status-badge');
+      statusBadge.className = `badge bg-${STATUS_COLORS[job.status] || 'secondary'} job-status-badge`;
+      statusBadge.textContent = STATUS_LABELS[job.status] || job.status;
+
+      // progress bar
+      const progBar = row.querySelector('.job-progress');
+      if (job.status === 'running' && job.total > 0) {
+        const pct = Math.round(job.processed / job.total * 100);
+        progBar.style.display = '';
+        progBar.querySelector('.progress-bar').style.width = pct + '%';
+        progBar.querySelector('.progress-bar').textContent = pct + '%';
+      } else if (job.status === 'running') {
+        progBar.style.display = '';
+        progBar.querySelector('.progress-bar').style.width = '100%';
+        progBar.querySelector('.progress-bar').textContent = 'Processing…';
+      } else {
+        progBar.style.display = 'none';
+      }
+
+      // result
+      const resultEl = row.querySelector('.job-result');
+      if (job.status === 'done' && job.result) {
+        resultEl.style.display = '';
+        resultEl.textContent = fmtResult(job.result, job.type);
+      } else {
+        resultEl.style.display = 'none';
+      }
+
+      // error
+      const errorEl = row.querySelector('.job-error');
+      if (job.status === 'error' && job.error) {
+        errorEl.style.display = '';
+        errorEl.textContent = job.error;
+      } else {
+        errorEl.style.display = 'none';
+      }
+
+      // time
+      const timeRef = job.status === 'done' || job.status === 'error' ? job.finished_at : job.started_at;
+      row.querySelector('.job-time').textContent = timeAgo(timeRef);
+    });
+  }
+
+  async function fetchAndRender() {
+    try {
+      const r = await fetch('{% url "upload_jobs_list" %}');
+      if (!r.ok) return;
+      const data = await r.json();
+      renderJobs(data.jobs || []);
+
+      const hasActive = (data.jobs || []).some(j => j.status === 'queued' || j.status === 'running');
+      if (hasActive) {
+        if (!_pollTimer) _pollTimer = setInterval(fetchAndRender, 3000);
+      } else {
+        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+      }
+    } catch (_) {}
+  }
+
+  // Clear finished button
+  document.getElementById('btnClearDone').addEventListener('click', () => {
+    document.querySelectorAll('.job-row').forEach(row => {
+      const id = row.dataset.jobId;
+      // find status from badge
+      const badge = row.querySelector('.job-status-badge');
+      if (badge && (badge.textContent === 'Done' || badge.textContent === 'Error')) {
+        _hiddenIds.add(id);
+        row.remove();
+      }
+    });
+    saveHidden();
+    if (document.querySelectorAll('.job-row').length === 0) {
+      document.getElementById('uploadStatusPanel').style.display = 'none';
+    }
+  });
+
+  // Initial fetch + poll
+  fetchAndRender();
+  setInterval(fetchAndRender, 5000);   // baseline refresh every 5s
+})();
+</script>

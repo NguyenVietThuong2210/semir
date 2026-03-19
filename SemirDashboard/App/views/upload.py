@@ -1,16 +1,28 @@
-"""App/views/upload.py — Data upload views."""
+"""App/views/upload.py — Data upload views (background thread processing)."""
 import logging
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.db.models import Min, Max, Count
+import threading
+from datetime import datetime
 
-from App.permissions import requires_perm
+from django.contrib import messages
+from django.db.models import Count, Max, Min
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
+
 from App.forms import CustomerUploadForm, SalesUploadForm, UsedPointsUploadForm
-from App.services import process_customer_file, process_sales_file, process_used_points_file
 from App.models import Customer, SalesTransaction
+from App.permissions import requires_perm
+from App.services import (
+    process_coupon_file,
+    process_customer_file,
+    process_sales_file,
+    process_used_points_file,
+)
+from App.upload_jobs import NamedBytesIO, create_job, get_recent_jobs, make_progress_fn, update_job
 
 logger = logging.getLogger("customer_analytics")
 
+
+# ── Cache helpers ─────────────────────────────────────────────────────────────
 
 def _invalidate_analytics_cache():
     from django.core.cache import cache
@@ -30,133 +42,142 @@ def _invalidate_coupon_cache():
     logger.info("coupon cache invalidated (ver→%d, trend_ver→%d)", v + 1, tv + 1)
 
 
+# ── Background thread runner ──────────────────────────────────────────────────
+
+def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
+    """Execute upload service function in a background thread."""
+    from django.db import connection
+    update_job(job_id, status="running")
+    try:
+        f = NamedBytesIO(file_bytes, filename)
+        result = fn(f, progress_fn=make_progress_fn(job_id))
+        if on_done_fn:
+            on_done_fn()
+        update_job(
+            job_id,
+            status="done",
+            finished_at=datetime.now().isoformat(timespec="seconds"),
+            result=result,
+        )
+        logger.info("Job %s done: %s", job_id, result)
+    except Exception as exc:
+        update_job(
+            job_id,
+            status="error",
+            finished_at=datetime.now().isoformat(timespec="seconds"),
+            error=str(exc),
+        )
+        logger.exception("Job %s failed", job_id)
+    finally:
+        connection.close()  # release DB connection held by this thread
+
+
+def _start_thread(job_id, fn, file_bytes, filename, on_done_fn=None):
+    t = threading.Thread(
+        target=_run_upload,
+        args=(job_id, fn, file_bytes, filename, on_done_fn),
+        daemon=True,
+    )
+    t.start()
+
+
+# ── Upload views ──────────────────────────────────────────────────────────────
+
 @requires_perm("page_upload")
 def upload_customers(request):
-    """
-    Upload customer data from Excel/CSV file.
-    Now includes database statistics showing date ranges.
-    """
     if request.method == "POST":
         form = CustomerUploadForm(request.POST, request.FILES)
-        used_points_form = UsedPointsUploadForm()
         if form.is_valid():
             f = request.FILES["file"]
-            logger.info("upload_customers: %s user=%s", f.name, request.user)
-            try:
-                result = process_customer_file(f)
-                _invalidate_analytics_cache()
-                messages.success(
-                    request,
-                    f"Processed {result['total_processed']} customers – "
-                    f"Created: {result['created']}, Updated: {result['updated']}",
-                )
-                for err in result.get("errors", [])[:5]:
-                    messages.warning(request, err)
-                return redirect("upload_customers")
-            except Exception as e:
-                logger.exception("upload_customers error")
-                messages.error(request, f"Error: {e}")
-    else:
-        form = CustomerUploadForm()
-        used_points_form = UsedPointsUploadForm()
+            file_bytes = f.read()
+            job_id = create_job("customers", f.name)
+            logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user)
+            _start_thread(job_id, process_customer_file, file_bytes, f.name, _invalidate_analytics_cache)
+            messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
+            return redirect("upload_customers")
+        else:
+            messages.error(request, "Invalid form submission.")
 
-    # Get database statistics with date ranges
     date_stats = Customer.objects.aggregate(
         min_date=Min("registration_date"),
         max_date=Max("registration_date"),
         total_count=Count("id"),
     )
-
     return render(
         request,
         "upload/customers.html",
-        {"form": form, "used_points_form": used_points_form, "date_stats": date_stats},
+        {
+            "form": CustomerUploadForm(),
+            "used_points_form": UsedPointsUploadForm(),
+            "date_stats": date_stats,
+        },
     )
 
 
 @requires_perm("page_upload")
 def upload_used_points(request):
-    """Upload used_points and used_points_note for existing POS customers."""
     if request.method == "POST":
         form = UsedPointsUploadForm(request.POST, request.FILES)
         if form.is_valid():
             f = request.FILES["file"]
-            logger.info("upload_used_points: %s user=%s", f.name, request.user)
-            try:
-                result = process_used_points_file(f)
-                messages.success(
-                    request,
-                    f"Processed {result['total_processed']} rows — "
-                    f"Updated: {result['updated']}, Skipped: {result['skipped']}",
-                )
-                for err in result.get("errors", [])[:5]:
-                    messages.warning(request, err)
-                return redirect("upload_customers")
-            except Exception as e:
-                logger.exception("upload_used_points error")
-                messages.error(request, f"Error: {e}")
-    else:
-        form = UsedPointsUploadForm()
-
+            file_bytes = f.read()
+            job_id = create_job("used_points", f.name)
+            logger.info("upload_used_points queued job=%s file=%s user=%s", job_id, f.name, request.user)
+            _start_thread(job_id, process_used_points_file, file_bytes, f.name)
+            messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
+        else:
+            messages.error(request, "Invalid form submission.")
     return redirect("upload_customers")
 
 
 @requires_perm("page_upload")
 def upload_sales(request):
-    """
-    Upload sales transaction data from Excel/CSV file.
-    Now includes database statistics showing date ranges.
-    """
     if request.method == "POST":
         form = SalesUploadForm(request.POST, request.FILES)
         if form.is_valid():
             f = request.FILES["file"]
-            logger.info("upload_sales: %s user=%s", f.name, request.user)
-            try:
-                result = process_sales_file(f)
-                _invalidate_analytics_cache()
-                messages.success(
-                    request,
-                    f"Imported {result['created']} new transactions. "
-                    f"Updated (overwritten) {result['updated']} existing.",
-                )
-                for err in result.get("errors", [])[:5]:
-                    messages.warning(request, err)
-                return redirect("analytics_dashboard")
-            except Exception as e:
-                logger.exception("upload_sales error")
-                messages.error(request, f"Error: {e}")
-    else:
-        form = SalesUploadForm()
+            file_bytes = f.read()
+            job_id = create_job("sales", f.name)
+            logger.info("upload_sales queued job=%s file=%s user=%s", job_id, f.name, request.user)
+            _start_thread(job_id, process_sales_file, file_bytes, f.name, _invalidate_analytics_cache)
+            messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
+            return redirect("upload_sales")
+        else:
+            messages.error(request, "Invalid form submission.")
 
-    # Get database statistics with date ranges
     date_stats = SalesTransaction.objects.aggregate(
         min_date=Min("sales_date"), max_date=Max("sales_date"), total_count=Count("id")
     )
-
-    return render(
-        request, "upload/sales.html", {"form": form, "date_stats": date_stats}
-    )
+    return render(request, "upload/sales.html", {"form": SalesUploadForm(), "date_stats": date_stats})
 
 
 @requires_perm("page_upload")
 def upload_coupons(request):
-    """Upload coupon data from Excel/CSV file."""
     if request.method == "POST" and request.FILES.get("file"):
         f = request.FILES["file"]
-        logger.info("upload_coupons: %s user=%s", f.name, request.user)
-        try:
-            from App.services import process_coupon_file
-
-            result = process_coupon_file(f)
-            _invalidate_coupon_cache()
-            messages.success(
-                request,
-                f"Coupon import complete – Created: {result['created']}, "
-                f"Updated (overwritten): {result['updated']}, Errors: {result['errors']}",
-            )
-        except Exception as e:
-            logger.exception("upload_coupons error")
-            messages.error(request, f"Error: {e}")
+        file_bytes = f.read()
+        job_id = create_job("coupons", f.name)
+        logger.info("upload_coupons queued job=%s file=%s user=%s", job_id, f.name, request.user)
+        _start_thread(job_id, process_coupon_file, file_bytes, f.name, _invalidate_coupon_cache)
+        messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
         return redirect("upload_coupons")
     return render(request, "upload/coupons.html")
+
+
+# ── Status API endpoints ──────────────────────────────────────────────────────
+
+@requires_perm("page_upload")
+def upload_job_status(request, job_id):
+    """Return JSON status for a single job."""
+    from App.upload_jobs import get_job
+    job = get_job(job_id)
+    if not job:
+        return JsonResponse({"error": "Job not found"}, status=404)
+    return JsonResponse(job)
+
+
+@requires_perm("page_upload")
+def upload_jobs_list(request):
+    """Return JSON list of recent upload jobs."""
+    jobs = get_recent_jobs(limit=30)
+    return JsonResponse({"jobs": jobs})

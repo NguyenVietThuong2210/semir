@@ -17,7 +17,7 @@ logger = logging.getLogger('customer_analytics')
 BATCH_SIZE = 5000
 
 
-def process_sales_file(file):
+def process_sales_file(file, progress_fn=None):
     """
     OPTIMIZED: Process 100k+ sales records in batches.
     """
@@ -126,6 +126,9 @@ def process_sales_file(file):
                     )
                     updated += len(transactions_to_update)
                     logger.info(f"[Batch {batch_num}] Updated {len(transactions_to_update)} transactions")
+
+        if progress_fn:
+            progress_fn(min(batch_end, total_rows), total_rows)
 
     logger.info("=== DONE Sales Import: created=%d updated=%d errors=%d ===",
                 created, updated, len(errors))
