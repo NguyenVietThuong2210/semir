@@ -8,7 +8,7 @@ Runs with ThreadPoolExecutor for 100k+ records.
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 import requests
 from django.utils import timezone
@@ -26,6 +26,12 @@ LOG_INTERVAL = 1000       # progress log every N records
 _zalo_sync_lock = threading.Lock()
 _zalo_sync_running = False
 
+# Per-thread session storage (each worker thread gets its own session)
+_thread_local = threading.local()
+
+# Syncs stuck "running" longer than this are considered orphaned
+_STALE_ZALO_HOURS = 4
+
 
 def is_zalo_sync_running():
     """Check if a zalo sync thread is active (in-memory guard)."""
@@ -33,13 +39,29 @@ def is_zalo_sync_running():
         return _zalo_sync_running
 
 
-def _fetch_zalo_data(cnv_id: int, cookie: str, session: requests.Session):
+def _get_thread_session(cookie: str) -> requests.Session:
+    """Return a per-thread requests.Session (thread-safe: each thread owns its session)."""
+    if not hasattr(_thread_local, "session") or _thread_local.cookie != cookie:
+        s = requests.Session()
+        s.headers.update({
+            "cookie": cookie,
+            "Accept": "application/json",
+            "User-Agent": "SemirDashboard/1.0",
+        })
+        _thread_local.session = s
+        _thread_local.cookie = cookie
+    return _thread_local.session
+
+
+def _fetch_zalo_data(cnv_id: int, cookie: str):
     """
     Fetch contactcdp data for one CNV customer.
+    Uses a per-thread session — safe for ThreadPoolExecutor.
     Returns parsed dict or None on error.
     """
     url = f"{ZALO_API_BASE}/{cnv_id}"
     try:
+        session = _get_thread_session(cookie)
         resp = session.get(url, timeout=10)
         if resp.status_code == 200:
             return resp.json().get("data")
@@ -90,14 +112,29 @@ def run_zalo_sync(cookie: str):
     Entry point called from the view (runs in a background thread).
     Fetches all CNV customers, queries contactcdp, updates zalo fields.
     """
+    from django.db import connection as db_connection
     global _zalo_sync_running
+
+    # Clear orphaned "running" logs (container restart mid-sync)
+    stale_threshold = timezone.now() - timedelta(hours=_STALE_ZALO_HOURS)
+    stale_count = CNVSyncLog.objects.filter(
+        sync_type="zalo_sync",
+        status="running",
+        started_at__lt=stale_threshold,
+    ).update(
+        status="failed",
+        error_message=f"Auto-failed: stuck for > {_STALE_ZALO_HOURS}h (orphaned after restart)",
+        completed_at=timezone.now(),
+    )
+    if stale_count:
+        logger.warning("Cleared %d stale zalo sync log(s)", stale_count)
 
     # DB-level guard: check CNVSyncLog
     if CNVSyncLog.objects.filter(sync_type="zalo_sync", status="running").exists():
         logger.warning("Zalo sync already running (DB log). Skipping.")
         return
 
-    # In-memory guard
+    # In-memory guard (fast path for same-process double-call)
     with _zalo_sync_lock:
         if _zalo_sync_running:
             logger.warning("Zalo sync already running (thread). Skipping.")
@@ -121,10 +158,11 @@ def run_zalo_sync(cookie: str):
     finally:
         with _zalo_sync_lock:
             _zalo_sync_running = False
+        db_connection.close()  # release DB connection held by this thread
 
 
 def _do_sync(cookie: str, sync_log: CNVSyncLog):
-    """Core sync loop using ThreadPoolExecutor."""
+    """Core sync loop using ThreadPoolExecutor, processed in chunks to cap memory."""
     # Load only id + cnv_id — minimal memory footprint
     customer_ids = list(
         CNVCustomer.objects.values_list("id", "cnv_id").order_by("cnv_id")
@@ -135,66 +173,55 @@ def _do_sync(cookie: str, sync_log: CNVSyncLog):
 
     logger.info("Zalo sync: %d customers to process", total)
 
-    session = requests.Session()
-    session.headers.update({
-        "cookie": cookie,
-        "Accept": "application/json",
-        "User-Agent": "SemirDashboard/1.0",
-    })
-
     updated_count = 0
     failed_count = 0
-    pending_updates = []   # list of CNVCustomer partial objects
+    processed = 0
 
     def process_one(pk, cnv_id):
-        data = _fetch_zalo_data(cnv_id, cookie, session)
+        # Each call uses its own thread-local session — thread-safe
+        data = _fetch_zalo_data(cnv_id, cookie)
         if data is None:
             return pk, None, None, None, False
         app_id, oa_id, created_at = _parse_zalo_fields(data)
         return pk, app_id, oa_id, created_at, True
 
-    processed = 0
-
+    # Process in chunks of BATCH_SIZE to keep futures dict bounded in memory
     with ThreadPoolExecutor(max_workers=THREAD_WORKERS) as executor:
-        futures = {
-            executor.submit(process_one, pk, cnv_id): (pk, cnv_id)
-            for pk, cnv_id in customer_ids
-        }
+        for chunk_start in range(0, total, BATCH_SIZE):
+            chunk = customer_ids[chunk_start:chunk_start + BATCH_SIZE]
+            pending_updates = []
 
-        for future in as_completed(futures):
-            pk, app_id, oa_id, created_at, ok = future.result()
-            processed += 1
+            futures = {
+                executor.submit(process_one, pk, cnv_id): (pk, cnv_id)
+                for pk, cnv_id in chunk
+            }
 
-            if not ok:
-                failed_count += 1
-            else:
-                obj = CNVCustomer(pk=pk)
-                obj.zalo_app_id = app_id
-                obj.zalo_oa_id = oa_id
-                obj.zalo_app_created_at = created_at
-                pending_updates.append(obj)
-                updated_count += 1
+            for future in as_completed(futures):
+                pk, app_id, oa_id, created_at, ok = future.result()
+                processed += 1
 
-            # Flush batch to DB
-            if len(pending_updates) >= BATCH_SIZE:
+                if not ok:
+                    failed_count += 1
+                else:
+                    obj = CNVCustomer(pk=pk)
+                    obj.zalo_app_id = app_id
+                    obj.zalo_oa_id = oa_id
+                    obj.zalo_app_created_at = created_at
+                    pending_updates.append(obj)
+                    updated_count += 1
+
+            # Flush this chunk to DB
+            if pending_updates:
                 CNVCustomer.objects.bulk_update(
                     pending_updates,
                     ["zalo_app_id", "zalo_oa_id", "zalo_app_created_at"],
                 )
-                pending_updates.clear()
 
-            if processed % LOG_INTERVAL == 0:
+            if processed % LOG_INTERVAL == 0 or chunk_start + BATCH_SIZE >= total:
                 logger.info("Zalo sync progress: %d/%d", processed, total)
                 sync_log.updated_count = updated_count
                 sync_log.failed_count = failed_count
                 sync_log.save(update_fields=["updated_count", "failed_count"])
-
-    # Final flush
-    if pending_updates:
-        CNVCustomer.objects.bulk_update(
-            pending_updates,
-            ["zalo_app_id", "zalo_oa_id", "zalo_app_created_at"],
-        )
 
     sync_log.updated_count = updated_count
     sync_log.failed_count = failed_count

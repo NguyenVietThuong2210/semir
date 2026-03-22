@@ -568,7 +568,24 @@ def trigger_sync(request):
     if sync_type not in ("customers", "orders"):
         return JsonResponse({"error": "Invalid sync_type"}, status=400)
 
-    # Check if already running
+    # Clear orphaned "running" logs before checking (in case of previous crash/restart)
+    from datetime import timedelta
+    from App.cnv.scheduler import _STALE_SYNC_HOURS
+    stale_threshold = timezone.now() - timedelta(hours=_STALE_SYNC_HOURS)
+    stale_count = CNVSyncLog.objects.filter(
+        sync_type=sync_type,
+        status="running",
+        started_at__lt=stale_threshold,
+    ).update(
+        status="failed",
+        error_message=f"Auto-failed: stuck for > {_STALE_SYNC_HOURS}h (orphaned after restart)",
+        completed_at=timezone.now(),
+    )
+    if stale_count:
+        logger.warning("trigger_sync: cleared %d stale %s sync log(s)", stale_count, sync_type)
+
+    # Check if already running (scheduler functions also check, but check here first
+    # to give a fast response to the user)
     if CNVSyncLog.objects.filter(sync_type=sync_type, status="running").exists():
         return JsonResponse(
             {
@@ -578,12 +595,20 @@ def trigger_sync(request):
         )
 
     def _run():
+        from django.db import connection
         from App.cnv.scheduler import sync_cnv_customers_only, sync_cnv_orders_only
-
-        if sync_type == "customers":
-            sync_cnv_customers_only()
-        else:
-            sync_cnv_orders_only()
+        try:
+            # Re-check inside the thread — APScheduler may have fired in the gap
+            # between the HTTP check above and this thread starting
+            if CNVSyncLog.objects.filter(sync_type=sync_type, status="running").exists():
+                logger.warning("trigger_sync: %s already running (race guard), aborting", sync_type)
+                return
+            if sync_type == "customers":
+                sync_cnv_customers_only()
+            else:
+                sync_cnv_orders_only()
+        finally:
+            connection.close()  # always release DB connection held by this thread
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
@@ -615,7 +640,23 @@ def trigger_zalo_sync(request):
     if not cookie:
         return JsonResponse({"error": "Cookie is required"}, status=400)
 
-    # In-memory guard
+    # Clear orphaned "running" Zalo logs before checking
+    from datetime import timedelta
+    from App.cnv.zalo_sync import _STALE_ZALO_HOURS
+    stale_threshold = timezone.now() - timedelta(hours=_STALE_ZALO_HOURS)
+    stale_count = CNVSyncLog.objects.filter(
+        sync_type="zalo_sync",
+        status="running",
+        started_at__lt=stale_threshold,
+    ).update(
+        status="failed",
+        error_message=f"Auto-failed: stuck for > {_STALE_ZALO_HOURS}h (orphaned after restart)",
+        completed_at=timezone.now(),
+    )
+    if stale_count:
+        logger.warning("trigger_zalo_sync: cleared %d stale log(s)", stale_count)
+
+    # In-memory guard (same-process fast path)
     if is_zalo_sync_running():
         return JsonResponse(
             {
@@ -624,7 +665,7 @@ def trigger_zalo_sync(request):
             }
         )
 
-    # DB guard
+    # DB guard (authoritative cross-worker check)
     if CNVSyncLog.objects.filter(sync_type="zalo_sync", status="running").exists():
         return JsonResponse(
             {

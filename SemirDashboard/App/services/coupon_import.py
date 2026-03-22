@@ -132,7 +132,7 @@ def process_coupon_file(file, progress_fn=None):
         # Execute bulk operations
         with transaction.atomic():
             if batch_creates:
-                Coupon.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=False)
+                Coupon.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
                 created += len(batch_creates)
                 logger.info(f"[Batch {batch_num}] Created {len(batch_creates)} coupons")
 

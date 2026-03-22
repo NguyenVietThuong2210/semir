@@ -10,6 +10,7 @@ UPDATED: 2026-02-27
 - Updated field mappings to match API format
 """
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
@@ -245,26 +246,33 @@ class CNVSyncService:
         cnv_ids = []
         transformed_map = {}
         
-        # Transform all customers
+        # Transform all customers (without membership — fetched in parallel below)
         for data in batch:
             try:
                 transformed = self._transform_customer(data)
                 cnv_id = transformed.get('cnv_id')
-                
                 if cnv_id:
-                    # Fetch membership data
-                    membership = self._fetch_membership(cnv_id)
-                    transformed.update(membership)
-                    
                     cnv_ids.append(cnv_id)
                     transformed_map[cnv_id] = transformed
                 else:
                     logger.warning(f"Skipping customer with no ID: {data}")
                     failed_count += 1
-                    
             except Exception as e:
                 logger.error(f"Transform error: {e}")
                 failed_count += 1
+
+        # Fetch memberships in parallel (max 10 concurrent HTTP calls)
+        if cnv_ids:
+            with ThreadPoolExecutor(max_workers=10) as pool:
+                futures = {pool.submit(self._fetch_membership, cid): cid for cid in cnv_ids}
+                for fut in as_completed(futures):
+                    cid = futures[fut]
+                    try:
+                        membership = fut.result(timeout=30)
+                        if membership and cid in transformed_map:
+                            transformed_map[cid].update(membership)
+                    except Exception as e:
+                        logger.warning(f"Membership fetch failed for CNV#{cid}: {e}")
         
         if not cnv_ids:
             return 0, 0, failed_count

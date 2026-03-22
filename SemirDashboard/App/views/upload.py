@@ -16,7 +16,7 @@ from App.services import (
     process_sales_file,
     process_used_points_file,
 )
-from App.upload_jobs import NamedBytesIO, _now_iso, create_job, get_recent_jobs, make_progress_fn, update_job
+from App.upload_jobs import NamedBytesIO, _now_iso, create_job, get_recent_jobs, is_type_running, make_progress_fn, update_job
 
 logger = logging.getLogger("customer_analytics")
 
@@ -87,6 +87,9 @@ def upload_customers(request):
     if request.method == "POST":
         form = CustomerUploadForm(request.POST, request.FILES)
         if form.is_valid():
+            if is_type_running("customers"):
+                messages.warning(request, "A customer upload is already in progress. Please wait for it to finish.")
+                return redirect("upload_customers")
             f = request.FILES["file"]
             file_bytes = f.read()
             job_id = create_job("customers", f.name)
@@ -118,6 +121,9 @@ def upload_used_points(request):
     if request.method == "POST":
         form = UsedPointsUploadForm(request.POST, request.FILES)
         if form.is_valid():
+            if is_type_running("used_points"):
+                messages.warning(request, "A used-points upload is already in progress. Please wait.")
+                return redirect("upload_customers")
             f = request.FILES["file"]
             file_bytes = f.read()
             job_id = create_job("used_points", f.name)
@@ -134,6 +140,9 @@ def upload_sales(request):
     if request.method == "POST":
         form = SalesUploadForm(request.POST, request.FILES)
         if form.is_valid():
+            if is_type_running("sales"):
+                messages.warning(request, "A sales upload is already in progress. Please wait.")
+                return redirect("upload_sales")
             f = request.FILES["file"]
             file_bytes = f.read()
             job_id = create_job("sales", f.name)
@@ -153,6 +162,9 @@ def upload_sales(request):
 @requires_perm("page_upload")
 def upload_coupons(request):
     if request.method == "POST" and request.FILES.get("file"):
+        if is_type_running("coupons"):
+            messages.warning(request, "A coupon upload is already in progress. Please wait.")
+            return redirect("upload_coupons")
         f = request.FILES["file"]
         file_bytes = f.read()
         job_id = create_job("coupons", f.name)
