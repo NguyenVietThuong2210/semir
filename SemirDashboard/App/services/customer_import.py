@@ -111,7 +111,7 @@ def process_customer_file(file, progress_fn=None):
         with transaction.atomic():
             # Bulk create new customers
             if batch_creates:
-                Customer.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=False)
+                Customer.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
                 created += len(batch_creates)
                 logger.info(f"[Batch {batch_num}] Created {len(batch_creates)} new customers")
 
@@ -200,10 +200,10 @@ def process_used_points_file(file, progress_fn=None):
     BATCH = 2000
 
     total_records = len(df)
-    with transaction.atomic():
-        records = df.to_dict('records')
-        for i in range(0, len(records), BATCH):
-            batch = records[i:i + BATCH]
+    records = df.to_dict('records')
+    for i in range(0, len(records), BATCH):
+        batch = records[i:i + BATCH]
+        with transaction.atomic():           # per-batch transaction (not one giant lock)
             for rec in batch:
                 total_processed += 1
                 try:
@@ -241,8 +241,8 @@ def process_used_points_file(file, progress_fn=None):
                     errors.append(f"Row {total_processed}: {e}")
                     skipped += 1
 
-            if progress_fn:
-                progress_fn(min(i + BATCH, total_records), total_records)
+        if progress_fn:
+            progress_fn(min(i + BATCH, total_records), total_records)
 
     logger.info("=== DONE UsedPoints Import: updated=%d skipped=%d errors=%d ===",
                 updated, skipped, len(errors))

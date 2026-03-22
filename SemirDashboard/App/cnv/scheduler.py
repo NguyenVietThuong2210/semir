@@ -6,13 +6,18 @@ Uses CNV_USERNAME and CNV_PASSWORD from settings.
 """
 
 import logging
+from datetime import timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from django_apscheduler.jobstores import DjangoJobStore
 from django_apscheduler.models import DjangoJobExecution
 from django.conf import settings
+from django.utils import timezone
 
 from .sync_service import CNVSyncService
+
+# A sync stuck in "running" for longer than this is considered crashed/orphaned
+_STALE_SYNC_HOURS = 2
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +34,22 @@ def sync_cnv_customers_only():
     logger.info("=" * 60)
 
     try:
-        # Check if already running
         from App.cnv.models import CNVSyncLog
+
+        # Mark orphaned "running" logs (crashed / container restart) as failed
+        stale_threshold = timezone.now() - timedelta(hours=_STALE_SYNC_HOURS)
+        stale_qs = CNVSyncLog.objects.filter(
+            sync_type="customers",
+            status="running",
+            started_at__lt=stale_threshold,
+        )
+        stale_count = stale_qs.update(
+            status="failed",
+            error_message=f"Auto-failed: stuck for > {_STALE_SYNC_HOURS}h (orphaned after restart)",
+            completed_at=timezone.now(),
+        )
+        if stale_count:
+            logger.warning("Cleared %d stale customers sync log(s)", stale_count)
 
         running = CNVSyncLog.objects.filter(
             sync_type="customers", status="running"
@@ -82,8 +101,22 @@ def sync_cnv_orders_only():
     logger.info("=" * 60)
 
     try:
-        # Check if already running
         from App.cnv.models import CNVSyncLog
+
+        # Mark orphaned "running" logs (crashed / container restart) as failed
+        stale_threshold = timezone.now() - timedelta(hours=_STALE_SYNC_HOURS)
+        stale_qs = CNVSyncLog.objects.filter(
+            sync_type="orders",
+            status="running",
+            started_at__lt=stale_threshold,
+        )
+        stale_count = stale_qs.update(
+            status="failed",
+            error_message=f"Auto-failed: stuck for > {_STALE_SYNC_HOURS}h (orphaned after restart)",
+            completed_at=timezone.now(),
+        )
+        if stale_count:
+            logger.warning("Cleared %d stale orders sync log(s)", stale_count)
 
         running = CNVSyncLog.objects.filter(
             sync_type="orders", status="running"

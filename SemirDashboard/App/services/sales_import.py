@@ -101,7 +101,7 @@ def process_sales_file(file, progress_fn=None):
         with transaction.atomic():
             # Bulk create new transactions
             if batch_creates:
-                SalesTransaction.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=False)
+                SalesTransaction.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
                 created += len(batch_creates)
                 logger.info(f"[Batch {batch_num}] Created {len(batch_creates)} new transactions")
 

@@ -5,7 +5,7 @@ Shared across all gunicorn workers.
 import io
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 _lock = threading.Lock()   # guards index read-modify-write within a single worker
 _MAX_JOBS = 100
@@ -89,7 +89,40 @@ def get_recent_jobs(limit: int = 20) -> list:
     index = cache.get(_INDEX_KEY) or []
     sorted_index = sorted(index, key=lambda x: x["started_at"], reverse=True)[:limit]
     jobs = [cache.get(_jkey(x["id"])) for x in sorted_index]
-    return [j for j in jobs if j]   # filter expired / missing entries
+    jobs = [j for j in jobs if j]  # filter expired / missing entries
+
+    # Auto-fail jobs stuck in running/queued for > 30 min (gunicorn restart mid-upload)
+    stale_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat(timespec="seconds")
+    for j in jobs:
+        if j.get("status") in ("running", "queued") and j.get("started_at", "") < stale_cutoff:
+            update_job(j["id"], status="error", finished_at=_now_iso(),
+                       error="Auto-failed: job stale (process likely restarted)")
+            j["status"] = "error"  # reflect in this response too
+
+    return jobs
+
+
+def is_type_running(job_type: str) -> bool:
+    """Return True if a non-stale job of this type is already queued or running."""
+    from django.core.cache import cache
+
+    stale_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat(timespec="seconds")
+    index = cache.get(_INDEX_KEY) or []
+    for entry in index:
+        job = cache.get(_jkey(entry["id"]))
+        if not job:
+            continue
+        if job.get("type") != job_type:
+            continue
+        if job.get("status") not in ("queued", "running"):
+            continue
+        # Treat jobs stuck > 30 min as stale — do not block new uploads
+        if job.get("started_at", "") < stale_cutoff:
+            update_job(job["id"], status="error", finished_at=_now_iso(),
+                       error="Auto-failed: job stale (process likely restarted)")
+            continue
+        return True
+    return False
 
 
 def make_progress_fn(job_id: str):
