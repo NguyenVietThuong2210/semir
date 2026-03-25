@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY SemirDashboard/ /app/
 
 # Create directories with correct permissions
-RUN mkdir -p /app/staticfiles /app/media && \
+RUN mkdir -p /app/staticfiles /app/media /app/logs && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user

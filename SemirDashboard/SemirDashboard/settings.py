@@ -219,8 +219,7 @@ APSCHEDULER_RUN_NOW_TIMEOUT = 25  # Seconds
 #                    {service="semir_web"} | json | step="sync_customers"
 # ============================================================================
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
-if not os.path.exists(LOGS_DIR):
-    os.makedirs(LOGS_DIR)
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 LOGGING = {
     "version": 1,
