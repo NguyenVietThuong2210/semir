@@ -407,6 +407,11 @@ def customer_analytics(request):
     start_date = request.GET.get("start_date", "")
     end_date = request.GET.get("end_date", "")
 
+    logger.info(
+        "customer_analytics: from=%s to=%s user=%s",
+        start_date or "all", end_date or "all", request.user,
+        extra={"step": "cnv_comparison"},
+    )
     d, _ = _get_cnv_comparison_data(start_date, end_date)
 
     context = {
@@ -450,6 +455,11 @@ def export_customer_analytics(request):
     except ValueError:
         pass
 
+    logger.info(
+        "export_customer_analytics: from=%s to=%s tab=%s user=%s",
+        date_from, date_to, tab or "full", request.user,
+        extra={"step": "export_customer_analytics"},
+    )
     d, _ = _get_cnv_comparison_data(start_date, end_date)
     ts = datetime.now().strftime('%H%M%S')
     period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
@@ -511,6 +521,7 @@ def sync_cnv_points(request):
     client = CNVAPIClient(settings.CNV_USERNAME, settings.CNV_PASSWORD)
     results = []
 
+    logger.info("sync_cnv_points: syncing %d ids by=%s", len(cnv_ids), request.user, extra={"step": "cnv_points_sync"})
     for cnv_id in cnv_ids:
         try:
             response = client.get_customer_membership(int(cnv_id))
@@ -538,10 +549,14 @@ def sync_cnv_points(request):
                     }
                 )
             else:
+                logger.warning("sync_cnv_points: no membership data for cnv_id=%s", cnv_id, extra={"step": "cnv_points_sync"})
                 results.append({"cnv_id": cnv_id, "status": "no_data"})
         except Exception as e:
+            logger.error("sync_cnv_points: cnv_id=%s error=%s", cnv_id, e, extra={"step": "cnv_points_sync"})
             results.append({"cnv_id": cnv_id, "status": "error", "error": str(e)})
 
+    ok = sum(1 for r in results if r["status"] == "ok")
+    logger.info("sync_cnv_points: done ok=%d no_data=%d error=%d", ok, len(results) - ok, sum(1 for r in results if r["status"] == "error"), extra={"step": "cnv_points_sync"})
     return JsonResponse({"results": results})
 
 
@@ -568,6 +583,8 @@ def trigger_sync(request):
     if sync_type not in ("customers", "orders"):
         return JsonResponse({"error": "Invalid sync_type"}, status=400)
 
+    logger.info("trigger_sync: type=%s user=%s", sync_type, request.user, extra={"step": "cnv_sync"})
+
     # Clear orphaned "running" logs before checking (in case of previous crash/restart)
     from datetime import timedelta
     from App.cnv.scheduler import _STALE_SYNC_HOURS
@@ -582,7 +599,7 @@ def trigger_sync(request):
         completed_at=timezone.now(),
     )
     if stale_count:
-        logger.warning("trigger_sync: cleared %d stale %s sync log(s)", stale_count, sync_type)
+        logger.warning("trigger_sync: cleared %d stale %s sync log(s)", stale_count, sync_type, extra={"step": "cnv_sync"})
 
     # Check if already running (scheduler functions also check, but check here first
     # to give a fast response to the user)
@@ -601,7 +618,7 @@ def trigger_sync(request):
             # Re-check inside the thread — APScheduler may have fired in the gap
             # between the HTTP check above and this thread starting
             if CNVSyncLog.objects.filter(sync_type=sync_type, status="running").exists():
-                logger.warning("trigger_sync: %s already running (race guard), aborting", sync_type)
+                logger.warning("trigger_sync: %s already running (race guard), aborting", sync_type, extra={"step": "cnv_sync"})
                 return
             if sync_type == "customers":
                 sync_cnv_customers_only()
@@ -640,6 +657,8 @@ def trigger_zalo_sync(request):
     if not cookie:
         return JsonResponse({"error": "Cookie is required"}, status=400)
 
+    logger.info("trigger_zalo_sync: user=%s", request.user, extra={"step": "zalo_sync"})
+
     # Clear orphaned "running" Zalo logs before checking
     from datetime import timedelta
     from App.cnv.zalo_sync import _STALE_ZALO_HOURS
@@ -654,7 +673,7 @@ def trigger_zalo_sync(request):
         completed_at=timezone.now(),
     )
     if stale_count:
-        logger.warning("trigger_zalo_sync: cleared %d stale log(s)", stale_count)
+        logger.warning("trigger_zalo_sync: cleared %d stale log(s)", stale_count, extra={"step": "zalo_sync"})
 
     # In-memory guard (same-process fast path)
     if is_zalo_sync_running():
@@ -675,6 +694,7 @@ def trigger_zalo_sync(request):
         )
 
     total = CNVCustomer.objects.count()
+    logger.info("trigger_zalo_sync: starting for total=%d customers", total, extra={"step": "zalo_sync"})
     t = threading.Thread(target=run_zalo_sync, args=(cookie,), daemon=True)
     t.start()
 

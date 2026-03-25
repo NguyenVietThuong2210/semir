@@ -1,0 +1,40 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Reads all Docker container stdout/stderr logs via the Docker socket.
+  # Labels: container, service, stream (stdout/stderr)
+  - job_name: docker-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Strip leading slash from container name
+      - source_labels: [__meta_docker_container_name]
+        regex: '/(.*)'
+        target_label: container
+      # Compose service name (e.g. web, db, nginx)
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      # Log stream: stdout or stderr
+      - source_labels: [__meta_docker_container_log_stream]
+        target_label: stream
+    pipeline_stages:
+      # Try to parse as JSON (Django app logs are JSON via JsonFormatter)
+      - json:
+          expressions:
+            level: level
+            request_id: request_id
+            step: step
+          # drop_malformed defaults to false — non-JSON lines (nginx, postgres) pass through unchanged
+      - labels:
+          level:
+          request_id:
+          step:

@@ -66,7 +66,7 @@ def sync_cnv_customers_only():
             checkpoint_updated_at__isnull=False,
         ).exists()
 
-        logger.info(f"CNV Username: {CNV_USERNAME}")
+        logger.info("CNV Username: %s", CNV_USERNAME)
         logger.info("Creating sync service...")
 
         service = CNVSyncService(CNV_USERNAME, CNV_PASSWORD)
@@ -80,7 +80,7 @@ def sync_cnv_customers_only():
 
         logger.info("=" * 60)
         logger.info("CUSTOMERS SYNC COMPLETED")
-        logger.info(f"Created: {created}, Updated: {updated}, Failed: {failed}")
+        logger.info("Created: %d, Updated: %d, Failed: %d", created, updated, failed)
         logger.info("=" * 60)
 
         from .views import _invalidate_cnv_cache
@@ -89,7 +89,7 @@ def sync_cnv_customers_only():
 
     except Exception as e:
         logger.error("=" * 60)
-        logger.error(f"CUSTOMERS SYNC FAILED: {e}")
+        logger.error("CUSTOMERS SYNC FAILED: %s", e)
         logger.error("=" * 60)
         logger.exception("Full traceback:")
 
@@ -131,7 +131,7 @@ def sync_cnv_orders_only():
             sync_type="orders", status="completed", checkpoint_updated_at__isnull=False
         ).exists()
 
-        logger.info(f"CNV Username: {CNV_USERNAME}")
+        logger.info("CNV Username: %s", CNV_USERNAME)
         logger.info("Creating sync service...")
 
         service = CNVSyncService(CNV_USERNAME, CNV_PASSWORD)
@@ -147,7 +147,7 @@ def sync_cnv_orders_only():
 
         logger.info("=" * 60)
         logger.info("ORDERS SYNC COMPLETED")
-        logger.info(f"Created: {created}, Updated: {updated}, Failed: {failed}")
+        logger.info("Created: %d, Updated: %d, Failed: %d", created, updated, failed)
         logger.info("=" * 60)
 
         from .views import _invalidate_cnv_cache
@@ -156,7 +156,7 @@ def sync_cnv_orders_only():
 
     except Exception as e:
         logger.error("=" * 60)
-        logger.error(f"ORDERS SYNC FAILED: {e}")
+        logger.error("ORDERS SYNC FAILED: %s", e)
         logger.error("=" * 60)
         logger.exception("Full traceback:")
 
@@ -165,9 +165,9 @@ def delete_old_job_executions(max_age=604_800):
     """Delete old job execution records (7 days)."""
     try:
         DjangoJobExecution.objects.delete_old_job_executions(max_age)
-        logger.info(f"Deleted job executions older than {max_age} seconds")
+        logger.info("Deleted job executions older than %d seconds", max_age)
     except Exception as e:
-        logger.error(f"Failed to delete old job executions: {e}")
+        logger.error("Failed to delete old job executions: %s", e)
 
 
 def start_scheduler():
@@ -238,6 +238,6 @@ def start_scheduler():
         return scheduler
 
     except Exception as e:
-        logger.error(f"Failed to start scheduler: {e}")
+        logger.error("Failed to start scheduler: %s", e)
         logger.exception("Full traceback:")
         raise

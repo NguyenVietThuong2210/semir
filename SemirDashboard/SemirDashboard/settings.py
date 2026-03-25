@@ -82,6 +82,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "App.middleware.RequestIDMiddleware",           # Request ID for log correlation
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -212,7 +213,10 @@ APSCHEDULER_DATETIME_FORMAT = "N j, Y, f:s a"
 APSCHEDULER_RUN_NOW_TIMEOUT = 25  # Seconds
 
 # ============================================================================
-# LOGGING CONFIGURATION (Optional but recommended)
+# LOGGING CONFIGURATION
+# Structured JSON logs → Loki (via Promtail)
+# Filter in Grafana: {service="semir_web"} | json | request_id="abc123"
+#                    {service="semir_web"} | json | step="sync_customers"
 # ============================================================================
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 if not os.path.exists(LOGS_DIR):
@@ -221,59 +225,86 @@ if not os.path.exists(LOGS_DIR):
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {
+            "()": "App.logging_utils.RequestIDFilter",
+        },
+    },
     "formatters": {
+        # Human-readable for console
         "verbose": {
-            "format": "{levelname} {asctime} {module} {message}",
+            "format": "[{levelname}] {asctime} {name} req={request_id} step={step} — {message}",
             "style": "{",
         },
-        "simple": {
-            "format": "{levelname} {message}",
-            "style": "{",
+        # Machine-readable JSON for Loki — one object per line
+        "json": {
+            "()": "App.logging_utils.JsonFormatter",
         },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
+            "filters": ["request_id"],
             "level": "INFO",
         },
-        "file": {
+        # General app log (views, services, uploads)
+        "app_file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": os.path.join(LOGS_DIR, "cnv_sync.log"),  # FIX: Add filename!
-            "maxBytes": 10485760,  # 10MB
+            "filename": os.path.join(LOGS_DIR, "app.log"),
+            "maxBytes": 10485760,   # 10 MB
             "backupCount": 5,
-            "formatter": "verbose",
+            "formatter": "json",
+            "filters": ["request_id"],
             "level": "INFO",
         },
+        # CNV sync log (separate file for easier filtering)
+        "cnv_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(LOGS_DIR, "cnv_sync.log"),
+            "maxBytes": 10485760,
+            "backupCount": 5,
+            "formatter": "json",
+            "filters": ["request_id"],
+            "level": "INFO",
+        },
+        # All ERROR+ across every logger
         "error_file": {
             "class": "logging.handlers.RotatingFileHandler",
             "filename": os.path.join(LOGS_DIR, "errors.log"),
-            "maxBytes": 10485760,  # 10MB
+            "maxBytes": 10485760,
             "backupCount": 5,
-            "formatter": "verbose",
+            "formatter": "json",
+            "filters": ["request_id"],
             "level": "ERROR",
         },
     },
     "loggers": {
-        # CNV module logger
+        # CNV module — dedicated file + errors
         "App.cnv": {
-            "handlers": ["console", "file", "error_file"],
+            "handlers": ["console", "cnv_file", "error_file"],
             "level": "INFO",
             "propagate": False,
         },
-        # General App logger
+        # All other App code — app file + errors
         "App": {
-            "handlers": ["console", "file"],
+            "handlers": ["console", "app_file", "error_file"],
             "level": "INFO",
             "propagate": False,
         },
-        # Django APScheduler
+        # APScheduler background jobs
         "django_apscheduler": {
-            "handlers": ["console", "file"],
+            "handlers": ["console", "app_file"],
             "level": "INFO",
             "propagate": False,
         },
-        # Root logger (catches everything else)
+        # Django 4xx/5xx request errors
+        "django.request": {
+            "handlers": ["console", "error_file"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        # Root — WARNING+ to console only (Django internals, third-party)
         "": {
             "handlers": ["console"],
             "level": "WARNING",

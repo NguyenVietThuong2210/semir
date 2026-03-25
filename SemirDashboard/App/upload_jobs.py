@@ -3,9 +3,12 @@ App/upload_jobs.py — Upload job store backed by Django cache (Redis).
 Shared across all gunicorn workers.
 """
 import io
+import logging
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()   # guards index read-modify-write within a single worker
 _MAX_JOBS = 100
@@ -98,6 +101,11 @@ def get_recent_jobs(limit: int = 20) -> list:
             update_job(j["id"], status="error", finished_at=_now_iso(),
                        error="Auto-failed: job stale (process likely restarted)")
             j["status"] = "error"  # reflect in this response too
+            logger.warning(
+                "upload_job auto-failed: id=%s type=%s filename=%s started_at=%s",
+                j["id"], j.get("type"), j.get("filename"), j.get("started_at"),
+                extra={"step": "upload_job"},
+            )
 
     return jobs
 
@@ -120,6 +128,11 @@ def is_type_running(job_type: str) -> bool:
         if job.get("started_at", "") < stale_cutoff:
             update_job(job["id"], status="error", finished_at=_now_iso(),
                        error="Auto-failed: job stale (process likely restarted)")
+            logger.warning(
+                "upload_job auto-failed (is_type_running): id=%s type=%s started_at=%s",
+                job["id"], job.get("type"), job.get("started_at"),
+                extra={"step": "upload_job"},
+            )
             continue
         return True
     return False

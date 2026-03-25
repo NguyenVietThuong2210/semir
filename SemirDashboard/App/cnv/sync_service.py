@@ -153,10 +153,10 @@ class CNVSyncService:
                     'total_points': Decimal(str(membership.get('total_points', 0))),
                 }
             else:
-                logger.warning(f"No membership data for customer {customer_id}")
+                logger.warning("No membership data for customer %d", customer_id)
                 
         except Exception as e:
-            logger.error(f"Error fetching membership for customer {customer_id}: {e}")
+            logger.error("Error fetching membership for customer %d: %s", customer_id, e)
         
         return {}
     
@@ -255,10 +255,10 @@ class CNVSyncService:
                     cnv_ids.append(cnv_id)
                     transformed_map[cnv_id] = transformed
                 else:
-                    logger.warning(f"Skipping customer with no ID: {data}")
+                    logger.warning("Skipping customer with no ID: %s", data)
                     failed_count += 1
             except Exception as e:
-                logger.error(f"Transform error: {e}")
+                logger.error("Transform error: %s", e)
                 failed_count += 1
 
         # Fetch memberships in parallel (max 10 concurrent HTTP calls)
@@ -272,7 +272,7 @@ class CNVSyncService:
                         if membership and cid in transformed_map:
                             transformed_map[cid].update(membership)
                     except Exception as e:
-                        logger.warning(f"Membership fetch failed for CNV#{cid}: {e}")
+                        logger.warning("Membership fetch failed for CNV#%s: %s", cid, e)
         
         if not cnv_ids:
             return 0, 0, failed_count
@@ -299,7 +299,7 @@ class CNVSyncService:
                 CNVCustomer.objects.bulk_create(new_customers, ignore_conflicts=True)
                 created_count = len(new_customers)
             except Exception as e:
-                logger.error(f"Bulk create failed: {e}")
+                logger.error("Bulk create failed: %s", e)
                 failed_count += len(new_customers)
         
         # Update existing records
@@ -310,9 +310,13 @@ class CNVSyncService:
                 })
                 updated_count += 1
             except Exception as e:
-                logger.error(f"Update failed for CNV#{cnv_id}: {e}")
+                logger.error("Update failed for CNV#%s: %s", cnv_id, e)
                 failed_count += 1
         
+        logger.info(
+            "_process_customer_batch: size=%d created=%d updated=%d failed=%d",
+            len(batch), created_count, updated_count, failed_count,
+        )
         return created_count, updated_count, failed_count
 
     def _process_order_batch(self, batch: List[Dict]) -> Tuple[int, int, int]:
@@ -345,11 +349,11 @@ class CNVSyncService:
                     codes.append(code)
                     transformed_map[code] = transformed
                 else:
-                    logger.warning(f"Skipping order with no code: {data}")
+                    logger.warning("Skipping order with no code: %s", data)
                     failed_count += 1
 
             except Exception as e:
-                logger.error(f"Transform error: {e}")
+                logger.error("Transform error: %s", e)
                 failed_count += 1
 
         if not codes:
@@ -377,7 +381,7 @@ class CNVSyncService:
                 CNVOrder.objects.bulk_create(new_orders, ignore_conflicts=True)
                 created_count = len(new_orders)
             except Exception as e:
-                logger.error(f"Bulk create failed: {e}")
+                logger.error("Bulk create failed: %s", e)
                 failed_count += len(new_orders)
 
         # Update existing records
@@ -388,7 +392,7 @@ class CNVSyncService:
                 })
                 updated_count += 1
             except Exception as e:
-                logger.error(f"Update failed for {code}: {e}")
+                logger.error("Update failed for order %s: %s", code, e)
                 failed_count += 1
 
         return created_count, updated_count, failed_count
@@ -427,12 +431,12 @@ class CNVSyncService:
                 
                 if last_sync:
                     checkpoint = last_sync.checkpoint_updated_at
-                    logger.info(f"Resuming from checkpoint: {checkpoint}")
+                    logger.info("sync_customers: resuming from checkpoint=%s", checkpoint)
                 else:
-                    logger.info("No checkpoint found - starting full sync")
-            
+                    logger.info("sync_customers: no checkpoint — starting full sync")
+
             # Fetch data from API (max 100 pages)
-            logger.info("Fetching customers from CNV API...")
+            logger.info("sync_customers: fetching from CNV API...")
             customers_data = self.client.fetch_all_customers(
                 updated_since=checkpoint,
                 max_pages=max_pages
@@ -443,11 +447,11 @@ class CNVSyncService:
             sync_log.save()
             
             if total == 0:
-                logger.info("No new customers to sync")
+                logger.info("sync_customers: no new customers to sync")
                 sync_log.mark_completed()
                 return 0, 0, 0
-            
-            logger.info(f"Processing {total} customers...")
+
+            logger.info("sync_customers: processing %d customers...", total)
             
             # Process in batches - only track checkpoint from fully successful batches
             total_created = 0
@@ -457,8 +461,6 @@ class CNVSyncService:
             
             for i in range(0, total, self.BATCH_SIZE):
                 batch = customers_data[i:i + self.BATCH_SIZE]
-                batch_size = len(batch)
-                
                 created, updated, failed = self._process_customer_batch(batch)
                 
                 total_created += created
@@ -476,22 +478,22 @@ class CNVSyncService:
                                 if not latest_updated_at or customer_dt > latest_updated_at:
                                     latest_updated_at = customer_dt
                 elif failed > 0:
-                    logger.warning(f"Batch had {failed} failures - checkpoint not advanced for this batch")
-                
+                    logger.warning("sync_customers: batch had %d failures — checkpoint not advanced", failed)
+
                 # Log progress
                 if (i + self.BATCH_SIZE) % self.LOG_INTERVAL == 0:
-                    logger.info(f"  Processed {i + self.BATCH_SIZE}/{total} customers")
-            
+                    logger.info("sync_customers: processed %d/%d customers", i + self.BATCH_SIZE, total)
+
             # Save checkpoint for next sync
             if latest_updated_at:
                 # Add 1 microsecond to avoid re-fetching the last record
                 from datetime import timedelta
                 sync_log.checkpoint_updated_at = latest_updated_at + timedelta(microseconds=1)
-                logger.info(f"Checkpoint saved: {sync_log.checkpoint_updated_at}")
+                logger.info("sync_customers: checkpoint saved=%s", sync_log.checkpoint_updated_at)
             elif checkpoint:
                 # No successful batches, keep old checkpoint
                 sync_log.checkpoint_updated_at = checkpoint
-                logger.info(f"No new checkpoint - kept previous: {checkpoint}")
+                logger.info("sync_customers: no new checkpoint — kept previous=%s", checkpoint)
             
             # Update sync log
             sync_log.created_count = total_created
@@ -500,13 +502,13 @@ class CNVSyncService:
             sync_log.mark_completed()
             
             logger.info(
-                f"Customers sync completed: "
-                f"{total_created} created, {total_updated} updated, {total_failed} failed"
+                "sync_customers: done created=%d updated=%d failed=%d",
+                total_created, total_updated, total_failed,
             )
             return total_created, total_updated, total_failed
-            
+
         except Exception as e:
-            logger.error(f"Customers sync failed: {e}", exc_info=True)
+            logger.error("sync_customers: failed: %s", e, exc_info=True)
             sync_log.mark_failed(str(e))
             raise
     
@@ -529,7 +531,7 @@ class CNVSyncService:
         sync_log = CNVSyncLog.objects.create(sync_type='customers')
         
         try:
-            logger.info(f"Syncing customers from {updated_since} to {updated_until}")
+            logger.info("sync_customers_range: from=%s to=%s", updated_since, updated_until)
             
             # Fetch data for this date range (max 100 pages)
             customers_data = self.client.fetch_all_customers(
@@ -549,11 +551,11 @@ class CNVSyncService:
             sync_log.save()
             
             if total == 0:
-                logger.info("No customers in this date range")
+                logger.info("sync_customers_range: no customers in range")
                 sync_log.mark_completed()
                 return 0, 0, 0
-            
-            logger.info(f"Processing {total} customers...")
+
+            logger.info("sync_customers_range: processing %d customers...", total)
             
             # Process all batches
             total_created = 0
@@ -575,16 +577,16 @@ class CNVSyncService:
             sync_log.mark_completed()
             
             logger.info(
-                f"Date range sync completed: {total_created} created, "
-                f"{total_updated} updated, {total_failed} failed"
+                "sync_customers_range: done created=%d updated=%d failed=%d",
+                total_created, total_updated, total_failed,
             )
             return total_created, total_updated, total_failed
-            
+
         except Exception as e:
-            logger.error(f"Date range sync failed: {e}", exc_info=True)
+            logger.error("sync_customers_range: failed: %s", e, exc_info=True)
             sync_log.mark_failed(str(e))
             raise
-    
+
     def sync_orders(
         self,
         incremental: bool = True,
@@ -623,12 +625,12 @@ class CNVSyncService:
                 
                 if last_sync:
                     checkpoint = last_sync.checkpoint_updated_at
-                    logger.info(f"Resuming from checkpoint: {checkpoint}")
+                    logger.info("sync_orders: resuming from checkpoint=%s", checkpoint)
                 else:
-                    logger.info("No checkpoint found - starting full sync")
-            
+                    logger.info("sync_orders: no checkpoint — starting full sync")
+
             # Fetch data from API (max 100 pages)
-            logger.info("Fetching orders from CNV API...")
+            logger.info("sync_orders: fetching from CNV API...")
             orders_data = self.client.fetch_all_orders(
                 start_date=start_date,
                 end_date=end_date,
@@ -641,11 +643,11 @@ class CNVSyncService:
             sync_log.save()
             
             if total == 0:
-                logger.info("No new orders to sync")
+                logger.info("sync_orders: no new orders to sync")
                 sync_log.mark_completed()
                 return 0, 0, 0
-            
-            logger.info(f"Processing {total} orders...")
+
+            logger.info("sync_orders: processing %d orders...", total)
             
             # Process in batches - only track checkpoint from fully successful batches
             total_created = 0
@@ -656,16 +658,14 @@ class CNVSyncService:
             # DEBUG: Check if orders have updated_at field
             if orders_data:
                 sample_order = orders_data[0]
-                logger.info(f"Sample order keys: {list(sample_order.keys())}")
+                logger.debug("sync_orders: sample order keys: %s", list(sample_order.keys()))
                 if 'updated_at' in sample_order:
-                    logger.info(f"Sample order updated_at: {sample_order.get('updated_at')}")
+                    logger.debug("sync_orders: sample order updated_at=%s", sample_order.get('updated_at'))
                 else:
-                    logger.warning("Orders do NOT have 'updated_at' field!")
+                    logger.warning("sync_orders: orders have no updated_at field — checkpoint will not advance")
             
             for i in range(0, total, self.BATCH_SIZE):
                 batch = orders_data[i:i + self.BATCH_SIZE]
-                batch_size = len(batch)
-                
                 created, updated, failed = self._process_order_batch(batch)
                 
                 total_created += created
@@ -690,26 +690,26 @@ class CNVSyncService:
                                 if not latest_updated_at or order_dt > latest_updated_at:
                                     latest_updated_at = order_dt
                 elif failed > 0:
-                    logger.warning(f"Batch had {failed} failures - checkpoint not advanced for this batch")
-                
+                    logger.warning("sync_orders: batch had %d failures — checkpoint not advanced", failed)
+
                 # Log progress
                 if (i + self.BATCH_SIZE) % self.LOG_INTERVAL == 0:
-                    logger.info(f"  Processed {i + self.BATCH_SIZE}/{total} orders")
-            
+                    logger.info("sync_orders: processed %d/%d orders", i + self.BATCH_SIZE, total)
+
             # Save checkpoint for next sync
-            logger.info(f"DEBUG: Final latest_updated_at for orders: {latest_updated_at}")
-            
+            logger.debug("sync_orders: final latest_updated_at=%s", latest_updated_at)
+
             if latest_updated_at:
                 # Add 1 microsecond to avoid re-fetching the last record
                 from datetime import timedelta
                 sync_log.checkpoint_updated_at = latest_updated_at + timedelta(microseconds=1)
-                logger.info(f"[OK] Orders checkpoint saved: {sync_log.checkpoint_updated_at}")
+                logger.info("sync_orders: checkpoint saved=%s", sync_log.checkpoint_updated_at)
             elif checkpoint:
                 # No successful batches, keep old checkpoint
                 sync_log.checkpoint_updated_at = checkpoint
-                logger.info(f"[WARN] No new checkpoint - kept previous: {checkpoint}")
+                logger.info("sync_orders: no new checkpoint — kept previous=%s", checkpoint)
             else:
-                logger.warning(f"[ERROR] NO CHECKPOINT SAVED - orders have no updated_at field!")
+                logger.warning("sync_orders: no checkpoint saved — orders have no updated_at field")
             
             # Update sync log
             sync_log.created_count = total_created
@@ -718,13 +718,13 @@ class CNVSyncService:
             sync_log.mark_completed()
             
             logger.info(
-                f"Orders sync completed: "
-                f"{total_created} created, {total_updated} updated, {total_failed} failed"
+                "sync_orders: done created=%d updated=%d failed=%d",
+                total_created, total_updated, total_failed,
             )
             return total_created, total_updated, total_failed
-            
+
         except Exception as e:
-            logger.error(f"Orders sync failed: {e}", exc_info=True)
+            logger.error("sync_orders: failed: %s", e, exc_info=True)
             sync_log.mark_failed(str(e))
             raise
     
@@ -747,7 +747,7 @@ class CNVSyncService:
         sync_log = CNVSyncLog.objects.create(sync_type='orders')
         
         try:
-            logger.info(f"Syncing orders from {updated_since} to {updated_until}")
+            logger.info("sync_orders_range: from=%s to=%s", updated_since, updated_until)
             
             # Fetch data for this date range (max 100 pages)
             orders_data = self.client.fetch_all_orders(
@@ -761,39 +761,39 @@ class CNVSyncService:
             sync_log.save()
             
             if total == 0:
-                logger.info("No orders in this date range")
+                logger.info("sync_orders_range: no orders in range")
                 sync_log.mark_completed()
                 return 0, 0, 0
-            
-            logger.info(f"Processing {total} orders...")
-            
+
+            logger.info("sync_orders_range: processing %d orders...", total)
+
             # Process all batches
             total_created = 0
             total_updated = 0
             total_failed = 0
-            
+
             for i in range(0, total, self.BATCH_SIZE):
                 batch = orders_data[i:i + self.BATCH_SIZE]
                 created, updated, failed = self._process_order_batch(batch)
                 total_created += created
                 total_updated += updated
                 total_failed += failed
-            
+
             # Save checkpoint = end of date range
             sync_log.checkpoint_updated_at = updated_until
             sync_log.created_count = total_created
             sync_log.updated_count = total_updated
             sync_log.failed_count = total_failed
             sync_log.mark_completed()
-            
+
             logger.info(
-                f"Date range sync completed: {total_created} created, "
-                f"{total_updated} updated, {total_failed} failed"
+                "sync_orders_range: done created=%d updated=%d failed=%d",
+                total_created, total_updated, total_failed,
             )
             return total_created, total_updated, total_failed
-            
+
         except Exception as e:
-            logger.error(f"Date range sync failed: {e}", exc_info=True)
+            logger.error("sync_orders_range: failed: %s", e, exc_info=True)
             sync_log.mark_failed(str(e))
             raise
 
@@ -807,7 +807,6 @@ class CNVSyncService:
         Returns:
             Tuple of (created_count, updated_count, failed_count)
         """
-        import os
         from pathlib import Path
         
         sync_log = CNVSyncLog.objects.create(sync_type='customers')
@@ -819,12 +818,12 @@ class CNVSyncService:
             if not ids_file.exists():
                 raise FileNotFoundError(f"Customer IDs file not found: {ids_file}")
             
-            logger.info(f"Reading customer IDs from: {ids_file}")
-            
+            logger.info("initial_sync_customers: reading IDs from %s", ids_file)
+
             with open(ids_file, 'r') as f:
                 customer_ids = [int(line.strip()) for line in f if line.strip().isdigit()]
-            
-            logger.info(f"Loaded {len(customer_ids)} customer IDs")
+
+            logger.info("initial_sync_customers: loaded %d customer IDs", len(customer_ids))
             
             # Fetch customers by IDs (100 at a time)
             customers_data = self.client.fetch_customers_by_ids(customer_ids, batch_size=100)
@@ -834,11 +833,11 @@ class CNVSyncService:
             sync_log.save()
             
             if total == 0:
-                logger.warning("No customers returned from API")
+                logger.warning("initial_sync_customers: no customers returned from API")
                 sync_log.mark_completed()
                 return 0, 0, 0
-            
-            logger.info(f"Processing {total} customers...")
+
+            logger.info("initial_sync_customers: processing %d customers...", total)
             
             # Process in batches
             total_created = 0
@@ -865,27 +864,27 @@ class CNVSyncService:
                                 latest_updated_at = customer_dt
                 
                 if (i + self.BATCH_SIZE) % self.LOG_INTERVAL == 0:
-                    logger.info(f"  Processed {i + self.BATCH_SIZE}/{total} customers")
-            
+                    logger.info("initial_sync_customers: processed %d/%d", i + self.BATCH_SIZE, total)
+
             # Save checkpoint
             if latest_updated_at:
                 from datetime import timedelta
                 sync_log.checkpoint_updated_at = latest_updated_at + timedelta(microseconds=1)
-                logger.info(f"[OK] Initial checkpoint saved: {sync_log.checkpoint_updated_at}")
-            
+                logger.info("initial_sync_customers: checkpoint saved=%s", sync_log.checkpoint_updated_at)
+
             sync_log.created_count = total_created
             sync_log.updated_count = total_updated
             sync_log.failed_count = total_failed
             sync_log.mark_completed()
-            
+
             logger.info(
-                f"Initial customers sync completed: "
-                f"{total_created} created, {total_updated} updated, {total_failed} failed"
+                "initial_sync_customers: done created=%d updated=%d failed=%d",
+                total_created, total_updated, total_failed,
             )
             return total_created, total_updated, total_failed
-            
+
         except Exception as e:
-            logger.error(f"Initial customers sync failed: {e}", exc_info=True)
+            logger.error("initial_sync_customers: failed: %s", e, exc_info=True)
             sync_log.mark_failed(str(e))
             raise
     
@@ -905,7 +904,7 @@ class CNVSyncService:
         start_date = timezone.make_aware(datetime(2024, 6, 1))
         end_date = timezone.now()
         
-        logger.info(f"Initial orders sync from {start_date} to {end_date}")
+        logger.info("initial_sync_orders: from=%s to=%s", start_date, end_date)
         
         total_created = 0
         total_updated = 0
@@ -925,7 +924,7 @@ class CNVSyncService:
             else:
                 month_end = next_month - timedelta(microseconds=1)
             
-            logger.info(f"Syncing month: {month_start.strftime('%Y-%m')}")
+            logger.info("initial_sync_orders: syncing month=%s", month_start.strftime('%Y-%m'))
             
             sync_log = CNVSyncLog.objects.create(sync_type='orders')
             
@@ -942,12 +941,12 @@ class CNVSyncService:
                 sync_log.save()
                 
                 if total == 0:
-                    logger.info(f"  No orders for {month_start.strftime('%Y-%m')}")
+                    logger.info("initial_sync_orders: no orders for month=%s", month_start.strftime('%Y-%m'))
                     sync_log.mark_completed()
                     current_month = next_month
                     continue
                 
-                logger.info(f"  Processing {total} orders...")
+                logger.info("initial_sync_orders: processing %d orders...", total)
                 
                 # Process batches
                 month_created = 0
@@ -988,12 +987,12 @@ class CNVSyncService:
                 sync_log.mark_completed()
                 
                 logger.info(
-                    f"  [OK] {month_start.strftime('%Y-%m')}: "
-                    f"{month_created} created, {month_updated} updated"
+                    "initial_sync_orders: month=%s created=%d updated=%d",
+                    month_start.strftime('%Y-%m'), month_created, month_updated,
                 )
-                
+
             except Exception as e:
-                logger.error(f"Month {month_start.strftime('%Y-%m')} failed: {e}")
+                logger.error("initial_sync_orders: month=%s failed: %s", month_start.strftime('%Y-%m'), e)
                 sync_log.mark_failed(str(e))
                 # Continue to next month
             
@@ -1010,10 +1009,10 @@ class CNVSyncService:
             final_log.failed_count = total_failed
             final_log.mark_completed()
             
-            logger.info(f"[OK] Final checkpoint saved: {final_log.checkpoint_updated_at}")
-        
+            logger.info("initial_sync_orders: final checkpoint saved=%s", final_log.checkpoint_updated_at)
+
         logger.info(
-            f"Initial orders sync completed: "
-            f"{total_created} created, {total_updated} updated, {total_failed} failed"
+            "initial_sync_orders: done created=%d updated=%d failed=%d",
+            total_created, total_updated, total_failed,
         )
         return total_created, total_updated, total_failed

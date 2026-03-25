@@ -7,7 +7,7 @@ from App.permissions import requires_perm
 from App.models import Customer, SalesTransaction, Coupon
 from App.cnv.models import CNVCustomer
 
-logger = logging.getLogger("customer_analytics")
+logger = logging.getLogger(__name__)
 
 
 @requires_perm("page_customer_detail")
@@ -57,10 +57,12 @@ def customer_detail(request):
             # Check CNV sync status (use 'phone' field not 'phone_no')
             if customer.phone:
                 cnv_customer = CNVCustomer.objects.filter(phone=customer.phone).first()
-                print(
-                    f"{cnv_customer.total_points} - {cnv_customer.used_points} - {cnv_customer.points}"
-                )
-                is_synced_to_cnv = True if cnv_customer is not None else False
+                is_synced_to_cnv = cnv_customer is not None
+                if cnv_customer:
+                    logger.debug(
+                        "cnv_match: phone=%s total_points=%s used_points=%s points=%s",
+                        customer.phone, cnv_customer.total_points, cnv_customer.used_points, cnv_customer.points,
+                    )
 
             # Get all invoices for this customer
             invoices = (

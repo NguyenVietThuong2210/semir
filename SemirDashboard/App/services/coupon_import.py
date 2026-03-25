@@ -12,7 +12,7 @@ from django.db import transaction
 from App.models import Coupon
 from .file_reader import parse_date, safe_str
 
-logger = logging.getLogger('customer_analytics')
+logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 5000
 
@@ -21,7 +21,7 @@ def process_coupon_file(file, progress_fn=None):
     """
     OPTIMIZED: Process coupons in batches.
     """
-    logger.info("=== START OPTIMIZED Coupon Import: %s ===", file.name)
+    logger.info("=== START OPTIMIZED Coupon Import: %s ===", file.name, extra={"step": "coupon_import"})
 
     if file.name.lower().endswith('.csv'):
         df = pd.read_csv(file)
@@ -64,7 +64,7 @@ def process_coupon_file(file, progress_fn=None):
         batch_end = min(batch_start + BATCH_SIZE, total_rows)
         batch_df = df.iloc[batch_start:batch_end]
 
-        logger.info(f"[Batch {batch_num}] Processing rows {batch_start+1} to {batch_end}")
+        logger.info("[Batch %d] rows %d-%d", batch_num, batch_start + 1, batch_end)
 
         batch_creates = []
         batch_updates = {}
@@ -127,14 +127,14 @@ def process_coupon_file(file, progress_fn=None):
 
             except Exception as exc:
                 errors += 1
-                logger.error(f"Coupon {cid} error: {exc}")
+                logger.error("coupon %s error: %s", cid, exc)
 
         # Execute bulk operations
         with transaction.atomic():
             if batch_creates:
                 Coupon.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
                 created += len(batch_creates)
-                logger.info(f"[Batch {batch_num}] Created {len(batch_creates)} coupons")
+                logger.info("[Batch %d] created=%d", batch_num, len(batch_creates))
 
             if batch_updates:
                 coupons_to_update = []
@@ -154,11 +154,11 @@ def process_coupon_file(file, progress_fn=None):
                         batch_size=1000
                     )
                     updated += len(coupons_to_update)
-                    logger.info(f"[Batch {batch_num}] Updated {len(coupons_to_update)} coupons")
+                    logger.info("[Batch %d] updated=%d", batch_num, len(coupons_to_update))
 
         if progress_fn:
             progress_fn(min(batch_end, total_rows), total_rows)
 
     logger.info("=== DONE Coupon Import: created=%d updated=%d errors=%d ===",
-                created, updated, errors)
+                created, updated, errors, extra={"step": "coupon_import"})
     return {'created': created, 'updated': updated, 'errors': errors}
