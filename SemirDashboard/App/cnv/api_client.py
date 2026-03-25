@@ -52,7 +52,7 @@ class CNVAPIClient:
         self.client_secret = "a4ba379b7037426b9fbb0455725c5979"
         self.redirect_uri = "http://localhost:5000/callback"
         
-        logger.info(f"CNVAPIClient initialized for user: {username}")
+        logger.info("CNVAPIClient initialized for user: %s", username)
     
     def _get_cached_token(self) -> Optional[str]:
         """Retrieve cached access token if available and valid."""
@@ -70,7 +70,7 @@ class CNVAPIClient:
         cache_key = f'cnv_token_{self.username}'
         cache_duration = max(expires_in - 300, 300)  # 5 min buffer
         cache.set(cache_key, token, cache_duration)
-        logger.info(f"Token cached (expires in ~{expires_in/86400:.0f} days)")
+        logger.info("Token cached (expires in ~%.0f days)", expires_in / 86400)
     
     def authenticate(self) -> str:
         """
@@ -104,7 +104,7 @@ class CNVAPIClient:
             
             oauth_url = f"{self.sso_url}/oauth"
             response = session.get(oauth_url, params=oauth_params, allow_redirects=True)
-            logger.info(f"OAuth initiated (status: {response.status_code})")
+            logger.info("OAuth initiated (status: %d)", response.status_code)
             
             # Step 2: Parse login form
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -170,7 +170,7 @@ class CNVAPIClient:
                 allow_redirects=False,  # Don't follow - need to extract code
                 timeout=30
             )
-            logger.info(f"Login submitted (status: {response.status_code})")
+            logger.info("Login submitted (status: %d)", response.status_code)
             
             # Step 4: Follow redirects to extract authorization code
             authorization_code = None
@@ -201,7 +201,7 @@ class CNVAPIClient:
                 code_in_url = query_params.get('code', [None])[0]
                 if code_in_url:
                     authorization_code = code_in_url
-                    logger.info(f"Authorization code obtained (redirect #{redirect_count + 1})")
+                    logger.info("Authorization code obtained (redirect #%d)", redirect_count + 1)
                     break
                 
                 # Follow this redirect
@@ -248,7 +248,7 @@ class CNVAPIClient:
             return access_token
             
         except Exception as e:
-            logger.error(f"Authentication failed: {e}")
+            logger.error("Authentication failed: %s", e)
             raise
         finally:
             session.close()
@@ -266,8 +266,9 @@ class CNVAPIClient:
             Parsed JSON response
         """
         token = self.authenticate()
-        
+
         url = f"{self.base_url}{endpoint}"
+        logger.debug("api_request: %s %s", method, endpoint)
         headers = kwargs.pop('headers', {})
         headers.update({
             'Authorization': f'TOKEN {token}',
@@ -283,7 +284,7 @@ class CNVAPIClient:
         )
         
         if response.status_code != 200:
-            logger.error(f"API error {response.status_code}: {response.text[:200]}")
+            logger.error("API error %d: %s", response.status_code, response.text[:200])
             response.raise_for_status()
         
         return response.json()
@@ -328,7 +329,7 @@ class CNVAPIClient:
             try:
                 return self._make_request('GET', endpoint, params=params)
             except Exception as e:
-                logger.warning(f"{endpoint} failed: {e}")
+                logger.warning("%s failed: %s", endpoint, e)
                 continue
         
         raise ValueError("All customer endpoints failed")
@@ -384,7 +385,7 @@ class CNVAPIClient:
             try:
                 return self._make_request('GET', endpoint, params=params)
             except Exception as e:
-                logger.warning(f"{endpoint} failed: {e}")
+                logger.warning("%s failed: %s", endpoint, e)
                 continue
         
         raise ValueError("All order endpoints failed")
@@ -410,7 +411,7 @@ class CNVAPIClient:
         if max_pages is None:
             max_pages = 100  # API limit
         
-        logger.info(f"Fetching customers (max {max_pages} pages, checkpoint: {updated_since})")
+        logger.info("Fetching customers (max %d pages, checkpoint: %s)", max_pages, updated_since)
         
         all_customers = []
         page = 1
@@ -431,11 +432,11 @@ class CNVAPIClient:
                     customers = response.get('data') or response.get('customers') or []
                 
                 if not customers:
-                    logger.info(f"  Page {page}: No more customers")
+                    logger.info("  Page %d: no more customers", page)
                     break
                 
                 all_customers.extend(customers)
-                logger.info(f"  Page {page}: {len(customers)} customers (total: {len(all_customers)})")
+                logger.info("  Page %d: %d customers (total: %d)", page, len(customers), len(all_customers))
                 
                 # Check if more pages exist
                 has_more = False
@@ -447,19 +448,19 @@ class CNVAPIClient:
                         has_more = True
                 
                 if not has_more:
-                    logger.info(f"  No more pages available")
+                    logger.info("  No more pages available")
                     break
                 
                 page += 1
                 
             except Exception as e:
-                logger.error(f"Failed to fetch page {page}: {e}")
+                logger.error("Failed to fetch page %d: %s", page, e)
                 break
-        
+
         if page >= max_pages:
-            logger.info(f"Reached max pages limit ({max_pages})")
-        
-        logger.info(f"Fetched {len(all_customers)} customers ({page-1} pages)")
+            logger.info("Reached max pages limit (%d)", max_pages)
+
+        logger.info("Fetched %d customers (%d pages)", len(all_customers), page - 1)
         return all_customers
     
     def fetch_customers_by_ids(self, customer_ids: List[int], batch_size: int = 100) -> List[Dict]:
@@ -473,7 +474,7 @@ class CNVAPIClient:
         Returns:
             List of customer dicts
         """
-        logger.info(f"Fetching {len(customer_ids)} customers by IDs...")
+        logger.info("Fetching %d customers by IDs...", len(customer_ids))
         all_customers = []
         
         # Process in batches of 100 IDs
@@ -491,13 +492,13 @@ class CNVAPIClient:
                     customers = response.get('data') or response.get('customers') or []
                 
                 all_customers.extend(customers)
-                logger.info(f"  Batch {i//batch_size + 1}: {len(customers)} customers (total: {len(all_customers)})")
+                logger.info("  Batch %d: %d customers (total: %d)", i // batch_size + 1, len(customers), len(all_customers))
                 
             except Exception as e:
-                logger.error(f"Failed to fetch batch {i//batch_size + 1}: {e}")
+                logger.error("Failed to fetch batch %d: %s", i // batch_size + 1, e)
                 continue
         
-        logger.info(f"Fetched {len(all_customers)} customers by IDs")
+        logger.info("Fetched %d customers by IDs", len(all_customers))
         return all_customers
     
     def fetch_all_orders(self, start_date: Optional[datetime] = None,
@@ -526,7 +527,7 @@ class CNVAPIClient:
         if max_pages is None:
             max_pages = 100  # API limit
         
-        logger.info(f"Fetching orders (max {max_pages} pages, checkpoint: {updated_since}, until: {updated_until})")
+        logger.info("Fetching orders (max %d pages, checkpoint: %s, until: %s)", max_pages, updated_since, updated_until)
         
         all_orders = []
         page = 1
@@ -550,11 +551,11 @@ class CNVAPIClient:
                     orders = response.get('data') or response.get('orders') or []
                 
                 if not orders:
-                    logger.info(f"  Page {page}: No more orders")
+                    logger.info("  Page %d: no more orders", page)
                     break
                 
                 all_orders.extend(orders)
-                logger.info(f"  Page {page}: {len(orders)} orders (total: {len(all_orders)})")
+                logger.info("  Page %d: %d orders (total: %d)", page, len(orders), len(all_orders))
                 
                 # Check if more pages exist
                 has_more = False
@@ -566,19 +567,19 @@ class CNVAPIClient:
                         has_more = True
                 
                 if not has_more:
-                    logger.info(f"  No more pages available")
+                    logger.info("  No more pages available")
                     break
                 
                 page += 1
                 
             except Exception as e:
-                logger.error(f"Failed to fetch page {page}: {e}")
+                logger.error("Failed to fetch page %d: %s", page, e)
                 break
-        
+
         if page >= max_pages:
-            logger.info(f"Reached max pages limit ({max_pages})")
-        
-        logger.info(f"Fetched {len(all_orders)} orders ({page-1} pages)")
+            logger.info("Reached max pages limit (%d)", max_pages)
+
+        logger.info("Fetched %d orders (%d pages)", len(all_orders), page - 1)
         return all_orders
     
     
@@ -612,5 +613,5 @@ class CNVAPIClient:
         try:
             return self._make_request('GET', endpoint)
         except Exception as e:
-            logger.error(f"Failed to fetch membership for customer {customer_id}: {e}")
+            logger.error("Failed to fetch membership for customer %d: %s", customer_id, e)
             return {}

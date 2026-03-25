@@ -12,7 +12,7 @@ from django.db import transaction
 from App.models import Customer, SalesTransaction
 from .file_reader import read_file, parse_date, safe_str, safe_int, safe_decimal
 
-logger = logging.getLogger('customer_analytics')
+logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 5000
 
@@ -21,7 +21,7 @@ def process_sales_file(file, progress_fn=None):
     """
     OPTIMIZED: Process 100k+ sales records in batches.
     """
-    logger.info("=== START OPTIMIZED Sales Import: %s ===", file.name)
+    logger.info("=== START OPTIMIZED Sales Import: %s ===", file.name, extra={"step": "sales_import"})
     df = read_file(file)
     df.columns = df.columns.str.strip().str.upper()
     total_rows = len(df)
@@ -30,7 +30,7 @@ def process_sales_file(file, progress_fn=None):
     # Pre-load ALL customers once (more efficient than batch queries)
     logger.info("Pre-loading customer map...")
     customer_map = {c.vip_id: c for c in Customer.objects.only('id', 'vip_id')}
-    logger.info(f"Loaded {len(customer_map)} customers")
+    logger.info("customer_map loaded: %d customers", len(customer_map))
 
     created = updated = 0
     errors = []
@@ -41,7 +41,7 @@ def process_sales_file(file, progress_fn=None):
         batch_df = df.iloc[batch_start:batch_end]
         batch_size = len(batch_df)
 
-        logger.info(f"[Batch {batch_num}] Processing rows {batch_start+1} to {batch_end} ({batch_size} rows)")
+        logger.info("[Batch %d] rows %d-%d (%d rows)", batch_num, batch_start + 1, batch_end, batch_size)
 
         batch_creates = []
         batch_updates = {}
@@ -55,7 +55,7 @@ def process_sales_file(file, progress_fn=None):
             for t in SalesTransaction.objects.filter(invoice_number__in=invoices_in_batch)
         }
 
-        logger.info(f"[Batch {batch_num}] Found {len(existing_invoices)} existing transactions")
+        logger.info("[Batch %d] existing=%d", batch_num, len(existing_invoices))
 
         # Process each row
         for idx, row in batch_df.iterrows():
@@ -95,7 +95,7 @@ def process_sales_file(file, progress_fn=None):
 
             except Exception as exc:
                 errors.append(f"Row {row_num}: {exc}")
-                logger.error(f"Row {row_num} error: {exc}")
+                logger.error("row %d error: %s", row_num, exc)
 
         # Execute bulk operations
         with transaction.atomic():
@@ -103,7 +103,7 @@ def process_sales_file(file, progress_fn=None):
             if batch_creates:
                 SalesTransaction.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
                 created += len(batch_creates)
-                logger.info(f"[Batch {batch_num}] Created {len(batch_creates)} new transactions")
+                logger.info("[Batch %d] created=%d", batch_num, len(batch_creates))
 
             # Bulk update existing transactions
             if batch_updates:
@@ -125,13 +125,13 @@ def process_sales_file(file, progress_fn=None):
                         batch_size=1000
                     )
                     updated += len(transactions_to_update)
-                    logger.info(f"[Batch {batch_num}] Updated {len(transactions_to_update)} transactions")
+                    logger.info("[Batch %d] updated=%d", batch_num, len(transactions_to_update))
 
         if progress_fn:
             progress_fn(min(batch_end, total_rows), total_rows)
 
     logger.info("=== DONE Sales Import: created=%d updated=%d errors=%d ===",
-                created, updated, len(errors))
+                created, updated, len(errors), extra={"step": "sales_import"})
     return {
         'created': created,
         'updated': updated,

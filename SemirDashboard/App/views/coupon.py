@@ -17,7 +17,7 @@ from App.analytics.coupon_analytics import (
 )
 from App.models import CouponCampaign
 
-logger = logging.getLogger("customer_analytics")
+logger = logging.getLogger(__name__)
 
 _COUPON_VER_KEY = "coupon_data_ver"
 _COUPON_TTL = 600  # 10 minutes
@@ -129,6 +129,11 @@ def export_coupons(request):
     date_from = _parse_date(start_date, "start date", request)
     date_to = _parse_date(end_date, "end date", request)
 
+    logger.info(
+        "export_coupons: from=%s to=%s prefix=%s shop_group=%s tab=%s user=%s",
+        date_from, date_to, coupon_id_prefix, shop_group, tab or "full", request.user,
+        extra={"step": "export_coupons"},
+    )
     data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
 
     ts = datetime.now().strftime('%H%M%S')
@@ -256,6 +261,7 @@ def manage_campaigns(request):
             c = CouponCampaign.objects.create(
                 name=name, prefix=prefix, detail=detail or None
             )
+            logger.info("campaign_create: name=%s prefix=%s by=%s", name, prefix, request.user, extra={"step": "manage_campaigns"})
             _invalidate_coupon_cache()
             return JsonResponse(
                 {"ok": True, "id": c.pk, "name": c.name, "prefix": c.prefix}
@@ -282,6 +288,7 @@ def manage_campaigns(request):
             c.prefix = prefix
             c.detail = detail or None
             c.save()
+            logger.info("campaign_update: id=%s name=%s prefix=%s by=%s", pk, name, prefix, request.user, extra={"step": "manage_campaigns"})
             _invalidate_coupon_cache()
             return JsonResponse({"ok": True})
 
@@ -292,6 +299,7 @@ def manage_campaigns(request):
             deleted, _ = CouponCampaign.objects.filter(pk=pk).delete()
             if not deleted:
                 return JsonResponse({"error": "Campaign not found"}, status=404)
+            logger.info("campaign_delete: id=%s by=%s", pk, request.user, extra={"step": "manage_campaigns"})
             _invalidate_coupon_cache()
             return JsonResponse({"ok": True})
 

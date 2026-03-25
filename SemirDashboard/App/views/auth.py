@@ -32,7 +32,7 @@ def login_view(request):
 
             if user is not None:
                 login(request, user)
-                logger.info(f'User {username} logged in successfully')
+                logger.info("login: user=%s", username, extra={"step": "auth"})
 
                 # Regenerate session key for security
                 request.session.cycle_key()
@@ -40,7 +40,7 @@ def login_view(request):
                 next_url = request.GET.get('next', 'analytics_dashboard')
                 return redirect(next_url)
             else:
-                logger.warning(f'Failed login attempt for username: {username}')
+                logger.warning("login_failed: user=%s", username, extra={"step": "auth"})
                 messages.error(request, 'Invalid username or password')
         else:
             messages.error(request, 'Invalid username or password')
@@ -56,7 +56,7 @@ def logout_view(request):
     if request.method == 'POST':
         username = request.user.username if request.user.is_authenticated else 'Anonymous'
         logout(request)
-        logger.info(f'User {username} logged out')
+        logger.info("logout: user=%s", username, extra={"step": "auth"})
         return redirect('login')
     return redirect('analytics_dashboard')
 
@@ -79,15 +79,16 @@ def register_view(request):
         if form.is_valid():
             user = form.save()
             username = form.cleaned_data.get('username')
-            logger.info(f'New user registered: {username}')
+            logger.info("register: user=%s created", username, extra={"step": "auth"})
 
             # Auto-assign viewer role to new user
             from App.models import Role, UserProfile
             try:
                 viewer_role = Role.objects.get(name='viewer')
                 UserProfile.objects.create(user=user, role=viewer_role)
-            except Exception:
-                pass
+                logger.info("register: viewer role assigned to user=%s", username)
+            except Exception as e:
+                logger.warning("register: failed to assign viewer role to user=%s: %s", username, e)
 
             messages.success(request, f'Account created for {username}.')
             return redirect('user_management')

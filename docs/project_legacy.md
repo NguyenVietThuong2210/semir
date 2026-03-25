@@ -1,6 +1,6 @@
 # 📘 SEMIR DASHBOARD - COMPLETE PROJECT DOCUMENTATION
 
-**Last Updated:** 2026-02-27  
+**Last Updated:** 2026-03-23
 **Purpose:** Chi tiết toàn bộ project để dễ dàng handover/recovery trong session khác
 
 ---
@@ -39,7 +39,7 @@
 
 ## 🗄️ DATABASE MODELS
 
-### **1. POS Models (App/models.py)**
+### **1. POS Models (App/models/pos.py)**
 
 #### **Customer**
 ```python
@@ -140,7 +140,7 @@ class Coupon(models.Model):
 
 ---
 
-### **2. CNV Models (App/models_cnv.py)**
+### **2. CNV Models (App/cnv/models.py)** (restructured Feb 27, 2026)
 
 #### **CNVCustomer** ⭐ RECENTLY UPDATED
 ```python
@@ -276,7 +276,7 @@ class CNVSyncLog(models.Model):
 ## 🎨 FEATURES & FUNCTIONALITY
 
 ### **1. Authentication System**
-**Files:** `App/auth_views.py`
+**Files:** `App/views/auth.py`
 **URLs:** `/login/`, `/logout/`, `/register/`
 
 **Features:**
@@ -288,7 +288,7 @@ class CNVSyncLog(models.Model):
 ---
 
 ### **2. Home Dashboard**
-**File:** `App/views.py::home()`
+**File:** `App/views/home.py::home()`
 **URL:** `/`
 **Template:** `home.html`
 
@@ -300,7 +300,7 @@ class CNVSyncLog(models.Model):
 ---
 
 ### **3. Data Upload System**
-**Files:** `App/views.py`
+**Files:** `App/views/upload.py`
 **URLs:** 
 - `/upload/customers/` - Upload customer CSV
 - `/upload/sales/` - Upload sales CSV
@@ -321,7 +321,7 @@ class CNVSyncLog(models.Model):
 ---
 
 ### **4. Analytics Dashboard** ⭐
-**File:** `App/views.py::analytics_dashboard()`
+**File:** `App/views/analytics.py::analytics_dashboard()`
 **URL:** `/analytics/`
 **Template:** `analytics_dashboard.html`
 
@@ -343,16 +343,17 @@ class CNVSyncLog(models.Model):
 
 **Analytics Module:** `App/analytics/`
 - `core.py` - Core analytics engine
-- `aggregators.py` - Data aggregation logic
-- `calculations.py` - Metric calculations
-- `season_utils.py` - Season detection (SS/AW based on month)
-- `customer_utils.py` - Customer analytics
-- `excel_export.py` - Excel export formatting
+- `aggregators.py` - Data aggregation logic (~40KB)
+- `calculations.py` - Return visit formula (LOCKED)
+- `season_utils.py` - Season detection (M2-4, M5-7, M8-10, M11-1)
+- `customer_utils.py` - Customer cache + purchase map
+- `coupon_analytics.py` - Coupon analytics (~37KB)
+- `excel_export.py` - Excel export formatting (~85KB, 13+ sheets)
 
 ---
 
 ### **5. Coupon Dashboard**
-**File:** `App/views.py::coupon_dashboard()`
+**File:** `App/views/coupon.py::coupon_dashboard()`
 **URL:** `/coupons/`
 **Template:** `coupon_dashboard.html`
 
@@ -374,7 +375,7 @@ class CNVSyncLog(models.Model):
 ---
 
 ### **6. Customer Detail Search**
-**File:** `App/views.py::customer_detail()`
+**File:** `App/views/customer.py::customer_detail()`
 **URL:** `/customer-detail/`
 **Template:** `customer_detail.html`
 
@@ -525,14 +526,13 @@ conversion = calculate_conversion_rate(...)
 ```
 
 ### **Season Logic** (App/analytics/season_utils.py)
-```python
-def get_season_from_month(month):
-    """
-    SS (Spring/Summer): Jan, Feb, Mar, Apr, May, Jun
-    AW (Autumn/Winter): Jul, Aug, Sep, Oct, Nov, Dec
-    """
-    return 'SS' if month <= 6 else 'AW'
 ```
+M2-4:  February, March, April
+M5-7:  May, June, July
+M8-10: August, September, October
+M11-1: November, December, January  ← cross-year
+```
+**NOTE:** Old SS/AW definition is OBSOLETE as of Mar 2026.
 
 ### **VIP Grade Hierarchy**
 ```
@@ -549,76 +549,96 @@ DIAMOND (highest)
 
 ---
 
-## 📁 FILE STRUCTURE
+## 📁 FILE STRUCTURE (Updated 2026-03-23)
 
 ```
 SemirDashboard/
 ├── App/
-│   ├── analytics/              # Analytics engine
+│   ├── models/                # ⭐ Split package (NOT models.py)
+│   │   ├── __init__.py        # Exports all models
+│   │   ├── pos.py             # Customer, SalesTransaction
+│   │   ├── coupon.py          # Coupon, CouponCampaign
+│   │   └── user.py            # Role, UserProfile
+│   │
+│   ├── views/                 # ⭐ Split package (NOT views.py)
+│   │   ├── __init__.py        # Re-exports all views
+│   │   ├── home.py            # home(), formulas_page()
+│   │   ├── auth.py            # login/logout/register
+│   │   ├── upload.py          # upload_*, upload_jobs_list/status
+│   │   ├── analytics.py       # analytics_dashboard/chart/export
+│   │   ├── coupon.py          # coupon_dashboard/chart/export, manage_campaigns
+│   │   ├── customer.py        # customer_detail()
+│   │   └── users.py           # user_management()
+│   │
+│   ├── analytics/             # Analytics engine
 │   │   ├── __init__.py
-│   │   ├── core.py            # Main analytics class
-│   │   ├── aggregators.py     # Data aggregation
-│   │   ├── calculations.py    # Metric calculations
-│   │   ├── season_utils.py    # Season detection
-│   │   ├── customer_utils.py  # Customer analytics
-│   │   └── excel_export.py    # Excel export ⭐
+│   │   ├── core.py            # calculate_return_rate_analytics()
+│   │   ├── aggregators.py     # Data aggregation (~40KB)
+│   │   ├── calculations.py    # Return visit formula (LOCKED)
+│   │   ├── season_utils.py    # M2-4, M5-7, M8-10, M11-1
+│   │   ├── customer_utils.py  # Customer cache + purchase map
+│   │   ├── coupon_analytics.py # Coupon analytics (~37KB)
+│   │   └── excel_export.py    # Excel export ~85KB, 13+ sheets
 │   │
 │   ├── cnv/                   # CNV integration
 │   │   ├── __init__.py
-│   │   ├── api_client.py      # CNV API client ⭐
-│   │   ├── sync_service.py    # Sync logic ⭐
-│   │   ├── scheduler.py       # Scheduled tasks
-│   │   ├── views.py           # CNV views ⭐
-│   │   └── urls.py            # CNV URLs
+│   │   ├── models.py          # ⭐ CNVCustomer, CNVOrder, CNVSyncLog
+│   │   ├── api_client.py      # CNVAPIClient (OAuth2, pagination)
+│   │   ├── sync_service.py    # CNVSyncService (incremental)
+│   │   ├── scheduler.py       # APScheduler background tasks
+│   │   ├── views.py           # CNV views
+│   │   ├── urls.py            # /cnv/... routes
+│   │   └── zalo_sync.py       # Zalo integration
+│   │
+│   ├── services/              # Import/processing services
+│   │   ├── file_reader.py     # CSV/Excel parsing
+│   │   ├── customer_import.py
+│   │   ├── sales_import.py
+│   │   └── coupon_import.py
 │   │
 │   ├── management/
 │   │   └── commands/
-│   │       └── sync_cnv.py    # Sync command
+│   │       ├── sync_cnv.py    # manage.py sync_cnv [--full]
+│   │       └── perm.py        # Permission management
 │   │
-│   ├── migrations/            # Database migrations
-│   │   ├── 0001_initial.py
-│   │   ├── 0002_coupon.py
-│   │   ├── 0003_cnvcustomer_cnvorder_cnvsynclog.py
-│   │   ├── 0004_cnvsynclog_checkpoint_updated_at_and_more.py
-│   │   └── 0005_recreate_cnvcustomer.py ⭐ NEW
+│   ├── migrations/            # 0001 through 0010
 │   │
 │   ├── templates/
-│   │   ├── base.html                      # Base template
-│   │   ├── home.html                      # Home page
-│   │   ├── login.html                     # Login page
-│   │   ├── register.html                  # Register page
-│   │   ├── formulas.html                  # Formulas page
-│   │   ├── upload_customers.html          # Upload customers
-│   │   ├── upload_sales.html              # Upload sales
-│   │   ├── upload_coupons.html            # Upload coupons
-│   │   ├── analytics_dashboard.html       # Analytics ⭐
-│   │   ├── coupon_dashboard.html          # Coupons ⭐
-│   │   ├── customer_detail.html           # Customer detail
-│   │   └── cnv/
-│   │       ├── sync_status.html           # CNV sync status
-│   │       └── customer_comparison.html   # Comparison ⭐
+│   │   ├── base.html, home.html, login.html, register.html, formulas.html
+│   │   ├── upload_customers.html, upload_sales.html, upload_coupons.html
+│   │   ├── analytics_dashboard.html, coupon_dashboard.html, customer_detail.html
+│   │   └── cnv/sync_status.html, cnv/customer_comparison.html
 │   │
 │   ├── templatetags/
-│   │   └── custom_filters.py  # Custom template filters
+│   │   ├── custom_filters.py
+│   │   └── perm_tags.py       # Permission checking tags
 │   │
-│   ├── models.py              # POS models
-│   ├── models_cnv.py          # CNV models ⭐
-│   ├── views.py               # Main views ⭐
-│   ├── auth_views.py          # Auth views
-│   ├── forms.py               # Forms
-│   ├── urls.py                # App URLs
-│   ├── admin.py               # Django admin
-│   └── apps.py                # App config
+│   ├── forms.py               # CustomerUploadForm, SalesUploadForm, UsedPointsUploadForm
+│   ├── urls.py                # App URL routing
+│   ├── admin.py
+│   ├── apps.py
+│   ├── permissions.py         # Custom role-based permissions
+│   └── upload_jobs.py         # Background job queue
 │
 ├── SemirDashboard/
 │   ├── settings.py            # Django settings
-│   ├── urls.py                # Root URLs
-│   └── wsgi.py                # WSGI config
+│   ├── urls.py                # Root URLs: /admin/, /, /cnv/
+│   └── wsgi.py
 │
-├── db.sqlite3                 # SQLite database
-├── manage.py                  # Django management
-└── requirements.txt           # Python dependencies
+├── db.sqlite3
+├── manage.py
+└── requirements.txt
 ```
+
+### ⚠️ OBSOLETE PATHS
+| Old (wrong) | New (correct) |
+|-------------|---------------|
+| `App/models.py` | `App/models/pos.py` + `coupon.py` + `user.py` |
+| `App/models_cnv.py` | `App/cnv/models.py` |
+| `App/views.py` | `App/views/*.py` |
+| `App/auth_views.py` | `App/views/auth.py` |
+| `App/utils.py` | `App/services/` |
+| `App/analytics.py` | `App/analytics/` package |
 
 ---
 
@@ -634,27 +654,37 @@ urlpatterns = [
 ```
 
 ### **App URLs (App/urls.py)**
-```python
+```
 /                           → home
-/login/                     → login
-/logout/                    → logout
-/register/                  → register
-/formulas/                  → formulas page
-/upload/customers/          → upload customers
-/upload/sales/              → upload sales
-/upload/coupons/            → upload coupons
-/analytics/                 → analytics dashboard ⭐
-/analytics/export/          → export analytics Excel ⭐
-/coupons/                   → coupon dashboard ⭐
-/coupons/export/            → export coupons Excel ⭐
-/customer-detail/           → customer detail search
+/formulas/                  → formulas_page
+/login/                     → login_view
+/logout/                    → logout_view
+/register/                  → register_view
+/upload/customers/          → upload_customers
+/upload/sales/              → upload_sales
+/upload/coupons/            → upload_coupons
+/upload/used-points/        → upload_used_points
+/upload/jobs/               → upload_jobs_list
+/upload/jobs/<job_id>/      → upload_job_status (AJAX)
+/analytics/                 → analytics_dashboard
+/analytics/export/          → export_analytics
+/analytics/chart/           → analytics_chart (AJAX)
+/coupons/                   → coupon_dashboard
+/coupons/export/            → export_coupons
+/coupons/chart/             → coupon_chart (AJAX)
+/coupons/campaigns/         → manage_campaigns
+/customer-detail/           → customer_detail
+/users/                     → user_management
 ```
 
 ### **CNV URLs (App/cnv/urls.py)**
-```python
-/cnv/sync-status/           → sync status dashboard
-/cnv/customer-comparison/   → POS vs CNV comparison ⭐
-/cnv/export-customer-comparison/ → export comparison Excel ⭐
+```
+/cnv/sync-status/                   → sync_status
+/cnv/customer-analytics/            → customer_analytics
+/cnv/export-customer-analytics/     → export_customer_analytics
+/cnv/sync-cnv-points/               → sync_cnv_points (AJAX POST)
+/cnv/trigger-sync/                  → trigger_sync (AJAX POST)
+/cnv/trigger-zalo-sync/             → trigger_zalo_sync (AJAX POST)
 ```
 
 ---
@@ -964,9 +994,12 @@ API first_name → CNVCustomer.first_name
 ### **C. Important Constants**
 
 ```python
-# Season boundaries
-SS_MONTHS = [1, 2, 3, 4, 5, 6]
-AW_MONTHS = [7, 8, 9, 10, 11, 12]
+# Season boundaries (updated Mar 2026)
+M2_4_MONTHS = [2, 3, 4]
+M5_7_MONTHS = [5, 6, 7]
+M8_10_MONTHS = [8, 9, 10]
+M11_1_MONTHS = [11, 12, 1]  # cross-year: Nov-Dec (year N), Jan (year N+1)
+# OLD (obsolete): SS = [1..6], AW = [7..12]
 
 # VIP Grades (in order)
 VIP_GRADES = ['VIP0', 'VIP1', 'VIP2', 'VIP3', 'DIAMOND']
@@ -990,7 +1023,7 @@ STATUS_FAILED = 'failed'
 
 **END OF DOCUMENTATION**
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-02-27  
-**Author:** Claude (Anthropic)  
-**Status:** ✅ Complete and Ready for Handover
+**Document Version:** 1.1
+**Last Updated:** 2026-03-23
+**Author:** Claude (Anthropic)
+**Status:** ✅ Updated — reflects post-refactor structure (views/, models/, cnv/, services/)

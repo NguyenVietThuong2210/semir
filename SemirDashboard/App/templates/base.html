@@ -187,8 +187,6 @@
                         </a>
                     </li>
 
-                    {% if user.is_authenticated %}
-
                     {% check_perm 'page_upload' as can_upload %}
                     {% if can_upload %}
                     <!-- Upload Dropdown -->
@@ -317,26 +315,16 @@
                             </li>
                             {% endif %}
                             {% check_perm 'page_cnv_sync' as can_cnv_sync %}
-                            {% check_perm 'page_cnv_comparison' as can_cnv_comparison2 %}
-                            {% if can_cnv_sync or can_cnv_comparison2 %}
+                            {% if can_cnv_sync %}
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
                             <li>
                                 <h6 class="dropdown-header">CNV Loyalty</h6>
                             </li>
-                            {% endif %}
-                            {% if can_cnv_sync %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'cnv:sync_status' %}">
                                     <i class="bi bi-arrow-repeat"></i> Sync Status
-                                </a>
-                            </li>
-                            {% endif %}
-                            {% if can_cnv_comparison2 %}
-                            <li>
-                                <a class="dropdown-item" href="{% url 'cnv:customer_analytics' %}">
-                                    <i class="bi bi-people-fill"></i> Customer Analytics
                                 </a>
                             </li>
                             {% endif %}
@@ -351,6 +339,21 @@
                             <li>
                                 <a class="dropdown-item" href="{% url 'user_management' %}">
                                     <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            {% endif %}
+
+                            {% if user.is_superuser %}
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#"
+                                   onclick="window.open(window.location.protocol+'//'+window.location.hostname+':3000','_blank'); return false;">
+                                    <i class="bi bi-activity"></i> Grafana
                                 </a>
                             </li>
                             {% endif %}
@@ -380,13 +383,6 @@
                         </ul>
                     </li>
 
-                    {% else %}
-                    <li class="nav-item">
-                        <a class="nav-link page-link" href="{% url 'login' %}">
-                            <i class="bi bi-box-arrow-in-right"></i> Login
-                        </a>
-                    </li>
-                    {% endif %}
                 </ul>
             </div>
         </div>

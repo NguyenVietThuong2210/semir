@@ -2,12 +2,16 @@
 user_views.py - User & Role Management Views
 All endpoints require manage_users permission.
 """
+import logging
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.models import User
 
 from App.permissions import requires_perm, PERMISSION_DEFS
 from App.models import Role, UserProfile
+
+logger = logging.getLogger(__name__)
 
 
 @requires_perm('manage_users')
@@ -24,14 +28,23 @@ def user_management(request):
             try:
                 target_user = User.objects.get(pk=user_id)
                 profile, _ = UserProfile.objects.get_or_create(user=target_user)
+                old_role = profile.role.name if profile.role else None
                 if role_id:
                     role = Role.objects.get(pk=role_id)
                     profile.role = role
+                    new_role = role.name
                 else:
                     profile.role = None
+                    new_role = None
                 profile.save()
+                logger.info(
+                    "set_user_role: user=%s old_role=%s new_role=%s by=%s",
+                    target_user.username, old_role, new_role, request.user,
+                    extra={"step": "user_management"},
+                )
                 messages.success(request, f"Role updated for {target_user.username}.")
             except (User.DoesNotExist, Role.DoesNotExist):
+                logger.warning("set_user_role: user_id=%s role_id=%s not found by=%s", user_id, role_id, request.user)
                 messages.error(request, "User or role not found.")
             return redirect('user_management')
 
@@ -43,8 +56,14 @@ def user_management(request):
                 selected = request.POST.getlist(f'perm_{role_id}')
                 role.permissions = selected
                 role.save()
+                logger.info(
+                    "save_role_permissions: role=%s perms=%s by=%s",
+                    role.name, selected, request.user,
+                    extra={"step": "user_management"},
+                )
                 messages.success(request, f"Permissions saved for role '{role.name}'.")
             except Role.DoesNotExist:
+                logger.warning("save_role_permissions: role_id=%s not found by=%s", role_id, request.user)
                 messages.error(request, "Role not found.")
             return redirect('user_management')
 
@@ -57,6 +76,7 @@ def user_management(request):
                 messages.error(request, f"A role named '{role_name}' already exists.")
             else:
                 Role.objects.create(name=role_name, permissions=[], is_system=False)
+                logger.info("create_role: name=%s by=%s", role_name, request.user, extra={"step": "user_management"})
                 messages.success(request, f"Role '{role_name}' created.")
             return redirect('user_management')
 
@@ -66,12 +86,15 @@ def user_management(request):
             try:
                 role = Role.objects.get(pk=role_id)
                 if role.is_system:
+                    logger.warning("delete_role: blocked — system role=%s by=%s", role.name, request.user)
                     messages.error(request, f"Cannot delete system role '{role.name}'.")
                 else:
                     role_name = role.name
                     role.delete()
+                    logger.info("delete_role: name=%s by=%s", role_name, request.user, extra={"step": "user_management"})
                     messages.success(request, f"Role '{role_name}' deleted.")
             except Role.DoesNotExist:
+                logger.warning("delete_role: role_id=%s not found by=%s", role_id, request.user)
                 messages.error(request, "Role not found.")
             return redirect('user_management')
 

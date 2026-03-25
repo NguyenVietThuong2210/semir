@@ -9,6 +9,14 @@
 # Watch logs for errors
 docker compose logs -f
 
+# Check Grafana + Loki are healthy
+docker compose logs grafana
+docker compose logs loki
+docker compose logs promtail
+
+# Verify logs are arriving in Loki
+# → open http://SERVER_IP:3000, Explore → Loki → {container_name="semirdashboard-web-1"}
+
 # Monitor resource usage
 htop
 
@@ -16,6 +24,15 @@ htop
 ls -lh ~/backups/
 cat ~/semir/logs/backup.log
 ```
+
+### Grafana First-Run Checklist
+- [ ] Set `GRAFANA_PASSWORD` in `.env` before `docker-compose up`
+- [ ] Open port 3000 only for trusted IPs: `ufw allow from <office-ip> to any port 3000`
+- [ ] Login at `http://14.225.254.192:3000` (admin / GRAFANA_PASSWORD)
+- [ ] Verify Loki datasource is auto-provisioned and shows "Data source connected"
+- [ ] Create dashboard: Error Rate panel → `{container_name="semirdashboard-web-1"} | json | level="ERROR"`
+- [ ] Create dashboard: Upload activity → `| json | step=~"upload_.*"`
+- [ ] Create dashboard: CNV sync → `| json | step="cnv_sync" or step="cnv_points_sync"`
 
 ### 2. Test All Features with Real Data
 - [ ] Upload real customer data
@@ -36,16 +53,19 @@ cat ~/semir/logs/backup.log
 ## 🔧 SHORT-TERM (This Month)
 
 ### 1. Performance Optimization
-- [ ] Enable Django caching (Redis)
-- [ ] Add database indexes
+- [x] Enable Django caching (Redis) ✅ (django-redis configured, falls back to LocMemCache)
+- [x] Add database indexes ✅ (indexes on sales_date, vip_id, phone, cnv_updated_at, etc.)
 - [ ] Optimize slow queries
 - [ ] Compress images/assets
 
 ### 2. Enhanced Monitoring
-- [ ] Set up error tracking (Sentry)
-- [ ] Monitor slow queries
-- [ ] Track user activity
-- [ ] Set up alerts
+- [x] Grafana + Loki + Promtail + Prometheus + cAdvisor ✅ (added Mar 2026)
+- [x] Structured JSON logging with `request_id` + `step` fields ✅ (all files, f-strings removed)
+- [x] Grafana link in navbar (superuser → Tools → Monitoring) ✅
+- [ ] Create Grafana dashboards (error rate, upload activity, CNV sync status)
+- [ ] Set up Grafana alerts (email when ERROR rate spikes)
+- [ ] Set up error tracking (Sentry) for exception aggregation
+- [ ] Monitor slow DB queries (django-debug-toolbar or pg_stat_statements)
 
 ### 3. Backup Testing
 - [ ] Test restore process monthly
@@ -63,7 +83,7 @@ cat ~/semir/logs/backup.log
 - [ ] More visualizations
 
 ### 2. User Management
-- [ ] Role-based access control
+- [x] Role-based access control ✅ (completed — Role, UserProfile models, permissions.py)
 - [ ] User activity logging
 - [ ] Password reset via email
 
@@ -106,5 +126,5 @@ cat ~/semir/logs/backup.log
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: TODAY_DATE
+**Document Version**: 1.2
+**Last Updated**: 2026-03-25

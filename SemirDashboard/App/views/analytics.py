@@ -12,7 +12,7 @@ from App.permissions import requires_perm
 from App.analytics.core import calculate_return_rate_analytics
 from App.analytics.excel_export import export_analytics_to_excel, export_tab_to_excel, _TAB_SHEETS
 
-logger = logging.getLogger("customer_analytics")
+logger = logging.getLogger(__name__)
 
 _ANALYTICS_VER_KEY = "analytics_data_ver"
 _ANALYTICS_TTL = 600  # 10 minutes
@@ -154,6 +154,11 @@ def analytics_chart(request):
         messages.error(request, "Start date must be before end date")
         date_from = date_to = None
 
+    logger.info(
+        "analytics_chart: from=%s to=%s shop_group=%s user=%s",
+        date_from, date_to, shop_group, request.user,
+        extra={"step": "analytics_chart"},
+    )
     data, _ = _get_analytics_data(date_from, date_to, shop_group)
     if not data:
         messages.info(request, "No sales data. Please upload sales data first.")
@@ -210,6 +215,11 @@ def export_analytics(request):
     date_from = _parse_date(start_date, "start date", request)
     date_to = _parse_date(end_date, "end date", request)
 
+    logger.info(
+        "export_analytics: from=%s to=%s shop_group=%s tab=%s user=%s",
+        date_from, date_to, shop_group, tab or "full", request.user,
+        extra={"step": "export_analytics"},
+    )
     data, _ = _get_analytics_data(date_from, date_to, shop_group)
     if not data:
         messages.error(request, "No data to export")

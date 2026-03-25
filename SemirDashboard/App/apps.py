@@ -36,6 +36,6 @@ class AppConfig(AppConfig):
                 start_scheduler()
                 logger.info("CNV sync scheduler started successfully")
             except Exception as e:
-                logger.error(f"Failed to start CNV scheduler: {e}", exc_info=True)
+                logger.error("Failed to start CNV scheduler: %s", e, exc_info=True)
         else:
             logger.debug("Skipping scheduler start (not running server)")

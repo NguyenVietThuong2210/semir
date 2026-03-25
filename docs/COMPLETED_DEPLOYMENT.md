@@ -5,8 +5,8 @@
 - **VPS Provider**: Vietnix
 - **Plan**: VPS SSD 3 (2 vCPU / 4GB RAM / 60GB SSD)
 - **OS**: Ubuntu 22.04 LTS
-- **Server IP**: `YOUR_SERVER_IP`
-- **Date Deployed**: `TODAY_DATE`
+- **Server IP**: `14.225.254.192`
+- **Date Deployed**: 2026-02-22
 
 ---
 
@@ -244,13 +244,14 @@ CSRF_TRUSTED_ORIGINS=https://analytics-customer-dashboard.com,https://www.analyt
 ```bash
 docker compose ps
 ```
+- semir_redis (Redis alpine) - Internal cache
 - semir_db (PostgreSQL 16) - Port 5432 (internal)
 - semir_web (Django + Gunicorn) - Port 8000 (internal)
 - semir_nginx (Nginx) - Ports 80, 443 (public)
 
 ### Environment
 - Python: 3.11
-- Django: 5.0+
+- Django: 6.0.2
 - PostgreSQL: 16
 - Nginx: Alpine
 - Docker Compose: v2.x
@@ -373,6 +374,5 @@ docker compose exec db psql -U semir_user -d semir_db
 
 ---
 
-**Deployment Date**: `DATE`  
-**Deployed By**: `YOUR_NAME`  
+**Deployment Date**: 2026-02-22
 **Status**: LIVE & OPERATIONAL

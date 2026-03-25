@@ -18,7 +18,7 @@ from App.services import (
 )
 from App.upload_jobs import NamedBytesIO, _now_iso, create_job, get_recent_jobs, is_type_running, make_progress_fn, update_job
 
-logger = logging.getLogger("customer_analytics")
+logger = logging.getLogger(__name__)
 
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
             finished_at=_now_iso(),
             result=result,
         )
-        logger.info("Job %s done: %s", job_id, result)
+        logger.info("Job %s done: %s", job_id, result, extra={"step": "upload_job"})
     except Exception as exc:
         update_job(
             job_id,
@@ -66,7 +66,7 @@ def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
             finished_at=_now_iso(),
             error=str(exc),
         )
-        logger.exception("Job %s failed", job_id)
+        logger.exception("Job %s failed", job_id, extra={"step": "upload_job"})
     finally:
         connection.close()  # release DB connection held by this thread
 
@@ -93,7 +93,7 @@ def upload_customers(request):
             f = request.FILES["file"]
             file_bytes = f.read()
             job_id = create_job("customers", f.name)
-            logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user)
+            logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_customers"})
             _start_thread(job_id, process_customer_file, file_bytes, f.name, _invalidate_analytics_cache)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
             return redirect("upload_customers")
@@ -127,7 +127,7 @@ def upload_used_points(request):
             f = request.FILES["file"]
             file_bytes = f.read()
             job_id = create_job("used_points", f.name)
-            logger.info("upload_used_points queued job=%s file=%s user=%s", job_id, f.name, request.user)
+            logger.info("upload_used_points queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_used_points"})
             _start_thread(job_id, process_used_points_file, file_bytes, f.name)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
         else:
@@ -146,7 +146,7 @@ def upload_sales(request):
             f = request.FILES["file"]
             file_bytes = f.read()
             job_id = create_job("sales", f.name)
-            logger.info("upload_sales queued job=%s file=%s user=%s", job_id, f.name, request.user)
+            logger.info("upload_sales queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_sales"})
             _start_thread(job_id, process_sales_file, file_bytes, f.name, _invalidate_analytics_cache)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
             return redirect("upload_sales")
@@ -168,7 +168,7 @@ def upload_coupons(request):
         f = request.FILES["file"]
         file_bytes = f.read()
         job_id = create_job("coupons", f.name)
-        logger.info("upload_coupons queued job=%s file=%s user=%s", job_id, f.name, request.user)
+        logger.info("upload_coupons queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_coupons"})
         _start_thread(job_id, process_coupon_file, file_bytes, f.name, _invalidate_coupon_cache)
         messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
         return redirect("upload_coupons")

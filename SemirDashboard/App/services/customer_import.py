@@ -13,7 +13,7 @@ from django.db import transaction
 from App.models import Customer
 from .file_reader import read_file, parse_date, safe_str, safe_int
 
-logger = logging.getLogger('customer_analytics')
+logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 5000
 
@@ -28,7 +28,7 @@ def process_customer_file(file, progress_fn=None):
     - Bulk updates for existing customers
     - Pre-fetch existing records to minimize queries
     """
-    logger.info("=== START OPTIMIZED Customer Import: %s ===", file.name)
+    logger.info("=== START OPTIMIZED Customer Import: %s ===", file.name, extra={"step": "customer_import"})
     df = read_file(file)
     df.columns = df.columns.str.strip().str.upper()
     total_rows = len(df)
@@ -43,7 +43,7 @@ def process_customer_file(file, progress_fn=None):
         batch_df = df.iloc[batch_start:batch_end]
         batch_size = len(batch_df)
 
-        logger.info(f"[Batch {batch_num}] Processing rows {batch_start+1} to {batch_end} ({batch_size} rows)")
+        logger.info("[Batch %d] rows %d-%d (%d rows)", batch_num, batch_start + 1, batch_end, batch_size)
 
         # Prepare batch data
         batch_creates = []
@@ -62,7 +62,7 @@ def process_customer_file(file, progress_fn=None):
             )
         }
 
-        logger.info(f"[Batch {batch_num}] Found {len(existing_customers)} existing customers")
+        logger.info("[Batch %d] existing=%d", batch_num, len(existing_customers))
 
         # Process each row in batch
         for idx, row in batch_df.iterrows():
@@ -105,7 +105,7 @@ def process_customer_file(file, progress_fn=None):
 
             except Exception as exc:
                 errors.append(f"Row {row_num}: {exc}")
-                logger.error(f"Row {row_num} error: {exc}")
+                logger.error("row %d error: %s", row_num, exc)
 
         # Execute bulk operations
         with transaction.atomic():
@@ -113,7 +113,7 @@ def process_customer_file(file, progress_fn=None):
             if batch_creates:
                 Customer.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
                 created += len(batch_creates)
-                logger.info(f"[Batch {batch_num}] Created {len(batch_creates)} new customers")
+                logger.info("[Batch %d] created=%d", batch_num, len(batch_creates))
 
             # Bulk update existing customers
             if batch_updates:
@@ -134,13 +134,13 @@ def process_customer_file(file, progress_fn=None):
                         batch_size=1000
                     )
                     updated += len(customers_to_update)
-                    logger.info(f"[Batch {batch_num}] Updated {len(customers_to_update)} customers")
+                    logger.info("[Batch %d] updated=%d", batch_num, len(customers_to_update))
 
         if progress_fn:
             progress_fn(min(batch_end, total_rows), total_rows)
 
     logger.info("=== DONE Customer Import: created=%d updated=%d errors=%d ===",
-                created, updated, len(errors))
+                created, updated, len(errors), extra={"step": "customer_import"})
     return {
         'created': created,
         'updated': updated,
@@ -162,6 +162,7 @@ def process_used_points_file(file, progress_fn=None):
     Duplicate matching: same VIP ID AND Phone  →  update both fields.
     Returns dict: { total_processed, updated, skipped, errors: [...] }
     """
+    logger.info("=== START UsedPoints Import: %s ===", file.name, extra={"step": "used_points_import"})
     # ── Read file ────────────────────────────────────────────────
     filename = file.name.lower()
     try:
@@ -245,7 +246,7 @@ def process_used_points_file(file, progress_fn=None):
             progress_fn(min(i + BATCH, total_records), total_records)
 
     logger.info("=== DONE UsedPoints Import: updated=%d skipped=%d errors=%d ===",
-                updated, skipped, len(errors))
+                updated, skipped, len(errors), extra={"step": "used_points_import"})
     return {
         'total_processed': total_processed,
         'updated': updated,
