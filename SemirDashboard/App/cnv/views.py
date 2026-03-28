@@ -40,7 +40,7 @@ def _invalidate_cnv_cache():
     global _cnv_ver
     with _cnv_ver_lock:
         _cnv_ver += 1
-    logger.info("CNV comparison cache invalidated (in-process ver→%d)", _cnv_ver)
+    logger.info("CNV comparison cache invalidated (in-process ver->%d)", _cnv_ver)
 
 
 @requires_perm("page_cnv_sync")
