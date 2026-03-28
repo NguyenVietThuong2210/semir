@@ -4,7 +4,7 @@ App/analytics/customer_utils.py
 Customer data fetching, processing, and caching utilities.
 Handles all customer-related operations.
 
-Version: 3.3
+Version: 3.4 - Added per-bucket invoice bucket maps for consistent NEW INV / NEW NO INV
 """
 import logging
 from collections import defaultdict
@@ -208,16 +208,119 @@ def build_customer_purchase_map(sales_list):
 def get_all_time_grade_counts():
     """
     Get customer counts by grade from database (all-time).
-    
+
     Returns:
         Dict[grade] -> count
     """
     from App.models import Customer
     from django.db.models import Count
-    
+
     grade_db = {}
     for row in Customer.objects.values('vip_grade').annotate(cnt=Count('id')):
         g = normalize_grade(row['vip_grade'])
         grade_db[g] = grade_db.get(g, 0) + row['cnt']
-    
+
     return grade_db
+
+
+def _make_inv_entry():
+    return {
+        'sessions': set(), 'months': set(), 'years': set(), 'weeks': set(), 'shops': set(),
+        'session_shops': set(), 'month_shops': set(), 'year_shops': set(), 'week_shops': set(),
+    }
+
+
+def build_inv_bucket_map(customer_purchases):
+    """
+    Build per-customer invoice-bucket presence from customer_purchases (already in memory).
+
+    For each vip_id, records which season/month/week/shop buckets contain invoices.
+    Used by Sales Analytics aggregators to compute NEW (INV) / NEW (NO INV) per bucket.
+
+    Returns dict[normalized_vip_id] → {
+        'sessions': set of session keys,
+        'months': set of month keys,
+        'weeks': set of week_sort keys,
+        'shops': set of shop names,
+        'session_shops': set of (session, shop) tuples,
+        'month_shops': set of (month, shop) tuples,
+        'week_shops': set of (week_sort, shop) tuples,
+    }
+    """
+    result = {}
+    for vip_id, purchases in customer_purchases.items():
+        if vip_id == '0':
+            continue
+        entry = _make_inv_entry()
+        for p in purchases:
+            sk, mk, yk, wk, shop = p['session'], p['month'], p.get('year'), p['week_sort'], p['shop']
+            entry['sessions'].add(sk)
+            entry['months'].add(mk)
+            if yk:
+                entry['years'].add(yk)
+                entry['year_shops'].add((yk, shop))
+            entry['weeks'].add(wk)
+            entry['shops'].add(shop)
+            entry['session_shops'].add((sk, shop))
+            entry['month_shops'].add((mk, shop))
+            entry['week_shops'].add((wk, shop))
+        result[vip_id] = entry
+    return result
+
+
+def build_inv_bucket_map_from_db(date_from=None, date_to=None):
+    """
+    Build per-customer invoice-bucket presence directly from the SalesTransaction table.
+    Used by _compute_cnv_breakdown (which doesn't hold customer_purchases in memory).
+
+    Returns (vid_map, pk_map):
+        vid_map: dict[normalized_vip_id] → {sessions, months, weeks, shops, ...}
+        pk_map:  dict[customer_pk (int)]  → same entry object (shared reference)
+    """
+    from App.models import SalesTransaction
+    from .season_utils import get_session_key, get_month_key, get_year_key, get_week_info
+
+    qs = (
+        SalesTransaction.objects
+        .filter(vip_id__isnull=False)
+        .exclude(vip_id='').exclude(vip_id='0')
+        .order_by()
+    )
+    if date_from:
+        qs = qs.filter(sales_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(sales_date__lte=date_to)
+
+    vid_map = {}
+    pk_map = {}
+
+    for tx in qs.values('vip_id', 'customer_id', 'sales_date', 'shop_name'):
+        vid = _norm_vid(tx['vip_id'])
+        if not vid or vid == '0':
+            continue
+
+        if vid not in vid_map:
+            vid_map[vid] = _make_inv_entry()
+        entry = vid_map[vid]
+
+        sk    = get_session_key(tx['sales_date'])
+        mk    = get_month_key(tx['sales_date'])
+        yk    = get_year_key(tx['sales_date'])
+        wk, _ = get_week_info(tx['sales_date'])
+        shop  = (tx['shop_name'] or '').strip() or 'Unknown'
+
+        entry['sessions'].add(sk)
+        entry['months'].add(mk)
+        if yk:
+            entry['years'].add(yk)
+            entry['year_shops'].add((yk, shop))
+        entry['weeks'].add(wk)
+        entry['shops'].add(shop)
+        entry['session_shops'].add((sk, shop))
+        entry['month_shops'].add((mk, shop))
+        entry['week_shops'].add((wk, shop))
+
+        if tx['customer_id']:
+            pk_map[tx['customer_id']] = entry   # shared reference — read-only
+
+    return vid_map, pk_map

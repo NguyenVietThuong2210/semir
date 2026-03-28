@@ -672,9 +672,6 @@
         <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdSeasonShop" type="button">By Season - All Shops</button></li>
         <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonthShop"  type="button">By Month - All Shops</button></li>
         <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeekShop"   type="button">By Week - All Shops</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShopSeason" type="button">By Shop - By Season</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShopMonth"  type="button">By Shop - By Month</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShopWeek"   type="button">By Shop - By Week</button></li>
     </ul>
 </div>
 <div class="tab-content border border-top-0 rounded-bottom p-3 mb-4" id="bdTabContent">
@@ -778,237 +775,287 @@
 </div>
 </div>
 
-<!-- ── By Shop ───────────────────────────────────────────────────────── -->
+<!-- ── By Shop (Sales-style: one card per shop, collapse → By Season/Month/Week) ── -->
 <div class="tab-pane fade" id="bdShop" role="tabpanel">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-shop"></i> New Registrations by Shop</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdShopBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <p class="text-muted small mb-2">Shops sorted alphabetically. Click a shop row to expand season / month / week breakdown.</p>
+    {% for sd in bd.shop_detail %}
+    <div class="card mb-3 border">
+        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+             style="background:#2c3e50;cursor:pointer"
+             data-bs-toggle="collapse"
+             data-bs-target="#bdSh-{{ forloop.counter }}"
+             aria-expanded="false">
+            <strong class="text-white"><i class="bi bi-shop me-1"></i>{{ sd.shop }}</strong>
+            <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
+        </div>
+        <div class="card-body p-0">
+            <!-- Summary row — always visible -->
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0 bd-tbl">
+                    <thead style="background-color:#366092;color:white;">
+                        <tr>
+                            <th class="col-lbl">Shop</th>
+                            <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                            <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                            <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                            <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% if sd.summary %}
+                    <tr>
+                        <td title="{{ sd.shop }}">{{ sd.shop }}</td>
+                        <td>{{ sd.summary.new_pos_inv }}</td><td>{{ sd.summary.new_pos_no_inv }}</td><td>{{ sd.summary.new_pos }}</td><td>{{ sd.summary.new_pos_only }}</td>
+                        <td>{{ sd.summary.new_cnv }}</td><td>{{ sd.summary.new_cnv_only }}</td>
+                        <td>{{ sd.summary.zalo_app }}</td><td>{{ sd.summary.zalo_app_pct }}%</td>
+                        <td>{{ sd.summary.zalo_oa }}</td><td>{{ sd.summary.zalo_oa_pct }}%</td>
+                    </tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            <!-- Collapse: By Season / By Month / By Week -->
+            <div class="collapse" id="bdSh-{{ forloop.counter }}">
+                <div class="px-3 py-2 border-top bg-light">
+
+                    <!-- By Season -->
+                    <div class="mb-3">
+                        <p class="text-muted small fw-semibold mb-1 text-uppercase">By Season</p>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0 bd-tbl">
+                                <thead style="background-color:#366092;color:white;">
+                                    <tr>
+                                        <th class="col-lbl">Season</th>
+                                        <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                                        <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                                        <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                                        <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                {% for r in sd.by_season %}
+                                <tr>
+                                    <td>{{ r.label }}</td>
+                                    <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                                    <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                                    <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                                    <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+                                </tr>
+                                {% empty %}<tr><td colspan="11" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- By Month -->
+                    <div class="mb-3">
+                        <p class="text-muted small fw-semibold mb-1 text-uppercase">By Month</p>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0 bd-tbl">
+                                <thead style="background-color:#366092;color:white;">
+                                    <tr>
+                                        <th class="col-lbl">Month</th>
+                                        <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                                        <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                                        <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                                        <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                {% for r in sd.by_month %}
+                                <tr>
+                                    <td>{{ r.label }}</td>
+                                    <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                                    <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                                    <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                                    <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+                                </tr>
+                                {% empty %}<tr><td colspan="11" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- By Week -->
+                    <div>
+                        <p class="text-muted small fw-semibold mb-1 text-uppercase">By Week</p>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0 bd-tbl">
+                                <thead style="background-color:#366092;color:white;">
+                                    <tr>
+                                        <th class="col-lbl">Week</th>
+                                        <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                                        <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                                        <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                                        <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                {% for r in sd.by_week %}
+                                <tr>
+                                    <td>{{ r.label }}</td>
+                                    <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                                    <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                                    <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                                    <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+                                </tr>
+                                {% empty %}<tr><td colspan="11" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="collapse show" id="bdShopBody"><div class="table-scroll">
-        <table class="table table-sm table-hover mb-0 bd-tbl">
-            <thead class="table-dark"><tr>
-                <th class="col-lbl">Shop</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in bd.shop %}
-            <tr>
-                <td title="{{ r.label }}">{{ r.label }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="11" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-</div>
+    {% empty %}
+    <p class="text-muted text-center py-3">No shop data available{% if not has_filter %} — apply a date filter{% endif %}.</p>
+    {% endfor %}
 </div>
 
-<!-- ── By Season - All Shops ─────────────────────────────────────────── -->
+<!-- ── By Season - All Shops (one card per season, Sales-style) ───────── -->
 <div class="tab-pane fade" id="bdSeasonShop" role="tabpanel">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-calendar3-range"></i> New Registrations by Season — All Shops</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdSeasonShopBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <p class="text-muted small mb-2">Compare all shops for each season. Shops sorted alphabetically.</p>
+    {% regroup bd.season_shop by label as season_groups %}
+    {% for grp in season_groups %}
+    <div class="card mb-3">
+        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+             style="background:#2c3e50;color:white;cursor:pointer"
+             data-bs-toggle="collapse"
+             data-bs-target="#bdSS-{{ forloop.counter }}"
+             aria-expanded="false">
+            <strong>SEASON: {{ grp.grouper }}</strong>
+            <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
+        </div>
+        <div class="collapse" id="bdSS-{{ forloop.counter }}">
+            <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 bd-tbl">
+                    <thead style="background-color:#366092;color:white;">
+                        <tr>
+                            <th class="col-lbl">Shop</th>
+                            <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                            <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                            <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                            <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in grp.list %}
+                    <tr>
+                        <td title="{{ r.shop }}">{{ r.shop }}</td>
+                        <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                        <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                        <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                        <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </div>
     </div>
-    <div class="collapse show" id="bdSeasonShopBody"><div class="table-scroll">
-        <table class="table table-sm table-hover mb-0 bd-shop-tbl">
-            <thead class="table-dark"><tr>
-                <th class="col-lbl">Season</th><th class="col-shop">Shop</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in bd.season_shop %}
-            <tr>
-                <td>{{ r.label }}</td><td title="{{ r.shop }}">{{ r.shop }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="12" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-    {% if breakdown.season_shop|length >= 500 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 500 rows — download for full data</small></div>{% endif %}
-</div>
+    {% empty %}
+    <p class="text-muted text-center py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</p>
+    {% endfor %}
 </div>
 
-<!-- ── By Month - All Shops ──────────────────────────────────────────── -->
+<!-- ── By Month - All Shops (one card per month, Sales-style) ─────────── -->
 <div class="tab-pane fade" id="bdMonthShop" role="tabpanel">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-calendar-month"></i> New Registrations by Month — All Shops</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdMonthShopBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <p class="text-muted small mb-2">Compare all shops for each month. Shops sorted alphabetically.</p>
+    {% regroup bd.month_shop by label as month_groups %}
+    {% for grp in month_groups %}
+    <div class="card mb-3">
+        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+             style="background:#2c3e50;color:white;cursor:pointer"
+             data-bs-toggle="collapse"
+             data-bs-target="#bdMS-{{ forloop.counter }}"
+             aria-expanded="false">
+            <strong>MONTH: {{ grp.grouper }}</strong>
+            <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
+        </div>
+        <div class="collapse" id="bdMS-{{ forloop.counter }}">
+            <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 bd-tbl">
+                    <thead style="background-color:#366092;color:white;">
+                        <tr>
+                            <th class="col-lbl">Shop</th>
+                            <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                            <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                            <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                            <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in grp.list %}
+                    <tr>
+                        <td title="{{ r.shop }}">{{ r.shop }}</td>
+                        <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                        <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                        <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                        <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </div>
     </div>
-    <div class="collapse show" id="bdMonthShopBody"><div class="table-scroll">
-        <table class="table table-sm table-hover mb-0 bd-shop-tbl">
-            <thead class="table-dark"><tr>
-                <th class="col-lbl">Month</th><th class="col-shop">Shop</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in bd.month_shop %}
-            <tr>
-                <td>{{ r.label }}</td><td title="{{ r.shop }}">{{ r.shop }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="12" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-    {% if breakdown.month_shop|length >= 500 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 500 rows — download for full data</small></div>{% endif %}
-</div>
+    {% empty %}
+    <p class="text-muted text-center py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</p>
+    {% endfor %}
 </div>
 
-<!-- ── By Week - All Shops ───────────────────────────────────────────── -->
+<!-- ── By Week - All Shops (one card per week, Sales-style) ───────────── -->
 <div class="tab-pane fade" id="bdWeekShop" role="tabpanel">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-calendar-week"></i> New Registrations by Week — All Shops</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdWeekShopBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <p class="text-muted small mb-2">Compare all shops for each week. Shops sorted alphabetically.</p>
+    {% regroup bd.week_shop by label as week_groups %}
+    {% for grp in week_groups %}
+    <div class="card mb-3">
+        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+             style="background:#2c3e50;color:white;cursor:pointer"
+             data-bs-toggle="collapse"
+             data-bs-target="#bdWS-{{ forloop.counter }}"
+             aria-expanded="false">
+            <strong>WEEK: {{ grp.grouper }}</strong>
+            <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
+        </div>
+        <div class="collapse" id="bdWS-{{ forloop.counter }}">
+            <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 bd-tbl">
+                    <thead style="background-color:#366092;color:white;">
+                        <tr>
+                            <th class="col-lbl">Shop</th>
+                            <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                            <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                            <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                            <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in grp.list %}
+                    <tr>
+                        <td title="{{ r.shop }}">{{ r.shop }}</td>
+                        <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                        <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                        <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                        <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </div>
     </div>
-    <div class="collapse show" id="bdWeekShopBody"><div class="table-scroll">
-        <table class="table table-sm table-hover mb-0 bd-shop-tbl">
-            <thead class="table-dark"><tr>
-                <th class="col-lbl">Week</th><th class="col-shop">Shop</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in bd.week_shop %}
-            <tr>
-                <td>{{ r.label }}</td><td title="{{ r.shop }}">{{ r.shop }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="12" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-    {% if breakdown.week_shop|length >= 500 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 500 rows — download for full data</small></div>{% endif %}
-</div>
-</div>
-
-<!-- ── By Shop - By Season ────────────────────────────────────────────── -->
-<div class="tab-pane fade" id="bdShopSeason" role="tabpanel">
-{% for sg in bd.shop_season %}
-<div class="table-wrapper mb-3">
-    <div class="table-header">
-        <h6><i class="bi bi-shop"></i> {{ sg.shop }}</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdShpS_{{ forloop.counter }}"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="bdShpS_{{ forloop.counter }}"><div class="table-scroll">
-        <table class="table table-sm table-hover mb-0 bd-tbl">
-            <thead class="table-dark"><tr>
-                <th class="col-lbl">Season</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in sg.rows %}
-            <tr>
-                <td>{{ r.label }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-</div>
-{% empty %}<p class="text-muted">No data{% if not has_filter %} — apply a date filter{% endif %}</p>{% endfor %}
-</div>
-
-<!-- ── By Shop - By Month ─────────────────────────────────────────────── -->
-<div class="tab-pane fade" id="bdShopMonth" role="tabpanel">
-{% for sg in bd.shop_month %}
-<div class="table-wrapper mb-3">
-    <div class="table-header">
-        <h6><i class="bi bi-shop"></i> {{ sg.shop }}</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdShpM_{{ forloop.counter }}"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="bdShpM_{{ forloop.counter }}"><div class="table-scroll">
-        <table class="table table-sm table-hover mb-0 bd-tbl">
-            <thead class="table-dark"><tr>
-                <th class="col-lbl">Month</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in sg.rows %}
-            <tr>
-                <td>{{ r.label }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-</div>
-{% empty %}<p class="text-muted">No data{% if not has_filter %} — apply a date filter{% endif %}</p>{% endfor %}
-</div>
-
-<!-- ── By Shop - By Week ──────────────────────────────────────────────── -->
-<div class="tab-pane fade" id="bdShopWeek" role="tabpanel">
-{% for sg in bd.shop_week %}
-<div class="table-wrapper mb-3">
-    <div class="table-header">
-        <h6><i class="bi bi-shop"></i> {{ sg.shop }}</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdShpW_{{ forloop.counter }}"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="bdShpW_{{ forloop.counter }}"><div class="table-scroll">
-        <table class="table table-sm table-hover mb-0 bd-tbl">
-            <thead class="table-dark"><tr>
-                <th class="col-lbl">Week</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in sg.rows %}
-            <tr>
-                <td>{{ r.label }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-</div>
-{% empty %}<p class="text-muted">No data{% if not has_filter %} — apply a date filter{% endif %}</p>{% endfor %}
+    {% empty %}
+    <p class="text-muted text-center py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</p>
+    {% endfor %}
 </div>
 
 {% endwith %}
