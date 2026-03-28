@@ -5,6 +5,7 @@ Handles CNV Loyalty integration pages
 
 import logging
 import threading
+import time
 
 from django.conf import settings
 from django.core.cache import cache
@@ -24,10 +25,15 @@ logger = logging.getLogger("App.cnv")
 _CNV_VER_KEY = "cnv_cmp_ver_v2"
 _CNV_TTL = 300  # 5 minutes (syncs happen more frequently)
 
+# Startup timestamp — changes on every server restart/deploy.
+# Included in the cache key so all stale cache entries are automatically
+# bypassed after a code deploy or server restart.
+_CNV_STARTUP_TS = int(time.time())
+
 
 def _cnv_cache_key(start_date, end_date):
     v = cache.get(_CNV_VER_KEY, 0)
-    return f"cnv_cmp3:{v}:{start_date}:{end_date}"
+    return f"cnv_cmp:{_CNV_STARTUP_TS}:{v}:{start_date}:{end_date}"
 
 
 def _invalidate_cnv_cache():
@@ -462,7 +468,8 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
 
     def _flat_rows(data, sort_fn):
         rows = []
-        for k, v in sorted(data.items(), key=lambda x: sort_fn(x[0])):
+        for k in sorted(data.keys(), key=sort_fn):
+            v = data[k]
             rows.append({"label": k, **v,
                          "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
                          "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
@@ -470,7 +477,8 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
 
     def _week_rows(wdict):
         rows = []
-        for k, (lbl, v) in sorted(wdict.items(), key=lambda x: week_sort_key(x[0])):
+        for k in sorted(wdict.keys(), key=week_sort_key):
+            lbl, v = wdict[k]
             rows.append({"label": lbl, **v,
                          "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
                          "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
@@ -478,8 +486,8 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
 
     def _cross_rows(data, time_sort_fn):
         rows = []
-        for (t, sh), v in sorted(data.items(),
-                                  key=lambda x: (time_sort_fn(x[0][0]), x[0][1])):
+        for (t, sh) in sorted(data.keys(), key=lambda x: (time_sort_fn(x[0]), x[1])):
+            v = data[(t, sh)]
             rows.append({"label": t, "shop": sh, **v,
                          "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
                          "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
@@ -487,8 +495,8 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
 
     def _week_cross_rows(wdict):
         rows = []
-        for (w_sort, sh), (lbl, v) in sorted(wdict.items(),
-                                              key=lambda x: (week_sort_key(x[0][0]), x[0][1])):
+        for (w_sort, sh) in sorted(wdict.keys(), key=lambda x: (week_sort_key(x[0]), x[1])):
+            lbl, v = wdict[(w_sort, sh)]
             rows.append({"label": lbl, "shop": sh, **v,
                          "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
                          "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
@@ -915,21 +923,18 @@ def customer_analytics(request):
         "quick_btns": [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90)],
         # breakdown display limits (full data goes to Excel)
         "breakdown": {
-            # Season lists reversed so newest season appears first
-            "season":       list(reversed(d["breakdown"]["season"])),
+            # All lists in ascending chronological order (oldest first)
+            "season":       d["breakdown"]["season"],
             "month":        d["breakdown"]["month"],
             "week":         d["breakdown"]["week"][:200],
             "shop":         d["breakdown"]["shop"],
-            "season_shop":  list(reversed(d["breakdown"]["season_shop"][:500])),
-            "month_shop":   d["breakdown"]["month_shop"][:500],
-            "week_shop":    d["breakdown"]["week_shop"][:500],
+            "season_shop":  d["breakdown"]["season_shop"],
+            "month_shop":   d["breakdown"]["month_shop"][:2000],
+            "week_shop":    d["breakdown"]["week_shop"][:5000],
             "shop_season":  d["breakdown"]["shop_season"],
             "shop_month":   d["breakdown"]["shop_month"],
             "shop_week":    d["breakdown"]["shop_week"],
-            "shop_detail":  [
-                {**sd, "by_season": list(reversed(sd["by_season"]))}
-                for sd in d["breakdown"]["shop_detail"]
-            ],
+            "shop_detail":  d["breakdown"]["shop_detail"],
         },
     }
     return render(request, "cnv/customer_analytics.html", context)
