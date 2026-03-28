@@ -12,7 +12,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from App.permissions import requires_perm
 from django.views.decorators.http import require_POST
-from datetime import datetime
+from datetime import datetime, timedelta, date as _date
 from django.utils import timezone
 
 from App.models import Customer as POSCustomer
@@ -136,10 +136,11 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         cnv_lo = _cnv_bounds["lo"]
         cnv_hi = _cnv_bounds["hi"]
 
-    # POS customers — always filtered by registration_date using effective range
+    # POS customers — ALL Customer records, same scope as Sales Analytics.
+    # No phone/vip_id filter here: Sales Analytics counts every Customer row.
     pos_qs = (
-        POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
-        .exclude(vip_id=0).exclude(phone="")
+        POSCustomer.objects
+        .filter(registration_date__isnull=False)
         .values("id", "vip_id", "phone", "registration_date", "registration_store")
     )
     if reg_lo and reg_hi:
@@ -147,7 +148,17 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
             registration_date__gte=reg_lo,
             registration_date__lte=reg_hi,
         )
-    pos_list = list(pos_qs)
+    # Deduplicate by vip_id — mirrors Sales Analytics all_new_in_period dict key:
+    #   valid vip_id → key = vid (customers sharing a vip_id counted once)
+    #   null/0 vip_id → key = "__pk{id}" (each counted separately, same as Sales Analytics)
+    _seen_keys = set()
+    pos_list = []
+    for _c in pos_qs:
+        _vid = _norm_vid(str(_c["vip_id"] or ""))
+        _key = _vid if (_vid and _vid != "0") else f"__pk{_c['id']}"
+        if _key not in _seen_keys:
+            _seen_keys.add(_key)
+            pos_list.append(_c)
 
     # CNV customers — always filtered by cnv_created_at using effective range
     cnv_qs = (
@@ -194,14 +205,33 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
     week_data       = {}   # sort_key → (label, row)
     week_shop_data  = {}   # (sort_key, shop) → (label, row)
 
+    # Pre-populate week_data with ALL weeks in [reg_lo, reg_hi] so zero-activity
+    # weeks still appear — mirrors Sales Analytics behavior.
+    if reg_lo and reg_hi:
+        _lo = reg_lo if isinstance(reg_lo, _date) else reg_lo.date()
+        _hi = reg_hi if isinstance(reg_hi, _date) else reg_hi.date()
+        _cur = _lo
+        _seen_w = set()
+        while _cur <= _hi:
+            _ws, _wl = get_week_info(_cur)
+            if _ws not in _seen_w:
+                _seen_w.add(_ws)
+                week_data[_ws] = (_wl, _empty())
+            _cur += timedelta(days=7)
+        # Ensure final partial week is included
+        _ws, _wl = get_week_info(_hi)
+        if _ws not in _seen_w:
+            week_data[_ws] = (_wl, _empty())
+
     # ── POS pass ──────────────────────────────────────────────────────────────
     for c in pos_list:
         reg_date = c["registration_date"]
-        phone    = c["phone"] or ""
-        store    = (c["registration_store"] or "").strip() or "Unknown"
-        if not reg_date or not phone:
+        if not reg_date:
             continue
-        is_pos_only = phone not in cnv_phones_all
+        phone = c["phone"] or ""
+        store = (c["registration_store"] or "").strip() or "Unknown"
+        # Customers with no phone can't be in CNV → definitionally POS-only.
+        is_pos_only = (not phone) or (phone not in cnv_phones_all)
 
         # Per-bucket invoice presence (user's formula: inv must be in same bucket as reg)
         c_pk  = c.get("id")
