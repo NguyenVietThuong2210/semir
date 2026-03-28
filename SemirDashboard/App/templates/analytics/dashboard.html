@@ -506,6 +506,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <th class="col-cnt text-end">Active</th>
                             <th class="col-cnt text-end c-green">NEW (INV)</th>
                             <th class="col-cnt text-end c-green">NEW (NO INV)</th>
+                            <th class="col-cnt text-end c-green">NEW (TOTAL)</th>
                             <th class="col-rate text-end c-green">NEW (INV) RATE</th>
                             <th class="col-cnt text-end">Returning</th>
                             <th class="col-rate text-end">Return Rate</th>
@@ -524,6 +525,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="col-cnt text-end">{{ s.total_customers }}</td>
                             <td class="col-cnt text-end c-green">{{ s.new_customers|default:0 }}</td>
                             <td class="col-cnt text-end c-green">{{ s.new_customers_no_inv|default:0 }}</td>
+                            <td class="col-cnt text-end c-green"><strong>{{ s.new_customers_total|default:0 }}</strong></td>
                             <td class="col-rate text-end c-green"><span class="badge bg-info">{{ s.new_rate|default:0 }}%</span></td>
                             <td class="col-cnt text-end">{{ s.returning_customers }}</td>
                             <td class="col-rate text-end"><span class="badge bg-primary">{{ s.return_rate }}%</span></td>
@@ -535,7 +537,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="col-amt text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }} {{ currency }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="13" class="text-center text-muted py-3">No season data for this period</td></tr>
+                        <tr><td colspan="14" class="text-center text-muted py-3">No season data for this period</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -556,6 +558,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <th class="col-cnt text-end">Active</th>
                             <th class="col-cnt text-end">NEW (INV)</th>
                             <th class="col-cnt text-end">NEW (NO INV)</th>
+                            <th class="col-cnt text-end">NEW (TOTAL)</th>
                             <th class="col-rate text-end">NEW (INV) RATE</th>
                             <th class="col-cnt text-end">Returning</th>
                             <th class="col-rate text-end">Return Rate</th>
@@ -574,6 +577,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="col-cnt text-end">{{ m.total_customers }}</td>
                             <td class="col-cnt text-end">{{ m.new_customers|default:0 }}</td>
                             <td class="col-cnt text-end">{{ m.new_customers_no_inv|default:0 }}</td>
+                            <td class="col-cnt text-end"><strong>{{ m.new_customers_total|default:0 }}</strong></td>
                             <td class="col-rate text-end"><span class="badge bg-info">{{ m.new_rate|default:0 }}%</span></td>
                             <td class="col-cnt text-end">{{ m.returning_customers }}</td>
                             <td class="col-rate text-end"><span class="badge bg-primary">{{ m.return_rate }}%</span></td>
@@ -585,7 +589,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="col-amt text-end amount-vnd">{{ m.total_amount_with_vip0|vnd }} {{ currency }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="13" class="text-center text-muted py-3">No monthly data for this period</td></tr>
+                        <tr><td colspan="14" class="text-center text-muted py-3">No monthly data for this period</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -606,6 +610,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <th class="col-cnt text-end">Active</th>
                             <th class="col-cnt text-end">NEW (INV)</th>
                             <th class="col-cnt text-end">NEW (NO INV)</th>
+                            <th class="col-cnt text-end">NEW (TOTAL)</th>
                             <th class="col-rate text-end">NEW (INV) RATE</th>
                             <th class="col-cnt text-end">Returning</th>
                             <th class="col-rate text-end">Return Rate</th>
@@ -624,6 +629,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="col-cnt text-end">{{ w.total_customers }}</td>
                             <td class="col-cnt text-end">{{ w.new_customers|default:0 }}</td>
                             <td class="col-cnt text-end">{{ w.new_customers_no_inv|default:0 }}</td>
+                            <td class="col-cnt text-end"><strong>{{ w.new_customers_total|default:0 }}</strong></td>
                             <td class="col-rate text-end"><span class="badge bg-info">{{ w.new_rate|default:0 }}%</span></td>
                             <td class="col-cnt text-end">{{ w.returning_customers }}</td>
                             <td class="col-rate text-end"><span class="badge bg-primary">{{ w.return_rate }}%</span></td>
@@ -635,7 +641,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                             <td class="col-amt text-end amount-vnd">{{ w.total_amount_with_vip0|vnd }} {{ currency }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="13" class="text-center text-muted py-3">No weekly data for this period</td></tr>
+                        <tr><td colspan="14" class="text-center text-muted py-3">No weekly data for this period</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -667,6 +673,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <th class="cv-cnt text-end">Active</th>
                                     <th class="cv-cnt text-end">NEW (INV)</th>
                                     <th class="cv-cnt text-end">NEW (NO INV)</th>
+                                    <th class="cv-cnt text-end">NEW (TOTAL)</th>
                                     <th class="cv-rate text-end">NEW (INV) RATE</th>
                                     <th class="cv-cnt text-end">Returning</th>
                                     <th class="cv-rate text-end">Rate</th>
@@ -684,6 +691,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <td class="cv-cnt text-end">{{ shop.total_customers }}</td>
                                     <td class="cv-cnt text-end">{{ shop.new_customers|default:0 }}</td>
                                     <td class="cv-cnt text-end">{{ shop.new_customers_no_inv|default:0 }}</td>
+                                    <td class="cv-cnt text-end"><strong>{{ shop.new_customers_total|default:0 }}</strong></td>
                                     <td class="cv-rate text-end"><span class="badge bg-info">{{ shop.new_rate|default:0 }}%</span></td>
                                     <td class="cv-cnt text-end">{{ shop.returning_customers }}</td>
                                     <td class="cv-rate text-end"><span class="badge bg-primary">{{ shop.return_rate }}%</span></td>
@@ -749,6 +757,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <th class="sv-cnt text-end">Active</th>
                                                 <th class="sv-cnt text-end">NEW (INV)</th>
                                                 <th class="sv-cnt text-end">NEW (NO INV)</th>
+                                                <th class="sv-cnt text-end">NEW (TOTAL)</th>
                                                 <th class="sv-rate text-end">NEW (INV) RATE</th>
                                                 <th class="sv-cnt text-end">Returning</th>
                                                 <th class="sv-rate text-end">Rate</th>
@@ -768,6 +777,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <td class="sv-cnt text-end">{{ sd.total_customers }}</td>
                                                 <td class="sv-cnt text-end">{{ sd.new_customers|default:0 }}</td>
                                                 <td class="sv-cnt text-end">{{ sd.new_customers_no_inv|default:0 }}</td>
+                                                <td class="sv-cnt text-end"><strong>{{ sd.new_customers_total|default:0 }}</strong></td>
                                                 <td class="sv-rate text-end"><span class="badge bg-info" style="font-size:.73rem">{{ sd.new_rate|default:0 }}%</span></td>
                                                 <td class="sv-cnt text-end">{{ sd.returning_customers }}</td>
                                                 <td class="sv-rate text-end">
@@ -782,7 +792,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             </tr>
                                             {% endif %}
                                             {% empty %}
-                                            <tr><td colspan="13" class="text-muted small text-center py-1">No data</td></tr>
+                                            <tr><td colspan="14" class="text-muted small text-center py-1">No data</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
@@ -800,6 +810,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <th class="sv-cnt text-end">Active</th>
                                                 <th class="sv-cnt text-end">NEW (INV)</th>
                                                 <th class="sv-cnt text-end">NEW (NO INV)</th>
+                                                <th class="sv-cnt text-end">NEW (TOTAL)</th>
                                                 <th class="sv-rate text-end">NEW (INV) RATE</th>
                                                 <th class="sv-cnt text-end">Returning</th>
                                                 <th class="sv-rate text-end">Rate</th>
@@ -819,6 +830,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <td class="sv-cnt text-end">{{ md.total_customers }}</td>
                                                 <td class="sv-cnt text-end">{{ md.new_customers|default:0 }}</td>
                                                 <td class="sv-cnt text-end">{{ md.new_customers_no_inv|default:0 }}</td>
+                                                <td class="sv-cnt text-end"><strong>{{ md.new_customers_total|default:0 }}</strong></td>
                                                 <td class="sv-rate text-end"><span class="badge bg-info" style="font-size:.73rem">{{ md.new_rate|default:0 }}%</span></td>
                                                 <td class="sv-cnt text-end">{{ md.returning_customers }}</td>
                                                 <td class="sv-rate text-end">
@@ -833,7 +845,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             </tr>
                                             {% endif %}
                                             {% empty %}
-                                            <tr><td colspan="13" class="text-muted small text-center py-1">No data</td></tr>
+                                            <tr><td colspan="14" class="text-muted small text-center py-1">No data</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
@@ -851,6 +863,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <th class="sv-cnt text-end">Active</th>
                                                 <th class="sv-cnt text-end">NEW (INV)</th>
                                                 <th class="sv-cnt text-end">NEW (NO INV)</th>
+                                                <th class="sv-cnt text-end">NEW (TOTAL)</th>
                                                 <th class="sv-rate text-end">NEW (INV) RATE</th>
                                                 <th class="sv-cnt text-end">Returning</th>
                                                 <th class="sv-rate text-end">Rate</th>
@@ -870,6 +883,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                                 <td class="sv-cnt text-end">{{ wd.total_customers }}</td>
                                                 <td class="sv-cnt text-end">{{ wd.new_customers|default:0 }}</td>
                                                 <td class="sv-cnt text-end">{{ wd.new_customers_no_inv|default:0 }}</td>
+                                                <td class="sv-cnt text-end"><strong>{{ wd.new_customers_total|default:0 }}</strong></td>
                                                 <td class="sv-rate text-end"><span class="badge bg-info" style="font-size:.73rem">{{ wd.new_rate|default:0 }}%</span></td>
                                                 <td class="sv-cnt text-end">{{ wd.returning_customers }}</td>
                                                 <td class="sv-rate text-end">
@@ -884,7 +898,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             </tr>
                                             {% endif %}
                                             {% empty %}
-                                            <tr><td colspan="13" class="text-muted small text-center py-1">No data</td></tr>
+                                            <tr><td colspan="14" class="text-muted small text-center py-1">No data</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
@@ -986,6 +1000,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <th class="val-cnt text-end">Active</th>
                                     <th class="val-cnt text-end">NEW (INV)</th>
                                     <th class="val-cnt text-end">NEW (NO INV)</th>
+                                    <th class="val-cnt text-end">NEW (TOTAL)</th>
                                     <th class="val-rate text-end">NEW (INV) RATE</th>
                                     <th class="val-cnt text-end">Returning</th>
                                     <th class="val-rate text-end">Return Rate</th>
@@ -1006,6 +1021,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             <td class="val-cnt text-end">{{ s.total_customers }}</td>
                                             <td class="val-cnt text-end">{{ s.new_customers|default:0 }}</td>
                                             <td class="val-cnt text-end">{{ s.new_customers_no_inv|default:0 }}</td>
+                                            <td class="val-cnt text-end"><strong>{{ s.new_customers_total|default:0 }}</strong></td>
                                             <td class="val-rate text-end"><span class="badge bg-info">{{ s.new_rate|default:0 }}%</span></td>
                                             <td class="val-cnt text-end">{{ s.returning_customers }}</td>
                                             <td class="val-rate text-end">
@@ -1056,6 +1072,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <th class="val-cnt text-end">Active</th>
                                     <th class="val-cnt text-end">NEW (INV)</th>
                                     <th class="val-cnt text-end">NEW (NO INV)</th>
+                                    <th class="val-cnt text-end">NEW (TOTAL)</th>
                                     <th class="val-rate text-end">NEW (INV) RATE</th>
                                     <th class="val-cnt text-end">Returning</th>
                                     <th class="val-rate text-end">Return Rate</th>
@@ -1076,6 +1093,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             <td class="val-cnt text-end">{{ m.total_customers }}</td>
                                             <td class="val-cnt text-end">{{ m.new_customers|default:0 }}</td>
                                             <td class="val-cnt text-end">{{ m.new_customers_no_inv|default:0 }}</td>
+                                            <td class="val-cnt text-end"><strong>{{ m.new_customers_total|default:0 }}</strong></td>
                                             <td class="val-rate text-end"><span class="badge bg-info">{{ m.new_rate|default:0 }}%</span></td>
                                             <td class="val-cnt text-end">{{ m.returning_customers }}</td>
                                             <td class="val-rate text-end">
@@ -1126,6 +1144,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                     <th class="val-cnt text-end">Active</th>
                                     <th class="val-cnt text-end">NEW (INV)</th>
                                     <th class="val-cnt text-end">NEW (NO INV)</th>
+                                    <th class="val-cnt text-end">NEW (TOTAL)</th>
                                     <th class="val-rate text-end">NEW (INV) RATE</th>
                                     <th class="val-cnt text-end">Returning</th>
                                     <th class="val-rate text-end">Return Rate</th>
@@ -1146,6 +1165,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
                                             <td class="val-cnt text-end">{{ w.total_customers }}</td>
                                             <td class="val-cnt text-end">{{ w.new_customers|default:0 }}</td>
                                             <td class="val-cnt text-end">{{ w.new_customers_no_inv|default:0 }}</td>
+                                            <td class="val-cnt text-end"><strong>{{ w.new_customers_total|default:0 }}</strong></td>
                                             <td class="val-rate text-end"><span class="badge bg-info">{{ w.new_rate|default:0 }}%</span></td>
                                             <td class="val-cnt text-end">{{ w.returning_customers }}</td>
                                             <td class="val-rate text-end">

@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from App.models import Customer as POSCustomer
 from App.cnv.models import CNVCustomer, CNVOrder, CNVSyncLog
-from App.analytics.customer_utils import get_inv_lookups_for_period, build_inv_bucket_map_from_db, _norm_vid
+from App.analytics.customer_utils import get_inv_lookups_for_period, build_inv_bucket_map_from_db, _norm_vid, classify_new_inv
 
 logger = logging.getLogger("App.cnv")
 
@@ -143,26 +143,24 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
                 "new_cnv": 0, "new_cnv_only": 0, "new_cnv_inv": 0, "new_cnv_no_inv": 0,
                 "zalo_app": 0, "zalo_oa": 0}
 
-    # Per-bucket invoice maps: vid_map[normalized_vip_id] and pk_map[customer_pk]
-    # Each entry: {sessions, months, years, weeks, shops, session_shops, ...}
-    # Used for per-bucket is_pos_inv checks (not full-period).
-    _inv_vid_map = {}
-    _inv_pk_map = {}
-    pos_phones_with_inv = set()  # kept for CNV pass (phone-based)
+    # Per-bucket invoice maps — same structure used by Customer Analytics page.
+    # vid_map[normalized_vip_id] / pk_map[customer_pk] → {sessions, months, weeks, ...}
+    # phone_to_inv_info[phone] → same entry (for CNV per-bucket checks).
+    # All three are empty dicts when no period_filter → inv checks return False.
+    _inv_vid_map     = {}
+    _inv_pk_map      = {}
+    _phone_to_inv    = {}   # replaces pos_phones_with_inv — carries full bucket info
     if period_filter:
-        from django.db.models import Q
         _inv_vid_map, _inv_pk_map = build_inv_bucket_map_from_db(
             period_filter["start"].date(), period_filter["end"].date()
         )
-        # phone → inv presence: any customer whose vid or pk has ANY invoice in period
-        _pks_any = set(_inv_pk_map.keys())
-        _vids_any = set(_inv_vid_map.keys())
-        pos_phones_with_inv = set(
-            POSCustomer.objects
-            .filter(Q(id__in=_pks_any) | Q(vip_id__in=_vids_any))
-            .exclude(phone__isnull=True).exclude(phone='')
-            .values_list('phone', flat=True)
-        )
+        # Build phone → inv_info so CNV pass can call classify_new_inv per bucket
+        for _row in POSCustomer.objects.filter(
+            vip_id__isnull=False, phone__isnull=False
+        ).exclude(vip_id=0).exclude(phone='').values('id', 'vip_id', 'phone'):
+            _ii = _inv_vid_map.get(_norm_vid(str(_row['vip_id']))) or _inv_pk_map.get(_row['id'])
+            if _ii:
+                _phone_to_inv[_row['phone']] = _ii
 
     season_data, month_data, shop_data = {}, {}, {}
     season_shop_data, month_shop_data = {}, {}
@@ -187,66 +185,63 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         m_key          = get_month_key(reg_date)
         w_sort, w_lbl  = get_week_info(reg_date)
 
-        is_inv_season = s_key in _inv.get("sessions", set())
-        is_inv_month  = m_key in _inv.get("months", set())
-        is_inv_week   = w_sort in _inv.get("weeks", set())
-        is_inv_shop   = store in _inv.get("shops", set())
-        is_inv_ss     = (s_key, store) in _inv.get("session_shops", set())
-        is_inv_ms     = (m_key, store) in _inv.get("month_shops", set())
-        is_inv_ws     = (w_sort, store) in _inv.get("week_shops", set())
+        # Shared formula — same classify_new_inv used by Customer Analytics aggregators.
+        # Shop attribution: registration_store (already in `store`).
+        # Inv check: time bucket only, any shop.
+        chk = classify_new_inv(_inv, reg_sk=s_key, reg_mk=m_key, reg_wk=w_sort)
 
-        # season_data
+        # season_data — inv: same season, any shop
         r = season_data.setdefault(s_key, _empty())
         r["new_pos"] += 1
         if is_pos_only: r["new_pos_only"] += 1
-        if is_inv_season: r["new_pos_inv"] += 1
+        if chk["season"]: r["new_pos_inv"] += 1
         else: r["new_pos_no_inv"] += 1
 
-        # month_data
+        # month_data — inv: same month, any shop
         r = month_data.setdefault(m_key, _empty())
         r["new_pos"] += 1
         if is_pos_only: r["new_pos_only"] += 1
-        if is_inv_month: r["new_pos_inv"] += 1
+        if chk["month"]: r["new_pos_inv"] += 1
         else: r["new_pos_no_inv"] += 1
 
-        # shop_data
+        # shop_data — inv: any invoice in period (no time-bucket filter at top level)
         r = shop_data.setdefault(store, _empty())
         r["new_pos"] += 1
         if is_pos_only: r["new_pos_only"] += 1
-        if is_inv_shop: r["new_pos_inv"] += 1
+        if chk["any"]: r["new_pos_inv"] += 1
         else: r["new_pos_no_inv"] += 1
 
-        # season_shop_data
+        # season_shop_data — inv: same season, any shop (NOT season+shop)
         r = season_shop_data.setdefault((s_key, store), _empty())
         r["new_pos"] += 1
         if is_pos_only: r["new_pos_only"] += 1
-        if is_inv_ss: r["new_pos_inv"] += 1
+        if chk["season"]: r["new_pos_inv"] += 1
         else: r["new_pos_no_inv"] += 1
 
-        # month_shop_data
+        # month_shop_data — inv: same month, any shop
         r = month_shop_data.setdefault((m_key, store), _empty())
         r["new_pos"] += 1
         if is_pos_only: r["new_pos_only"] += 1
-        if is_inv_ms: r["new_pos_inv"] += 1
+        if chk["month"]: r["new_pos_inv"] += 1
         else: r["new_pos_no_inv"] += 1
 
-        # week_data
+        # week_data — inv: same week, any shop
         if w_sort not in week_data:
             week_data[w_sort] = (w_lbl, _empty())
         r = week_data[w_sort][1]
         r["new_pos"] += 1
         if is_pos_only: r["new_pos_only"] += 1
-        if is_inv_week: r["new_pos_inv"] += 1
+        if chk["week"]: r["new_pos_inv"] += 1
         else: r["new_pos_no_inv"] += 1
 
-        # week_shop_data
+        # week_shop_data — inv: same week, any shop
         ws_key = (w_sort, store)
         if ws_key not in week_shop_data:
             week_shop_data[ws_key] = (w_lbl, _empty())
         r = week_shop_data[ws_key][1]
         r["new_pos"] += 1
         if is_pos_only: r["new_pos_only"] += 1
-        if is_inv_ws: r["new_pos_inv"] += 1
+        if chk["week"]: r["new_pos_inv"] += 1
         else: r["new_pos_no_inv"] += 1
 
     # ── CNV pass ──────────────────────────────────────────────────────────────
@@ -255,62 +250,74 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         phone = c["phone"] or ""
         if not dt or not phone:
             continue
-        reg_date   = dt.date() if hasattr(dt, "date") else dt
+        reg_date    = dt.date() if hasattr(dt, "date") else dt
         is_cnv_only = phone not in pos_phones_all
-        is_cnv_inv  = phone in pos_phones_with_inv
-        store      = phone_to_store.get(phone)  # None if not linked to POS
+        store       = phone_to_store.get(phone)  # None if not linked to POS
 
         s_key         = get_session_key(reg_date)
         m_key         = get_month_key(reg_date)
         w_sort, w_lbl = get_week_info(reg_date)
 
-        # Flat (all-shops) buckets
-        for bucket, key in [(season_data, s_key), (month_data, m_key)]:
-            r = bucket.setdefault(key, _empty())
-            r["new_cnv"] += 1
-            if is_cnv_only:
-                r["new_cnv_only"] += 1
-            if is_cnv_inv:
-                r["new_cnv_inv"] += 1
-            else:
-                r["new_cnv_no_inv"] += 1
+        # Same formula as POS pass and Customer Analytics:
+        # inv_info = POS customer's bucket presence (via phone link); {} if not linked
+        chk_cnv = classify_new_inv(_phone_to_inv.get(phone, {}),
+                                   reg_sk=s_key, reg_mk=m_key, reg_wk=w_sort)
 
+        # season_data — inv: same season, any shop
+        r = season_data.setdefault(s_key, _empty())
+        r["new_cnv"] += 1
+        if is_cnv_only: r["new_cnv_only"] += 1
+        if chk_cnv["season"]: r["new_cnv_inv"] += 1
+        else: r["new_cnv_no_inv"] += 1
+
+        # month_data — inv: same month, any shop
+        r = month_data.setdefault(m_key, _empty())
+        r["new_cnv"] += 1
+        if is_cnv_only: r["new_cnv_only"] += 1
+        if chk_cnv["month"]: r["new_cnv_inv"] += 1
+        else: r["new_cnv_no_inv"] += 1
+
+        # week_data — inv: same week, any shop
         if w_sort not in week_data:
             week_data[w_sort] = (w_lbl, _empty())
         wr = week_data[w_sort][1]
         wr["new_cnv"] += 1
-        if is_cnv_only:
-            wr["new_cnv_only"] += 1
-        if is_cnv_inv:
-            wr["new_cnv_inv"] += 1
-        else:
-            wr["new_cnv_no_inv"] += 1
+        if is_cnv_only: wr["new_cnv_only"] += 1
+        if chk_cnv["week"]: wr["new_cnv_inv"] += 1
+        else: wr["new_cnv_no_inv"] += 1
 
-        # Shop-linked buckets (only if CNV customer is linked to a POS shop)
+        # Shop-linked buckets (only if CNV customer is linked to a POS shop via phone)
         if store:
-            for bucket, key in [(shop_data, store),
-                                 (season_shop_data, (s_key, store)),
-                                 (month_shop_data, (m_key, store))]:
-                r = bucket.setdefault(key, _empty())
-                r["new_cnv"] += 1
-                if is_cnv_only:
-                    r["new_cnv_only"] += 1
-                if is_cnv_inv:
-                    r["new_cnv_inv"] += 1
-                else:
-                    r["new_cnv_no_inv"] += 1
+            # shop_data — inv: any invoice in period
+            r = shop_data.setdefault(store, _empty())
+            r["new_cnv"] += 1
+            if is_cnv_only: r["new_cnv_only"] += 1
+            if chk_cnv["any"]: r["new_cnv_inv"] += 1
+            else: r["new_cnv_no_inv"] += 1
 
+            # season_shop_data — inv: same season, any shop
+            r = season_shop_data.setdefault((s_key, store), _empty())
+            r["new_cnv"] += 1
+            if is_cnv_only: r["new_cnv_only"] += 1
+            if chk_cnv["season"]: r["new_cnv_inv"] += 1
+            else: r["new_cnv_no_inv"] += 1
+
+            # month_shop_data — inv: same month, any shop
+            r = month_shop_data.setdefault((m_key, store), _empty())
+            r["new_cnv"] += 1
+            if is_cnv_only: r["new_cnv_only"] += 1
+            if chk_cnv["month"]: r["new_cnv_inv"] += 1
+            else: r["new_cnv_no_inv"] += 1
+
+            # week_shop_data — inv: same week, any shop
             ws_key = (w_sort, store)
             if ws_key not in week_shop_data:
                 week_shop_data[ws_key] = (w_lbl, _empty())
             wr2 = week_shop_data[ws_key][1]
             wr2["new_cnv"] += 1
-            if is_cnv_only:
-                wr2["new_cnv_only"] += 1
-            if is_cnv_inv:
-                wr2["new_cnv_inv"] += 1
-            else:
-                wr2["new_cnv_no_inv"] += 1
+            if is_cnv_only: wr2["new_cnv_only"] += 1
+            if chk_cnv["week"]: wr2["new_cnv_inv"] += 1
+            else: wr2["new_cnv_no_inv"] += 1
 
     # ── Zalo pass (grouped by zalo_app_created_at) ────────────────────────────
     zalo_qs = (
