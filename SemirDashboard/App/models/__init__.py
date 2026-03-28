@@ -1,6 +1,7 @@
 from .pos import Customer, SalesTransaction
 from .coupon import Coupon, CouponCampaign
 from .user import Role, UserProfile
+from .shop import ShopNameTitle, ShopNameAlias
 
 __all__ = [
     "Customer",
@@ -9,4 +10,6 @@ __all__ = [
     "CouponCampaign",
     "Role",
     "UserProfile",
+    "ShopNameTitle",
+    "ShopNameAlias",
 ]

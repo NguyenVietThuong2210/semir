@@ -6,6 +6,7 @@ from django.contrib import messages
 from App.permissions import requires_perm
 from App.models import Customer, SalesTransaction, Coupon
 from App.cnv.models import CNVCustomer
+from App.analytics.shop_utils import get_shop_map, normalize_shop_display
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +72,15 @@ def customer_detail(request):
                 .order_by("-sales_date")
             )
 
+            _shop_map = get_shop_map()
+
             # Add coupon info to each invoice
             invoices_with_coupons = []
             for inv in invoices:
                 invoice_data = {
                     "invoice_no": inv.invoice_number,
                     "sales_day": inv.sales_date,
-                    "shop_name": inv.shop_name,
+                    "shop_name": normalize_shop_display(inv.shop_name, _shop_map) or inv.shop_name,
                     "amount": inv.settlement_amount,
                     "season": inv.bu,
                     "coupon_id": None,

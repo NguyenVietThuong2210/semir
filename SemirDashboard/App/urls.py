@@ -4,6 +4,7 @@ App/urls.py — URL configuration for the main application.
 from django.urls import path
 from .views import auth, users
 from . import views
+from .views import shop_names
 
 urlpatterns = [
     # ── Authentication ────────────────────────────────────────────────────────
@@ -39,4 +40,14 @@ urlpatterns = [
 
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/", users.user_management, name="user_management"),
+
+    # ── Shop Name Management (CRUD) ───────────────────────────────────────────
+    path("shop-names/",                              shop_names.shop_titles_list,   name="shop_titles_list"),
+    path("shop-names/raw/",                          shop_names.shop_raw_names,     name="shop_raw_names"),
+    path("shop-names/title/create/",                 shop_names.shop_title_create,  name="shop_title_create"),
+    path("shop-names/title/<int:title_id>/update/",  shop_names.shop_title_update,  name="shop_title_update"),
+    path("shop-names/title/<int:title_id>/delete/",  shop_names.shop_title_delete,  name="shop_title_delete"),
+    path("shop-names/alias/create/",                 shop_names.shop_alias_create,  name="shop_alias_create"),
+    path("shop-names/alias/<int:alias_id>/update/",  shop_names.shop_alias_update,  name="shop_alias_update"),
+    path("shop-names/alias/<int:alias_id>/delete/",  shop_names.shop_alias_delete,  name="shop_alias_delete"),
 ]

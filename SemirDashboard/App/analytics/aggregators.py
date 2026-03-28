@@ -1006,17 +1006,29 @@ def get_comparison_data(shop_group=None):
             Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马')
         )
 
+    from .shop_utils import get_shop_map, normalize_shop_display
+    shop_map = get_shop_map()
+
     result = {}
     for row in qs:
-        sh     = row['shop_name'] or 'Unknown Shop'
+        sh     = normalize_shop_display(row['shop_name'], shop_map) or 'Unknown Shop'
         mo_key = f"{row['sales_date__year']}-{row['sales_date__month']:02d}"
         if sh not in result:
             result[sh] = {}
-        result[sh][mo_key] = {
-            'total_invoices_with_vip0': row['total_invoices_with_vip0'],
-            'total_amount_with_vip0':   float(row['total_amount_with_vip0'] or 0),
-            'total_invoices':           row['total_invoices'],
-            'total_amount':             float(row['total_amount'] or 0),
-            'total_customers':          row['total_customers'],
-        }
+        mo = result[sh].get(mo_key)
+        if mo is None:
+            result[sh][mo_key] = {
+                'total_invoices_with_vip0': row['total_invoices_with_vip0'],
+                'total_amount_with_vip0':   float(row['total_amount_with_vip0'] or 0),
+                'total_invoices':           row['total_invoices'],
+                'total_amount':             float(row['total_amount'] or 0),
+                'total_customers':          row['total_customers'],
+            }
+        else:
+            # Multiple raw names may map to same canonical title — merge them
+            mo['total_invoices_with_vip0'] += row['total_invoices_with_vip0']
+            mo['total_amount_with_vip0']   += float(row['total_amount_with_vip0'] or 0)
+            mo['total_invoices']           += row['total_invoices']
+            mo['total_amount']             += float(row['total_amount'] or 0)
+            mo['total_customers']          += row['total_customers']
     return result

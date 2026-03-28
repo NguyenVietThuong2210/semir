@@ -158,27 +158,30 @@ def clear_customer_cache():
     _customer_cache = {}
 
 
-def build_customer_purchase_map(sales_list):
+def build_customer_purchase_map(sales_list, shop_map=None):
     """
     Group sales transactions by customer VIP ID.
-    
+
     Converts flat list of sales into a map of purchases by customer.
     VIP ID blank/0 → key='0'
-    
+
     Args:
         sales_list: List of SalesTransaction objects
-    
+        shop_map: Optional pre-built alias→(title_id, display) dict from get_shop_map().
+                  When provided, shop names are normalized to canonical titles.
+
     Returns:
         Dict[vip_id] -> List[purchase_dict]
         Each purchase_dict contains:
         - date: Purchase date
         - invoice: Invoice number
         - amount: Purchase amount
-        - shop: Shop name
+        - shop: Canonical shop title (normalized via shop_map if provided)
         - customer: Customer object (or None)
         - session: Season label
     """
     from .season_utils import get_session_key, get_month_key, get_year_key, get_week_info
+    from .shop_utils import normalize_shop_display
 
     customer_purchases = defaultdict(list)
 
@@ -190,7 +193,7 @@ def build_customer_purchase_map(sales_list):
             'date':       s.sales_date,
             'invoice':    s.invoice_number,
             'amount':     s.sales_amount or 0,
-            'shop':       s.shop_name or 'Unknown Shop',
+            'shop':       normalize_shop_display(s.shop_name, shop_map) or 'Unknown Shop',
             'customer':   s.customer if key != '0' else None,
             'session':    get_session_key(s.sales_date),
             'month':      get_month_key(s.sales_date),

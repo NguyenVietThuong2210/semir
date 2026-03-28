@@ -18,6 +18,7 @@ from openpyxl.utils import get_column_letter
 
 from App.models import Coupon, Customer, SalesTransaction
 from App.cnv.models import CNVCustomer
+from App.analytics.shop_utils import get_shop_map, normalize_shop_display
 
 
 def calc_coupon_amount(face_value, invoice_amount):
@@ -87,6 +88,9 @@ def calculate_coupon_analytics(
         Dict with all_time, period, by_shop, and details data
     """
     qs = Coupon.objects.all()
+
+    # Load shop normalization map once for this analytics run
+    shop_map = get_shop_map()
 
     # Apply shop group filter using icontains
     if shop_group:
@@ -210,7 +214,7 @@ def calculate_coupon_analytics(
             try:
                 txn = SalesTransaction.objects.get(invoice_number=docket)
                 inv_amount = txn.sales_amount or Decimal(0)
-                shop_name = txn.shop_name or ""
+                shop_name = normalize_shop_display(txn.shop_name, shop_map) or ""
                 sales_date = txn.sales_date
             except SalesTransaction.DoesNotExist:
                 inv_amount = Decimal(0)
@@ -226,7 +230,7 @@ def calculate_coupon_analytics(
                             calc_coupon_amount(c.face_value, inv_amount)
                         ),
                         "using_date": c.using_date,
-                        "using_shop": c.using_shop or "",
+                        "using_shop": normalize_shop_display(c.using_shop, shop_map) or "",
                         "inv_amount": float(inv_amount),
                         "shop_name": shop_name,
                         "sales_date": sales_date,
@@ -283,12 +287,13 @@ def calculate_coupon_analytics(
 
                 # Get transaction details
                 sales_date = txn.sales_date
-                inv_shop = txn.shop_name
+                inv_shop = normalize_shop_display(txn.shop_name, shop_map)
                 inv_amount = txn.sales_amount
 
-                # Validate shop match
-                if coupon.using_shop and inv_shop and coupon.using_shop != inv_shop:
-                    note = f"Shop mismatch: Coupon@{coupon.using_shop} vs Invoice@{inv_shop}"
+                # Validate shop match (compare canonical titles)
+                _coupon_shop_norm = normalize_shop_display(coupon.using_shop, shop_map)
+                if _coupon_shop_norm and inv_shop and _coupon_shop_norm != inv_shop:
+                    note = f"Shop mismatch: Coupon@{_coupon_shop_norm} vs Invoice@{inv_shop}"
 
             except SalesTransaction.DoesNotExist:
                 note = f"Invoice {coupon.docket_number} not found"
@@ -308,8 +313,8 @@ def calculate_coupon_analytics(
             _seen_dockets_period = _seen_dockets_period | {dk}
             period_unique_amount += final_amount
 
-        # Accumulate by shop
-        shop = coupon.using_shop or "Unknown"
+        # Accumulate by shop (using canonical title)
+        shop = normalize_shop_display(coupon.using_shop, shop_map) or "Unknown"
         if shop not in shop_data:
             shop_data[shop] = {
                 "total": 0,
@@ -334,7 +339,7 @@ def calculate_coupon_analytics(
                 "creator": coupon.creator or "",
                 "face_value": coupon.face_value or 0,
                 "face_value_display": format_face_value(coupon.face_value),
-                "using_shop": coupon.using_shop or "Unknown",
+                "using_shop": normalize_shop_display(coupon.using_shop, shop_map) or "Unknown",
                 "using_date": coupon.using_date,
                 "docket_number": coupon.docket_number or "",
                 "vip_id": vip_id or "",
@@ -351,7 +356,7 @@ def calculate_coupon_analytics(
 
     # Add unused coupons to shop totals
     for coupon in period_qs.filter(using_date__isnull=True):
-        shop = coupon.using_shop or "Unknown"
+        shop = normalize_shop_display(coupon.using_shop, shop_map) or "Unknown"
         if shop not in shop_data:
             shop_data[shop] = {
                 "total": 0,
@@ -596,7 +601,7 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None, c
         d = row["using_date"]
         if not d:
             continue
-        shop = row["using_shop"] or "Unknown"
+        shop = normalize_shop_display(row["using_shop"], shop_map) or "Unknown"
         dk = row["docket_number"] or f'__no_{row["coupon_id"]}'
         inv_amt, cpn_amt = _row_inv(row)
         for btype, fn in bucket_fns.items():
