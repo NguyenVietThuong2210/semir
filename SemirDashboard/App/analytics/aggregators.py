@@ -11,7 +11,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 from .calculations import calculate_return_visits, create_empty_bucket
-from .customer_utils import GRADE_ORDER, get_all_time_grade_counts
+from .customer_utils import GRADE_ORDER, get_all_time_grade_counts, classify_new_inv
 from .season_utils import (session_sort_key, month_sort_key, year_sort_key, week_sort_key,
                             get_session_key, get_month_key, get_week_info, get_year_key)
 
@@ -73,6 +73,7 @@ def aggregate_by_grade(customer_details, new_members=None, new_no_inv_members=No
             'total_in_db': tdb,
             'new_customers': new_c,
             'new_customers_no_inv': grade_no_inv.get(grade, 0),
+            'new_customers_total': new_c + grade_no_inv.get(grade, 0),
             'new_rate': round(new_c / s['active'] * 100, 2) if s['active'] else 0,
             'returning_customers': s['returning'],
             'return_rate': round(s['returning'] / s['active'] * 100 if s['active'] else 0, 2),
@@ -184,6 +185,7 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
             'total_customers': ac,
             'new_customers': new_c,
             'new_customers_no_inv': new_no_inv,
+            'new_customers_total': new_c + new_no_inv,
             'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
@@ -275,6 +277,7 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
             'total_customers': ac,
             'new_customers': new_c,
             'new_customers_no_inv': new_no_inv,
+            'new_customers_total': new_c + new_no_inv,
             'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
@@ -370,6 +373,7 @@ def aggregate_by_week(customer_purchases, get_customer_info_fn, new_members=None
             'total_customers': ac,
             'new_customers': new_c,
             'new_customers_no_inv': new_no_inv,
+            'new_customers_total': new_c + new_no_inv,
             'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
@@ -460,6 +464,7 @@ def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None
             'total_customers': ac,
             'new_customers': new_c,
             'new_customers_no_inv': new_no_inv,
+            'new_customers_total': new_c + new_no_inv,
             'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
@@ -683,73 +688,51 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                     shop_week_returning[sh][wk]['amount'] += wp_amount
 
     # ── Post-loop: new member attribution ────────────────────────────────────
-    # Formula applied consistently for ALL sub-tables:
-    #
-    #   new_members[sh]        = registered at sh in period  (via registration_store)
-    #   new_members_inv[sh]    = ^ AND has invoice in same time bucket (ANY shop)
-    #   new_members_no_inv[sh] = new_members[sh] − new_members_inv[sh]
-    #
-    # KEY SEPARATION:
-    #   - Customer attribution → registration_store  (which shop "owns" this customer)
-    #   - Invoice check        → time bucket only    (season/month/week, shop-agnostic)
-    #
-    # Both new_members_in_period (with invoices) and new_no_inv_members (without) are
-    # merged into all_new_in_period before being passed here, so a single loop suffices.
-    # Customers with no invoices have inv_bucket_map entry = {} → all buckets → no_inv.
+    # Uses shared classify_new_inv() — same function as CNV page.
+    # Shop attribution: registration_store (separate from inv check).
+    # Invoice check:    time bucket only, any shop (see classify_new_inv docstring).
     _ibm = inv_bucket_map or {}
     for vip_id, reg_info in (new_members or {}).items():
         if not isinstance(reg_info, dict):
             continue
-        # Shop attribution: always via registration_store, never via purchase shop
         sh     = reg_info.get('registration_store') or 'Unknown'
         grade  = reg_info.get('grade', 'No Grade')
-        # {} = no invoices in period; non-empty = has at least one invoice
-        inv_info = _ibm.get(vip_id, {})
-
         reg_sk = reg_info.get('session')
         reg_mk = reg_info.get('month')
         reg_yk = reg_info.get('year')
         reg_wk = reg_info.get('week_sort')
 
-        # ── Top-level shop ───────────────────────────────────────────────────
-        # inv check: has ANY invoice in period (no time-bucket filter at top level)
-        if inv_info:
+        # Shared formula: classify by time bucket, shop-agnostic inv check
+        chk = classify_new_inv(_ibm.get(vip_id, {}),
+                                reg_sk=reg_sk, reg_mk=reg_mk,
+                                reg_yk=reg_yk, reg_wk=reg_wk)
+
+        # ── Top-level shop: inv = has any invoice in period ──────────────────
+        if chk['any']:
             shop_new[sh] += 1
             shop_grade_new[sh][grade] += 1
         else:
             shop_no_inv[sh] += 1
 
-        # ── Shop × Season ────────────────────────────────────────────────────
-        # inv check: has invoice in the same season as registration (any shop)
+        # ── Shop × Season: inv = same season, any shop ───────────────────────
         if reg_sk:
-            if reg_sk in inv_info.get('sessions', set()):
-                shop_sess_new[sh][reg_sk] += 1
-            else:
-                shop_sess_no_inv[sh][reg_sk] += 1
+            if chk['season']: shop_sess_new[sh][reg_sk] += 1
+            else:              shop_sess_no_inv[sh][reg_sk] += 1
 
-        # ── Shop × Month ─────────────────────────────────────────────────────
-        # inv check: has invoice in the same month as registration (any shop)
+        # ── Shop × Month: inv = same month, any shop ─────────────────────────
         if reg_mk:
-            if reg_mk in inv_info.get('months', set()):
-                shop_month_new[sh][reg_mk] += 1
-            else:
-                shop_month_no_inv[sh][reg_mk] += 1
+            if chk['month']: shop_month_new[sh][reg_mk] += 1
+            else:             shop_month_no_inv[sh][reg_mk] += 1
 
-        # ── Shop × Year ──────────────────────────────────────────────────────
-        # inv check: has invoice in the same year as registration (any shop)
+        # ── Shop × Year: inv = same year, any shop ───────────────────────────
         if reg_yk:
-            if reg_yk in inv_info.get('years', set()):
-                shop_year_new[sh][reg_yk] += 1
-            else:
-                shop_year_no_inv[sh][reg_yk] += 1
+            if chk['year']: shop_year_new[sh][reg_yk] += 1
+            else:            shop_year_no_inv[sh][reg_yk] += 1
 
-        # ── Shop × Week ──────────────────────────────────────────────────────
-        # inv check: has invoice in the same week as registration (any shop)
+        # ── Shop × Week: inv = same week, any shop ───────────────────────────
         if reg_wk:
-            if reg_wk in inv_info.get('weeks', set()):
-                shop_week_new[sh][reg_wk] += 1
-            else:
-                shop_week_no_inv[sh][reg_wk] += 1
+            if chk['week']: shop_week_new[sh][reg_wk] += 1
+            else:            shop_week_no_inv[sh][reg_wk] += 1
 
     # Build shop stats list
     # Include shops with regular invoices OR VIP0-only invoices (vấn đề 2)
@@ -797,6 +780,7 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_customers': a,
                 'new_customers': sess_new_c,
                 'new_customers_no_inv': shop_sess_no_inv[sh].get(key, 0),
+                'new_customers_total': sess_new_c + shop_sess_no_inv[sh].get(key, 0),
                 'new_rate': round(sess_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
@@ -824,6 +808,7 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_customers': a,
                 'new_customers': mo_new_c,
                 'new_customers_no_inv': shop_month_no_inv[sh].get(key, 0),
+                'new_customers_total': mo_new_c + shop_month_no_inv[sh].get(key, 0),
                 'new_rate': round(mo_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
@@ -851,6 +836,7 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_customers': a,
                 'new_customers': yr_new_c,
                 'new_customers_no_inv': shop_year_no_inv[sh].get(key, 0),
+                'new_customers_total': yr_new_c + shop_year_no_inv[sh].get(key, 0),
                 'new_rate': round(yr_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
@@ -879,6 +865,7 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_customers': a,
                 'new_customers': wk_new_c,
                 'new_customers_no_inv': shop_week_no_inv[sh].get(key, 0),
+                'new_customers_total': wk_new_c + shop_week_no_inv[sh].get(key, 0),
                 'new_rate': round(wk_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
@@ -896,6 +883,7 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             'total_customers': ac,
             'new_customers': shop_new_c,
             'new_customers_no_inv': shop_no_inv.get(sh, 0),
+            'new_customers_total': shop_new_c + shop_no_inv.get(sh, 0),
             'new_rate': round(shop_new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),

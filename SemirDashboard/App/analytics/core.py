@@ -220,19 +220,24 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         for c in (
             Customer.objects
             .filter(registration_date__gte=date_from, registration_date__lte=date_to)
-            .exclude(vip_id__isnull=True).exclude(vip_id='').exclude(vip_id='0')
             .values('id', 'vip_id', 'vip_grade', 'registration_date', 'registration_store')
         ):
+            vid = _norm_vid(c['vip_id'] or '')
+            # Customers with no valid vip_id can't link to invoices → always new_no_inv.
+            # Use pk-based key so null-vip customers don't overwrite each other.
+            key = vid if (vid and vid != '0') else f"__pk{c['id']}"
+            # Already counted as new member with invoices
+            if key in new_members_in_period:
+                continue
+            # Has invoice via FK regardless of vip_id formatting
             if c['id'] in pks_with_inv:
                 continue
-            vid = _norm_vid(c['vip_id'])
-            if not vid or vid == '0':
-                continue
-            if vid in vids_with_inv:
+            # Has invoice via vip_id string match (valid vip only)
+            if vid and vid != '0' and vid in vids_with_inv:
                 continue
             rd = c['registration_date']
             w_sort, w_lbl = get_week_info(rd) if rd else (None, None)
-            new_no_inv_members[vid] = {
+            new_no_inv_members[key] = {
                 'vip_grade':          c['vip_grade'] or '',
                 'registration_store': (c['registration_store'] or '').strip() or 'Unknown',
                 'session':            get_session_key(rd) if rd else None,

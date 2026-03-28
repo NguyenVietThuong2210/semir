@@ -324,3 +324,41 @@ def build_inv_bucket_map_from_db(date_from=None, date_to=None):
             pk_map[tx['customer_id']] = entry   # shared reference — read-only
 
     return vid_map, pk_map
+
+
+def classify_new_inv(inv_info, reg_sk=None, reg_mk=None, reg_yk=None, reg_wk=None):
+    """
+    ── SHARED FORMULA ──────────────────────────────────────────────────────────
+    Used by BOTH Customer Analytics (aggregators.py) and CNV page (cnv/views.py)
+    to guarantee identical NEW (INV) / NEW (NO INV) classification.
+
+    Formula:
+        new_members_inv[bucket]    = new member AND has invoice in same TIME bucket
+                                     (any shop — shop is NEVER part of the inv check)
+        new_members_no_inv[bucket] = new_members[bucket] − new_members_inv[bucket]
+
+    For by-shop tables, shop attribution is via registration_store (separate step).
+    The invoice check is ALWAYS time-bucket only.
+
+    Args:
+        inv_info : {} if no invoices in period; else entry from build_inv_bucket_map*
+                   ({sessions, months, years, weeks, ...} with populated sets)
+        reg_sk   : registration season key  (e.g. "2024-S2")
+        reg_mk   : registration month key   (e.g. "2024-08")
+        reg_yk   : registration year key    (e.g. "2024")
+        reg_wk   : registration week sort   (e.g. (2024, 32))
+
+    Returns dict:
+        'any'    : bool — has ANY invoice in period (used for flat-by-shop top level)
+        'season' : bool — has invoice in registration season (any shop)
+        'month'  : bool — has invoice in registration month  (any shop)
+        'year'   : bool — has invoice in registration year   (any shop)
+        'week'   : bool — has invoice in registration week   (any shop)
+    """
+    return {
+        'any':    bool(inv_info),
+        'season': reg_sk is not None and reg_sk in inv_info.get('sessions', set()),
+        'month':  reg_mk is not None and reg_mk in inv_info.get('months',   set()),
+        'year':   reg_yk is not None and reg_yk in inv_info.get('years',    set()),
+        'week':   reg_wk is not None and reg_wk in inv_info.get('weeks',    set()),
+    }
