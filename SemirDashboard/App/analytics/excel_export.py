@@ -1839,12 +1839,48 @@ def _build_cnv_breakdown_ws(wb, breakdown, key, title, has_shop, hf, font, align
             ws.column_dimensions[col_letter].width = w
 
 
+def _build_cnv_shop_grouped_ws(wb, breakdown, key, title, time_col_name, hf, font, align):
+    """Build a By-Shop-then-time Registration Breakdown sheet.
+    breakdown[key] is a list of {shop, rows: [{label, new_pos_inv, ...}]}.
+    """
+    ws = wb.create_sheet(title)
+    headers = ["Shop", time_col_name,
+               "New POS (INV)", "New POS (NO INV)", "New POS (TOTAL)", "POS Only",
+               "New CNV", "CNV Only",
+               "Zalo App", "% App/CNV", "Zalo OA", "% OA/CNV"]
+    _cnv_hdr(ws, headers, hf, font, align)
+
+    r_idx = 2
+    shop_groups = breakdown.get(key) or []
+    for sg in shop_groups:
+        shop_name = sg.get("shop", "")
+        for r in sg.get("rows", []):
+            col = 1
+            ws.cell(r_idx, col, shop_name);                   col += 1
+            ws.cell(r_idx, col, r.get("label", ""));          col += 1
+            ws.cell(r_idx, col, r.get("new_pos_inv", 0));     col += 1
+            ws.cell(r_idx, col, r.get("new_pos_no_inv", 0));  col += 1
+            ws.cell(r_idx, col, r.get("new_pos", 0));         col += 1
+            ws.cell(r_idx, col, r.get("new_pos_only", 0));    col += 1
+            ws.cell(r_idx, col, r.get("new_cnv", 0));         col += 1
+            ws.cell(r_idx, col, r.get("new_cnv_only", 0));    col += 1
+            ws.cell(r_idx, col, r.get("zalo_app", 0));        col += 1
+            ws.cell(r_idx, col, r.get("zalo_app_pct", 0.0));  col += 1
+            ws.cell(r_idx, col, r.get("zalo_oa", 0));         col += 1
+            ws.cell(r_idx, col, r.get("zalo_oa_pct", 0.0))
+            r_idx += 1
+
+    for col_letter, w in zip("ABCDEFGHIJKL", [22, 16, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]):
+        ws.column_dimensions[col_letter].width = w
+
+
 _CNV_TAB_SHEETS = {
     "points":    ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
     "zalo":      ["zalo_mini_app",   "zalo_oa"],
     "pos_cnv":   ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
     "breakdown": ["bd_season", "bd_month", "bd_week", "bd_shop",
-                  "bd_season_shop", "bd_month_shop", "bd_week_shop"],
+                  "bd_season_shop", "bd_month_shop", "bd_week_shop",
+                  "bd_shop_season", "bd_shop_month", "bd_shop_week"],
 }
 
 
@@ -1879,6 +1915,9 @@ def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
         "bd_season_shop": lambda: _build_cnv_breakdown_ws(wb, bd, "season_shop", "By Season - All Shops", True, hf, fnt, aln),
         "bd_month_shop":  lambda: _build_cnv_breakdown_ws(wb, bd, "month_shop",  "By Month - All Shops",  True, hf, fnt, aln),
         "bd_week_shop":   lambda: _build_cnv_breakdown_ws(wb, bd, "week_shop",   "By Week - All Shops",   True, hf, fnt, aln),
+        "bd_shop_season": lambda: _build_cnv_shop_grouped_ws(wb, bd, "shop_season", "By Shop - By Season", "Season", hf, fnt, aln),
+        "bd_shop_month":  lambda: _build_cnv_shop_grouped_ws(wb, bd, "shop_month",  "By Shop - By Month",  "Month",  hf, fnt, aln),
+        "bd_shop_week":   lambda: _build_cnv_shop_grouped_ws(wb, bd, "shop_week",   "By Shop - By Week",   "Week",   hf, fnt, aln),
     }
 
     for key in _CNV_TAB_SHEETS[tab]:
