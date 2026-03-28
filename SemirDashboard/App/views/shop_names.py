@@ -14,6 +14,17 @@ from App.permissions import requires_perm
 from App.analytics.shop_utils import invalidate_shop_map
 
 
+def _invalidate_all_caches():
+    """Invalidate shop map + all analytics caches whenever shop name mappings change."""
+    invalidate_shop_map()
+    from App.views.analytics import _invalidate_analytics_cache
+    from App.views.coupon import _invalidate_coupon_cache
+    from App.cnv.views import _invalidate_cnv_cache
+    _invalidate_analytics_cache()
+    _invalidate_coupon_cache()
+    _invalidate_cnv_cache()
+
+
 # ── Title CRUD ────────────────────────────────────────────────────────────────
 
 @requires_perm("page_upload")
@@ -41,7 +52,7 @@ def shop_title_create(request):
         if ShopNameTitle.objects.filter(title=title_text).exists():
             return JsonResponse({"error": "Title already exists"}, status=400)
         t = ShopNameTitle.objects.create(title=title_text)
-        invalidate_shop_map()
+        _invalidate_all_caches()
         return JsonResponse({"id": t.id, "title": t.title})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
@@ -60,7 +71,7 @@ def shop_title_update(request, title_id):
             return JsonResponse({"error": "Title already exists"}, status=400)
         t.title = title_text
         t.save()
-        invalidate_shop_map()
+        _invalidate_all_caches()
         return JsonResponse({"id": t.id, "title": t.title})
     except ShopNameTitle.DoesNotExist:
         return JsonResponse({"error": "Not found"}, status=404)
@@ -73,7 +84,7 @@ def shop_title_update(request, title_id):
 def shop_title_delete(request, title_id):
     try:
         ShopNameTitle.objects.filter(pk=title_id).delete()
-        invalidate_shop_map()
+        _invalidate_all_caches()
         return JsonResponse({"ok": True})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
@@ -94,7 +105,7 @@ def shop_alias_create(request):
             return JsonResponse({"error": "Alias already exists"}, status=400)
         t = ShopNameTitle.objects.get(pk=title_id)
         a = ShopNameAlias.objects.create(title=t, alias=alias_text)
-        invalidate_shop_map()
+        _invalidate_all_caches()
         return JsonResponse({"id": a.id, "alias": a.alias, "title_id": t.id})
     except ShopNameTitle.DoesNotExist:
         return JsonResponse({"error": "Title not found"}, status=404)
@@ -115,7 +126,7 @@ def shop_alias_update(request, alias_id):
             return JsonResponse({"error": "Alias already exists"}, status=400)
         a.alias = alias_text
         a.save()
-        invalidate_shop_map()
+        _invalidate_all_caches()
         return JsonResponse({"id": a.id, "alias": a.alias})
     except ShopNameAlias.DoesNotExist:
         return JsonResponse({"error": "Not found"}, status=404)
@@ -128,7 +139,7 @@ def shop_alias_update(request, alias_id):
 def shop_alias_delete(request, alias_id):
     try:
         ShopNameAlias.objects.filter(pk=alias_id).delete()
-        invalidate_shop_map()
+        _invalidate_all_caches()
         return JsonResponse({"ok": True})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
@@ -202,5 +213,5 @@ def shop_seed_titles(request):
         ShopNameTitle.objects.get_or_create(title=name)
         created += 1
 
-    invalidate_shop_map()
+    _invalidate_all_caches()
     return JsonResponse({"created": created, "skipped": len(all_raw) - created})
