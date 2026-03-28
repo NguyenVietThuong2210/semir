@@ -126,16 +126,18 @@
 .zalo-table th:nth-child(9), .zalo-table td:nth-child(9) { width:9%; }
 .zalo-table th:nth-child(10), .zalo-table td:nth-child(10){ width:9%; }
 
-/* Registration breakdown table — 11 cols (label + 10 data) */
+/* Registration breakdown table — 11 cols: 14% + 10×8.6% = 100% */
 .bd-tbl { table-layout:fixed; width:100%; }
-.bd-tbl .col-lbl  { width:14%; }
-.bd-tbl .col-num  { width:8.8%; text-align:right; }
+.bd-tbl .col-lbl             { width:14%; }
+.bd-tbl .col-num             { width:8.6%; text-align:right; }
+.bd-tbl td:not(:first-child) { text-align:right; }
 
-/* Registration breakdown cross-tab (+ Shop col) — 12 cols */
+/* Registration breakdown cross-tab (+ Shop col) — 12 cols: 12%+14%+10×7.4%=100% */
 .bd-shop-tbl { table-layout:fixed; width:100%; }
 .bd-shop-tbl .col-lbl  { width:12%; }
 .bd-shop-tbl .col-shop { width:14%; }
 .bd-shop-tbl .col-num  { width:7.4%; text-align:right; }
+.bd-shop-tbl td:not(:first-child):not(:nth-child(2)) { text-align:right; }
 
 /* Inner tabs for breakdown section */
 .bd-inner-tabs .nav-link { font-size:.82rem; padding:.3rem .7rem; }
