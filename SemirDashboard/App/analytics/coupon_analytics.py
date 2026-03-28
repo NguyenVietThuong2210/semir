@@ -154,6 +154,33 @@ def calculate_coupon_analytics(
     )
 
     # ===========================================================================
+    # PRE-FETCH SalesTransactions + Customers to avoid N+1 queries
+    # ===========================================================================
+    _all_dockets = set(
+        qs.filter(using_date__isnull=False, docket_number__isnull=False)
+        .exclude(docket_number="")
+        .values_list("docket_number", flat=True).distinct()
+    )
+    _txn_map = {}
+    if _all_dockets:
+        _txn_map = {
+            t["invoice_number"]: t
+            for t in SalesTransaction.objects.filter(invoice_number__in=list(_all_dockets))
+            .values("invoice_number", "sales_amount", "shop_name", "sales_date", "vip_id")
+        }
+    _vip_ids_from_txn = {
+        v["vip_id"] for v in _txn_map.values()
+        if v.get("vip_id") and v["vip_id"] != "0"
+    }
+    _customer_map = {}
+    if _vip_ids_from_txn:
+        _customer_map = {
+            c["vip_id"]: c
+            for c in Customer.objects.filter(vip_id__in=list(_vip_ids_from_txn))
+            .values("vip_id", "name", "phone")
+        }
+
+    # ===========================================================================
     # CALCULATE AMOUNTS FROM INVOICE AMOUNTS (NOT face_value)
     # ===========================================================================
 
@@ -165,17 +192,6 @@ def calculate_coupon_analytics(
     period_unique_amount = Decimal(0)
     shop_data = {}
     coupon_details = []
-
-    # Helper function to get invoice amount for a coupon
-    def get_invoice_amount(coupon):
-        """Get invoice amount for a coupon, fallback to face_value if no invoice found."""
-        if coupon.docket_number:
-            try:
-                txn = SalesTransaction.objects.get(invoice_number=coupon.docket_number)
-                return txn.sales_amount or coupon.face_value or Decimal(0)
-            except SalesTransaction.DoesNotExist:
-                pass
-        return coupon.face_value or Decimal(0)
 
     # ===========================================================================
     # DUPLICATE INVOICE DETECTION
@@ -211,12 +227,12 @@ def calculate_coupon_analytics(
                     docket_number=docket, using_date__isnull=False
                 ).order_by("coupon_id")
             )
-            try:
-                txn = SalesTransaction.objects.get(invoice_number=docket)
-                inv_amount = txn.sales_amount or Decimal(0)
-                shop_name = normalize_shop_display(txn.shop_name, shop_map) or ""
-                sales_date = txn.sales_date
-            except SalesTransaction.DoesNotExist:
+            _dt = _txn_map.get(docket)
+            if _dt:
+                inv_amount = _dt["sales_amount"] or Decimal(0)
+                shop_name = normalize_shop_display(_dt["shop_name"], shop_map) or ""
+                sales_date = _dt["sales_date"]
+            else:
                 inv_amount = Decimal(0)
                 shop_name = ""
                 sales_date = None
@@ -243,7 +259,8 @@ def calculate_coupon_analytics(
     # Calculate all-time amount (process ALL used coupons)
     _seen_dockets_all = set()
     for coupon in qs.filter(using_date__isnull=False):
-        inv_amount = get_invoice_amount(coupon)
+        _at = _txn_map.get(coupon.docket_number) if coupon.docket_number else None
+        inv_amount = (_at["sales_amount"] if _at else None) or coupon.face_value or Decimal(0)
         all_time_amount += inv_amount
         all_time_coupon_amount += calc_coupon_amount(coupon.face_value, inv_amount)
         # Unique: count invoice amount only once per docket
@@ -271,31 +288,25 @@ def calculate_coupon_analytics(
 
         # Try to get invoice/transaction info
         if coupon.docket_number:
-            try:
-                txn = SalesTransaction.objects.get(invoice_number=coupon.docket_number)
-
+            _txn = _txn_map.get(coupon.docket_number)
+            if _txn:
                 # Get customer info from transaction if not in coupon
                 if not vip_id:
-                    vip_id = txn.vip_id
-                if not vip_name and txn.vip_id and txn.vip_id != "0":
-                    try:
-                        cust = Customer.objects.get(vip_id=txn.vip_id)
-                        vip_name = cust.name
-                        phone = cust.phone
-                    except Customer.DoesNotExist:
-                        vip_name = txn.vip_name
+                    vip_id = _txn["vip_id"]
+                if not vip_name and _txn["vip_id"] and _txn["vip_id"] != "0":
+                    _cust = _customer_map.get(_txn["vip_id"])
+                    vip_name = _cust["name"] if _cust else None
 
                 # Get transaction details
-                sales_date = txn.sales_date
-                inv_shop = normalize_shop_display(txn.shop_name, shop_map)
-                inv_amount = txn.sales_amount
+                sales_date = _txn["sales_date"]
+                inv_shop = normalize_shop_display(_txn["shop_name"], shop_map)
+                inv_amount = _txn["sales_amount"]
 
                 # Validate shop match (compare canonical titles)
                 _coupon_shop_norm = normalize_shop_display(coupon.using_shop, shop_map)
                 if _coupon_shop_norm and inv_shop and _coupon_shop_norm != inv_shop:
                     note = f"Shop mismatch: Coupon@{_coupon_shop_norm} vs Invoice@{inv_shop}"
-
-            except SalesTransaction.DoesNotExist:
+            else:
                 note = f"Invoice {coupon.docket_number} not found"
 
         # Final amount (invoice amount or fallback to face_value)
