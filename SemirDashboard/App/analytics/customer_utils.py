@@ -11,6 +11,53 @@ from collections import defaultdict
 
 logger = logging.getLogger('customer_analytics')
 
+
+# ---------------------------------------------------------------------------
+# VIP ID helpers — shared by Sales Analytics and Customer Analytics
+# ---------------------------------------------------------------------------
+
+def _norm_vid(vid):
+    """Normalize vip_id: strip whitespace, convert float-notation '12345.0' → '12345'."""
+    v = (str(vid) or '').strip()
+    if '.' in v:
+        try:
+            v = str(int(float(v)))
+        except (ValueError, OverflowError):
+            pass
+    return v
+
+
+def get_inv_lookups_for_period(date_from, date_to):
+    """
+    Build lookup sets for "customer has SalesTransactions in [date_from, date_to]".
+
+    Returns:
+        pks_with_inv  (set[int])  — Customer PKs via FK (format-agnostic).
+        vids_with_inv (set[str])  — Normalized SalesTransaction.vip_id strings
+                                    (fallback for transactions without FK).
+
+    Usage:
+        has_inv = (customer_pk in pks_with_inv) or (_norm_vid(vip_id) in vids_with_inv)
+    """
+    from App.models import SalesTransaction
+    qs = (
+        SalesTransaction.objects
+        .filter(sales_date__gte=date_from, sales_date__lte=date_to)
+        .exclude(vip_id__isnull=True).exclude(vip_id='').exclude(vip_id='0')
+    )
+    pks_with_inv = set(
+        qs.filter(customer__isnull=False)
+        .values_list('customer_id', flat=True)
+        .distinct()
+    )
+    vids_with_inv = {
+        _norm_vid(v)
+        for v in qs.values_list('vip_id', flat=True).distinct()
+        if v
+    } - {'', '0'}
+    return pks_with_inv, vids_with_inv
+
+
 # Global cache for customer lookups to avoid repeated DB queries
 _customer_cache = {}
 
@@ -136,7 +183,7 @@ def build_customer_purchase_map(sales_list):
     customer_purchases = defaultdict(list)
 
     for s in sales_list:
-        vid = (s.vip_id or '').strip()
+        vid = _norm_vid(s.vip_id or '')
         key = '0' if vid in ('', '0', 'None') else vid
         _wk = get_week_info(s.sales_date)
         customer_purchases[key].append({

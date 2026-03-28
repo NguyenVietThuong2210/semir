@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from App.models import Customer as POSCustomer
 from App.cnv.models import CNVCustomer, CNVOrder, CNVSyncLog
+from App.analytics.customer_utils import get_inv_lookups_for_period, _norm_vid
 
 logger = logging.getLogger("App.cnv")
 
@@ -108,7 +109,7 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
     pos_qs = (
         POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
         .exclude(vip_id=0).exclude(phone="")
-        .values("phone", "registration_date", "registration_store")
+        .values("id", "vip_id", "phone", "registration_date", "registration_store")
     )
     if period_filter:
         pos_qs = pos_qs.filter(
@@ -142,26 +143,20 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
                 "new_cnv": 0, "new_cnv_only": 0, "new_cnv_inv": 0, "new_cnv_no_inv": 0,
                 "zalo_app": 0, "zalo_oa": 0}
 
-    # POS phones that had at least one invoice in the period
-    # Use vip_id directly from SalesTransaction (avoids broken customer__phone FK join)
+    # Customer PKs / normalized vip_ids with invoices in period.
+    # _pks_with_inv + _vids_with_inv: from shared helper (same logic as Sales Analytics).
+    # pos_phones_with_inv: phone set for is_cnv_inv check (CNV has no vip_id in SalesTransaction).
+    _pks_with_inv = set()
+    _vids_with_inv = set()
     pos_phones_with_inv = set()
     if period_filter:
-        from App.models import SalesTransaction
-        _vids_with_inv = set(
-            SalesTransaction.objects
-            .filter(
-                sales_date__gte=period_filter["start"].date(),
-                sales_date__lte=period_filter["end"].date(),
-            )
-            .exclude(vip_id__isnull=True)
-            .exclude(vip_id='0')
-            .exclude(vip_id='')
-            .values_list('vip_id', flat=True)
-            .distinct()
+        from django.db.models import Q
+        _pks_with_inv, _vids_with_inv = get_inv_lookups_for_period(
+            period_filter["start"].date(), period_filter["end"].date()
         )
         pos_phones_with_inv = set(
             POSCustomer.objects
-            .filter(vip_id__in=_vids_with_inv)
+            .filter(Q(id__in=_pks_with_inv) | Q(vip_id__in=_vids_with_inv))
             .exclude(phone__isnull=True).exclude(phone='')
             .values_list('phone', flat=True)
         )
@@ -179,7 +174,10 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         if not reg_date or not phone:
             continue
         is_pos_only = phone not in cnv_phones_all
-        is_pos_inv  = phone in pos_phones_with_inv
+        # Check by Customer PK first (format-agnostic), then by normalized vip_id
+        c_pk  = c.get("id")
+        c_vid = _norm_vid(c.get("vip_id") or "")
+        is_pos_inv = (bool(c_pk) and c_pk in _pks_with_inv) or (bool(c_vid) and c_vid in _vids_with_inv)
 
         s_key          = get_session_key(reg_date)
         m_key          = get_month_key(reg_date)
@@ -497,21 +495,13 @@ def _get_cnv_comparison_data(start_date, end_date):
         )
         new_pos_count = pos_period.count()
         _pos_period_phones = set(pos_period.values_list('phone', flat=True))
-        from App.models import SalesTransaction as _ST
-        # Use vip_id directly (avoids broken customer__phone FK join)
-        _vids_with_inv = set(
-            _ST.objects.filter(
-                sales_date__gte=period_filter["start"].date(),
-                sales_date__lte=period_filter["end"].date(),
-            ).exclude(vip_id__isnull=True)
-            .exclude(vip_id='0')
-            .exclude(vip_id='')
-            .values_list('vip_id', flat=True)
-            .distinct()
+        from django.db.models import Q as _Q
+        _pks_wi, _vids_wi = get_inv_lookups_for_period(
+            period_filter["start"].date(), period_filter["end"].date()
         )
         _inv_phones = set(
             POSCustomer.objects
-            .filter(vip_id__in=_vids_with_inv)
+            .filter(_Q(id__in=_pks_wi) | _Q(vip_id__in=_vids_wi))
             .exclude(phone__isnull=True).exclude(phone='')
             .values_list('phone', flat=True)
         )

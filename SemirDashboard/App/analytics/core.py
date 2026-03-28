@@ -22,6 +22,8 @@ from .customer_utils import (
     clear_customer_cache,
     get_customer_info,
     build_customer_purchase_map,
+    get_inv_lookups_for_period,
+    _norm_vid,
 )
 from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key, get_session_key, get_month_key, get_week_info, get_year_key
 from .aggregators import (
@@ -199,26 +201,35 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     # Customers registered in period with NO invoice (not in customer_purchases)
     new_no_inv_members = {}
     if date_from and date_to:
-        active_ids = set(customer_purchases.keys()) - {'0', '', None}
+        # Shared helper: Customer PKs (via FK) + normalized vip_ids with invoices in period
+        pks_with_inv, vids_with_inv = get_inv_lookups_for_period(date_from, date_to)
         for c in (
             Customer.objects
             .filter(registration_date__gte=date_from, registration_date__lte=date_to)
             .exclude(vip_id__isnull=True).exclude(vip_id='').exclude(vip_id='0')
-            .values('vip_id', 'vip_grade', 'registration_date', 'registration_store')
+            .values('id', 'vip_id', 'vip_grade', 'registration_date', 'registration_store')
         ):
-            vid = str(c['vip_id'])
-            if vid not in active_ids:
-                rd = c['registration_date']
-                w_sort, w_lbl = get_week_info(rd) if rd else (None, None)
-                new_no_inv_members[vid] = {
-                    'vip_grade':          c['vip_grade'] or '',
-                    'registration_store': (c['registration_store'] or '').strip() or 'Unknown',
-                    'session':            get_session_key(rd) if rd else None,
-                    'month':              get_month_key(rd) if rd else None,
-                    'year':               get_year_key(rd) if rd else None,
-                    'week_sort':          w_sort,
-                    'week_label':         w_lbl,
-                }
+            if c['id'] in pks_with_inv:
+                continue
+            vid = _norm_vid(c['vip_id'])
+            if not vid or vid == '0':
+                continue
+            if vid in vids_with_inv:
+                continue
+            rd = c['registration_date']
+            w_sort, w_lbl = get_week_info(rd) if rd else (None, None)
+            new_no_inv_members[vid] = {
+                'vip_grade':          c['vip_grade'] or '',
+                'registration_store': (c['registration_store'] or '').strip() or 'Unknown',
+                'session':            get_session_key(rd) if rd else None,
+                'month':              get_month_key(rd) if rd else None,
+                'year':               get_year_key(rd) if rd else None,
+                'week_sort':          w_sort,
+                'week_label':         w_lbl,
+            }
+
+    logger.info("new_members_in_period=%d  new_no_inv_members=%d",
+                len(new_members_in_period), len(new_no_inv_members))
 
     # Calculate metrics EXCLUDING VIP ID = 0
     total_active = len([vid for vid in customer_purchases if vid != '0'])
