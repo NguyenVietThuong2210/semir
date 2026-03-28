@@ -114,6 +114,9 @@
                     <button class="btn btn-outline-warning btn-sm" id="btnShowUnmapped" title="Show raw names not yet mapped">
                         <i class="bi bi-exclamation-triangle"></i> Unmapped Names
                     </button>
+                    <button class="btn btn-outline-info btn-sm" id="btnSeedTitles" title="Auto-import all distinct shop names from data as titles">
+                        <i class="bi bi-download"></i> Import from Data
+                    </button>
                     <button class="btn btn-success btn-sm" id="btnAddTitle">
                         <i class="bi bi-plus-circle"></i> Add Title
                     </button>
@@ -235,6 +238,25 @@
                 fetch("{% url 'shop_titles_list' %}").then(r=>r.json()).then(d=>renderTitles(d.titles));
             }
             loadTitles();
+
+            // ── Import from Data (seed titles) ──────────────────────────────
+            document.getElementById('btnSeedTitles').onclick = function() {
+                if (!confirm('Auto-import all distinct shop names from your data as titles?\n\nExisting titles/aliases will not be affected.')) return;
+                const btn = this;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importing…';
+                fetch("{% url 'shop_seed_titles' %}", {method:'POST', headers})
+                  .then(r => r.json()).then(d => {
+                    if (d.error) { alert(d.error); return; }
+                    alert(`Done: ${d.created} new title(s) created, ${d.skipped} already covered.`);
+                    loadTitles();
+                  })
+                  .catch(() => alert('Request failed'))
+                  .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-download"></i> Import from Data';
+                  });
+            };
 
             // ── Add Title ───────────────────────────────────────────────────
             document.getElementById('btnAddTitle').onclick = function() {

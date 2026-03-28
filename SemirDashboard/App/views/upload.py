@@ -24,21 +24,13 @@ logger = logging.getLogger(__name__)
 # ── Cache helpers ─────────────────────────────────────────────────────────────
 
 def _invalidate_analytics_cache():
-    from django.core.cache import cache
-    from App.views.analytics import _ANALYTICS_VER_KEY
-    v = cache.get(_ANALYTICS_VER_KEY, 0)
-    cache.set(_ANALYTICS_VER_KEY, v + 1, 86400 * 30)
-    logger.info("analytics cache invalidated (ver→%d)", v + 1)
+    from App.views.analytics import _invalidate_analytics_cache as _do
+    _do()
 
 
 def _invalidate_coupon_cache():
-    from django.core.cache import cache
-    from App.views.coupon import _COUPON_VER_KEY
-    v = cache.get(_COUPON_VER_KEY, 0)
-    cache.set(_COUPON_VER_KEY, v + 1, 86400 * 30)
-    tv = cache.get("cpn_trend_ver", 0)
-    cache.set("cpn_trend_ver", tv + 1, 86400 * 30)
-    logger.info("coupon cache invalidated (ver→%d, trend_ver→%d)", v + 1, tv + 1)
+    from App.views.coupon import _invalidate_coupon_cache as _do
+    _do()
 
 
 # ── Background thread runner ──────────────────────────────────────────────────

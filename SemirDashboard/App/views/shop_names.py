@@ -139,8 +139,6 @@ def shop_alias_delete(request, alias_id):
 def shop_raw_names(request):
     """Return all distinct raw shop names not yet mapped to any alias."""
     from App.models import SalesTransaction, Customer
-    from django.db.models import Value
-    from django.db.models.functions import Coalesce
 
     mapped = set(ShopNameAlias.objects.values_list("alias", flat=True))
 
@@ -156,3 +154,53 @@ def shop_raw_names(request):
     )
     all_raw = sorted((raw_sales | raw_reg) - mapped)
     return JsonResponse({"unmapped": all_raw})
+
+
+@requires_perm("page_upload")
+@require_POST
+def shop_seed_titles(request):
+    """
+    Auto-create a ShopNameTitle for every distinct raw shop name in the DB
+    that is not already covered by an existing title or alias.
+
+    Returns counts: created / skipped.
+    """
+    from App.models import SalesTransaction, Customer
+    try:
+        from App.models import Coupon
+        raw_coupon = set(
+            Coupon.objects
+            .exclude(using_shop="").exclude(using_shop__isnull=True)
+            .values_list("using_shop", flat=True).distinct()
+        )
+    except Exception:
+        raw_coupon = set()
+
+    from App.models import SalesTransaction, Customer
+
+    raw_sales = set(
+        SalesTransaction.objects
+        .exclude(shop_name="").exclude(shop_name__isnull=True)
+        .values_list("shop_name", flat=True).distinct()
+    )
+    raw_reg = set(
+        Customer.objects
+        .exclude(registration_store="").exclude(registration_store__isnull=True)
+        .values_list("registration_store", flat=True).distinct()
+    )
+
+    all_raw = {s.strip() for s in (raw_sales | raw_reg | raw_coupon) if s and s.strip()}
+
+    # Skip names already covered by a title or an alias
+    existing_titles = set(ShopNameTitle.objects.values_list("title", flat=True))
+    existing_aliases = set(ShopNameAlias.objects.values_list("alias", flat=True))
+    covered = existing_titles | existing_aliases
+
+    to_create = sorted(all_raw - covered)
+    created = 0
+    for name in to_create:
+        ShopNameTitle.objects.get_or_create(title=name)
+        created += 1
+
+    invalidate_shop_map()
+    return JsonResponse({"created": created, "skipped": len(all_raw) - created})
