@@ -2,7 +2,6 @@
 import json
 import logging
 import threading
-import time
 from datetime import datetime
 
 from django.shortcuts import render, redirect
@@ -22,18 +21,17 @@ from App.models import CouponCampaign
 logger = logging.getLogger(__name__)
 
 _COUPON_TTL = 600  # 10 minutes
-_COUPON_STARTUP_TS = int(time.time())
 _cpn_ver_lock = threading.Lock()
 _cpn_ver = 0
 _cpn_trend_ver = 0
 
 
 def _coupon_cache_key(date_from, date_to, prefix, shop_group):
-    return f"cpn_data:{_COUPON_STARTUP_TS}:{_cpn_ver}:{date_from}:{date_to}:{prefix}:{shop_group}"
+    return f"cpn_data:{_cpn_ver}:{date_from}:{date_to}:{prefix}:{shop_group}"
 
 
 def _coupon_trend_cache_key(date_from, date_to, shop_group, prefix):
-    return f"cpn_trend:{_COUPON_STARTUP_TS}:{_cpn_trend_ver}:{date_from}:{date_to}:{shop_group}:{prefix}"
+    return f"cpn_trend:{_cpn_trend_ver}:{date_from}:{date_to}:{shop_group}:{prefix}"
 
 
 def _invalidate_coupon_cache():
@@ -41,7 +39,7 @@ def _invalidate_coupon_cache():
     with _cpn_ver_lock:
         _cpn_ver += 1
         _cpn_trend_ver += 1
-    logger.info("coupon cache invalidated (in-process ver→%d, trend_ver→%d)", _cpn_ver, _cpn_trend_ver)
+    logger.info("coupon cache invalidated (in-process ver->%d, trend_ver->%d)", _cpn_ver, _cpn_trend_ver)
 
 
 def _get_coupon_data(date_from, date_to, prefix, shop_group):
