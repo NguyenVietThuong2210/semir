@@ -125,6 +125,20 @@
 .zalo-table th:nth-child(8), .zalo-table td:nth-child(8) { width:9%; }
 .zalo-table th:nth-child(9), .zalo-table td:nth-child(9) { width:9%; }
 .zalo-table th:nth-child(10), .zalo-table td:nth-child(10){ width:9%; }
+
+/* Registration breakdown table — 11 cols (label + 10 data) */
+.bd-tbl { table-layout:fixed; width:100%; }
+.bd-tbl .col-lbl  { width:14%; }
+.bd-tbl .col-num  { width:8.8%; }
+
+/* Registration breakdown cross-tab (+ Shop col) — 12 cols */
+.bd-shop-tbl { table-layout:fixed; width:100%; }
+.bd-shop-tbl .col-lbl  { width:12%; }
+.bd-shop-tbl .col-shop { width:14%; }
+.bd-shop-tbl .col-num  { width:7.4%; }
+
+/* Inner tabs for breakdown section */
+.bd-inner-tabs .nav-link { font-size:.82rem; padding:.3rem .7rem; }
 </style>
 {% endblock %}
 
@@ -235,7 +249,7 @@
     <div class="col"><div class="stat-card card text-white border-0" style="background:#0047B3"><div class="card-body">
         <div class="stat-label opacity-75">New Customers (POS)</div>
         <div class="stat-value">{{ new_pos_count|default:0 }}</div>
-        <small class="opacity-75">Registered in period</small>
+        <small class="opacity-75"><span class="text-success fw-semibold">{{ new_pos_inv_count|default:0 }}</span> NEW (INV) · <span class="text-warning fw-semibold">{{ new_pos_no_inv_count|default:0 }}</span> NEW (NO INV)</small>
     </div></div></div>
     <div class="col"><div class="stat-card card text-white border-0" style="background:#0047B3"><div class="card-body">
         <div class="stat-label opacity-75">New CNV Customers</div>
@@ -280,36 +294,38 @@
 
 <!-- Tab navigation -->
 <div class="mt-3" style="background:#1a252f; border-radius:6px 6px 0 0;">
-    <ul class="nav dark-tabs px-3 pt-2 flex-wrap" id="caTabNav" role="tablist">
+    <ul class="nav dark-tabs px-3 pt-2 pb-2 flex-wrap" id="caTabNav" role="tablist">
         <li class="nav-item">
-            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button"
-                    data-tab-desc="Points earned, used & mismatches between POS and CNV loyalty system">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button">
                 <i class="bi bi-coin"></i> Points Analysis
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button"
-                    data-tab-desc="CNV customers linked to Zalo Mini App or following Semir Zalo OA">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button">
                 <i class="bi bi-chat-dots-fill"></i> Active Zalo Mini App
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button"
-                    data-tab-desc="Customers present in POS only, CNV only, or both systems — all-time and period">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button">
                 <i class="bi bi-people"></i> POS vs CNV
             </button>
         </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabBreakdown" type="button">
+                <i class="bi bi-bar-chart-steps"></i> Registration Breakdown
+            </button>
+        </li>
     </ul>
-    <div class="px-3 pb-2 pt-1" style="border-top:1px solid rgba(255,255,255,.08);">
-        <small class="text-white-50" id="caTabDesc">Points earned, used &amp; mismatches between POS and CNV loyalty system</small>
-    </div>
 </div>
 
 <div class="tab-content" id="caTabContent">
 
 <!-- ══ TAB 1: Points Analysis (t1, t2, t3) ══════════════════════════════ -->
 <div class="tab-pane fade show active pt-3" id="tabPoints" role="tabpanel">
-{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_analytics' %}?tab=points{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0">Points earned &amp; used, plus mismatches between POS and CNV loyalty system.</p>
+    {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=points{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% else %}<span></span>{% endif %}
+</div>
 <div class="row g-3">
 
 <div class="col-12">
@@ -435,7 +451,10 @@
 
 <!-- ══ TAB 2: Zalo (t8, t9) ═════════════════════════════════════════════ -->
 <div class="tab-pane fade pt-3" id="tabZalo" role="tabpanel">
-{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_analytics' %}?tab=zalo{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0">CNV customers linked to Zalo Mini App or following Semir Zalo OA.</p>
+    {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=zalo{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% else %}<span></span>{% endif %}
+</div>
 <div class="row g-3">
 
 <div class="col-12">
@@ -511,7 +530,10 @@
 
 <!-- ══ TAB 3: POS vs CNV (t4, t5, t6, t7) ═══════════════════════════════ -->
 <div class="tab-pane fade pt-3" id="tabPOSCNV" role="tabpanel">
-{% if can_dl_cnv %}<div class="d-flex justify-content-end mb-2"><a href="{% url 'cnv:export_customer_analytics' %}?tab=pos_cnv{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a></div>{% endif %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0">Customers present in POS only, CNV only, or both systems — all-time and period.</p>
+    {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=pos_cnv{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% else %}<span></span>{% endif %}
+</div>
 <div class="row g-3">
 
 <div class="col-12">
@@ -637,6 +659,260 @@
 </div><!-- end row tabPOSCNV -->
 </div><!-- end tabPOSCNV -->
 
+<!-- ══ TAB 4: Registration Breakdown ══════════════════════════════════════ -->
+<div class="tab-pane fade pt-3" id="tabBreakdown" role="tabpanel">
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0">New member registrations by season, month, week and shop. POS uses <code>registration_date</code>, CNV uses <code>cnv_created_at</code>.</p>
+    {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=breakdown{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% else %}<span></span>{% endif %}
+</div>
+
+<!-- Inner tabs -->
+<ul class="nav nav-tabs bd-inner-tabs mb-3" id="bdTabNav" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bdSeason"     type="button">By Season</button></li>
+    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonth"      type="button">By Month</button></li>
+    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeek"       type="button">By Week</button></li>
+    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShop"       type="button">By Shop</button></li>
+    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdSeasonShop" type="button">By Season - All Shops</button></li>
+    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonthShop"  type="button">By Month - All Shops</button></li>
+    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeekShop"   type="button">By Week - All Shops</button></li>
+</ul>
+
+<div class="tab-content" id="bdTabContent">
+
+{% with bd=breakdown %}
+
+<!-- ── By Season ─────────────────────────────────────────────────────── -->
+<div class="tab-pane fade show active" id="bdSeason" role="tabpanel">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-calendar3-range"></i> New Registrations by Season</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdSeasonBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdSeasonBody"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Season</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in bd.season %}
+            <tr>
+                <td>{{ r.label }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="11" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+</div>
+</div>
+
+<!-- ── By Month ──────────────────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdMonth" role="tabpanel">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-calendar-month"></i> New Registrations by Month</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdMonthBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdMonthBody"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Month</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in bd.month %}
+            <tr>
+                <td>{{ r.label }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="11" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+</div>
+</div>
+
+<!-- ── By Week ───────────────────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdWeek" role="tabpanel">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-calendar-week"></i> New Registrations by Week</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdWeekBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdWeekBody"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Week</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in bd.week %}
+            <tr>
+                <td>{{ r.label }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="11" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+    {% if breakdown.week|length >= 200 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 200 weeks — download for full data</small></div>{% endif %}
+</div>
+</div>
+
+<!-- ── By Shop ───────────────────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdShop" role="tabpanel">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-shop"></i> New Registrations by Shop</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdShopBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdShopBody"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Shop</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in bd.shop %}
+            <tr>
+                <td title="{{ r.label }}">{{ r.label }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="11" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+</div>
+</div>
+
+<!-- ── By Season - All Shops ─────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdSeasonShop" role="tabpanel">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-calendar3-range"></i> New Registrations by Season — All Shops</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdSeasonShopBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdSeasonShopBody"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-shop-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Season</th><th class="col-shop">Shop</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in bd.season_shop %}
+            <tr>
+                <td>{{ r.label }}</td><td title="{{ r.shop }}">{{ r.shop }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="12" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+    {% if breakdown.season_shop|length >= 500 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 500 rows — download for full data</small></div>{% endif %}
+</div>
+</div>
+
+<!-- ── By Month - All Shops ──────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdMonthShop" role="tabpanel">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-calendar-month"></i> New Registrations by Month — All Shops</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdMonthShopBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdMonthShopBody"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-shop-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Month</th><th class="col-shop">Shop</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in bd.month_shop %}
+            <tr>
+                <td>{{ r.label }}</td><td title="{{ r.shop }}">{{ r.shop }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="12" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+    {% if breakdown.month_shop|length >= 500 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 500 rows — download for full data</small></div>{% endif %}
+</div>
+</div>
+
+<!-- ── By Week - All Shops ───────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdWeekShop" role="tabpanel">
+<div class="table-wrapper">
+    <div class="table-header">
+        <h6><i class="bi bi-calendar-week"></i> New Registrations by Week — All Shops</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdWeekShopBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdWeekShopBody"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-shop-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Week</th><th class="col-shop">Shop</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in bd.week_shop %}
+            <tr>
+                <td>{{ r.label }}</td><td title="{{ r.shop }}">{{ r.shop }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="12" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+    {% if breakdown.week_shop|length >= 500 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 500 rows — download for full data</small></div>{% endif %}
+</div>
+</div>
+
+{% endwith %}
+</div><!-- end bdTabContent -->
+</div><!-- end tabBreakdown -->
+
 </div><!-- end tab-content -->
 {% endblock %}
 
@@ -759,11 +1035,5 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
     });
 });
 
-// Tab description updater
-document.querySelectorAll('#caTabNav button[data-bs-toggle="tab"]').forEach(btn => {
-    btn.addEventListener('shown.bs.tab', () => {
-        document.getElementById('caTabDesc').textContent = btn.dataset.tabDesc || '';
-    });
-});
 </script>
 {% endblock %}
