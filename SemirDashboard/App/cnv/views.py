@@ -90,6 +90,289 @@ def sync_status(request):
     return render(request, "cnv/sync_status.html", context)
 
 
+def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
+    """
+    Compute registration breakdown tables: by season / month / week / shop
+    and the cross-tab variants (season×shop, month×shop, week×shop).
+
+    period_filter: {"start": aware_datetime, "end": aware_datetime} or {}
+    pos_phones_all / cnv_phones_all: all-time phone sets (for POS-only / CNV-only check).
+    """
+    from App.analytics.season_utils import (
+        get_session_key, session_sort_key,
+        get_month_key, month_sort_key,
+        get_week_info, week_sort_key,
+    )
+
+    # POS customers (date-filtered)
+    pos_qs = (
+        POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
+        .exclude(vip_id=0).exclude(phone="")
+        .values("phone", "registration_date", "registration_store")
+    )
+    if period_filter:
+        pos_qs = pos_qs.filter(
+            registration_date__gte=period_filter["start"].date(),
+            registration_date__lte=period_filter["end"].date(),
+        )
+    pos_list = list(pos_qs)
+
+    # CNV customers (date-filtered)
+    cnv_qs = (
+        CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
+        .values("phone", "cnv_created_at", "zalo_app_id", "zalo_oa_id")
+    )
+    if period_filter:
+        cnv_qs = cnv_qs.filter(
+            cnv_created_at__gte=period_filter["start"],
+            cnv_created_at__lte=period_filter["end"],
+        )
+    cnv_list = list(cnv_qs)
+
+    # phone → registration_store (all-time) for CNV shop attribution
+    phone_to_store = dict(
+        POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
+        .exclude(vip_id=0).exclude(phone="")
+        .exclude(registration_store__isnull=True).exclude(registration_store="")
+        .values_list("phone", "registration_store")
+    )
+
+    def _empty():
+        return {"new_pos": 0, "new_pos_only": 0, "new_pos_inv": 0, "new_pos_no_inv": 0,
+                "new_cnv": 0, "new_cnv_only": 0, "new_cnv_inv": 0, "new_cnv_no_inv": 0,
+                "zalo_app": 0, "zalo_oa": 0}
+
+    # POS phones that had at least one invoice in the period
+    pos_phones_with_inv = set()
+    if period_filter:
+        from App.models import SalesTransaction
+        pos_phones_with_inv = set(
+            SalesTransaction.objects
+            .filter(
+                sales_date__gte=period_filter["start"].date(),
+                sales_date__lte=period_filter["end"].date(),
+            )
+            .exclude(customer__vip_id__isnull=True)
+            .exclude(customer__vip_id='0')
+            .exclude(customer__vip_id='')
+            .values_list('customer__phone', flat=True)
+            .distinct()
+        )
+
+    season_data, month_data, shop_data = {}, {}, {}
+    season_shop_data, month_shop_data = {}, {}
+    week_data       = {}   # sort_key → (label, row)
+    week_shop_data  = {}   # (sort_key, shop) → (label, row)
+
+    # ── POS pass ──────────────────────────────────────────────────────────────
+    for c in pos_list:
+        reg_date = c["registration_date"]
+        phone    = c["phone"] or ""
+        store    = (c["registration_store"] or "").strip() or "Unknown"
+        if not reg_date or not phone:
+            continue
+        is_pos_only = phone not in cnv_phones_all
+        is_pos_inv  = phone in pos_phones_with_inv
+
+        s_key          = get_session_key(reg_date)
+        m_key          = get_month_key(reg_date)
+        w_sort, w_lbl  = get_week_info(reg_date)
+
+        for bucket, key in [(season_data, s_key), (month_data, m_key),
+                            (shop_data, store), (season_shop_data, (s_key, store)),
+                            (month_shop_data, (m_key, store))]:
+            r = bucket.setdefault(key, _empty())
+            r["new_pos"] += 1
+            if is_pos_only:
+                r["new_pos_only"] += 1
+            if is_pos_inv:
+                r["new_pos_inv"] += 1
+            else:
+                r["new_pos_no_inv"] += 1
+
+        for wdict, wkey in [(week_data, w_sort), (week_shop_data, (w_sort, store))]:
+            if wkey not in wdict:
+                wdict[wkey] = (w_lbl, _empty())
+            r = wdict[wkey][1]
+            r["new_pos"] += 1
+            if is_pos_only:
+                r["new_pos_only"] += 1
+            if is_pos_inv:
+                r["new_pos_inv"] += 1
+            else:
+                r["new_pos_no_inv"] += 1
+
+    # ── CNV pass ──────────────────────────────────────────────────────────────
+    for c in cnv_list:
+        dt    = c["cnv_created_at"]
+        phone = c["phone"] or ""
+        if not dt or not phone:
+            continue
+        reg_date   = dt.date() if hasattr(dt, "date") else dt
+        is_cnv_only = phone not in pos_phones_all
+        is_cnv_inv  = phone in pos_phones_with_inv
+        store      = phone_to_store.get(phone)  # None if not linked to POS
+
+        s_key         = get_session_key(reg_date)
+        m_key         = get_month_key(reg_date)
+        w_sort, w_lbl = get_week_info(reg_date)
+
+        # Flat (all-shops) buckets
+        for bucket, key in [(season_data, s_key), (month_data, m_key)]:
+            r = bucket.setdefault(key, _empty())
+            r["new_cnv"] += 1
+            if is_cnv_only:
+                r["new_cnv_only"] += 1
+            if is_cnv_inv:
+                r["new_cnv_inv"] += 1
+            else:
+                r["new_cnv_no_inv"] += 1
+
+        if w_sort not in week_data:
+            week_data[w_sort] = (w_lbl, _empty())
+        wr = week_data[w_sort][1]
+        wr["new_cnv"] += 1
+        if is_cnv_only:
+            wr["new_cnv_only"] += 1
+        if is_cnv_inv:
+            wr["new_cnv_inv"] += 1
+        else:
+            wr["new_cnv_no_inv"] += 1
+
+        # Shop-linked buckets (only if CNV customer is linked to a POS shop)
+        if store:
+            for bucket, key in [(shop_data, store),
+                                 (season_shop_data, (s_key, store)),
+                                 (month_shop_data, (m_key, store))]:
+                r = bucket.setdefault(key, _empty())
+                r["new_cnv"] += 1
+                if is_cnv_only:
+                    r["new_cnv_only"] += 1
+                if is_cnv_inv:
+                    r["new_cnv_inv"] += 1
+                else:
+                    r["new_cnv_no_inv"] += 1
+
+            ws_key = (w_sort, store)
+            if ws_key not in week_shop_data:
+                week_shop_data[ws_key] = (w_lbl, _empty())
+            wr2 = week_shop_data[ws_key][1]
+            wr2["new_cnv"] += 1
+            if is_cnv_only:
+                wr2["new_cnv_only"] += 1
+            if is_cnv_inv:
+                wr2["new_cnv_inv"] += 1
+            else:
+                wr2["new_cnv_no_inv"] += 1
+
+    # ── Zalo pass (grouped by zalo_app_created_at) ────────────────────────────
+    zalo_qs = (
+        CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
+        .filter(zalo_app_id__isnull=False).exclude(zalo_app_id="")
+        .filter(zalo_app_created_at__isnull=False)
+    )
+    if period_filter:
+        zalo_qs = zalo_qs.filter(
+            zalo_app_created_at__gte=period_filter["start"],
+            zalo_app_created_at__lte=period_filter["end"],
+        )
+    for z in zalo_qs.values("phone", "zalo_app_created_at", "zalo_oa_id"):
+        phone = z["phone"] or ""
+        dt    = z["zalo_app_created_at"]
+        if not dt or not phone:
+            continue
+        reg_date = dt.date() if hasattr(dt, "date") else dt
+        has_oa   = bool(z["zalo_oa_id"])
+        store    = phone_to_store.get(phone)
+
+        s_key         = get_session_key(reg_date)
+        m_key         = get_month_key(reg_date)
+        w_sort, w_lbl = get_week_info(reg_date)
+
+        for bucket, key in [(season_data, s_key), (month_data, m_key)]:
+            r = bucket.setdefault(key, _empty())
+            r["zalo_app"] += 1
+            if has_oa:
+                r["zalo_oa"] += 1
+
+        if store:
+            r = shop_data.setdefault(store, _empty())
+            r["zalo_app"] += 1
+            if has_oa:
+                r["zalo_oa"] += 1
+
+        if w_sort not in week_data:
+            week_data[w_sort] = (w_lbl, _empty())
+        wr = week_data[w_sort][1]
+        wr["zalo_app"] += 1
+        if has_oa:
+            wr["zalo_oa"] += 1
+
+        if store:
+            for bucket, key in [(season_shop_data, (s_key, store)),
+                                 (month_shop_data,  (m_key, store))]:
+                r = bucket.setdefault(key, _empty())
+                r["zalo_app"] += 1
+                if has_oa:
+                    r["zalo_oa"] += 1
+
+            ws_key = (w_sort, store)
+            if ws_key not in week_shop_data:
+                week_shop_data[ws_key] = (w_lbl, _empty())
+            wr2 = week_shop_data[ws_key][1]
+            wr2["zalo_app"] += 1
+            if has_oa:
+                wr2["zalo_oa"] += 1
+
+    # ── Finalise: add pct, convert to sorted row lists ────────────────────────
+    def _pct(a, b):
+        return round(a / b * 100, 1) if b else 0.0
+
+    def _flat_rows(data, sort_fn):
+        rows = []
+        for k, v in sorted(data.items(), key=lambda x: sort_fn(x[0])):
+            rows.append({"label": k, **v,
+                         "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
+                         "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
+        return rows
+
+    def _week_rows(wdict):
+        rows = []
+        for k, (lbl, v) in sorted(wdict.items(), key=lambda x: week_sort_key(x[0])):
+            rows.append({"label": lbl, **v,
+                         "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
+                         "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
+        return rows
+
+    def _cross_rows(data, time_sort_fn):
+        rows = []
+        for (t, sh), v in sorted(data.items(),
+                                  key=lambda x: (time_sort_fn(x[0][0]), x[0][1])):
+            rows.append({"label": t, "shop": sh, **v,
+                         "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
+                         "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
+        return rows
+
+    def _week_cross_rows(wdict):
+        rows = []
+        for (w_sort, sh), (lbl, v) in sorted(wdict.items(),
+                                              key=lambda x: (week_sort_key(x[0][0]), x[0][1])):
+            rows.append({"label": lbl, "shop": sh, **v,
+                         "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
+                         "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
+        return rows
+
+    return {
+        "season":       _flat_rows(season_data, session_sort_key),
+        "month":        _flat_rows(month_data,  month_sort_key),
+        "week":         _week_rows(week_data),
+        "shop":         _flat_rows(shop_data,   lambda x: x),
+        "season_shop":  _cross_rows(season_shop_data, session_sort_key),
+        "month_shop":   _cross_rows(month_shop_data,  month_sort_key),
+        "week_shop":    _week_cross_rows(week_shop_data),
+    }
+
+
 def _get_cnv_comparison_data(start_date, end_date):
     """Compute or retrieve cached CNV comparison data.
 
@@ -169,6 +452,7 @@ def _get_cnv_comparison_data(start_date, end_date):
     pos_only_period = []
     cnv_only_period = []
     new_pos_count = new_cnv_count = pos_only_period_count = cnv_only_period_count = 0
+    new_pos_inv_count = new_pos_no_inv_count = 0
 
     if period_filter:
         pos_period = pos_all.filter(
@@ -176,6 +460,20 @@ def _get_cnv_comparison_data(start_date, end_date):
             registration_date__lte=period_filter["end"],
         )
         new_pos_count = pos_period.count()
+        _pos_period_phones = set(pos_period.values_list('phone', flat=True))
+        from App.models import SalesTransaction as _ST
+        _inv_phones = set(
+            _ST.objects.filter(
+                sales_date__gte=period_filter["start"].date(),
+                sales_date__lte=period_filter["end"].date(),
+            ).exclude(customer__vip_id__isnull=True)
+            .exclude(customer__vip_id='0')
+            .exclude(customer__vip_id='')
+            .values_list('customer__phone', flat=True)
+            .distinct()
+        )
+        new_pos_inv_count = len(_pos_period_phones & _inv_phones)
+        new_pos_no_inv_count = new_pos_count - new_pos_inv_count
         cnv_period = cnv_all.filter(
             cnv_created_at__gte=period_filter["start"],
             cnv_created_at__lte=period_filter["end"],
@@ -372,6 +670,8 @@ def _get_cnv_comparison_data(start_date, end_date):
         "pos_only_all_count": len(pos_only_phones_all),
         "cnv_only_all_count": len(cnv_only_phones_all),
         "new_pos_count": new_pos_count,
+        "new_pos_inv_count": new_pos_inv_count,
+        "new_pos_no_inv_count": new_pos_no_inv_count,
         "new_cnv_count": new_cnv_count,
         "pos_only_period_count": pos_only_period_count,
         "cnv_only_period_count": cnv_only_period_count,
@@ -395,6 +695,7 @@ def _get_cnv_comparison_data(start_date, end_date):
         "zalo_oa_period_pct": zalo_oa_period_pct,
         "zalo_mini_app_list": zalo_app_list,
         "zalo_oa_list": zalo_oa_list,
+        "breakdown": _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all),
     }
     cache.set(cache_key, result, _CNV_TTL)
     logger.info("CNV comparison cache MISS — computed & cached (%s)", cache_key)
@@ -429,6 +730,16 @@ def customer_analytics(request):
         "pos_only_period":       d["pos_only_period"][:50],
         "cnv_only_period":       d["cnv_only_period"][:50],
         "quick_btns": [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90)],
+        # breakdown display limits (full data goes to Excel)
+        "breakdown": {
+            "season":      d["breakdown"]["season"],
+            "month":       d["breakdown"]["month"],
+            "week":        d["breakdown"]["week"][:200],
+            "shop":        d["breakdown"]["shop"],
+            "season_shop": d["breakdown"]["season_shop"][:500],
+            "month_shop":  d["breakdown"]["month_shop"][:500],
+            "week_shop":   d["breakdown"]["week_shop"][:500],
+        },
     }
     return render(request, "cnv/customer_analytics.html", context)
 
@@ -436,7 +747,7 @@ def customer_analytics(request):
 @requires_perm("download_cnv")
 def export_customer_analytics(request):
     """Export POS vs CNV comparison to Excel.
-    If ?tab=<points|zalo|pos_cnv> is given, exports only that tab's sheets.
+    If ?tab=<points|zalo|pos_cnv|breakdown> is given, exports only that tab's sheets.
     Otherwise exports the full workbook.
     """
     from App.models import Customer

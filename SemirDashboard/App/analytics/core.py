@@ -23,7 +23,7 @@ from .customer_utils import (
     get_customer_info,
     build_customer_purchase_map,
 )
-from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key
+from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key, get_session_key, get_month_key, get_week_info, get_year_key
 from .aggregators import (
     aggregate_by_grade,
     aggregate_by_season,
@@ -127,7 +127,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     
     # Build customer purchase map
     customer_purchases = build_customer_purchase_map(sales_list)
-    
+
     buyer_no_info_invoices = len(customer_purchases.get('0', []))
     logger.info("Customers: %d  buyer_no_info_invoices: %d",
                 len(customer_purchases), buyer_no_info_invoices)
@@ -196,6 +196,30 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             'total_spent': float(amt),
         })
     
+    # Customers registered in period with NO invoice (not in customer_purchases)
+    new_no_inv_members = {}
+    if date_from and date_to:
+        active_ids = set(customer_purchases.keys()) - {'0', '', None}
+        for c in (
+            Customer.objects
+            .filter(registration_date__gte=date_from, registration_date__lte=date_to)
+            .exclude(vip_id__isnull=True).exclude(vip_id='').exclude(vip_id='0')
+            .values('vip_id', 'vip_grade', 'registration_date', 'registration_store')
+        ):
+            vid = str(c['vip_id'])
+            if vid not in active_ids:
+                rd = c['registration_date']
+                w_sort, w_lbl = get_week_info(rd) if rd else (None, None)
+                new_no_inv_members[vid] = {
+                    'vip_grade':          c['vip_grade'] or '',
+                    'registration_store': (c['registration_store'] or '').strip() or 'Unknown',
+                    'session':            get_session_key(rd) if rd else None,
+                    'month':              get_month_key(rd) if rd else None,
+                    'year':               get_year_key(rd) if rd else None,
+                    'week_sort':          w_sort,
+                    'week_label':         w_lbl,
+                }
+
     # Calculate metrics EXCLUDING VIP ID = 0
     total_active = len([vid for vid in customer_purchases if vid != '0'])
     total_returning = len(returning_customers)
@@ -209,17 +233,17 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     # ========================================================================
     # AGGREGATE BY DIMENSIONS
     # ========================================================================
-    grade_stats = aggregate_by_grade(customer_details, new_members_in_period)
-    session_stats = aggregate_by_season(customer_purchases, get_customer_info, new_members_in_period)
-    month_stats = aggregate_by_month(customer_purchases, get_customer_info, new_members_in_period)
-    year_stats = aggregate_by_year(customer_purchases, get_customer_info, new_members_in_period)
+    grade_stats = aggregate_by_grade(customer_details, new_members_in_period, new_no_inv_members)
+    session_stats = aggregate_by_season(customer_purchases, get_customer_info, new_members_in_period, new_no_inv_members)
+    month_stats = aggregate_by_month(customer_purchases, get_customer_info, new_members_in_period, new_no_inv_members)
+    year_stats = aggregate_by_year(customer_purchases, get_customer_info, new_members_in_period, new_no_inv_members)
 
     all_session_keys = sorted([s['session'] for s in session_stats], key=session_sort_key)
     all_month_keys = sorted([m['month'] for m in month_stats], key=month_sort_key)
     all_year_keys = sorted([y['year'] for y in year_stats], key=year_sort_key)
-    week_stats = aggregate_by_week(customer_purchases, get_customer_info, new_members_in_period)
+    week_stats = aggregate_by_week(customer_purchases, get_customer_info, new_members_in_period, new_no_inv_members)
     all_week_keys = sorted([w['week_sort'] for w in week_stats], key=week_sort_key)
-    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys, new_members_in_period, all_month_keys, all_year_keys, all_week_keys)
+    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys, new_members_in_period, all_month_keys, all_year_keys, all_week_keys, new_no_inv_members)
     
     buyer_without_info_stats = calculate_buyer_without_info(
         vip_0_purchases,
@@ -250,6 +274,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             'total_amount_period': float(total_amount_period),
             'buyer_without_info': buyer_no_info_invoices,
             'new_members_in_period': len(new_members_in_period),
+            'new_no_inv_in_period':  len(new_no_inv_members),
             'total_customers_in_db': total_customers_in_db,
             'member_active_all_time': member_active_all_time,
             'member_inactive_all_time': member_inactive_all_time,

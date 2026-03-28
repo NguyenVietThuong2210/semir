@@ -88,7 +88,9 @@ def _create_overview_sheet(wb, data, header_fill, header_font, header_align, dat
     
     ov = data['overview']
     for label, value in [
-        ("New Members (Period)", ov['new_members_in_period']),
+        ("New Members (Period)", ov['new_members_in_period'] + ov.get('new_no_inv_in_period', 0)),
+        ("NEW (INV)", ov['new_members_in_period']),
+        ("NEW (NO INV)", ov.get('new_no_inv_in_period', 0)),
         ("Returning (Period)", ov['returning_customers']),
         ("Active (Period)", ov['active_customers']),
         ("Return Rate (Period)", f"{ov['return_rate']}%"),
@@ -175,7 +177,7 @@ def _create_season_sheet(wb, data, header_fill, header_font, header_align):
     """By Season sheet."""
     ws = wb.create_sheet("By Season")
 
-    headers = ["Season", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+    headers = ["Season", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -186,23 +188,24 @@ def _create_season_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=1, value=s['session'])
         ws.cell(row=row_num, column=2, value=s['total_customers'])
         ws.cell(row=row_num, column=3, value=s.get('new_customers', 0))
-        ws.cell(row=row_num, column=4, value=f"{s.get('new_rate', 0)}%")
-        ws.cell(row=row_num, column=5, value=s['returning_customers'])
-        ws.cell(row=row_num, column=6, value=f"{s['return_rate']}%")
-        ws.cell(row=row_num, column=7, value=s.get('returning_invoices', 0))
-        ws.cell(row=row_num, column=8, value=s.get('returning_amount', 0))
-        ws.cell(row=row_num, column=8).number_format = '#,##0'
-        ws.cell(row=row_num, column=9, value=s['total_invoices'])
-        ws.cell(row=row_num, column=10, value=s['total_amount'])
-        ws.cell(row=row_num, column=10).number_format = '#,##0'
-        ws.cell(row=row_num, column=11, value=s.get('total_invoices_with_vip0', 0))
-        ws.cell(row=row_num, column=12, value=s.get('total_amount_with_vip0', 0))
-        ws.cell(row=row_num, column=12).number_format = '#,##0'
+        ws.cell(row=row_num, column=4, value=s.get('new_customers_no_inv', 0))
+        ws.cell(row=row_num, column=5, value=f"{s.get('new_rate', 0)}%")
+        ws.cell(row=row_num, column=6, value=s['returning_customers'])
+        ws.cell(row=row_num, column=7, value=f"{s['return_rate']}%")
+        ws.cell(row=row_num, column=8, value=s.get('returning_invoices', 0))
+        ws.cell(row=row_num, column=9, value=s.get('returning_amount', 0))
+        ws.cell(row=row_num, column=9).number_format = '#,##0'
+        ws.cell(row=row_num, column=10, value=s['total_invoices'])
+        ws.cell(row=row_num, column=11, value=s['total_amount'])
+        ws.cell(row=row_num, column=11).number_format = '#,##0'
+        ws.cell(row=row_num, column=12, value=s.get('total_invoices_with_vip0', 0))
+        ws.cell(row=row_num, column=13, value=s.get('total_amount_with_vip0', 0))
+        ws.cell(row=row_num, column=13).number_format = '#,##0'
 
     ws.column_dimensions['A'].width = 15  # Season
-    for col in range(2, 7):
+    for col in range(2, 8):
         ws.column_dimensions[get_column_letter(col)].width = 14  # Numeric
-    for col in range(7, 13):
+    for col in range(8, 14):
         ws.column_dimensions[get_column_letter(col)].width = 16  # Amount
 
 
@@ -210,7 +213,7 @@ def _create_month_sheet(wb, data, header_fill, header_font, header_align):
     """By Month sheet."""
     ws = wb.create_sheet("By Month")
 
-    headers = ["Month", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+    headers = ["Month", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -221,23 +224,24 @@ def _create_month_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=1, value=m['month'])
         ws.cell(row=row_num, column=2, value=m['total_customers'])
         ws.cell(row=row_num, column=3, value=m.get('new_customers', 0))
-        ws.cell(row=row_num, column=4, value=f"{m.get('new_rate', 0)}%")
-        ws.cell(row=row_num, column=5, value=m['returning_customers'])
-        ws.cell(row=row_num, column=6, value=f"{m['return_rate']}%")
-        ws.cell(row=row_num, column=7, value=m.get('returning_invoices', 0))
-        ws.cell(row=row_num, column=8, value=m.get('returning_amount', 0))
-        ws.cell(row=row_num, column=8).number_format = '#,##0'
-        ws.cell(row=row_num, column=9, value=m['total_invoices'])
-        ws.cell(row=row_num, column=10, value=m['total_amount'])
-        ws.cell(row=row_num, column=10).number_format = '#,##0'
-        ws.cell(row=row_num, column=11, value=m.get('total_invoices_with_vip0', 0))
-        ws.cell(row=row_num, column=12, value=m.get('total_amount_with_vip0', 0))
-        ws.cell(row=row_num, column=12).number_format = '#,##0'
+        ws.cell(row=row_num, column=4, value=m.get('new_customers_no_inv', 0))
+        ws.cell(row=row_num, column=5, value=f"{m.get('new_rate', 0)}%")
+        ws.cell(row=row_num, column=6, value=m['returning_customers'])
+        ws.cell(row=row_num, column=7, value=f"{m['return_rate']}%")
+        ws.cell(row=row_num, column=8, value=m.get('returning_invoices', 0))
+        ws.cell(row=row_num, column=9, value=m.get('returning_amount', 0))
+        ws.cell(row=row_num, column=9).number_format = '#,##0'
+        ws.cell(row=row_num, column=10, value=m['total_invoices'])
+        ws.cell(row=row_num, column=11, value=m['total_amount'])
+        ws.cell(row=row_num, column=11).number_format = '#,##0'
+        ws.cell(row=row_num, column=12, value=m.get('total_invoices_with_vip0', 0))
+        ws.cell(row=row_num, column=13, value=m.get('total_amount_with_vip0', 0))
+        ws.cell(row=row_num, column=13).number_format = '#,##0'
 
     ws.column_dimensions['A'].width = 12  # Month YYYY-MM
-    for col in range(2, 7):
+    for col in range(2, 8):
         ws.column_dimensions[get_column_letter(col)].width = 14
-    for col in range(7, 13):
+    for col in range(8, 14):
         ws.column_dimensions[get_column_letter(col)].width = 16
 
 
@@ -245,7 +249,7 @@ def _create_shop_sheet(wb, data, header_fill, header_font, header_align):
     """By Shop summary."""
     ws = wb.create_sheet("By Shop")
 
-    headers = ["Shop", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+    headers = ["Shop", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -258,23 +262,24 @@ def _create_shop_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=1, value=shop['shop_name'])
         ws.cell(row=row_num, column=2, value=shop['total_customers'])
         ws.cell(row=row_num, column=3, value=shop.get('new_customers', 0))
-        ws.cell(row=row_num, column=4, value=f"{shop.get('new_rate', 0)}%")
-        ws.cell(row=row_num, column=5, value=shop['returning_customers'])
-        ws.cell(row=row_num, column=6, value=f"{shop['return_rate']}%")
-        ws.cell(row=row_num, column=7, value=shop.get('returning_invoices', 0))
-        ws.cell(row=row_num, column=8, value=shop.get('returning_amount', 0))
-        ws.cell(row=row_num, column=8).number_format = '#,##0'
-        ws.cell(row=row_num, column=9, value=shop['total_invoices'])
-        ws.cell(row=row_num, column=10, value=shop['total_amount'])
-        ws.cell(row=row_num, column=10).number_format = '#,##0'
-        ws.cell(row=row_num, column=11, value=shop.get('total_invoices_with_vip0', 0))
-        ws.cell(row=row_num, column=12, value=shop.get('total_amount_with_vip0', 0))
-        ws.cell(row=row_num, column=12).number_format = '#,##0'
+        ws.cell(row=row_num, column=4, value=shop.get('new_customers_no_inv', 0))
+        ws.cell(row=row_num, column=5, value=f"{shop.get('new_rate', 0)}%")
+        ws.cell(row=row_num, column=6, value=shop['returning_customers'])
+        ws.cell(row=row_num, column=7, value=f"{shop['return_rate']}%")
+        ws.cell(row=row_num, column=8, value=shop.get('returning_invoices', 0))
+        ws.cell(row=row_num, column=9, value=shop.get('returning_amount', 0))
+        ws.cell(row=row_num, column=9).number_format = '#,##0'
+        ws.cell(row=row_num, column=10, value=shop['total_invoices'])
+        ws.cell(row=row_num, column=11, value=shop['total_amount'])
+        ws.cell(row=row_num, column=11).number_format = '#,##0'
+        ws.cell(row=row_num, column=12, value=shop.get('total_invoices_with_vip0', 0))
+        ws.cell(row=row_num, column=13, value=shop.get('total_amount_with_vip0', 0))
+        ws.cell(row=row_num, column=13).number_format = '#,##0'
 
     ws.column_dimensions['A'].width = 30  # Shop name
-    for col in range(2, 7):
+    for col in range(2, 8):
         ws.column_dimensions[get_column_letter(col)].width = 14  # Numeric
-    for col in range(7, 13):
+    for col in range(8, 14):
         ws.column_dimensions[get_column_letter(col)].width = 16  # Amount
 
 
@@ -321,7 +326,7 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=current_row, column=1, value="By Season").font = Font(bold=True)
         current_row += 1
 
-        season_headers = ["Season", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+        season_headers = ["Season", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(season_headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -334,18 +339,19 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
             ws.cell(row=current_row, column=1, value=s['session'])
             ws.cell(row=current_row, column=2, value=s['total_customers'])
             ws.cell(row=current_row, column=3, value=s.get('new_customers', 0))
-            ws.cell(row=current_row, column=4, value=f"{s.get('new_rate', 0)}%")
-            ws.cell(row=current_row, column=5, value=s['returning_customers'])
-            ws.cell(row=current_row, column=6, value=f"{s['return_rate']}%")
-            ws.cell(row=current_row, column=7, value=s.get('returning_invoices', 0))
-            ws.cell(row=current_row, column=8, value=s.get('returning_amount', 0))
-            ws.cell(row=current_row, column=8).number_format = '#,##0'
-            ws.cell(row=current_row, column=9, value=s['total_invoices'])
-            ws.cell(row=current_row, column=10, value=s['total_amount'])
-            ws.cell(row=current_row, column=10).number_format = '#,##0'
-            ws.cell(row=current_row, column=11, value=s.get('total_invoices_with_vip0', 0))
-            ws.cell(row=current_row, column=12, value=s.get('total_amount_with_vip0', 0))
-            ws.cell(row=current_row, column=12).number_format = '#,##0'
+            ws.cell(row=current_row, column=4, value=s.get('new_customers_no_inv', 0))
+            ws.cell(row=current_row, column=5, value=f"{s.get('new_rate', 0)}%")
+            ws.cell(row=current_row, column=6, value=s['returning_customers'])
+            ws.cell(row=current_row, column=7, value=f"{s['return_rate']}%")
+            ws.cell(row=current_row, column=8, value=s.get('returning_invoices', 0))
+            ws.cell(row=current_row, column=9, value=s.get('returning_amount', 0))
+            ws.cell(row=current_row, column=9).number_format = '#,##0'
+            ws.cell(row=current_row, column=10, value=s['total_invoices'])
+            ws.cell(row=current_row, column=11, value=s['total_amount'])
+            ws.cell(row=current_row, column=11).number_format = '#,##0'
+            ws.cell(row=current_row, column=12, value=s.get('total_invoices_with_vip0', 0))
+            ws.cell(row=current_row, column=13, value=s.get('total_amount_with_vip0', 0))
+            ws.cell(row=current_row, column=13).number_format = '#,##0'
             current_row += 1
 
         current_row += 1
@@ -354,7 +360,7 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=current_row, column=1, value="By Month").font = Font(bold=True)
         current_row += 1
 
-        month_headers = ["Month", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+        month_headers = ["Month", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(month_headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -367,18 +373,19 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
             ws.cell(row=current_row, column=1, value=m['month'])
             ws.cell(row=current_row, column=2, value=m['total_customers'])
             ws.cell(row=current_row, column=3, value=m.get('new_customers', 0))
-            ws.cell(row=current_row, column=4, value=f"{m.get('new_rate', 0)}%")
-            ws.cell(row=current_row, column=5, value=m['returning_customers'])
-            ws.cell(row=current_row, column=6, value=f"{m['return_rate']}%")
-            ws.cell(row=current_row, column=7, value=m.get('returning_invoices', 0))
-            ws.cell(row=current_row, column=8, value=m.get('returning_amount', 0))
-            ws.cell(row=current_row, column=8).number_format = '#,##0'
-            ws.cell(row=current_row, column=9, value=m['total_invoices'])
-            ws.cell(row=current_row, column=10, value=m['total_amount'])
-            ws.cell(row=current_row, column=10).number_format = '#,##0'
-            ws.cell(row=current_row, column=11, value=m.get('total_invoices_with_vip0', 0))
-            ws.cell(row=current_row, column=12, value=m.get('total_amount_with_vip0', 0))
-            ws.cell(row=current_row, column=12).number_format = '#,##0'
+            ws.cell(row=current_row, column=4, value=m.get('new_customers_no_inv', 0))
+            ws.cell(row=current_row, column=5, value=f"{m.get('new_rate', 0)}%")
+            ws.cell(row=current_row, column=6, value=m['returning_customers'])
+            ws.cell(row=current_row, column=7, value=f"{m['return_rate']}%")
+            ws.cell(row=current_row, column=8, value=m.get('returning_invoices', 0))
+            ws.cell(row=current_row, column=9, value=m.get('returning_amount', 0))
+            ws.cell(row=current_row, column=9).number_format = '#,##0'
+            ws.cell(row=current_row, column=10, value=m['total_invoices'])
+            ws.cell(row=current_row, column=11, value=m['total_amount'])
+            ws.cell(row=current_row, column=11).number_format = '#,##0'
+            ws.cell(row=current_row, column=12, value=m.get('total_invoices_with_vip0', 0))
+            ws.cell(row=current_row, column=13, value=m.get('total_amount_with_vip0', 0))
+            ws.cell(row=current_row, column=13).number_format = '#,##0'
             current_row += 1
 
         current_row += 1
@@ -387,7 +394,7 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=current_row, column=1, value="By Week").font = Font(bold=True)
         current_row += 1
 
-        week_headers = ["Week", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+        week_headers = ["Week", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(week_headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -400,18 +407,19 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
             ws.cell(row=current_row, column=1, value=w['week_label'])
             ws.cell(row=current_row, column=2, value=w['total_customers'])
             ws.cell(row=current_row, column=3, value=w.get('new_customers', 0))
-            ws.cell(row=current_row, column=4, value=f"{w.get('new_rate', 0)}%")
-            ws.cell(row=current_row, column=5, value=w['returning_customers'])
-            ws.cell(row=current_row, column=6, value=f"{w['return_rate']}%")
-            ws.cell(row=current_row, column=7, value=w.get('returning_invoices', 0))
-            ws.cell(row=current_row, column=8, value=w.get('returning_amount', 0))
-            ws.cell(row=current_row, column=8).number_format = '#,##0'
-            ws.cell(row=current_row, column=9, value=w['total_invoices'])
-            ws.cell(row=current_row, column=10, value=w['total_amount'])
-            ws.cell(row=current_row, column=10).number_format = '#,##0'
-            ws.cell(row=current_row, column=11, value=w.get('total_invoices_with_vip0', 0))
-            ws.cell(row=current_row, column=12, value=w.get('total_amount_with_vip0', 0))
-            ws.cell(row=current_row, column=12).number_format = '#,##0'
+            ws.cell(row=current_row, column=4, value=w.get('new_customers_no_inv', 0))
+            ws.cell(row=current_row, column=5, value=f"{w.get('new_rate', 0)}%")
+            ws.cell(row=current_row, column=6, value=w['returning_customers'])
+            ws.cell(row=current_row, column=7, value=f"{w['return_rate']}%")
+            ws.cell(row=current_row, column=8, value=w.get('returning_invoices', 0))
+            ws.cell(row=current_row, column=9, value=w.get('returning_amount', 0))
+            ws.cell(row=current_row, column=9).number_format = '#,##0'
+            ws.cell(row=current_row, column=10, value=w['total_invoices'])
+            ws.cell(row=current_row, column=11, value=w['total_amount'])
+            ws.cell(row=current_row, column=11).number_format = '#,##0'
+            ws.cell(row=current_row, column=12, value=w.get('total_invoices_with_vip0', 0))
+            ws.cell(row=current_row, column=13, value=w.get('total_amount_with_vip0', 0))
+            ws.cell(row=current_row, column=13).number_format = '#,##0'
             current_row += 1
 
         current_row += 2
@@ -501,7 +509,7 @@ def _create_season_comparison_sheet(wb, data, header_fill, header_font, header_a
         ws.merge_cells(f'A{current_row}:L{current_row}')
         current_row += 1
 
-        headers = ["Shop", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+        headers = ["Shop", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -514,24 +522,25 @@ def _create_season_comparison_sheet(wb, data, header_fill, header_font, header_a
                 ws.cell(row=current_row, column=1, value=shop['shop_name'])
                 ws.cell(row=current_row, column=2, value=s['total_customers'])
                 ws.cell(row=current_row, column=3, value=s.get('new_customers', 0))
-                ws.cell(row=current_row, column=4, value=f"{s.get('new_rate', 0)}%")
-                ws.cell(row=current_row, column=5, value=s['returning_customers'])
-                ws.cell(row=current_row, column=6, value=f"{s['return_rate']}%")
-                ws.cell(row=current_row, column=7, value=s.get('returning_invoices', 0))
-                ws.cell(row=current_row, column=8, value=s.get('returning_amount', 0))
-                ws.cell(row=current_row, column=8).number_format = '#,##0'
-                ws.cell(row=current_row, column=9, value=s['total_invoices'])
-                ws.cell(row=current_row, column=10, value=s['total_amount'])
-                ws.cell(row=current_row, column=10).number_format = '#,##0'
-                ws.cell(row=current_row, column=11, value=s.get('total_invoices_with_vip0', 0))
-                ws.cell(row=current_row, column=12, value=s.get('total_amount_with_vip0', 0))
-                ws.cell(row=current_row, column=12).number_format = '#,##0'
+                ws.cell(row=current_row, column=4, value=s.get('new_customers_no_inv', 0))
+                ws.cell(row=current_row, column=5, value=f"{s.get('new_rate', 0)}%")
+                ws.cell(row=current_row, column=6, value=s['returning_customers'])
+                ws.cell(row=current_row, column=7, value=f"{s['return_rate']}%")
+                ws.cell(row=current_row, column=8, value=s.get('returning_invoices', 0))
+                ws.cell(row=current_row, column=9, value=s.get('returning_amount', 0))
+                ws.cell(row=current_row, column=9).number_format = '#,##0'
+                ws.cell(row=current_row, column=10, value=s['total_invoices'])
+                ws.cell(row=current_row, column=11, value=s['total_amount'])
+                ws.cell(row=current_row, column=11).number_format = '#,##0'
+                ws.cell(row=current_row, column=12, value=s.get('total_invoices_with_vip0', 0))
+                ws.cell(row=current_row, column=13, value=s.get('total_amount_with_vip0', 0))
+                ws.cell(row=current_row, column=13).number_format = '#,##0'
                 current_row += 1
 
         current_row += 1
 
     ws.column_dimensions['A'].width = 30
-    for col in range(2, 13):
+    for col in range(2, 14):
         ws.column_dimensions[get_column_letter(col)].width = 16
 
 
@@ -555,7 +564,7 @@ def _create_month_comparison_sheet(wb, data, header_fill, header_font, header_al
         ws.merge_cells(f'A{current_row}:L{current_row}')
         current_row += 1
 
-        headers = ["Shop", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+        headers = ["Shop", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -568,26 +577,27 @@ def _create_month_comparison_sheet(wb, data, header_fill, header_font, header_al
                 ws.cell(row=current_row, column=1, value=shop['shop_name'])
                 ws.cell(row=current_row, column=2, value=m['total_customers'])
                 ws.cell(row=current_row, column=3, value=m.get('new_customers', 0))
-                ws.cell(row=current_row, column=4, value=f"{m.get('new_rate', 0)}%")
-                ws.cell(row=current_row, column=5, value=m['returning_customers'])
-                ws.cell(row=current_row, column=6, value=f"{m['return_rate']}%")
-                ws.cell(row=current_row, column=7, value=m.get('returning_invoices', 0))
-                ws.cell(row=current_row, column=8, value=m.get('returning_amount', 0))
-                ws.cell(row=current_row, column=8).number_format = '#,##0'
-                ws.cell(row=current_row, column=9, value=m['total_invoices'])
-                ws.cell(row=current_row, column=10, value=m['total_amount'])
-                ws.cell(row=current_row, column=10).number_format = '#,##0'
-                ws.cell(row=current_row, column=11, value=m.get('total_invoices_with_vip0', 0))
-                ws.cell(row=current_row, column=12, value=m.get('total_amount_with_vip0', 0))
-                ws.cell(row=current_row, column=12).number_format = '#,##0'
+                ws.cell(row=current_row, column=4, value=m.get('new_customers_no_inv', 0))
+                ws.cell(row=current_row, column=5, value=f"{m.get('new_rate', 0)}%")
+                ws.cell(row=current_row, column=6, value=m['returning_customers'])
+                ws.cell(row=current_row, column=7, value=f"{m['return_rate']}%")
+                ws.cell(row=current_row, column=8, value=m.get('returning_invoices', 0))
+                ws.cell(row=current_row, column=9, value=m.get('returning_amount', 0))
+                ws.cell(row=current_row, column=9).number_format = '#,##0'
+                ws.cell(row=current_row, column=10, value=m['total_invoices'])
+                ws.cell(row=current_row, column=11, value=m['total_amount'])
+                ws.cell(row=current_row, column=11).number_format = '#,##0'
+                ws.cell(row=current_row, column=12, value=m.get('total_invoices_with_vip0', 0))
+                ws.cell(row=current_row, column=13, value=m.get('total_amount_with_vip0', 0))
+                ws.cell(row=current_row, column=13).number_format = '#,##0'
                 current_row += 1
 
         current_row += 1
 
     ws.column_dimensions['A'].width = 30
-    for col in range(2, 7):
+    for col in range(2, 8):
         ws.column_dimensions[get_column_letter(col)].width = 14
-    for col in range(7, 13):
+    for col in range(8, 14):
         ws.column_dimensions[get_column_letter(col)].width = 16
 
 
@@ -595,7 +605,7 @@ def _create_week_sheet(wb, data, header_fill, header_font, header_align):
     """By Week sheet."""
     ws = wb.create_sheet("By Week")
 
-    headers = ["Week", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+    headers = ["Week", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -606,23 +616,24 @@ def _create_week_sheet(wb, data, header_fill, header_font, header_align):
         ws.cell(row=row_num, column=1, value=w['week_label'])
         ws.cell(row=row_num, column=2, value=w['total_customers'])
         ws.cell(row=row_num, column=3, value=w.get('new_customers', 0))
-        ws.cell(row=row_num, column=4, value=f"{w.get('new_rate', 0)}%")
-        ws.cell(row=row_num, column=5, value=w['returning_customers'])
-        ws.cell(row=row_num, column=6, value=f"{w['return_rate']}%")
-        ws.cell(row=row_num, column=7, value=w.get('returning_invoices', 0))
-        ws.cell(row=row_num, column=8, value=w.get('returning_amount', 0))
-        ws.cell(row=row_num, column=8).number_format = '#,##0'
-        ws.cell(row=row_num, column=9, value=w['total_invoices'])
-        ws.cell(row=row_num, column=10, value=w['total_amount'])
-        ws.cell(row=row_num, column=10).number_format = '#,##0'
-        ws.cell(row=row_num, column=11, value=w.get('total_invoices_with_vip0', 0))
-        ws.cell(row=row_num, column=12, value=w.get('total_amount_with_vip0', 0))
-        ws.cell(row=row_num, column=12).number_format = '#,##0'
+        ws.cell(row=row_num, column=4, value=w.get('new_customers_no_inv', 0))
+        ws.cell(row=row_num, column=5, value=f"{w.get('new_rate', 0)}%")
+        ws.cell(row=row_num, column=6, value=w['returning_customers'])
+        ws.cell(row=row_num, column=7, value=f"{w['return_rate']}%")
+        ws.cell(row=row_num, column=8, value=w.get('returning_invoices', 0))
+        ws.cell(row=row_num, column=9, value=w.get('returning_amount', 0))
+        ws.cell(row=row_num, column=9).number_format = '#,##0'
+        ws.cell(row=row_num, column=10, value=w['total_invoices'])
+        ws.cell(row=row_num, column=11, value=w['total_amount'])
+        ws.cell(row=row_num, column=11).number_format = '#,##0'
+        ws.cell(row=row_num, column=12, value=w.get('total_invoices_with_vip0', 0))
+        ws.cell(row=row_num, column=13, value=w.get('total_amount_with_vip0', 0))
+        ws.cell(row=row_num, column=13).number_format = '#,##0'
 
     ws.column_dimensions['A'].width = 22  # Week label e.g. "Week 1 (1/1-7/1)"
-    for col in range(2, 7):
+    for col in range(2, 8):
         ws.column_dimensions[get_column_letter(col)].width = 14
-    for col in range(7, 13):
+    for col in range(8, 14):
         ws.column_dimensions[get_column_letter(col)].width = 16
 
 
@@ -646,7 +657,7 @@ def _create_week_comparison_sheet(wb, data, header_fill, header_font, header_ali
         ws.merge_cells(f'A{current_row}:L{current_row}')
         current_row += 1
 
-        headers = ["Shop", "Active", "New", "New Rate", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
+        headers = ["Shop", "Active", "NEW (INV)", "NEW (NO INV)", "NEW (INV) RATE", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -659,26 +670,27 @@ def _create_week_comparison_sheet(wb, data, header_fill, header_font, header_ali
                 ws.cell(row=current_row, column=1, value=shop['shop_name'])
                 ws.cell(row=current_row, column=2, value=w['total_customers'])
                 ws.cell(row=current_row, column=3, value=w.get('new_customers', 0))
-                ws.cell(row=current_row, column=4, value=f"{w.get('new_rate', 0)}%")
-                ws.cell(row=current_row, column=5, value=w['returning_customers'])
-                ws.cell(row=current_row, column=6, value=f"{w['return_rate']}%")
-                ws.cell(row=current_row, column=7, value=w.get('returning_invoices', 0))
-                ws.cell(row=current_row, column=8, value=w.get('returning_amount', 0))
-                ws.cell(row=current_row, column=8).number_format = '#,##0'
-                ws.cell(row=current_row, column=9, value=w['total_invoices'])
-                ws.cell(row=current_row, column=10, value=w['total_amount'])
-                ws.cell(row=current_row, column=10).number_format = '#,##0'
-                ws.cell(row=current_row, column=11, value=w.get('total_invoices_with_vip0', 0))
-                ws.cell(row=current_row, column=12, value=w.get('total_amount_with_vip0', 0))
-                ws.cell(row=current_row, column=12).number_format = '#,##0'
+                ws.cell(row=current_row, column=4, value=w.get('new_customers_no_inv', 0))
+                ws.cell(row=current_row, column=5, value=f"{w.get('new_rate', 0)}%")
+                ws.cell(row=current_row, column=6, value=w['returning_customers'])
+                ws.cell(row=current_row, column=7, value=f"{w['return_rate']}%")
+                ws.cell(row=current_row, column=8, value=w.get('returning_invoices', 0))
+                ws.cell(row=current_row, column=9, value=w.get('returning_amount', 0))
+                ws.cell(row=current_row, column=9).number_format = '#,##0'
+                ws.cell(row=current_row, column=10, value=w['total_invoices'])
+                ws.cell(row=current_row, column=11, value=w['total_amount'])
+                ws.cell(row=current_row, column=11).number_format = '#,##0'
+                ws.cell(row=current_row, column=12, value=w.get('total_invoices_with_vip0', 0))
+                ws.cell(row=current_row, column=13, value=w.get('total_amount_with_vip0', 0))
+                ws.cell(row=current_row, column=13).number_format = '#,##0'
                 current_row += 1
 
         current_row += 1
 
     ws.column_dimensions['A'].width = 30
-    for col in range(2, 7):
+    for col in range(2, 8):
         ws.column_dimensions[get_column_letter(col)].width = 14
-    for col in range(7, 13):
+    for col in range(8, 14):
         ws.column_dimensions[get_column_letter(col)].width = 16
 
 
@@ -1785,10 +1797,54 @@ def _build_cnv_only_ws(wb, data, key, title, hf, font, align):
         ws.column_dimensions[col].width = w
 
 
+def _build_cnv_breakdown_ws(wb, breakdown, key, title, has_shop, hf, font, align):
+    """Build one Registration Breakdown sheet.
+    has_shop=True → extra 'Shop' column between label and data cols.
+    """
+    ws = wb.create_sheet(title)
+    if has_shop:
+        headers = ["Period", "Shop",
+                   "New POS (INV)", "New POS (NO INV)", "New POS (TOTAL)", "POS Only",
+                   "New CNV", "CNV Only",
+                   "Zalo App", "% App/CNV", "Zalo OA", "% OA/CNV"]
+    else:
+        headers = ["Period",
+                   "New POS (INV)", "New POS (NO INV)", "New POS (TOTAL)", "POS Only",
+                   "New CNV", "CNV Only",
+                   "Zalo App", "% App/CNV", "Zalo OA", "% OA/CNV"]
+    _cnv_hdr(ws, headers, hf, font, align)
+
+    rows = breakdown.get(key) or []
+    for r_idx, r in enumerate(rows, 2):
+        col = 1
+        ws.cell(r_idx, col, r.get("label", "")); col += 1
+        if has_shop:
+            ws.cell(r_idx, col, r.get("shop", "")); col += 1
+        ws.cell(r_idx, col, r.get("new_pos_inv", 0));    col += 1
+        ws.cell(r_idx, col, r.get("new_pos_no_inv", 0)); col += 1
+        ws.cell(r_idx, col, r.get("new_pos", 0));        col += 1
+        ws.cell(r_idx, col, r.get("new_pos_only", 0));   col += 1
+        ws.cell(r_idx, col, r.get("new_cnv", 0));        col += 1
+        ws.cell(r_idx, col, r.get("new_cnv_only", 0));   col += 1
+        ws.cell(r_idx, col, r.get("zalo_app", 0));       col += 1
+        ws.cell(r_idx, col, r.get("zalo_app_pct", 0.0)); col += 1
+        ws.cell(r_idx, col, r.get("zalo_oa", 0));        col += 1
+        ws.cell(r_idx, col, r.get("zalo_oa_pct", 0.0))
+
+    if has_shop:
+        for col_letter, w in zip("ABCDEFGHIJKL", [16, 22, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]):
+            ws.column_dimensions[col_letter].width = w
+    else:
+        for col_letter, w in zip("ABCDEFGHIJK", [16, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]):
+            ws.column_dimensions[col_letter].width = w
+
+
 _CNV_TAB_SHEETS = {
-    "points":  ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
-    "zalo":    ["zalo_mini_app",   "zalo_oa"],
-    "pos_cnv": ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
+    "points":    ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
+    "zalo":      ["zalo_mini_app",   "zalo_oa"],
+    "pos_cnv":   ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
+    "breakdown": ["bd_season", "bd_month", "bd_week", "bd_shop",
+                  "bd_season_shop", "bd_month_shop", "bd_week_shop"],
 }
 
 
@@ -1803,6 +1859,8 @@ def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
     fnt = Font(bold=True, color="FFFFFF")
     aln = Alignment(horizontal="center", vertical="center")
 
+    bd = data.get("breakdown") or {}
+
     builders = {
         "cnv_used_points":     lambda: _build_cnv_used_points_ws(wb, data, hf, fnt, aln),
         "points_mismatch":     lambda: _build_mismatch_ws(wb, data, "points_mismatch",       "Points Mismatch",       hf, fnt, aln),
@@ -1813,6 +1871,14 @@ def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
         "cnv_only_all":        lambda: _build_cnv_only_ws(wb, data, "cnv_only_all",    "CNV Only - All Time",    hf, fnt, aln),
         "pos_only_period":     lambda: _build_pos_only_ws(wb, data, "pos_only_period", "POS Only - Period",      hf, fnt, aln),
         "cnv_only_period":     lambda: _build_cnv_only_ws(wb, data, "cnv_only_period", "CNV Only - Period",      hf, fnt, aln),
+        # breakdown sheets
+        "bd_season":      lambda: _build_cnv_breakdown_ws(wb, bd, "season",      "By Season",           False, hf, fnt, aln),
+        "bd_month":       lambda: _build_cnv_breakdown_ws(wb, bd, "month",       "By Month",            False, hf, fnt, aln),
+        "bd_week":        lambda: _build_cnv_breakdown_ws(wb, bd, "week",        "By Week",             False, hf, fnt, aln),
+        "bd_shop":        lambda: _build_cnv_breakdown_ws(wb, bd, "shop",        "By Shop",             False, hf, fnt, aln),
+        "bd_season_shop": lambda: _build_cnv_breakdown_ws(wb, bd, "season_shop", "By Season - All Shops", True, hf, fnt, aln),
+        "bd_month_shop":  lambda: _build_cnv_breakdown_ws(wb, bd, "month_shop",  "By Month - All Shops",  True, hf, fnt, aln),
+        "bd_week_shop":   lambda: _build_cnv_breakdown_ws(wb, bd, "week_shop",   "By Week - All Shops",   True, hf, fnt, aln),
     }
 
     for key in _CNV_TAB_SHEETS[tab]:
