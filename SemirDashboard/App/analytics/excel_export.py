@@ -102,8 +102,8 @@ def _create_overview_sheet(wb, data, header_fill, header_font, header_align, dat
         ("Total Amount", ov['total_amount_with_vip0']),
         (None, None),  # separator
         ("Total Customers (All Time)", ov['total_customers_in_db']),
-        ("Member Active (All Time)", ov['member_active_all_time']),
-        ("Member Inactive (All Time)", ov['member_inactive_all_time']),
+        ("Member Active (All Time) - Has Invoice", ov['member_active_all_time']),
+        ("Member Inactive (All Time) - No Invoice", ov['member_inactive_all_time']),
         ("Return Rate (All Time)", f"{ov['return_rate_all_time']}%"),
     ]:
         if label is None:
