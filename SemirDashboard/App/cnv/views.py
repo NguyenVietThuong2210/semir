@@ -371,11 +371,11 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
 
     def _shop_cross_rows(cross_data, time_sort_fn):
         """Group flat cross-data by shop → sorted list of {shop, rows}."""
-        shop_dict = defaultdict(list)
+        shop_dict = {}
         for (t, sh), v in cross_data.items():
-            shop_dict[sh].append({"label": t, **v,
-                                   "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
-                                   "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
+            shop_dict.setdefault(sh, []).append({"label": t, **v,
+                                                  "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
+                                                  "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
         result = []
         for sh in sorted(shop_dict.keys()):
             rows = sorted(shop_dict[sh], key=lambda x: time_sort_fn(x["label"]))
@@ -384,11 +384,11 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
 
     def _shop_week_cross_rows(wdict):
         """Group flat week×shop data by shop → sorted list of {shop, rows}."""
-        shop_dict = defaultdict(list)
+        shop_dict = {}
         for (w_sort, sh), (lbl, v) in wdict.items():
-            shop_dict[sh].append({"label": lbl, "week_sort": w_sort, **v,
-                                   "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
-                                   "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
+            shop_dict.setdefault(sh, []).append({"label": lbl, "week_sort": w_sort, **v,
+                                                  "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
+                                                  "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
         result = []
         for sh in sorted(shop_dict.keys()):
             rows = sorted(shop_dict[sh], key=lambda x: week_sort_key(x["week_sort"]))
