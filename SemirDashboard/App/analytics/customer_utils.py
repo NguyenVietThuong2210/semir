@@ -282,6 +282,8 @@ def build_inv_bucket_map_from_db(date_from=None, date_to=None):
     """
     from App.models import SalesTransaction
     from .season_utils import get_session_key, get_month_key, get_year_key, get_week_info
+    from .shop_utils import get_shop_map, normalize_shop_display
+    _shop_map = get_shop_map()
 
     qs = (
         SalesTransaction.objects
@@ -310,7 +312,7 @@ def build_inv_bucket_map_from_db(date_from=None, date_to=None):
         mk    = get_month_key(tx['sales_date'])
         yk    = get_year_key(tx['sales_date'])
         wk, _ = get_week_info(tx['sales_date'])
-        shop  = (tx['shop_name'] or '').strip() or 'Unknown'
+        shop  = normalize_shop_display((tx['shop_name'] or '').strip(), _shop_map) or 'Unknown'
 
         entry['sessions'].add(sk)
         entry['months'].add(mk)

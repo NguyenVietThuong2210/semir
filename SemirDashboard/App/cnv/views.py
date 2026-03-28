@@ -23,24 +23,24 @@ from App.analytics.shop_utils import get_shop_map, normalize_shop_display
 
 logger = logging.getLogger("App.cnv")
 
-_CNV_VER_KEY = "cnv_cmp_ver_v2"
 _CNV_TTL = 300  # 5 minutes (syncs happen more frequently)
 
-# Startup timestamp — changes on every server restart/deploy.
-# Included in the cache key so all stale cache entries are automatically
-# bypassed after a code deploy or server restart.
+# In-process version counter — zero cache calls to build the key.
+# _CNV_STARTUP_TS ensures deploy/restart busts all stale entries automatically.
 _CNV_STARTUP_TS = int(time.time())
+_cnv_ver_lock = threading.Lock()
+_cnv_ver = 0
 
 
 def _cnv_cache_key(start_date, end_date):
-    v = cache.get(_CNV_VER_KEY, 0)
-    return f"cnv_cmp:{_CNV_STARTUP_TS}:{v}:{start_date}:{end_date}"
+    return f"cnv_cmp:{_CNV_STARTUP_TS}:{_cnv_ver}:{start_date}:{end_date}"
 
 
 def _invalidate_cnv_cache():
-    v = cache.get(_CNV_VER_KEY, 0)
-    cache.set(_CNV_VER_KEY, v + 1, 86400 * 30)
-    logger.info("CNV comparison cache invalidated (ver→%d)", v + 1)
+    global _cnv_ver
+    with _cnv_ver_lock:
+        _cnv_ver += 1
+    logger.info("CNV comparison cache invalidated (in-process ver→%d)", _cnv_ver)
 
 
 @requires_perm("page_cnv_sync")

@@ -35,20 +35,31 @@ def _build_map():
 def get_shop_map():
     """
     Return the alias→(title_id, display_title) dict, cached for _TTL seconds.
-    Thread-safe.
+    Thread-safe — the DB query runs OUTSIDE the lock so threads are never
+    blocked waiting for a slow DB rebuild. At most one redundant rebuild can
+    occur when multiple threads race on a cold/expired cache; the last writer
+    wins, which is harmless.
     """
     now = time.time()
+
+    # Fast path: return cached data while still fresh
     with _lock:
-        if _cache["data"] is None or (now - _cache["ts"]) > _TTL:
-            try:
-                _cache["data"] = _build_map()
-                _cache["ts"] = now
-                logger.debug("shop_map rebuilt (%d aliases)", len(_cache["data"]))
-            except Exception:
-                # DB not ready (e.g. migrations running) — return empty map
-                logger.exception("shop_map build failed, returning empty map")
-                return {}
-        return _cache["data"]
+        if _cache["data"] is not None and (now - _cache["ts"]) <= _TTL:
+            return _cache["data"]
+        stale = _cache["data"]  # keep reference in case build fails
+
+    # Slow path: rebuild outside the lock
+    try:
+        new_data = _build_map()
+    except Exception:
+        logger.exception("shop_map build failed, returning stale/empty map")
+        return stale if stale is not None else {}
+
+    with _lock:
+        _cache["data"] = new_data
+        _cache["ts"] = now
+    logger.debug("shop_map rebuilt (%d aliases)", len(new_data))
+    return new_data
 
 
 def invalidate_shop_map():

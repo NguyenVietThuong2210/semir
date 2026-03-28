@@ -50,4 +50,5 @@ urlpatterns = [
     path("shop-names/alias/create/",                 shop_names.shop_alias_create,  name="shop_alias_create"),
     path("shop-names/alias/<int:alias_id>/update/",  shop_names.shop_alias_update,  name="shop_alias_update"),
     path("shop-names/alias/<int:alias_id>/delete/",  shop_names.shop_alias_delete,  name="shop_alias_delete"),
+    path("shop-names/seed/",                         shop_names.shop_seed_titles,   name="shop_seed_titles"),
 ]

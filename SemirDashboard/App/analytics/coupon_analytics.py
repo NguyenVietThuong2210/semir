@@ -493,6 +493,8 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None, c
     )
     from App.models import CouponCampaign
 
+    shop_map = get_shop_map()
+
     # ══════════════════════════════════════════════════════════════════════════
     # CHART 1 — Shop Trends queryset  (date + shop_group + prefix)
     # ══════════════════════════════════════════════════════════════════════════
