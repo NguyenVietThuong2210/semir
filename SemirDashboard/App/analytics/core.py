@@ -86,7 +86,8 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     # OPT-3: select_related with only() to avoid loading unused Customer columns
     SALES_FIELDS = ('vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name', 'customer')
     CUST_FIELDS  = ('customer__id', 'customer__vip_id', 'customer__vip_grade',
-                    'customer__registration_date', 'customer__name')
+                    'customer__registration_date', 'customer__name',
+                    'customer__registration_store')   # needed for shop normalization
     qs = (
         SalesTransaction.objects
         .select_related('customer')
