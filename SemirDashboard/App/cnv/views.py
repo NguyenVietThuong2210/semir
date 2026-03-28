@@ -104,29 +104,60 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         get_month_key, month_sort_key,
         get_week_info, week_sort_key,
     )
+    from django.db.models import Min, Max
 
-    # POS customers (date-filtered)
+    # Effective date range — mirrors Sales Analytics logic:
+    # use explicit filter when provided; fall back to full data extent when not.
+    if period_filter:
+        reg_lo = period_filter["start"].date()
+        reg_hi = period_filter["end"].date()
+    else:
+        _bounds = (
+            POSCustomer.objects
+            .filter(vip_id__isnull=False, phone__isnull=False,
+                    registration_date__isnull=False)
+            .exclude(vip_id=0).exclude(phone="")
+            .aggregate(lo=Min("registration_date"), hi=Max("registration_date"))
+        )
+        reg_lo = _bounds["lo"]
+        reg_hi = _bounds["hi"]
+
+    # CNV effective date range (cnv_created_at)
+    if period_filter:
+        cnv_lo = period_filter["start"]
+        cnv_hi = period_filter["end"]
+    else:
+        _cnv_bounds = (
+            CNVCustomer.objects
+            .filter(phone__isnull=False, cnv_created_at__isnull=False)
+            .exclude(phone="")
+            .aggregate(lo=Min("cnv_created_at"), hi=Max("cnv_created_at"))
+        )
+        cnv_lo = _cnv_bounds["lo"]
+        cnv_hi = _cnv_bounds["hi"]
+
+    # POS customers — always filtered by registration_date using effective range
     pos_qs = (
         POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
         .exclude(vip_id=0).exclude(phone="")
         .values("id", "vip_id", "phone", "registration_date", "registration_store")
     )
-    if period_filter:
+    if reg_lo and reg_hi:
         pos_qs = pos_qs.filter(
-            registration_date__gte=period_filter["start"].date(),
-            registration_date__lte=period_filter["end"].date(),
+            registration_date__gte=reg_lo,
+            registration_date__lte=reg_hi,
         )
     pos_list = list(pos_qs)
 
-    # CNV customers (date-filtered)
+    # CNV customers — always filtered by cnv_created_at using effective range
     cnv_qs = (
         CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
         .values("phone", "cnv_created_at", "zalo_app_id", "zalo_oa_id")
     )
-    if period_filter:
+    if cnv_lo and cnv_hi:
         cnv_qs = cnv_qs.filter(
-            cnv_created_at__gte=period_filter["start"],
-            cnv_created_at__lte=period_filter["end"],
+            cnv_created_at__gte=cnv_lo,
+            cnv_created_at__lte=cnv_hi,
         )
     cnv_list = list(cnv_qs)
 
@@ -143,17 +174,13 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
                 "new_cnv": 0, "new_cnv_only": 0, "new_cnv_inv": 0, "new_cnv_no_inv": 0,
                 "zalo_app": 0, "zalo_oa": 0}
 
-    # Per-bucket invoice maps — same structure used by Customer Analytics page.
-    # vid_map[normalized_vip_id] / pk_map[customer_pk] → {sessions, months, weeks, ...}
-    # phone_to_inv_info[phone] → same entry (for CNV per-bucket checks).
-    # All three are empty dicts when no period_filter → inv checks return False.
-    _inv_vid_map     = {}
-    _inv_pk_map      = {}
-    _phone_to_inv    = {}   # replaces pos_phones_with_inv — carries full bucket info
-    if period_filter:
-        _inv_vid_map, _inv_pk_map = build_inv_bucket_map_from_db(
-            period_filter["start"].date(), period_filter["end"].date()
-        )
+    # Per-bucket invoice maps — always built using effective date range.
+    # Mirrors Sales Analytics: inv check uses [reg_lo, reg_hi] in all cases.
+    _inv_vid_map  = {}
+    _inv_pk_map   = {}
+    _phone_to_inv = {}
+    if reg_lo and reg_hi:
+        _inv_vid_map, _inv_pk_map = build_inv_bucket_map_from_db(reg_lo, reg_hi)
         # Build phone → inv_info so CNV pass can call classify_new_inv per bucket
         for _row in POSCustomer.objects.filter(
             vip_id__isnull=False, phone__isnull=False
@@ -320,15 +347,16 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
             else: wr2["new_cnv_no_inv"] += 1
 
     # ── Zalo pass (grouped by zalo_app_created_at) ────────────────────────────
+    # Zalo effective range — use cnv_lo/cnv_hi as proxy when no explicit filter
     zalo_qs = (
         CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
         .filter(zalo_app_id__isnull=False).exclude(zalo_app_id="")
         .filter(zalo_app_created_at__isnull=False)
     )
-    if period_filter:
+    if cnv_lo and cnv_hi:
         zalo_qs = zalo_qs.filter(
-            zalo_app_created_at__gte=period_filter["start"],
-            zalo_app_created_at__lte=period_filter["end"],
+            zalo_app_created_at__gte=cnv_lo,
+            zalo_app_created_at__lte=cnv_hi,
         )
     for z in zalo_qs.values("phone", "zalo_app_created_at", "zalo_oa_id"):
         phone = z["phone"] or ""
