@@ -27,7 +27,7 @@ _CNV_TTL = 300  # 5 minutes (syncs happen more frequently)
 
 def _cnv_cache_key(start_date, end_date):
     v = cache.get(_CNV_VER_KEY, 0)
-    return f"cnv_cmp:{v}:{start_date}:{end_date}"
+    return f"cnv_cmp3:{v}:{start_date}:{end_date}"
 
 
 def _invalidate_cnv_cache():
@@ -205,21 +205,29 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
     week_data       = {}   # sort_key → (label, row)
     week_shop_data  = {}   # (sort_key, shop) → (label, row)
 
-    # Pre-populate week_data with ALL weeks in [reg_lo, reg_hi] so zero-activity
-    # weeks still appear — mirrors Sales Analytics behavior.
-    if reg_lo and reg_hi:
-        _lo = reg_lo if isinstance(reg_lo, _date) else reg_lo.date()
-        _hi = reg_hi if isinstance(reg_hi, _date) else reg_hi.date()
-        _cur = _lo
+    # Pre-populate week_data with ALL weeks in union(POS, CNV) date range so
+    # zero-activity weeks appear — mirrors Sales Analytics behavior.
+    # Use the wider range: min(reg_lo, cnv_lo) .. max(reg_hi, cnv_hi).
+    _pop_lo = reg_lo if isinstance(reg_lo, _date) else (reg_lo.date() if reg_lo else None)
+    _pop_hi = reg_hi if isinstance(reg_hi, _date) else (reg_hi.date() if reg_hi else None)
+    _cnv_lo_d = cnv_lo.date() if cnv_lo and hasattr(cnv_lo, 'date') else cnv_lo
+    _cnv_hi_d = cnv_hi.date() if cnv_hi and hasattr(cnv_hi, 'date') else cnv_hi
+    if _cnv_lo_d:
+        _pop_lo = min(_pop_lo, _cnv_lo_d) if _pop_lo else _cnv_lo_d
+    if _cnv_hi_d:
+        _pop_hi = max(_pop_hi, _cnv_hi_d) if _pop_hi else _cnv_hi_d
+
+    if _pop_lo and _pop_hi:
+        _cur = _pop_lo
         _seen_w = set()
-        while _cur <= _hi:
+        while _cur <= _pop_hi:
             _ws, _wl = get_week_info(_cur)
             if _ws not in _seen_w:
                 _seen_w.add(_ws)
                 week_data[_ws] = (_wl, _empty())
             _cur += timedelta(days=7)
         # Ensure final partial week is included
-        _ws, _wl = get_week_info(_hi)
+        _ws, _wl = get_week_info(_pop_hi)
         if _ws not in _seen_w:
             week_data[_ws] = (_wl, _empty())
 
