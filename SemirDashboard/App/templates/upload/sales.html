@@ -193,9 +193,10 @@
           </div>
         </div>
 
+        {% csrf_token %}
         <script>
         (function() {
-            const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+            const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
             const headers = {'Content-Type':'application/json','X-CSRFToken':CSRF};
             let titlesData = [];
 
@@ -246,12 +247,16 @@
                 btn.disabled = true;
                 btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importing…';
                 fetch("{% url 'shop_seed_titles' %}", {method:'POST', headers})
-                  .then(r => r.json()).then(d => {
+                  .then(r => {
+                    if (!r.ok) return r.text().then(t => { throw new Error(`HTTP ${r.status}: ${t.slice(0,200)}`); });
+                    return r.json();
+                  })
+                  .then(d => {
                     if (d.error) { alert(d.error); return; }
                     alert(`Done: ${d.created} new title(s) created, ${d.skipped} already covered.`);
                     loadTitles();
                   })
-                  .catch(() => alert('Request failed'))
+                  .catch(e => alert('Request failed: ' + e.message))
                   .finally(() => {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-download"></i> Import from Data';
