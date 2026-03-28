@@ -21,7 +21,7 @@ from App.analytics.customer_utils import get_inv_lookups_for_period, build_inv_b
 
 logger = logging.getLogger("App.cnv")
 
-_CNV_VER_KEY = "cnv_cmp_ver"
+_CNV_VER_KEY = "cnv_cmp_ver_v2"
 _CNV_TTL = 300  # 5 minutes (syncs happen more frequently)
 
 
@@ -435,6 +435,18 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
             wr2["zalo_app"] += 1
             if has_oa:
                 wr2["zalo_oa"] += 1
+
+    # ── Post-pass: ensure every (week, shop) pair exists in week_shop_data ──────
+    # Mirrors week_data pre-population: zero-activity weeks appear for every shop
+    # so "By Week - All Shops" shows complete week range per shop (UI + Excel).
+    _all_wk_keys = set(week_data.keys())
+    _all_sh_keys = set(shop_data.keys())
+    for _wk in _all_wk_keys:
+        _wl = week_data[_wk][0]
+        for _sh in _all_sh_keys:
+            _ws_key = (_wk, _sh)
+            if _ws_key not in week_shop_data:
+                week_shop_data[_ws_key] = (_wl, _empty())
 
     # ── Finalise: add pct, convert to sorted row lists ────────────────────────
     def _pct(a, b):
