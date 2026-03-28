@@ -28,6 +28,7 @@ from .customer_utils import (
     _norm_vid,
 )
 from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key, get_session_key, get_month_key, get_week_info, get_year_key
+from .shop_utils import get_shop_map, normalize_shop_display
 from .aggregators import (
     aggregate_by_grade,
     aggregate_by_season,
@@ -127,9 +128,12 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     vip0_alltime_amount   = float(_vip0_agg['total'] or 0)
 
     logger.info("Transactions: %d  VIP0-alltime: %d", len(sales_list), vip0_alltime_invoices)
-    
-    # Build customer purchase map
-    customer_purchases = build_customer_purchase_map(sales_list)
+
+    # Load shop normalization map once for the entire analytics run
+    shop_map = get_shop_map()
+
+    # Build customer purchase map — shop names normalized to canonical titles
+    customer_purchases = build_customer_purchase_map(sales_list, shop_map)
 
     buyer_no_info_invoices = len(customer_purchases.get('0', []))
     logger.info("Customers: %d  buyer_no_info_invoices: %d",
@@ -192,7 +196,8 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
                 # registration_store: needed by aggregate_by_shop for shop attribution
                 # grade: already resolved above via get_customer_info
                 cust_obj = purchases_sorted[0]['customer']
-                reg_store = (getattr(cust_obj, 'registration_store', None) or '').strip() or 'Unknown'
+                _raw_store = (getattr(cust_obj, 'registration_store', None) or '').strip()
+                reg_store = normalize_shop_display(_raw_store, shop_map) or 'Unknown'
                 new_members_in_period[vip_id] = {
                     'session':            get_session_key(reg_date),
                     'month':              get_month_key(reg_date),
@@ -238,9 +243,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             continue
         rd = c['registration_date']
         w_sort, w_lbl = get_week_info(rd) if rd else (None, None)
+        _raw_reg = (c['registration_store'] or '').strip()
         new_no_inv_members[key] = {
             'vip_grade':          c['vip_grade'] or '',
-            'registration_store': (c['registration_store'] or '').strip() or 'Unknown',
+            'registration_store': normalize_shop_display(_raw_reg, shop_map) or 'Unknown',
             'session':            get_session_key(rd) if rd else None,
             'month':              get_month_key(rd) if rd else None,
             'year':               get_year_key(rd) if rd else None,

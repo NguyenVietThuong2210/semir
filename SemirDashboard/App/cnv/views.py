@@ -19,6 +19,7 @@ from django.utils import timezone
 from App.models import Customer as POSCustomer
 from App.cnv.models import CNVCustomer, CNVOrder, CNVSyncLog
 from App.analytics.customer_utils import get_inv_lookups_for_period, build_inv_bucket_map_from_db, _norm_vid, classify_new_inv
+from App.analytics.shop_utils import get_shop_map, normalize_shop_display
 
 logger = logging.getLogger("App.cnv")
 
@@ -112,6 +113,9 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
     )
     from django.db.models import Min, Max
 
+    # Load shop normalization map once for this computation
+    shop_map = get_shop_map()
+
     # Effective date range — mirrors Sales Analytics logic:
     # use explicit filter when provided; fall back to full data extent when not.
     if period_filter:
@@ -178,13 +182,16 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         )
     cnv_list = list(cnv_qs)
 
-    # phone → registration_store (all-time) for CNV shop attribution
-    phone_to_store = dict(
-        POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
-        .exclude(vip_id=0).exclude(phone="")
-        .exclude(registration_store__isnull=True).exclude(registration_store="")
-        .values_list("phone", "registration_store")
-    )
+    # phone → registration_store (all-time, normalized) for CNV shop attribution
+    phone_to_store = {
+        phone: normalize_shop_display(raw_store, shop_map) or "Unknown"
+        for phone, raw_store in (
+            POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
+            .exclude(vip_id=0).exclude(phone="")
+            .exclude(registration_store__isnull=True).exclude(registration_store="")
+            .values_list("phone", "registration_store")
+        )
+    }
 
     def _empty():
         return {"new_pos": 0, "new_pos_only": 0, "new_pos_inv": 0, "new_pos_no_inv": 0,
@@ -243,7 +250,8 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         if not reg_date:
             continue
         phone = c["phone"] or ""
-        store = (c["registration_store"] or "").strip() or "Unknown"
+        _raw_store = (c["registration_store"] or "").strip()
+        store = normalize_shop_display(_raw_store, shop_map) or "Unknown"
         # Customers with no phone can't be in CNV → definitionally POS-only.
         is_pos_only = (not phone) or (phone not in cnv_phones_all)
 

@@ -106,6 +106,238 @@
         </div>
         {% endif %}
 
+        <!-- ══ Shop Name Management ═══════════════════════════════════════════ -->
+        <div class="card mt-4" id="shopNamesCard">
+            <div class="card-header d-flex justify-content-between align-items-center bg-dark text-white">
+                <span><i class="bi bi-shop"></i> Shop Name Management</span>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-warning btn-sm" id="btnShowUnmapped" title="Show raw names not yet mapped">
+                        <i class="bi bi-exclamation-triangle"></i> Unmapped Names
+                    </button>
+                    <button class="btn btn-success btn-sm" id="btnAddTitle">
+                        <i class="bi bi-plus-circle"></i> Add Title
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+
+                <!-- Unmapped names panel (hidden by default) -->
+                <div id="unmappedPanel" class="d-none border-bottom p-3 bg-warning-subtle">
+                    <h6 class="mb-2"><i class="bi bi-list-ul"></i> Raw Names Not Yet Mapped</h6>
+                    <p class="text-muted small mb-2">Click a name to quickly add it as an alias to an existing title.</p>
+                    <div id="unmappedList" class="d-flex flex-wrap gap-2"></div>
+                </div>
+
+                <!-- Titles table -->
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0" id="titlesTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width:30%">Title (Canonical Name)</th>
+                                <th>Aliases (Raw Variants)</th>
+                                <th style="width:120px" class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="titlesBody">
+                            <tr><td colspan="3" class="text-center text-muted py-3">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Modals ──────────────────────────────────────────────────────── -->
+
+        <!-- Add/Edit Title modal -->
+        <div class="modal fade" id="titleModal" tabindex="-1">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header"><h5 class="modal-title" id="titleModalLabel">Add Title</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+              <div class="modal-body">
+                <input type="hidden" id="titleModalId">
+                <div class="mb-3">
+                  <label class="form-label">Canonical Title</label>
+                  <input type="text" class="form-control" id="titleModalInput" placeholder="e.g. Bala VN Hanoi Aeon Mall - Direct">
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="titleModalSave">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add/Edit Alias modal -->
+        <div class="modal fade" id="aliasModal" tabindex="-1">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header"><h5 class="modal-title" id="aliasModalLabel">Add Alias</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+              <div class="modal-body">
+                <input type="hidden" id="aliasModalId">
+                <input type="hidden" id="aliasModalTitleId">
+                <p class="text-muted small mb-2">Title: <strong id="aliasModalTitleName"></strong></p>
+                <div class="mb-3">
+                  <label class="form-label">Raw Alias Name</label>
+                  <input type="text" class="form-control" id="aliasModalInput" placeholder="e.g. 巴拉越南河内市HA DONG AEON MALL-直营店">
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="aliasModalSave">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <script>
+        (function() {
+            const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+            const headers = {'Content-Type':'application/json','X-CSRFToken':CSRF};
+            let titlesData = [];
+
+            // ── Render ──────────────────────────────────────────────────────
+            function renderTitles(titles) {
+                titlesData = titles;
+                const tbody = document.getElementById('titlesBody');
+                if (!titles.length) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">No titles yet. Click "Add Title" to create one.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = titles.map(t => `
+                <tr>
+                  <td><strong>${esc(t.title)}</strong></td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-1 align-items-center">
+                      ${t.aliases.map(a => `
+                        <span class="badge bg-secondary d-inline-flex align-items-center gap-1">
+                          ${esc(a.alias)}
+                          <button class="btn-close btn-close-white" style="font-size:.5rem" onclick="deleteAlias(${a.id})" title="Remove alias"></button>
+                        </span>`).join('')}
+                      <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.75rem" onclick="openAddAlias(${t.id},'${esc(t.title).replace(/'/g,"\\'")}')">
+                        <i class="bi bi-plus"></i> alias
+                      </button>
+                    </div>
+                  </td>
+                  <td class="text-end">
+                    <button class="btn btn-outline-primary btn-sm" onclick="openEditTitle(${t.id},'${esc(t.title).replace(/'/g,"\\'")}')"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteTitle(${t.id})"><i class="bi bi-trash"></i></button>
+                  </td>
+                </tr>`).join('');
+            }
+
+            function esc(s) {
+                return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            }
+
+            // ── Load ────────────────────────────────────────────────────────
+            function loadTitles() {
+                fetch("{% url 'shop_titles_list' %}").then(r=>r.json()).then(d=>renderTitles(d.titles));
+            }
+            loadTitles();
+
+            // ── Add Title ───────────────────────────────────────────────────
+            document.getElementById('btnAddTitle').onclick = function() {
+                document.getElementById('titleModalId').value = '';
+                document.getElementById('titleModalInput').value = '';
+                document.getElementById('titleModalLabel').textContent = 'Add Title';
+                new bootstrap.Modal(document.getElementById('titleModal')).show();
+            };
+            document.getElementById('titleModalSave').onclick = function() {
+                const id  = document.getElementById('titleModalId').value;
+                const val = document.getElementById('titleModalInput').value.trim();
+                if (!val) return alert('Title is required');
+                const url = id ? `/shop-names/title/${id}/update/` : "{% url 'shop_title_create' %}";
+                fetch(url,{method:'POST',headers,body:JSON.stringify({title:val})})
+                  .then(r=>r.json()).then(d=>{
+                    if(d.error){alert(d.error);return;}
+                    bootstrap.Modal.getInstance(document.getElementById('titleModal')).hide();
+                    loadTitles();
+                });
+            };
+
+            // ── Edit Title ──────────────────────────────────────────────────
+            window.openEditTitle = function(id, name) {
+                document.getElementById('titleModalId').value = id;
+                document.getElementById('titleModalInput').value = name;
+                document.getElementById('titleModalLabel').textContent = 'Edit Title';
+                new bootstrap.Modal(document.getElementById('titleModal')).show();
+            };
+
+            // ── Delete Title ────────────────────────────────────────────────
+            window.deleteTitle = function(id) {
+                if(!confirm('Delete this title and ALL its aliases?')) return;
+                fetch(`/shop-names/title/${id}/delete/`,{method:'POST',headers,body:'{}'})
+                  .then(r=>r.json()).then(d=>{if(d.error){alert(d.error);}else{loadTitles();}});
+            };
+
+            // ── Add Alias ───────────────────────────────────────────────────
+            window.openAddAlias = function(titleId, titleName, prefill) {
+                document.getElementById('aliasModalId').value = '';
+                document.getElementById('aliasModalTitleId').value = titleId;
+                document.getElementById('aliasModalTitleName').textContent = titleName;
+                document.getElementById('aliasModalInput').value = prefill || '';
+                document.getElementById('aliasModalLabel').textContent = 'Add Alias';
+                new bootstrap.Modal(document.getElementById('aliasModal')).show();
+            };
+            document.getElementById('aliasModalSave').onclick = function() {
+                const aliasId  = document.getElementById('aliasModalId').value;
+                const titleId  = document.getElementById('aliasModalTitleId').value;
+                const val      = document.getElementById('aliasModalInput').value.trim();
+                if (!val) return alert('Alias is required');
+                const url = aliasId ? `/shop-names/alias/${aliasId}/update/` : "{% url 'shop_alias_create' %}";
+                const body = aliasId ? {alias:val} : {alias:val, title_id: parseInt(titleId)};
+                fetch(url,{method:'POST',headers,body:JSON.stringify(body)})
+                  .then(r=>r.json()).then(d=>{
+                    if(d.error){alert(d.error);return;}
+                    bootstrap.Modal.getInstance(document.getElementById('aliasModal')).hide();
+                    loadTitles();
+                    loadUnmapped();
+                });
+            };
+
+            // ── Delete Alias ────────────────────────────────────────────────
+            window.deleteAlias = function(id) {
+                if(!confirm('Remove this alias?')) return;
+                fetch(`/shop-names/alias/${id}/delete/`,{method:'POST',headers,body:'{}'})
+                  .then(r=>r.json()).then(d=>{if(d.error){alert(d.error);}else{loadTitles();loadUnmapped();}});
+            };
+
+            // ── Unmapped Panel ──────────────────────────────────────────────
+            let unmappedLoaded = false;
+            function loadUnmapped() {
+                fetch("{% url 'shop_raw_names' %}").then(r=>r.json()).then(d=>{
+                    unmappedLoaded = true;
+                    const list = document.getElementById('unmappedList');
+                    if(!d.unmapped.length) {
+                        list.innerHTML = '<span class="text-success small">All shop names are mapped! ✓</span>';
+                        return;
+                    }
+                    list.innerHTML = d.unmapped.map(n => `
+                        <span class="badge bg-warning text-dark" style="cursor:pointer;font-size:.8rem"
+                              onclick="pickTitleForUnmapped('${n.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')"
+                              title="Click to map to a title">${esc(n)}</span>
+                    `).join('');
+                });
+            }
+            document.getElementById('btnShowUnmapped').onclick = function() {
+                const panel = document.getElementById('unmappedPanel');
+                panel.classList.toggle('d-none');
+                if (!unmappedLoaded) loadUnmapped();
+            };
+
+            window.pickTitleForUnmapped = function(rawName) {
+                if (!titlesData.length) { alert('Create a title first.'); return; }
+                const opts = titlesData.map((t,i) => `${i+1}. ${t.title}`).join('\n');
+                const idx = prompt(`Map "${rawName}" to which title?\n\n${opts}\n\nEnter number:`);
+                if (!idx) return;
+                const t = titlesData[parseInt(idx)-1];
+                if (!t) { alert('Invalid selection'); return; }
+                openAddAlias(t.id, t.title, rawName);
+            };
+        })();
+        </script>
+
         <div class="card mt-4">
             <div class="card-header">
                 <i class="bi bi-download"></i> Sample File Format
