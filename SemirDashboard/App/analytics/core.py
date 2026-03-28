@@ -136,6 +136,11 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     logger.info("Customers: %d  buyer_no_info_invoices: %d",
                 len(customer_purchases), buyer_no_info_invoices)
     
+    # Effective date range for "new member" tracking
+    # Use explicit filter if provided; fall back to actual data extent
+    period_lo = date_from or date_stats['start_date']
+    period_hi = date_to   or date_stats['end_date']
+
     # ========================================================================
     # PERIOD-LEVEL METRICS (EXCLUDING VIP ID = 0)
     # ========================================================================
@@ -183,9 +188,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         
         # Track new members in period (keyed by vip_id, stores registration bucket info)
         if reg_date and vip_id != '0':
-            lo = date_from or date_stats['start_date']
-            hi = date_to or date_stats['end_date']
-            if lo <= reg_date <= hi:
+            if period_lo <= reg_date <= period_hi:
                 w_sort_reg, _ = get_week_info(reg_date)
                 # registration_store: needed by aggregate_by_shop for shop attribution
                 # grade: already resolved above via get_customer_info
@@ -213,39 +216,38 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         })
     
     # Customers registered in period with NO invoice (not in customer_purchases)
+    # Always run — period_lo/period_hi cover both filtered and unfiltered cases
     new_no_inv_members = {}
-    if date_from and date_to:
-        # Shared helper: Customer PKs (via FK) + normalized vip_ids with invoices in period
-        pks_with_inv, vids_with_inv = get_inv_lookups_for_period(date_from, date_to)
-        for c in (
-            Customer.objects
-            .filter(registration_date__gte=date_from, registration_date__lte=date_to)
-            .values('id', 'vip_id', 'vip_grade', 'registration_date', 'registration_store')
-        ):
-            vid = _norm_vid(c['vip_id'] or '')
-            # Customers with no valid vip_id can't link to invoices → always new_no_inv.
-            # Use pk-based key so null-vip customers don't overwrite each other.
-            key = vid if (vid and vid != '0') else f"__pk{c['id']}"
-            # Already counted as new member with invoices
-            if key in new_members_in_period:
-                continue
-            # Has invoice via FK regardless of vip_id formatting
-            if c['id'] in pks_with_inv:
-                continue
-            # Has invoice via vip_id string match (valid vip only)
-            if vid and vid != '0' and vid in vids_with_inv:
-                continue
-            rd = c['registration_date']
-            w_sort, w_lbl = get_week_info(rd) if rd else (None, None)
-            new_no_inv_members[key] = {
-                'vip_grade':          c['vip_grade'] or '',
-                'registration_store': (c['registration_store'] or '').strip() or 'Unknown',
-                'session':            get_session_key(rd) if rd else None,
-                'month':              get_month_key(rd) if rd else None,
-                'year':               get_year_key(rd) if rd else None,
-                'week_sort':          w_sort,
-                'week_label':         w_lbl,
-            }
+    pks_with_inv, vids_with_inv = get_inv_lookups_for_period(period_lo, period_hi)
+    for c in (
+        Customer.objects
+        .filter(registration_date__gte=period_lo, registration_date__lte=period_hi)
+        .values('id', 'vip_id', 'vip_grade', 'registration_date', 'registration_store')
+    ):
+        vid = _norm_vid(c['vip_id'] or '')
+        # Customers with no valid vip_id can't link to invoices → always new_no_inv.
+        # Use pk-based key so null-vip customers don't overwrite each other.
+        key = vid if (vid and vid != '0') else f"__pk{c['id']}"
+        # Already counted as new member with invoices
+        if key in new_members_in_period:
+            continue
+        # Has invoice via FK regardless of vip_id formatting
+        if c['id'] in pks_with_inv:
+            continue
+        # Has invoice via vip_id string match (valid vip only)
+        if vid and vid != '0' and vid in vids_with_inv:
+            continue
+        rd = c['registration_date']
+        w_sort, w_lbl = get_week_info(rd) if rd else (None, None)
+        new_no_inv_members[key] = {
+            'vip_grade':          c['vip_grade'] or '',
+            'registration_store': (c['registration_store'] or '').strip() or 'Unknown',
+            'session':            get_session_key(rd) if rd else None,
+            'month':              get_month_key(rd) if rd else None,
+            'year':               get_year_key(rd) if rd else None,
+            'week_sort':          w_sort,
+            'week_label':         w_lbl,
+        }
 
     # Merge both into one unified dict: all customers registered in period.
     # new_no_inv_members customers have no invoices → inv_bucket_map returns {}
