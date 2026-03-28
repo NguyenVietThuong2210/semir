@@ -13,7 +13,7 @@ import logging
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Count, Case, When, IntegerField, Q
+from django.db.models import Count, Q
 
 from App.models import Customer, SalesTransaction
 
@@ -72,15 +72,14 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     clear_customer_cache()
     logger.info("START date_from=%s date_to=%s shop_group=%s", date_from, date_to, shop_group)
 
-    # OPT-1: Single query for all Customer aggregate stats (was 3 separate COUNT queries)
-    cust_stats = Customer.objects.aggregate(
-        total=Count('id'),
-        active=Count(Case(When(points__gt=0, then=1), output_field=IntegerField())),
-        inactive=Count(Case(When(points=0, then=1), output_field=IntegerField())),
+    # OPT-1: Customer total + all-time active (has at least 1 invoice, excl VIP=0)
+    total_customers_in_db = Customer.objects.count()
+    member_active_all_time = (
+        SalesTransaction.objects
+        .exclude(Q(vip_id='') | Q(vip_id='0') | Q(vip_id__isnull=True))
+        .values('vip_id').distinct().count()
     )
-    total_customers_in_db   = cust_stats['total']
-    member_active_all_time   = cust_stats['active']
-    member_inactive_all_time = cust_stats['inactive']
+    member_inactive_all_time = max(0, total_customers_in_db - member_active_all_time)
 
     # OPT-2: Only select needed fields; clear default model ordering (avoids DB-level sort)
     # OPT-3: select_related with only() to avoid loading unused Customer columns
