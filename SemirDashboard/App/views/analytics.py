@@ -2,7 +2,6 @@
 import json
 import logging
 import threading
-import time
 from datetime import datetime
 
 from django.shortcuts import render, redirect
@@ -18,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 _ANALYTICS_TTL = 600  # 10 minutes
 # In-process version counter — incremented on invalidation, zero cache calls.
-# Combined with startup timestamp so every deploy/restart also busts stale keys.
-_ANALYTICS_STARTUP_TS = int(time.time())
+# No startup timestamp: cache in Redis survives restarts and stays warm.
+# Invalidation on upload (counter increment) is the only bust mechanism needed.
 _anl_ver_lock = threading.Lock()
 _anl_ver = 0
 
@@ -34,14 +33,14 @@ YEAR_BTNS = [2024, 2025, 2026]
 
 
 def _analytics_cache_key(date_from, date_to, shop_group):
-    return f"anl_data:{_ANALYTICS_STARTUP_TS}:{_anl_ver}:{date_from}:{date_to}:{shop_group}"
+    return f"anl_data:{_anl_ver}:{date_from}:{date_to}:{shop_group}"
 
 
 def _invalidate_analytics_cache():
     global _anl_ver
     with _anl_ver_lock:
         _anl_ver += 1
-    logger.info("analytics cache invalidated (in-process ver→%d)", _anl_ver)
+    logger.info("analytics cache invalidated (in-process ver->%d)", _anl_ver)
 
 
 def _get_analytics_data(date_from, date_to, shop_group):
