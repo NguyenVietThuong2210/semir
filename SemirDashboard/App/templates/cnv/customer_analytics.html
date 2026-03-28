@@ -310,11 +310,6 @@
                 <i class="bi bi-people"></i> POS vs CNV
             </button>
         </li>
-        <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabBreakdown" type="button">
-                <i class="bi bi-bar-chart-steps"></i> Registration Breakdown
-            </button>
-        </li>
     </ul>
 </div>
 
@@ -659,25 +654,30 @@
 </div><!-- end row tabPOSCNV -->
 </div><!-- end tabPOSCNV -->
 
-<!-- ══ TAB 4: Registration Breakdown ══════════════════════════════════════ -->
-<div class="tab-pane fade pt-3" id="tabBreakdown" role="tabpanel">
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="text-muted small mb-0">New member registrations by season, month, week and shop. POS uses <code>registration_date</code>, CNV uses <code>cnv_created_at</code>.</p>
-    {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=breakdown{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% else %}<span></span>{% endif %}
+</div><!-- end tab-content -->
+
+<!-- ══ STANDALONE: Registration Breakdown ══════════════════════════════════ -->
+<div class="mt-4" style="background:#1a252f; border-radius:6px 6px 0 0;">
+    <div class="d-flex justify-content-between align-items-center px-3 pt-2">
+        <h6 class="text-white mb-0 pt-1"><i class="bi bi-bar-chart-steps"></i> Registration Breakdown
+            <small class="opacity-75 ms-2" style="font-size:.75rem; font-weight:400;">POS uses registration_date · CNV uses cnv_created_at</small>
+        </h6>
+        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=breakdown{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm my-1"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    </div>
+    <ul class="nav dark-tabs px-3 pt-1 pb-2 flex-wrap" id="bdTabNav" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bdSeason"     type="button">By Season</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonth"      type="button">By Month</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeek"       type="button">By Week</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShop"       type="button">By Shop</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdSeasonShop" type="button">By Season - All Shops</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonthShop"  type="button">By Month - All Shops</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeekShop"   type="button">By Week - All Shops</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShopSeason" type="button">By Shop - By Season</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShopMonth"  type="button">By Shop - By Month</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShopWeek"   type="button">By Shop - By Week</button></li>
+    </ul>
 </div>
-
-<!-- Inner tabs -->
-<ul class="nav nav-tabs bd-inner-tabs mb-3" id="bdTabNav" role="tablist">
-    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bdSeason"     type="button">By Season</button></li>
-    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonth"      type="button">By Month</button></li>
-    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeek"       type="button">By Week</button></li>
-    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShop"       type="button">By Shop</button></li>
-    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdSeasonShop" type="button">By Season - All Shops</button></li>
-    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonthShop"  type="button">By Month - All Shops</button></li>
-    <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeekShop"   type="button">By Week - All Shops</button></li>
-</ul>
-
-<div class="tab-content" id="bdTabContent">
+<div class="tab-content border border-top-0 rounded-bottom p-3 mb-4" id="bdTabContent">
 
 {% with bd=breakdown %}
 
@@ -909,11 +909,110 @@
 </div>
 </div>
 
+<!-- ── By Shop - By Season ────────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdShopSeason" role="tabpanel">
+{% for sg in bd.shop_season %}
+<div class="table-wrapper mb-3">
+    <div class="table-header">
+        <h6><i class="bi bi-shop"></i> {{ sg.shop }}</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdShpS_{{ forloop.counter }}"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdShpS_{{ forloop.counter }}"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Season</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in sg.rows %}
+            <tr>
+                <td>{{ r.label }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+</div>
+{% empty %}<p class="text-muted">No data{% if not has_filter %} — apply a date filter{% endif %}</p>{% endfor %}
+</div>
+
+<!-- ── By Shop - By Month ─────────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdShopMonth" role="tabpanel">
+{% for sg in bd.shop_month %}
+<div class="table-wrapper mb-3">
+    <div class="table-header">
+        <h6><i class="bi bi-shop"></i> {{ sg.shop }}</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdShpM_{{ forloop.counter }}"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdShpM_{{ forloop.counter }}"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Month</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in sg.rows %}
+            <tr>
+                <td>{{ r.label }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+</div>
+{% empty %}<p class="text-muted">No data{% if not has_filter %} — apply a date filter{% endif %}</p>{% endfor %}
+</div>
+
+<!-- ── By Shop - By Week ──────────────────────────────────────────────── -->
+<div class="tab-pane fade" id="bdShopWeek" role="tabpanel">
+{% for sg in bd.shop_week %}
+<div class="table-wrapper mb-3">
+    <div class="table-header">
+        <h6><i class="bi bi-shop"></i> {{ sg.shop }}</h6>
+        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdShpW_{{ forloop.counter }}"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    </div>
+    <div class="collapse show" id="bdShpW_{{ forloop.counter }}"><div class="table-scroll">
+        <table class="table table-sm table-hover mb-0 bd-tbl">
+            <thead class="table-dark"><tr>
+                <th class="col-lbl">Week</th>
+                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
+                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
+                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
+                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
+            </tr></thead>
+            <tbody>
+            {% for r in sg.rows %}
+            <tr>
+                <td>{{ r.label }}</td>
+                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
+                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
+                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
+                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
+            </tr>
+            {% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+</div>
+{% empty %}<p class="text-muted">No data{% if not has_filter %} — apply a date filter{% endif %}</p>{% endfor %}
+</div>
+
 {% endwith %}
 </div><!-- end bdTabContent -->
-</div><!-- end tabBreakdown -->
-
-</div><!-- end tab-content -->
 {% endblock %}
 
 {% block extra_js %}

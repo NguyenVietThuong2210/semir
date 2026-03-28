@@ -143,20 +143,27 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
                 "zalo_app": 0, "zalo_oa": 0}
 
     # POS phones that had at least one invoice in the period
+    # Use vip_id directly from SalesTransaction (avoids broken customer__phone FK join)
     pos_phones_with_inv = set()
     if period_filter:
         from App.models import SalesTransaction
-        pos_phones_with_inv = set(
+        _vids_with_inv = set(
             SalesTransaction.objects
             .filter(
                 sales_date__gte=period_filter["start"].date(),
                 sales_date__lte=period_filter["end"].date(),
             )
-            .exclude(customer__vip_id__isnull=True)
-            .exclude(customer__vip_id='0')
-            .exclude(customer__vip_id='')
-            .values_list('customer__phone', flat=True)
+            .exclude(vip_id__isnull=True)
+            .exclude(vip_id='0')
+            .exclude(vip_id='')
+            .values_list('vip_id', flat=True)
             .distinct()
+        )
+        pos_phones_with_inv = set(
+            POSCustomer.objects
+            .filter(vip_id__in=_vids_with_inv)
+            .exclude(phone__isnull=True).exclude(phone='')
+            .values_list('phone', flat=True)
         )
 
     season_data, month_data, shop_data = {}, {}, {}
@@ -362,6 +369,32 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
                          "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
         return rows
 
+    def _shop_cross_rows(cross_data, time_sort_fn):
+        """Group flat cross-data by shop → sorted list of {shop, rows}."""
+        shop_dict = defaultdict(list)
+        for (t, sh), v in cross_data.items():
+            shop_dict[sh].append({"label": t, **v,
+                                   "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
+                                   "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
+        result = []
+        for sh in sorted(shop_dict.keys()):
+            rows = sorted(shop_dict[sh], key=lambda x: time_sort_fn(x["label"]))
+            result.append({"shop": sh, "rows": rows})
+        return result
+
+    def _shop_week_cross_rows(wdict):
+        """Group flat week×shop data by shop → sorted list of {shop, rows}."""
+        shop_dict = defaultdict(list)
+        for (w_sort, sh), (lbl, v) in wdict.items():
+            shop_dict[sh].append({"label": lbl, "week_sort": w_sort, **v,
+                                   "zalo_app_pct": _pct(v["zalo_app"], v["new_cnv"]),
+                                   "zalo_oa_pct":  _pct(v["zalo_oa"],  v["new_cnv"])})
+        result = []
+        for sh in sorted(shop_dict.keys()):
+            rows = sorted(shop_dict[sh], key=lambda x: week_sort_key(x["week_sort"]))
+            result.append({"shop": sh, "rows": rows})
+        return result
+
     return {
         "season":       _flat_rows(season_data, session_sort_key),
         "month":        _flat_rows(month_data,  month_sort_key),
@@ -370,6 +403,9 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         "season_shop":  _cross_rows(season_shop_data, session_sort_key),
         "month_shop":   _cross_rows(month_shop_data,  month_sort_key),
         "week_shop":    _week_cross_rows(week_shop_data),
+        "shop_season":  _shop_cross_rows(season_shop_data, session_sort_key),
+        "shop_month":   _shop_cross_rows(month_shop_data,  month_sort_key),
+        "shop_week":    _shop_week_cross_rows(week_shop_data),
     }
 
 
@@ -462,15 +498,22 @@ def _get_cnv_comparison_data(start_date, end_date):
         new_pos_count = pos_period.count()
         _pos_period_phones = set(pos_period.values_list('phone', flat=True))
         from App.models import SalesTransaction as _ST
-        _inv_phones = set(
+        # Use vip_id directly (avoids broken customer__phone FK join)
+        _vids_with_inv = set(
             _ST.objects.filter(
                 sales_date__gte=period_filter["start"].date(),
                 sales_date__lte=period_filter["end"].date(),
-            ).exclude(customer__vip_id__isnull=True)
-            .exclude(customer__vip_id='0')
-            .exclude(customer__vip_id='')
-            .values_list('customer__phone', flat=True)
+            ).exclude(vip_id__isnull=True)
+            .exclude(vip_id='0')
+            .exclude(vip_id='')
+            .values_list('vip_id', flat=True)
             .distinct()
+        )
+        _inv_phones = set(
+            POSCustomer.objects
+            .filter(vip_id__in=_vids_with_inv)
+            .exclude(phone__isnull=True).exclude(phone='')
+            .values_list('phone', flat=True)
         )
         new_pos_inv_count = len(_pos_period_phones & _inv_phones)
         new_pos_no_inv_count = new_pos_count - new_pos_inv_count
@@ -732,13 +775,16 @@ def customer_analytics(request):
         "quick_btns": [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90)],
         # breakdown display limits (full data goes to Excel)
         "breakdown": {
-            "season":      d["breakdown"]["season"],
-            "month":       d["breakdown"]["month"],
-            "week":        d["breakdown"]["week"][:200],
-            "shop":        d["breakdown"]["shop"],
-            "season_shop": d["breakdown"]["season_shop"][:500],
-            "month_shop":  d["breakdown"]["month_shop"][:500],
-            "week_shop":   d["breakdown"]["week_shop"][:500],
+            "season":       d["breakdown"]["season"],
+            "month":        d["breakdown"]["month"],
+            "week":         d["breakdown"]["week"][:200],
+            "shop":         d["breakdown"]["shop"],
+            "season_shop":  d["breakdown"]["season_shop"][:500],
+            "month_shop":   d["breakdown"]["month_shop"][:500],
+            "week_shop":    d["breakdown"]["week_shop"][:500],
+            "shop_season":  d["breakdown"]["shop_season"],
+            "shop_month":   d["breakdown"]["shop_month"],
+            "shop_week":    d["breakdown"]["shop_week"],
         },
     }
     return render(request, "cnv/customer_analytics.html", context)
