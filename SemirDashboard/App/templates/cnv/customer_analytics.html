@@ -319,6 +319,7 @@
 
 <!-- ── By Season ─────────────────────────────────────────────────────── -->
 <div class="tab-pane fade show active" id="bdSeason" role="tabpanel">
+<div class="d-flex justify-content-end mb-2">{% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_season{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}</div>
 <div class="table-wrapper">
     <div class="table-header">
         <h6><i class="bi bi-calendar3-range"></i> New Registrations by Season</h6>
@@ -351,6 +352,7 @@
 
 <!-- ── By Month ──────────────────────────────────────────────────────── -->
 <div class="tab-pane fade" id="bdMonth" role="tabpanel">
+<div class="d-flex justify-content-end mb-2">{% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_month{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}</div>
 <div class="table-wrapper">
     <div class="table-header">
         <h6><i class="bi bi-calendar-month"></i> New Registrations by Month</h6>
@@ -383,6 +385,7 @@
 
 <!-- ── By Week ───────────────────────────────────────────────────────── -->
 <div class="tab-pane fade" id="bdWeek" role="tabpanel">
+<div class="d-flex justify-content-end mb-2">{% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_week{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}</div>
 <div class="table-wrapper">
     <div class="table-header">
         <h6><i class="bi bi-calendar-week"></i> New Registrations by Week</h6>
@@ -416,7 +419,10 @@
 
 <!-- ── By Shop (Sales-style: one card per shop, collapse → By Season/Month/Week) ── -->
 <div class="tab-pane fade" id="bdShop" role="tabpanel">
-    <p class="text-muted small mb-2">Shops sorted alphabetically. Click a shop row to expand season / month / week breakdown.</p>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="text-muted small mb-0">Shops sorted alphabetically. Click a shop row to expand season / month / week breakdown.</p>
+        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    </div>
     {% for sd in bd.shop_detail %}
     <div class="card mb-3 border">
         <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
@@ -555,7 +561,10 @@
 
 <!-- ── By Season - All Shops (one card per season, Sales-style) ───────── -->
 <div class="tab-pane fade" id="bdSeasonShop" role="tabpanel">
-    <p class="text-muted small mb-2">Compare all shops for each season. Shops sorted alphabetically.</p>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="text-muted small mb-0">Compare all shops for each season. Shops sorted alphabetically.</p>
+        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_season_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    </div>
     {% regroup bd.season_shop by label as season_groups %}
     {% for grp in season_groups %}
     <div class="card mb-3">
@@ -603,7 +612,10 @@
 
 <!-- ── By Month - All Shops (one card per month, Sales-style) ─────────── -->
 <div class="tab-pane fade" id="bdMonthShop" role="tabpanel">
-    <p class="text-muted small mb-2">Compare all shops for each month. Shops sorted alphabetically.</p>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="text-muted small mb-0">Compare all shops for each month. Shops sorted alphabetically.</p>
+        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_month_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    </div>
     {% regroup bd.month_shop by label as month_groups %}
     {% for grp in month_groups %}
     <div class="card mb-3">
@@ -651,7 +663,10 @@
 
 <!-- ── By Week - All Shops (one card per week, Sales-style) ───────────── -->
 <div class="tab-pane fade" id="bdWeekShop" role="tabpanel">
-    <p class="text-muted small mb-2">Compare all shops for each week. Shops sorted alphabetically.</p>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="text-muted small mb-0">Compare all shops for each week. Shops sorted alphabetically.</p>
+        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_week_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    </div>
     {% regroup bd.week_shop by label as week_groups %}
     {% for grp in week_groups %}
     <div class="card mb-3">

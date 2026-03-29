@@ -572,14 +572,12 @@ def _get_cnv_comparison_data(start_date, end_date):
         logger.info("CNV comparison cache HIT (%s)", cache_key)
         return cached, cache_key
 
-    from django.db.models import Subquery
-
     period_filter = {}
     has_filter = False
     if start_date and end_date:
         try:
             start = datetime.strptime(start_date, "%Y-%m-%d")
-            end = datetime.strptime(end_date, "%Y-%m-%d")
+            end = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999)
             period_filter = {
                 "start": timezone.make_aware(start),
                 "end": timezone.make_aware(end),
@@ -606,7 +604,7 @@ def _get_cnv_comparison_data(start_date, end_date):
     cnv_only_phones_all = cnv_phones_all - pos_phones_all
 
     pos_only_all = list(
-        pos_all.exclude(phone__in=Subquery(cnv_all.values("phone")))
+        pos_all.exclude(phone__in=cnv_phones_all)
         .values(
             "vip_id",
             "phone",
@@ -620,7 +618,7 @@ def _get_cnv_comparison_data(start_date, end_date):
     )
 
     cnv_only_all = list(
-        cnv_all.exclude(phone__in=Subquery(pos_all.values("phone")))
+        cnv_all.exclude(phone__in=pos_phones_all)
         .values(
             "cnv_id",
             "phone",
@@ -666,9 +664,7 @@ def _get_cnv_comparison_data(start_date, end_date):
         )
         new_cnv_count = cnv_period.count()
 
-        pos_only_period_qs = pos_period.exclude(
-            phone__in=Subquery(cnv_all.values("phone"))
-        )
+        pos_only_period_qs = pos_period.exclude(phone__in=cnv_phones_all)
         pos_only_period_count = pos_only_period_qs.count()
         pos_only_period = list(
             pos_only_period_qs.values(
@@ -682,9 +678,7 @@ def _get_cnv_comparison_data(start_date, end_date):
             ).order_by("-registration_date")
         )
 
-        cnv_only_period_qs = cnv_period.exclude(
-            phone__in=Subquery(pos_all.values("phone"))
-        )
+        cnv_only_period_qs = cnv_period.exclude(phone__in=pos_phones_all)
         cnv_only_period_count = cnv_only_period_qs.count()
         cnv_only_period = list(
             cnv_only_period_qs.values(
@@ -701,16 +695,17 @@ def _get_cnv_comparison_data(start_date, end_date):
             ).order_by("-cnv_created_at")
         )
 
-    # Points mismatch — single Python join
+    # Points mismatch — single Python join using pre-computed intersection set
+    _shared_phones = pos_phones_all & cnv_phones_all
     pos_map = {
         c["phone"]: c
-        for c in pos_all.filter(phone__in=Subquery(cnv_all.values("phone"))).values(
+        for c in pos_all.filter(phone__in=_shared_phones).values(
             "vip_id", "phone", "name", "vip_grade", "points", "used_points"
         )
     }
     cnv_map = {
         c["phone"]: c
-        for c in cnv_all.filter(phone__in=Subquery(pos_all.values("phone"))).values(
+        for c in cnv_all.filter(phone__in=_shared_phones).values(
             "cnv_id",
             "phone",
             "last_name",
@@ -756,8 +751,8 @@ def _get_cnv_comparison_data(start_date, end_date):
     points_mismatch.sort(key=lambda x: abs(x["diff"]), reverse=True)
     total_points_mismatch.sort(key=lambda x: abs(x["diff"]), reverse=True)
 
-    # CNV used points
-    cnv_used_qs = (
+    # CNV used points — materialise once, derive count and phone list from it
+    _cnv_used_raw = list(
         cnv_all.filter(used_points__gt=0)
         .values(
             "cnv_id",
@@ -773,13 +768,14 @@ def _get_cnv_comparison_data(start_date, end_date):
         )
         .order_by("-used_points")
     )
-    cnv_used_points_count = cnv_all.filter(used_points__gt=0).count()
-    _used_phones = [r["phone"] for r in cnv_used_qs if r["phone"]]
-    _pos_phones_set = set(
-        pos_all.filter(phone__in=_used_phones).values_list("phone", flat=True)
+    cnv_used_points_count = len(_cnv_used_raw)
+    _used_phones = [r["phone"] for r in _cnv_used_raw if r["phone"]]
+    _pos_phones_set = (
+        set(pos_all.filter(phone__in=_used_phones).values_list("phone", flat=True))
+        if _used_phones else set()
     )
     cnv_used_points_list = [
-        {**r, "in_pos": r["phone"] in _pos_phones_set} for r in cnv_used_qs
+        {**r, "in_pos": r["phone"] in _pos_phones_set} for r in _cnv_used_raw
     ]
 
     # Zalo stats

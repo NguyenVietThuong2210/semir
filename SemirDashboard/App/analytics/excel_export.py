@@ -1843,12 +1843,20 @@ def _build_cnv_shop_grouped_ws(wb, breakdown, key, title, time_col_name, hf, fon
 
 
 _CNV_TAB_SHEETS = {
-    "points":    ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
-    "zalo":      ["zalo_mini_app",   "zalo_oa"],
-    "pos_cnv":   ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
-    "breakdown": ["bd_season", "bd_month", "bd_week", "bd_shop",
-                  "bd_season_shop", "bd_month_shop", "bd_week_shop",
-                  "bd_shop_season", "bd_shop_month", "bd_shop_week"],
+    "points":       ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
+    "zalo":         ["zalo_mini_app",   "zalo_oa"],
+    "pos_cnv":      ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
+    "breakdown":    ["bd_season", "bd_month", "bd_week", "bd_shop",
+                     "bd_season_shop", "bd_month_shop", "bd_week_shop",
+                     "bd_shop_season", "bd_shop_month", "bd_shop_week"],
+    # Individual breakdown sub-tabs
+    "bd_season":      ["bd_season"],
+    "bd_month":       ["bd_month"],
+    "bd_week":        ["bd_week"],
+    "bd_shop":        ["bd_shop", "bd_shop_season", "bd_shop_month", "bd_shop_week"],
+    "bd_season_shop": ["bd_season_shop"],
+    "bd_month_shop":  ["bd_month_shop"],
+    "bd_week_shop":   ["bd_week_shop"],
 }
 
 

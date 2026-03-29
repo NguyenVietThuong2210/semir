@@ -71,6 +71,15 @@ def customer_detail(request):
                 .order_by("-sales_date")
             )
 
+            # Pre-fetch coupons for all invoices in one query (avoids N+1)
+            invoice_numbers = [inv.invoice_number for inv in invoices]
+            coupon_map = {
+                c.docket_number: c
+                for c in Coupon.objects.filter(
+                    docket_number__in=invoice_numbers, using_date__isnull=False
+                )
+            }
+
             # Add coupon info to each invoice
             invoices_with_coupons = []
             for inv in invoices:
@@ -85,10 +94,7 @@ def customer_detail(request):
                     "coupon_amount": None,
                 }
 
-                # Check if this invoice has a coupon
-                coupon = Coupon.objects.filter(
-                    docket_number=inv.invoice_number, using_date__isnull=False
-                ).first()
+                coupon = coupon_map.get(inv.invoice_number)
 
                 if coupon:
                     invoice_data["coupon_id"] = coupon.coupon_id

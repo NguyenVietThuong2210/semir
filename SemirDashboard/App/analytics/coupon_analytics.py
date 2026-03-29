@@ -8,7 +8,6 @@ Version: 3.4 - FIXED: Total amount now uses invoice amounts, not face_value
 All field names verified against Coupon model
 """
 
-from collections import defaultdict
 from decimal import Decimal
 
 from django.db.models import Q
@@ -162,16 +161,38 @@ def calculate_coupon_analytics(
     shop_data = {}
     coupon_details = []
 
-    # Helper function to get invoice amount for a coupon
-    def get_invoice_amount(coupon):
-        """Get invoice amount for a coupon, fallback to face_value if no invoice found."""
-        if coupon.docket_number:
-            try:
-                txn = SalesTransaction.objects.get(invoice_number=coupon.docket_number)
-                return txn.sales_amount or coupon.face_value or Decimal(0)
-            except SalesTransaction.DoesNotExist:
-                pass
-        return coupon.face_value or Decimal(0)
+    # ===========================================================================
+    # PRE-FETCH TRANSACTIONS AND CUSTOMERS (avoids N+1 queries)
+    # ===========================================================================
+
+    # All-time used coupons + bulk-fetch their transactions
+    _all_used_coupons = list(qs.filter(using_date__isnull=False))
+    _all_dockets = [c.docket_number for c in _all_used_coupons if c.docket_number]
+    txn_map_all = {
+        t.invoice_number: t
+        for t in SalesTransaction.objects.filter(invoice_number__in=_all_dockets)
+    }
+
+    # Period used coupons + bulk-fetch their transactions
+    _period_used_coupons = list(
+        period_qs.filter(using_date__isnull=False).order_by("-using_date")
+    )
+    _period_dockets = [c.docket_number for c in _period_used_coupons if c.docket_number]
+    txn_map_period = {
+        t.invoice_number: t
+        for t in SalesTransaction.objects.filter(invoice_number__in=_period_dockets)
+    }
+
+    # Bulk-fetch customers for all vip_ids appearing in period transactions
+    _period_vip_ids = {
+        t.vip_id
+        for t in txn_map_period.values()
+        if t.vip_id and t.vip_id != "0"
+    }
+    customer_map = {
+        c.vip_id: c
+        for c in Customer.objects.filter(vip_id__in=_period_vip_ids)
+    }
 
     # ===========================================================================
     # DUPLICATE INVOICE DETECTION
@@ -202,17 +223,16 @@ def calculate_coupon_analytics(
     duplicate_invoices = []
     if _dup_dockets_period:
         for docket in sorted(_dup_dockets_period):
-            coupons_for_docket = list(
-                period_qs.filter(
-                    docket_number=docket, using_date__isnull=False
-                ).order_by("coupon_id")
+            coupons_for_docket = sorted(
+                [c for c in _period_used_coupons if c.docket_number == docket],
+                key=lambda c: c.coupon_id or "",
             )
-            try:
-                txn = SalesTransaction.objects.get(invoice_number=docket)
+            txn = txn_map_period.get(docket)
+            if txn:
                 inv_amount = txn.sales_amount or Decimal(0)
                 shop_name = txn.shop_name or ""
                 sales_date = txn.sales_date
-            except SalesTransaction.DoesNotExist:
+            else:
                 inv_amount = Decimal(0)
                 shop_name = ""
                 sales_date = None
@@ -238,8 +258,9 @@ def calculate_coupon_analytics(
 
     # Calculate all-time amount (process ALL used coupons)
     _seen_dockets_all = set()
-    for coupon in qs.filter(using_date__isnull=False):
-        inv_amount = get_invoice_amount(coupon)
+    for coupon in _all_used_coupons:
+        _txn = txn_map_all.get(coupon.docket_number) if coupon.docket_number else None
+        inv_amount = (_txn.sales_amount if _txn else None) or coupon.face_value or Decimal(0)
         all_time_amount += inv_amount
         all_time_coupon_amount += calc_coupon_amount(coupon.face_value, inv_amount)
         # Unique: count invoice amount only once per docket
@@ -253,7 +274,7 @@ def calculate_coupon_analytics(
     # ===========================================================================
     _seen_dockets_period = set()
 
-    for coupon in period_qs.filter(using_date__isnull=False).order_by("-using_date"):
+    for coupon in _period_used_coupons:
         # Get customer info from coupon
         vip_id = coupon.member_id or None
         vip_name = coupon.member_name or None
@@ -267,18 +288,17 @@ def calculate_coupon_analytics(
 
         # Try to get invoice/transaction info
         if coupon.docket_number:
-            try:
-                txn = SalesTransaction.objects.get(invoice_number=coupon.docket_number)
-
+            txn = txn_map_period.get(coupon.docket_number)
+            if txn:
                 # Get customer info from transaction if not in coupon
                 if not vip_id:
                     vip_id = txn.vip_id
                 if not vip_name and txn.vip_id and txn.vip_id != "0":
-                    try:
-                        cust = Customer.objects.get(vip_id=txn.vip_id)
+                    cust = customer_map.get(txn.vip_id)
+                    if cust:
                         vip_name = cust.name
                         phone = cust.phone
-                    except Customer.DoesNotExist:
+                    else:
                         vip_name = txn.vip_name
 
                 # Get transaction details
@@ -289,8 +309,7 @@ def calculate_coupon_analytics(
                 # Validate shop match
                 if coupon.using_shop and inv_shop and coupon.using_shop != inv_shop:
                     note = f"Shop mismatch: Coupon@{coupon.using_shop} vs Invoice@{inv_shop}"
-
-            except SalesTransaction.DoesNotExist:
+            else:
                 note = f"Invoice {coupon.docket_number} not found"
 
         # Final amount (invoice amount or fallback to face_value)
