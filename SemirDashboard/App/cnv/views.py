@@ -22,19 +22,18 @@ from App.analytics.customer_utils import get_inv_lookups_for_period, build_inv_b
 logger = logging.getLogger("App.cnv")
 
 _CNV_TTL = 300  # 5 minutes (syncs happen more frequently)
-_cnv_ver_lock = threading.Lock()
-_cnv_ver = 0
+_CNV_VER_KEY = "cnv_cmp_ver"  # version stored in shared cache
 
 
 def _cnv_cache_key(start_date, end_date):
-    return f"cnv_cmp:{_cnv_ver}:{start_date}:{end_date}"
+    v = cache.get(_CNV_VER_KEY, 0)
+    return f"cnv_cmp:{v}:{start_date}:{end_date}"
 
 
 def _invalidate_cnv_cache():
-    global _cnv_ver
-    with _cnv_ver_lock:
-        _cnv_ver += 1
-    logger.info("CNV comparison cache invalidated (in-process ver->%d)", _cnv_ver)
+    v = cache.get(_CNV_VER_KEY, 0)
+    cache.set(_CNV_VER_KEY, v + 1, 86400 * 30)
+    logger.info("CNV comparison cache invalidated (ver→%d)", v + 1)
 
 
 @requires_perm("page_cnv_sync")

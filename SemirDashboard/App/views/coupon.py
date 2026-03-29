@@ -1,7 +1,6 @@
 """App/views/coupon.py — Coupon analytics views."""
 import json
 import logging
-import threading
 from datetime import datetime
 
 from django.shortcuts import render, redirect
@@ -21,25 +20,25 @@ from App.models import CouponCampaign
 logger = logging.getLogger(__name__)
 
 _COUPON_TTL = 600  # 10 minutes
-_cpn_ver_lock = threading.Lock()
-_cpn_ver = 0
-_cpn_trend_ver = 0
+_COUPON_VER_KEY = "cpn_ver"  # version stored in shared cache
 
 
 def _coupon_cache_key(date_from, date_to, prefix, shop_group):
-    return f"cpn_data:{_cpn_ver}:{date_from}:{date_to}:{prefix}:{shop_group}"
+    v = cache.get(_COUPON_VER_KEY, 0)
+    return f"cpn_data:{v}:{date_from}:{date_to}:{prefix}:{shop_group}"
 
 
 def _coupon_trend_cache_key(date_from, date_to, shop_group, prefix):
-    return f"cpn_trend:{_cpn_trend_ver}:{date_from}:{date_to}:{shop_group}:{prefix}"
+    v = cache.get("cpn_trend_ver", 0)
+    return f"cpn_trend:{v}:{date_from}:{date_to}:{shop_group}:{prefix}"
 
 
 def _invalidate_coupon_cache():
-    global _cpn_ver, _cpn_trend_ver
-    with _cpn_ver_lock:
-        _cpn_ver += 1
-        _cpn_trend_ver += 1
-    logger.info("coupon cache invalidated (in-process ver->%d, trend_ver->%d)", _cpn_ver, _cpn_trend_ver)
+    v = cache.get(_COUPON_VER_KEY, 0)
+    cache.set(_COUPON_VER_KEY, v + 1, 86400 * 30)
+    tv = cache.get("cpn_trend_ver", 0)
+    cache.set("cpn_trend_ver", tv + 1, 86400 * 30)
+    logger.info("coupon cache invalidated (ver→%d, trend_ver→%d)", v + 1, tv + 1)
 
 
 def _get_coupon_data(date_from, date_to, prefix, shop_group):

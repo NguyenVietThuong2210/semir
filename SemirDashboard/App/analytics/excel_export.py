@@ -1842,18 +1842,108 @@ def _build_cnv_shop_grouped_ws(wb, breakdown, key, title, time_col_name, hf, fon
         ws.column_dimensions[col_letter].width = w
 
 
+def _build_cnv_shop_detail_ws(wb, breakdown, hf, font, align):
+    """Build a per-shop nested detail sheet.
+
+    Mirrors Sales Analytics _create_shop_detail_sheet concept:
+    for each shop → dark header row → summary row → By Season / By Month / By Week sections.
+
+    breakdown["shop_detail"] is a list of:
+        {"shop": str, "summary": row_dict|None, "by_season": [...], "by_month": [...], "by_week": [...]}
+    """
+    ws = wb.create_sheet("By Shop - Detail")
+
+    SHOP_FILL  = PatternFill(start_color="1a252f", end_color="1a252f", fill_type="solid")
+    SHOP_FONT  = Font(bold=True, color="FFFFFF", size=11)
+    SEC_FILL   = PatternFill(start_color="2980b9", end_color="2980b9", fill_type="solid")
+    SEC_FONT   = Font(bold=True, color="FFFFFF", size=9)
+    TOTAL_FONT = Font(bold=True)
+
+    DATA_HDRS = ["Period",
+                 "New POS (INV)", "New POS (NO INV)", "New POS (TOTAL)", "POS Only",
+                 "New CNV", "CNV Only",
+                 "Zalo App", "% App/CNV", "Zalo OA", "% OA/CNV"]
+    ncols = len(DATA_HDRS)
+
+    def _write_data_headers(row):
+        for ci, h in enumerate(DATA_HDRS, 1):
+            c = ws.cell(row, ci, h)
+            c.fill = hf; c.font = font; c.alignment = align
+
+    def _write_data_row(row, r):
+        ws.cell(row, 1,  r.get("label", ""))
+        ws.cell(row, 2,  r.get("new_pos_inv",   0))
+        ws.cell(row, 3,  r.get("new_pos_no_inv", 0))
+        ws.cell(row, 4,  r.get("new_pos",        0))
+        ws.cell(row, 5,  r.get("new_pos_only",   0))
+        ws.cell(row, 6,  r.get("new_cnv",        0))
+        ws.cell(row, 7,  r.get("new_cnv_only",   0))
+        ws.cell(row, 8,  r.get("zalo_app",       0))
+        ws.cell(row, 9,  r.get("zalo_app_pct",   0.0))
+        ws.cell(row, 10, r.get("zalo_oa",        0))
+        ws.cell(row, 11, r.get("zalo_oa_pct",    0.0))
+
+    cur = 1
+    for sd in (breakdown.get("shop_detail") or []):
+        shop_name = sd.get("shop", "")
+
+        # ── Shop header row ──────────────────────────────────────────────
+        ws.cell(cur, 1, f"  {shop_name}")
+        ws.cell(cur, 1).fill = SHOP_FILL
+        ws.cell(cur, 1).font = SHOP_FONT
+        ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=ncols)
+        cur += 1
+
+        # ── Summary totals row ───────────────────────────────────────────
+        summary = sd.get("summary")
+        if summary:
+            ws.cell(cur, 1, "TOTAL")
+            ws.cell(cur, 1).font = TOTAL_FONT
+            _write_data_row(cur, {**summary, "label": "TOTAL"})
+            cur += 1
+
+        # ── Sub-sections: By Season / By Month / By Week ─────────────────
+        for sub_key, sub_label in (("by_season", "By Season"),
+                                   ("by_month",  "By Month"),
+                                   ("by_week",   "By Week")):
+            rows = sd.get(sub_key) or []
+            if not rows:
+                continue
+
+            # Section label
+            ws.cell(cur, 1, sub_label)
+            ws.cell(cur, 1).fill = SEC_FILL
+            ws.cell(cur, 1).font = SEC_FONT
+            ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=ncols)
+            cur += 1
+
+            # Column headers
+            _write_data_headers(cur); cur += 1
+
+            # Data
+            for r in rows:
+                _write_data_row(cur, r); cur += 1
+
+            cur += 1  # blank spacer after each section
+
+        cur += 1  # blank spacer between shops
+
+    ws.column_dimensions["A"].width = 18
+    for col_letter in "BCDEFGHIJK":
+        ws.column_dimensions[col_letter].width = 12
+
+
 _CNV_TAB_SHEETS = {
     "points":       ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
     "zalo":         ["zalo_mini_app",   "zalo_oa"],
     "pos_cnv":      ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
-    "breakdown":    ["bd_season", "bd_month", "bd_week", "bd_shop",
-                     "bd_season_shop", "bd_month_shop", "bd_week_shop",
-                     "bd_shop_season", "bd_shop_month", "bd_shop_week"],
+    "breakdown":    ["bd_season", "bd_month", "bd_week", "bd_shop", "bd_shop_detail",
+                     "bd_season_shop", "bd_month_shop", "bd_week_shop"],
     # Individual breakdown sub-tabs
     "bd_season":      ["bd_season"],
     "bd_month":       ["bd_month"],
     "bd_week":        ["bd_week"],
-    "bd_shop":        ["bd_shop", "bd_shop_season", "bd_shop_month", "bd_shop_week"],
+    "bd_shop":        ["bd_shop", "bd_shop_detail"],
     "bd_season_shop": ["bd_season_shop"],
     "bd_month_shop":  ["bd_month_shop"],
     "bd_week_shop":   ["bd_week_shop"],
@@ -1888,6 +1978,7 @@ def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
         "bd_month":       lambda: _build_cnv_breakdown_ws(wb, bd, "month",       "By Month",            False, hf, fnt, aln),
         "bd_week":        lambda: _build_cnv_breakdown_ws(wb, bd, "week",        "By Week",             False, hf, fnt, aln),
         "bd_shop":        lambda: _build_cnv_breakdown_ws(wb, bd, "shop",        "By Shop",             False, hf, fnt, aln),
+        "bd_shop_detail": lambda: _build_cnv_shop_detail_ws(wb, bd, hf, fnt, aln),
         "bd_season_shop": lambda: _build_cnv_breakdown_ws(wb, bd, "season_shop", "By Season - All Shops", True, hf, fnt, aln),
         "bd_month_shop":  lambda: _build_cnv_breakdown_ws(wb, bd, "month_shop",  "By Month - All Shops",  True, hf, fnt, aln),
         "bd_week_shop":   lambda: _build_cnv_breakdown_ws(wb, bd, "week_shop",   "By Week - All Shops",   True, hf, fnt, aln),
