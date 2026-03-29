@@ -10,7 +10,6 @@ Version: 3.3 - Fixed within-season + cross-season returns
 Version: 3.4 - Added shop_group filter
 """
 import logging
-from collections import defaultdict
 from decimal import Decimal
 
 from django.db.models import Count, Q
@@ -21,13 +20,9 @@ from .calculations import calculate_return_visits
 from .customer_utils import (
     clear_customer_cache,
     get_customer_info,
-    normalize_grade,
     build_customer_purchase_map,
-    build_inv_bucket_map,
-    get_inv_lookups_for_period,
-    _norm_vid,
 )
-from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key, get_session_key, get_month_key, get_week_info, get_year_key
+from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key
 from .aggregators import (
     aggregate_by_grade,
     aggregate_by_season,
@@ -144,7 +139,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     # PERIOD-LEVEL METRICS (EXCLUDING VIP ID = 0)
     # ========================================================================
     returning_customers = set()
-    new_members_in_period = {}   # vip_id → {session, month, year, week_sort}
+    new_members_count = 0
     customer_details = []
     total_amount_period = Decimal(0)
     
@@ -185,23 +180,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             returning_invoices += n
             returning_amount += amt
         
-        # Track new members in period (keyed by vip_id, stores registration bucket info)
-        if reg_date and vip_id != '0':
-            if period_lo <= reg_date <= period_hi:
-                w_sort_reg, _ = get_week_info(reg_date)
-                # registration_store: needed by aggregate_by_shop for shop attribution
-                # grade: already resolved above via get_customer_info
-                cust_obj = purchases_sorted[0]['customer']
-                reg_store = (getattr(cust_obj, 'registration_store', None) or '').strip() or 'Unknown'
-                new_members_in_period[vip_id] = {
-                    'session':            get_session_key(reg_date),
-                    'month':              get_month_key(reg_date),
-                    'year':               get_year_key(reg_date),
-                    'week_sort':          w_sort_reg,
-                    'registration_store': reg_store,
-                    'grade':              grade,
-                }
-        
+        # Count new members in period
+        if reg_date and period_lo <= reg_date <= period_hi:
+            new_members_count += 1
+
         # Build customer detail record
         customer_details.append({
             'vip_id': vip_id,
@@ -214,59 +196,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             'total_spent': float(amt),
         })
     
-    # Customers registered in period with NO invoice (not in customer_purchases)
-    # Always run — period_lo/period_hi cover both filtered and unfiltered cases
-    new_no_inv_members = {}
-    pks_with_inv, vids_with_inv = get_inv_lookups_for_period(period_lo, period_hi)
-    for c in (
-        Customer.objects
-        .filter(registration_date__gte=period_lo, registration_date__lte=period_hi)
-        .values('id', 'vip_id', 'vip_grade', 'registration_date', 'registration_store')
-    ):
-        vid = _norm_vid(c['vip_id'] or '')
-        # Customers with no valid vip_id can't link to invoices → always new_no_inv.
-        # Use pk-based key so null-vip customers don't overwrite each other.
-        key = vid if (vid and vid != '0') else f"__pk{c['id']}"
-        # Already counted as new member with invoices
-        if key in new_members_in_period:
-            continue
-        # Has invoice via FK regardless of vip_id formatting
-        if c['id'] in pks_with_inv:
-            continue
-        # Has invoice via vip_id string match (valid vip only)
-        if vid and vid != '0' and vid in vids_with_inv:
-            continue
-        rd = c['registration_date']
-        w_sort, w_lbl = get_week_info(rd) if rd else (None, None)
-        new_no_inv_members[key] = {
-            'vip_grade':          c['vip_grade'] or '',
-            'registration_store': (c['registration_store'] or '').strip() or 'Unknown',
-            'session':            get_session_key(rd) if rd else None,
-            'month':              get_month_key(rd) if rd else None,
-            'year':               get_year_key(rd) if rd else None,
-            'week_sort':          w_sort,
-            'week_label':         w_lbl,
-        }
-
-    # Merge both into one unified dict: all customers registered in period.
-    # new_no_inv_members customers have no invoices → inv_bucket_map returns {}
-    # → naturally go to new_no_inv in aggregators without a separate counter.
-    # (no overlap: new_members_in_period has invoices, new_no_inv_members does not)
-    all_new_in_period = dict(new_members_in_period)
-    for _vid, _m in new_no_inv_members.items():
-        if _vid not in all_new_in_period:
-            all_new_in_period[_vid] = {
-                'session':            _m['session'],
-                'month':              _m['month'],
-                'year':               _m.get('year'),
-                'week_sort':          _m['week_sort'],
-                # registration_store and grade preserved from new_no_inv_members
-                'registration_store': _m['registration_store'],
-                'grade':              normalize_grade(_m.get('vip_grade') or ''),
-            }
-
-    logger.info("new_members_in_period=%d  new_no_inv_members=%d  all_new=%d",
-                len(new_members_in_period), len(new_no_inv_members), len(all_new_in_period))
+    logger.info("new_members_count=%d", new_members_count)
 
     # Calculate metrics EXCLUDING VIP ID = 0
     total_active = len([vid for vid in customer_purchases if vid != '0'])
@@ -281,20 +211,17 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     # ========================================================================
     # AGGREGATE BY DIMENSIONS
     # ========================================================================
-    # Build per-bucket invoice presence map for consistent NEW INV / NEW NO INV
-    inv_bucket_map = build_inv_bucket_map(customer_purchases)
-
-    grade_stats = aggregate_by_grade(customer_details, all_new_in_period, new_no_inv_members)
-    session_stats = aggregate_by_season(customer_purchases, get_customer_info, all_new_in_period, inv_bucket_map)
-    month_stats = aggregate_by_month(customer_purchases, get_customer_info, all_new_in_period, inv_bucket_map)
-    year_stats = aggregate_by_year(customer_purchases, get_customer_info, all_new_in_period, inv_bucket_map)
+    grade_stats = aggregate_by_grade(customer_details)
+    session_stats = aggregate_by_season(customer_purchases, get_customer_info)
+    month_stats = aggregate_by_month(customer_purchases, get_customer_info)
+    year_stats = aggregate_by_year(customer_purchases, get_customer_info)
 
     all_session_keys = sorted([s['session'] for s in session_stats], key=session_sort_key)
     all_month_keys = sorted([m['month'] for m in month_stats], key=month_sort_key)
     all_year_keys = sorted([y['year'] for y in year_stats], key=year_sort_key)
-    week_stats = aggregate_by_week(customer_purchases, get_customer_info, all_new_in_period, inv_bucket_map)
+    week_stats = aggregate_by_week(customer_purchases, get_customer_info)
     all_week_keys = sorted([w['week_sort'] for w in week_stats], key=week_sort_key)
-    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys, all_new_in_period, all_month_keys, all_year_keys, all_week_keys, inv_bucket_map)
+    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys, all_month_keys, all_year_keys, all_week_keys)
     
     buyer_without_info_stats = calculate_buyer_without_info(
         vip_0_purchases,
@@ -324,8 +251,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             'returning_amount': float(returning_amount),  # NEW
             'total_amount_period': float(total_amount_period),
             'buyer_without_info': buyer_no_info_invoices,
-            'new_members_in_period': len(new_members_in_period),  # with invoices
-            'new_no_inv_in_period':  len(new_no_inv_members),      # without invoices
+            'new_members_in_period': new_members_count,
             'total_customers_in_db': total_customers_in_db,
             'member_active_all_time': member_active_all_time,
             'member_inactive_all_time': member_inactive_all_time,

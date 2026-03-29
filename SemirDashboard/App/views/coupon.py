@@ -1,6 +1,7 @@
 """App/views/coupon.py — Coupon analytics views."""
 import json
 import logging
+import threading
 from datetime import datetime
 
 from django.shortcuts import render, redirect
@@ -19,21 +20,26 @@ from App.models import CouponCampaign
 
 logger = logging.getLogger(__name__)
 
-_COUPON_VER_KEY = "coupon_data_ver"
 _COUPON_TTL = 600  # 10 minutes
+_cpn_ver_lock = threading.Lock()
+_cpn_ver = 0
+_cpn_trend_ver = 0
 
 
 def _coupon_cache_key(date_from, date_to, prefix, shop_group):
-    v = cache.get(_COUPON_VER_KEY, 0)
-    return f"cpn_data:{v}:{date_from}:{date_to}:{prefix}:{shop_group}"
+    return f"cpn_data:{_cpn_ver}:{date_from}:{date_to}:{prefix}:{shop_group}"
+
+
+def _coupon_trend_cache_key(date_from, date_to, shop_group, prefix):
+    return f"cpn_trend:{_cpn_trend_ver}:{date_from}:{date_to}:{shop_group}:{prefix}"
 
 
 def _invalidate_coupon_cache():
-    v = cache.get(_COUPON_VER_KEY, 0)
-    cache.set(_COUPON_VER_KEY, v + 1, 86400 * 30)
-    tv = cache.get("cpn_trend_ver", 0)
-    cache.set("cpn_trend_ver", tv + 1, 86400 * 30)
-    logger.info("coupon cache invalidated (ver→%d, trend_ver→%d)", v + 1, tv + 1)
+    global _cpn_ver, _cpn_trend_ver
+    with _cpn_ver_lock:
+        _cpn_ver += 1
+        _cpn_trend_ver += 1
+    logger.info("coupon cache invalidated (in-process ver->%d, trend_ver->%d)", _cpn_ver, _cpn_trend_ver)
 
 
 def _get_coupon_data(date_from, date_to, prefix, shop_group):
@@ -175,10 +181,8 @@ def coupon_chart(request):
     data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
 
     # Trend data (shop×time, campaign×time) — separate cache
-    _trend_ver_key = "cpn_trend_ver"
     _trend_ttl = 600
-    trend_v = cache.get(_trend_ver_key, 0)
-    trend_cache_key = f"cpn_trend:{trend_v}:{date_from}:{date_to}:{shop_group}:{coupon_id_prefix}"
+    trend_cache_key = _coupon_trend_cache_key(date_from, date_to, shop_group, coupon_id_prefix)
     trend_data = cache.get(trend_cache_key)
     if trend_data is None:
         trend_data = calculate_coupon_trend_data(date_from, date_to, shop_group, coupon_id_prefix)

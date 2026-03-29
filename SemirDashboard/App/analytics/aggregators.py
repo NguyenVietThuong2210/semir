@@ -11,27 +11,18 @@ from collections import defaultdict
 from decimal import Decimal
 
 from .calculations import calculate_return_visits, create_empty_bucket
-from .customer_utils import GRADE_ORDER, get_all_time_grade_counts, classify_new_inv
+from .customer_utils import GRADE_ORDER, get_all_time_grade_counts
 from .season_utils import (session_sort_key, month_sort_key, year_sort_key, week_sort_key,
                             get_session_key, get_month_key, get_week_info, get_year_key)
 
 logger = logging.getLogger('customer_analytics')
 
 
-def aggregate_by_grade(customer_details, new_members=None, new_no_inv_members=None):
+def aggregate_by_grade(customer_details):
     """
     Aggregate customer data by VIP grade.
-
-    Args:
-        customer_details: List of customer detail dicts (already excludes VIP ID = 0)
-        new_members: Set of vip_ids whose registration_date falls in the analysis period
-
-    Returns:
-        List of grade stats dicts sorted by grade order
     """
     grade_buckets = defaultdict(create_empty_bucket)
-    grade_new = defaultdict(int)
-    grade_no_inv = defaultdict(int)
 
     for d in customer_details:
         g = d['vip_grade']
@@ -39,47 +30,30 @@ def aggregate_by_grade(customer_details, new_members=None, new_no_inv_members=No
         grade_buckets[g]['amount'] += Decimal(str(d['total_spent']))
         grade_buckets[g]['invoices'] += d['total_purchases']
 
-        # Track returning customers
         if d['return_visits'] > 0:
             grade_buckets[g]['returning'] += 1
-            # NEW: Track returning invoices and amount
             grade_buckets[g]['returning_invoices'] = grade_buckets[g].get('returning_invoices', 0) + d['total_purchases']
             grade_buckets[g]['returning_amount'] = grade_buckets[g].get('returning_amount', Decimal(0)) + Decimal(str(d['total_spent']))
 
-        # Track new members
-        if new_members and d['vip_id'] in new_members:
-            grade_new[g] += 1
-
-    for m in (new_no_inv_members or {}).values():
-        grade_no_inv[m['vip_grade']] += 1
-
-    # Ensure all grades exist
     for g in GRADE_ORDER:
         if g not in grade_buckets:
             _ = grade_buckets[g]
 
-    # Get all-time grade counts from database
     grade_db = get_all_time_grade_counts()
 
-    # Build stats list
     grade_stats = []
     for grade in sorted(grade_buckets, key=lambda x: GRADE_ORDER.get(x, 99)):
         s = grade_buckets[grade]
         tdb = grade_db.get(grade, 0)
-        new_c = grade_new.get(grade, 0)
         grade_stats.append({
             'grade': grade,
             'total_customers': s['active'],
             'total_in_db': tdb,
-            'new_customers': new_c,
-            'new_customers_no_inv': grade_no_inv.get(grade, 0),
-            'new_customers_total': new_c + grade_no_inv.get(grade, 0),
-            'new_rate': round(new_c / s['active'] * 100, 2) if s['active'] else 0,
             'returning_customers': s['returning'],
             'return_rate': round(s['returning'] / s['active'] * 100 if s['active'] else 0, 2),
             'return_rate_all_time': round(s['returning'] / tdb * 100 if tdb else 0, 2),
-            'returning_invoices': s.get('returning_invoices', 0),  # NEW
-            'returning_amount': float(s.get('returning_amount', Decimal(0))),  # NEW
+            'returning_invoices': s.get('returning_invoices', 0),
+            'returning_amount': float(s.get('returning_amount', Decimal(0))),
             'total_invoices': s['invoices'],
             'total_amount': float(s['amount']),
         })
@@ -87,32 +61,15 @@ def aggregate_by_grade(customer_details, new_members=None, new_no_inv_members=No
     return grade_stats
 
 
-def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=None, inv_bucket_map=None):
+def aggregate_by_season(customer_purchases, get_customer_info_fn):
     """
     Aggregate customer data by season.
-
-    Fixed v3.3: Now correctly counts BOTH within-season AND cross-season returns.
-    Fixed v3.4: NEW (INV) / NEW (NO INV) use user's formula:
-        new_members      = all customers registered in period (with OR without invoices)
-        new_members_inv  = subset that has invoice in same season as registration
-        new_members_no_inv = new_members − new_members_inv
-
-    Args:
-        customer_purchases: Dict[vip_id] -> List[purchase_dict]
-        get_customer_info_fn: Function to get customer info
-        new_members: dict[vip_id → {session,month,...}] — all customers registered in period
-        inv_bucket_map: dict[vip_id → {sessions,...}] built by build_inv_bucket_map()
-
-    Returns:
-        List of season stats dicts sorted chronologically
     """
     session_buckets = defaultdict(create_empty_bucket)
     session_vip0_invoices = defaultdict(int)
     session_vip0_amount = defaultdict(lambda: Decimal(0))
     session_returning_invoices = defaultdict(int)
     session_returning_amount = defaultdict(lambda: Decimal(0))
-    session_new_inv     = defaultdict(int)   # registered in period, has inv in same season
-    session_new_no_inv  = defaultdict(int)   # registered in period, no inv in that season
 
     for vip_id, purchases in customer_purchases.items():
         # Track VIP 0 separately
@@ -154,39 +111,17 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
                 session_returning_invoices[sk] += len(sp)
                 session_returning_amount[sk] += sp_amount
 
-    # Post-loop: bucket new members by their REGISTRATION season, check inv in same season
-    for vip_id, reg_info in (new_members or {}).items():
-        if not isinstance(reg_info, dict):
-            continue
-        reg_sk = reg_info.get('session')
-        if not reg_sk:
-            continue
-        inv_info = (inv_bucket_map or {}).get(vip_id, {})
-        if reg_sk in inv_info.get('sessions', set()):
-            session_new_inv[reg_sk] += 1
-        else:
-            session_new_no_inv[reg_sk] += 1
-
-    # Build stats list — include seasons that have VIP0-only transactions or new members
-    all_session_keys_union = set(session_buckets.keys()) | set(session_vip0_invoices.keys()) | set(session_new_inv.keys()) | set(session_new_no_inv.keys())
+    all_session_keys_union = set(session_buckets.keys()) | set(session_vip0_invoices.keys())
     session_stats = []
     for key in sorted(all_session_keys_union, key=session_sort_key):
         s = session_buckets[key]
         ac = s['active']
         rc = s['returning']
-
         vip0_inv = session_vip0_invoices.get(key, 0)
         vip0_amt = session_vip0_amount.get(key, Decimal(0))
-
-        new_c      = session_new_inv.get(key, 0)
-        new_no_inv = session_new_no_inv.get(key, 0)
         session_stats.append({
             'session': key,
             'total_customers': ac,
-            'new_customers': new_c,
-            'new_customers_no_inv': new_no_inv,
-            'new_customers_total': new_c + new_no_inv,
-            'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'returning_invoices': session_returning_invoices.get(key, 0),
@@ -201,19 +136,15 @@ def aggregate_by_season(customer_purchases, get_customer_info_fn, new_members=No
     return session_stats
 
 
-def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=None, inv_bucket_map=None):
+def aggregate_by_month(customer_purchases, get_customer_info_fn):
     """
     Aggregate customer data by calendar month (YYYY-MM).
-    Same logic as aggregate_by_season but uses the 'month' field.
-    Fixed v3.4: NEW (INV) bucketed by registration month, not purchase month.
     """
     month_buckets = defaultdict(create_empty_bucket)
     month_vip0_invoices = defaultdict(int)
     month_vip0_amount = defaultdict(lambda: Decimal(0))
     month_returning_invoices = defaultdict(int)
     month_returning_amount = defaultdict(lambda: Decimal(0))
-    month_new_inv    = defaultdict(int)
-    month_new_no_inv = defaultdict(int)
 
     for vip_id, purchases in customer_purchases.items():
         if vip_id == '0':
@@ -248,21 +179,7 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
                 month_returning_invoices[mk] += len(mp)
                 month_returning_amount[mk] += mp_amount
 
-    # Post-loop: bucket new members by REGISTRATION month
-    for vip_id, reg_info in (new_members or {}).items():
-        if not isinstance(reg_info, dict):
-            continue
-        reg_mk = reg_info.get('month')
-        if not reg_mk:
-            continue
-        inv_info = (inv_bucket_map or {}).get(vip_id, {})
-        if reg_mk in inv_info.get('months', set()):
-            month_new_inv[reg_mk] += 1
-        else:
-            month_new_no_inv[reg_mk] += 1
-
-    # Include months that have VIP0-only transactions or new members
-    all_month_keys_union = set(month_buckets.keys()) | set(month_vip0_invoices.keys()) | set(month_new_inv.keys()) | set(month_new_no_inv.keys())
+    all_month_keys_union = set(month_buckets.keys()) | set(month_vip0_invoices.keys())
     month_stats = []
     for key in sorted(all_month_keys_union, key=month_sort_key):
         s = month_buckets[key]
@@ -270,15 +187,9 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
         rc = s['returning']
         vip0_inv = month_vip0_invoices.get(key, 0)
         vip0_amt = month_vip0_amount.get(key, Decimal(0))
-        new_c      = month_new_inv.get(key, 0)
-        new_no_inv = month_new_no_inv.get(key, 0)
         month_stats.append({
             'month': key,
             'total_customers': ac,
-            'new_customers': new_c,
-            'new_customers_no_inv': new_no_inv,
-            'new_customers_total': new_c + new_no_inv,
-            'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'returning_invoices': month_returning_invoices.get(key, 0),
@@ -293,20 +204,15 @@ def aggregate_by_month(customer_purchases, get_customer_info_fn, new_members=Non
     return month_stats
 
 
-def aggregate_by_week(customer_purchases, get_customer_info_fn, new_members=None, inv_bucket_map=None):
+def aggregate_by_week(customer_purchases, get_customer_info_fn):
     """
     Aggregate customer data by week (week starting on first Monday of year).
-    Same logic as aggregate_by_month but uses 'week_sort' and 'week_label' fields.
-    Fixed v3.4: NEW (INV) bucketed by registration week, not purchase week.
-    Each row: {week_sort, week_label, total_customers, new_customers, ...}
     """
     week_buckets = defaultdict(create_empty_bucket)
     week_vip0_invoices = defaultdict(int)
     week_vip0_amount = defaultdict(lambda: Decimal(0))
     week_returning_invoices = defaultdict(int)
     week_returning_amount = defaultdict(lambda: Decimal(0))
-    week_new_inv    = defaultdict(int)
-    week_new_no_inv = defaultdict(int)
     week_labels = {}  # week_sort -> week_label
 
     for vip_id, purchases in customer_purchases.items():
@@ -344,20 +250,7 @@ def aggregate_by_week(customer_purchases, get_customer_info_fn, new_members=None
                 week_returning_invoices[wk] += len(wp)
                 week_returning_amount[wk] += wp_amount
 
-    # Post-loop: bucket new members by REGISTRATION week
-    for vip_id, reg_info in (new_members or {}).items():
-        if not isinstance(reg_info, dict):
-            continue
-        reg_wk = reg_info.get('week_sort')
-        if not reg_wk:
-            continue
-        inv_info = (inv_bucket_map or {}).get(vip_id, {})
-        if reg_wk in inv_info.get('weeks', set()):
-            week_new_inv[reg_wk] += 1
-        else:
-            week_new_no_inv[reg_wk] += 1
-
-    all_week_keys_union = set(week_buckets.keys()) | set(week_vip0_invoices.keys()) | set(week_new_inv.keys()) | set(week_new_no_inv.keys())
+    all_week_keys_union = set(week_buckets.keys()) | set(week_vip0_invoices.keys())
     week_stats = []
     for key in sorted(all_week_keys_union, key=week_sort_key):
         s = week_buckets[key]
@@ -365,16 +258,10 @@ def aggregate_by_week(customer_purchases, get_customer_info_fn, new_members=None
         rc = s['returning']
         vip0_inv = week_vip0_invoices.get(key, 0)
         vip0_amt = week_vip0_amount.get(key, Decimal(0))
-        new_c      = week_new_inv.get(key, 0)
-        new_no_inv = week_new_no_inv.get(key, 0)
         week_stats.append({
             'week_sort':  key,
             'week_label': week_labels.get(key, key),
             'total_customers': ac,
-            'new_customers': new_c,
-            'new_customers_no_inv': new_no_inv,
-            'new_customers_total': new_c + new_no_inv,
-            'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'returning_invoices': week_returning_invoices.get(key, 0),
@@ -389,19 +276,15 @@ def aggregate_by_week(customer_purchases, get_customer_info_fn, new_members=None
     return week_stats
 
 
-def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None, inv_bucket_map=None):
+def aggregate_by_year(customer_purchases, get_customer_info_fn):
     """
     Aggregate customer data by calendar year (YYYY).
-    Same logic as aggregate_by_month but uses the 'year' field.
-    Fixed v3.4: NEW (INV) bucketed by registration year, not purchase year.
     """
     year_buckets = defaultdict(create_empty_bucket)
     year_vip0_invoices = defaultdict(int)
     year_vip0_amount = defaultdict(lambda: Decimal(0))
     year_returning_invoices = defaultdict(int)
     year_returning_amount = defaultdict(lambda: Decimal(0))
-    year_new_inv    = defaultdict(int)
-    year_new_no_inv = defaultdict(int)
 
     for vip_id, purchases in customer_purchases.items():
         if vip_id == '0':
@@ -436,20 +319,7 @@ def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None
                 year_returning_invoices[yk] += len(yp)
                 year_returning_amount[yk] += yp_amount
 
-    # Post-loop: bucket new members by REGISTRATION year
-    for vip_id, reg_info in (new_members or {}).items():
-        if not isinstance(reg_info, dict):
-            continue
-        reg_yk = reg_info.get('year')
-        if not reg_yk:
-            continue
-        inv_info = (inv_bucket_map or {}).get(vip_id, {})
-        if reg_yk in inv_info.get('years', set()):
-            year_new_inv[reg_yk] += 1
-        else:
-            year_new_no_inv[reg_yk] += 1
-
-    all_year_keys_union = set(year_buckets.keys()) | set(year_vip0_invoices.keys()) | set(year_new_inv.keys()) | set(year_new_no_inv.keys())
+    all_year_keys_union = set(year_buckets.keys()) | set(year_vip0_invoices.keys())
     year_stats = []
     for key in sorted(all_year_keys_union, key=year_sort_key):
         s = year_buckets[key]
@@ -457,15 +327,9 @@ def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None
         rc = s['returning']
         vip0_inv = year_vip0_invoices.get(key, 0)
         vip0_amt = year_vip0_amount.get(key, Decimal(0))
-        new_c      = year_new_inv.get(key, 0)
-        new_no_inv = year_new_no_inv.get(key, 0)
         year_stats.append({
             'year': key,
             'total_customers': ac,
-            'new_customers': new_c,
-            'new_customers_no_inv': new_no_inv,
-            'new_customers_total': new_c + new_no_inv,
-            'new_rate': round(new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'returning_invoices': year_returning_invoices.get(key, 0),
@@ -480,38 +344,16 @@ def aggregate_by_year(customer_purchases, get_customer_info_fn, new_members=None
     return year_stats
 
 
-def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys, new_members=None, all_month_keys=None, all_year_keys=None, all_week_keys=None, inv_bucket_map=None):
+def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys, all_month_keys=None, all_year_keys=None, all_week_keys=None):
     """
     Aggregate customer data by shop with sub-breakdowns.
-
-    Fixed v3.3: Shop→Season now counts within-season returns correctly.
-
-    Args:
-        customer_purchases: Dict[vip_id] -> List[purchase_dict]
-        get_customer_info_fn: Function to get customer info
-        all_session_keys: List of all season keys (for consistent shop sub-breakdowns)
-        new_members: Set of vip_ids whose registration_date falls in the analysis period
-        all_month_keys: List of all month keys (for consistent shop by-month breakdowns)
-
-    Returns:
-        List of shop stats dicts with by_grade, by_session, and by_month breakdowns
     """
     shop_customers = defaultdict(set)
     shop_invoices = defaultdict(int)
     shop_amount = defaultdict(Decimal)
     shop_returning = defaultdict(set)
-    # NEW: Track returning invoices and amounts at shop level
     shop_returning_invoices = defaultdict(int)
     shop_returning_amount = defaultdict(lambda: Decimal(0))
-    # Track new customers per shop / per shop-grade / per shop-session
-    shop_new = defaultdict(int)
-    shop_grade_new = defaultdict(lambda: defaultdict(int))
-    shop_sess_new = defaultdict(lambda: defaultdict(int))
-    shop_no_inv       = defaultdict(int)
-    shop_sess_no_inv  = defaultdict(lambda: defaultdict(int))
-    shop_month_no_inv = defaultdict(lambda: defaultdict(int))
-    shop_year_no_inv  = defaultdict(lambda: defaultdict(int))
-    shop_week_no_inv  = defaultdict(lambda: defaultdict(int))
     
     shop_grade = defaultdict(lambda: defaultdict(lambda: {
         'active': set(), 'returning': set(), 'invoices': 0, 'amount': Decimal(0),
@@ -530,19 +372,16 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
     shop_month = defaultdict(lambda: defaultdict(create_empty_bucket))
     shop_month_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
     shop_month_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
-    shop_month_new = defaultdict(lambda: defaultdict(int))
 
     # Year tracking per shop
     shop_year = defaultdict(lambda: defaultdict(create_empty_bucket))
     shop_year_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
     shop_year_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
-    shop_year_new = defaultdict(lambda: defaultdict(int))
 
     # Week tracking per shop
     shop_week = defaultdict(lambda: defaultdict(create_empty_bucket))
     shop_week_returning = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
     shop_week_vip0 = defaultdict(lambda: defaultdict(lambda: {'invoices': 0, 'amount': Decimal(0)}))
-    shop_week_new = defaultdict(lambda: defaultdict(int))
     shop_week_labels = {}  # week_sort -> week_label
 
     for vip_id, purchases in customer_purchases.items():
@@ -687,53 +526,6 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                     shop_week_returning[sh][wk]['invoices'] += len(wp)
                     shop_week_returning[sh][wk]['amount'] += wp_amount
 
-    # ── Post-loop: new member attribution ────────────────────────────────────
-    # Uses shared classify_new_inv() — same function as CNV page.
-    # Shop attribution: registration_store (separate from inv check).
-    # Invoice check:    time bucket only, any shop (see classify_new_inv docstring).
-    _ibm = inv_bucket_map or {}
-    for vip_id, reg_info in (new_members or {}).items():
-        if not isinstance(reg_info, dict):
-            continue
-        sh     = reg_info.get('registration_store') or 'Unknown'
-        grade  = reg_info.get('grade', 'No Grade')
-        reg_sk = reg_info.get('session')
-        reg_mk = reg_info.get('month')
-        reg_yk = reg_info.get('year')
-        reg_wk = reg_info.get('week_sort')
-
-        # Shared formula: classify by time bucket, shop-agnostic inv check
-        chk = classify_new_inv(_ibm.get(vip_id, {}),
-                                reg_sk=reg_sk, reg_mk=reg_mk,
-                                reg_yk=reg_yk, reg_wk=reg_wk)
-
-        # ── Top-level shop: inv = has any invoice in period ──────────────────
-        if chk['any']:
-            shop_new[sh] += 1
-            shop_grade_new[sh][grade] += 1
-        else:
-            shop_no_inv[sh] += 1
-
-        # ── Shop × Season: inv = same season, any shop ───────────────────────
-        if reg_sk:
-            if chk['season']: shop_sess_new[sh][reg_sk] += 1
-            else:              shop_sess_no_inv[sh][reg_sk] += 1
-
-        # ── Shop × Month: inv = same month, any shop ─────────────────────────
-        if reg_mk:
-            if chk['month']: shop_month_new[sh][reg_mk] += 1
-            else:             shop_month_no_inv[sh][reg_mk] += 1
-
-        # ── Shop × Year: inv = same year, any shop ───────────────────────────
-        if reg_yk:
-            if chk['year']: shop_year_new[sh][reg_yk] += 1
-            else:            shop_year_no_inv[sh][reg_yk] += 1
-
-        # ── Shop × Week: inv = same week, any shop ───────────────────────────
-        if reg_wk:
-            if chk['week']: shop_week_new[sh][reg_wk] += 1
-            else:            shop_week_no_inv[sh][reg_wk] += 1
-
     # Build shop stats list
     # Include shops with regular invoices OR VIP0-only invoices (vấn đề 2)
     all_shops_with_data = set(shop_customers.keys()) | set(shop_vip0_invoices.keys())
@@ -748,12 +540,9 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             gd = shop_grade[sh][grade]
             a = len(gd['active'])
             r = len(gd['returning'])
-            grade_new_c = shop_grade_new[sh].get(grade, 0)
             by_grade_list.append({
                 'grade': grade,
                 'total_customers': a,
-                'new_customers': grade_new_c,
-                'new_rate': round(grade_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
                 'returning_invoices': gd.get('returning_invoices', 0),  # NEW
@@ -774,14 +563,9 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             
             a = sd['active']
             r = sd['returning']
-            sess_new_c = shop_sess_new[sh].get(key, 0)
             by_session_list.append({
                 'session': key,
                 'total_customers': a,
-                'new_customers': sess_new_c,
-                'new_customers_no_inv': shop_sess_no_inv[sh].get(key, 0),
-                'new_customers_total': sess_new_c + shop_sess_no_inv[sh].get(key, 0),
-                'new_rate': round(sess_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
                 'returning_invoices': ret_sess['invoices'],  # NEW
@@ -802,14 +586,9 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             ret_mo = shop_month_returning[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
             a = md['active']
             r = md['returning']
-            mo_new_c = shop_month_new[sh].get(key, 0)
             by_month_list.append({
                 'month': key,
                 'total_customers': a,
-                'new_customers': mo_new_c,
-                'new_customers_no_inv': shop_month_no_inv[sh].get(key, 0),
-                'new_customers_total': mo_new_c + shop_month_no_inv[sh].get(key, 0),
-                'new_rate': round(mo_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
                 'returning_invoices': ret_mo['invoices'],
@@ -830,14 +609,9 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             ret_yr = shop_year_returning[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
             a = yd['active']
             r = yd['returning']
-            yr_new_c = shop_year_new[sh].get(key, 0)
             by_year_list.append({
                 'year': key,
                 'total_customers': a,
-                'new_customers': yr_new_c,
-                'new_customers_no_inv': shop_year_no_inv[sh].get(key, 0),
-                'new_customers_total': yr_new_c + shop_year_no_inv[sh].get(key, 0),
-                'new_rate': round(yr_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
                 'returning_invoices': ret_yr['invoices'],
@@ -858,15 +632,10 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
             ret_wk = shop_week_returning[sh].get(key, {'invoices': 0, 'amount': Decimal(0)})
             a = wd['active']
             r = wd['returning']
-            wk_new_c = shop_week_new[sh].get(key, 0)
             by_week_list.append({
                 'week_sort':  key,
                 'week_label': shop_week_labels.get(key, key),
                 'total_customers': a,
-                'new_customers': wk_new_c,
-                'new_customers_no_inv': shop_week_no_inv[sh].get(key, 0),
-                'new_customers_total': wk_new_c + shop_week_no_inv[sh].get(key, 0),
-                'new_rate': round(wk_new_c / a * 100, 2) if a else 0,
                 'returning_customers': r,
                 'return_rate': round(r / a * 100 if a else 0, 2),
                 'returning_invoices': ret_wk['invoices'],
@@ -877,14 +646,9 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 'total_amount_with_vip0': float(wd['amount'] + vip0_wk['amount']),
             })
 
-        shop_new_c = shop_new.get(sh, 0)
         shop_stats.append({
             'shop_name': sh,
             'total_customers': ac,
-            'new_customers': shop_new_c,
-            'new_customers_no_inv': shop_no_inv.get(sh, 0),
-            'new_customers_total': shop_new_c + shop_no_inv.get(sh, 0),
-            'new_rate': round(shop_new_c / ac * 100, 2) if ac else 0,
             'returning_customers': rc,
             'return_rate': round(rc / ac * 100 if ac else 0, 2),
             'returning_invoices': shop_returning_invoices.get(sh, 0),
