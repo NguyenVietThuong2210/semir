@@ -22,10 +22,6 @@ from App.analytics.customer_utils import get_inv_lookups_for_period, build_inv_b
 logger = logging.getLogger("App.cnv")
 
 
-def _invalidate_cnv_cache():
-    pass  # cache removed — kept as stub so scheduler.py calls don't break
-
-
 @requires_perm("page_cnv_sync")
 def sync_status(request):
     """
@@ -875,7 +871,7 @@ def _compute_cnv_comparison(start_date, end_date):
 
 @requires_perm("page_cnv_comparison")
 def customer_analytics(request):
-    """Compare POS System vs CNV Loyalty customers — served from cache."""
+    """Compare POS System vs CNV Loyalty customers."""
     start_date = request.GET.get("start_date", "")
     end_date = request.GET.get("end_date", "")
 
@@ -890,7 +886,7 @@ def customer_analytics(request):
         **d,
         "start_date": start_date,
         "end_date": end_date,
-        # UI display limits — download uses full data from cache
+        # UI display limits
         "points_mismatch":       d["points_mismatch"][:100],
         "total_points_mismatch": d["total_points_mismatch"][:100],
         "cnv_used_points_list":  d["cnv_used_points_list"][:200],

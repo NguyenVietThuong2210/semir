@@ -497,7 +497,7 @@ def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None, c
         NO user filters — always all-time, all coupons, all shops.
         Produces: campaign_series, time_labels_camp, total_by_time.
 
-    Returns serialisable plain dicts — safe to cache.
+    Returns serialisable plain dicts.
     Bucket types: week (YYYY-Www), month (YYYY-MM), season, year.
     """
     from collections import defaultdict

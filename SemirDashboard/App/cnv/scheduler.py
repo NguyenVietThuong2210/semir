@@ -83,10 +83,6 @@ def sync_cnv_customers_only():
         logger.info("Created: %d, Updated: %d, Failed: %d", created, updated, failed)
         logger.info("=" * 60)
 
-        from .views import _invalidate_cnv_cache
-
-        _invalidate_cnv_cache()
-
     except Exception as e:
         logger.error("=" * 60)
         logger.error("CUSTOMERS SYNC FAILED: %s", e)
@@ -149,10 +145,6 @@ def sync_cnv_orders_only():
         logger.info("ORDERS SYNC COMPLETED")
         logger.info("Created: %d, Updated: %d, Failed: %d", created, updated, failed)
         logger.info("=" * 60)
-
-        from .views import _invalidate_cnv_cache
-
-        _invalidate_cnv_cache()
 
     except Exception as e:
         logger.error("=" * 60)

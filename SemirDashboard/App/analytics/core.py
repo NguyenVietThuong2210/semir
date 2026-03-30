@@ -18,7 +18,6 @@ from App.models import Customer, SalesTransaction
 
 from .calculations import calculate_return_visits
 from .customer_utils import (
-    clear_customer_cache,
     get_customer_info,
     build_customer_purchase_map,
 )
@@ -64,7 +63,6 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         - customer_details: Individual customer data
         - buyer_without_info_stats: VIP ID = 0 analytics
     """
-    clear_customer_cache()
     logger.info("START date_from=%s date_to=%s shop_group=%s", date_from, date_to, shop_group)
 
     # OPT-1: Customer total + all-time active (has at least 1 invoice, excl VIP=0)

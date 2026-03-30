@@ -146,7 +146,6 @@ def coupon_chart(request):
     date_from = _parse_date(start_date, "start date", request)
     date_to = _parse_date(end_date, "end date", request)
 
-    # Overview pies reuse the cached coupon data
     data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
 
     # Trend data (shop×time, campaign×time)

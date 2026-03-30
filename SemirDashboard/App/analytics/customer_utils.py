@@ -58,9 +58,6 @@ def get_inv_lookups_for_period(date_from, date_to):
     return pks_with_inv, vids_with_inv
 
 
-# Global cache for customer lookups to avoid repeated DB queries
-_customer_cache = {}
-
 # Grade standardization constants
 GRADE_ORDER = {'No Grade': 0, 'Member': 1, 'Silver': 2, 'Gold': 3, 'Diamond': 4}
 
@@ -90,50 +87,31 @@ def normalize_grade(raw):
 def get_customer_info(vip_id, customer_obj=None):
     """
     🔑 UNIFIED CUSTOMER LOOKUP - Single source of truth
-    
+
     Get customer grade, registration date, and name.
     Used EVERYWHERE for consistency across all analytics calculations.
-    
-    Features:
-    - Smart caching (reduces DB queries by ~50%)
-    - Fallback to DB if foreign key is None
-    - Handles VIP ID = 0 specially
-    - Single source of truth for customer data
-    
+
     Args:
         vip_id: Customer VIP ID string
         customer_obj: Customer object from foreign key (may be None)
-    
+
     Returns:
         (grade, reg_date, name) tuple
-        - grade: Normalized grade string
-        - reg_date: Registration date or None
-        - name: Customer name or 'Unknown'
     """
-    global _customer_cache
-    
     # Special case: VIP ID = 0 (no customer info)
     if vip_id == '0':
         return ('No Grade', None, 'Unknown (No VIP)')
-    
-    # Try to use provided customer object first
+
     cust = customer_obj
-    
-    # If customer object is None, lookup from database (with caching)
+
     if not cust:
-        if vip_id in _customer_cache:
-            cust = _customer_cache[vip_id]
-        else:
-            # Import here to avoid circular dependency
-            from App.models import Customer
-            try:
-                cust = Customer.objects.only(
-                    'id', 'vip_id', 'vip_grade', 'registration_date', 'name'
-                ).get(vip_id=vip_id)
-                _customer_cache[vip_id] = cust
-            except Customer.DoesNotExist:
-                _customer_cache[vip_id] = None
-                cust = None
+        from App.models import Customer
+        try:
+            cust = Customer.objects.only(
+                'id', 'vip_id', 'vip_grade', 'registration_date', 'name'
+            ).get(vip_id=vip_id)
+        except Customer.DoesNotExist:
+            cust = None
     
     # Extract info
     if cust:
@@ -147,15 +125,6 @@ def get_customer_info(vip_id, customer_obj=None):
         name = 'Unknown'
     
     return (grade, reg_date, name)
-
-
-def clear_customer_cache():
-    """
-    Clear the customer lookup cache.
-    Called at the start of each analytics calculation.
-    """
-    global _customer_cache
-    _customer_cache = {}
 
 
 def build_customer_purchase_map(sales_list):

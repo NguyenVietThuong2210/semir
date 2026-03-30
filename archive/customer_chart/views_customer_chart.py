@@ -2,14 +2,6 @@
 #  CUSTOMER ANALYTICS CHARTS
 # ═══════════════════════════════════════════════════════════════
 
-_CUST_CHART_VER_KEY = "cust_chart_ver"
-_CUST_CHART_TTL = 300
-
-
-def _cust_chart_cache_key(start_date, end_date):
-    v = cache.get(_CUST_CHART_VER_KEY, 0)
-    return f"cust_chart:{v}:{start_date}:{end_date}"
-
 
 def _compute_customer_chart_data(date_from=None, date_to=None):
     """Compute all data needed for Customer Analytics Charts page.
@@ -185,11 +177,7 @@ def customer_chart(request):
         date_from = date_to = None
         start_date = end_date = ""
 
-    cache_key = _cust_chart_cache_key(start_date, end_date)
-    data = cache.get(cache_key)
-    if data is None:
-        data = _compute_customer_chart_data(date_from, date_to)
-        cache.set(cache_key, data, _CUST_CHART_TTL)
+    data = _compute_customer_chart_data(date_from, date_to)
 
     now_year = datetime.now().year
     return render(
