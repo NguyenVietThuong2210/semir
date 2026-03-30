@@ -71,6 +71,7 @@ class CNVCustomer(models.Model):
             models.Index(fields=['level_name']),
             models.Index(fields=['-last_synced_at']),
             models.Index(fields=['-cnv_updated_at']),
+            models.Index(fields=['cnv_created_at']),   # date-range filter on customer analytics
         ]
 
     def __str__(self):

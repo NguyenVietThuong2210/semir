@@ -6,7 +6,6 @@ from datetime import datetime
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponse
-from django.core.cache import cache
 
 from App.permissions import requires_perm
 from App.analytics.coupon_analytics import (
@@ -19,45 +18,16 @@ from App.models import CouponCampaign
 
 logger = logging.getLogger(__name__)
 
-_COUPON_TTL = 600  # 10 minutes
-_COUPON_VER_KEY = "cpn_ver"  # version stored in shared cache
-
-
-def _coupon_cache_key(date_from, date_to, prefix, shop_group):
-    v = cache.get(_COUPON_VER_KEY, 0)
-    return f"cpn_data:{v}:{date_from}:{date_to}:{prefix}:{shop_group}"
-
-
-def _coupon_trend_cache_key(date_from, date_to, shop_group, prefix):
-    v = cache.get("cpn_trend_ver", 0)
-    return f"cpn_trend:{v}:{date_from}:{date_to}:{shop_group}:{prefix}"
-
-
-def _invalidate_coupon_cache():
-    v = cache.get(_COUPON_VER_KEY, 0)
-    cache.set(_COUPON_VER_KEY, v + 1, 86400 * 30)
-    tv = cache.get("cpn_trend_ver", 0)
-    cache.set("cpn_trend_ver", tv + 1, 86400 * 30)
-    logger.info("coupon cache invalidated (ver→%d, trend_ver→%d)", v + 1, tv + 1)
-
 
 def _get_coupon_data(date_from, date_to, prefix, shop_group):
-    """Return full coupon analytics dict from cache or compute it."""
-    cache_key = _coupon_cache_key(date_from, date_to, prefix, shop_group)
-    data = cache.get(cache_key)
-    if data is not None:
-        logger.info("coupon cache HIT (%s)", cache_key)
-        return data, cache_key
-
+    """Compute coupon analytics fresh on every call. Returns (data, None)."""
     data = calculate_coupon_analytics(
         date_from=date_from,
         date_to=date_to,
         coupon_id_prefix=prefix or None,
         shop_group=shop_group or None,
     )
-    cache.set(cache_key, data, _COUPON_TTL)
-    logger.info("coupon cache MISS — computed & cached (%s)", cache_key)
-    return data, cache_key
+    return data, None
 
 
 def _parse_date(val, label, request):
@@ -179,16 +149,8 @@ def coupon_chart(request):
     # Overview pies reuse the cached coupon data
     data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
 
-    # Trend data (shop×time, campaign×time) — separate cache
-    _trend_ttl = 600
-    trend_cache_key = _coupon_trend_cache_key(date_from, date_to, shop_group, coupon_id_prefix)
-    trend_data = cache.get(trend_cache_key)
-    if trend_data is None:
-        trend_data = calculate_coupon_trend_data(date_from, date_to, shop_group, coupon_id_prefix)
-        cache.set(trend_cache_key, trend_data, _trend_ttl)
-        logger.info("coupon trend cache MISS (%s)", trend_cache_key)
-    else:
-        logger.info("coupon trend cache HIT (%s)", trend_cache_key)
+    # Trend data (shop×time, campaign×time)
+    trend_data = calculate_coupon_trend_data(date_from, date_to, shop_group, coupon_id_prefix)
 
     campaigns = list(CouponCampaign.objects.values("id", "name", "prefix"))
 
@@ -265,7 +227,6 @@ def manage_campaigns(request):
                 name=name, prefix=prefix, detail=detail or None
             )
             logger.info("campaign_create: name=%s prefix=%s by=%s", name, prefix, request.user, extra={"step": "manage_campaigns"})
-            _invalidate_coupon_cache()
             return JsonResponse(
                 {"ok": True, "id": c.pk, "name": c.name, "prefix": c.prefix}
             )
@@ -292,7 +253,7 @@ def manage_campaigns(request):
             c.detail = detail or None
             c.save()
             logger.info("campaign_update: id=%s name=%s prefix=%s by=%s", pk, name, prefix, request.user, extra={"step": "manage_campaigns"})
-            _invalidate_coupon_cache()
+
             return JsonResponse({"ok": True})
 
         if action == "delete":
@@ -303,7 +264,7 @@ def manage_campaigns(request):
             if not deleted:
                 return JsonResponse({"error": "Campaign not found"}, status=404)
             logger.info("campaign_delete: id=%s by=%s", pk, request.user, extra={"step": "manage_campaigns"})
-            _invalidate_coupon_cache()
+
             return JsonResponse({"ok": True})
 
         return JsonResponse({"error": "Unknown action"}, status=400)

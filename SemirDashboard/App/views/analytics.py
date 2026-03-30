@@ -6,16 +6,12 @@ from datetime import datetime
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponse
-from django.core.cache import cache
 
 from App.permissions import requires_perm
 from App.analytics.core import calculate_return_rate_analytics
 from App.analytics.excel_export import export_analytics_to_excel, export_tab_to_excel, _TAB_SHEETS
 
 logger = logging.getLogger(__name__)
-
-_ANALYTICS_TTL = 600  # 10 minutes
-_ANALYTICS_VER_KEY = "anl_ver"  # version stored in shared cache
 
 QUICK_BTNS = [
     ("Last 7 Days", 7),
@@ -27,47 +23,14 @@ QUICK_BTNS = [
 YEAR_BTNS = [2024, 2025, 2026]
 
 
-def _analytics_cache_key(date_from, date_to, shop_group):
-    v = cache.get(_ANALYTICS_VER_KEY, 0)
-    return f"anl_data:{v}:{date_from}:{date_to}:{shop_group}"
-
-
-def _invalidate_analytics_cache():
-    v = cache.get(_ANALYTICS_VER_KEY, 0)
-    cache.set(_ANALYTICS_VER_KEY, v + 1, 86400 * 30)
-    logger.info("analytics cache invalidated (ver→%d)", v + 1)
-
-
 def _get_analytics_data(date_from, date_to, shop_group):
-    """Return full analytics data dict from cache or compute it.
-
-    customer_purchases dict has model instances stripped (set to None)
-    before storing — safe for pickle/Redis.
-    Returns None if no data exists.
-    """
-    cache_key = _analytics_cache_key(date_from, date_to, shop_group)
-    data = cache.get(cache_key)
-    if data is not None:
-        logger.info("analytics cache HIT (%s)", cache_key)
-        return data, cache_key
-
+    """Compute analytics data fresh on every call. Returns (data, None)."""
     data = calculate_return_rate_analytics(
         date_from=date_from,
         date_to=date_to,
         shop_group=shop_group or None,
     )
-    if not data:
-        return None, cache_key
-
-    # Strip Django model instances from customer_purchases so it can be pickled
-    if "customer_purchases" in data:
-        data["customer_purchases"] = {
-            vid: [{**p, "customer": None} for p in purchases]
-            for vid, purchases in data["customer_purchases"].items()
-        }
-    cache.set(cache_key, data, _ANALYTICS_TTL)
-    logger.info("analytics cache MISS — computed & cached (%s)", cache_key)
-    return data, cache_key
+    return data, None
 
 
 def _parse_date(val, label, request):

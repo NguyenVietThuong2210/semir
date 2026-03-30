@@ -7,7 +7,7 @@ import logging
 import threading
 
 from django.conf import settings
-from django.core.cache import cache
+from django.db.models import Count, Q as _Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from App.permissions import requires_perm
@@ -21,19 +21,9 @@ from App.analytics.customer_utils import get_inv_lookups_for_period, build_inv_b
 
 logger = logging.getLogger("App.cnv")
 
-_CNV_TTL = 300  # 5 minutes (syncs happen more frequently)
-_CNV_VER_KEY = "cnv_cmp_ver"  # version stored in shared cache
-
-
-def _cnv_cache_key(start_date, end_date):
-    v = cache.get(_CNV_VER_KEY, 0)
-    return f"cnv_cmp:{v}:{start_date}:{end_date}"
-
 
 def _invalidate_cnv_cache():
-    v = cache.get(_CNV_VER_KEY, 0)
-    cache.set(_CNV_VER_KEY, v + 1, 86400 * 30)
-    logger.info("CNV comparison cache invalidated (ver→%d)", v + 1)
+    pass  # cache removed — kept as stub so scheduler.py calls don't break
 
 
 @requires_perm("page_cnv_sync")
@@ -172,13 +162,19 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
         )
     cnv_list = list(cnv_qs)
 
-    # phone → registration_store (all-time) for CNV shop attribution
-    phone_to_store = dict(
+    # Single query for ALL POS customers (id, vip_id, phone, registration_store).
+    # Builds both phone_to_store AND the phone→inv lookup map — avoids fetching
+    # the same 100k rows twice.
+    _all_pos_rows = list(
         POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
         .exclude(vip_id=0).exclude(phone="")
-        .exclude(registration_store__isnull=True).exclude(registration_store="")
-        .values_list("phone", "registration_store")
+        .values("id", "vip_id", "phone", "registration_store")
     )
+    phone_to_store = {
+        r["phone"]: r["registration_store"]
+        for r in _all_pos_rows
+        if r["registration_store"]
+    }
 
     def _empty():
         return {"new_pos": 0, "new_pos_only": 0, "new_pos_inv": 0, "new_pos_no_inv": 0,
@@ -192,10 +188,8 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
     _phone_to_inv = {}
     if reg_lo and reg_hi:
         _inv_vid_map, _inv_pk_map = build_inv_bucket_map_from_db(reg_lo, reg_hi)
-        # Build phone → inv_info so CNV pass can call classify_new_inv per bucket
-        for _row in POSCustomer.objects.filter(
-            vip_id__isnull=False, phone__isnull=False
-        ).exclude(vip_id=0).exclude(phone='').values('id', 'vip_id', 'phone'):
+        # Build phone → inv_info from already-fetched _all_pos_rows (no extra DB query)
+        for _row in _all_pos_rows:
             _ii = _inv_vid_map.get(_norm_vid(str(_row['vip_id']))) or _inv_pk_map.get(_row['id'])
             if _ii:
                 _phone_to_inv[_row['phone']] = _ii
@@ -560,17 +554,12 @@ def _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all):
 
 
 def _get_cnv_comparison_data(start_date, end_date):
-    """Compute or retrieve cached CNV comparison data.
+    """Compute CNV comparison data fresh on every call. Returns (data, None)."""
+    return _compute_cnv_comparison(start_date, end_date), None
 
-    Returns a dict with all counts, mismatch lists, and Zalo stats.
-    All values are plain Python dicts/lists — safe to pickle for Redis.
-    """
-    cache_key = _cnv_cache_key(start_date, end_date)
-    cached = cache.get(cache_key)
-    if cached is not None:
-        logger.info("CNV comparison cache HIT (%s)", cache_key)
-        return cached, cache_key
 
+def _compute_cnv_comparison(start_date, end_date):
+    """Compute all CNV comparison data."""
     period_filter = {}
     has_filter = False
     if start_date and end_date:
@@ -592,18 +581,23 @@ def _get_cnv_comparison_data(start_date, end_date):
     )
     cnv_all = CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
 
+    # SQL subquery references — never materialised into Python; used for DB-level joins.
+    # This avoids passing 100k phone strings as SQL parameters (PostgreSQL limit: 65535).
+    _cnv_phone_qs = cnv_all.values("phone")
+    _pos_phone_qs = pos_all.values("phone")
+
     total_pos_all = (
         POSCustomer.objects.filter(vip_id__isnull=False).exclude(vip_id=0).count()
     )
     total_cnv_all = CNVCustomer.objects.count()
 
+    # Python sets — needed by _compute_cnv_breakdown for O(1) per-row membership checks
     pos_phones_all = set(pos_all.values_list("phone", flat=True))
     cnv_phones_all = set(cnv_all.values_list("phone", flat=True))
-    pos_only_phones_all = pos_phones_all - cnv_phones_all
-    cnv_only_phones_all = cnv_phones_all - pos_phones_all
 
+    # Use SQL subquery anti-join (not Python set) to avoid >65535 parameter limit
     pos_only_all = list(
-        pos_all.exclude(phone__in=cnv_phones_all)
+        pos_all.exclude(phone__in=_cnv_phone_qs)
         .values(
             "vip_id",
             "phone",
@@ -617,7 +611,7 @@ def _get_cnv_comparison_data(start_date, end_date):
     )
 
     cnv_only_all = list(
-        cnv_all.exclude(phone__in=pos_phones_all)
+        cnv_all.exclude(phone__in=_pos_phone_qs)
         .values(
             "cnv_id",
             "phone",
@@ -645,7 +639,6 @@ def _get_cnv_comparison_data(start_date, end_date):
         )
         new_pos_count = pos_period.count()
         _pos_period_phones = set(pos_period.values_list('phone', flat=True))
-        from django.db.models import Q as _Q
         _pks_wi, _vids_wi = get_inv_lookups_for_period(
             period_filter["start"].date(), period_filter["end"].date()
         )
@@ -663,7 +656,8 @@ def _get_cnv_comparison_data(start_date, end_date):
         )
         new_cnv_count = cnv_period.count()
 
-        pos_only_period_qs = pos_period.exclude(phone__in=cnv_phones_all)
+        # SQL subquery anti-joins (avoids >65535 param limit)
+        pos_only_period_qs = pos_period.exclude(phone__in=_cnv_phone_qs)
         pos_only_period_count = pos_only_period_qs.count()
         pos_only_period = list(
             pos_only_period_qs.values(
@@ -677,7 +671,7 @@ def _get_cnv_comparison_data(start_date, end_date):
             ).order_by("-registration_date")
         )
 
-        cnv_only_period_qs = cnv_period.exclude(phone__in=pos_phones_all)
+        cnv_only_period_qs = cnv_period.exclude(phone__in=_pos_phone_qs)
         cnv_only_period_count = cnv_only_period_qs.count()
         cnv_only_period = list(
             cnv_only_period_qs.values(
@@ -694,17 +688,16 @@ def _get_cnv_comparison_data(start_date, end_date):
             ).order_by("-cnv_created_at")
         )
 
-    # Points mismatch — single Python join using pre-computed intersection set
-    _shared_phones = pos_phones_all & cnv_phones_all
+    # Points mismatch — SQL subquery join (avoids passing intersection set to SQL)
     pos_map = {
         c["phone"]: c
-        for c in pos_all.filter(phone__in=_shared_phones).values(
+        for c in pos_all.filter(phone__in=_cnv_phone_qs).values(
             "vip_id", "phone", "name", "vip_grade", "points", "used_points"
         )
     }
     cnv_map = {
         c["phone"]: c
-        for c in cnv_all.filter(phone__in=_shared_phones).values(
+        for c in cnv_all.filter(phone__in=_pos_phone_qs).values(
             "cnv_id",
             "phone",
             "last_name",
@@ -768,24 +761,25 @@ def _get_cnv_comparison_data(start_date, end_date):
         .order_by("-used_points")
     )
     cnv_used_points_count = len(_cnv_used_raw)
-    _used_phones = [r["phone"] for r in _cnv_used_raw if r["phone"]]
-    _pos_phones_set = (
-        set(pos_all.filter(phone__in=_used_phones).values_list("phone", flat=True))
-        if _used_phones else set()
-    )
+    # Use pos_phones_all (already loaded) — no extra DB query needed
     cnv_used_points_list = [
-        {**r, "in_pos": r["phone"] in _pos_phones_set} for r in _cnv_used_raw
+        {**r, "in_pos": bool(r["phone"]) and r["phone"] in pos_phones_all}
+        for r in _cnv_used_raw
     ]
 
-    # Zalo stats
+    # Zalo stats — single aggregate instead of 2 separate COUNT queries
     zalo_app_qs = CNVCustomer.objects.filter(zalo_app_id__isnull=False).exclude(
         zalo_app_id=""
     )
     zalo_oa_qs = CNVCustomer.objects.filter(zalo_oa_id__isnull=False).exclude(
         zalo_oa_id=""
     )
-    zalo_app_all_count = zalo_app_qs.count()
-    zalo_oa_all_count = zalo_oa_qs.count()
+    _zalo_all_counts = CNVCustomer.objects.aggregate(
+        app=Count("id", filter=_Q(zalo_app_id__isnull=False) & ~_Q(zalo_app_id="")),
+        oa=Count("id",  filter=_Q(zalo_oa_id__isnull=False)  & ~_Q(zalo_oa_id="")),
+    )
+    zalo_app_all_count = _zalo_all_counts["app"]
+    zalo_oa_all_count  = _zalo_all_counts["oa"]
     zalo_app_all_pct = (
         round(zalo_app_all_count / total_cnv_all * 100, 1) if total_cnv_all else 0
     )
@@ -800,12 +794,13 @@ def _get_cnv_comparison_data(start_date, end_date):
             zalo_app_created_at__gte=period_filter["start"],
             zalo_app_created_at__lte=period_filter["end"],
         )
-        zalo_app_period_count = (
-            _pqs.filter(zalo_app_id__isnull=False).exclude(zalo_app_id="").count()
+        # Single aggregate instead of 2 separate COUNT queries
+        _pz = _pqs.aggregate(
+            app=Count("id", filter=_Q(zalo_app_id__isnull=False) & ~_Q(zalo_app_id="")),
+            oa=Count("id",  filter=_Q(zalo_oa_id__isnull=False)  & ~_Q(zalo_oa_id="")),
         )
-        zalo_oa_period_count = (
-            _pqs.filter(zalo_oa_id__isnull=False).exclude(zalo_oa_id="").count()
-        )
+        zalo_app_period_count = _pz["app"]
+        zalo_oa_period_count  = _pz["oa"]
         zalo_app_period_pct = (
             round(zalo_app_period_count / total_cnv_all * 100, 1)
             if total_cnv_all
@@ -833,11 +828,8 @@ def _get_cnv_comparison_data(start_date, end_date):
     )
     zalo_oa_list = list(zalo_oa_qs.order_by("-zalo_app_created_at").values(*_zf))
     _all_z_phones = {r["phone"] for r in zalo_app_list + zalo_oa_list if r["phone"]}
-    _pos_z_phones = (
-        set(pos_all.filter(phone__in=_all_z_phones).values_list("phone", flat=True))
-        if _all_z_phones
-        else set()
-    )
+    # Intersect with already-loaded pos_phones_all — no extra DB query
+    _pos_z_phones = _all_z_phones & pos_phones_all
     for r in zalo_app_list:
         r["in_pos"] = r["phone"] in _pos_z_phones
     for r in zalo_oa_list:
@@ -848,8 +840,8 @@ def _get_cnv_comparison_data(start_date, end_date):
         "period_label": f"{start_date} to {end_date}" if has_filter else "All Time",
         "total_pos": total_pos_all,
         "total_cnv": total_cnv_all,
-        "pos_only_all_count": len(pos_only_phones_all),
-        "cnv_only_all_count": len(cnv_only_phones_all),
+        "pos_only_all_count": len(pos_only_all),
+        "cnv_only_all_count": len(cnv_only_all),
         "new_pos_count": new_pos_count,
         "new_pos_inv_count": new_pos_inv_count,
         "new_pos_no_inv_count": new_pos_no_inv_count,
@@ -878,9 +870,7 @@ def _get_cnv_comparison_data(start_date, end_date):
         "zalo_oa_list": zalo_oa_list,
         "breakdown": _compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all),
     }
-    cache.set(cache_key, result, _CNV_TTL)
-    logger.info("CNV comparison cache MISS — computed & cached (%s)", cache_key)
-    return result, cache_key
+    return result
 
 
 @requires_perm("page_cnv_comparison")

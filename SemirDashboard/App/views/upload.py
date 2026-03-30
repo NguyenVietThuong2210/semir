@@ -21,26 +21,6 @@ from App.upload_jobs import NamedBytesIO, _now_iso, create_job, get_recent_jobs,
 logger = logging.getLogger(__name__)
 
 
-# ── Cache helpers ─────────────────────────────────────────────────────────────
-
-def _invalidate_analytics_cache():
-    from django.core.cache import cache
-    from App.views.analytics import _ANALYTICS_VER_KEY
-    v = cache.get(_ANALYTICS_VER_KEY, 0)
-    cache.set(_ANALYTICS_VER_KEY, v + 1, 86400 * 30)
-    logger.info("analytics cache invalidated (ver→%d)", v + 1)
-
-
-def _invalidate_coupon_cache():
-    from django.core.cache import cache
-    from App.views.coupon import _COUPON_VER_KEY
-    v = cache.get(_COUPON_VER_KEY, 0)
-    cache.set(_COUPON_VER_KEY, v + 1, 86400 * 30)
-    tv = cache.get("cpn_trend_ver", 0)
-    cache.set("cpn_trend_ver", tv + 1, 86400 * 30)
-    logger.info("coupon cache invalidated (ver→%d, trend_ver→%d)", v + 1, tv + 1)
-
-
 # ── Background thread runner ──────────────────────────────────────────────────
 
 def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
@@ -94,7 +74,7 @@ def upload_customers(request):
             file_bytes = f.read()
             job_id = create_job("customers", f.name)
             logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_customers"})
-            _start_thread(job_id, process_customer_file, file_bytes, f.name, _invalidate_analytics_cache)
+            _start_thread(job_id, process_customer_file, file_bytes, f.name, None)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
             return redirect("upload_customers")
         else:
@@ -147,7 +127,7 @@ def upload_sales(request):
             file_bytes = f.read()
             job_id = create_job("sales", f.name)
             logger.info("upload_sales queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_sales"})
-            _start_thread(job_id, process_sales_file, file_bytes, f.name, _invalidate_analytics_cache)
+            _start_thread(job_id, process_sales_file, file_bytes, f.name, None)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
             return redirect("upload_sales")
         else:
@@ -169,7 +149,7 @@ def upload_coupons(request):
         file_bytes = f.read()
         job_id = create_job("coupons", f.name)
         logger.info("upload_coupons queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_coupons"})
-        _start_thread(job_id, process_coupon_file, file_bytes, f.name, _invalidate_coupon_cache)
+        _start_thread(job_id, process_coupon_file, file_bytes, f.name, None)
         messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
         return redirect("upload_coupons")
     return render(request, "upload/coupons.html")

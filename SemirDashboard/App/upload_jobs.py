@@ -4,15 +4,14 @@ Shared across all gunicorn workers.
 """
 import io
 import logging
-import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-_lock = threading.Lock()   # guards index read-modify-write within a single worker
 _MAX_JOBS = 100
 _JOB_TTL  = 86400          # 24 h
+_IDX_LOCK_KEY = "upload_jobs_index:lock"  # distributed lock key
 
 JOB_TYPE_LABELS = {
     "customers":   "Customer Data",
@@ -60,12 +59,23 @@ def create_job(job_type: str, filename: str) -> str:
     }
     cache.set(_jkey(job_id), job, _JOB_TTL)
 
-    with _lock:
+    # Use cache.add() as a distributed lock to safely update the shared index
+    # across all gunicorn workers.  Hold for max 10 s; release after write.
+    _acquired = False
+    for _attempt in range(20):
+        if cache.add(_IDX_LOCK_KEY, 1, 10):
+            _acquired = True
+            break
+        import time; time.sleep(0.1)
+    try:
         index = cache.get(_INDEX_KEY) or []
         index.append({"id": job_id, "started_at": job["started_at"]})
         if len(index) > _MAX_JOBS:
             index = index[-_MAX_JOBS:]
         cache.set(_INDEX_KEY, index, _JOB_TTL)
+    finally:
+        if _acquired:
+            cache.delete(_IDX_LOCK_KEY)
 
     return job_id
 
@@ -73,11 +83,11 @@ def create_job(job_type: str, filename: str) -> str:
 def update_job(job_id: str, **kwargs) -> None:
     from django.core.cache import cache
 
-    with _lock:
-        job = cache.get(_jkey(job_id))
-        if job:
-            job.update(kwargs)
-            cache.set(_jkey(job_id), job, _JOB_TTL)
+    # Individual job keys are written atomically per job_id — no cross-worker conflict.
+    job = cache.get(_jkey(job_id))
+    if job:
+        job.update(kwargs)
+        cache.set(_jkey(job_id), job, _JOB_TTL)
 
 
 def get_job(job_id: str) -> dict:
