@@ -132,17 +132,31 @@ def calculate_coupon_analytics(
             qs = qs.filter(_pq)
             period_qs = period_qs.filter(_pq)
 
-    # All-time stats - counts only (amounts calculated below)
-    all_time_total = qs.count()
-    all_time_used = qs.filter(using_date__isnull=False).count()
+    # All-time stats — single aggregate query (replaces 2 separate count() calls)
+    from django.db.models import Count as _Count2, Q as _Q2
+    _at_agg = qs.aggregate(
+        total=_Count2('id'),
+        used_count=_Count2('id', filter=_Q2(using_date__isnull=False)),
+    )
+    all_time_total = _at_agg['total']
+    all_time_used  = _at_agg['used_count']
     all_time_unused = all_time_total - all_time_used
     all_time_usage_rate = round(
         all_time_used / all_time_total * 100 if all_time_total else 0, 2
     )
 
-    # Period stats - counts only (amounts calculated below)
-    period_total = period_qs.count()
-    period_used = period_qs.filter(using_date__isnull=False).count()
+    # Period stats — single aggregate query
+    if period_qs is qs:
+        # No date filter: reuse all-time counts
+        period_total = all_time_total
+        period_used  = all_time_used
+    else:
+        _pd_agg = period_qs.aggregate(
+            total=_Count2('id'),
+            used_count=_Count2('id', filter=_Q2(using_date__isnull=False)),
+        )
+        period_total = _pd_agg['total']
+        period_used  = _pd_agg['used_count']
     period_unused = period_total - period_used
     period_usage_rate = round(
         period_used / period_total * 100 if period_total else 0, 2
@@ -324,7 +338,7 @@ def calculate_coupon_analytics(
         dk = coupon.docket_number or f"__no_docket_{coupon.pk}"
         is_duplicate = dk in _dup_dockets_period and bool(coupon.docket_number)
         if dk not in _seen_dockets_period:
-            _seen_dockets_period = _seen_dockets_period | {dk}
+            _seen_dockets_period.add(dk)
             period_unique_amount += final_amount
 
         # Accumulate by shop
@@ -368,9 +382,15 @@ def calculate_coupon_analytics(
             }
         )
 
-    # Add unused coupons to shop totals
-    for coupon in period_qs.filter(using_date__isnull=True):
-        shop = coupon.using_shop or "Unknown"
+    # Add unused coupons to shop totals — single aggregate query, no row fetch
+    from django.db.models import Count as _CntU
+    _unused_by_shop = (
+        period_qs.filter(using_date__isnull=True)
+        .values('using_shop')
+        .annotate(_cnt=_CntU('id'))
+    )
+    for _row in _unused_by_shop:
+        shop = _row['using_shop'] or "Unknown"
         if shop not in shop_data:
             shop_data[shop] = {
                 "total": 0,
@@ -380,7 +400,7 @@ def calculate_coupon_analytics(
                 "unique_amount": Decimal(0),
                 "seen_dockets": set(),
             }
-        shop_data[shop]["total"] += 1
+        shop_data[shop]["total"] += _row['_cnt']
 
     # Update shop totals (add used to total for each shop)
     for shop_name in shop_data:

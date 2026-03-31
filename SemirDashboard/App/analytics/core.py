@@ -74,15 +74,16 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     )
     member_inactive_all_time = max(0, total_customers_in_db - member_active_all_time)
 
-    # OPT-2: Only select needed fields; clear default model ordering (avoids DB-level sort)
-    # OPT-3: select_related with only() to avoid loading unused Customer columns
-    SALES_FIELDS = ('vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name', 'customer')
-    CUST_FIELDS  = ('customer__id', 'customer__vip_id', 'customer__vip_grade',
-                    'customer__registration_date', 'customer__name')
+    # OPT-2: Use values() dict fetch — avoids model instantiation for 118k rows
+    #        (plain dicts use ~10x less memory than model objects)
+    FIELDS = (
+        'vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name',
+        'customer_id',
+        'customer__vip_grade', 'customer__registration_date', 'customer__name',
+    )
     qs = (
         SalesTransaction.objects
-        .select_related('customer')
-        .only(*SALES_FIELDS, *CUST_FIELDS)
+        .values(*FIELDS)
         .order_by()           # clears the model Meta ordering (no wasted DB sort)
     )
     if date_from:
@@ -106,8 +107,8 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     if not sales_list:
         return None
     date_stats = {
-        'start_date': min(s.sales_date for s in sales_list),
-        'end_date':   max(s.sales_date for s in sales_list),
+        'start_date': min(s['sales_date'] for s in sales_list),
+        'end_date':   max(s['sales_date'] for s in sales_list),
     }
 
     # OPT-5: Single aggregate query for VIP0 all-time stats (no full table load)
@@ -121,8 +122,10 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
 
     logger.info("Transactions: %d  VIP0-alltime: %d", len(sales_list), vip0_alltime_invoices)
     
-    # Build customer purchase map
+    # Build customer purchase map (handles both model objects and values() dicts)
     customer_purchases = build_customer_purchase_map(sales_list)
+    # Free the raw list — no longer needed
+    del sales_list
 
     buyer_no_info_invoices = len(customer_purchases.get('0', []))
     logger.info("Customers: %d  buyer_no_info_invoices: %d",
@@ -140,31 +143,36 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     new_members_count = 0
     customer_details = []
     total_amount_period = Decimal(0)
-    
+
     # NEW: Track returning invoices and amounts
     returning_invoices = 0
     returning_amount = Decimal(0)
-    
+
     # Separate tracking for VIP ID = 0
     vip_0_purchases = customer_purchases.get('0', [])
     vip_0_amount = sum(p['amount'] for p in vip_0_purchases)
-    
+
     # NEW: Track invoice counts for VIP 0 totals
     total_invoices_without_vip0 = 0
-    
+
+    # Pre-compute customer info once per customer — avoids 5x repeated lookup
+    # across aggregators (season, month, year, week, shop each call get_customer_info)
+    _customer_info_cache = {}
+
     for vip_id, purchases in customer_purchases.items():
         # CRITICAL: Skip VIP ID = 0 for customer metrics
         if vip_id == '0':
             continue
-        
+
         purchases_sorted = sorted(purchases, key=lambda x: x['date'])
         n = len(purchases_sorted)
-        
+
         # NEW: Count invoices WITHOUT VIP 0
         total_invoices_without_vip0 += n
-        
-        # Get customer info
+
+        # Get customer info once and cache it
         grade, reg_date, name = get_customer_info(vip_id, purchases_sorted[0]['customer'])
+        _customer_info_cache[vip_id] = (grade, reg_date, name)
         
         # Calculate total amount (needed for returning tracking)
         amt = sum(p['amount'] for p in purchases_sorted)
@@ -209,17 +217,25 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     # ========================================================================
     # AGGREGATE BY DIMENSIONS
     # ========================================================================
+
+    # Wrapper that uses pre-computed cache — eliminates 4 redundant DB lookups per customer
+    def _cached_get_customer_info(vip_id, customer_obj=None):
+        cached = _customer_info_cache.get(vip_id)
+        if cached is not None:
+            return cached
+        return get_customer_info(vip_id, customer_obj)
+
     grade_stats = aggregate_by_grade(customer_details)
-    session_stats = aggregate_by_season(customer_purchases, get_customer_info)
-    month_stats = aggregate_by_month(customer_purchases, get_customer_info)
-    year_stats = aggregate_by_year(customer_purchases, get_customer_info)
+    session_stats = aggregate_by_season(customer_purchases, _cached_get_customer_info)
+    month_stats = aggregate_by_month(customer_purchases, _cached_get_customer_info)
+    year_stats = aggregate_by_year(customer_purchases, _cached_get_customer_info)
 
     all_session_keys = sorted([s['session'] for s in session_stats], key=session_sort_key)
     all_month_keys = sorted([m['month'] for m in month_stats], key=month_sort_key)
     all_year_keys = sorted([y['year'] for y in year_stats], key=year_sort_key)
-    week_stats = aggregate_by_week(customer_purchases, get_customer_info)
+    week_stats = aggregate_by_week(customer_purchases, _cached_get_customer_info)
     all_week_keys = sorted([w['week_sort'] for w in week_stats], key=week_sort_key)
-    shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_session_keys, all_month_keys, all_year_keys, all_week_keys)
+    shop_stats = aggregate_by_shop(customer_purchases, _cached_get_customer_info, all_session_keys, all_month_keys, all_year_keys, all_week_keys)
     
     buyer_without_info_stats = calculate_buyer_without_info(
         vip_0_purchases,

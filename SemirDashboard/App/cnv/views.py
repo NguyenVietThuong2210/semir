@@ -635,12 +635,22 @@ def _compute_cnv_comparison(start_date, end_date):
         )
         new_pos_count = pos_period.count()
         _pos_period_phones = set(pos_period.values_list('phone', flat=True))
-        _pks_wi, _vids_wi = get_inv_lookups_for_period(
-            period_filter["start"].date(), period_filter["end"].date()
+
+        # Build subquery references for "has invoice in period" — avoids >999 params in SQLite
+        from App.models import SalesTransaction as _ST
+        _inv_qs = (
+            _ST.objects
+            .filter(
+                sales_date__gte=period_filter["start"].date(),
+                sales_date__lte=period_filter["end"].date(),
+            )
+            .exclude(vip_id__isnull=True).exclude(vip_id='').exclude(vip_id='0')
         )
+        _pks_wi_qs  = _inv_qs.filter(customer__isnull=False).values('customer_id')
+        _vids_wi_qs = _inv_qs.values('vip_id')
         _inv_phones = set(
             POSCustomer.objects
-            .filter(_Q(id__in=_pks_wi) | _Q(vip_id__in=_vids_wi))
+            .filter(_Q(id__in=_pks_wi_qs) | _Q(vip_id__in=_vids_wi_qs))
             .exclude(phone__isnull=True).exclude(phone='')
             .values_list('phone', flat=True)
         )

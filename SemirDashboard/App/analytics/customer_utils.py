@@ -7,9 +7,13 @@ Handles all customer-related operations.
 Version: 3.4 - Added per-bucket invoice bucket maps for consistent NEW INV / NEW NO INV
 """
 import logging
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 logger = logging.getLogger('customer_analytics')
+
+
+# Lightweight customer proxy for values() dict results (avoids model instantiation)
+_CustProxy = namedtuple('_CustProxy', ['vip_grade', 'registration_date', 'name'])
 
 
 # ---------------------------------------------------------------------------
@@ -150,20 +154,40 @@ def build_customer_purchase_map(sales_list):
     from .season_utils import get_session_key, get_month_key, get_year_key, get_week_info
 
     customer_purchases = defaultdict(list)
+    _is_values = sales_list and isinstance(sales_list[0], dict)
 
     for s in sales_list:
-        vid = _norm_vid(s.vip_id or '')
+        if _is_values:
+            vid = _norm_vid(s.get('vip_id') or '')
+            date_   = s['sales_date']
+            invoice = s.get('invoice_number')
+            amount  = s.get('sales_amount') or 0
+            shop    = s.get('shop_name') or 'Unknown Shop'
+            # Build a lightweight proxy only when customer FK exists
+            cust = _CustProxy(
+                s.get('customer__vip_grade'),
+                s.get('customer__registration_date'),
+                s.get('customer__name'),
+            ) if s.get('customer_id') is not None else None
+        else:
+            vid = _norm_vid(s.vip_id or '')
+            date_   = s.sales_date
+            invoice = s.invoice_number
+            amount  = s.sales_amount or 0
+            shop    = s.shop_name or 'Unknown Shop'
+            cust    = s.customer
+
         key = '0' if vid in ('', '0', 'None') else vid
-        _wk = get_week_info(s.sales_date)
+        _wk = get_week_info(date_)
         customer_purchases[key].append({
-            'date':       s.sales_date,
-            'invoice':    s.invoice_number,
-            'amount':     s.sales_amount or 0,
-            'shop':       s.shop_name or 'Unknown Shop',
-            'customer':   s.customer if key != '0' else None,
-            'session':    get_session_key(s.sales_date),
-            'month':      get_month_key(s.sales_date),
-            'year':       get_year_key(s.sales_date),
+            'date':       date_,
+            'invoice':    invoice,
+            'amount':     amount,
+            'shop':       shop,
+            'customer':   cust if key != '0' else None,
+            'session':    get_session_key(date_),
+            'month':      get_month_key(date_),
+            'year':       get_year_key(date_),
             'week_sort':  _wk[0],
             'week_label': _wk[1],
         })

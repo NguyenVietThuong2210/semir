@@ -4,9 +4,10 @@ App/analytics/season_utils.py
 Date and season handling utilities.
 Pure functions with no database or model dependencies.
 
-Version: 3.3
+Version: 3.4 - Added lru_cache on date-key functions (118k calls → ~1k unique)
 """
 import datetime
+from functools import lru_cache
 
 # Season definitions
 SEASON_DEFS = [
@@ -17,6 +18,7 @@ SEASON_DEFS = [
 ]
 
 
+@lru_cache(maxsize=2048)
 def get_session_key(d):
     """
     Convert a date to a season label (year-aware).
@@ -85,6 +87,7 @@ def session_sort_key(label):
     return (first_year, season_order)
 
 
+@lru_cache(maxsize=2048)
 def get_month_key(d):
     """Convert a date to a month label like '2025-01'."""
     if not d:
@@ -101,6 +104,7 @@ def month_sort_key(label):
         return (9999, 99)
 
 
+@lru_cache(maxsize=2048)
 def get_year_key(d):
     """Convert a date to a year label like '2024'."""
     if not d:
@@ -157,6 +161,7 @@ def get_session_for_range(date_from, date_to):
     return None
 
 
+@lru_cache(maxsize=2048)
 def get_week_info(d):
     """Returns (week_sort_key, week_display_label) for a date.
     Week 1 starts on the first Monday of the year.
