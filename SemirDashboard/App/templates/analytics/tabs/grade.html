@@ -1,0 +1,41 @@
+{% load custom_filters perm_tags %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0">Grade order: No Grade to Member to Silver to Gold to Diamond.</p>
+    {% if can_dl_analytics %}<a href="{% url 'export_analytics' %}?tab=grade{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+</div>
+<div class="table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0 grade-tbl">
+        <thead style="background-color: #366092; color: white;">
+            <tr>
+                <th class="col-grade">VIP Grade</th>
+                <th class="col-cnt text-end">Active (Period)</th>
+                <th class="col-cnt text-end">Returning</th>
+                <th class="col-rate text-end">Return Visit Rate</th>
+                <th class="col-cnt text-end">Total (All Time)</th>
+                <th class="col-rate text-end">Return Visit Rate (All Time)</th>
+                <th class="col-inv text-end">INV(RET)</th>
+                <th class="col-amt text-end">AMT(RET)</th>
+                <th class="col-inv text-end">Total INV</th>
+                <th class="col-amt text-end">Total Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for g in grade_stats %}
+            <tr>
+                <td><strong>{{ g.grade }}</strong></td>
+                <td class="col-cnt text-end">{{ g.total_customers }}</td>
+                <td class="col-cnt text-end">{{ g.returning_customers }}</td>
+                <td class="col-rate text-end"><span class="badge bg-primary">{{ g.return_rate }}%</span></td>
+                <td class="col-cnt text-end">{{ g.total_in_db }}</td>
+                <td class="col-rate text-end"><span class="badge bg-warning">{{ g.return_rate_all_time }}%</span></td>
+                <td class="col-inv text-end text-success">{{ g.returning_invoices|default:0 }}</td>
+                <td class="col-amt text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} {{ currency }}</td>
+                <td class="col-inv text-end">{{ g.total_invoices }}</td>
+                <td class="col-amt text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="10" class="text-center text-muted py-3">No data</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

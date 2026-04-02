@@ -691,8 +691,9 @@ def calculate_buyer_without_info(vip_0_purchases_period, alltime_invoices, allti
     period_amount = sum(p['amount'] for p in vip_0_purchases_period)
     
     # Calculate percentages
+    _total_amount_f = float(total_amount_all_period) if total_amount_all_period else 0.0
     pct_invoices = round(period_invoices / total_invoices_all_period * 100, 2) if total_invoices_all_period else 0
-    pct_amount = round(period_amount / total_amount_all_period * 100, 2) if total_amount_all_period else 0
+    pct_amount = round(float(period_amount) / _total_amount_f * 100, 2) if _total_amount_f else 0
     
     # All-time stats — pre-computed via DB aggregate in core.py
     all_time_invoices = alltime_invoices
@@ -715,7 +716,7 @@ def calculate_buyer_without_info(vip_0_purchases_period, alltime_invoices, allti
             'invoices': inv,
             'amount': float(amt),
             'pct_of_period_invoices': round(inv / total_invoices_all_period * 100, 2) if total_invoices_all_period else 0,
-            'pct_of_period_amount': round(amt / total_amount_all_period * 100, 2) if total_amount_all_period else 0,
+            'pct_of_period_amount': round(float(amt) / _total_amount_f * 100, 2) if _total_amount_f else 0,
         })
     
     return {

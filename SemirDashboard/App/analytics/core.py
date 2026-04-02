@@ -35,7 +35,7 @@ from .aggregators import (
 logger = logging.getLogger('customer_analytics')
 
 
-def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=None):
+def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=None, chart_only=False):
     """
     🎯 MAIN ANALYTICS FUNCTION - Entry point for all customer analytics
     
@@ -190,17 +190,18 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         if reg_date and period_lo <= reg_date <= period_hi:
             new_members_count += 1
 
-        # Build customer detail record
-        customer_details.append({
-            'vip_id': vip_id,
-            'name': name,
-            'vip_grade': grade,
-            'registration_date': reg_date,
-            'first_purchase_date': purchases_sorted[0]['date'],
-            'total_purchases': n,
-            'return_visits': rc,
-            'total_spent': float(amt),
-        })
+        # Build customer detail record (skipped for chart_only)
+        if not chart_only:
+            customer_details.append({
+                'vip_id': vip_id,
+                'name': name,
+                'vip_grade': grade,
+                'registration_date': reg_date,
+                'first_purchase_date': purchases_sorted[0]['date'],
+                'total_purchases': n,
+                'return_visits': rc,
+                'total_spent': float(amt),
+            })
     
     logger.info("new_members_count=%d", new_members_count)
 
@@ -225,7 +226,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             return cached
         return get_customer_info(vip_id, customer_obj)
 
-    grade_stats = aggregate_by_grade(customer_details)
+    grade_stats = [] if chart_only else aggregate_by_grade(customer_details)
     session_stats = aggregate_by_season(customer_purchases, _cached_get_customer_info)
     month_stats = aggregate_by_month(customer_purchases, _cached_get_customer_info)
     year_stats = aggregate_by_year(customer_purchases, _cached_get_customer_info)
@@ -237,18 +238,19 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     all_week_keys = sorted([w['week_sort'] for w in week_stats], key=week_sort_key)
     shop_stats = aggregate_by_shop(customer_purchases, _cached_get_customer_info, all_session_keys, all_month_keys, all_year_keys, all_week_keys)
     
-    buyer_without_info_stats = calculate_buyer_without_info(
-        vip_0_purchases,
-        vip0_alltime_invoices,
-        vip0_alltime_amount,
-        date_from,
-        date_to,
-        total_invoices_with_vip0,
-        total_amount_with_vip0,
-    )
-    
-    # Sort customer details by return visits
-    customer_details.sort(key=lambda x: x['return_visits'], reverse=True)
+    if chart_only:
+        buyer_without_info_stats = None
+    else:
+        buyer_without_info_stats = calculate_buyer_without_info(
+            vip_0_purchases,
+            vip0_alltime_invoices,
+            vip0_alltime_amount,
+            date_from,
+            date_to,
+            total_invoices_with_vip0,
+            total_amount_with_vip0,
+        )
+        customer_details.sort(key=lambda x: x['return_visits'], reverse=True)
     
     logger.info("DONE  total_amount=%.2f  shops=%d  sessions=%d",
                 float(total_amount_period), len(shop_stats), len(session_stats))

@@ -24,15 +24,17 @@ urlpatterns = [
     path("upload/jobs/<str:job_id>/",       views.upload_job_status, name="upload_job_status"),
 
     # ── Sales Analytics ───────────────────────────────────────────────────────
-    path("analytics/",         views.analytics_dashboard, name="analytics_dashboard"),
-    path("analytics/export/",  views.export_analytics,    name="export_analytics"),
-    path("analytics/chart/",   views.analytics_chart,     name="analytics_chart"),
+    path("analytics/",                views.analytics_dashboard, name="analytics_dashboard"),
+    path("analytics/export/",         views.export_analytics,    name="export_analytics"),
+    path("analytics/chart/",          views.analytics_chart,     name="analytics_chart"),
+    path("analytics/tab/<str:tab>/",  views.analytics_tab,       name="analytics_tab"),
 
     # ── Coupon Analytics ──────────────────────────────────────────────────────
-    path("coupons/",            views.coupon_dashboard,  name="coupon_dashboard"),
-    path("coupons/export/",     views.export_coupons,    name="export_coupons"),
-    path("coupons/chart/",      views.coupon_chart,      name="coupon_chart"),
-    path("coupons/campaigns/",  views.manage_campaigns,  name="manage_campaigns"),
+    path("coupons/",                  views.coupon_dashboard,  name="coupon_dashboard"),
+    path("coupons/export/",           views.export_coupons,    name="export_coupons"),
+    path("coupons/chart/",            views.coupon_chart,      name="coupon_chart"),
+    path("coupons/campaigns/",        views.manage_campaigns,  name="manage_campaigns"),
+    path("coupons/tab/<str:tab>/",    views.coupon_tab,        name="coupon_tab"),
 
     # ── Customer ──────────────────────────────────────────────────────────────
     path("customer-detail/", views.customer_detail, name="customer_detail"),

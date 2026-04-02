@@ -305,12 +305,18 @@
     </div>
     <ul class="nav dark-tabs px-3 pt-1 pb-2 flex-wrap" id="bdTabNav" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bdSeason"     type="button">By Season</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonth"      type="button">By Month</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeek"       type="button">By Week</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShop"       type="button">By Shop</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdSeasonShop" type="button">By Season - All Shops</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonthShop"  type="button">By Month - All Shops</button></li>
-        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeekShop"   type="button">By Week - All Shops</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonth"      type="button"
+                data-lazy-url="{% url 'cnv:customer_tab' 'bd_month' %}" data-lazy-params="{{ lazy_params }}">By Month</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeek"       type="button"
+                data-lazy-url="{% url 'cnv:customer_tab' 'bd_week' %}" data-lazy-params="{{ lazy_params }}">By Week</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdShop"       type="button"
+                data-lazy-url="{% url 'cnv:customer_tab' 'bd_shop' %}" data-lazy-params="{{ lazy_params }}">By Shop</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdSeasonShop" type="button"
+                data-lazy-url="{% url 'cnv:customer_tab' 'bd_season_allshops' %}" data-lazy-params="{{ lazy_params }}">By Season - All Shops</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdMonthShop"  type="button"
+                data-lazy-url="{% url 'cnv:customer_tab' 'bd_month_allshops' %}" data-lazy-params="{{ lazy_params }}">By Month - All Shops</button></li>
+        <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#bdWeekShop"   type="button"
+                data-lazy-url="{% url 'cnv:customer_tab' 'bd_week_allshops' %}" data-lazy-params="{{ lazy_params }}">By Week - All Shops</button></li>
     </ul>
 </div>
 <div class="tab-content border border-top-0 rounded-bottom p-3 mb-4" id="bdTabContent">
@@ -352,364 +358,50 @@
 
 <!-- ── By Month ──────────────────────────────────────────────────────── -->
 <div class="tab-pane fade" id="bdMonth" role="tabpanel">
-<div class="d-flex justify-content-end mb-2">{% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_month{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}</div>
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-calendar-month"></i> New Registrations by Month</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdMonthBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    <div class="collapse show" id="bdMonthBody"><div class="table-responsive">
-        <table class="table table-sm table-striped table-hover mb-0 bd-tbl">
-            <thead style="background-color:#366092;color:white;"><tr>
-                <th class="col-lbl">Month</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in bd.month %}
-            <tr>
-                <td>{{ r.label }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="11" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-</div>
 </div>
 
 <!-- ── By Week ───────────────────────────────────────────────────────── -->
 <div class="tab-pane fade" id="bdWeek" role="tabpanel">
-<div class="d-flex justify-content-end mb-2">{% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_week{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}</div>
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-calendar-week"></i> New Registrations by Week</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#bdWeekBody"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    <div class="collapse show" id="bdWeekBody"><div class="table-responsive">
-        <table class="table table-sm table-striped table-hover mb-0 bd-tbl">
-            <thead style="background-color:#366092;color:white;"><tr>
-                <th class="col-lbl">Week</th>
-                <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-            </tr></thead>
-            <tbody>
-            {% for r in bd.week %}
-            <tr>
-                <td>{{ r.label }}</td>
-                <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-            </tr>
-            {% empty %}<tr><td colspan="11" class="text-center text-muted py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-    {% if breakdown.week|length >= 200 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 200 weeks — download for full data</small></div>{% endif %}
-</div>
 </div>
 
 <!-- ── By Shop (Sales-style: one card per shop, collapse → By Season/Month/Week) ── -->
 <div class="tab-pane fade" id="bdShop" role="tabpanel">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <p class="text-muted small mb-0">Shops sorted alphabetically. Click a shop row to expand season / month / week breakdown.</p>
-        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    {% for sd in bd.shop_detail %}
-    <div class="card mb-3 border">
-        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
-             style="background:#2c3e50;cursor:pointer"
-             data-bs-toggle="collapse"
-             data-bs-target="#bdSh-{{ forloop.counter }}"
-             aria-expanded="false">
-            <strong class="text-white"><i class="bi bi-shop me-1"></i>{{ sd.shop }}</strong>
-            <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
-        </div>
-        <div class="card-body p-0">
-            <!-- Summary row — always visible -->
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0 bd-tbl">
-                    <thead style="background-color:#366092;color:white;">
-                        <tr>
-                            <th class="col-lbl">Shop</th>
-                            <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                            <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                            <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                            <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% if sd.summary %}
-                    <tr>
-                        <td title="{{ sd.shop }}">{{ sd.shop }}</td>
-                        <td>{{ sd.summary.new_pos_inv }}</td><td>{{ sd.summary.new_pos_no_inv }}</td><td>{{ sd.summary.new_pos }}</td><td>{{ sd.summary.new_pos_only }}</td>
-                        <td>{{ sd.summary.new_cnv }}</td><td>{{ sd.summary.new_cnv_only }}</td>
-                        <td>{{ sd.summary.zalo_app }}</td><td>{{ sd.summary.zalo_app_pct }}%</td>
-                        <td>{{ sd.summary.zalo_oa }}</td><td>{{ sd.summary.zalo_oa_pct }}%</td>
-                    </tr>
-                    {% endif %}
-                    </tbody>
-                </table>
-            </div>
-            <!-- Collapse: By Season / By Month / By Week -->
-            <div class="collapse" id="bdSh-{{ forloop.counter }}">
-                <div class="px-3 py-2 border-top bg-light">
-
-                    <!-- By Season -->
-                    <div class="mb-3">
-                        <p class="text-muted small fw-semibold mb-1 text-uppercase">By Season</p>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0 bd-tbl">
-                                <thead style="background-color:#366092;color:white;">
-                                    <tr>
-                                        <th class="col-lbl">Season</th>
-                                        <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                                        <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                                        <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                                        <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                {% for r in sd.by_season %}
-                                <tr>
-                                    <td>{{ r.label }}</td>
-                                    <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                                    <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                                    <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                                    <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-                                </tr>
-                                {% empty %}<tr><td colspan="11" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- By Month -->
-                    <div class="mb-3">
-                        <p class="text-muted small fw-semibold mb-1 text-uppercase">By Month</p>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0 bd-tbl">
-                                <thead style="background-color:#366092;color:white;">
-                                    <tr>
-                                        <th class="col-lbl">Month</th>
-                                        <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                                        <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                                        <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                                        <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                {% for r in sd.by_month %}
-                                <tr>
-                                    <td>{{ r.label }}</td>
-                                    <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                                    <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                                    <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                                    <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-                                </tr>
-                                {% empty %}<tr><td colspan="11" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- By Week -->
-                    <div>
-                        <p class="text-muted small fw-semibold mb-1 text-uppercase">By Week</p>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0 bd-tbl">
-                                <thead style="background-color:#366092;color:white;">
-                                    <tr>
-                                        <th class="col-lbl">Week</th>
-                                        <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                                        <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                                        <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                                        <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                {% for r in sd.by_week %}
-                                <tr>
-                                    <td>{{ r.label }}</td>
-                                    <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                                    <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                                    <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                                    <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-                                </tr>
-                                {% empty %}<tr><td colspan="11" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-    </div>
-    {% empty %}
-    <p class="text-muted text-center py-3">No shop data available{% if not has_filter %} — apply a date filter{% endif %}.</p>
-    {% endfor %}
 </div>
 
 <!-- ── By Season - All Shops (one card per season, Sales-style) ───────── -->
 <div class="tab-pane fade" id="bdSeasonShop" role="tabpanel">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <p class="text-muted small mb-0">Compare all shops for each season. Shops sorted alphabetically.</p>
-        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_season_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    {% regroup bd.season_shop by label as season_groups %}
-    {% for grp in season_groups %}
-    <div class="card mb-3">
-        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
-             style="background:#2c3e50;color:white;cursor:pointer"
-             data-bs-toggle="collapse"
-             data-bs-target="#bdSS-{{ forloop.counter }}"
-             aria-expanded="false">
-            <strong>SEASON: {{ grp.grouper }}</strong>
-            <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
-        </div>
-        <div class="collapse" id="bdSS-{{ forloop.counter }}">
-            <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 bd-tbl">
-                    <thead style="background-color:#366092;color:white;">
-                        <tr>
-                            <th class="col-lbl">Shop</th>
-                            <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                            <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                            <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                            <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for r in grp.list %}
-                    <tr>
-                        <td title="{{ r.shop }}">{{ r.shop }}</td>
-                        <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                        <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                        <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                        <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-                    </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            </div>
-        </div>
-    </div>
-    {% empty %}
-    <p class="text-muted text-center py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</p>
-    {% endfor %}
 </div>
 
 <!-- ── By Month - All Shops (one card per month, Sales-style) ─────────── -->
 <div class="tab-pane fade" id="bdMonthShop" role="tabpanel">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <p class="text-muted small mb-0">Compare all shops for each month. Shops sorted alphabetically.</p>
-        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_month_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    {% regroup bd.month_shop by label as month_groups %}
-    {% for grp in month_groups %}
-    <div class="card mb-3">
-        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
-             style="background:#2c3e50;color:white;cursor:pointer"
-             data-bs-toggle="collapse"
-             data-bs-target="#bdMS-{{ forloop.counter }}"
-             aria-expanded="false">
-            <strong>MONTH: {{ grp.grouper }}</strong>
-            <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
-        </div>
-        <div class="collapse" id="bdMS-{{ forloop.counter }}">
-            <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 bd-tbl">
-                    <thead style="background-color:#366092;color:white;">
-                        <tr>
-                            <th class="col-lbl">Shop</th>
-                            <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                            <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                            <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                            <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for r in grp.list %}
-                    <tr>
-                        <td title="{{ r.shop }}">{{ r.shop }}</td>
-                        <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                        <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                        <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                        <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-                    </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            </div>
-        </div>
-    </div>
-    {% empty %}
-    <p class="text-muted text-center py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</p>
-    {% endfor %}
 </div>
 
 <!-- ── By Week - All Shops (one card per week, Sales-style) ───────────── -->
 <div class="tab-pane fade" id="bdWeekShop" role="tabpanel">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <p class="text-muted small mb-0">Compare all shops for each week. Shops sorted alphabetically.</p>
-        {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_week_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    {% regroup bd.week_shop by label as week_groups %}
-    {% for grp in week_groups %}
-    <div class="card mb-3">
-        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
-             style="background:#2c3e50;color:white;cursor:pointer"
-             data-bs-toggle="collapse"
-             data-bs-target="#bdWS-{{ forloop.counter }}"
-             aria-expanded="false">
-            <strong>WEEK: {{ grp.grouper }}</strong>
-            <small class="text-white-50"><i class="bi bi-chevron-down"></i></small>
-        </div>
-        <div class="collapse" id="bdWS-{{ forloop.counter }}">
-            <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 bd-tbl">
-                    <thead style="background-color:#366092;color:white;">
-                        <tr>
-                            <th class="col-lbl">Shop</th>
-                            <th class="col-num">New POS (INV)</th><th class="col-num">New POS (NO INV)</th><th class="col-num">New POS (TOTAL)</th><th class="col-num">POS Only</th>
-                            <th class="col-num">New CNV</th><th class="col-num">CNV Only</th>
-                            <th class="col-num">Zalo App</th><th class="col-num">% App/CNV</th>
-                            <th class="col-num">Zalo OA</th><th class="col-num">% OA/CNV</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for r in grp.list %}
-                    <tr>
-                        <td title="{{ r.shop }}">{{ r.shop }}</td>
-                        <td>{{ r.new_pos_inv }}</td><td>{{ r.new_pos_no_inv }}</td><td>{{ r.new_pos }}</td><td>{{ r.new_pos_only }}</td>
-                        <td>{{ r.new_cnv }}</td><td>{{ r.new_cnv_only }}</td>
-                        <td>{{ r.zalo_app }}</td><td>{{ r.zalo_app_pct }}%</td>
-                        <td>{{ r.zalo_oa }}</td><td>{{ r.zalo_oa_pct }}%</td>
-                    </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            </div>
-        </div>
-    </div>
-    {% empty %}
-    <p class="text-muted text-center py-3">No data{% if not has_filter %} — apply a date filter{% endif %}</p>
-    {% endfor %}
 </div>
 
 {% endwith %}
@@ -719,17 +411,20 @@
 <div class="mt-3" style="background:#1a252f; border-radius:6px 6px 0 0;">
     <ul class="nav dark-tabs px-3 pt-2 pb-2 flex-wrap" id="caTabNav" role="tablist">
         <li class="nav-item">
-            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPoints" type="button"
+                    data-lazy-url="{% url 'cnv:customer_tab' 'ca_points' %}" data-lazy-params="{{ lazy_params }}">
                 <i class="bi bi-coin"></i> Points Analysis
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabZalo" type="button"
+                    data-lazy-url="{% url 'cnv:customer_tab' 'ca_zalo' %}" data-lazy-params="{{ lazy_params }}">
                 <i class="bi bi-chat-dots-fill"></i> Active Zalo Mini App
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPOSCNV" type="button"
+                    data-lazy-url="{% url 'cnv:customer_tab' 'ca_pos_cnv' %}" data-lazy-params="{{ lazy_params }}">
                 <i class="bi bi-people"></i> POS vs CNV
             </button>
         </li>
@@ -740,341 +435,26 @@
 
 <!-- ══ TAB 1: Points Analysis (t1, t2, t3) ══════════════════════════════ -->
 <div class="tab-pane fade show active pt-3" id="tabPoints" role="tabpanel">
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="text-muted small mb-0">Points earned &amp; used, plus mismatches between POS and CNV loyalty system.</p>
-    {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=points{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% else %}<span></span>{% endif %}
-</div>
-<div class="row g-3">
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-1-circle text-success"></i> CNV Customers with Used Points &gt; 0 ({{ cnv_used_points_count }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t1"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    <div class="collapse show" id="t1">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 cnv-used-table">
-                <thead class="table-dark"><tr>
-                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th><th>In POS</th>
-                </tr></thead>
-                <tbody>
-                {% for c in cnv_used_points_list %}
-                <tr>
-                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
-                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
-                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td>
-                    <td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
-                    <td>{{ c.points|default:0 }}</td>
-                    <td><strong class="text-success">{{ c.used_points|default:0 }}</strong></td>
-                    <td>{{ c.total_points|default:0 }}</td>
-                    <td>{% if c.in_pos %}<span class="badge bg-success">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
-                </tr>
-                {% empty %}<tr><td colspan="10" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if cnv_used_points_count > 200 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 200 of {{ cnv_used_points_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-2-circle text-warning"></i> Points Mismatch — POS Points vs CNV Points ({{ points_mismatch_count }} mismatches)</h6>
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-primary sync-points-btn" data-table="t2" data-url="{% url 'cnv:sync_cnv_points' %}">
-                <i class="bi bi-arrow-repeat"></i> Sync CNV Points
-            </button>
-            <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t2"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-        </div>
-    </div>
-    <div class="collapse show" id="t2">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 mismatch-table">
-                <thead class="table-dark"><tr>
-                    <th>Phone</th><th>POS VIP ID</th><th>POS Name</th><th>POS Grade</th><th>POS Pts</th><th>POS Used Pts</th>
-                    <th>CNV ID</th><th>CNV Name</th><th>CNV Level</th><th>CNV Pts</th><th>CNV Total Pts</th><th>CNV Used Pts</th><th>Diff</th>
-                </tr></thead>
-                <tbody>
-                {% for row in points_mismatch %}
-                <tr data-cnv-id="{{ row.cnv_id }}">
-                    <td>{{ row.phone }}</td><td>{{ row.pos_vip_id }}</td>
-                    <td>{{ row.pos_name|default:"-" }}</td>
-                    <td>{% with g=row.pos_grade|lower %}<span class="badge {% if g == 'diamond' %}badge-level-diamond{% elif g == 'vip3' %}badge-level-vip3{% elif g == 'vip2' %}badge-level-vip2{% elif g == 'vip1' %}badge-level-vip1{% elif g == 'vip0' %}badge-level-vip0{% elif g == 'gold' %}badge-level-gold{% elif g == 'silver' %}badge-level-silver{% elif g == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ row.pos_grade|default:"-" }}</span>{% endwith %}</td>
-                    <td><span class="pts-highlight">{{ row.pos_points }}</span></td>
-                    <td>{{ row.pos_used_points|default:0 }}</td>
-                    <td>{{ row.cnv_id }}</td>
-                    <td>{{ row.cnv_name|default:"-" }}</td>
-                    <td>{% with lv=row.cnv_level|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ row.cnv_level|default:"-" }}</span>{% endwith %}</td>
-                    <td><span class="pts-highlight">{{ row.cnv_points }}</span></td><td>{{ row.cnv_total_points }}</td><td>{{ row.cnv_used_points }}</td>
-                    <td><span class="{% if row.diff > 0 %}diff-positive{% else %}diff-negative{% endif %}">{% if row.diff > 0 %}+{% endif %}{{ row.diff }}</span></td>
-                </tr>
-                {% empty %}<tr><td colspan="13" class="text-center text-muted py-3">No mismatch found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if points_mismatch_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ points_mismatch_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-3-circle" style="color:#a855f7;"></i> Total Points Mismatch — POS Points vs CNV Total Points ({{ total_points_mismatch_count }} mismatches)</h6>
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-primary sync-points-btn" data-table="t3" data-url="{% url 'cnv:sync_cnv_points' %}">
-                <i class="bi bi-arrow-repeat"></i> Sync CNV Points
-            </button>
-            <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t3"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-        </div>
-    </div>
-    <div class="collapse show" id="t3">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 mismatch-table">
-                <thead class="table-dark"><tr>
-                    <th>Phone</th><th>POS VIP ID</th><th>POS Name</th><th>POS Grade</th><th>POS Pts</th><th>POS Used Pts</th>
-                    <th>CNV ID</th><th>CNV Name</th><th>CNV Level</th><th>CNV Pts</th><th>CNV Total Pts</th><th>CNV Used Pts</th><th>Diff</th>
-                </tr></thead>
-                <tbody>
-                {% for row in total_points_mismatch %}
-                <tr data-cnv-id="{{ row.cnv_id }}">
-                    <td>{{ row.phone }}</td><td>{{ row.pos_vip_id }}</td>
-                    <td>{{ row.pos_name|default:"-" }}</td>
-                    <td>{% with g=row.pos_grade|lower %}<span class="badge {% if g == 'diamond' %}badge-level-diamond{% elif g == 'vip3' %}badge-level-vip3{% elif g == 'vip2' %}badge-level-vip2{% elif g == 'vip1' %}badge-level-vip1{% elif g == 'vip0' %}badge-level-vip0{% elif g == 'gold' %}badge-level-gold{% elif g == 'silver' %}badge-level-silver{% elif g == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ row.pos_grade|default:"-" }}</span>{% endwith %}</td>
-                    <td><span class="pts-highlight">{{ row.pos_points }}</span></td>
-                    <td>{{ row.pos_used_points|default:0 }}</td>
-                    <td>{{ row.cnv_id }}</td>
-                    <td>{{ row.cnv_name|default:"-" }}</td>
-                    <td>{% with lv=row.cnv_level|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ row.cnv_level|default:"-" }}</span>{% endwith %}</td>
-                    <td>{{ row.cnv_points }}</td>
-                    <td><span class="pts-highlight">{{ row.cnv_total_points }}</span></td>
-                    <td>{{ row.cnv_used_points }}</td>
-                    <td><span class="{% if row.diff > 0 %}diff-positive{% else %}diff-negative{% endif %}">{% if row.diff > 0 %}+{% endif %}{{ row.diff }}</span></td>
-                </tr>
-                {% empty %}<tr><td colspan="13" class="text-center text-muted py-3">No mismatch found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if total_points_mismatch_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ total_points_mismatch_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-</div><!-- end row tab1 -->
 </div><!-- end tabPoints -->
 
 <!-- ══ TAB 2: Zalo (t8, t9) ═════════════════════════════════════════════ -->
 <div class="tab-pane fade pt-3" id="tabZalo" role="tabpanel">
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="text-muted small mb-0">CNV customers linked to Zalo Mini App or following Semir Zalo OA.</p>
-    {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=zalo{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% else %}<span></span>{% endif %}
-</div>
-<div class="row g-3">
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-8-circle" style="color:#0068FF;"></i> 100 Latest Active Zalo Mini App ({{ zalo_mini_app_list|length }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t8"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    <div class="collapse show" id="t8">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 zalo-table">
-                <thead class="table-dark"><tr>
-                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Mini App</th><th>Follow OA</th><th>In POS</th>
-                </tr></thead>
-                <tbody>
-                {% for c in zalo_mini_app_list %}
-                <tr>
-                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
-                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
-                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td>
-                    <td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
-                    <td>{{ c.points|default:0 }}</td>
-                    <td>{% if c.zalo_app_id %}<span class="badge" style="background:#0068FF;">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
-                    <td>{% if c.zalo_oa_id %}<span class="badge" style="background:#00AAFF;">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
-                    <td>{% if c.in_pos %}<span class="badge bg-success">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
-                </tr>
-                {% empty %}<tr><td colspan="10" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if zalo_app_all_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ zalo_app_all_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-9-circle" style="color:#00AAFF;"></i> 100 Latest Follow Zalo OA ({{ zalo_oa_list|length }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t9"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="t9">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 zalo-table">
-                <thead class="table-dark"><tr>
-                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Mini App</th><th>Follow OA</th><th>In POS</th>
-                </tr></thead>
-                <tbody>
-                {% for c in zalo_oa_list %}
-                <tr>
-                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
-                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
-                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td>
-                    <td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
-                    <td>{{ c.points|default:0 }}</td>
-                    <td>{% if c.zalo_app_id %}<span class="badge" style="background:#0068FF;">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
-                    <td>{% if c.zalo_oa_id %}<span class="badge" style="background:#00AAFF;">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
-                    <td>{% if c.in_pos %}<span class="badge bg-success">✓ Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
-                </tr>
-                {% empty %}<tr><td colspan="10" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if zalo_oa_all_count > 100 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 100 of {{ zalo_oa_all_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-</div><!-- end row tabZalo -->
 </div><!-- end tabZalo -->
 
 <!-- ══ TAB 3: POS vs CNV (t4, t5, t6, t7) ═══════════════════════════════ -->
 <div class="tab-pane fade pt-3" id="tabPOSCNV" role="tabpanel">
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="text-muted small mb-0">Customers present in POS only, CNV only, or both systems — all-time and period.</p>
-    {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=pos_cnv{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% else %}<span></span>{% endif %}
-</div>
-<div class="row g-3">
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-4-circle text-primary"></i> POS Customers NOT in CNV — All Time ({{ pos_only_all_count }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t4"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
+    <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+        Loading data&hellip;
     </div>
-    <div class="collapse show" id="t4">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 pos-table">
-                <thead class="table-dark"><tr>
-                    <th>VIP ID</th><th>Phone</th><th>Name</th><th>VIP Grade</th><th>Email</th><th>Reg Date</th><th>Points</th>
-                </tr></thead>
-                <tbody>
-                {% for c in pos_only_all %}
-                <tr>
-                    <td>{{ c.vip_id }}</td><td>{{ c.phone }}</td><td>{{ c.name|default:"-" }}</td>
-                    <td>{% with g=c.vip_grade|lower %}<span class="badge {% if g == 'diamond' %}badge-level-diamond{% elif g == 'vip3' %}badge-level-vip3{% elif g == 'vip2' %}badge-level-vip2{% elif g == 'vip1' %}badge-level-vip1{% elif g == 'vip0' %}badge-level-vip0{% elif g == 'gold' %}badge-level-gold{% elif g == 'silver' %}badge-level-silver{% elif g == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.vip_grade|default:"No Grade" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td><td>{{ c.registration_date|date:"Y-m-d"|default:"-" }}</td><td>{{ c.points|default:0 }}</td>
-                </tr>
-                {% empty %}<tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if pos_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ pos_only_all_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-5-circle text-info"></i> CNV Customers NOT in POS — All Time ({{ cnv_only_all_count }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t5"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="t5">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 cnv-table">
-                <thead class="table-dark"><tr>
-                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
-                </tr></thead>
-                <tbody>
-                {% for c in cnv_only_all %}
-                <tr>
-                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
-                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
-                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td><td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
-                    <td>{{ c.points|default:0 }}</td><td>{{ c.used_points|default:0 }}</td><td>{{ c.total_points|default:0 }}</td>
-                </tr>
-                {% empty %}<tr><td colspan="9" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if cnv_only_all_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_all_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-{% if has_filter %}
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-6-circle text-success"></i> New POS Customers NOT in CNV — Period ({{ pos_only_period_count }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t6"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="t6">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 pos-table">
-                <thead class="table-dark"><tr>
-                    <th>VIP ID</th><th>Phone</th><th>Name</th><th>VIP Grade</th><th>Email</th><th>Reg Date</th><th>Points</th>
-                </tr></thead>
-                <tbody>
-                {% for c in pos_only_period %}
-                <tr>
-                    <td>{{ c.vip_id }}</td><td>{{ c.phone }}</td><td>{{ c.name|default:"-" }}</td>
-                    <td>{% with g=c.vip_grade|lower %}<span class="badge {% if g == 'diamond' %}badge-level-diamond{% elif g == 'vip3' %}badge-level-vip3{% elif g == 'vip2' %}badge-level-vip2{% elif g == 'vip1' %}badge-level-vip1{% elif g == 'vip0' %}badge-level-vip0{% elif g == 'gold' %}badge-level-gold{% elif g == 'silver' %}badge-level-silver{% elif g == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.vip_grade|default:"No Grade" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td><td>{{ c.registration_date|date:"Y-m-d"|default:"-" }}</td><td>{{ c.points|default:0 }}</td>
-                </tr>
-                {% empty %}<tr><td colspan="7" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if pos_only_period_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ pos_only_period_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-<div class="col-12">
-<div class="table-wrapper">
-    <div class="table-header">
-        <h6><i class="bi bi-7-circle text-success"></i> New CNV Customers NOT in POS — Period ({{ cnv_only_period_count }})</h6>
-        <button class="expand-btn" data-bs-toggle="collapse" data-bs-target="#t7"><i class="bi bi-arrows-expand"></i> Show/Hide</button>
-    </div>
-    <div class="collapse show" id="t7">
-        <div class="table-scroll">
-            <table class="table table-sm table-hover mb-0 cnv-table">
-                <thead class="table-dark"><tr>
-                    <th>CNV ID</th><th>Phone</th><th>Full Name</th><th>Level</th><th>Email</th><th>Reg Date</th><th>Points</th><th>Used Pts</th><th>Total Pts</th>
-                </tr></thead>
-                <tbody>
-                {% for c in cnv_only_period %}
-                <tr>
-                    <td>{{ c.cnv_id }}</td><td>{{ c.phone }}</td>
-                    <td>{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}</td>
-                    <td>{% with lv=c.level_name|lower %}<span class="badge {% if lv == 'diamond' %}badge-level-diamond{% elif lv == 'gold' %}badge-level-gold{% elif lv == 'silver' %}badge-level-silver{% elif lv == 'member' %}badge-level-member{% else %}badge-level-default{% endif %}">{{ c.level_name|default:"-" }}</span>{% endwith %}</td>
-                    <td>{{ c.email|default:"-" }}</td><td>{{ c.cnv_created_at|date:"Y-m-d"|default:"-" }}</td>
-                    <td>{{ c.points|default:0 }}</td><td>{{ c.used_points|default:0 }}</td><td>{{ c.total_points|default:0 }}</td>
-                </tr>
-                {% empty %}<tr><td colspan="9" class="text-center text-muted py-3">No records found</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if cnv_only_period_count > 50 %}<div class="p-2 bg-light border-top text-center"><small class="text-muted">Showing first 50 of {{ cnv_only_period_count }} records — download for full data</small></div>{% endif %}
-    </div>
-</div>
-</div>
-
-{% endif %}
-
-</div><!-- end row tabPOSCNV -->
 </div><!-- end tabPOSCNV -->
 
 </div><!-- end tab-content -->
@@ -1201,4 +581,5 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
 });
 
 </script>
+{% include "components/lazy_tabs_js.html" %}
 {% endblock %}

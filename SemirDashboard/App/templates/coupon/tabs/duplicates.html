@@ -1,0 +1,45 @@
+{% load custom_filters perm_tags %}
+{% check_perm 'download_coupons' as can_dl_coupons %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0">Invoices linked to <strong>more than one coupon</strong> in the current period/filter. The invoice amount is counted only once in <em>Unique Invoice Amount</em>.</p>
+    {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=dup&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+</div>
+{% if duplicate_invoices %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.86rem">
+        <thead>
+            <tr>
+                <th class="tbl-hdr-shop">Invoice No</th>
+                <th class="tbl-hdr-shop">Sales Date</th>
+                <th class="tbl-hdr-shop">Shop (Invoice)</th>
+                <th class="text-end tbl-hdr-shop">Invoice Amt</th>
+                <th class="tbl-hdr-used">Coupon ID</th>
+                <th class="tbl-hdr-used">Using Shop</th>
+                <th class="tbl-hdr-used">Using Date</th>
+                <th class="tbl-hdr-used">Face Value</th>
+                <th class="text-end tbl-hdr-used">Coupon Amt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in duplicate_invoices %}
+            <tr>
+                <td class="cell-shop"><strong>{{ d.docket_number }}</strong></td>
+                <td class="cell-shop">{{ d.sales_date|default:"-" }}</td>
+                <td class="cell-shop">{{ d.shop_name|default:"-" }}</td>
+                <td class="text-end cell-shop amount-vnd">{{ d.inv_amount|vnd }} VND</td>
+                <td class="cell-used"><strong>{{ d.coupon_id }}</strong></td>
+                <td class="cell-used">{{ d.using_shop|default:"-" }}</td>
+                <td class="cell-used">{{ d.using_date|default:"-" }}</td>
+                <td class="cell-used">{{ d.face_value_display }}</td>
+                <td class="text-end cell-used amount-vnd">{{ d.coupon_amount|vnd }} VND</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-check-circle" style="font-size:2.5rem;color:#198754"></i>
+    <p class="mt-2">No duplicate invoices found in the current period.</p>
+</div>
+{% endif %}

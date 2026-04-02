@@ -23,7 +23,8 @@ from django.utils import timezone
 from App.models import Customer
 from App.cnv.models import CNVCustomer
 from App.services import process_customer_file, process_sales_file
-from App.cnv.views import _compute_cnv_comparison
+from App.cnv.service import compute_cnv_comparison as _compute_cnv_comparison
+from App.analytics.tab_functions import get_customer_tab, CUSTOMER_TABS
 
 from tests.base import SnapshotTestCase, INPUT_DIR, get_run_log
 
@@ -267,8 +268,7 @@ class CustomerAnalyticsTest(SnapshotTestCase):
         zalo_oa  = CNVCustomer.objects.filter(zalo_oa_id__isnull=False).exclude(zalo_oa_id="").count()
         t.checkpoint(f"DB zalo counts → app={zalo_app} oa={zalo_oa}")
 
-        # Phase 8: Breakdown (_compute_cnv_breakdown)
-        from App.cnv.views import _compute_cnv_comparison
+        # Phase 8: Breakdown (compute_cnv_comparison)
         data = _compute_cnv_comparison("", "")
         t.checkpoint(f"_compute_cnv_comparison full (includes breakdown)")
 
@@ -334,13 +334,14 @@ class CustomerAnalyticsTest(SnapshotTestCase):
         bd = data.get("breakdown", {})
         t.checkpoint(f"_compute_cnv_comparison → breakdown keys={list(bd.keys())}")
         t.report()
+        # Keys in compute_cnv_breakdown return: 'season', 'month', 'week', 'shop'
         self.assert_snapshot("customer_breakdown", {
-            "by_season_count": len(bd.get("by_season", [])),
-            "by_month_count":  len(bd.get("by_month", [])),
-            "by_week_count":   len(bd.get("by_week", [])),
-            "by_shop_count":   len(bd.get("by_shop", [])),
-            "by_season": bd.get("by_season", []),
-            "by_month":  bd.get("by_month", []),
+            "by_season_count": len(bd.get("season", [])),
+            "by_month_count":  len(bd.get("month", [])),
+            "by_week_count":   len(bd.get("week", [])),
+            "by_shop_count":   len(bd.get("shop", [])),
+            "by_season": bd.get("season", []),
+            "by_month":  bd.get("month", []),
         })
 
     # ── Sanity ────────────────────────────────────────────────────────────
@@ -369,6 +370,155 @@ class CustomerAnalyticsTest(SnapshotTestCase):
     def test_invalid_date_graceful(self):
         data = _compute_cnv_comparison("not-a-date", "also-bad")
         self.assertFalse(data["has_filter"])
+
+
+class CustomerTabSnapshotTest(SnapshotTestCase):
+    """
+    Step 1 — Lock per-tab data for ALL Customer Analytics tabs (all-time).
+    Covers Session A (Registration Breakdown, 7 tabs) +
+            Session B (Customer Analytics, 3 tabs).
+    These snapshots are the ground-truth for Step 4 regression checks.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        if CUSTOMER_FILE.exists():
+            process_customer_file(_named(CUSTOMER_FILE))
+        for path in SALE_FILES:
+            if path.exists():
+                process_sales_file(_named(path))
+        _load_cnv_customers_from_csv()
+
+    def _tab(self, tab):
+        return get_customer_tab(tab)
+
+    def test_tab_perf_all(self):
+        """Time each customer tab individually via get_customer_tab() and compare."""
+        log = get_run_log()
+        log.section("CUSTOMER TAB PERF — per-tab via get_customer_tab()")
+        timings = {}
+        for tab in CUSTOMER_TABS:
+            t = self.timer(f"customer_tab_{tab}")
+            get_customer_tab(tab)
+            elapsed = t.total()
+            timings[tab] = elapsed
+            t.checkpoint(f"{tab} → {elapsed:.2f}s")
+            t.report()
+        self.record_page_timing("CUSTOMER per-tab timings", sum(timings.values()),
+                                [(f"tab:{k}", 0, v) for k, v in timings.items()])
+        for tab, elapsed in timings.items():
+            self.assertLess(elapsed, 30, f"Tab '{tab}' took {elapsed:.1f}s > 30s threshold")
+
+    # ── Session A: Registration Breakdown (7 tabs) ─────────────────────────
+
+    def test_tab_snapshot_bd_season(self):
+        t = self.timer("customer_tab_bd_season")
+        data = self._tab('bd_season')
+        t.checkpoint(f"by_season → {len(data['by_season'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("customer_tab_bd_season", {"by_season": data["by_season"]})
+
+    def test_tab_snapshot_bd_month(self):
+        t = self.timer("customer_tab_bd_month")
+        data = self._tab('bd_month')
+        t.checkpoint(f"by_month → {len(data['by_month'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("customer_tab_bd_month", {"by_month": data["by_month"]})
+
+    def test_tab_snapshot_bd_week(self):
+        t = self.timer("customer_tab_bd_week")
+        data = self._tab('bd_week')
+        t.checkpoint(f"by_week → {len(data['by_week'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("customer_tab_bd_week", {"by_week": data["by_week"]})
+
+    def test_tab_snapshot_bd_shop(self):
+        t = self.timer("customer_tab_bd_shop")
+        data = self._tab('bd_shop')
+        t.checkpoint(f"by_shop → {len(data['by_shop'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("customer_tab_bd_shop", {
+            "by_shop": data["by_shop"],
+            "shop_detail": data["shop_detail"],
+        })
+
+    def test_tab_snapshot_bd_season_allshops(self):
+        t = self.timer("customer_tab_bd_season_allshops")
+        data = self._tab('bd_season_allshops')
+        t.checkpoint(f"season_shop → {len(data['season_shop'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("customer_tab_bd_season_allshops", {
+            "season_shop": data["season_shop"],
+            "shop_season": data["shop_season"],
+        })
+
+    def test_tab_snapshot_bd_month_allshops(self):
+        t = self.timer("customer_tab_bd_month_allshops")
+        data = self._tab('bd_month_allshops')
+        t.checkpoint(f"month_shop → {len(data['month_shop'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("customer_tab_bd_month_allshops", {
+            "month_shop": data["month_shop"],
+            "shop_month": data["shop_month"],
+        })
+
+    def test_tab_snapshot_bd_week_allshops(self):
+        t = self.timer("customer_tab_bd_week_allshops")
+        data = self._tab('bd_week_allshops')
+        t.checkpoint(f"week_shop → {len(data['week_shop'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("customer_tab_bd_week_allshops", {
+            "week_shop": data["week_shop"],
+            "shop_week": data["shop_week"],
+        })
+
+    # ── Session B: Customer Analytics (3 tabs) ─────────────────────────────
+
+    def test_tab_snapshot_ca_points(self):
+        t = self.timer("customer_tab_ca_points")
+        data = self._tab('ca_points')
+        t.checkpoint(f"cnv_used_points → {data['cnv_used_points_count']} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("customer_tab_ca_points", {
+            "cnv_used_points_count": data["cnv_used_points_count"],
+            "cnv_used_points_list": data["cnv_used_points_list"],
+        })
+
+    def test_tab_snapshot_ca_zalo(self):
+        t = self.timer("customer_tab_ca_zalo")
+        data = self._tab('ca_zalo')
+        t.checkpoint(
+            f"zalo_app={data['zalo_app_all_count']} oa={data['zalo_oa_all_count']}  [{t.total():.2f}s]"
+        )
+        t.report()
+        self.assert_snapshot("customer_tab_ca_zalo", {
+            "zalo_app_all_count": data["zalo_app_all_count"],
+            "zalo_oa_all_count": data["zalo_oa_all_count"],
+            "zalo_app_all_pct": data["zalo_app_all_pct"],
+            "zalo_oa_all_pct": data["zalo_oa_all_pct"],
+            "zalo_mini_app_list": data["zalo_mini_app_list"],
+            "zalo_oa_list": data["zalo_oa_list"],
+        })
+
+    def test_tab_snapshot_ca_pos_cnv(self):
+        t = self.timer("customer_tab_ca_pos_cnv")
+        data = self._tab('ca_pos_cnv')
+        t.checkpoint(
+            f"mismatch={data['points_mismatch_count']} "
+            f"pos_only={data['pos_only_all_count']} "
+            f"cnv_only={data['cnv_only_all_count']}  [{t.total():.2f}s]"
+        )
+        t.report()
+        self.assert_snapshot("customer_tab_ca_pos_cnv", {
+            "points_mismatch_count": data["points_mismatch_count"],
+            "total_points_mismatch_count": data["total_points_mismatch_count"],
+            "pos_only_all_count": data["pos_only_all_count"],
+            "cnv_only_all_count": data["cnv_only_all_count"],
+            "points_mismatch": data["points_mismatch"],
+            "total_points_mismatch": data["total_points_mismatch"],
+            "pos_only_all": data["pos_only_all"],
+            "cnv_only_all": data["cnv_only_all"],
+        })
 
 
 class CustomerTimingBreakdownTest(SnapshotTestCase):

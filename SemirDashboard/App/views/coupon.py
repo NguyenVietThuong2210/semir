@@ -5,40 +5,23 @@ from datetime import datetime
 
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseBadRequest
 
 from App.permissions import requires_perm
 from App.analytics.coupon_analytics import (
     calculate_coupon_analytics,
+    get_coupon_summary,
     export_coupon_to_excel,
     export_coupon_tab_to_excel,
     _COUPON_TAB_SHEETS,
 )
+from App.analytics.tab_functions import get_coupon_tab, COUPON_TABS
 from App.models import CouponCampaign
+from App.views.view_utils import parse_date, filter_params_str
 
 logger = logging.getLogger(__name__)
 
 
-def _get_coupon_data(date_from, date_to, prefix, shop_group):
-    """Compute coupon analytics fresh on every call. Returns (data, None)."""
-    data = calculate_coupon_analytics(
-        date_from=date_from,
-        date_to=date_to,
-        coupon_id_prefix=prefix or None,
-        shop_group=shop_group or None,
-    )
-    return data, None
-
-
-def _parse_date(val, label, request):
-    """Parse date string to date object."""
-    if not val:
-        return None
-    try:
-        return datetime.strptime(val, "%Y-%m-%d").date()
-    except ValueError:
-        messages.warning(request, f"Invalid {label} format")
-        return None
 
 
 @requires_perm("page_coupons")
@@ -52,8 +35,8 @@ def coupon_dashboard(request):
     coupon_id_prefix = request.GET.get("coupon_id_prefix", "").strip()
     shop_group = request.GET.get("shop_group", "").strip()
 
-    date_from = _parse_date(start_date, "start date", request)
-    date_to = _parse_date(end_date, "end date", request)
+    date_from = parse_date(start_date, "start date", request)
+    date_to = parse_date(end_date, "end date", request)
 
     logger.info(
         "coupon_dashboard: from=%s to=%s prefix=%s shop_group=%s user=%s",
@@ -64,11 +47,22 @@ def coupon_dashboard(request):
         request.user,
     )
 
-    data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
+    # Lazy loading: only compute shop tab (first tab) on initial page load
+    data = get_coupon_tab('shop', date_from=date_from, date_to=date_to,
+                          coupon_id_prefix=coupon_id_prefix or None,
+                          shop_group=shop_group or None)
 
     _campaigns = list(CouponCampaign.objects.values("id", "name", "prefix"))
     for _c in _campaigns:
         _c["prefix_list"] = [p.strip() for p in (_c["prefix"] or "").split(",") if p.strip()]
+
+    # Build lazy params for tab AJAX URLs
+    _lazy_parts = []
+    if start_date:    _lazy_parts.append(f'start_date={start_date}')
+    if end_date:      _lazy_parts.append(f'end_date={end_date}')
+    if coupon_id_prefix: _lazy_parts.append(f'coupon_id_prefix={coupon_id_prefix}')
+    if shop_group:    _lazy_parts.append(f'shop_group={shop_group}')
+    lazy_params = '&'.join(_lazy_parts)
 
     return render(
         request,
@@ -77,8 +71,7 @@ def coupon_dashboard(request):
             "all_time": data["all_time"],
             "period": data["period"],
             "by_shop": data["by_shop"],
-            "details": data["details"],
-            "duplicate_invoices": data["duplicate_invoices"],
+            "lazy_params": lazy_params,
             "start_date": start_date,
             "end_date": end_date,
             "coupon_id_prefix": coupon_id_prefix,
@@ -87,6 +80,44 @@ def coupon_dashboard(request):
             "campaigns_json": json.dumps(_campaigns),
         },
     )
+
+
+@requires_perm("page_coupons")
+def coupon_tab(request, tab: str):
+    """
+    AJAX endpoint: returns a rendered HTML fragment for one Coupon Analytics tab.
+    Called by lazy_tabs_js.html on first tab click.
+    """
+    if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return HttpResponseBadRequest("AJAX only")
+    if tab not in COUPON_TABS or tab == 'shop':
+        return HttpResponseBadRequest(f"Invalid tab: {tab!r}")
+
+    start_date       = request.GET.get("start_date", "")
+    end_date         = request.GET.get("end_date", "")
+    coupon_id_prefix = request.GET.get("coupon_id_prefix", "").strip()
+    shop_group       = request.GET.get("shop_group", "").strip()
+
+    date_from = parse_date(start_date, "start date", request)
+    date_to   = parse_date(end_date,   "end date",   request)
+
+    logger.info(
+        "coupon_tab: tab=%s from=%s to=%s prefix=%s shop_group=%s user=%s",
+        tab, date_from, date_to, coupon_id_prefix, shop_group, request.user,
+    )
+
+    data = get_coupon_tab(tab, date_from=date_from, date_to=date_to,
+                          coupon_id_prefix=coupon_id_prefix or None,
+                          shop_group=shop_group or None)
+
+    ctx = {
+        **data,
+        "start_date": start_date,
+        "end_date":   end_date,
+        "coupon_id_prefix": coupon_id_prefix,
+        "shop_group": shop_group,
+    }
+    return render(request, f"coupon/tabs/{tab}.html", ctx)
 
 
 @requires_perm("download_coupons")
@@ -101,15 +132,18 @@ def export_coupons(request):
     shop_group = request.GET.get("shop_group", "").strip()
     tab = request.GET.get("tab", "").strip()
 
-    date_from = _parse_date(start_date, "start date", request)
-    date_to = _parse_date(end_date, "end date", request)
+    date_from = parse_date(start_date, "start date", request)
+    date_to = parse_date(end_date, "end date", request)
 
     logger.info(
         "export_coupons: from=%s to=%s prefix=%s shop_group=%s tab=%s user=%s",
         date_from, date_to, coupon_id_prefix, shop_group, tab or "full", request.user,
         extra={"step": "export_coupons"},
     )
-    data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
+    data = calculate_coupon_analytics(
+        date_from=date_from, date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix or None, shop_group=shop_group or None,
+    )
 
     ts = datetime.now().strftime('%H%M%S')
     period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
@@ -143,10 +177,14 @@ def coupon_chart(request):
     coupon_id_prefix = request.GET.get("coupon_id_prefix", "").strip()
     shop_group = request.GET.get("shop_group", "").strip()
 
-    date_from = _parse_date(start_date, "start date", request)
-    date_to = _parse_date(end_date, "end date", request)
+    date_from = parse_date(start_date, "start date", request)
+    date_to = parse_date(end_date, "end date", request)
 
-    data, _ = _get_coupon_data(date_from, date_to, coupon_id_prefix, shop_group)
+    data = get_coupon_summary(
+        date_from=date_from, date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix or None,
+        shop_group=shop_group or None,
+    )
 
     # Trend data (shop×time, campaign×time)
     trend_data = calculate_coupon_trend_data(date_from, date_to, shop_group, coupon_id_prefix)

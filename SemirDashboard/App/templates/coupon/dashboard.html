@@ -392,16 +392,15 @@
                 </button>
             </li>
             <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#detailTab" type="button">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#detailTab" type="button"
+                        data-lazy-url="{% url 'coupon_tab' 'detail' %}" data-lazy-params="{{ lazy_params }}">
                     <i class="bi bi-list-ul"></i> Coupon Detail
                 </button>
             </li>
             <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dupTab" type="button">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dupTab" type="button"
+                        data-lazy-url="{% url 'coupon_tab' 'duplicates' %}" data-lazy-params="{{ lazy_params }}">
                     <i class="bi bi-exclamation-triangle text-warning"></i> Duplicate Invoices
-                    {% if duplicate_invoices %}
-                    <span class="badge bg-danger ms-1">{{ duplicate_invoices|length }}</span>
-                    {% endif %}
                 </button>
             </li>
         </ul>
@@ -454,123 +453,22 @@
 
         <!-- DETAIL TAB -->
         <div class="tab-pane fade p-3" id="detailTab">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <p class="text-muted small mb-0">Sorted by Coupon ID (ascending). Customer name + phone from VIP ID lookup. <span class="badge bg-warning text-dark">Warning</span> = shop mismatch between coupon's using shop and invoice shop, or invoice not found.</p>
-                {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=detail&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data&hellip;
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.86rem">
-                    <thead>
-                        <tr>
-                            <th class="tbl-hdr-shop">Coupon ID</th>
-                            <th class="tbl-hdr-shop">Creator</th>
-                            <th class="text-end tbl-hdr-shop">Face Value</th>
-                            <th class="tbl-hdr-shop">Using Shop</th>
-                            <th class="tbl-hdr-shop">Using Date</th>
-                            <th class="tbl-hdr-used">VIP ID</th>
-                            <th class="tbl-hdr-used" style="max-width:120px;min-width:80px;">Name</th>
-                            <th class="tbl-hdr-used">Phone No</th>
-                            <th class="tbl-hdr-used">Sales Date</th>
-                            <th class="tbl-hdr-used">Shop (Invoice)</th>
-                            <th class="text-end tbl-hdr-used">Amount</th>
-                            <th class="text-end tbl-hdr-used">Coupon Amt</th>
-                            <th class="tbl-hdr-used">Note</th>
-                            <th class="tbl-hdr-cnv">CNV ID</th>
-                            <th class="tbl-hdr-cnv">CNV Points (Current)</th>
-                            <th class="tbl-hdr-cnv">CNV Total Points</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for d in details %}
-                        <tr {% if d.note %}class="table-warning" {% endif %}>
-                            <td class="cell-shop"><strong>{{ d.coupon_id }}</strong></td>
-                            <td class="cell-shop">{{ d.creator|default:"-" }}</td>
-                            <td class="text-end cell-shop">{{ d.face_value_display }}</td>
-                            <td class="cell-shop">{{ d.using_shop|default:"-" }}</td>
-                            <td class="cell-shop">{{ d.using_date|default:"-" }}</td>
-                            <td class="cell-used">{{ d.vip_id|default:"-" }}</td>
-                            <td class="cell-used"
-                                style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                                title="{{ d.customer_name }}">{{ d.customer_name|default:"-" }}</td>
-                            <td class="cell-used">{{ d.customer_phone|default:"-" }}</td>
-                            <td class="cell-used">{{ d.sales_day|default:"-" }}</td>
-                            <td class="cell-used">{{ d.inv_shop|default:"-" }}</td>
-                            <td class="text-end amount-vnd cell-used">{{ d.amount|vnd }} VND</td>
-                            <td class="text-end amount-vnd cell-used">{{ d.coupon_amount|vnd }} VND</td>
-                            <td class="cell-used">
-                                {% if d.note %}
-                                <span class="badge bg-warning text-dark small" title="{{ d.note }}">
-                                    &#9888; {{ d.note|truncatechars:35 }}
-                                </span>
-                                {% endif %}
-                            </td>
-                            <td class="cell-cnv">{{ d.cnv_id|default:"-" }}</td>
-                            <td class="cell-cnv">{% if d.cnv_points != '' %}{{ d.cnv_points|floatformat:0 }}{% else %}-{% endif %}</td>
-                            <td class="cell-cnv">{% if d.cnv_total_points != '' %}{{ d.cnv_total_points|floatformat:0 }}{% else %}-{% endif %}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="16" class="text-center text-muted py-3">No data</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% if details|length >= 500 %}
-            <div class="p-3 text-muted small border-top">
-                Showing first 500 rows. Export to Excel for all data.
-            </div>
-            {% endif %}
         </div>
 
         <!-- DUPLICATE INVOICES TAB -->
         <div class="tab-pane fade p-3" id="dupTab">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <p class="text-muted small mb-0">Invoices linked to <strong>more than one coupon</strong> in the current period/filter. The invoice amount is counted only once in <em>Unique Invoice Amount</em>.</p>
-                {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=dup&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data&hellip;
             </div>
-            {% if duplicate_invoices %}
-            <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.86rem">
-                    <thead>
-                        <tr>
-                            <th class="tbl-hdr-shop">Invoice No</th>
-                            <th class="tbl-hdr-shop">Sales Date</th>
-                            <th class="tbl-hdr-shop">Shop (Invoice)</th>
-                            <th class="text-end tbl-hdr-shop">Invoice Amt</th>
-                            <th class="tbl-hdr-used">Coupon ID</th>
-                            <th class="tbl-hdr-used">Using Shop</th>
-                            <th class="tbl-hdr-used">Using Date</th>
-                            <th class="tbl-hdr-used">Face Value</th>
-                            <th class="text-end tbl-hdr-used">Coupon Amt</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for d in duplicate_invoices %}
-                        <tr>
-                            <td class="cell-shop"><strong>{{ d.docket_number }}</strong></td>
-                            <td class="cell-shop">{{ d.sales_date|default:"-" }}</td>
-                            <td class="cell-shop">{{ d.shop_name|default:"-" }}</td>
-                            <td class="text-end cell-shop amount-vnd">{{ d.inv_amount|vnd }} VND</td>
-                            <td class="cell-used"><strong>{{ d.coupon_id }}</strong></td>
-                            <td class="cell-used">{{ d.using_shop|default:"-" }}</td>
-                            <td class="cell-used">{{ d.using_date|default:"-" }}</td>
-                            <td class="cell-used">{{ d.face_value_display }}</td>
-                            <td class="text-end cell-used amount-vnd">{{ d.coupon_amount|vnd }} VND</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="text-center py-5 text-muted">
-                <i class="bi bi-check-circle" style="font-size:2.5rem;color:#198754"></i>
-                <p class="mt-2">No duplicate invoices found in the current period.</p>
-            </div>
-            {% endif %}
         </div>
 
     </div>
+    {% include "components/lazy_tabs_js.html" %}
 </div>
 
 {% endblock %}

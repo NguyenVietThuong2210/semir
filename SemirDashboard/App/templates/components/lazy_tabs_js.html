@@ -1,0 +1,66 @@
+{#
+  components/lazy_tabs_js.html
+  ────────────────────────────
+  Include once per page that uses lazy-loading tabs:
+      {% include "components/lazy_tabs_js.html" %}
+
+  How it works:
+  - On Bootstrap tab `show.bs.tab`, checks data-lazy-url on the activated button.
+  - If url is set and tab hasn't loaded yet (no data-loaded="true"), fetches it.
+  - Replaces .lazy-tab-placeholder with the HTML response.
+  - Sets data-loaded="true" so subsequent switches are instant.
+
+  The AJAX endpoint must return a plain HTML fragment (no <html>/<body>).
+  Pass current filters as query params via data-lazy-params on the tab button.
+#}
+<script>
+(function () {
+    "use strict";
+
+    function loadLazyTab(btn, pane) {
+        var url = btn.dataset.lazyUrl;
+        if (!url || btn.dataset.loaded === "true") return;
+
+        // Build URL with any extra params encoded on the button
+        var params = btn.dataset.lazyParams || "";
+        var fullUrl = params ? (url + (url.includes("?") ? "&" : "?") + params) : url;
+
+        var placeholder = pane.querySelector(".lazy-tab-placeholder");
+        if (!placeholder) return;
+
+        fetch(fullUrl, {headers: {"X-Requested-With": "XMLHttpRequest"}})
+            .then(function (r) {
+                if (!r.ok) throw new Error("HTTP " + r.status);
+                return r.text();
+            })
+            .then(function (html) {
+                placeholder.outerHTML = html;
+                btn.dataset.loaded = "true";
+                // Trigger custom event so page JS can post-process (e.g. init DataTables)
+                pane.dispatchEvent(new CustomEvent("lazyTabLoaded", {bubbles: true}));
+            })
+            .catch(function (err) {
+                placeholder.innerHTML =
+                    '<div class="alert alert-danger m-3">Failed to load tab: ' + err.message + '</div>';
+            });
+    }
+
+    document.addEventListener("show.bs.tab", function (e) {
+        var btn  = e.target;          // the newly activated tab button
+        var paneId = btn.dataset.bsTarget;
+        if (!paneId) return;
+        var pane = document.querySelector(paneId);
+        if (pane) loadLazyTab(btn, pane);
+    });
+
+    // Trigger loading for any initially active tab that has a placeholder
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll(".tab-pane.show.active .lazy-tab-placeholder").forEach(function (ph) {
+            var pane = ph.closest(".tab-pane");
+            if (!pane) return;
+            var btn = document.querySelector('[data-bs-target="#' + pane.id + '"][data-lazy-url]');
+            if (btn) loadLazyTab(btn, pane);
+        });
+    });
+})();
+</script>

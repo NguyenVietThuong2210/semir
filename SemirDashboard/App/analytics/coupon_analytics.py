@@ -505,6 +505,161 @@ def calculate_coupon_analytics(
     }
 
 
+def get_coupon_summary(date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None):
+    """
+    Lean summary for the coupon chart page — returns only all_time and period dicts.
+
+    Skips by_shop, coupon_details, duplicate_invoices, and customer lookups.
+    Use this instead of calculate_coupon_analytics() when only summary counts/amounts
+    are needed (e.g. chart pies and headline numbers).
+    """
+    from django.db.models import Count as _Count, Q as _Q
+
+    qs = Coupon.objects.all()
+
+    # Shop group filter
+    if shop_group:
+        if shop_group == "Bala Group":
+            qs = qs.filter(Q(using_shop__icontains="Bala") | Q(using_shop__icontains="巴拉"))
+        elif shop_group == "Semir Group":
+            qs = qs.filter(Q(using_shop__icontains="Semir") | Q(using_shop__icontains="森马"))
+        elif shop_group == "Others Group":
+            qs = qs.exclude(
+                Q(using_shop__icontains="Bala") | Q(using_shop__icontains="巴拉") |
+                Q(using_shop__icontains="Semir") | Q(using_shop__icontains="森马")
+            )
+
+    # Period filter
+    if date_from or date_to:
+        usage_filter = Q(using_date__isnull=False)
+        if date_from:
+            usage_filter &= Q(using_date__gte=date_from)
+        if date_to:
+            usage_filter &= Q(using_date__lte=date_to)
+        period_qs = qs.filter(usage_filter)
+    else:
+        period_qs = qs
+
+    # Coupon ID prefix filter
+    if coupon_id_prefix:
+        _prefixes = [p.strip() for p in coupon_id_prefix.split(",") if p.strip()]
+        if len(_prefixes) == 1:
+            qs = qs.filter(coupon_id__istartswith=_prefixes[0])
+            period_qs = period_qs.filter(coupon_id__istartswith=_prefixes[0])
+        elif _prefixes:
+            _pq = Q()
+            for _p in _prefixes:
+                _pq |= Q(coupon_id__istartswith=_p)
+            qs = qs.filter(_pq)
+            period_qs = period_qs.filter(_pq)
+
+    # Counts via aggregates
+    _at_agg = qs.aggregate(
+        total=_Count('id'),
+        used_count=_Count('id', filter=_Q(using_date__isnull=False)),
+    )
+    all_time_total = _at_agg['total']
+    all_time_used  = _at_agg['used_count']
+    all_time_unused = all_time_total - all_time_used
+    all_time_usage_rate = round(all_time_used / all_time_total * 100 if all_time_total else 0, 2)
+
+    if period_qs is qs:
+        period_total = all_time_total
+        period_used  = all_time_used
+    else:
+        _pd_agg = period_qs.aggregate(
+            total=_Count('id'),
+            used_count=_Count('id', filter=_Q(using_date__isnull=False)),
+        )
+        period_total = _pd_agg['total']
+        period_used  = _pd_agg['used_count']
+    period_unused = period_total - period_used
+    period_usage_rate = round(period_used / period_total * 100 if period_total else 0, 2)
+
+    # Amounts — fetch used coupons + join transactions (no customer lookup, no detail building)
+    _all_used = list(qs.filter(using_date__isnull=False).values(
+        'pk', 'coupon_id', 'face_value', 'docket_number'
+    ))
+    _all_dockets = [r['docket_number'] for r in _all_used if r['docket_number']]
+    _txn_all = {
+        t['invoice_number']: t['sales_amount']
+        for t in SalesTransaction.objects.filter(
+            invoice_number__in=_all_dockets
+        ).values('invoice_number', 'sales_amount')
+    }
+
+    all_time_amount = Decimal(0)
+    all_time_coupon_amount = Decimal(0)
+    all_time_unique_amount = Decimal(0)
+    _seen_all = set()
+    for r in _all_used:
+        inv_amount = _txn_all.get(r['docket_number']) if r['docket_number'] else None
+        inv_amount = Decimal(str(inv_amount)) if inv_amount is not None else (r['face_value'] or Decimal(0))
+        all_time_amount += inv_amount
+        all_time_coupon_amount += calc_coupon_amount(r['face_value'], inv_amount)
+        dk = r['docket_number'] or f"__no_docket_{r['pk']}"
+        if dk not in _seen_all:
+            _seen_all.add(dk)
+            all_time_unique_amount += inv_amount
+
+    _pd_used = list(period_qs.filter(using_date__isnull=False).values(
+        'pk', 'face_value', 'docket_number'
+    ))
+    _pd_dockets = [r['docket_number'] for r in _pd_used if r['docket_number']]
+    _txn_pd = {
+        t['invoice_number']: t['sales_amount']
+        for t in SalesTransaction.objects.filter(
+            invoice_number__in=_pd_dockets
+        ).values('invoice_number', 'sales_amount')
+    }
+
+    period_amount = Decimal(0)
+    period_coupon_amount = Decimal(0)
+    period_unique_amount = Decimal(0)
+    _seen_pd = set()
+    for r in _pd_used:
+        inv_amount = _txn_pd.get(r['docket_number']) if r['docket_number'] else None
+        inv_amount = Decimal(str(inv_amount)) if inv_amount is not None else (r['face_value'] or Decimal(0))
+        period_amount += inv_amount
+        period_coupon_amount += calc_coupon_amount(r['face_value'], inv_amount)
+        dk = r['docket_number'] or f"__no_docket_{r['pk']}"
+        if dk not in _seen_pd:
+            _seen_pd.add(dk)
+            period_unique_amount += inv_amount
+
+    at_used_pct   = round(all_time_used / all_time_total * 100, 1) if all_time_total else 0
+    at_unused_pct = round(all_time_unused / all_time_total * 100, 1) if all_time_total else 0
+    pd_used_pct   = round(period_used / period_total * 100, 1) if period_total else 0
+    pd_unused_pct = round(period_unused / period_total * 100, 1) if period_total else 0
+
+    return {
+        "all_time": {
+            "total": all_time_total,
+            "used": all_time_used,
+            "unused": all_time_unused,
+            "used_pct": at_used_pct,
+            "unused_pct": at_unused_pct,
+            "usage_rate": all_time_usage_rate,
+            "total_amount": float(all_time_amount),
+            "total_coupon_amount": float(all_time_coupon_amount),
+            "unique_invoice_amount": float(all_time_unique_amount),
+            "duplicate_invoice_count": 0,
+        },
+        "period": {
+            "total": period_total,
+            "used": period_used,
+            "unused": period_unused,
+            "used_pct": pd_used_pct,
+            "unused_pct": pd_unused_pct,
+            "usage_rate": period_usage_rate,
+            "total_amount": float(period_amount),
+            "total_coupon_amount": float(period_coupon_amount),
+            "unique_invoice_amount": float(period_unique_amount),
+            "duplicate_invoice_count": 0,
+        },
+    }
+
+
 def calculate_coupon_trend_data(date_from=None, date_to=None, shop_group=None, coupon_id_prefix=None):
     """
     Compute time-series trend data for the coupon chart page.

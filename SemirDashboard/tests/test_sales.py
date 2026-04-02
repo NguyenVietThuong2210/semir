@@ -15,6 +15,7 @@ from pathlib import Path
 from App.models import Customer, SalesTransaction
 from App.services import process_customer_file, process_sales_file
 from App.analytics.core import calculate_return_rate_analytics
+from App.analytics.tab_functions import get_sales_tab, SALES_TABS
 from App.analytics.aggregators import (
     aggregate_by_grade, aggregate_by_season, aggregate_by_month,
     aggregate_by_year, aggregate_by_week, aggregate_by_shop,
@@ -222,3 +223,117 @@ class SalesAnalyticsTest(SnapshotTestCase):
         grade_sum    = sum(g.get("total_customers", 0) for g in data["by_grade"])
         self.assertEqual(total_active, grade_sum,
             f"Grade sum ({grade_sum}) != overview active ({total_active})")
+
+
+class SalesTabSnapshotTest(SnapshotTestCase):
+    """
+    Per-tab lazy-loading tests.
+    Each test calls get_sales_tab(tab) — the actual AJAX endpoint path.
+    Measures tab-level load time and locks snapshot for regression.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        process_customer_file(_named(CUSTOMER_FILE))
+        for path in SALE_FILES:
+            if path.exists():
+                process_sales_file(_named(path))
+
+    def _tab(self, tab):
+        data = get_sales_tab(tab)
+        if not data:
+            self.skipTest("No sales data")
+        return data
+
+    def test_tab_perf_all(self):
+        """Time each sales tab individually via get_sales_tab() and compare."""
+        log = get_run_log()
+        log.section("SALES TAB PERF — per-tab via get_sales_tab()")
+        timings = {}
+        for tab in SALES_TABS:
+            t = self.timer(f"sales_tab_{tab}")
+            data = get_sales_tab(tab)
+            elapsed = t.total()
+            timings[tab] = elapsed
+            t.checkpoint(f"{tab} → {elapsed:.2f}s")
+            t.report()
+        self.record_page_timing("SALES per-tab timings", sum(timings.values()),
+                                [(f"tab:{k}", 0, v) for k, v in timings.items()])
+        # Each individual tab must complete within 15s
+        for tab, elapsed in timings.items():
+            self.assertLess(elapsed, 15, f"Tab '{tab}' took {elapsed:.1f}s > 15s threshold")
+
+    def test_tab_snapshot_grade(self):
+        t = self.timer("sales_tab_grade")
+        data = self._tab('grade')
+        t.checkpoint(f"by_grade → {len(data['by_grade'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_grade", {"by_grade": data["by_grade"]})
+
+    def test_tab_snapshot_season(self):
+        t = self.timer("sales_tab_season")
+        data = self._tab('season')
+        t.checkpoint(f"by_session → {len(data['by_session'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_season", {"by_session": data["by_session"]})
+
+    def test_tab_snapshot_month(self):
+        t = self.timer("sales_tab_month")
+        data = self._tab('month')
+        t.checkpoint(f"by_month → {len(data['by_month'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_month", {"by_month": data["by_month"]})
+
+    def test_tab_snapshot_week(self):
+        t = self.timer("sales_tab_week")
+        data = self._tab('week')
+        t.checkpoint(f"by_week → {len(data['by_week'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_week", {"by_week": data["by_week"]})
+
+    def test_tab_snapshot_shop(self):
+        t = self.timer("sales_tab_shop")
+        data = self._tab('shop')
+        t.checkpoint(f"by_shop → {len(data['by_shop'])} shops  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_shop", {"by_shop": data["by_shop"]})
+
+    def test_tab_snapshot_grade_allshops(self):
+        t = self.timer("sales_tab_grade_allshops")
+        data = self._tab('grade_allshops')
+        t.checkpoint(f"grade_allshops → grades={len(data['by_grade'])} shops={len(data['by_shop'])}  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_grade_allshops", {
+            "by_grade": data["by_grade"],
+            "by_shop": data["by_shop"],
+        })
+
+    def test_tab_snapshot_season_allshops(self):
+        t = self.timer("sales_tab_season_allshops")
+        data = self._tab('season_allshops')
+        t.checkpoint(f"season_allshops → sessions={len(data['by_session'])} shops={len(data['by_shop'])}  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_season_allshops", {
+            "by_session": data["by_session"],
+            "by_shop": data["by_shop"],
+        })
+
+    def test_tab_snapshot_month_allshops(self):
+        t = self.timer("sales_tab_month_allshops")
+        data = self._tab('month_allshops')
+        t.checkpoint(f"month_allshops → months={len(data['by_month'])} shops={len(data['by_shop'])}  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_month_allshops", {
+            "by_month": data["by_month"],
+            "by_shop": data["by_shop"],
+        })
+
+    def test_tab_snapshot_week_allshops(self):
+        t = self.timer("sales_tab_week_allshops")
+        data = self._tab('week_allshops')
+        t.checkpoint(f"week_allshops → weeks={len(data['by_week'])} shops={len(data['by_shop'])}  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("sales_tab_week_allshops", {
+            "by_week": data["by_week"],
+            "by_shop": data["by_shop"],
+        })

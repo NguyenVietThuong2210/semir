@@ -1,0 +1,155 @@
+{% load custom_filters perm_tags %}
+{% check_perm 'download_analytics' as can_dl_analytics %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0">Shops sorted by customer count (descending). Click a shop card to expand season / month / week breakdown.</p>
+    {% if can_dl_analytics %}<a href="{% url 'export_analytics' %}?tab=shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+</div>
+
+{% for sh in by_shop %}
+<div class="card mb-3 border">
+    <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+         style="background:#2c3e50;cursor:pointer"
+         data-bs-toggle="collapse"
+         data-bs-target="#shopDetail-{{ forloop.counter }}"
+         aria-expanded="false">
+        <strong class="text-white"><i class="bi bi-shop me-1"></i>{{ sh.shop_name }}</strong>
+        <small class="text-white-50">
+            Active: {{ sh.total_customers }} &nbsp;|&nbsp; Return: {{ sh.return_rate }}%
+            &nbsp;<i class="bi bi-chevron-down"></i>
+        </small>
+    </div>
+    <!-- Summary row always visible -->
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead style="background-color:#366092;color:white;">
+                <tr>
+                    <th>Shop</th>
+                    <th class="text-end">Active</th>
+                    <th class="text-end">Returning</th>
+                    <th class="text-end">Return Rate</th>
+                    <th class="text-end">INV(RET)</th>
+                    <th class="text-end">AMT(RET)</th>
+                    <th class="text-end">Total INV</th>
+                    <th class="text-end">Total Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td title="{{ sh.shop_name }}"><strong>{{ sh.shop_name }}</strong></td>
+                <td class="text-end">{{ sh.total_customers }}</td>
+                <td class="text-end">{{ sh.returning_customers }}</td>
+                <td class="text-end"><span class="badge bg-primary">{{ sh.return_rate }}%</span></td>
+                <td class="text-end text-success">{{ sh.returning_invoices }}</td>
+                <td class="text-end text-success amount-vnd">{{ sh.returning_amount|vnd }} {{ currency }}</td>
+                <td class="text-end">{{ sh.total_invoices_with_vip0 }}</td>
+                <td class="text-end amount-vnd">{{ sh.total_amount_with_vip0|vnd }} {{ currency }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <!-- Expandable sub-breakdowns -->
+    <div class="collapse" id="shopDetail-{{ forloop.counter }}">
+        <div class="px-3 py-2 border-top bg-light">
+
+            <!-- By Season -->
+            <div class="mb-3">
+                <p class="text-muted small fw-semibold mb-1 text-uppercase">By Season</p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead style="background-color:#366092;color:white;">
+                            <tr>
+                                <th>Season</th>
+                                <th class="text-end">Active</th><th class="text-end">Returning</th>
+                                <th class="text-end">Return Rate</th>
+                                <th class="text-end">INV(RET)</th><th class="text-end">AMT(RET)</th>
+                                <th class="text-end">Total INV</th><th class="text-end">Total Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for s in sh.by_session %}
+                        <tr>
+                            <td>{{ s.session }}</td>
+                            <td class="text-end">{{ s.total_customers }}</td>
+                            <td class="text-end">{{ s.returning_customers }}</td>
+                            <td class="text-end"><span class="badge bg-primary">{{ s.return_rate }}%</span></td>
+                            <td class="text-end text-success">{{ s.returning_invoices }}</td>
+                            <td class="text-end text-success amount-vnd">{{ s.returning_amount|vnd }} {{ currency }}</td>
+                            <td class="text-end">{{ s.total_invoices_with_vip0 }}</td>
+                            <td class="text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }} {{ currency }}</td>
+                        </tr>
+                        {% empty %}<tr><td colspan="8" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- By Month -->
+            <div class="mb-3">
+                <p class="text-muted small fw-semibold mb-1 text-uppercase">By Month</p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead style="background-color:#366092;color:white;">
+                            <tr>
+                                <th>Month</th>
+                                <th class="text-end">Active</th><th class="text-end">Returning</th>
+                                <th class="text-end">Return Rate</th>
+                                <th class="text-end">INV(RET)</th><th class="text-end">AMT(RET)</th>
+                                <th class="text-end">Total INV</th><th class="text-end">Total Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for m in sh.by_month %}
+                        <tr>
+                            <td>{{ m.month }}</td>
+                            <td class="text-end">{{ m.total_customers }}</td>
+                            <td class="text-end">{{ m.returning_customers }}</td>
+                            <td class="text-end"><span class="badge bg-primary">{{ m.return_rate }}%</span></td>
+                            <td class="text-end text-success">{{ m.returning_invoices }}</td>
+                            <td class="text-end text-success amount-vnd">{{ m.returning_amount|vnd }} {{ currency }}</td>
+                            <td class="text-end">{{ m.total_invoices_with_vip0 }}</td>
+                            <td class="text-end amount-vnd">{{ m.total_amount_with_vip0|vnd }} {{ currency }}</td>
+                        </tr>
+                        {% empty %}<tr><td colspan="8" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- By Week -->
+            <div>
+                <p class="text-muted small fw-semibold mb-1 text-uppercase">By Week</p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead style="background-color:#366092;color:white;">
+                            <tr>
+                                <th>Week</th>
+                                <th class="text-end">Active</th><th class="text-end">Returning</th>
+                                <th class="text-end">Return Rate</th>
+                                <th class="text-end">INV(RET)</th><th class="text-end">AMT(RET)</th>
+                                <th class="text-end">Total INV</th><th class="text-end">Total Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for w in sh.by_week %}
+                        <tr>
+                            <td>{{ w.week_label }}</td>
+                            <td class="text-end">{{ w.total_customers }}</td>
+                            <td class="text-end">{{ w.returning_customers }}</td>
+                            <td class="text-end"><span class="badge bg-primary">{{ w.return_rate }}%</span></td>
+                            <td class="text-end text-success">{{ w.returning_invoices }}</td>
+                            <td class="text-end text-success amount-vnd">{{ w.returning_amount|vnd }} {{ currency }}</td>
+                            <td class="text-end">{{ w.total_invoices_with_vip0 }}</td>
+                            <td class="text-end amount-vnd">{{ w.total_amount_with_vip0|vnd }} {{ currency }}</td>
+                        </tr>
+                        {% empty %}<tr><td colspan="8" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% empty %}
+<p class="text-muted text-center py-3">No shop data for this period.</p>
+{% endfor %}

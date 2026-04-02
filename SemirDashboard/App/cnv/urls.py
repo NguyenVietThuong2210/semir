@@ -13,7 +13,8 @@ urlpatterns = [
     path('sync-status/', views.sync_status, name='sync_status'),
 
     # Customer Analytics (POS ↔ CNV comparison)
-    path('customer-analytics/', views.customer_analytics, name='customer_analytics'),
+    path('customer-analytics/',         views.customer_analytics,        name='customer_analytics'),
+    path('customer-analytics/tab/<str:tab>/', views.customer_tab,        name='customer_tab'),
     path('export-customer-analytics/', views.export_customer_analytics, name='export_customer_analytics'),
 
     # AJAX: Sync CNV points for selected customers

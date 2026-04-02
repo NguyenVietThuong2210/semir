@@ -14,6 +14,7 @@ from datetime import date
 from App.models import Coupon, SalesTransaction, Customer
 from App.services import process_coupon_file, process_sales_file, process_customer_file
 from App.analytics.coupon_analytics import calculate_coupon_analytics
+from App.analytics.tab_functions import get_coupon_tab, COUPON_TABS
 
 from tests.base import SnapshotTestCase, INPUT_DIR, get_run_log
 
@@ -208,3 +209,75 @@ class CouponAnalyticsTest(SnapshotTestCase):
         t.checkpoint(f"prefix={prefix} total={data['all_time']['total']} vs full={full['all_time']['total']}")
         t.report()
         self.assertLessEqual(data["all_time"]["total"], full["all_time"]["total"])
+
+
+class CouponTabSnapshotTest(SnapshotTestCase):
+    """
+    Step 1 — Lock per-tab data for all Coupon Analytics tabs (all-time).
+    These snapshots are the ground-truth for Step 4 regression checks.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        if CUSTOMER_FILE.exists():
+            process_customer_file(_named(CUSTOMER_FILE))
+        for path in SALE_FILES:
+            if path.exists():
+                process_sales_file(_named(path))
+        if COUPON_FILE.exists():
+            process_coupon_file(_named(COUPON_FILE))
+
+    def _tab(self, tab):
+        if not Coupon.objects.exists():
+            self.skipTest("No coupon data")
+        return get_coupon_tab(tab)
+
+    def test_tab_perf_all(self):
+        """Time each coupon tab individually via get_coupon_tab() and compare."""
+        if not Coupon.objects.exists():
+            self.skipTest("No coupon data")
+        log = get_run_log()
+        log.section("COUPON TAB PERF — per-tab via get_coupon_tab()")
+        timings = {}
+        for tab in COUPON_TABS:
+            t = self.timer(f"coupon_tab_{tab}")
+            get_coupon_tab(tab)
+            elapsed = t.total()
+            timings[tab] = elapsed
+            t.checkpoint(f"{tab} → {elapsed:.2f}s")
+            t.report()
+        self.record_page_timing("COUPON per-tab timings", sum(timings.values()),
+                                [(f"tab:{k}", 0, v) for k, v in timings.items()])
+        for tab, elapsed in timings.items():
+            self.assertLess(elapsed, 15, f"Tab '{tab}' took {elapsed:.1f}s > 15s threshold")
+
+    def test_tab_snapshot_shop(self):
+        t = self.timer("coupon_tab_shop")
+        data = self._tab('shop')
+        t.checkpoint(f"by_shop → {len(data['by_shop'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("coupon_tab_shop", {
+            "all_time": data["all_time"],
+            "period": data["period"],
+            "by_shop": data["by_shop"],
+        })
+
+    def test_tab_snapshot_detail(self):
+        t = self.timer("coupon_tab_detail")
+        data = self._tab('detail')
+        t.checkpoint(f"details → {len(data['details'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("coupon_tab_detail", {
+            "details_count": len(data["details"]),
+            "details": data["details"],
+        })
+
+    def test_tab_snapshot_duplicates(self):
+        t = self.timer("coupon_tab_duplicates")
+        data = self._tab('duplicates')
+        t.checkpoint(f"duplicate_invoices → {len(data['duplicate_invoices'])} rows  [{t.total():.2f}s]")
+        t.report()
+        self.assert_snapshot("coupon_tab_duplicates", {
+            "duplicate_invoices_count": len(data["duplicate_invoices"]),
+            "duplicate_invoices": data["duplicate_invoices"],
+        })

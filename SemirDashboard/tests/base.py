@@ -152,10 +152,17 @@ def _snapshot_path(name: str) -> Path:
     return SNAPSHOTS_DIR / f"{name}.json"
 
 
+def _now_str() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def save_snapshot(name: str, data):
     path = _snapshot_path(name)
+    normalised = _normalise(data)
+    # _last_run always first so it's visible at the top of the file
+    payload = {"_last_run": _now_str(), **normalised}
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(_normalise(data), f, indent=2, ensure_ascii=False)
+        json.dump(payload, f, indent=2, ensure_ascii=False)
     get_run_log().log(f"  [snapshot] saved: {path.name}")
 
 
@@ -165,6 +172,24 @@ def load_snapshot(name: str):
         return None
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _touch_last_run(name: str):
+    """Stamp _last_run in-place using a text replace — no JSON round-trip so nothing else changes."""
+    import re as _re
+    path = _snapshot_path(name)
+    if not path.exists():
+        return
+    content = path.read_text(encoding="utf-8")
+    ts = _now_str()
+    new_content = _re.sub(
+        r'"_last_run": "[^"]*"',
+        f'"_last_run": "{ts}"',
+        content,
+        count=1,
+    )
+    if new_content != content:
+        path.write_text(new_content, encoding="utf-8")
 
 
 # ── Base test case ──────────────────────────────────────────────────────────
@@ -184,7 +209,12 @@ class SnapshotTestCase(TestCase):
             save_snapshot(name, normalised)
             get_run_log().log(f"  [snapshot] {'updated' if existing else 'created'}: {name}")
             return
-        self._deep_compare(name, existing, normalised, path="root")
+        # Strip _last_run before comparing (it's metadata, not data)
+        existing_data = {k: v for k, v in existing.items() if k != "_last_run"}
+        self._deep_compare(name, existing_data, normalised, path="root")
+        # Comparison passed — stamp the snapshot with current run time
+        _touch_last_run(name)
+        get_run_log().log(f"  [snapshot] verified: {name}")
 
     def _deep_compare(self, snap_name, expected, actual, path: str):
         if type(expected) != type(actual):

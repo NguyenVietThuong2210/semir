@@ -1,0 +1,98 @@
+{% load custom_filters perm_tags %}
+{% check_perm 'download_analytics' as can_dl_analytics %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0">Overall grade summary + per-shop grade breakdown. Click a shop card to expand.</p>
+    {% if can_dl_analytics %}<a href="{% url 'export_analytics' %}?tab=grade_allshops{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
+</div>
+
+<!-- Overall Grade Summary -->
+<div class="mb-3">
+    <p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-award"></i> Overall Grade Summary</p>
+    <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle mb-0 grade-tbl">
+            <thead style="background-color:#366092;color:white;">
+                <tr>
+                    <th class="col-grade">VIP Grade</th>
+                    <th class="col-cnt text-end">Active (Period)</th>
+                    <th class="col-cnt text-end">Returning</th>
+                    <th class="col-rate text-end">Return Rate</th>
+                    <th class="col-cnt text-end">Total (All Time)</th>
+                    <th class="col-rate text-end">Return Rate (All Time)</th>
+                    <th class="col-inv text-end">INV(RET)</th>
+                    <th class="col-amt text-end">AMT(RET)</th>
+                    <th class="col-inv text-end">Total INV</th>
+                    <th class="col-amt text-end">Total Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in by_grade %}
+                <tr>
+                    <td><strong>{{ g.grade }}</strong></td>
+                    <td class="col-cnt text-end">{{ g.total_customers }}</td>
+                    <td class="col-cnt text-end">{{ g.returning_customers }}</td>
+                    <td class="col-rate text-end"><span class="badge bg-primary">{{ g.return_rate }}%</span></td>
+                    <td class="col-cnt text-end">{{ g.total_in_db }}</td>
+                    <td class="col-rate text-end"><span class="badge bg-warning">{{ g.return_rate_all_time }}%</span></td>
+                    <td class="col-inv text-end text-success">{{ g.returning_invoices|default:0 }}</td>
+                    <td class="col-amt text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} {{ currency }}</td>
+                    <td class="col-inv text-end">{{ g.total_invoices }}</td>
+                    <td class="col-amt text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="10" class="text-center text-muted py-3">No data</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Per-Shop Grade Breakdown -->
+<p class="text-muted small fw-semibold text-uppercase mb-1 mt-3"><i class="bi bi-shop"></i> By Shop — Grade Breakdown</p>
+{% for sh in by_shop %}
+<div class="card mb-3 border">
+    <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+         style="background:#2c3e50;cursor:pointer"
+         data-bs-toggle="collapse"
+         data-bs-target="#gradeShop-{{ forloop.counter }}"
+         aria-expanded="false">
+        <strong class="text-white"><i class="bi bi-shop me-1"></i>{{ sh.shop_name }}</strong>
+        <small class="text-white-50">Active: {{ sh.total_customers }} &nbsp;<i class="bi bi-chevron-down"></i></small>
+    </div>
+    <div class="collapse" id="gradeShop-{{ forloop.counter }}">
+        <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead style="background-color:#366092;color:white;">
+                    <tr>
+                        <th>Grade</th>
+                        <th class="text-end">Active</th>
+                        <th class="text-end">Returning</th>
+                        <th class="text-end">Return Rate</th>
+                        <th class="text-end">INV(RET)</th>
+                        <th class="text-end">AMT(RET)</th>
+                        <th class="text-end">Total INV</th>
+                        <th class="text-end">Total Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for g in sh.by_grade %}
+                <tr>
+                    <td><strong>{{ g.grade }}</strong></td>
+                    <td class="text-end">{{ g.total_customers }}</td>
+                    <td class="text-end">{{ g.returning_customers }}</td>
+                    <td class="text-end"><span class="badge bg-primary">{{ g.return_rate }}%</span></td>
+                    <td class="text-end text-success">{{ g.returning_invoices|default:0 }}</td>
+                    <td class="text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} {{ currency }}</td>
+                    <td class="text-end">{{ g.total_invoices }}</td>
+                    <td class="text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
+                </tr>
+                {% empty %}<tr><td colspan="8" class="text-center text-muted small py-1">No data</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        </div>
+    </div>
+</div>
+{% empty %}
+<p class="text-muted text-center py-3">No shop data for this period.</p>
+{% endfor %}

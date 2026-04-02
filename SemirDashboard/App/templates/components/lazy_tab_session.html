@@ -1,0 +1,76 @@
+{#
+  components/lazy_tab_session.html
+  ─────────────────────────────────
+  Common tab-session shell used by Sales, Coupon, and Customer pages.
+
+  HOW TO USE
+  ──────────
+  In your page template, call:
+
+      {% include "components/lazy_tab_session.html" with
+          session_id  = "analysisTabs"
+          tabs        = tab_defs          {# list of dicts — see below #}
+          first_pane  = "analytics/tabs/grade.html"  {# template path for tab 0 #}
+      %}
+
+  Each entry in `tabs`:
+      {
+        "id":    "gradeTab",            # unique within page
+        "label": "By VIP Grade",
+        "icon":  "star-half",           # Bootstrap Icons name (optional)
+        "url":   "/analytics/tab/grade/",  # AJAX endpoint; omit/None for first tab
+      }
+
+  CSS classes (.dark-tabs, .lazy-tab-placeholder) are defined once in base.html or
+  per-page <style> blocks — no new CSS needed here.
+
+  JS hook:
+      The shared initLazyTabs() function (included via components/lazy_tabs.js)
+      attaches click listeners to every button[data-lazy-url] and replaces the
+      .lazy-tab-placeholder with the AJAX response on first activation.
+#}
+
+<div class="card mb-4">
+    <div class="card-header p-0 border-0" style="background:#1a252f">
+        <ul class="nav dark-tabs px-3 pt-2 flex-wrap" id="{{ session_id }}" role="tablist">
+            {% for tab in tabs %}
+            <li class="nav-item">
+                <button
+                    class="nav-link{% if forloop.first %} active{% endif %}"
+                    id="btn-{{ tab.id }}"
+                    data-bs-toggle="tab"
+                    data-bs-target="#{{ tab.id }}"
+                    {% if tab.url %}data-lazy-url="{{ tab.url }}"{% endif %}
+                    type="button"
+                    role="tab"
+                    aria-controls="{{ tab.id }}"
+                    aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+                >
+                    {% if tab.icon %}<i class="bi bi-{{ tab.icon }}"></i> {% endif %}{{ tab.label }}
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card-body tab-content p-0">
+        {% for tab in tabs %}
+        <div
+            class="tab-pane fade{% if forloop.first %} show active{% endif %} p-3"
+            id="{{ tab.id }}"
+            role="tabpanel"
+        >
+            {% if forloop.first %}
+                {# First tab rendered server-side — no AJAX needed #}
+                {% include first_pane %}
+            {% else %}
+                {# All other tabs: skeleton replaced by AJAX on first click #}
+                <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                    Loading data…
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
