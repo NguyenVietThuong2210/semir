@@ -272,6 +272,8 @@ def export_customer_analytics(request):
         )
         filename = f"customer_analytics_{period}_{ts}.xlsx"
 
+    logger.info("export_customer_analytics: file=%s user=%s", filename, request.user,
+                extra={"step": "export_customer_analytics"})
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

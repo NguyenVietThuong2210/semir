@@ -17,10 +17,7 @@ from django.db.models import Count, Q
 from App.models import Customer, SalesTransaction
 
 from .calculations import calculate_return_visits
-from .customer_utils import (
-    get_customer_info,
-    build_customer_purchase_map,
-)
+from .customer_utils import get_customer_info
 from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key
 from .aggregators import (
     aggregate_by_grade,
@@ -38,20 +35,17 @@ logger = logging.getLogger('customer_analytics')
 def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=None, chart_only=False):
     """
     🎯 MAIN ANALYTICS FUNCTION - Entry point for all customer analytics
-    
-    Calculates comprehensive return visit analytics with:
-    - Period-level metrics (excluding VIP ID = 0)
-    - By VIP Grade breakdown
-    - By Season breakdown (cross-season returns)
-    - By Shop breakdown (with grade and season sub-breakdowns)
-    - Customer details list
-    - Buyer without info stats (VIP ID = 0)
-    
+
+    Uses the same cached _load_sales() data as the dashboard tab functions, so
+    chart/export views benefit from the 5-minute locmem cache and produce data
+    that is guaranteed to be consistent with the dashboard.
+
     Args:
         date_from: Start date for period filter (optional)
         date_to: End date for period filter (optional)
         shop_group: Shop group filter - "Bala Group", "Semir Group", "Others Group" (optional)
-    
+        chart_only: Skip customer_details + buyer_without_info (lighter for chart page)
+
     Returns:
         Dict with complete analytics data:
         - date_range: {start, end}
@@ -63,9 +57,11 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         - customer_details: Individual customer data
         - buyer_without_info_stats: VIP ID = 0 analytics
     """
-    logger.info("START date_from=%s date_to=%s shop_group=%s", date_from, date_to, shop_group)
+    from App.analytics.tab_functions import _load_sales
 
-    # OPT-1: Customer total + all-time active (has at least 1 invoice, excl VIP=0)
+    logger.debug("START date_from=%s date_to=%s shop_group=%s", date_from, date_to, shop_group)
+
+    # Cheap aggregate queries (not in _load_sales)
     total_customers_in_db = Customer.objects.count()
     member_active_all_time = (
         SalesTransaction.objects
@@ -74,44 +70,12 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     )
     member_inactive_all_time = max(0, total_customers_in_db - member_active_all_time)
 
-    # OPT-2: Use values() dict fetch — avoids model instantiation for 118k rows
-    #        (plain dicts use ~10x less memory than model objects)
-    FIELDS = (
-        'vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name',
-        'customer_id',
-        'customer__vip_grade', 'customer__registration_date', 'customer__name',
-    )
-    qs = (
-        SalesTransaction.objects
-        .values(*FIELDS)
-        .order_by()           # clears the model Meta ordering (no wasted DB sort)
-    )
-    if date_from:
-        qs = qs.filter(sales_date__gte=date_from)
-    if date_to:
-        qs = qs.filter(sales_date__lte=date_to)
-
-    if shop_group:
-        if shop_group == 'Bala Group':
-            qs = qs.filter(Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉'))
-        elif shop_group == 'Semir Group':
-            qs = qs.filter(Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马'))
-        elif shop_group == 'Others Group':
-            qs = qs.exclude(
-                Q(shop_name__icontains='Bala') | Q(shop_name__icontains='巴拉') |
-                Q(shop_name__icontains='Semir') | Q(shop_name__icontains='森马')
-            )
-
-    # OPT-4: Single fetch — no separate exists() call, no second aggregate(Min/Max)
-    sales_list = list(qs)
-    if not sales_list:
+    # Heavy fetch — uses 5-min locmem cache so chart + export reuse dashboard data
+    customer_purchases, get_ci, date_stats = _load_sales(date_from, date_to, shop_group)
+    if customer_purchases is None:
         return None
-    date_stats = {
-        'start_date': min(s['sales_date'] for s in sales_list),
-        'end_date':   max(s['sales_date'] for s in sales_list),
-    }
 
-    # OPT-5: Single aggregate query for VIP0 all-time stats (no full table load)
+    # VIP0 all-time stats (single aggregate, no row fetch)
     _vip0_q = Q(vip_id='') | Q(vip_id='0') | Q(vip_id__isnull=True)
     from django.db.models import Sum as _Sum
     _vip0_agg = SalesTransaction.objects.filter(_vip0_q).aggregate(
@@ -120,19 +84,11 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     vip0_alltime_invoices = _vip0_agg['cnt'] or 0
     vip0_alltime_amount   = float(_vip0_agg['total'] or 0)
 
-    logger.info("Transactions: %d  VIP0-alltime: %d", len(sales_list), vip0_alltime_invoices)
-    
-    # Build customer purchase map (handles both model objects and values() dicts)
-    customer_purchases = build_customer_purchase_map(sales_list)
-    # Free the raw list — no longer needed
-    del sales_list
-
     buyer_no_info_invoices = len(customer_purchases.get('0', []))
-    logger.info("Customers: %d  buyer_no_info_invoices: %d",
+    logger.debug("Customers: %d  buyer_no_info_invoices: %d",
                 len(customer_purchases), buyer_no_info_invoices)
-    
+
     # Effective date range for "new member" tracking
-    # Use explicit filter if provided; fall back to actual data extent
     period_lo = date_from or date_stats['start_date']
     period_hi = date_to   or date_stats['end_date']
 
@@ -143,54 +99,35 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     new_members_count = 0
     customer_details = []
     total_amount_period = Decimal(0)
-
-    # NEW: Track returning invoices and amounts
     returning_invoices = 0
     returning_amount = Decimal(0)
 
-    # Separate tracking for VIP ID = 0
     vip_0_purchases = customer_purchases.get('0', [])
     vip_0_amount = sum(p['amount'] for p in vip_0_purchases)
-
-    # NEW: Track invoice counts for VIP 0 totals
     total_invoices_without_vip0 = 0
 
-    # Pre-compute customer info once per customer — avoids 5x repeated lookup
-    # across aggregators (season, month, year, week, shop each call get_customer_info)
-    _customer_info_cache = {}
-
     for vip_id, purchases in customer_purchases.items():
-        # CRITICAL: Skip VIP ID = 0 for customer metrics
         if vip_id == '0':
             continue
 
         purchases_sorted = sorted(purchases, key=lambda x: x['date'])
         n = len(purchases_sorted)
-
-        # NEW: Count invoices WITHOUT VIP 0
         total_invoices_without_vip0 += n
 
-        # Get customer info once and cache it
-        grade, reg_date, name = get_customer_info(vip_id, purchases_sorted[0]['customer'])
-        _customer_info_cache[vip_id] = (grade, reg_date, name)
-        
-        # Calculate total amount (needed for returning tracking)
+        grade, reg_date, name = get_ci(vip_id, purchases_sorted[0].get('customer'))
+
         amt = sum(p['amount'] for p in purchases_sorted)
         total_amount_period += amt
-        
-        # Calculate return visits (by unique days)
+
         rc, is_ret = calculate_return_visits(purchases_sorted, reg_date)
         if is_ret:
             returning_customers.add(vip_id)
-            # NEW: Track returning invoices and amount
             returning_invoices += n
             returning_amount += amt
-        
-        # Count new members in period
+
         if reg_date and period_lo <= reg_date <= period_hi:
             new_members_count += 1
 
-        # Build customer detail record (skipped for chart_only)
         if not chart_only:
             customer_details.append({
                 'vip_id': vip_id,
@@ -202,42 +139,32 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
                 'return_visits': rc,
                 'total_spent': float(amt),
             })
-    
-    logger.info("new_members_count=%d", new_members_count)
 
-    # Calculate metrics EXCLUDING VIP ID = 0
+    logger.debug("new_members_count=%d", new_members_count)
+
     total_active = len([vid for vid in customer_purchases if vid != '0'])
     total_returning = len(returning_customers)
     return_rate_p = round(total_returning / total_active * 100, 2) if total_active else 0
     return_rate_at = round(total_returning / total_customers_in_db * 100, 2) if total_customers_in_db else 0
-    
-    # NEW: Calculate totals WITH VIP 0
+
     total_invoices_with_vip0 = total_invoices_without_vip0 + len(vip_0_purchases)
     total_amount_with_vip0 = total_amount_period + vip_0_amount
-    
+
     # ========================================================================
     # AGGREGATE BY DIMENSIONS
     # ========================================================================
-
-    # Wrapper that uses pre-computed cache — eliminates 4 redundant DB lookups per customer
-    def _cached_get_customer_info(vip_id, customer_obj=None):
-        cached = _customer_info_cache.get(vip_id)
-        if cached is not None:
-            return cached
-        return get_customer_info(vip_id, customer_obj)
-
     grade_stats = [] if chart_only else aggregate_by_grade(customer_details)
-    session_stats = aggregate_by_season(customer_purchases, _cached_get_customer_info)
-    month_stats = aggregate_by_month(customer_purchases, _cached_get_customer_info)
-    year_stats = aggregate_by_year(customer_purchases, _cached_get_customer_info)
+    session_stats = aggregate_by_season(customer_purchases, get_ci)
+    month_stats = aggregate_by_month(customer_purchases, get_ci)
+    year_stats = aggregate_by_year(customer_purchases, get_ci)
 
     all_session_keys = sorted([s['session'] for s in session_stats], key=session_sort_key)
     all_month_keys = sorted([m['month'] for m in month_stats], key=month_sort_key)
     all_year_keys = sorted([y['year'] for y in year_stats], key=year_sort_key)
-    week_stats = aggregate_by_week(customer_purchases, _cached_get_customer_info)
+    week_stats = aggregate_by_week(customer_purchases, get_ci)
     all_week_keys = sorted([w['week_sort'] for w in week_stats], key=week_sort_key)
-    shop_stats = aggregate_by_shop(customer_purchases, _cached_get_customer_info, all_session_keys, all_month_keys, all_year_keys, all_week_keys)
-    
+    shop_stats = aggregate_by_shop(customer_purchases, get_ci, all_session_keys, all_month_keys, all_year_keys, all_week_keys)
+
     if chart_only:
         buyer_without_info_stats = None
     else:
@@ -248,13 +175,13 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             date_from,
             date_to,
             total_invoices_with_vip0,
-            total_amount_with_vip0,
+            float(total_amount_with_vip0),
         )
         customer_details.sort(key=lambda x: x['return_visits'], reverse=True)
-    
-    logger.info("DONE  total_amount=%.2f  shops=%d  sessions=%d",
+
+    logger.debug("DONE  total_amount=%.2f  shops=%d  sessions=%d",
                 float(total_amount_period), len(shop_stats), len(session_stats))
-    
+
     return {
         'date_range': {'start': date_stats['start_date'], 'end': date_stats['end_date']},
         'session_label': get_session_for_range(date_from, date_to),
@@ -263,8 +190,8 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             'returning_customers': total_returning,
             'return_rate': return_rate_p,
             'return_rate_all_time': return_rate_at,
-            'returning_invoices': returning_invoices,  # NEW
-            'returning_amount': float(returning_amount),  # NEW
+            'returning_invoices': returning_invoices,
+            'returning_amount': float(returning_amount),
             'total_amount_period': float(total_amount_period),
             'buyer_without_info': buyer_no_info_invoices,
             'new_members_in_period': new_members_count,

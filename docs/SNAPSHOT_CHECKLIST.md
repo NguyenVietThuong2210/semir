@@ -39,7 +39,7 @@ After each run, `git diff` should show:
 | `customer_tab_bd_month_allshops.json` | 2026-04-02 20:41:41 | `1+` | First-time `_last_run` added |
 | `customer_tab_bd_season.json` | 2026-04-02 20:41:42 | `1+` | First-time `_last_run` added |
 | `customer_tab_bd_season_allshops.json` | 2026-04-02 20:41:43 | `1+` | First-time `_last_run` added |
-| `customer_tab_bd_shop.json` | 2026-04-02 20:41:45 | `41668+-` | **STRUCT CHANGE**: removed full `shop_detail` list (too large), now stores only `shop_detail_count` |
+| `customer_tab_bd_shop.json` | 2026-04-02 20:41:45 | `1+` | First-time `_last_run` added. Keys: `by_shop`×24, `shop_detail`×24 (full) |
 | `customer_tab_bd_week.json` | 2026-04-02 20:41:46 | `1+` | First-time `_last_run` added |
 | `customer_tab_bd_week_allshops.json` | 2026-04-02 20:41:48 | `1+` | First-time `_last_run` added |
 | `customer_tab_ca_points.json` | 2026-04-02 20:41:48 | `1+` | First-time `_last_run` added |
@@ -53,14 +53,14 @@ After each run, `git diff` should show:
 | `sales_2025.json` | 2026-04-02 20:47:43 | `1+` | First-time `_last_run` added |
 | `sales_alltime.json` | 2026-04-02 20:47:51 | `1+` | First-time `_last_run` added |
 | `sales_tab_grade.json` | 2026-04-02 20:52:55 | `1+` | First-time `_last_run` added |
-| `sales_tab_grade_allshops.json` | 2026-04-02 20:52:58 | `1392+-` | **STRUCT CHANGE**: old key `grade_allshops` (nested per-shop), new keys `by_grade` + `by_shop_count` (flat) |
+| `sales_tab_grade_allshops.json` | 2026-04-02 20:52:58 | large | Restored full `by_shop`×22 (was `by_shop_count` only). Keys: `by_grade`×5, `by_shop`×22 |
 | `sales_tab_month.json` | 2026-04-02 20:52:59 | `1+` | First-time `_last_run` added |
-| `sales_tab_month_allshops.json` | 2026-04-02 20:53:02 | `7480+-` | **STRUCT CHANGE**: old key `month_allshops` (nested), new keys `by_month` + `by_shop_count` (flat) |
+| `sales_tab_month_allshops.json` | 2026-04-02 20:53:02 | large | Restored full `by_shop`×22 (was `by_shop_count` only). Keys: `by_month`×27, `by_shop`×22 |
 | `sales_tab_season.json` | 2026-04-02 20:53:03 | `1+` | First-time `_last_run` added |
-| `sales_tab_season_allshops.json` | 2026-04-02 20:53:06 | `2874+-` | **STRUCT CHANGE**: old key `season_allshops` (nested), new keys `by_session` + `by_shop_count` (flat) |
+| `sales_tab_season_allshops.json` | 2026-04-02 20:53:06 | large | Restored full `by_shop`×22 (was `by_shop_count` only). Keys: `by_session`×10, `by_shop`×22 |
 | `sales_tab_shop.json` | 2026-04-02 20:53:09 | `1+` | First-time `_last_run` added |
 | `sales_tab_week.json` | 2026-04-02 20:53:10 | `1+` | First-time `_last_run` added |
-| `sales_tab_week_allshops.json` | 2026-04-02 20:53:13 | `35011+-` | **STRUCT CHANGE**: old key `week_allshops` (nested), new keys `by_week` + `by_shop_count` (flat) |
+| `sales_tab_week_allshops.json` | 2026-04-02 20:53:13 | large | Restored full `by_shop`×22 (was `by_shop_count` only). Keys: `by_week`×117, `by_shop`×22 |
 
 ---
 

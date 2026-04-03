@@ -17,6 +17,7 @@ from openpyxl.utils import get_column_letter
 
 from App.models import Coupon, Customer, SalesTransaction
 from App.cnv.models import CNVCustomer
+from App.analytics.excel_export import xl_write_header, xl_set_col_widths, xl_prepend_filter_row
 
 
 def calc_coupon_amount(face_value, invoice_amount):
@@ -893,6 +894,11 @@ def _coupon_wb_styles():
         Alignment(horizontal="center", vertical="center"),
     )
 
+# Alias for coupon-purple header fill (used inline in sheet builders)
+_COUPON_HDR_FILL  = PatternFill(start_color="6F42C1", end_color="6F42C1", fill_type="solid")
+_COUPON_HDR_FONT  = Font(bold=True, color="FFFFFF")
+_COUPON_HDR_ALIGN = Alignment(horizontal="center", vertical="center")
+
 
 def _build_coupon_summary_ws(wb, data, date_from, date_to, coupon_id_prefix, shop_group):
     ws = wb.active
@@ -1045,13 +1051,7 @@ def _prepend_coupon_filter_info(wb, date_from=None, date_to=None, coupon_id_pref
         parts.append(f"Prefix: {coupon_id_prefix}")
     if shop_group:
         parts.append(f"Shop Group: {shop_group}")
-    if not parts:
-        return
-    line = "  |  ".join(parts)
-    for ws in wb.worksheets:
-        ws.insert_rows(1)
-        ws["A1"] = line
-        ws["A1"].font = Font(italic=True, color="888888", size=9)
+    xl_prepend_filter_row(wb, parts)
 
 
 def export_coupon_tab_to_excel(tab, data, date_from=None, date_to=None, coupon_id_prefix=None, shop_group=None):

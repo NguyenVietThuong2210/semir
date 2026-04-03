@@ -491,13 +491,20 @@ class CustomerTabSnapshotTest(SnapshotTestCase):
             f"zalo_app={data['zalo_app_all_count']} oa={data['zalo_oa_all_count']}  [{t.total():.2f}s]"
         )
         t.report()
+        # Normalize list-item key order to match _zf in tab_functions.py so snapshot
+        # is immune to future dict insertion-order changes.
+        _ZFIELDS = ['cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
+                    'email', 'cnv_created_at', 'points', 'zalo_app_id', 'zalo_oa_id',
+                    'zalo_app_created_at', 'in_pos']
+        def _norm(rows):
+            return [{k: r.get(k) for k in _ZFIELDS} for r in rows]
         self.assert_snapshot("customer_tab_ca_zalo", {
             "zalo_app_all_count": data["zalo_app_all_count"],
             "zalo_oa_all_count": data["zalo_oa_all_count"],
             "zalo_app_all_pct": data["zalo_app_all_pct"],
             "zalo_oa_all_pct": data["zalo_oa_all_pct"],
-            "zalo_mini_app_list": data["zalo_mini_app_list"],
-            "zalo_oa_list": data["zalo_oa_list"],
+            "zalo_mini_app_list": _norm(data["zalo_mini_app_list"]),
+            "zalo_oa_list": _norm(data["zalo_oa_list"]),
         })
 
     def test_tab_snapshot_ca_pos_cnv(self):

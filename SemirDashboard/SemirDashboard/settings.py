@@ -214,9 +214,11 @@ APSCHEDULER_RUN_NOW_TIMEOUT = 25  # Seconds
 
 # ============================================================================
 # LOGGING CONFIGURATION
-# Structured JSON logs → Loki (via Promtail)
-# Filter in Grafana: {service="semir_web"} | json | request_id="abc123"
-#                    {service="semir_web"} | json | step="sync_customers"
+# Structured JSON logs written to logs/ directory (rotating files).
+# app.log    — general app events (views, services, uploads)
+# cnv_sync.log — CNV sync events (separate file for easy filtering)
+# errors.log — all ERROR+ events (all loggers)
+# Admin log viewer: /admin-logs/ (superuser only)
 # ============================================================================
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)

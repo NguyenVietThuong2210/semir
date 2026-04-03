@@ -203,6 +203,8 @@ def export_analytics(request):
     )
     data = calculate_return_rate_analytics(date_from=date_from, date_to=date_to, shop_group=shop_group or None)
     if not data:
+        logger.warning("export_analytics: no data returned, from=%s to=%s shop_group=%s user=%s",
+                       date_from, date_to, shop_group, request.user, extra={"step": "export_analytics"})
         messages.error(request, "No data to export")
         return redirect("analytics_dashboard")
 
@@ -218,6 +220,7 @@ def export_analytics(request):
         wb = export_analytics_to_excel(data, date_from=date_from, date_to=date_to, shop_group=shop_group)
         fn = f"return_visit_rate_{period}_{ts}.xlsx"
 
+    logger.info("export_analytics: file=%s user=%s", fn, request.user, extra={"step": "export_analytics"})
     resp = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

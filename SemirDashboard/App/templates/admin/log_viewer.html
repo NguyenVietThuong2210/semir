@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Admin Logs{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center mb-4">
+    <i class="bi bi-journal-text fs-3 me-2 text-purple" style="color:#6f42c1"></i>
+    <div>
+      <h2 class="mb-0">Admin Log Viewer</h2>
+      <small class="text-muted">Last {{ limit }} entries per level &mdash; {{ logs_dir }}</small>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="location.reload()">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+  </div>
+
+  <!-- ── ERROR ────────────────────────────────────────────────────────── -->
+  <div class="card mb-4 border-danger">
+    <div class="card-header bg-danger text-white d-flex align-items-center">
+      <i class="bi bi-x-octagon me-2"></i>
+      <strong>ERROR</strong>
+      <span class="badge bg-light text-danger ms-2">{{ error_entries|length }}</span>
+    </div>
+    <div class="card-body p-0">
+      {% if error_entries %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 log-table">
+          <thead class="table-danger">
+            <tr>
+              <th style="width:160px">Time</th>
+              <th style="width:130px">Logger</th>
+              <th style="width:100px">Step</th>
+              <th style="width:90px">Req ID</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in error_entries %}
+            <tr>
+              <td class="text-nowrap small text-muted">{{ e.time|default:"—" }}</td>
+              <td class="small text-truncate" style="max-width:130px" title="{{ e.logger|default:'' }}">{{ e.logger|default:"—" }}</td>
+              <td class="small">{{ e.step|default:"" }}</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">{{ e.request_id|default:""|truncatechars:8 }}</td>
+              <td class="small">
+                {{ e.message|default:"" }}
+                {% if e.exception %}
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">{{ e.exception }}</pre>
+                </details>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted p-3 mb-0"><i class="bi bi-check-circle text-success"></i> No ERROR entries found.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── WARNING ──────────────────────────────────────────────────────── -->
+  <div class="card mb-4 border-warning">
+    <div class="card-header bg-warning text-dark d-flex align-items-center">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <strong>WARNING</strong>
+      <span class="badge bg-dark text-warning ms-2">{{ warning_entries|length }}</span>
+    </div>
+    <div class="card-body p-0">
+      {% if warning_entries %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 log-table">
+          <thead class="table-warning">
+            <tr>
+              <th style="width:160px">Time</th>
+              <th style="width:130px">Logger</th>
+              <th style="width:100px">Step</th>
+              <th style="width:90px">Req ID</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in warning_entries %}
+            <tr>
+              <td class="text-nowrap small text-muted">{{ e.time|default:"—" }}</td>
+              <td class="small text-truncate" style="max-width:130px" title="{{ e.logger|default:'' }}">{{ e.logger|default:"—" }}</td>
+              <td class="small">{{ e.step|default:"" }}</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">{{ e.request_id|default:""|truncatechars:8 }}</td>
+              <td class="small">{{ e.message|default:"" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted p-3 mb-0"><i class="bi bi-check-circle text-success"></i> No WARNING entries found.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── INFO ─────────────────────────────────────────────────────────── -->
+  <div class="card mb-4">
+    <div class="card-header bg-info text-dark d-flex align-items-center">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>INFO</strong>
+      <span class="badge bg-dark text-info ms-2">{{ info_entries|length }}</span>
+    </div>
+    <div class="card-body p-0">
+      {% if info_entries %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 log-table">
+          <thead class="table-info">
+            <tr>
+              <th style="width:160px">Time</th>
+              <th style="width:130px">Logger</th>
+              <th style="width:100px">Step</th>
+              <th style="width:90px">Req ID</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in info_entries %}
+            <tr>
+              <td class="text-nowrap small text-muted">{{ e.time|default:"—" }}</td>
+              <td class="small text-truncate" style="max-width:130px" title="{{ e.logger|default:'' }}">{{ e.logger|default:"—" }}</td>
+              <td class="small">{{ e.step|default:"" }}</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">{{ e.request_id|default:""|truncatechars:8 }}</td>
+              <td class="small">{{ e.message|default:"" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted p-3 mb-0">No INFO entries found.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<style>
+.log-table td, .log-table th { vertical-align: middle; }
+</style>
+{% endblock %}

@@ -3,6 +3,7 @@ from .upload import upload_customers, upload_sales, upload_coupons, upload_used_
 from .analytics import analytics_dashboard, analytics_chart, export_analytics, analytics_tab
 from .coupon import coupon_dashboard, export_coupons, coupon_chart, manage_campaigns, coupon_tab
 from .customer import customer_detail
+from .admin_logs import admin_logs
 from . import auth, users
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "manage_campaigns",
     "coupon_tab",
     "customer_detail",
+    "admin_logs",
 ]

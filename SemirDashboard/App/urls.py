@@ -40,5 +40,6 @@ urlpatterns = [
     path("customer-detail/", views.customer_detail, name="customer_detail"),
 
     # ── Admin ─────────────────────────────────────────────────────────────────
-    path("users/", users.user_management, name="user_management"),
+    path("users/",       users.user_management, name="user_management"),
+    path("admin-logs/",  views.admin_logs,       name="admin_logs"),
 ]

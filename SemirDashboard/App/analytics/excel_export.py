@@ -18,6 +18,62 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 
+# ── Common Excel style helpers ────────────────────────────────────────────────
+# Importable by other modules (coupon_analytics, etc.) for consistent styling.
+
+# Sales / CNV workbook: navy blue headers
+XL_HDR_FILL  = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+XL_HDR_FONT  = Font(bold=True, color="FFFFFF")
+XL_HDR_ALIGN = Alignment(horizontal="center", vertical="center")
+
+# Section title style (bold, no background)
+XL_TITLE_FONT = Font(bold=True, size=14)
+
+# Filter annotation style (small italic grey)
+XL_FILTER_FONT = Font(italic=True, color="888888", size=9)
+
+
+def xl_write_header(ws, headers, fill=None, font=None, align=None, row=1):
+    """Write a styled header row to ws starting at the given row number."""
+    fill  = fill  or XL_HDR_FILL
+    font  = font  or XL_HDR_FONT
+    align = align or XL_HDR_ALIGN
+    for col, text in enumerate(headers, 1):
+        c = ws.cell(row=row, column=col, value=text)
+        c.fill = fill
+        c.font = font
+        c.alignment = align
+
+
+def xl_set_col_widths(ws, widths, start_col=1):
+    """
+    Set column widths from a list of ints/floats.
+
+    widths: list of widths; position 0 → column start_col.
+    """
+    for i, w in enumerate(widths):
+        ws.column_dimensions[get_column_letter(start_col + i)].width = w
+
+
+def xl_prepend_filter_row(wb, parts):
+    """
+    Insert a filter-info row at the top of every sheet in wb.
+
+    parts: list of strings, e.g. ["Period: 2025-01-01 → 2025-12-31", "Shop: Bala Group"]
+    No-op if parts is empty.
+    """
+    if not parts:
+        return
+    line = "  |  ".join(parts)
+    for ws in wb.worksheets:
+        ws.insert_rows(1)
+        ws["A1"] = line
+        ws["A1"].font = XL_FILTER_FONT
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 def export_analytics_to_excel(data, date_from=None, date_to=None, shop_group=None):
     """
     Export analytics data to Excel workbook.
@@ -1634,13 +1690,7 @@ def _prepend_filter_info(wb, date_from=None, date_to=None, shop_group=None):
         parts.append(f"Period: {date_from} → {date_to}")
     if shop_group:
         parts.append(f"Shop Group: {shop_group}")
-    if not parts:
-        return
-    line = "  |  ".join(parts)
-    for ws in wb.worksheets:
-        ws.insert_rows(1)
-        ws["A1"] = line
-        ws["A1"].font = Font(italic=True, color="888888", size=9)
+    xl_prepend_filter_row(wb, parts)
 
 
 def export_tab_to_excel(tab, data, date_from=None, date_to=None, shop_group=None):

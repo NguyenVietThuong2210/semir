@@ -6,6 +6,12 @@ Usage in views/services:
     logger = logging.getLogger(__name__)
     logger.info("Importing customers", extra={"step": "import_customers"})
     # request_id is injected automatically by RequestIDMiddleware
+
+JSON log format (one object per line):
+    {"time": "...", "level": "INFO", "logger": "...", "module": "...",
+     "request_id": "...", "step": "...", "message": "..."}
+
+Admin log viewer: /admin-logs/ (superuser only) — shows last 50 INFO/WARNING/ERROR entries.
 """
 
 import json
@@ -54,10 +60,7 @@ class JsonFormatter(logging.Formatter):
     Emits one JSON object per line. Fields:
         time, level, logger, module, request_id, step, message[, exception]
 
-    Filter in Grafana/Loki with:
-        {service="semir_web"} | json | request_id="abc123"
-        {service="semir_web"} | json | step="sync_customers"
-        {service="semir_web"} | json | level="ERROR"
+    Readable in /admin-logs/ or by tailing logs/app.log, logs/cnv_sync.log, logs/errors.log.
     """
 
     def format(self, record: logging.LogRecord) -> str:

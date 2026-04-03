@@ -144,6 +144,11 @@ def export_coupons(request):
         date_from=date_from, date_to=date_to,
         coupon_id_prefix=coupon_id_prefix or None, shop_group=shop_group or None,
     )
+    if not data:
+        logger.warning("export_coupons: no data, from=%s to=%s prefix=%s user=%s",
+                       date_from, date_to, coupon_id_prefix, request.user, extra={"step": "export_coupons"})
+        messages.error(request, "No data to export")
+        return redirect("coupon_dashboard")
 
     ts = datetime.now().strftime('%H%M%S')
     period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
@@ -159,6 +164,7 @@ def export_coupons(request):
                                     coupon_id_prefix=coupon_id_prefix, shop_group=shop_group)
         fn = f"coupon_{period}_{ts}.xlsx"
 
+    logger.info("export_coupons: file=%s user=%s", fn, request.user, extra={"step": "export_coupons"})
     resp = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
