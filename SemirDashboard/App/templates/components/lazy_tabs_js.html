@@ -1,18 +1,12 @@
-{#
+{% comment %}
   components/lazy_tabs_js.html
-  ────────────────────────────
   Include once per page that uses lazy-loading tabs:
-      {% include "components/lazy_tabs_js.html" %}
+      {% include "components/lazy_tabs_js.html" %}   (this line is inside a comment)
 
-  How it works:
-  - On Bootstrap tab `show.bs.tab`, checks data-lazy-url on the activated button.
-  - If url is set and tab hasn't loaded yet (no data-loaded="true"), fetches it.
-  - Replaces .lazy-tab-placeholder with the HTML response.
-  - Sets data-loaded="true" so subsequent switches are instant.
-
-  The AJAX endpoint must return a plain HTML fragment (no <html>/<body>).
-  Pass current filters as query params via data-lazy-params on the tab button.
-#}
+  On Bootstrap tab show.bs.tab, checks data-lazy-url on the activated button.
+  Fetches the URL on first click and replaces .lazy-tab-placeholder with the response.
+  Sets data-loaded="true" so subsequent switches are instant.
+{% endcomment %}
 <script>
 (function () {
     "use strict";
