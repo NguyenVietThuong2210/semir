@@ -499,7 +499,10 @@ def trigger_zalo_sync(request):
 #  CUSTOMER ANALYTICS CHARTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-_CUST_CHART_TTL = 300  # 5-minute cache TTL
+_CUST_CHART_TTL = 300   # 5-min cache for full chart result
+_CUST_OV_TTL   = 600   # 10-min cache for all-time overview counts (rarely change)
+
+_CUST_OV_CACHE_KEY = "cust_chart_overview_counts"
 
 
 def _cust_chart_cache_key(start_date: str, end_date: str) -> str:
@@ -516,107 +519,122 @@ def compute_customer_chart_data(start_date: str = "", end_date: str = "") -> dic
 
     This guarantees chart data ≡ table data for every metric.
 
-    Performance:
-      - Full result cached 5 min per (start_date, end_date) key.
-      - _fetch_bd_raw is cached separately — so chart + table page share the DB hit.
+    Performance improvements over v1:
+      1. Overview counts cached separately for 10 min (all-time, rarely change).
+      2. Shop dims merged into the same compute_cnv_breakdown call → single _fetch_bd_raw.
+      3. Full chart result still cached 5 min per (start_date, end_date).
+      4. YOY breakdown ({} period) shares _fetch_bd_raw cache with other all-time calls.
     """
-    import json as _json
     from django.core.cache import cache as _djc
     from App.cnv.service import (
         parse_cnv_period_filter,
         get_cnv_phone_sets,
         compute_cnv_breakdown,
     )
-    from App.analytics.season_utils import session_sort_key, month_sort_key, week_sort_key
 
     _cache_key = _cust_chart_cache_key(start_date, end_date)
     hit = _djc.get(_cache_key)
     if hit is not None:
         return hit
 
-    period_filter, has_filter = parse_cnv_period_filter(start_date, end_date)
+    period_filter, _ = parse_cnv_period_filter(start_date, end_date)
     pos_phones_all, cnv_phones_all = get_cnv_phone_sets()
 
-    # ── Breakdown for filtered period (season / month / week) ────────────────
-    _DIMS = frozenset({'season', 'month', 'week'})
-    bd = compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=_DIMS)
-
-    # ── All-time breakdown for YOY (no period filter) ────────────────────────
-    bd_all = compute_cnv_breakdown({}, pos_phones_all, cnv_phones_all, dims=_DIMS)
-
-    # ── All-time overview counts ─────────────────────────────────────────────
-    total_cnv = CNVCustomer.objects.count()
-    total_pos = POSCustomer.objects.filter(
-        vip_id__isnull=False
-    ).exclude(vip_id=0).count()
-
-    active_zalo = CNVCustomer.objects.filter(
-        zalo_app_id__isnull=False
-    ).exclude(zalo_app_id="").count()
-
-    follow_oa = CNVCustomer.objects.filter(
-        zalo_oa_id__isnull=False
-    ).exclude(zalo_oa_id="").count()
+    # ── Overview counts: cached separately (all-time, 10 min TTL) ────────────
+    ov = _djc.get(_CUST_OV_CACHE_KEY)
+    if ov is None:
+        ov = {
+            "total_cnv":   CNVCustomer.objects.count(),
+            "total_pos":   POSCustomer.objects.filter(
+                               vip_id__isnull=False).exclude(vip_id=0).count(),
+            "active_zalo": CNVCustomer.objects.filter(
+                               zalo_app_id__isnull=False).exclude(zalo_app_id="").count(),
+            "follow_oa":   CNVCustomer.objects.filter(
+                               zalo_oa_id__isnull=False).exclude(zalo_oa_id="").count(),
+        }
+        _djc.set(_CUST_OV_CACHE_KEY, ov, timeout=_CUST_OV_TTL)
 
     pos_only_count = len(pos_phones_all - cnv_phones_all)
     cnv_only_count = len(cnv_phones_all - pos_phones_all)
 
-    # ── Serialise breakdown rows for Chart.js consumption ────────────────────
-    def _serialise_season(rows):
-        return [
-            {
-                "label":         r["label"],
-                "new_pos_users": r["new_pos"],
-                "new_cnv_users": r["new_cnv"],
-                "active_zalo":   r["zalo_app"],
-                "follow_oa":     r["zalo_oa"],
-            }
-            for r in rows
-        ]
+    # ── Breakdown (filtered period) — includes shop dims in one pass ──────────
+    # Adding shop dims costs only Python accumulation (same _fetch_bd_raw DB hit).
+    _DIMS_PERIOD = frozenset({'season', 'month', 'week',
+                              'shop', 'season_shop', 'month_shop', 'week_shop'})
+    bd = compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=_DIMS_PERIOD)
 
-    def _serialise_month(rows):
-        return [
-            {
-                "month":         r["label"],   # "YYYY-MM"
-                "new_pos_users": r["new_pos"],
-                "new_cnv_users": r["new_cnv"],
-                "active_zalo":   r["zalo_app"],
-                "follow_oa":     r["zalo_oa"],
-            }
-            for r in rows
-        ]
+    # ── All-time breakdown for YOY (shares _fetch_bd_raw("") cache) ──────────
+    _DIMS_ALL = frozenset({'season', 'month', 'week'})
+    bd_all = compute_cnv_breakdown({}, pos_phones_all, cnv_phones_all, dims=_DIMS_ALL)
 
-    def _serialise_week(rows):
-        # rows from compute_cnv_breakdown have no week_sort; re-derive from label
-        # week label: "Week N (d/m-d/m)" — use row index order (already sorted)
-        return [
-            {
-                "week":          r["label"],   # display label e.g. "Week 1 (1/1-7/1)"
-                "new_pos_users": r["new_pos"],
-                "new_cnv_users": r["new_cnv"],
-                "active_zalo":   r["zalo_app"],
-                "follow_oa":     r["zalo_oa"],
-            }
-            for r in rows
-        ]
+    # ── Serialisers ───────────────────────────────────────────────────────────
+    def _ser_row(row, time_key, time_val):
+        return {
+            time_key:       time_val,
+            "new_pos_inv":  row["new_pos_inv"],
+            "new_pos_no_inv": row["new_pos_no_inv"],
+            "new_pos":      row["new_pos"],
+            "new_pos_only": row["new_pos_only"],
+            "new_cnv":      row["new_cnv"],
+            "new_cnv_only": row["new_cnv_only"],
+            "zalo_app":     row["zalo_app"],
+            "zalo_app_pct": row["zalo_app_pct"],
+            "zalo_oa":      row["zalo_oa"],
+            "zalo_oa_pct":  row["zalo_oa_pct"],
+        }
+
+    def _ser_season(rows):
+        return [_ser_row(r, "label", r["label"]) for r in rows]
+
+    def _ser_month(rows):
+        return [_ser_row(r, "month", r["label"]) for r in rows]
+
+    def _ser_week(rows):
+        return [_ser_row(r, "week", r["label"]) for r in rows]
+
+    # ── Per-shop series: {shop_name: {season, month, week}} ──────────────────
+    # shop_season / shop_month / shop_week from compute_cnv_breakdown:
+    #   [{"shop": "Shop A", "rows": [{"label": "M2-4 2025", "new_pos": 5, ...}]}, ...]
+    def _shop_series(shop_list_key, ser_fn):
+        out = {}
+        for sh_entry in bd.get(shop_list_key, []):
+            out[sh_entry["shop"]] = ser_fn(sh_entry["rows"])
+        return out
+
+    shop_season_map = _shop_series("shop_season", _ser_season)
+    shop_month_map  = _shop_series("shop_month",  _ser_month)
+    shop_week_map   = _shop_series("shop_week",   _ser_week)
+
+    all_shops = sorted(
+        set(shop_season_map) | set(shop_month_map) | set(shop_week_map)
+    )
+
+    shop_stats = {
+        shop: {
+            "season": shop_season_map.get(shop, []),
+            "month":  shop_month_map.get(shop, []),
+            "week":   shop_week_map.get(shop, []),
+        }
+        for shop in all_shops
+    }
 
     result = {
         "overview": {
-            "total_cnv":   total_cnv,
-            "total_pos":   total_pos,
-            "active_zalo": active_zalo,
-            "follow_oa":   follow_oa,
-            "cnv_only":    cnv_only_count,
-            "pos_only":    pos_only_count,
+            **ov,
+            "cnv_only": cnv_only_count,
+            "pos_only": pos_only_count,
         },
-        # Filtered period series (used by line + bar charts)
-        "season_stats": _serialise_season(bd["season"]),
-        "month_stats":  _serialise_month(bd["month"]),
-        "week_stats":   _serialise_week(bd["week"]),
-        # All-time series (used by YOY chart)
-        "all_season_stats": _serialise_season(bd_all["season"]),
-        "all_month_stats":  _serialise_month(bd_all["month"]),
-        "all_week_stats":   _serialise_week(bd_all["week"]),
+        # Filtered period series (trend line + period totals bar)
+        "season_stats": _ser_season(bd["season"]),
+        "month_stats":  _ser_month(bd["month"]),
+        "week_stats":   _ser_week(bd["week"]),
+        # All-time series (YOY chart)
+        "all_season_stats": _ser_season(bd_all["season"]),
+        "all_month_stats":  _ser_month(bd_all["month"]),
+        "all_week_stats":   _ser_week(bd_all["week"]),
+        # Per-shop data (Period Totals shop selector)
+        "shops":      all_shops,
+        "shop_stats": shop_stats,
     }
 
     _djc.set(_cache_key, result, timeout=_CUST_CHART_TTL)
@@ -661,6 +679,7 @@ def customer_chart(request):
         {
             "overview":        data["overview"],
             "chart_data_json": json.dumps(data),
+            "chart_shops":     data["shops"],   # sorted list for template checklist
             "start_date":      start_date,
             "end_date":        end_date,
             "quick_btns":      [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90)],

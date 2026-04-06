@@ -32,28 +32,48 @@
 .donut-footer { margin-top:.55rem; font-size:.72rem; color:#495057; }
 .donut-footer strong { font-weight:700; }
 
-/* ─── Chart controls ─── */
-.metric-select-card {
-    background:#f8f9fa; border-radius:8px; padding:.75rem 1rem; height:100%;
+/* ─── Shop checklist ─── */
+.shop-checklist {
+    max-height:280px; overflow-y:auto;
+    border:1.5px solid #dee2e6; border-radius:8px; padding:.4rem .5rem;
+    background:#fafbfc;
 }
-.control-label {
-    font-size:.8rem; font-weight:700; color:#495057;
-    text-transform:uppercase; letter-spacing:.4px; margin-bottom:.5rem;
+.shop-checklist .form-check {
+    padding:.4rem .5rem; border-bottom:1px solid #f0f0f0;
+    border-radius:5px; cursor:pointer; transition:background .12s; margin-bottom:0;
 }
-.line-chart-wrap {
-    position:relative; height:420px;
-    background:#fff; border-radius:10px;
-    padding:1rem; box-shadow:0 1px 4px rgba(0,0,0,.07);
+.shop-checklist .form-check:hover { background:rgba(0,71,179,.06); }
+.shop-checklist .form-check:last-child { border-bottom:none; }
+.shop-checklist .form-check-input { cursor:pointer; width:1.1em; height:1.1em; margin-top:.15em; float:none; margin-left:0; }
+.shop-checklist .form-check-label { cursor:pointer; width:100%; font-size:.85rem; }
+.shop-checklist .avg-row {
+    background:rgba(102,126,234,.08); border-bottom:2px solid #dee2e6 !important;
+    border-radius:5px; margin-bottom:.2rem;
 }
-.bar-chart-wrap {
-    position:relative; height:360px;
-    background:#fff; border-radius:10px;
-    padding:1rem; box-shadow:0 1px 4px rgba(0,0,0,.07);
-}
+.shop-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:4px; flex-shrink:0; }
+
+/* ─── Controls ─── */
+.metric-select-card { background:#f8f9fa; border-radius:8px; padding:.75rem 1rem; height:100%; }
+.control-label { font-size:.8rem; font-weight:700; color:#495057; text-transform:uppercase; letter-spacing:.4px; margin-bottom:.5rem; }
+.shop-select-actions { margin-bottom:.4rem; }
+.shop-select-actions button { font-size:.78rem; }
+
+/* ─── Charts ─── */
+.trend-chart-wrap { position:relative; height:420px; background:#fff; border-radius:10px; padding:1rem; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+.bar-chart-wrap   { position:relative; height:360px; background:#fff; border-radius:10px; padding:1rem; box-shadow:0 1px 4px rgba(0,0,0,.07); }
 .click-info-panel { font-size:.8rem; max-height:240px; overflow-y:auto; }
-.metric-check-list .form-check { margin-bottom:.3rem; }
-.metric-check-list .form-check-label { font-size:.85rem; display:flex; align-items:center; gap:.4rem; }
-.metric-dot { display:inline-block; width:16px; height:3px; border-radius:2px; flex-shrink:0; }
+
+/* ─── Data tables ─── */
+.chart-tbl-wrap { overflow-x:auto; }
+.chart-data-tbl th, .chart-data-tbl td { white-space:nowrap; }
+.tbl-toggle-btn .bi-chevron-down { transition:transform .2s ease; }
+.tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform:rotate(180deg); }
+.chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:#2c3e50;box-shadow:2px 0 4px rgba(0,0,0,.12); }
+.chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
+.tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
+.tbl-row-hl > td:first-child { border-left:4px solid #0d6efd !important; background:#93c5fd !important; }
+.tbl-row-hl > td { background:#bfdbfe !important; }
+.tbl-row-hl > td.tbl-col-hl { background:#ffe066 !important; }
 </style>
 {% endblock %}
 
@@ -194,85 +214,149 @@
     </div>
 </div>
 
-<!-- ══════════════ SECTION 2: TREND LINES ══════════════ -->
+<!-- ══════════════ SECTION 2: SHOP TRENDS ══════════════ -->
 <div class="card mb-4 border-0 shadow-sm">
     <div class="card-header bg-white">
         <i class="bi bi-graph-up text-primary"></i>
-        <strong>Trend Lines</strong>
-        <small class="text-muted ms-2">Select metrics to compare over time</small>
+        <strong>Shop Trends</strong>
+        <small class="text-muted ms-2">Compare shops across time periods</small>
     </div>
     <div class="card-body">
         <div class="row g-3 mb-3">
+
+            <!-- Shop checklist with AVG -->
             <div class="col-lg-4 col-md-5">
-                <div class="metric-select-card">
-                    <div class="control-label"><i class="bi bi-check2-square"></i> Metrics</div>
-                    <div class="metric-check-list mt-1">
-                        <div class="form-check">
-                            <input class="form-check-input line-metric-cb" type="checkbox" id="lcb_pos" value="new_pos_users" checked>
-                            <label class="form-check-label" for="lcb_pos">
-                                <span class="metric-dot" style="background:var(--c-pos)"></span>New User (POS)
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input line-metric-cb" type="checkbox" id="lcb_cnv" value="new_cnv_users" checked>
-                            <label class="form-check-label" for="lcb_cnv">
-                                <span class="metric-dot" style="background:var(--c-cnv)"></span>New User (CNV)
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input line-metric-cb" type="checkbox" id="lcb_zalo" value="active_zalo" checked>
-                            <label class="form-check-label" for="lcb_zalo">
-                                <span class="metric-dot" style="background:var(--c-zalo)"></span>Active Zalo
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input line-metric-cb" type="checkbox" id="lcb_oa" value="follow_oa" checked>
-                            <label class="form-check-label" for="lcb_oa">
-                                <span class="metric-dot" style="background:var(--c-oa)"></span>Follow OA
-                            </label>
-                        </div>
-                    </div>
-                    <hr class="my-2">
-                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis</div>
-                    <div class="form-check mt-1">
-                        <input class="form-check-input" type="radio" name="lineXaxis" value="week" id="lineXWeek">
-                        <label class="form-check-label" for="lineXWeek">By Week</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="lineXaxis" value="month" id="lineXMonth" checked>
-                        <label class="form-check-label" for="lineXMonth">By Month</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="lineXaxis" value="season" id="lineXSeason">
-                        <label class="form-check-label" for="lineXSeason">By Season</label>
-                    </div>
+                <div class="control-label"><i class="bi bi-shop"></i> Select Shops</div>
+                <div class="shop-select-actions d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm" id="btnSelAll">All</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnSelNone">None</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnSelTop5">First 5</button>
+                </div>
+                <div class="shop-checklist" id="shopChecklist">
+                    <label for="cbAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbAvgAll" value="__avg_all__" style="flex-shrink:0;">
+                        <span class="shop-dot" id="dot_avg_all" style="background:#6c757d;flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (all shops)</span>
+                    </label>
+                    <label for="cbAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbAvg" value="__avg__" style="flex-shrink:0;">
+                        <span class="shop-dot" id="dot_avg" style="background:#2C3E50;flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (selected)</span>
+                    </label>
+                    {% for shop_name in chart_shops %}
+                    <label for="sc_{{ forloop.counter }}" class="form-check d-flex align-items-center gap-1" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input shop-check" type="checkbox"
+                               value="{{ shop_name }}" id="sc_{{ forloop.counter }}" style="flex-shrink:0;">
+                        <span class="shop-dot" id="dot_{{ forloop.counter }}" style="flex-shrink:0;"></span>
+                        <span style="font-size:.85rem;">{{ shop_name }}</span>
+                    </label>
+                    {% endfor %}
                 </div>
             </div>
-            <div class="col-lg-8 col-md-7 d-flex align-items-start">
+
+            <!-- Time axis + Metric -->
+            <div class="col-lg-3 col-md-3">
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="trendXaxis" value="week" id="trendXWeek">
+                        <label class="form-check-label" for="trendXWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="trendXaxis" value="month" id="trendXMonth" checked>
+                        <label class="form-check-label" for="trendXMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="trendXaxis" value="season" id="trendXSeason">
+                        <label class="form-check-label" for="trendXSeason">By Season</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm mt-1" id="trendMetricSelect">
+                        <optgroup label="POS">
+                            <option value="new_pos_inv">NEW POS (INV)</option>
+                            <option value="new_pos_no_inv">NEW POS (NO INV)</option>
+                            <option value="new_pos" selected>NEW POS (TOTAL)</option>
+                            <option value="new_pos_only">POS ONLY</option>
+                        </optgroup>
+                        <optgroup label="CNV">
+                            <option value="new_cnv">NEW CNV</option>
+                            <option value="new_cnv_only">CNV ONLY</option>
+                        </optgroup>
+                        <optgroup label="Zalo">
+                            <option value="zalo_app">ZALO APP</option>
+                            <option value="zalo_app_pct">% APP/CNV</option>
+                            <option value="zalo_oa">ZALO OA</option>
+                            <option value="zalo_oa_pct">% OA/CNV</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Legend panel -->
+            <div class="col-lg-5 col-md-4 d-none d-md-flex align-items-start">
                 <div class="w-100">
-                    <div class="control-label"><i class="bi bi-info-circle"></i> Details (click chart)</div>
-                    <div id="lineInfoPanel" class="mt-1 click-info-panel"></div>
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Legend</div>
+                    <div id="trendLegendPanel" class="mt-1" style="font-size:.8rem;max-height:200px;overflow-y:auto;"></div>
                 </div>
             </div>
         </div>
-        <div class="line-chart-wrap">
-            <canvas id="custLineChart"></canvas>
+        <div class="trend-chart-wrap">
+            <canvas id="shopTrendChart"></canvas>
         </div>
     </div>
 </div>
 
-<!-- ══════════════ SECTION 3: BAR CHART ══════════════ -->
+<!-- ─── Shop Trends Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Shop Trends — Data Table</strong>
+            <small class="text-muted ms-2" id="trendDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#trendDataCollapse" aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="trendDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="trendDataWrap" class="chart-tbl-wrap"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════ SECTION 3: PERIOD TOTALS ══════════════ -->
 <div class="card mb-4 border-0 shadow-sm">
     <div class="card-header bg-white">
         <i class="bi bi-bar-chart-fill text-primary"></i>
-        <strong>Bar Chart</strong>
-        <small class="text-muted ms-2">Single metric — registrations &amp; Zalo engagement</small>
+        <strong>Period Totals</strong>
+        <small class="text-muted ms-2">Combined total across selected shops per time period</small>
     </div>
     <div class="card-body">
         <div class="row g-3 mb-3">
+
+            <!-- Bar shop checklist -->
             <div class="col-lg-4 col-md-5">
+                <div class="control-label"><i class="bi bi-shop"></i> Select Shops</div>
+                <div class="shop-select-actions d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm" id="btnBarSelAll">All</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnBarSelNone">None</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btnBarSelTop5">First 5</button>
+                </div>
+                <div class="shop-checklist" id="barShopChecklist">
+                    {% for shop_name in chart_shops %}
+                    <label for="bsc_{{ forloop.counter }}" class="form-check d-flex align-items-center gap-1" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input bar-shop-check" type="checkbox"
+                               value="{{ shop_name }}" id="bsc_{{ forloop.counter }}" style="flex-shrink:0;">
+                        <span style="font-size:.85rem;">{{ shop_name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Time axis + Metric -->
+            <div class="col-lg-3 col-md-3">
                 <div class="metric-select-card">
-                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis</div>
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
                     <div class="form-check mt-1">
                         <input class="form-check-input" type="radio" name="barXaxis" value="week" id="barXWeek">
                         <label class="form-check-label" for="barXWeek">By Week</label>
@@ -286,24 +370,55 @@
                         <label class="form-check-label" for="barXSeason">By Season</label>
                     </div>
                     <hr class="my-2">
-                    <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric</div>
+                    <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
                     <select class="form-select form-select-sm mt-1" id="barMetricSelect">
-                        <option value="new_pos_users">New User (POS)</option>
-                        <option value="new_cnv_users">New User (CNV)</option>
-                        <option value="active_zalo">Active Zalo</option>
-                        <option value="follow_oa">Follow OA</option>
+                        <optgroup label="POS">
+                            <option value="new_pos_inv">NEW POS (INV)</option>
+                            <option value="new_pos_no_inv">NEW POS (NO INV)</option>
+                            <option value="new_pos" selected>NEW POS (TOTAL)</option>
+                            <option value="new_pos_only">POS ONLY</option>
+                        </optgroup>
+                        <optgroup label="CNV">
+                            <option value="new_cnv">NEW CNV</option>
+                            <option value="new_cnv_only">CNV ONLY</option>
+                        </optgroup>
+                        <optgroup label="Zalo">
+                            <option value="zalo_app">ZALO APP</option>
+                            <option value="zalo_app_pct">% APP/CNV</option>
+                            <option value="zalo_oa">ZALO OA</option>
+                            <option value="zalo_oa_pct">% OA/CNV</option>
+                        </optgroup>
                     </select>
                 </div>
             </div>
-            <div class="col-lg-8 col-md-7 d-flex align-items-start">
+
+            <!-- Click info panel -->
+            <div class="col-lg-5 col-md-4 d-none d-md-flex align-items-start">
                 <div class="w-100">
-                    <div class="control-label"><i class="bi bi-info-circle"></i> Details (click chart)</div>
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Details</div>
                     <div id="barInfoPanel" class="mt-1 click-info-panel"></div>
                 </div>
             </div>
         </div>
         <div class="bar-chart-wrap">
-            <canvas id="custBarChart"></canvas>
+            <canvas id="periodBarChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Period Totals Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Period Totals — Data Table</strong>
+            <small class="text-muted ms-2" id="barDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#barDataCollapse" aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="barDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="barDataWrap" class="chart-tbl-wrap"></div>
         </div>
     </div>
 </div>
@@ -319,7 +434,7 @@
         <div class="row g-3 mb-3">
             <div class="col-lg-4 col-md-5">
                 <div class="metric-select-card">
-                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis</div>
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
                     <div class="form-check mt-1">
                         <input class="form-check-input" type="radio" name="yoyXaxis" value="week" id="yoyXWeek">
                         <label class="form-check-label" for="yoyXWeek">By Week</label>
@@ -333,12 +448,24 @@
                         <label class="form-check-label" for="yoyXSeason">By Season</label>
                     </div>
                     <hr class="my-2">
-                    <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric</div>
+                    <div class="control-label mt-1"><i class="bi bi-graph-up-arrow"></i> Metric (Y)</div>
                     <select class="form-select form-select-sm mt-1" id="yoyMetricSelect">
-                        <option value="new_pos_users">New User (POS)</option>
-                        <option value="new_cnv_users">New User (CNV)</option>
-                        <option value="active_zalo">Active Zalo</option>
-                        <option value="follow_oa">Follow OA</option>
+                        <optgroup label="POS">
+                            <option value="new_pos_inv">NEW POS (INV)</option>
+                            <option value="new_pos_no_inv">NEW POS (NO INV)</option>
+                            <option value="new_pos" selected>NEW POS (TOTAL)</option>
+                            <option value="new_pos_only">POS ONLY</option>
+                        </optgroup>
+                        <optgroup label="CNV">
+                            <option value="new_cnv">NEW CNV</option>
+                            <option value="new_cnv_only">CNV ONLY</option>
+                        </optgroup>
+                        <optgroup label="Zalo">
+                            <option value="zalo_app">ZALO APP</option>
+                            <option value="zalo_app_pct">% APP/CNV</option>
+                            <option value="zalo_oa">ZALO OA</option>
+                            <option value="zalo_oa_pct">% OA/CNV</option>
+                        </optgroup>
                     </select>
                 </div>
             </div>
@@ -351,6 +478,23 @@
         </div>
         <div class="bar-chart-wrap">
             <canvas id="yoyBarChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ─── YOY Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Year-over-Year — Data Table</strong>
+            <small class="text-muted ms-2" id="yoyDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#yoyDataCollapse" aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="yoyDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="yoyDataWrap" class="chart-tbl-wrap"></div>
         </div>
     </div>
 </div>
@@ -378,23 +522,65 @@ const C_CNV  = '#6A1B9A';
 const C_POS  = '#E53935';
 const REST   = '#e9ecef';
 
-const YOY_PALETTE = [
+const SHOP_PALETTE = [
     '#1565C0','#E53935','#2E7D32','#F57C00','#6A1B9A',
     '#00838F','#AD1457','#558B2F','#4527A0','#BF360C',
+    '#37474F','#6D4C41','#1B5E20','#880E4F','#E65100',
 ];
+const YOY_PALETTE = SHOP_PALETTE;
 
-const METRIC_COLORS = {
-    new_pos_users: C_POS,
-    new_cnv_users: '#0047B3',
-    active_zalo:   C_ZALO,
-    follow_oa:     C_OA,
-};
-const METRIC_LABELS = {
-    new_pos_users: 'New User (POS)',
-    new_cnv_users: 'New User (CNV)',
-    active_zalo:   'Active Zalo',
-    follow_oa:     'Follow OA',
-};
+/* ══════════════════════════════════════════════
+   Metric helpers
+══════════════════════════════════════════════ */
+const PCT_METRICS = new Set(['zalo_app_pct', 'zalo_oa_pct']);
+
+function fmtVal(v, metric) {
+    if (PCT_METRICS.has(metric)) return (v || 0).toFixed(1) + '%';
+    return Math.round(v || 0).toLocaleString();
+}
+function yLabel(metric) {
+    return {
+        new_pos_inv:    'NEW POS (INV)',
+        new_pos_no_inv: 'NEW POS (NO INV)',
+        new_pos:        'NEW POS (TOTAL)',
+        new_pos_only:   'POS ONLY',
+        new_cnv:        'NEW CNV',
+        new_cnv_only:   'CNV ONLY',
+        zalo_app:       'ZALO APP',
+        zalo_app_pct:   '% APP/CNV',
+        zalo_oa:        'ZALO OA',
+        zalo_oa_pct:    '% OA/CNV',
+    }[metric] || metric;
+}
+
+/* ══════════════════════════════════════════════
+   Time axis helpers
+══════════════════════════════════════════════ */
+function getTimeKey(xAxis) {
+    return xAxis === 'week' ? 'week' : xAxis === 'month' ? 'month' : 'label';
+}
+function getXLabels(xAxis) {
+    if (xAxis === 'week')   return CD.week_stats.map(r => r.week);
+    if (xAxis === 'month')  return CD.month_stats.map(r => r.month);
+    return CD.season_stats.map(r => r.label);
+}
+function getGlobalRows(xAxis) {
+    if (xAxis === 'week')   return { rows: CD.week_stats,   key: 'week'  };
+    if (xAxis === 'month')  return { rows: CD.month_stats,  key: 'month' };
+    return { rows: CD.season_stats, key: 'label' };
+}
+
+/* Get shop series data array for given shop name, time axis, labels, metric */
+function getShopData(shopName, xAxis, xLabels, metric) {
+    const shopData = CD.shop_stats[shopName];
+    if (!shopData) return xLabels.map(() => 0);
+    const rows    = shopData[xAxis] || [];  // 'season' | 'month' | 'week'
+    const timeKey = getTimeKey(xAxis);
+    return xLabels.map(lbl => {
+        const row = rows.find(r => r[timeKey] === lbl);
+        return row ? (row[metric] ?? 0) : 0;
+    });
+}
 
 /* ══════════════════════════════════════════════
    DONUT CHARTS
@@ -428,91 +614,207 @@ makeDonut('dChart3', 'dPct3', OV.cnv_only,    OV.total_cnv, C_CNV);
 makeDonut('dChart4', 'dPct4', OV.pos_only,    OV.total_pos, C_POS);
 
 /* ══════════════════════════════════════════════
-   HELPERS
+   SHARED: renderClickCard
 ══════════════════════════════════════════════ */
-function getRows(xAxis) {
-    if (xAxis === 'week')   return { rows: CD.week_stats,   key: 'week'   };
-    if (xAxis === 'season') return { rows: CD.season_stats, key: 'label'  };
-    return { rows: CD.month_stats, key: 'month' };
-}
-
-function renderClickCard(panelId, lbl, rows, pctMode) {
-    const total = rows.reduce((s, r) => s + r.value, 0);
-    let yoyMap = null;
+function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) {
     let displayRows = rows;
+    let yoyMap = null;
     if (pctMode === 'yoy') {
         displayRows = [...rows].sort((a, b) => a.label.localeCompare(b.label));
         yoyMap = {};
         displayRows.forEach((r, i) => {
             yoyMap[r.label] = i === 0 ? null
-                : (displayRows[i - 1].value > 0
-                    ? (r.value - displayRows[i - 1].value) / displayRows[i - 1].value * 100
-                    : null);
+                : (displayRows[i-1].value > 0 ? (r.value - displayRows[i-1].value) / displayRows[i-1].value * 100 : null);
         });
     }
+    const total = rows.reduce((s, r) => s + r.value, 0);
     const panel = document.getElementById(panelId);
     panel.innerHTML =
         `<div style="display:flex;justify-content:space-between;align-items:center;
                      border-bottom:2px solid #0047B3;padding-bottom:4px;margin-bottom:5px;">
             <strong style="font-size:.82rem;color:#0047B3;">${lbl}</strong>
-            <span id="_cc_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;
-                  padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005;</span>
+            <span id="_closeCard_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;
+                  padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
          </div>` +
         displayRows.map(r => {
-            let sub = '';
-            if (pctMode === 'share' && total > 0)
-                sub = `<div style="font-size:.7rem;color:#888;">${(r.value / total * 100).toFixed(1)}%</div>`;
-            if (pctMode === 'yoy') {
-                const g = yoyMap[r.label];
-                sub = g === null
-                    ? `<div style="font-size:.7rem;color:#aaa;">base</div>`
-                    : `<div style="font-size:.7rem;font-weight:600;color:${g >= 0 ? '#2e7d32' : '#c62828'};">${g >= 0 ? '+' : ''}${g.toFixed(1)}%</div>`;
+            let pctHtml = '';
+            if (showPct) {
+                if (pctMode === 'yoy') {
+                    const g = yoyMap[r.label];
+                    pctHtml = g === null
+                        ? `<div style="font-size:.7rem;color:#aaa;">base</div>`
+                        : `<div style="font-size:.7rem;font-weight:600;color:${g>=0?'#2e7d32':'#c62828'};">${g>=0?'+':''}${g.toFixed(1)}%</div>`;
+                } else if (total > 0) {
+                    pctHtml = `<div style="font-size:.7rem;color:#888;">${(r.value/total*100).toFixed(1)}%</div>`;
+                }
             }
             return `<div style="display:flex;align-items:center;margin-bottom:3px;">
-                <div style="width:75%;display:flex;align-items:center;min-width:0;">
+                <div style="width:75%;display:flex;align-items:center;min-width:0;overflow:hidden;">
                     <span style="display:inline-block;width:20px;height:2.5px;background:${r.color};
                                  margin-right:5px;flex-shrink:0;border-radius:2px;"></span>
-                    <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.label}</span>
+                    <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;
+                                 white-space:nowrap;" title="${r.label}">${r.label}</span>
                 </div>
-                <div style="width:25%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;padding-left:4px;">
-                    ${r.value.toLocaleString()}${sub}
+                <div style="width:25%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;flex-shrink:0;padding-left:4px;">
+                    ${fmtVal(r.value, metric)}${pctHtml}
                 </div>
             </div>`;
         }).join('');
-    document.getElementById('_cc_' + panelId).addEventListener('click',
-        () => { document.getElementById(panelId).innerHTML = ''; });
+    document.getElementById('_closeCard_' + panelId).addEventListener('click', onClose);
 }
 
 /* ══════════════════════════════════════════════
-   TREND LINE CHART
+   SHARED: highlightTableCol + renderDataTable
 ══════════════════════════════════════════════ */
-let lineChart = null;
+function highlightTableCol(wrapId, colIndex, rowLabel) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const collapseEl = wrap.closest('.collapse');
+    if (collapseEl && !collapseEl.classList.contains('show'))
+        bootstrap.Collapse.getOrCreateInstance(collapseEl).show();
+    wrap.querySelectorAll('.tbl-col-hl').forEach(el => el.classList.remove('tbl-col-hl'));
+    wrap.querySelectorAll('.tbl-row-hl').forEach(el => el.classList.remove('tbl-row-hl'));
+    const nth = colIndex + 2;
+    wrap.querySelectorAll(`thead th:nth-child(${nth}), tbody td:nth-child(${nth})`).forEach(el => el.classList.add('tbl-col-hl'));
+    if (rowLabel) {
+        for (const tr of wrap.querySelectorAll('tbody tr')) {
+            const td = tr.querySelector('td');
+            if (td && td.textContent.trim() === rowLabel.trim()) { tr.classList.add('tbl-row-hl'); break; }
+        }
+    }
+    const hdrCell = wrap.querySelector(`thead th:nth-child(${nth})`);
+    if (hdrCell) hdrCell.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
+}
 
-function buildLineChart() {
-    const xAxis   = document.querySelector('input[name="lineXaxis"]:checked').value;
-    const checked = [...document.querySelectorAll('.line-metric-cb:checked')].map(e => e.value);
-    const { rows, key } = getRows(xAxis);
-    const xLabels = rows.map(r => r[key]);
+function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, entityLabel) {
+    entityLabel = entityLabel || 'Shop / Entity';
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    if (!datasets.length || !xLabels.length) {
+        wrap.innerHTML = '<p class="text-muted p-3 mb-0 small">No data to display.</p>';
+        return;
+    }
+    const n    = xLabels.length;
+    const minW = isWeek && n > 0 ? 'min-width:' + Math.max(5, Math.floor(70/n)) + '%;' : 'min-width:70px;';
+    let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
+        <thead><tr style="background:#2c3e50;color:#fff;">
+            <th style="min-width:140px;">${entityLabel}</th>`;
+    xLabels.forEach(lbl => { html += `<th style="${minW}text-align:center;">${lbl}</th>`; });
+    html += `</tr></thead><tbody>`;
+    const _avgDs    = datasets.filter(ds => ds.label && ds.label.startsWith('AVG'));
+    const _totalDs  = datasets.filter(ds => ds._isTotal);
+    const _normalDs = datasets.filter(ds => !ds._isTotal && !(ds.label && ds.label.startsWith('AVG')));
+    _normalDs.sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, {sensitivity:'base'}));
+    [..._avgDs, ..._normalDs, ..._totalDs].forEach((ds, idx) => {
+        const isAvg  = ds.label && ds.label.startsWith('AVG');
+        const bgColor = ds._isTotal ? '#e8f0fe' : isAvg ? '#f4f6f8' : idx % 2 === 1 ? '#fafbfc' : '#ffffff';
+        html += `<tr style="background:${bgColor}${isAvg?';font-style:italic':''}">`;
+        html += `<td style="white-space:nowrap;font-weight:600;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ds.borderColor||'#aaa'};margin-right:5px;vertical-align:middle;"></span>
+            ${ds.label}</td>`;
+        (ds.data || []).forEach(v => {
+            const disp = v === 0 ? '<span style="color:#ccc">—</span>' : fmtVal(v, metric);
+            html += `<td style="text-align:right;">${disp}</td>`;
+        });
+        html += `</tr>`;
+    });
+    html += `</tbody></table>`;
+    wrap.innerHTML = html;
+    const capEl = document.getElementById(captionId);
+    if (capEl) capEl.textContent = yLabel(metric) + ' · ' + n + (n === 1 ? ' period' : ' periods');
+}
 
-    const datasets = checked.map(metric => {
-        const color = METRIC_COLORS[metric];
-        const data  = rows.map(r => r[metric] || 0);
+/* ══════════════════════════════════════════════
+   Sort checklist alphabetically
+══════════════════════════════════════════════ */
+function sortChecklistAlpha(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const items = [...container.querySelectorAll('label')].filter(l => !l.classList.contains('avg-row'));
+    items.sort((a, b) => {
+        const va = (a.querySelector('input')?.value || '').trim();
+        const vb = (b.querySelector('input')?.value || '').trim();
+        return va.localeCompare(vb, undefined, {sensitivity:'base'});
+    });
+    items.forEach(item => container.appendChild(item));
+}
+
+/* ══════════════════════════════════════════════
+   SECTION 2: SHOP TRENDS — Line chart per shop
+══════════════════════════════════════════════ */
+let trendChart = null;
+
+function syncDotColors() {
+    const checks = [...document.querySelectorAll('.shop-check')];
+    let colorIdx = 0;
+    checks.forEach((cb, i) => {
+        const dot = document.getElementById('dot_' + (i + 1));
+        if (!dot) return;
+        dot.style.background = cb.checked ? SHOP_PALETTE[colorIdx++ % SHOP_PALETTE.length] : '#dee2e6';
+    });
+}
+
+function updateLegend(datasets) {
+    const panel = document.getElementById('trendLegendPanel');
+    panel.innerHTML = datasets.map(ds =>
+        `<div class="d-flex align-items-center mb-1">
+           <span style="display:inline-block;width:24px;height:3px;background:${ds.borderColor};border-radius:2px;margin-right:6px;flex-shrink:0;"></span>
+           <span title="${ds.label}" style="word-break:break-word;white-space:normal;">${ds.label}</span>
+         </div>`
+    ).join('');
+}
+
+function buildTrendChart() {
+    sortChecklistAlpha('shopChecklist');
+    syncDotColors();
+
+    const xAxis   = document.querySelector('input[name="trendXaxis"]:checked').value;
+    const metric  = document.getElementById('trendMetricSelect').value;
+    const xLabels = getXLabels(xAxis);
+
+    const checkedShops = [...document.querySelectorAll('.shop-check:checked')].map(el => el.value);
+    const wantAvgAll   = document.getElementById('cbAvgAll').checked;
+    const wantAvgSel   = document.getElementById('cbAvg').checked;
+
+    // Build per-shop datasets
+    let colorIdx = 0;
+    const shopDatasets = checkedShops.map(shopName => {
+        const color = SHOP_PALETTE[colorIdx++ % SHOP_PALETTE.length];
+        const data  = getShopData(shopName, xAxis, xLabels, metric);
         return {
-            label: METRIC_LABELS[metric],
+            label: shopName,
             data,
             borderColor: color,
             backgroundColor: color + '18',
             pointBackgroundColor: color,
             borderWidth: 2,
-            pointRadius:      data.map(v => v > 0 ? 4 : 0),
-            pointHoverRadius: data.map(v => v > 0 ? 6 : 0),
+            pointRadius:      data.map(v => v > 0 ? 3 : 0),
+            pointHoverRadius: data.map(v => v > 0 ? 5 : 0),
             tension: 0.35,
             fill: false,
         };
     });
 
-    if (lineChart) lineChart.destroy();
-    lineChart = new Chart(document.getElementById('custLineChart'), {
+    // All-shops average line
+    const allShopNames = CD.shops || [];
+    const avgAllData = xLabels.map((_, i) => {
+        const vals = allShopNames.map(s => getShopData(s, xAxis, xLabels, metric)[i]).filter(v => v > 0);
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    });
+
+    // Selected-shops average line
+    const avgSelData = xLabels.map((_, i) => {
+        const vals = checkedShops.map(s => shopDatasets.find(d => d.label === s)?.data[i] ?? 0).filter(v => v > 0);
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    });
+
+    const datasets = [];
+    if (wantAvgAll) datasets.push({ label: 'AVG (all shops)', data: avgAllData, borderColor: '#6c757d', backgroundColor: '#6c757d18', borderWidth: 2, borderDash: [6,3], pointRadius: 0, tension: 0.35, fill: false });
+    if (wantAvgSel) datasets.push({ label: 'AVG (selected)',  data: avgSelData, borderColor: '#2C3E50', backgroundColor: '#2C3E5018', borderWidth: 2, borderDash: [4,4], pointRadius: 0, tension: 0.35, fill: false });
+    datasets.push(...shopDatasets);
+
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(document.getElementById('shopTrendChart'), {
         type: 'line',
         data: { labels: xLabels, datasets },
         options: {
@@ -520,61 +822,92 @@ function buildLineChart() {
             animation: { duration: 500 },
             interaction: { mode: 'index', intersect: false },
             onClick(evt, elements) {
-                if (!elements.length) { document.getElementById('lineInfoPanel').innerHTML = ''; return; }
-                const di   = elements[0].index;
-                const lbl  = lineChart.data.labels[di];
-                const rowz = lineChart.data.datasets
+                if (!elements.length) { document.getElementById('trendLegendPanel').innerHTML = ''; updateLegend(datasets); return; }
+                const di  = elements[0].index;
+                const lbl = trendChart.data.labels[di];
+                const rows = trendChart.data.datasets
+                    .filter(ds => !ds.label.startsWith('AVG'))
                     .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
                     .filter(r => r.value > 0).sort((a, b) => b.value - a.value);
-                renderClickCard('lineInfoPanel', lbl, rowz, 'share');
+                renderClickCard('trendLegendPanel', lbl, rows, metric, true,
+                    () => updateLegend(datasets), 'share');
+                highlightTableCol('trendDataWrap', di, null);
             },
             plugins: {
-                legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
+                legend: { display: false },
                 tooltip: {
                     backgroundColor: 'rgba(30,30,30,.92)',
                     itemSort: (a, b) => b.raw - a.raw,
                     filter: item => item.raw > 0,
-                    callbacks: { label: ctx => '  ' + ctx.dataset.label + ': ' + ctx.raw.toLocaleString() },
+                    callbacks: { label: ctx => '  ' + ctx.dataset.label + ': ' + fmtVal(ctx.raw, metric) },
                 },
             },
             scales: {
-                x: { grid: { color: 'rgba(0,0,0,.08)' }, ticks: { font: { size: 11 } } },
+                x: { grid: { color:'rgba(0,0,0,.08)' }, ticks: { font:{ size:11 } } },
                 y: {
                     beginAtZero: true,
                     grid: { color: 'rgba(0,0,0,.12)' },
-                    ticks: { font: { size: 11 }, callback: v => v.toLocaleString() },
+                    title: { display: true, text: yLabel(metric), font:{ size:11 } },
+                    ticks: { font:{ size:11 }, callback: v => fmtVal(v, metric) },
                 },
             },
         },
     });
+    updateLegend(shopDatasets);
+    renderDataTable('trendDataWrap', 'trendDataCaption', xLabels, shopDatasets, metric, xAxis === 'week');
 }
 
-document.querySelectorAll('.line-metric-cb').forEach(cb => cb.addEventListener('change', buildLineChart));
-document.querySelectorAll('input[name="lineXaxis"]').forEach(r => r.addEventListener('change', buildLineChart));
+document.querySelectorAll('.shop-check').forEach(cb => cb.addEventListener('change', buildTrendChart));
+document.getElementById('cbAvg').addEventListener('change', buildTrendChart);
+document.getElementById('cbAvgAll').addEventListener('change', buildTrendChart);
+document.querySelectorAll('input[name="trendXaxis"]').forEach(r => r.addEventListener('change', buildTrendChart));
+document.getElementById('trendMetricSelect').addEventListener('change', buildTrendChart);
+
+document.getElementById('btnSelAll').addEventListener('click', () => {
+    document.querySelectorAll('.shop-check').forEach(cb => cb.checked = true); buildTrendChart();
+});
+document.getElementById('btnSelNone').addEventListener('click', () => {
+    document.querySelectorAll('.shop-check').forEach(cb => cb.checked = false); buildTrendChart();
+});
+document.getElementById('btnSelTop5').addEventListener('click', () => {
+    [...document.querySelectorAll('.shop-check')].forEach((cb, i) => cb.checked = i < 5); buildTrendChart();
+});
 
 /* ══════════════════════════════════════════════
-   BAR CHART — single metric
+   SECTION 3: PERIOD TOTALS — Bar chart (sum selected shops)
 ══════════════════════════════════════════════ */
 let barChart = null;
+const BAR_COLOR = '#0047B3';
 
 function buildBarChart() {
-    const xAxis  = document.querySelector('input[name="barXaxis"]:checked').value;
-    const metric = document.getElementById('barMetricSelect').value;
-    const { rows, key } = getRows(xAxis);
-    const xLabels = rows.map(r => r[key]);
-    const values  = rows.map(r => r[metric] || 0);
-    const color   = METRIC_COLORS[metric] || '#0047B3';
+    sortChecklistAlpha('barShopChecklist');
+    const xAxis         = document.querySelector('input[name="barXaxis"]:checked').value;
+    const metric        = document.getElementById('barMetricSelect').value;
+    const xLabels       = getXLabels(xAxis);
+    const selectedShops = [...document.querySelectorAll('.bar-shop-check:checked')].map(el => el.value);
+
+    // Sum all selected shops per period
+    const values = xLabels.map(lbl => {
+        return selectedShops.reduce((sum, sName) => {
+            const data = CD.shop_stats[sName];
+            if (!data) return sum;
+            const rows    = data[xAxis] || [];
+            const timeKey = getTimeKey(xAxis);
+            const row     = rows.find(r => r[timeKey] === lbl);
+            return sum + (row ? (row[metric] ?? 0) : 0);
+        }, 0);
+    });
 
     if (barChart) barChart.destroy();
-    barChart = new Chart(document.getElementById('custBarChart'), {
+    barChart = new Chart(document.getElementById('periodBarChart'), {
         type: 'bar',
         data: {
             labels: xLabels,
             datasets: [{
-                label: METRIC_LABELS[metric],
+                label: yLabel(metric),
                 data: values,
-                backgroundColor: color + 'cc',
-                borderColor: color,
+                backgroundColor: BAR_COLOR + 'cc',
+                borderColor: BAR_COLOR,
                 borderWidth: 1,
                 borderRadius: 5,
                 borderSkipped: false,
@@ -587,42 +920,74 @@ function buildBarChart() {
                 if (!elements.length) { document.getElementById('barInfoPanel').innerHTML = ''; return; }
                 const di  = elements[0].index;
                 const lbl = barChart.data.labels[di];
-                renderClickCard('barInfoPanel', lbl,
-                    [{ label: METRIC_LABELS[metric], color, value: values[di] }], 'share');
+                const rows = selectedShops.map(sName => {
+                    const data    = CD.shop_stats[sName];
+                    const rows_   = data ? (data[xAxis] || []) : [];
+                    const timeKey = getTimeKey(xAxis);
+                    const row     = rows_.find(r => r[timeKey] === lbl);
+                    return { label: sName, color: BAR_COLOR, value: row ? (row[metric] ?? 0) : 0 };
+                }).filter(r => r.value > 0).sort((a, b) => b.value - a.value);
+                renderClickCard('barInfoPanel', lbl, rows, metric, true,
+                    () => { document.getElementById('barInfoPanel').innerHTML = ''; }, 'share');
+                highlightTableCol('barDataWrap', di);
             },
             plugins: {
                 legend: { display: false },
                 tooltip: {
                     backgroundColor: 'rgba(30,30,30,.92)',
-                    callbacks: { label: ctx => '  ' + METRIC_LABELS[metric] + ': ' + ctx.raw.toLocaleString() },
+                    callbacks: { label: ctx => '  ' + yLabel(metric) + ': ' + fmtVal(ctx.raw, metric) },
                 },
             },
             scales: {
-                x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                x: { grid: { display: false }, ticks: { font:{ size:11 } } },
                 y: {
                     beginAtZero: true,
                     grid: { color: 'rgba(0,0,0,.12)' },
-                    title: { display: true, text: METRIC_LABELS[metric], font: { size: 11 } },
-                    ticks: { font: { size: 11 }, callback: v => v.toLocaleString() },
+                    title: { display: true, text: yLabel(metric), font:{ size:11 } },
+                    ticks: { font:{ size:11 }, callback: v => fmtVal(v, metric) },
                 },
             },
         },
     });
+
+    // Per-shop rows for data table
+    const tblRows = selectedShops.map(sName => {
+        const data = CD.shop_stats[sName];
+        const d    = xLabels.map(lbl => {
+            const rows_   = data ? (data[xAxis] || []) : [];
+            const timeKey = getTimeKey(xAxis);
+            const row     = rows_.find(r => r[timeKey] === lbl);
+            return row ? (row[metric] ?? 0) : 0;
+        });
+        return { label: sName, data: d, borderColor: BAR_COLOR };
+    }).filter(Boolean);
+    tblRows.push({ label: 'Total (selected)', data: values, borderColor: '#2c3e50', _isTotal: true });
+    renderDataTable('barDataWrap', 'barDataCaption', xLabels, tblRows, metric, xAxis === 'week');
 }
 
+document.querySelectorAll('.bar-shop-check').forEach(cb => cb.addEventListener('change', buildBarChart));
 document.querySelectorAll('input[name="barXaxis"]').forEach(r => r.addEventListener('change', buildBarChart));
 document.getElementById('barMetricSelect').addEventListener('change', buildBarChart);
 
+document.getElementById('btnBarSelAll').addEventListener('click', () => {
+    document.querySelectorAll('.bar-shop-check').forEach(cb => cb.checked = true); buildBarChart();
+});
+document.getElementById('btnBarSelNone').addEventListener('click', () => {
+    document.querySelectorAll('.bar-shop-check').forEach(cb => cb.checked = false); buildBarChart();
+});
+document.getElementById('btnBarSelTop5').addEventListener('click', () => {
+    [...document.querySelectorAll('.bar-shop-check')].forEach((cb, i) => cb.checked = i < 5); buildBarChart();
+});
+
 /* ══════════════════════════════════════════════
-   YOY CHART — all-time grouped bar
-   Season label format: "M2-4 2025" → extract year from last token
-   Month label format:  "2025-01"   → extract year from first 4 chars
-   Week label format:   "Week N (d/m-d/m)" — derived from all_week_stats
-     each row has .week = display label, but we need year grouping.
-     We use the index order since all_week_stats is sorted by year-week.
+   SECTION 4: YOY CHART — All-time grouped bar
+   Season label format: "M2-4 2025" → label has year at end
+   Month label format:  "2025-01"   → year from first 4 chars
+   Week: sequential scan to detect year rollover
 ══════════════════════════════════════════════ */
 let yoyChart = null;
-const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_SHORT  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const SEASON_ORDER = ['M2-4','M5-7','M8-10','M11-1'];
 
 function buildYOYChart() {
     const xAxis  = document.querySelector('input[name="yoyXaxis"]:checked').value;
@@ -637,86 +1002,59 @@ function buildYOYChart() {
             if (!yearData[yr]) yearData[yr] = {};
             yearData[yr][mo] = (yearData[yr][mo] || 0) + (row[metric] || 0);
         });
-        xLabels = MONTH_SHORT;
-        datasets = Object.keys(yearData).sort().map((yr, i) => {
-            const color = YOY_PALETTE[i % YOY_PALETTE.length];
-            return {
-                label: yr,
-                data: Array.from({ length: 12 }, (_, j) => yearData[yr][j + 1] || 0),
-                backgroundColor: color + 'cc', borderColor: color,
-                borderWidth: 1, borderRadius: 4, borderSkipped: false,
-            };
-        });
+        xLabels  = MONTH_SHORT;
+        datasets = Object.keys(yearData).sort().map((yr, i) => ({
+            label: yr,
+            data: Array.from({length:12}, (_, j) => yearData[yr][j+1] || 0),
+            backgroundColor: YOY_PALETTE[i % YOY_PALETTE.length] + 'cc',
+            borderColor:     YOY_PALETTE[i % YOY_PALETTE.length],
+            borderWidth: 1, borderRadius: 4, borderSkipped: false,
+        }));
 
-    } else if (xAxis === 'week') {
-        // Week labels are "Week N (d/m-d/m)"; extract week-number for x-axis
-        // all_week_stats rows are sorted by year-week (service layer guarantees this)
+    } else if (xAxis === 'season') {
         const yearData = {};
-        const weekNums = new Set();
-        CD.all_week_stats.forEach(row => {
-            const m = row.week.match(/^Week\s+(\d+)/);
-            if (!m) return;
-            const wn = parseInt(m[1]);
-            // Derive year: scan forward through sorted rows — use position-based approach
-            // Since sorted by year-week, track current year via simple heuristic:
-            // year boundary = when wn resets to a value < previous wn
-            weekNums.add(wn);
+        CD.all_season_stats.forEach(row => {
+            const parts = row.label.split(' ');
+            const yr    = parts[parts.length - 1];
+            const sn    = parts.slice(0, parts.length - 1).join(' ');
+            if (!yearData[yr]) yearData[yr] = {};
+            yearData[yr][sn] = (yearData[yr][sn] || 0) + (row[metric] || 0);
         });
-        // Group by year: re-parse from month stats year range
-        const years = [...new Set(CD.all_month_stats.map(r => r.month.slice(0, 4)))].sort();
-        // Build a year→weekNum→value map by pairing rows with years via sequential scan
+        xLabels  = SEASON_ORDER;
+        datasets = Object.keys(yearData).sort().map((yr, i) => ({
+            label: yr,
+            data: SEASON_ORDER.map(s => yearData[yr][s] || 0),
+            backgroundColor: YOY_PALETTE[i % YOY_PALETTE.length] + 'cc',
+            borderColor:     YOY_PALETTE[i % YOY_PALETTE.length],
+            borderWidth: 1, borderRadius: 4, borderSkipped: false,
+        }));
+
+    } else {
+        // week
+        const years = [...new Set(CD.all_month_stats.map(r => r.month.slice(0,4)))].sort();
         const yearWeekData = {};
         let prevWn = 0, curYrIdx = 0;
+        const weekNums = new Set();
         CD.all_week_stats.forEach(row => {
             const m = row.week.match(/^Week\s+(\d+)/);
             if (!m) return;
             const wn = parseInt(m[1]);
             if (wn < prevWn && curYrIdx < years.length - 1) curYrIdx++;
             prevWn = wn;
+            weekNums.add(wn);
             const yr = years[curYrIdx] || years[years.length - 1];
             if (!yearWeekData[yr]) yearWeekData[yr] = {};
             yearWeekData[yr][wn] = (yearWeekData[yr][wn] || 0) + (row[metric] || 0);
         });
-        const allWeekNums = [...weekNums].sort((a, b) => a - b);
-        xLabels = allWeekNums.map(wn => `W${String(wn).padStart(2, '0')}`);
-        datasets = Object.keys(yearWeekData).sort().map((yr, i) => {
-            const color = YOY_PALETTE[i % YOY_PALETTE.length];
-            return {
-                label: yr,
-                data: allWeekNums.map(wn => yearWeekData[yr][wn] || 0),
-                backgroundColor: color + 'cc', borderColor: color,
-                borderWidth: 1, borderRadius: 4, borderSkipped: false,
-            };
-        });
-
-    } else {
-        // Season: label = "M2-4 2025" or "M11-1 2024-2025"
-        // Extract year: last token(s) form the year identifier
-        const yearSeasonData = {};
-        CD.all_season_stats.forEach(row => {
-            const parts = row.label.split(' ');
-            const seasonCode = parts[0];   // e.g. "M2-4"
-            const yr         = parts.slice(1).join(' ');  // e.g. "2025" or "2024-2025"
-            if (!yearSeasonData[yr]) yearSeasonData[yr] = {};
-            yearSeasonData[yr][seasonCode] = (yearSeasonData[yr][seasonCode] || 0) + (row[metric] || 0);
-        });
-        // Collect all unique season codes in order
-        const allCodes = [...new Set(CD.all_season_stats.map(r => r.label.split(' ')[0]))];
-        const codeOrder = ['M2-4', 'M5-7', 'M8-10', 'M11-1'];
-        allCodes.sort((a, b) => {
-            const ia = codeOrder.indexOf(a), ib = codeOrder.indexOf(b);
-            return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-        });
-        xLabels = allCodes;
-        datasets = Object.keys(yearSeasonData).sort().map((yr, i) => {
-            const color = YOY_PALETTE[i % YOY_PALETTE.length];
-            return {
-                label: yr,
-                data: allCodes.map(code => yearSeasonData[yr][code] || 0),
-                backgroundColor: color + 'cc', borderColor: color,
-                borderWidth: 1, borderRadius: 4, borderSkipped: false,
-            };
-        });
+        xLabels  = [...weekNums].sort((a,b)=>a-b).map(n => 'W' + n);
+        const wkArr = [...weekNums].sort((a,b)=>a-b);
+        datasets = Object.keys(yearWeekData).sort().map((yr, i) => ({
+            label: yr,
+            data: wkArr.map(wn => yearWeekData[yr][wn] || 0),
+            backgroundColor: YOY_PALETTE[i % YOY_PALETTE.length] + 'cc',
+            borderColor:     YOY_PALETTE[i % YOY_PALETTE.length],
+            borderWidth: 1, borderRadius: 4, borderSkipped: false,
+        }));
     }
 
     if (yoyChart) yoyChart.destroy();
@@ -729,82 +1067,94 @@ function buildYOYChart() {
             interaction: { mode: 'index', intersect: false },
             onClick(evt, elements) {
                 if (!elements.length) { document.getElementById('yoyInfoPanel').innerHTML = ''; return; }
-                const di   = elements[0].index;
-                const lbl  = yoyChart.data.labels[di];
-                const rowz = yoyChart.data.datasets
+                const di  = elements[0].index;
+                const lbl = yoyChart.data.labels[di];
+                const rows = yoyChart.data.datasets
                     .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
                     .filter(r => r.value > 0);
-                renderClickCard('yoyInfoPanel', lbl, rowz, 'yoy');
+                renderClickCard('yoyInfoPanel', lbl, rows, metric, true,
+                    () => { document.getElementById('yoyInfoPanel').innerHTML = ''; }, 'yoy');
+                highlightTableCol('yoyDataWrap', di);
             },
             plugins: {
-                legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
+                legend: { display: true, position: 'bottom', labels: { font:{ size:11 } } },
                 tooltip: {
                     backgroundColor: 'rgba(30,30,30,.92)',
-                    itemSort: (a, b) => b.raw - a.raw,
-                    callbacks: { label: ctx => '  ' + ctx.dataset.label + ': ' + ctx.raw.toLocaleString() },
+                    callbacks: { label: ctx => '  ' + ctx.dataset.label + ': ' + fmtVal(ctx.raw, metric) },
                 },
             },
             scales: {
-                x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                x: { grid: { display: false }, ticks: { font:{ size:11 } } },
                 y: {
                     beginAtZero: true,
                     grid: { color: 'rgba(0,0,0,.12)' },
-                    title: { display: true, text: METRIC_LABELS[metric], font: { size: 11 } },
-                    ticks: { font: { size: 11 }, callback: v => v.toLocaleString() },
+                    title: { display: true, text: yLabel(metric), font:{ size:11 } },
+                    ticks: { font:{ size:11 }, callback: v => fmtVal(v, metric) },
                 },
             },
         },
     });
+    renderDataTable('yoyDataWrap', 'yoyDataCaption', xLabels, datasets, metric, xAxis === 'week', 'Year');
 }
 
 document.querySelectorAll('input[name="yoyXaxis"]').forEach(r => r.addEventListener('change', buildYOYChart));
 document.getElementById('yoyMetricSelect').addEventListener('change', buildYOYChart);
 
-// Initial render
-buildLineChart();
+/* ══════════════════════════════════════════════
+   INITIAL RENDER
+══════════════════════════════════════════════ */
+sortChecklistAlpha('shopChecklist');
+document.querySelectorAll('#shopChecklist .shop-check').forEach((cb, i) => { cb.checked = i < 5; });
+sortChecklistAlpha('barShopChecklist');
+document.querySelectorAll('#barShopChecklist .bar-shop-check').forEach((cb, i) => { cb.checked = i < 5; });
+
+buildTrendChart();
 buildBarChart();
 buildYOYChart();
 
 /* ══════════════════════════════════════════════
-   FILTER SHORTCUTS
+   FILTER BAR — quick buttons
 ══════════════════════════════════════════════ */
+const _form    = document.getElementById('dateFilterForm');
+const _sdInput = _form.querySelector('[name="start_date"]');
+const _edInput = _form.querySelector('[name="end_date"]');
+
 document.querySelectorAll('.quick-days-btn').forEach(btn => {
-    btn.addEventListener('click', function () {
-        const days = parseInt(this.dataset.days);
-        const end = new Date(), start = new Date();
-        start.setDate(start.getDate() - days);
-        document.querySelector('[name="start_date"]').value = start.toISOString().split('T')[0];
-        document.querySelector('[name="end_date"]').value   = end.toISOString().split('T')[0];
-        document.getElementById('dateFilterForm').submit();
+    btn.addEventListener('click', () => {
+        const d = parseInt(btn.dataset.days);
+        const now = new Date();
+        const from = new Date(now); from.setDate(from.getDate() - d);
+        _sdInput.value = from.toISOString().slice(0,10);
+        _edInput.value = now.toISOString().slice(0,10);
+        _form.submit();
+    });
+});
+document.querySelectorAll('.quick-year-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const yr = btn.dataset.year;
+        _sdInput.value = yr + '-01-01';
+        _edInput.value = yr + '-12-31';
+        _form.submit();
     });
 });
 document.getElementById('btnThisMonth').addEventListener('click', () => {
     const now = new Date();
-    document.querySelector('[name="start_date"]').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    document.querySelector('[name="end_date"]').value   = now.toISOString().split('T')[0];
-    document.getElementById('dateFilterForm').submit();
+    _sdInput.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+    _edInput.value = now.toISOString().slice(0,10);
+    _form.submit();
 });
 document.getElementById('btnLastMonth').addEventListener('click', () => {
     const now = new Date();
-    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const last  = new Date(now.getFullYear(), now.getMonth(), 0);
-    document.querySelector('[name="start_date"]').value = first.toISOString().split('T')[0];
-    document.querySelector('[name="end_date"]').value   = last.toISOString().split('T')[0];
-    document.getElementById('dateFilterForm').submit();
+    const f = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const t = new Date(now.getFullYear(), now.getMonth(), 0);
+    _sdInput.value = f.toISOString().slice(0,10);
+    _edInput.value = t.toISOString().slice(0,10);
+    _form.submit();
 });
 document.getElementById('btnThisYear').addEventListener('click', () => {
-    const y = new Date().getFullYear();
-    document.querySelector('[name="start_date"]').value = `${y}-01-01`;
-    document.querySelector('[name="end_date"]').value   = `${y}-12-31`;
-    document.getElementById('dateFilterForm').submit();
-});
-document.querySelectorAll('.quick-year-btn').forEach(btn => {
-    btn.addEventListener('click', function () {
-        const y = this.dataset.year;
-        document.querySelector('[name="start_date"]').value = `${y}-01-01`;
-        document.querySelector('[name="end_date"]').value   = `${y}-12-31`;
-        document.getElementById('dateFilterForm').submit();
-    });
+    _sdInput.value = new Date().getFullYear() + '-01-01';
+    _edInput.value = new Date().toISOString().slice(0,10);
+    _form.submit();
 });
 
 /* ══════════════════════════════════════════════
@@ -815,103 +1165,56 @@ function getCanvasPng(id) {
     if (!c || !c.width || !c.height) return null;
     const tmp = document.createElement('canvas');
     tmp.width = c.width; tmp.height = c.height;
-    const ctx = tmp.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, tmp.width, tmp.height);
-    ctx.drawImage(c, 0, 0);
+    const ctx2 = tmp.getContext('2d');
+    ctx2.fillStyle = '#ffffff';
+    ctx2.fillRect(0, 0, tmp.width, tmp.height);
+    ctx2.drawImage(c, 0, 0);
     return tmp.toDataURL('image/png');
 }
 
-const btnPDF = document.getElementById('btnDownloadPDF');
-if (btnPDF) {
-    btnPDF.addEventListener('click', function () {
-        btnPDF.disabled = true;
-        btnPDF.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
-        try {
-            const { jsPDF } = window.jspdf;
-            const PW = 297, PH = 210, M = 10, CW = PW - M * 2;
-            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+document.getElementById('btnDownloadPDF')?.addEventListener('click', async () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+    const PW = 297, PH = 210, M = 10;
 
-            const sd = document.querySelector('[name="start_date"]').value;
-            const ed = document.querySelector('[name="end_date"]').value;
-            const filterStr = (sd && ed) ? `Period: ${sd} to ${ed}` : 'All data (no date filter)';
-            const now = new Date().toLocaleString('en-GB');
+    function pageHeader(title) {
+        doc.setFontSize(11); doc.setFont(undefined,'bold');
+        doc.text(title, M, M + 5);
+        doc.setFont(undefined,'normal'); doc.setFontSize(9);
+        const dateStr = '{% if start_date and end_date %}{{ start_date }} to {{ end_date }}{% else %}All Time{% endif %}';
+        doc.text('Period: ' + dateStr, M, M + 11);
+        return M + 18;
+    }
 
-            function pageHeader(title) {
-                doc.setFontSize(14); doc.setTextColor(0, 71, 179);
-                doc.text(title, M, 14);
-                doc.setFontSize(8); doc.setTextColor(110);
-                doc.text(filterStr + '   |   Generated: ' + now, M, 20);
-                doc.setDrawColor(0, 71, 179); doc.setLineWidth(0.4);
-                doc.line(M, 23, PW - M, 23);
-                return 27;
-            }
+    function addChart(canvasId, title) {
+        const png = getCanvasPng(canvasId);
+        if (!png) return;
+        doc.addPage();
+        let y = pageHeader(title);
+        const maxW = PW - 2*M, maxH = PH - y - M;
+        const c = document.getElementById(canvasId);
+        const ratio = c.height / c.width;
+        let w = maxW, h = w * ratio;
+        if (h > maxH) { h = maxH; w = h / ratio; }
+        doc.addImage(png, 'PNG', M, y, w, h);
+    }
 
-            function addChart(png, id, x, y, maxW, maxH) {
-                if (!png) return y;
-                const c = document.getElementById(id);
-                const ratio = c.height / c.width;
-                const imgH  = Math.min(maxW * ratio, maxH);
-                const imgW  = imgH / ratio;
-                doc.addImage(png, 'PNG', x, y, imgW, imgH);
-                return y + imgH;
-            }
-
-            /* PAGE 1 — Overview donuts */
-            let y = pageHeader('Customer Analytics Charts — Overview');
-            const donutIds    = ['dChart1', 'dChart2', 'dChart3', 'dChart4'];
-            const donutLabels = ['Active Zalo / CNV', 'Follow OA / CNV', 'CNV Only / CNV', 'POS Only / POS'];
-            const dSize = 42, dGap = (CW - dSize * 4) / 3;
-            let dx = M;
-            donutIds.forEach((id, i) => {
-                const png = getCanvasPng(id);
-                if (png) {
-                    doc.addImage(png, 'PNG', dx, y, dSize, dSize);
-                    doc.setFontSize(7); doc.setTextColor(90);
-                    donutLabels[i].split(' / ').forEach((line, li) =>
-                        doc.text(line, dx + dSize / 2, y + dSize + 4 + li * 4, { align: 'center' })
-                    );
-                }
-                dx += dSize + dGap;
-            });
-
-            /* PAGE 2 — Trend Lines */
-            doc.addPage();
-            y = pageHeader('Customer Analytics Charts — Trend Lines');
-            const lineXLbl   = document.querySelector('input[name="lineXaxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
-            const selMetrics = [...document.querySelectorAll('.line-metric-cb:checked')]
-                .map(e => document.querySelector(`label[for="${e.id}"]`)?.textContent?.trim() || e.value).join(', ');
-            doc.setFontSize(8); doc.setTextColor(100);
-            doc.text('Axis: ' + lineXLbl + '   |   Metrics: ' + selMetrics, M, y); y += 4;
-            addChart(getCanvasPng('custLineChart'), 'custLineChart', M, y, CW, PH - y - M);
-
-            /* PAGE 3 — Bar Chart */
-            doc.addPage();
-            y = pageHeader('Customer Analytics Charts — Bar Chart');
-            const barXLbl = document.querySelector('input[name="barXaxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
-            const barMet  = document.getElementById('barMetricSelect').options[document.getElementById('barMetricSelect').selectedIndex].text;
-            doc.setFontSize(8); doc.setTextColor(100);
-            doc.text('Axis: ' + barXLbl + '   |   Metric: ' + barMet, M, y); y += 4;
-            addChart(getCanvasPng('custBarChart'), 'custBarChart', M, y, CW, PH - y - M);
-
-            /* PAGE 4 — YOY */
-            doc.addPage();
-            y = pageHeader('Customer Analytics Charts — Year-over-Year');
-            const yoyXLbl = document.querySelector('input[name="yoyXaxis"]:checked')?.nextElementSibling?.textContent?.trim() || '';
-            const yoyMet  = document.getElementById('yoyMetricSelect').options[document.getElementById('yoyMetricSelect').selectedIndex].text;
-            doc.setFontSize(8); doc.setTextColor(100);
-            doc.text('Axis: ' + yoyXLbl + '   |   Metric: ' + yoyMet, M, y); y += 4;
-            addChart(getCanvasPng('yoyBarChart'), 'yoyBarChart', M, y, CW, PH - y - M);
-
-            doc.save('customer_analytics_charts.pdf');
-        } catch (e) {
-            console.error('PDF error:', e);
-            alert('PDF generation failed: ' + e.message);
-        } finally {
-            btnPDF.disabled = false;
-            btnPDF.innerHTML = '<i class="bi bi-file-pdf"></i> Download PDF';
-        }
+    // Page 1: Overview donuts
+    let y = pageHeader('Overview — Customer Analytics Charts');
+    ['dChart1','dChart2','dChart3','dChart4'].forEach((id, i) => {
+        const png = getCanvasPng(id);
+        if (!png) return;
+        const x = M + i * ((PW - 2*M) / 4);
+        doc.addImage(png, 'PNG', x, y, (PW - 2*M)/4 - 2, 70);
     });
-}
+
+    addChart('shopTrendChart', 'Shop Trends');
+    addChart('periodBarChart', 'Period Totals');
+    addChart('yoyBarChart',    'Year-over-Year Comparison');
+
+    doc.save('customer_analytics_charts_{% if start_date %}{{ start_date }}_{{ end_date }}{% else %}alltime{% endif %}.pdf');
+});
 </script>
+
+<!-- Filter JS (quick buttons already handled above) -->
 {% endblock %}
