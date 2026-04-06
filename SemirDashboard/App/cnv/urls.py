@@ -20,6 +20,9 @@ urlpatterns = [
     # AJAX: Sync CNV points for selected customers
     path('sync-cnv-points/', views.sync_cnv_points, name='sync_cnv_points'),
 
+    # Customer Analytics Charts
+    path('customer-chart/', views.customer_chart, name='customer_chart'),
+
     # AJAX: Manual sync triggers
     path('trigger-sync/', views.trigger_sync, name='trigger_sync'),
     path('trigger-zalo-sync/', views.trigger_zalo_sync, name='trigger_zalo_sync'),

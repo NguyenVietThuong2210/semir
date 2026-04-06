@@ -495,3 +495,177 @@ def trigger_zalo_sync(request):
     )
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  CUSTOMER ANALYTICS CHARTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+_CUST_CHART_TTL = 300  # 5-minute cache TTL
+
+
+def _cust_chart_cache_key(start_date: str, end_date: str) -> str:
+    return f"cust_chart:{start_date}:{end_date}"
+
+
+def compute_customer_chart_data(start_date: str = "", end_date: str = "") -> dict:
+    """
+    Compute all chart data for Customer Analytics Charts page.
+
+    Uses the SAME underlying service calls as the customer analytics page:
+      - compute_cnv_breakdown() via _fetch_bd_raw() → same cache, same numbers
+      - get_cnv_phone_sets()                        → shared all-time phone sets
+
+    This guarantees chart data ≡ table data for every metric.
+
+    Performance:
+      - Full result cached 5 min per (start_date, end_date) key.
+      - _fetch_bd_raw is cached separately — so chart + table page share the DB hit.
+    """
+    import json as _json
+    from django.core.cache import cache as _djc
+    from App.cnv.service import (
+        parse_cnv_period_filter,
+        get_cnv_phone_sets,
+        compute_cnv_breakdown,
+    )
+    from App.analytics.season_utils import session_sort_key, month_sort_key, week_sort_key
+
+    _cache_key = _cust_chart_cache_key(start_date, end_date)
+    hit = _djc.get(_cache_key)
+    if hit is not None:
+        return hit
+
+    period_filter, has_filter = parse_cnv_period_filter(start_date, end_date)
+    pos_phones_all, cnv_phones_all = get_cnv_phone_sets()
+
+    # ── Breakdown for filtered period (season / month / week) ────────────────
+    _DIMS = frozenset({'season', 'month', 'week'})
+    bd = compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=_DIMS)
+
+    # ── All-time breakdown for YOY (no period filter) ────────────────────────
+    bd_all = compute_cnv_breakdown({}, pos_phones_all, cnv_phones_all, dims=_DIMS)
+
+    # ── All-time overview counts ─────────────────────────────────────────────
+    total_cnv = CNVCustomer.objects.count()
+    total_pos = POSCustomer.objects.filter(
+        vip_id__isnull=False
+    ).exclude(vip_id=0).count()
+
+    active_zalo = CNVCustomer.objects.filter(
+        zalo_app_id__isnull=False
+    ).exclude(zalo_app_id="").count()
+
+    follow_oa = CNVCustomer.objects.filter(
+        zalo_oa_id__isnull=False
+    ).exclude(zalo_oa_id="").count()
+
+    pos_only_count = len(pos_phones_all - cnv_phones_all)
+    cnv_only_count = len(cnv_phones_all - pos_phones_all)
+
+    # ── Serialise breakdown rows for Chart.js consumption ────────────────────
+    def _serialise_season(rows):
+        return [
+            {
+                "label":         r["label"],
+                "new_pos_users": r["new_pos"],
+                "new_cnv_users": r["new_cnv"],
+                "active_zalo":   r["zalo_app"],
+                "follow_oa":     r["zalo_oa"],
+            }
+            for r in rows
+        ]
+
+    def _serialise_month(rows):
+        return [
+            {
+                "month":         r["label"],   # "YYYY-MM"
+                "new_pos_users": r["new_pos"],
+                "new_cnv_users": r["new_cnv"],
+                "active_zalo":   r["zalo_app"],
+                "follow_oa":     r["zalo_oa"],
+            }
+            for r in rows
+        ]
+
+    def _serialise_week(rows):
+        # rows from compute_cnv_breakdown have no week_sort; re-derive from label
+        # week label: "Week N (d/m-d/m)" — use row index order (already sorted)
+        return [
+            {
+                "week":          r["label"],   # display label e.g. "Week 1 (1/1-7/1)"
+                "new_pos_users": r["new_pos"],
+                "new_cnv_users": r["new_cnv"],
+                "active_zalo":   r["zalo_app"],
+                "follow_oa":     r["zalo_oa"],
+            }
+            for r in rows
+        ]
+
+    result = {
+        "overview": {
+            "total_cnv":   total_cnv,
+            "total_pos":   total_pos,
+            "active_zalo": active_zalo,
+            "follow_oa":   follow_oa,
+            "cnv_only":    cnv_only_count,
+            "pos_only":    pos_only_count,
+        },
+        # Filtered period series (used by line + bar charts)
+        "season_stats": _serialise_season(bd["season"]),
+        "month_stats":  _serialise_month(bd["month"]),
+        "week_stats":   _serialise_week(bd["week"]),
+        # All-time series (used by YOY chart)
+        "all_season_stats": _serialise_season(bd_all["season"]),
+        "all_month_stats":  _serialise_month(bd_all["month"]),
+        "all_week_stats":   _serialise_week(bd_all["week"]),
+    }
+
+    _djc.set(_cache_key, result, timeout=_CUST_CHART_TTL)
+    return result
+
+
+@requires_perm("page_customer_chart")
+def customer_chart(request):
+    """Customer Analytics Charts — donut overview + trend lines + bar + YOY comparison."""
+    import json
+
+    start_date = request.GET.get("start_date", "")
+    end_date   = request.GET.get("end_date", "")
+
+    # Validate / normalise dates
+    date_from = date_to = None
+    try:
+        if start_date:
+            date_from = datetime.strptime(start_date, "%Y-%m-%d").date()
+    except ValueError:
+        start_date = ""
+    try:
+        if end_date:
+            date_to = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        end_date = ""
+    if date_from and date_to and date_from > date_to:
+        start_date = end_date = ""
+
+    logger.info(
+        "customer_chart: from=%s to=%s user=%s",
+        start_date or "all", end_date or "all", request.user,
+        extra={"step": "customer_chart"},
+    )
+
+    data = compute_customer_chart_data(start_date, end_date)
+    now_year = datetime.now().year
+
+    return render(
+        request,
+        "cnv/customer_chart.html",
+        {
+            "overview":        data["overview"],
+            "chart_data_json": json.dumps(data),
+            "start_date":      start_date,
+            "end_date":        end_date,
+            "quick_btns":      [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90)],
+            "year_btns":       [now_year - i for i in range(4)],
+        },
+    )
+
+
