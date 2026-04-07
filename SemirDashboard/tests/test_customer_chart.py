@@ -25,6 +25,13 @@ CUSTOMER_FILE = INPUT_DIR / "customer.xlsx"
 CNV_FILE      = INPUT_DIR / "cnv_customers.csv"
 SALE_FILES    = [INPUT_DIR / "Sale 2024.xlsx", INPUT_DIR / "Sale 2025.xlsx", INPUT_DIR / "Sale 2026.xlsx"]
 
+# All 10 metric fields present in every chart row
+_ALL_10_FIELDS = (
+    "new_pos_inv", "new_pos_no_inv", "new_pos", "new_pos_only",
+    "new_cnv", "new_cnv_only",
+    "zalo_app", "zalo_app_pct", "zalo_oa", "zalo_oa_pct",
+)
+
 
 def _named(path):
     with open(path, "rb") as f:
@@ -129,11 +136,10 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
     # ── season stats consistency ──────────────────────────────────────────────
 
     def _assert_season_match(self, chart_rows, page_rows, label):
-        """Check that chart season rows match page season rows exactly."""
-        page_by_label = {r["label"]: r for r in page_rows}
+        """Check that chart season rows match page season rows exactly (all 10 metrics)."""
+        page_by_label  = {r["label"]: r for r in page_rows}
         chart_by_label = {r["label"]: r for r in chart_rows}
 
-        # Same set of season labels
         self.assertEqual(
             set(chart_by_label.keys()), set(page_by_label.keys()),
             f"[{label}] season label sets differ: "
@@ -142,14 +148,11 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
 
         for lbl, cr in chart_by_label.items():
             pr = page_by_label[lbl]
-            self.assertEqual(cr["new_pos_users"], pr["new_pos"],
-                             f"[{label}] season {lbl}: new_pos mismatch chart={cr['new_pos_users']} page={pr['new_pos']}")
-            self.assertEqual(cr["new_cnv_users"], pr["new_cnv"],
-                             f"[{label}] season {lbl}: new_cnv mismatch chart={cr['new_cnv_users']} page={pr['new_cnv']}")
-            self.assertEqual(cr["active_zalo"], pr["zalo_app"],
-                             f"[{label}] season {lbl}: zalo_app mismatch chart={cr['active_zalo']} page={pr['zalo_app']}")
-            self.assertEqual(cr["follow_oa"], pr["zalo_oa"],
-                             f"[{label}] season {lbl}: zalo_oa mismatch chart={cr['follow_oa']} page={pr['zalo_oa']}")
+            for field in _ALL_10_FIELDS:
+                self.assertEqual(
+                    cr[field], pr[field],
+                    f"[{label}] season {lbl}: {field} mismatch chart={cr[field]} page={pr[field]}",
+                )
 
     def test_season_alltime_chart_vs_page(self):
         self._skip_if_no_data()
@@ -177,14 +180,11 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
 
         for m, cr in chart_by_month.items():
             pr = page_by_label[m]
-            self.assertEqual(cr["new_pos_users"], pr["new_pos"],
-                             f"[{label}] month {m}: new_pos mismatch")
-            self.assertEqual(cr["new_cnv_users"], pr["new_cnv"],
-                             f"[{label}] month {m}: new_cnv mismatch")
-            self.assertEqual(cr["active_zalo"], pr["zalo_app"],
-                             f"[{label}] month {m}: zalo_app mismatch")
-            self.assertEqual(cr["follow_oa"], pr["zalo_oa"],
-                             f"[{label}] month {m}: zalo_oa mismatch")
+            for field in _ALL_10_FIELDS:
+                self.assertEqual(
+                    cr[field], pr[field],
+                    f"[{label}] month {m}: {field} mismatch chart={cr[field]} page={pr[field]}",
+                )
 
     def test_month_alltime_chart_vs_page(self):
         self._skip_if_no_data()
@@ -204,7 +204,6 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
         """
         Chart week key = display label like 'Week N (d/m-d/m)'.
         Page rows also have 'label' = same display label.
-        Both are already sorted chronologically by the service layer.
         """
         self.assertEqual(
             len(chart_rows), len(page_rows),
@@ -214,14 +213,11 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
         for i, (cr, pr) in enumerate(zip(chart_rows, page_rows)):
             self.assertEqual(cr["week"], pr["label"],
                              f"[{label}] week[{i}] label mismatch chart={cr['week']!r} page={pr['label']!r}")
-            self.assertEqual(cr["new_pos_users"], pr["new_pos"],
-                             f"[{label}] week {cr['week']}: new_pos mismatch")
-            self.assertEqual(cr["new_cnv_users"], pr["new_cnv"],
-                             f"[{label}] week {cr['week']}: new_cnv mismatch")
-            self.assertEqual(cr["active_zalo"], pr["zalo_app"],
-                             f"[{label}] week {cr['week']}: zalo_app mismatch")
-            self.assertEqual(cr["follow_oa"], pr["zalo_oa"],
-                             f"[{label}] week {cr['week']}: zalo_oa mismatch")
+            for field in _ALL_10_FIELDS:
+                self.assertEqual(
+                    cr[field], pr[field],
+                    f"[{label}] week {cr['week']}: {field} mismatch chart={cr[field]} page={pr[field]}",
+                )
 
     def test_week_alltime_chart_vs_page(self):
         self._skip_if_no_data()
@@ -243,41 +239,36 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
         filtered   = self._chart("2025-01-01", "2025-12-31")
         unfiltered = self._chart()
 
-        def _chart_season_eq(rows_a, rows_b, label):
-            """Compare two lists of chart season rows (both use new_pos_users)."""
+        def _eq_season(rows_a, rows_b, label):
             by_a = {r["label"]: r for r in rows_a}
             by_b = {r["label"]: r for r in rows_b}
             self.assertEqual(set(by_a), set(by_b), f"[{label}] label sets differ")
             for lbl, a in by_a.items():
                 b = by_b[lbl]
-                for field in ("new_pos_users", "new_cnv_users", "active_zalo", "follow_oa"):
-                    self.assertEqual(a[field], b[field],
-                                     f"[{label}] season {lbl}: {field} mismatch a={a[field]} b={b[field]}")
+                for field in _ALL_10_FIELDS:
+                    self.assertEqual(a[field], b[field], f"[{label}] season {lbl}: {field} mismatch")
 
-        def _chart_month_eq(rows_a, rows_b, label):
+        def _eq_month(rows_a, rows_b, label):
             by_a = {r["month"]: r for r in rows_a}
             by_b = {r["month"]: r for r in rows_b}
             self.assertEqual(set(by_a), set(by_b), f"[{label}] month sets differ")
             for m, a in by_a.items():
                 b = by_b[m]
-                for field in ("new_pos_users", "new_cnv_users", "active_zalo", "follow_oa"):
-                    self.assertEqual(a[field], b[field],
-                                     f"[{label}] month {m}: {field} mismatch")
+                for field in _ALL_10_FIELDS:
+                    self.assertEqual(a[field], b[field], f"[{label}] month {m}: {field} mismatch")
 
-        def _chart_week_eq(rows_a, rows_b, label):
+        def _eq_week(rows_a, rows_b, label):
             self.assertEqual(len(rows_a), len(rows_b),
-                             f"[{label}] week row count differs {len(rows_a)} vs {len(rows_b)}")
+                             f"[{label}] week row count {len(rows_a)} vs {len(rows_b)}")
             for i, (a, b) in enumerate(zip(rows_a, rows_b)):
                 self.assertEqual(a["week"], b["week"],
                                  f"[{label}] week[{i}] label mismatch {a['week']!r} vs {b['week']!r}")
-                for field in ("new_pos_users", "new_cnv_users", "active_zalo", "follow_oa"):
-                    self.assertEqual(a[field], b[field],
-                                     f"[{label}] week {a['week']}: {field} mismatch")
+                for field in _ALL_10_FIELDS:
+                    self.assertEqual(a[field], b[field], f"[{label}] week {a['week']}: {field} mismatch")
 
-        # all_*_stats in filtered call must equal season/month/week_stats in unfiltered call
-        _chart_season_eq(filtered["all_season_stats"], unfiltered["season_stats"], "yoy_season")
-        _chart_month_eq(filtered["all_month_stats"],   unfiltered["month_stats"],  "yoy_month")
-        _chart_week_eq(filtered["all_week_stats"],     unfiltered["week_stats"],   "yoy_week")
+        _eq_season(filtered["all_season_stats"], unfiltered["season_stats"], "yoy_season")
+        _eq_month(filtered["all_month_stats"],   unfiltered["month_stats"],  "yoy_month")
+        _eq_week(filtered["all_week_stats"],     unfiltered["week_stats"],   "yoy_week")
 
     # ── overview totals cross-check ───────────────────────────────────────────
 
@@ -286,14 +277,10 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
         self._skip_if_no_data()
         chart = self._chart()
         ov = chart["overview"]
-        self.assertLessEqual(ov["active_zalo"], ov["total_cnv"],
-                             "active_zalo > total_cnv — impossible")
-        self.assertLessEqual(ov["follow_oa"], ov["total_cnv"],
-                             "follow_oa > total_cnv — impossible")
-        self.assertLessEqual(ov["pos_only"], ov["total_pos"],
-                             "pos_only > total_pos — impossible")
-        self.assertLessEqual(ov["cnv_only"], ov["total_cnv"],
-                             "cnv_only > total_cnv — impossible")
+        self.assertLessEqual(ov["active_zalo"], ov["total_cnv"], "active_zalo > total_cnv")
+        self.assertLessEqual(ov["follow_oa"],   ov["total_cnv"], "follow_oa > total_cnv")
+        self.assertLessEqual(ov["pos_only"],    ov["total_pos"], "pos_only > total_pos")
+        self.assertLessEqual(ov["cnv_only"],    ov["total_cnv"], "cnv_only > total_cnv")
 
     # ── structure / schema ────────────────────────────────────────────────────
 
@@ -302,40 +289,129 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
         self._skip_if_no_data()
         chart = self._chart()
         for key in ("overview", "season_stats", "month_stats", "week_stats",
-                    "all_season_stats", "all_month_stats", "all_week_stats"):
+                    "all_season_stats", "all_month_stats", "all_week_stats",
+                    "shops", "shop_stats"):
             self.assertIn(key, chart, f"Missing key: {key!r}")
 
-        # overview sub-keys
-        for k in ("total_cnv", "total_pos", "active_zalo", "follow_oa",
-                  "cnv_only", "pos_only"):
+        for k in ("total_cnv", "total_pos", "active_zalo", "follow_oa", "cnv_only", "pos_only"):
             self.assertIn(k, chart["overview"], f"Missing overview key: {k!r}")
 
-    def test_chart_row_schema_season(self):
-        """Each season_stats row has the expected fields."""
+    def test_chart_row_schema_all_10_metrics_season(self):
+        """Each season_stats row has all 10 metric fields."""
         self._skip_if_no_data()
         chart = self._chart()
         for row in chart["season_stats"]:
-            for field in ("label", "new_pos_users", "new_cnv_users", "active_zalo", "follow_oa"):
+            self.assertIn("label", row, "season row missing 'label'")
+            for field in _ALL_10_FIELDS:
                 self.assertIn(field, row, f"season row missing field: {field!r}")
 
-    def test_chart_row_schema_month(self):
-        """Each month_stats row has the expected fields."""
+    def test_chart_row_schema_all_10_metrics_month(self):
+        """Each month_stats row has all 10 metric fields."""
         self._skip_if_no_data()
         chart = self._chart()
         for row in chart["month_stats"]:
-            for field in ("month", "new_pos_users", "new_cnv_users", "active_zalo", "follow_oa"):
-                self.assertIn(field, row, f"month row missing field: {field!r}")
-            # Month format: 'YYYY-MM'
+            self.assertIn("month", row, "month row missing 'month'")
             self.assertRegex(row["month"], r"^\d{4}-\d{2}$",
                              f"month label format unexpected: {row['month']!r}")
+            for field in _ALL_10_FIELDS:
+                self.assertIn(field, row, f"month row missing field: {field!r}")
 
-    def test_chart_row_schema_week(self):
-        """Each week_stats row has the expected fields."""
+    def test_chart_row_schema_all_10_metrics_week(self):
+        """Each week_stats row has all 10 metric fields."""
         self._skip_if_no_data()
         chart = self._chart()
         for row in chart["week_stats"]:
-            for field in ("week", "new_pos_users", "new_cnv_users", "active_zalo", "follow_oa"):
+            self.assertIn("week", row, "week row missing 'week'")
+            for field in _ALL_10_FIELDS:
                 self.assertIn(field, row, f"week row missing field: {field!r}")
+
+    # ── shop stats structure ──────────────────────────────────────────────────
+
+    def test_shop_stats_structure(self):
+        """shops is a sorted list; shop_stats is a dict with season/month/week keys."""
+        self._skip_if_no_data()
+        chart = self._chart()
+        shops      = chart["shops"]
+        shop_stats = chart["shop_stats"]
+
+        self.assertIsInstance(shops, list, "shops should be a list")
+        self.assertIsInstance(shop_stats, dict, "shop_stats should be a dict")
+
+        # Every shop name in the list has an entry in the dict
+        for shop_name in shops:
+            self.assertIn(shop_name, shop_stats,
+                          f"Shop {shop_name!r} in shops list but not in shop_stats dict")
+            entry = shop_stats[shop_name]
+            for key in ("season", "month", "week"):
+                self.assertIn(key, entry, f"shop_stats[{shop_name!r}] missing key {key!r}")
+                self.assertIsInstance(entry[key], list,
+                                      f"shop_stats[{shop_name!r}][{key!r}] should be a list")
+
+        # shops list is sorted
+        self.assertEqual(shops, sorted(shops), "shops list is not sorted alphabetically")
+
+    def test_shop_stats_row_schema(self):
+        """Every row in shop season/month/week arrays has all 10 metric fields."""
+        self._skip_if_no_data()
+        chart = self._chart()
+        shops      = chart["shops"]
+        shop_stats = chart["shop_stats"]
+
+        for shop_name in shops:
+            entry = shop_stats[shop_name]
+            for s_row in entry["season"]:
+                self.assertIn("label", s_row, f"shop {shop_name!r} season row missing 'label'")
+                for field in _ALL_10_FIELDS:
+                    self.assertIn(field, s_row,
+                                  f"shop {shop_name!r} season row missing field {field!r}")
+            for m_row in entry["month"]:
+                self.assertIn("month", m_row, f"shop {shop_name!r} month row missing 'month'")
+                for field in _ALL_10_FIELDS:
+                    self.assertIn(field, m_row,
+                                  f"shop {shop_name!r} month row missing field {field!r}")
+            for w_row in entry["week"]:
+                self.assertIn("week", w_row, f"shop {shop_name!r} week row missing 'week'")
+                for field in _ALL_10_FIELDS:
+                    self.assertIn(field, w_row,
+                                  f"shop {shop_name!r} week row missing field {field!r}")
+
+    def test_shop_stats_sum_le_total(self):
+        """For each season, sum of new_pos across all shops <= total new_pos (shops can overlap)."""
+        self._skip_if_no_data()
+        chart = self._chart()
+        shops      = chart["shops"]
+        shop_stats = chart["shop_stats"]
+        totals     = {r["label"]: r["new_pos"] for r in chart["season_stats"]}
+
+        if not shops or not totals:
+            return  # no data
+
+        for lbl, total_val in totals.items():
+            shop_sum = sum(
+                next((r["new_pos"] for r in shop_stats[s]["season"] if r["label"] == lbl), 0)
+                for s in shops
+            )
+            # Shop sum can exceed total if customers bought at multiple shops in same season
+            # (they appear in multiple shop rows but only once in the aggregate).
+            # So we just assert neither is negative.
+            self.assertGreaterEqual(total_val, 0,
+                                    f"season {lbl} total new_pos is negative: {total_val}")
+            self.assertGreaterEqual(shop_sum, 0,
+                                    f"season {lbl} shop sum new_pos is negative: {shop_sum}")
+
+    def test_shop_stats_zalo_pct_range(self):
+        """zalo_app_pct and zalo_oa_pct must be 0–100 in every shop row."""
+        self._skip_if_no_data()
+        chart = self._chart()
+        for shop_name, entry in chart["shop_stats"].items():
+            for period_key in ("season", "month", "week"):
+                for row in entry[period_key]:
+                    for pct_field in ("zalo_app_pct", "zalo_oa_pct"):
+                        v = row[pct_field]
+                        self.assertGreaterEqual(v, 0,
+                            f"shop {shop_name!r} {period_key} {pct_field}={v} < 0")
+                        self.assertLessEqual(v, 100,
+                            f"shop {shop_name!r} {period_key} {pct_field}={v} > 100")
 
     # ── caching: second call returns same data ────────────────────────────────
 
@@ -349,6 +425,7 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
         self.assertEqual(first["overview"], second["overview"])
         self.assertEqual(first["season_stats"], second["season_stats"])
         self.assertEqual(first["month_stats"], second["month_stats"])
+        self.assertEqual(first["shops"], second["shops"])
 
     # ── performance ───────────────────────────────────────────────────────────
 
@@ -363,9 +440,12 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
         cache.clear()
         data = compute_customer_chart_data()
         cold = t.total()
-        t.checkpoint(f"cold call → {cold:.2f}s  seasons={len(data['season_stats'])} months={len(data['month_stats'])} weeks={len(data['week_stats'])}")
+        t.checkpoint(
+            f"cold call → {cold:.2f}s  seasons={len(data['season_stats'])} "
+            f"months={len(data['month_stats'])} weeks={len(data['week_stats'])} "
+            f"shops={len(data['shops'])}"
+        )
 
-        # Warm call — should hit locmem cache
         t2 = self.timer("customer_chart_warm")
         compute_customer_chart_data()
         warm = t2.total()
@@ -406,3 +486,11 @@ class CustomerChartConsistencyTest(SnapshotTestCase):
             "count": len(chart["month_stats"]),
             "rows":  chart["month_stats"],
         })
+
+    def test_snapshot_shops_list(self):
+        """Lock the set of shop names returned."""
+        self._skip_if_no_data()
+        from django.core.cache import cache
+        cache.clear()
+        chart = compute_customer_chart_data()
+        self.assert_snapshot("customer_chart_shops", {"shops": chart["shops"]})

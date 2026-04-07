@@ -820,7 +820,7 @@ function buildTrendChart() {
         options: {
             responsive: true, maintainAspectRatio: false,
             animation: { duration: 500 },
-            interaction: { mode: 'index', intersect: false },
+            interaction: { mode: 'nearest', intersect: true },
             onClick(evt, elements) {
                 if (!elements.length) { document.getElementById('trendLegendPanel').innerHTML = ''; updateLegend(datasets); return; }
                 const di  = elements[0].index;
@@ -1064,7 +1064,6 @@ function buildYOYChart() {
         options: {
             responsive: true, maintainAspectRatio: false,
             animation: { duration: 500 },
-            interaction: { mode: 'index', intersect: false },
             onClick(evt, elements) {
                 if (!elements.length) { document.getElementById('yoyInfoPanel').innerHTML = ''; return; }
                 const di  = elements[0].index;

@@ -109,6 +109,52 @@ def _load_sales(date_from=None, date_to=None, shop_group=None):
     return customer_purchases, _ci_fresh, date_stats
 
 
+# ── Shared helpers ───────────────────────────────────────────────────────────
+
+def _group_periods(by_shop, period_keys, sub_key, match_key, label_fn=None):
+    """
+    Invert by_shop list into period-first grouping.
+
+    by_shop:     list of shop dicts each with a sub_key array
+    period_keys: ordered list of period identifiers to iterate
+    sub_key:     key in each shop dict ('by_session', 'by_month', 'by_week', 'by_grade')
+    match_key:   field in each sub-row that matches period_keys ('session', 'month', 'week_sort', 'grade')
+    label_fn:    optional callable(row) → display label (e.g. lambda r: r['week_label'])
+
+    Returns list of {'label': str, 'shops': [{shop_name, ...row fields}]}
+    """
+    result = []
+    for pk in period_keys:
+        shops = []
+        label = pk
+        for sh in by_shop:
+            for row in sh.get(sub_key, []):
+                if row.get(match_key) == pk:
+                    if label_fn is not None and label == pk:
+                        label = label_fn(row)
+                    shops.append({'shop_name': sh['shop_name'], **row})
+                    break
+        result.append({'label': label, 'shops': shops})
+    return result
+
+
+def _group_flat_by_period(flat, label_key='label'):
+    """
+    Group a flat cross list (e.g. season_shop) by period label key.
+
+    Returns list of {'label': str, 'shops': [row, ...]} preserving order.
+    """
+    seen: dict = {}
+    order: list = []
+    for row in flat:
+        lbl = row[label_key]
+        if lbl not in seen:
+            seen[lbl] = []
+            order.append(lbl)
+        seen[lbl].append(row)
+    return [{'label': lbl, 'shops': seen[lbl]} for lbl in order]
+
+
 # ── Sales per-tab functions ───────────────────────────────────────────────────
 
 SALES_TABS = (
@@ -156,27 +202,42 @@ def get_sales_tab(tab: str, date_from=None, date_to=None, shop_group=None) -> di
         details = _build_customer_details(cp, ci, date_from, date_to)
         all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
         by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
-        return {'by_grade': aggregate_by_grade(details), 'by_shop': by_shop}
+        by_grade = aggregate_by_grade(details)
+        grade_keys = [g['grade'] for g in by_grade]
+        return {
+            'by_grade': by_grade,
+            'by_shop': by_shop,
+            'periods_by_grade': _group_periods(by_shop, grade_keys, 'by_grade', 'grade'),
+        }
 
     if tab == 'season_allshops':
         all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
+        by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
         return {
             'by_session': aggregate_by_season(cp, ci),
-            'by_shop': aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk),
+            'by_shop': by_shop,
+            'periods_by_season': _group_periods(by_shop, all_sk, 'by_session', 'session'),
         }
 
     if tab == 'month_allshops':
         all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
+        by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
         return {
             'by_month': aggregate_by_month(cp, ci),
-            'by_shop': aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk),
+            'by_shop': by_shop,
+            'periods_by_month': _group_periods(by_shop, all_mk, 'by_month', 'month'),
         }
 
     if tab == 'week_allshops':
         all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
+        by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
         return {
             'by_week': aggregate_by_week(cp, ci),
-            'by_shop': aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk),
+            'by_shop': by_shop,
+            'periods_by_week': _group_periods(
+                by_shop, all_wk, 'by_week', 'week_sort',
+                label_fn=lambda r: r['week_label'],
+            ),
         }
 
     raise ValueError(f"Unknown sales tab: {tab!r}")
@@ -853,11 +914,23 @@ def _customer_bd_tab(tab: str, start_date: str, end_date: str) -> dict:
     if tab == 'bd_shop':
         return {'by_shop': bd['shop'], 'shop_detail': bd['shop_detail']}
     if tab == 'bd_season_allshops':
-        return {'season_shop': bd['season_shop'], 'shop_season': bd['shop_season']}
+        return {
+            'season_shop': bd['season_shop'],
+            'shop_season': bd['shop_season'],
+            'period_season': _group_flat_by_period(bd['season_shop']),
+        }
     if tab == 'bd_month_allshops':
-        return {'month_shop': bd['month_shop'], 'shop_month': bd['shop_month']}
+        return {
+            'month_shop': bd['month_shop'],
+            'shop_month': bd['shop_month'],
+            'period_month': _group_flat_by_period(bd['month_shop']),
+        }
     if tab == 'bd_week_allshops':
-        return {'week_shop': bd['week_shop'], 'shop_week': bd['shop_week']}
+        return {
+            'week_shop': bd['week_shop'],
+            'shop_week': bd['shop_week'],
+            'period_week': _group_flat_by_period(bd['week_shop']),
+        }
     raise ValueError(f"Unknown BD tab: {tab!r}")
 
 

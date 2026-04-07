@@ -467,8 +467,6 @@
                     <select class="form-select form-select-sm mt-1" id="metricSelect">
                         <optgroup label="Customers">
                             <option value="total_customers">Active Customers</option>
-                            <option value="new_customers">New Customers</option>
-                            <option value="new_rate">New Rate (%)</option>
                             <option value="returning_customers">Returning Customers</option>
                             <option value="return_rate">Return Rate (%)</option>
                         </optgroup>
@@ -585,7 +583,6 @@
                     <select class="form-select form-select-sm mt-1" id="barMetricSelect">
                         <optgroup label="Customers">
                             <option value="total_customers">Active Customers</option>
-                            <option value="new_customers">New Customers</option>
                             <option value="returning_customers">Returning Customers</option>
                         </optgroup>
                         <optgroup label="Invoices">
@@ -692,7 +689,6 @@
                     <select class="form-select form-select-sm mt-1" id="compMetricSelect">
                         <optgroup label="Customers">
                             <option value="total_customers">Active Customers</option>
-                            <option value="new_customers">New Customers</option>
                             <option value="returning_customers">Returning Customers</option>
                         </optgroup>
                         <optgroup label="Invoices">
@@ -777,7 +773,7 @@ const SHOP_PALETTE = [
    Helper: format number for tooltip
 ══════════════════════════════════════════════ */
 function fmtVal(v, metric) {
-    if (['return_rate','new_rate'].includes(metric))
+    if (metric === 'return_rate')
         return v.toFixed(1) + '%';
     if (['returning_amount','total_amount','total_amount_with_vip0'].includes(metric))
         return Math.round(v).toLocaleString() + ' VND';
@@ -786,8 +782,6 @@ function fmtVal(v, metric) {
 function yLabel(metric) {
     const m = {
         total_customers: 'Active Customers',
-        new_customers: 'New Customers',
-        new_rate: 'New Rate (%)',
         returning_customers: 'Returning Customers',
         return_rate: 'Return Rate (%)',
         returning_invoices: 'INV(RET)',
@@ -995,7 +989,7 @@ function buildChart() {
     const xAxis   = document.querySelector('input[name="xaxis"]:checked').value;
     const metric  = document.getElementById('metricSelect').value;
     const xLabels = getXLabels(xAxis);
-    const isRate   = ['return_rate', 'new_rate'].includes(metric);
+    const isRate   = metric === 'return_rate';
     const isAmount = ['returning_amount','total_amount','total_amount_with_vip0'].includes(metric);
 
     // Build per-shop datasets — conditional dots (only where value > 0)
