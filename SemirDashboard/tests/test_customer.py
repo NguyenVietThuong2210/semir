@@ -442,35 +442,53 @@ class CustomerTabSnapshotTest(SnapshotTestCase):
             "shop_detail": data["shop_detail"],
         })
 
+    def _assert_period_group_schema(self, periods, shop_key='shop'):
+        """Verify period-grouped list: [{label, shops:[{shop_key, new_pos, ...}]}]."""
+        self.assertIsInstance(periods, list)
+        for p in periods:
+            self.assertIn('label', p)
+            self.assertIn('shops', p)
+            for sh in p['shops']:
+                self.assertIn(shop_key, sh)
+                self.assertIn('new_pos', sh)
+                self.assertIn('new_cnv', sh)
+                self.assertIn('zalo_app_pct', sh)
+
     def test_tab_snapshot_bd_season_allshops(self):
         t = self.timer("customer_tab_bd_season_allshops")
         data = self._tab('bd_season_allshops')
-        t.checkpoint(f"season_shop → {len(data['season_shop'])} rows  [{t.total():.2f}s]")
+        periods = data['period_season']
+        t.checkpoint(f"period_season → {len(periods)} season periods  [{t.total():.2f}s]")
         t.report()
-        self.assert_snapshot("customer_tab_bd_season_allshops", {
-            "season_shop": data["season_shop"],
-            "shop_season": data["shop_season"],
-        })
+        self.assertIn('period_season', data)
+        self.assertNotIn('season_shop', data, "season_shop should not be returned (removed for perf)")
+        self.assertNotIn('shop_season', data, "shop_season should not be returned (removed for perf)")
+        self._assert_period_group_schema(periods)
+        self.assert_snapshot("customer_tab_bd_season_allshops", {"period_season": periods})
 
     def test_tab_snapshot_bd_month_allshops(self):
         t = self.timer("customer_tab_bd_month_allshops")
         data = self._tab('bd_month_allshops')
-        t.checkpoint(f"month_shop → {len(data['month_shop'])} rows  [{t.total():.2f}s]")
+        periods = data['period_month']
+        t.checkpoint(f"period_month → {len(periods)} month periods  [{t.total():.2f}s]")
         t.report()
-        self.assert_snapshot("customer_tab_bd_month_allshops", {
-            "month_shop": data["month_shop"],
-            "shop_month": data["shop_month"],
-        })
+        self.assertIn('period_month', data)
+        self.assertNotIn('month_shop', data, "month_shop should not be returned (removed for perf)")
+        self.assertNotIn('shop_month', data, "shop_month should not be returned (removed for perf)")
+        self._assert_period_group_schema(periods)
+        self.assert_snapshot("customer_tab_bd_month_allshops", {"period_month": periods})
 
     def test_tab_snapshot_bd_week_allshops(self):
         t = self.timer("customer_tab_bd_week_allshops")
         data = self._tab('bd_week_allshops')
-        t.checkpoint(f"week_shop → {len(data['week_shop'])} rows  [{t.total():.2f}s]")
+        periods = data['period_week']
+        t.checkpoint(f"period_week → {len(periods)} week periods  [{t.total():.2f}s]")
         t.report()
-        self.assert_snapshot("customer_tab_bd_week_allshops", {
-            "week_shop": data["week_shop"],
-            "shop_week": data["shop_week"],
-        })
+        self.assertIn('period_week', data)
+        self.assertNotIn('week_shop', data, "week_shop should not be returned (removed for perf)")
+        self.assertNotIn('shop_week', data, "shop_week should not be returned (removed for perf)")
+        self._assert_period_group_schema(periods)
+        self.assert_snapshot("customer_tab_bd_week_allshops", {"period_week": periods})
 
     # ── Session B: Customer Analytics (3 tabs) ─────────────────────────────
 

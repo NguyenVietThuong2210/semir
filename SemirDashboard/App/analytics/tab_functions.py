@@ -202,43 +202,26 @@ def get_sales_tab(tab: str, date_from=None, date_to=None, shop_group=None) -> di
         details = _build_customer_details(cp, ci, date_from, date_to)
         all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
         by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
-        by_grade = aggregate_by_grade(details)
-        grade_keys = [g['grade'] for g in by_grade]
-        return {
-            'by_grade': by_grade,
-            'by_shop': by_shop,
-            'periods_by_grade': _group_periods(by_shop, grade_keys, 'by_grade', 'grade'),
-        }
+        grade_keys = [g['grade'] for g in aggregate_by_grade(details)]
+        return {'periods_by_grade': _group_periods(by_shop, grade_keys, 'by_grade', 'grade')}
 
     if tab == 'season_allshops':
         all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
         by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
-        return {
-            'by_session': aggregate_by_season(cp, ci),
-            'by_shop': by_shop,
-            'periods_by_season': _group_periods(by_shop, all_sk, 'by_session', 'session'),
-        }
+        return {'periods_by_season': _group_periods(by_shop, all_sk, 'by_session', 'session')}
 
     if tab == 'month_allshops':
         all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
         by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
-        return {
-            'by_month': aggregate_by_month(cp, ci),
-            'by_shop': by_shop,
-            'periods_by_month': _group_periods(by_shop, all_mk, 'by_month', 'month'),
-        }
+        return {'periods_by_month': _group_periods(by_shop, all_mk, 'by_month', 'month')}
 
     if tab == 'week_allshops':
         all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
         by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
-        return {
-            'by_week': aggregate_by_week(cp, ci),
-            'by_shop': by_shop,
-            'periods_by_week': _group_periods(
-                by_shop, all_wk, 'by_week', 'week_sort',
-                label_fn=lambda r: r['week_label'],
-            ),
-        }
+        return {'periods_by_week': _group_periods(
+            by_shop, all_wk, 'by_week', 'week_sort',
+            label_fn=lambda r: r['week_label'],
+        )}
 
     raise ValueError(f"Unknown sales tab: {tab!r}")
 
@@ -888,7 +871,7 @@ _BD_DIMS = {
     'bd_shop':            frozenset({'shop', 'season_shop', 'month_shop', 'week', 'week_shop'}),
     'bd_season_allshops': frozenset({'season_shop'}),
     'bd_month_allshops':  frozenset({'month_shop'}),
-    'bd_week_allshops':   frozenset({'week', 'week_shop'}),
+    'bd_week_allshops':   frozenset({'week_shop'}),
 }
 
 
@@ -914,23 +897,11 @@ def _customer_bd_tab(tab: str, start_date: str, end_date: str) -> dict:
     if tab == 'bd_shop':
         return {'by_shop': bd['shop'], 'shop_detail': bd['shop_detail']}
     if tab == 'bd_season_allshops':
-        return {
-            'season_shop': bd['season_shop'],
-            'shop_season': bd['shop_season'],
-            'period_season': _group_flat_by_period(bd['season_shop']),
-        }
+        return {'period_season': _group_flat_by_period(bd['season_shop'])}
     if tab == 'bd_month_allshops':
-        return {
-            'month_shop': bd['month_shop'],
-            'shop_month': bd['shop_month'],
-            'period_month': _group_flat_by_period(bd['month_shop']),
-        }
+        return {'period_month': _group_flat_by_period(bd['month_shop'])}
     if tab == 'bd_week_allshops':
-        return {
-            'week_shop': bd['week_shop'],
-            'shop_week': bd['shop_week'],
-            'period_week': _group_flat_by_period(bd['week_shop']),
-        }
+        return {'period_week': _group_flat_by_period(bd['week_shop'])}
     raise ValueError(f"Unknown BD tab: {tab!r}")
 
 

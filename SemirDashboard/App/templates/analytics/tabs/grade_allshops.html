@@ -1,61 +1,11 @@
 {% load custom_filters perm_tags %}
 {% check_perm 'download_analytics' as can_dl_analytics %}
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="text-muted small mb-0">Overall grade summary + per-grade shop breakdown.</p>
+    <p class="text-muted small mb-0">Compare all shops for each VIP grade.</p>
     {% if can_dl_analytics %}<a href="{% url 'export_analytics' %}?tab=grade_allshops{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
 </div>
 
-<!-- Overall Grade Summary -->
-<div class="card mb-3 border-0 shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-        <span><i class="bi bi-award text-primary me-1"></i><strong>Overall Grade Summary</strong></span>
-        <button class="btn btn-sm btn-outline-secondary" type="button"
-                data-bs-toggle="collapse" data-bs-target="#gradeSummaryBody">
-            <i class="bi bi-arrows-expand"></i> Show/Hide
-        </button>
-    </div>
-    <div class="collapse show" id="gradeSummaryBody">
-        <div class="table-responsive tab-tbl-wrap">
-            <table class="table table-sm table-striped table-hover align-middle mb-0">
-                <thead style="background-color:#366092;color:white;">
-                    <tr>
-                        <th>VIP Grade</th>
-                        <th class="text-end">Active (Period)</th>
-                        <th class="text-end">Returning</th>
-                        <th class="text-end">Return Rate</th>
-                        <th class="text-end">Total (All Time)</th>
-                        <th class="text-end">Return Rate (All Time)</th>
-                        <th class="text-end">INV(RET)</th>
-                        <th class="text-end">AMT(RET)</th>
-                        <th class="text-end">Total INV</th>
-                        <th class="text-end">Total Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for g in by_grade %}
-                <tr>
-                    <td><strong>{{ g.grade }}</strong></td>
-                    <td class="text-end">{{ g.total_customers }}</td>
-                    <td class="text-end">{{ g.returning_customers }}</td>
-                    <td class="text-end"><span class="badge bg-primary">{{ g.return_rate }}%</span></td>
-                    <td class="text-end">{{ g.total_in_db }}</td>
-                    <td class="text-end"><span class="badge bg-warning">{{ g.return_rate_all_time }}%</span></td>
-                    <td class="text-end text-success">{{ g.returning_invoices|default:0 }}</td>
-                    <td class="text-end text-success amount-vnd">{{ g.returning_amount|default:0|vnd }} {{ currency }}</td>
-                    <td class="text-end">{{ g.total_invoices }}</td>
-                    <td class="text-end amount-vnd">{{ g.total_amount|vnd }} {{ currency }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="10" class="text-center text-muted py-3">No data</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Per-Grade cards with shop rows -->
-<p class="text-muted small fw-semibold text-uppercase mb-1 mt-3"><i class="bi bi-award"></i> By Grade — Shop Comparison</p>
+<p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-award"></i> By Grade — Shop Comparison</p>
 {% for p in periods_by_grade %}
 <div class="card mb-3 border">
     <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
@@ -69,10 +19,20 @@
     <div class="collapse" id="gradePeriod-{{ forloop.counter }}">
         <div class="card-body p-0">
             <div class="table-responsive tab-tbl-wrap">
-                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;table-layout:fixed;width:100%">
+                    <colgroup>
+                        <col style="min-width:200px">
+                        <col style="width:70px">
+                        <col style="width:80px">
+                        <col style="width:85px">
+                        <col style="width:75px">
+                        <col style="width:130px">
+                        <col style="width:75px">
+                        <col style="width:130px">
+                    </colgroup>
                     <thead style="background-color:#4a6785;color:white;">
                         <tr>
-                            <th style="min-width:180px;">Shop</th>
+                            <th>Shop</th>
                             <th class="text-end">Active</th>
                             <th class="text-end">Returning</th>
                             <th class="text-end">Return Rate</th>
@@ -85,7 +45,7 @@
                     <tbody>
                     {% for sh in p.shops %}
                     <tr>
-                        <td><strong>{{ sh.shop_name }}</strong></td>
+                        <td class="text-truncate" style="max-width:0"><strong>{{ sh.shop_name }}</strong></td>
                         <td class="text-end">{{ sh.total_customers }}</td>
                         <td class="text-end">{{ sh.returning_customers }}</td>
                         <td class="text-end"><span class="badge bg-primary">{{ sh.return_rate }}%</span></td>

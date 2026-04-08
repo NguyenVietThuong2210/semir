@@ -301,39 +301,87 @@ class SalesTabSnapshotTest(SnapshotTestCase):
     def test_tab_snapshot_grade_allshops(self):
         t = self.timer("sales_tab_grade_allshops")
         data = self._tab('grade_allshops')
-        t.checkpoint(f"grade_allshops → grades={len(data['by_grade'])} shops={len(data['by_shop'])}  [{t.total():.2f}s]")
+        periods = data['periods_by_grade']
+        t.checkpoint(f"grade_allshops → {len(periods)} grade periods  [{t.total():.2f}s]")
         t.report()
-        self.assert_snapshot("sales_tab_grade_allshops", {
-            "by_grade": data["by_grade"],
-            "by_shop": data["by_shop"],
-        })
+        self.assertIn('periods_by_grade', data)
+        self.assertNotIn('by_grade', data, "by_grade should not be in tab data (removed for perf)")
+        self.assertNotIn('by_shop', data,  "by_shop should not be in tab data (removed for perf)")
+        # Each period has label + shops list
+        for p in periods:
+            self.assertIn('label', p)
+            self.assertIn('shops', p)
+            for sh in p['shops']:
+                self.assertIn('shop_name', sh)
+                self.assertIn('total_customers', sh)
+                self.assertIn('return_rate', sh)
+        self.assert_snapshot("sales_tab_grade_allshops", {"periods_by_grade": periods})
 
     def test_tab_snapshot_season_allshops(self):
         t = self.timer("sales_tab_season_allshops")
         data = self._tab('season_allshops')
-        t.checkpoint(f"season_allshops → sessions={len(data['by_session'])} shops={len(data['by_shop'])}  [{t.total():.2f}s]")
+        periods = data['periods_by_season']
+        t.checkpoint(f"season_allshops → {len(periods)} season periods  [{t.total():.2f}s]")
         t.report()
-        self.assert_snapshot("sales_tab_season_allshops", {
-            "by_session": data["by_session"],
-            "by_shop": data["by_shop"],
-        })
+        self.assertIn('periods_by_season', data)
+        self.assertNotIn('by_session', data, "by_session should not be in tab data (removed for perf)")
+        self.assertNotIn('by_shop', data,    "by_shop should not be in tab data (removed for perf)")
+        for p in periods:
+            self.assertIn('label', p)
+            self.assertIn('shops', p)
+            for sh in p['shops']:
+                self.assertIn('shop_name', sh)
+                self.assertIn('total_customers', sh)
+                self.assertIn('total_invoices_with_vip0', sh)
+                self.assertIn('return_rate', sh)
+        self.assert_snapshot("sales_tab_season_allshops", {"periods_by_season": periods})
 
     def test_tab_snapshot_month_allshops(self):
         t = self.timer("sales_tab_month_allshops")
         data = self._tab('month_allshops')
-        t.checkpoint(f"month_allshops → months={len(data['by_month'])} shops={len(data['by_shop'])}  [{t.total():.2f}s]")
+        periods = data['periods_by_month']
+        t.checkpoint(f"month_allshops → {len(periods)} month periods  [{t.total():.2f}s]")
         t.report()
-        self.assert_snapshot("sales_tab_month_allshops", {
-            "by_month": data["by_month"],
-            "by_shop": data["by_shop"],
-        })
+        self.assertIn('periods_by_month', data)
+        self.assertNotIn('by_month', data, "by_month should not be in tab data (removed for perf)")
+        self.assertNotIn('by_shop', data,  "by_shop should not be in tab data (removed for perf)")
+        for p in periods:
+            self.assertIn('label', p)
+            self.assertIn('shops', p)
+            for sh in p['shops']:
+                self.assertIn('shop_name', sh)
+                self.assertIn('total_customers', sh)
+                self.assertIn('total_invoices_with_vip0', sh)
+                self.assertIn('return_rate', sh)
+        self.assert_snapshot("sales_tab_month_allshops", {"periods_by_month": periods})
 
     def test_tab_snapshot_week_allshops(self):
         t = self.timer("sales_tab_week_allshops")
         data = self._tab('week_allshops')
-        t.checkpoint(f"week_allshops → weeks={len(data['by_week'])} shops={len(data['by_shop'])}  [{t.total():.2f}s]")
+        periods = data['periods_by_week']
+        t.checkpoint(f"week_allshops → {len(periods)} week periods  [{t.total():.2f}s]")
         t.report()
-        self.assert_snapshot("sales_tab_week_allshops", {
-            "by_week": data["by_week"],
-            "by_shop": data["by_shop"],
-        })
+        self.assertIn('periods_by_week', data)
+        self.assertNotIn('by_week', data, "by_week should not be in tab data (removed for perf)")
+        self.assertNotIn('by_shop', data, "by_shop should not be in tab data (removed for perf)")
+        for p in periods:
+            self.assertIn('label', p)
+            self.assertIn('shops', p)
+            for sh in p['shops']:
+                self.assertIn('shop_name', sh)
+                self.assertIn('total_customers', sh)
+                self.assertIn('total_invoices_with_vip0', sh)
+                self.assertIn('return_rate', sh)
+        self.assert_snapshot("sales_tab_week_allshops", {"periods_by_week": periods})
+
+    def test_export_tab_keys_cover_allshops(self):
+        """Download button tab keys must exist in _TAB_SHEETS."""
+        from App.analytics.excel_export import _TAB_SHEETS
+        for tab in ('grade_allshops', 'season_allshops', 'month_allshops', 'week_allshops'):
+            self.assertIn(tab, _TAB_SHEETS, f"Missing tab key in _TAB_SHEETS: {tab}")
+
+    def test_export_cnv_tab_keys_cover_allshops(self):
+        """Download button CNV tab keys must exist in _CNV_TAB_SHEETS."""
+        from App.analytics.excel_export import _CNV_TAB_SHEETS
+        for tab in ('bd_season_allshops', 'bd_month_allshops', 'bd_week_allshops'):
+            self.assertIn(tab, _CNV_TAB_SHEETS, f"Missing tab key in _CNV_TAB_SHEETS: {tab}")

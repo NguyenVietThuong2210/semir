@@ -469,7 +469,7 @@ def _create_shop_detail_sheet(wb, data, header_fill, header_font, header_align):
 
 
 def _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_align):
-    """By Grade - All Shops comparison."""
+    """By Grade - All Shops comparison. Period = one table, all shops included."""
     ws = wb.create_sheet("By Grade - All Shops")
 
     all_grades = set()
@@ -481,21 +481,19 @@ def _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_al
     sorted_grades = sorted(all_grades, key=lambda x: GRADE_ORDER.get(x, 99))
     sorted_shops = sorted(data['by_shop'], key=lambda x: x['shop_name'])
 
-    # Pre-build lookup: {shop_name: {grade: g_data}} — O(1) per lookup vs O(n) next()
     shop_grade_map = {
         shop['shop_name']: {g['grade']: g for g in shop.get('by_grade', [])}
         for shop in sorted_shops
     }
 
+    headers = ["Shop", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "Total INV", "Total Amount"]
     current_row = 1
 
     for grade in sorted_grades:
-        ws.cell(row=current_row, column=1, value=f"GRADE: {grade}")
-        ws.cell(row=current_row, column=1).font = Font(bold=True, size=12)
+        ws.cell(row=current_row, column=1, value=f"GRADE: {grade}").font = Font(bold=True, size=12)
         ws.merge_cells(f'A{current_row}:H{current_row}')
         current_row += 1
 
-        headers = ["Shop", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -503,49 +501,47 @@ def _create_grade_comparison_sheet(wb, data, header_fill, header_font, header_al
         current_row += 1
 
         for shop in sorted_shops:
-            g = shop_grade_map[shop['shop_name']].get(grade)
-            if g and g.get('total_invoices', 0) > 0:
-                ws.cell(row=current_row, column=1, value=shop['shop_name'])
-                ws.cell(row=current_row, column=2, value=g['total_customers'])
-                ws.cell(row=current_row, column=3, value=g['returning_customers'])
-                ws.cell(row=current_row, column=4, value=f"{g['return_rate']}%")
-                ws.cell(row=current_row, column=5, value=g.get('returning_invoices', 0))
-                ws.cell(row=current_row, column=6, value=g.get('returning_amount', 0))
-                ws.cell(row=current_row, column=6).number_format = '#,##0'
-                ws.cell(row=current_row, column=7, value=g['total_invoices'])
-                ws.cell(row=current_row, column=8, value=g['total_amount'])
-                ws.cell(row=current_row, column=8).number_format = '#,##0'
-                current_row += 1
+            g = shop_grade_map[shop['shop_name']].get(grade, {})
+            ws.cell(row=current_row, column=1, value=shop['shop_name'])
+            ws.cell(row=current_row, column=2, value=g.get('total_customers', 0))
+            ws.cell(row=current_row, column=3, value=g.get('returning_customers', 0))
+            ws.cell(row=current_row, column=4, value=f"{g.get('return_rate', 0)}%")
+            ws.cell(row=current_row, column=5, value=g.get('returning_invoices', 0))
+            ws.cell(row=current_row, column=6, value=g.get('returning_amount', 0))
+            ws.cell(row=current_row, column=6).number_format = '#,##0'
+            ws.cell(row=current_row, column=7, value=g.get('total_invoices', 0))
+            ws.cell(row=current_row, column=7).number_format = '#,##0'
+            ws.cell(row=current_row, column=8, value=g.get('total_amount', 0))
+            ws.cell(row=current_row, column=8).number_format = '#,##0'
+            current_row += 1
 
-        current_row += 1
+        current_row += 1  # blank row between periods
 
-    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['A'].width = 32
     for col in range(2, 9):
-        ws.column_dimensions[get_column_letter(col)].width = 16
+        ws.column_dimensions[get_column_letter(col)].width = 15
 
 
 def _create_season_comparison_sheet(wb, data, header_fill, header_font, header_align):
-    """By Season - All Shops comparison."""
+    """By Season - All Shops comparison. Period = one table, all shops included."""
     ws = wb.create_sheet("By Season - All Shops")
 
     all_seasons = [s['session'] for s in data['by_session']]
     sorted_shops = sorted(data['by_shop'], key=lambda x: x['shop_name'])
 
-    # Pre-build lookup: {shop_name: {season: s_data}}
     shop_session_map = {
         shop['shop_name']: {s['session']: s for s in shop.get('by_session', [])}
         for shop in sorted_shops
     }
 
+    headers = ["Shop", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "Total INV", "Total Amount"]
     current_row = 1
 
     for season in all_seasons:
-        ws.cell(row=current_row, column=1, value=f"SEASON: {season}")
-        ws.cell(row=current_row, column=1).font = Font(bold=True, size=12)
-        ws.merge_cells(f'A{current_row}:M{current_row}')
+        ws.cell(row=current_row, column=1, value=f"SEASON: {season}").font = Font(bold=True, size=12)
+        ws.merge_cells(f'A{current_row}:H{current_row}')
         current_row += 1
 
-        headers = ["Shop", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -553,51 +549,47 @@ def _create_season_comparison_sheet(wb, data, header_fill, header_font, header_a
         current_row += 1
 
         for shop in sorted_shops:
-            s = shop_session_map[shop['shop_name']].get(season)
-            if s and s.get('total_invoices_with_vip0', 0) > 0:
-                ws.cell(row=current_row, column=1, value=shop['shop_name'])
-                ws.cell(row=current_row, column=2, value=s['total_customers'])
-                ws.cell(row=current_row, column=3, value=s['returning_customers'])
-                ws.cell(row=current_row, column=4, value=f"{s['return_rate']}%")
-                ws.cell(row=current_row, column=5, value=s.get('returning_invoices', 0))
-                ws.cell(row=current_row, column=6, value=s.get('returning_amount', 0))
-                ws.cell(row=current_row, column=6).number_format = '#,##0'
-                ws.cell(row=current_row, column=7, value=s['total_invoices'])
-                ws.cell(row=current_row, column=8, value=s['total_amount'])
-                ws.cell(row=current_row, column=8).number_format = '#,##0'
-                ws.cell(row=current_row, column=9, value=s.get('total_invoices_with_vip0', 0))
-                ws.cell(row=current_row, column=10, value=s.get('total_amount_with_vip0', 0))
-                ws.cell(row=current_row, column=10).number_format = '#,##0'
-                current_row += 1
+            s = shop_session_map[shop['shop_name']].get(season, {})
+            ws.cell(row=current_row, column=1, value=shop['shop_name'])
+            ws.cell(row=current_row, column=2, value=s.get('total_customers', 0))
+            ws.cell(row=current_row, column=3, value=s.get('returning_customers', 0))
+            ws.cell(row=current_row, column=4, value=f"{s.get('return_rate', 0)}%")
+            ws.cell(row=current_row, column=5, value=s.get('returning_invoices', 0))
+            ws.cell(row=current_row, column=6, value=s.get('returning_amount', 0))
+            ws.cell(row=current_row, column=6).number_format = '#,##0'
+            ws.cell(row=current_row, column=7, value=s.get('total_invoices_with_vip0', 0))
+            ws.cell(row=current_row, column=7).number_format = '#,##0'
+            ws.cell(row=current_row, column=8, value=s.get('total_amount_with_vip0', 0))
+            ws.cell(row=current_row, column=8).number_format = '#,##0'
+            current_row += 1
 
         current_row += 1
 
-    ws.column_dimensions['A'].width = 30
-    for col in range(2, 15):
-        ws.column_dimensions[get_column_letter(col)].width = 16
+    ws.column_dimensions['A'].width = 32
+    for col in range(2, 9):
+        ws.column_dimensions[get_column_letter(col)].width = 15
 
 
 def _create_month_comparison_sheet(wb, data, header_fill, header_font, header_align):
-    """By Month - All Shops comparison."""
+    """By Month - All Shops comparison. Period = one table, all shops included."""
     ws = wb.create_sheet("By Month - All Shops")
 
     all_months = [m['month'] for m in data.get('by_month', [])]
     sorted_shops = sorted(data['by_shop'], key=lambda x: x['shop_name'])
 
-    # Pre-build lookup: {shop_name: {month: m_data}}
     shop_month_map = {
         shop['shop_name']: {m['month']: m for m in shop.get('by_month', [])}
         for shop in sorted_shops
     }
 
+    headers = ["Shop", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "Total INV", "Total Amount"]
     current_row = 1
 
     for month in all_months:
         ws.cell(row=current_row, column=1, value=f"MONTH: {month}").font = Font(bold=True, size=12)
-        ws.merge_cells(f'A{current_row}:M{current_row}')
+        ws.merge_cells(f'A{current_row}:H{current_row}')
         current_row += 1
 
-        headers = ["Shop", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -605,30 +597,25 @@ def _create_month_comparison_sheet(wb, data, header_fill, header_font, header_al
         current_row += 1
 
         for shop in sorted_shops:
-            m = shop_month_map[shop['shop_name']].get(month)
-            if m and m.get('total_invoices_with_vip0', 0) > 0:
-                ws.cell(row=current_row, column=1, value=shop['shop_name'])
-                ws.cell(row=current_row, column=2, value=m['total_customers'])
-                ws.cell(row=current_row, column=3, value=m['returning_customers'])
-                ws.cell(row=current_row, column=4, value=f"{m['return_rate']}%")
-                ws.cell(row=current_row, column=5, value=m.get('returning_invoices', 0))
-                ws.cell(row=current_row, column=6, value=m.get('returning_amount', 0))
-                ws.cell(row=current_row, column=6).number_format = '#,##0'
-                ws.cell(row=current_row, column=7, value=m['total_invoices'])
-                ws.cell(row=current_row, column=8, value=m['total_amount'])
-                ws.cell(row=current_row, column=8).number_format = '#,##0'
-                ws.cell(row=current_row, column=9, value=m.get('total_invoices_with_vip0', 0))
-                ws.cell(row=current_row, column=10, value=m.get('total_amount_with_vip0', 0))
-                ws.cell(row=current_row, column=10).number_format = '#,##0'
-                current_row += 1
+            m = shop_month_map[shop['shop_name']].get(month, {})
+            ws.cell(row=current_row, column=1, value=shop['shop_name'])
+            ws.cell(row=current_row, column=2, value=m.get('total_customers', 0))
+            ws.cell(row=current_row, column=3, value=m.get('returning_customers', 0))
+            ws.cell(row=current_row, column=4, value=f"{m.get('return_rate', 0)}%")
+            ws.cell(row=current_row, column=5, value=m.get('returning_invoices', 0))
+            ws.cell(row=current_row, column=6, value=m.get('returning_amount', 0))
+            ws.cell(row=current_row, column=6).number_format = '#,##0'
+            ws.cell(row=current_row, column=7, value=m.get('total_invoices_with_vip0', 0))
+            ws.cell(row=current_row, column=7).number_format = '#,##0'
+            ws.cell(row=current_row, column=8, value=m.get('total_amount_with_vip0', 0))
+            ws.cell(row=current_row, column=8).number_format = '#,##0'
+            current_row += 1
 
         current_row += 1
 
-    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['A'].width = 32
     for col in range(2, 9):
-        ws.column_dimensions[get_column_letter(col)].width = 14
-    for col in range(9, 15):
-        ws.column_dimensions[get_column_letter(col)].width = 16
+        ws.column_dimensions[get_column_letter(col)].width = 15
 
 
 def _create_week_sheet(wb, data, header_fill, header_font, header_align):
@@ -665,26 +652,25 @@ def _create_week_sheet(wb, data, header_fill, header_font, header_align):
 
 
 def _create_week_comparison_sheet(wb, data, header_fill, header_font, header_align):
-    """By Week - All Shops comparison."""
+    """By Week - All Shops comparison. Period = one table, all shops included."""
     ws = wb.create_sheet("By Week - All Shops")
 
-    all_weeks = [w['week_label'] for w in data.get('by_week', [])]
+    all_weeks = [(w['week_sort'], w['week_label']) for w in data.get('by_week', [])]
     sorted_shops = sorted(data['by_shop'], key=lambda x: x['shop_name'])
 
-    # Pre-build lookup: {shop_name: {week_label: w_data}}
     shop_week_map = {
-        shop['shop_name']: {w['week_label']: w for w in shop.get('by_week', [])}
+        shop['shop_name']: {w['week_sort']: w for w in shop.get('by_week', [])}
         for shop in sorted_shops
     }
 
+    headers = ["Shop", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "Total INV", "Total Amount"]
     current_row = 1
 
-    for week_label in all_weeks:
+    for week_sort, week_label in all_weeks:
         ws.cell(row=current_row, column=1, value=f"WEEK: {week_label}").font = Font(bold=True, size=12)
-        ws.merge_cells(f'A{current_row}:M{current_row}')
+        ws.merge_cells(f'A{current_row}:H{current_row}')
         current_row += 1
 
-        headers = ["Shop", "Active", "Returning", "Return Rate", "INV(RET)", "AMT(RET)", "INV(CUS)", "AMT(CUS)", "Total Invoices", "Total Amount"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col_num, value=header)
             cell.fill = header_fill
@@ -692,28 +678,25 @@ def _create_week_comparison_sheet(wb, data, header_fill, header_font, header_ali
         current_row += 1
 
         for shop in sorted_shops:
-            w = shop_week_map[shop['shop_name']].get(week_label)
-            if w and w.get('total_invoices_with_vip0', 0) > 0:
-                ws.cell(row=current_row, column=1, value=shop['shop_name'])
-                ws.cell(row=current_row, column=2, value=w['total_customers'])
-                ws.cell(row=current_row, column=3, value=w['returning_customers'])
-                ws.cell(row=current_row, column=4, value=f"{w['return_rate']}%")
-                ws.cell(row=current_row, column=5, value=w.get('returning_invoices', 0))
-                ws.cell(row=current_row, column=6, value=w.get('returning_amount', 0))
-                ws.cell(row=current_row, column=6).number_format = '#,##0'
-                ws.cell(row=current_row, column=7, value=w['total_invoices'])
-                ws.cell(row=current_row, column=8, value=w['total_amount'])
-                ws.cell(row=current_row, column=8).number_format = '#,##0'
-                ws.cell(row=current_row, column=9, value=w.get('total_invoices_with_vip0', 0))
-                ws.cell(row=current_row, column=10, value=w.get('total_amount_with_vip0', 0))
-                ws.cell(row=current_row, column=10).number_format = '#,##0'
-                current_row += 1
+            w = shop_week_map[shop['shop_name']].get(week_sort, {})
+            ws.cell(row=current_row, column=1, value=shop['shop_name'])
+            ws.cell(row=current_row, column=2, value=w.get('total_customers', 0))
+            ws.cell(row=current_row, column=3, value=w.get('returning_customers', 0))
+            ws.cell(row=current_row, column=4, value=f"{w.get('return_rate', 0)}%")
+            ws.cell(row=current_row, column=5, value=w.get('returning_invoices', 0))
+            ws.cell(row=current_row, column=6, value=w.get('returning_amount', 0))
+            ws.cell(row=current_row, column=6).number_format = '#,##0'
+            ws.cell(row=current_row, column=7, value=w.get('total_invoices_with_vip0', 0))
+            ws.cell(row=current_row, column=7).number_format = '#,##0'
+            ws.cell(row=current_row, column=8, value=w.get('total_amount_with_vip0', 0))
+            ws.cell(row=current_row, column=8).number_format = '#,##0'
+            current_row += 1
 
         current_row += 1
 
-    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['A'].width = 32
     for col in range(2, 9):
-        ws.column_dimensions[get_column_letter(col)].width = 14
+        ws.column_dimensions[get_column_letter(col)].width = 15
     for col in range(9, 15):
         ws.column_dimensions[get_column_letter(col)].width = 16
 
@@ -1676,10 +1659,15 @@ _TAB_SHEETS = {
     "month":      ([_create_month_sheet],                           "By Month"),
     "week":       ([_create_week_sheet],                            "By Week"),
     "shop":       ([_create_shop_sheet, _create_shop_detail_sheet], "By Shop"),
-    "grade_all":  ([_create_grade_comparison_sheet],                "By Grade - All Shops"),
-    "season_all": ([_create_season_comparison_sheet],               "By Season - All Shops"),
-    "month_all":  ([_create_month_comparison_sheet],                "By Month - All Shops"),
-    "week_all":   ([_create_week_comparison_sheet],                 "By Week - All Shops"),
+    "grade_all":      ([_create_grade_comparison_sheet],   "By Grade - All Shops"),
+    "season_all":     ([_create_season_comparison_sheet],  "By Season - All Shops"),
+    "month_all":      ([_create_month_comparison_sheet],   "By Month - All Shops"),
+    "week_all":       ([_create_week_comparison_sheet],    "By Week - All Shops"),
+    # Aliases matching the tab AJAX keys used in templates
+    "grade_allshops":  ([_create_grade_comparison_sheet],  "By Grade - All Shops"),
+    "season_allshops": ([_create_season_comparison_sheet], "By Season - All Shops"),
+    "month_allshops":  ([_create_month_comparison_sheet],  "By Month - All Shops"),
+    "week_allshops":   ([_create_week_comparison_sheet],   "By Week - All Shops"),
 }
 
 
@@ -1857,6 +1845,60 @@ def _build_cnv_breakdown_ws(wb, breakdown, key, title, has_shop, hf, font, align
             ws.column_dimensions[col_letter].width = w
 
 
+def _build_cnv_period_grouped_ws(wb, breakdown, key, title, hf, font, align):
+    """Build period-grouped Registration Breakdown sheet matching UI tab format.
+    Each period = one table block: bold header row + shop-data header + shop rows.
+    breakdown[key] is flat [{label, shop, new_pos_inv, ...}].
+    """
+    ws = wb.create_sheet(title)
+    shop_headers = ["Shop", "POS(INV)", "POS(NO INV)", "POS Total", "POS Only",
+                    "CNV", "CNV Only", "Zalo App", "%App", "Zalo OA", "%OA"]
+    n_cols = len(shop_headers)
+
+    rows = breakdown.get(key) or []
+    # Group by label preserving order
+    from collections import OrderedDict
+    period_map: dict = OrderedDict()
+    for r in rows:
+        lbl = r.get("label", "")
+        period_map.setdefault(lbl, []).append(r)
+
+    current_row = 1
+    for label, shop_rows in period_map.items():
+        # Period header
+        ws.cell(current_row, 1, label).font = Font(bold=True, size=12)
+        if n_cols > 1:
+            ws.merge_cells(f'A{current_row}:{get_column_letter(n_cols)}{current_row}')
+        current_row += 1
+
+        # Column headers
+        for col_num, h in enumerate(shop_headers, 1):
+            c = ws.cell(current_row, col_num, h)
+            c.fill = hf; c.font = font; c.alignment = align
+        current_row += 1
+
+        # Shop data rows
+        for r in shop_rows:
+            ws.cell(current_row, 1,  r.get("shop", ""))
+            ws.cell(current_row, 2,  r.get("new_pos_inv", 0))
+            ws.cell(current_row, 3,  r.get("new_pos_no_inv", 0))
+            ws.cell(current_row, 4,  r.get("new_pos", 0))
+            ws.cell(current_row, 5,  r.get("new_pos_only", 0))
+            ws.cell(current_row, 6,  r.get("new_cnv", 0))
+            ws.cell(current_row, 7,  r.get("new_cnv_only", 0))
+            ws.cell(current_row, 8,  r.get("zalo_app", 0))
+            ws.cell(current_row, 9,  r.get("zalo_app_pct", 0.0))
+            ws.cell(current_row, 10, r.get("zalo_oa", 0))
+            ws.cell(current_row, 11, r.get("zalo_oa_pct", 0.0))
+            current_row += 1
+
+        current_row += 1  # blank row between periods
+
+    ws.column_dimensions['A'].width = 32
+    for col_letter, w in zip("BCDEFGHIJK", [10, 10, 10, 10, 10, 10, 10, 8, 10, 8]):
+        ws.column_dimensions[col_letter].width = w
+
+
 def _build_cnv_shop_grouped_ws(wb, breakdown, key, title, time_col_name, hf, font, align):
     """Build a By-Shop-then-time Registration Breakdown sheet.
     breakdown[key] is a list of {shop, rows: [{label, new_pos_inv, ...}]}.
@@ -1997,6 +2039,10 @@ _CNV_TAB_SHEETS = {
     "bd_season_shop": ["bd_season_shop"],
     "bd_month_shop":  ["bd_month_shop"],
     "bd_week_shop":   ["bd_week_shop"],
+    # Aliases matching template tab AJAX keys — period-grouped format matching UI
+    "bd_season_allshops": ["bd_season_shop_grouped"],
+    "bd_month_allshops":  ["bd_month_shop_grouped"],
+    "bd_week_allshops":   ["bd_week_shop_grouped"],
 }
 
 
@@ -2032,6 +2078,10 @@ def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
         "bd_season_shop": lambda: _build_cnv_breakdown_ws(wb, bd, "season_shop", "By Season - All Shops", True, hf, fnt, aln),
         "bd_month_shop":  lambda: _build_cnv_breakdown_ws(wb, bd, "month_shop",  "By Month - All Shops",  True, hf, fnt, aln),
         "bd_week_shop":   lambda: _build_cnv_breakdown_ws(wb, bd, "week_shop",   "By Week - All Shops",   True, hf, fnt, aln),
+        # Period-grouped format (matching UI tab layout)
+        "bd_season_shop_grouped": lambda: _build_cnv_period_grouped_ws(wb, bd, "season_shop", "By Season - All Shops", hf, fnt, aln),
+        "bd_month_shop_grouped":  lambda: _build_cnv_period_grouped_ws(wb, bd, "month_shop",  "By Month - All Shops",  hf, fnt, aln),
+        "bd_week_shop_grouped":   lambda: _build_cnv_period_grouped_ws(wb, bd, "week_shop",   "By Week - All Shops",   hf, fnt, aln),
         "bd_shop_season": lambda: _build_cnv_shop_grouped_ws(wb, bd, "shop_season", "By Shop - By Season", "Season", hf, fnt, aln),
         "bd_shop_month":  lambda: _build_cnv_shop_grouped_ws(wb, bd, "shop_month",  "By Shop - By Month",  "Month",  hf, fnt, aln),
         "bd_shop_week":   lambda: _build_cnv_shop_grouped_ws(wb, bd, "shop_week",   "By Shop - By Week",   "Week",   hf, fnt, aln),
