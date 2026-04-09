@@ -2244,10 +2244,13 @@ _CHART_DATA_OFFSET = 32
 
 
 def _make_light_gridlines():
-    """Return ChartLines with light gray 0.5pt lines (matches UI subtle gridlines)."""
+    """Return ChartLines with light gray 0.5pt lines (matches UI subtle gridlines).
+    Must use openpyxl.chart.shapes.GraphicalProperties — ChartLines.spPr is typed to that class.
+    Using openpyxl.drawing.connector.GraphicalProperties (wrong type) corrupts y_axis XML
+    and makes BOTH axes go blank in Excel.
+    """
     from openpyxl.chart.axis import ChartLines
-    from openpyxl.drawing.connector import GraphicalProperties
-    from openpyxl.drawing.line import LineProperties
+    from openpyxl.chart.shapes import GraphicalProperties, LineProperties
     gl = ChartLines()
     lp = LineProperties(w=6350)   # 0.5pt in EMU
     lp.solidFill = 'D9D9D9'       # light gray
@@ -2257,17 +2260,23 @@ def _make_light_gridlines():
     return gl
 
 
-def _style_chart_axes(chart, y_num_fmt='General'):
-    """Apply axis label visibility and tick marks — mirrors UI appearance."""
+def _style_chart_axes(chart, y_num_fmt='General', show_legend=True, legend_pos='b'):
+    """Apply axis label visibility, light gridlines, tick marks — mirrors UI appearance.
+    show_legend=False: hide legend (for single-series charts where legend is noise).
+    legend_pos='r':    right legend (for multi-series bar — avoids overlap with x-axis title).
+    legend_pos='b':    bottom legend (for line charts with many series).
+    """
     from openpyxl.chart.legend import Legend
     chart.y_axis.majorGridlines = _make_light_gridlines()
     chart.y_axis.numFmt = y_num_fmt
     chart.y_axis.majorTickMark = 'out'
     chart.y_axis.minorTickMark = 'none'
     chart.x_axis.majorTickMark = 'out'
-    # Legend at bottom so plot area is wider (more room for y-axis labels)
-    chart.legend = Legend()
-    chart.legend.position = 'b'
+    if show_legend:
+        chart.legend = Legend()
+        chart.legend.position = legend_pos
+    else:
+        chart.legend = None
 
 
 def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric,
@@ -2307,16 +2316,20 @@ def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric
     if not periods or not entities:
         return ws
 
-    # LineChart
+    # LineChart — wider when many periods to give x-axis labels room
+    n_periods = len(periods)
     chart = LineChart()
     chart.title = chart_title or sheet_title
     chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
     chart.x_axis.title = x_label
     chart.height = 15
-    chart.width = 28
-    # Light gridlines + axis tick labels matching UI
+    chart.width = 36 if n_periods > 24 else 28
     y_fmt = '0%' if _is_pct_metric(metric) else 'General'
-    _style_chart_axes(chart, y_num_fmt=y_fmt)
+    # Line charts have multiple series → legend at bottom
+    _style_chart_axes(chart, y_num_fmt=y_fmt, show_legend=True, legend_pos='b')
+    # Skip x-axis labels when too many categories to avoid cramping
+    if n_periods > 24:
+        chart.x_axis.tickLblSkip = max(2, n_periods // 12)
 
     cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
     for ci, _ in enumerate(entities, 2):
@@ -2403,16 +2416,27 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
     if not periods:
         return ws
 
+    n_periods = len(periods)
     chart = BarChart()
     chart.type = 'col'
     chart.grouping = 'clustered'
     chart.title = chart_title or sheet_title
     chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
-    chart.x_axis.title = x_label
+    # x_axis title only when periods are few enough to not conflict with legend
+    if n_periods <= 24:
+        chart.x_axis.title = x_label
     chart.height = 15
-    chart.width = 28
+    chart.width = 36 if n_periods > 24 else 28
     y_fmt = '0%' if _is_pct_metric(metric) else 'General'
-    _style_chart_axes(chart, y_num_fmt=y_fmt)
+    if multi_series:
+        # Multi-series (YOY): legend at right — avoids overlap with x-axis title/labels
+        _style_chart_axes(chart, y_num_fmt=y_fmt, show_legend=True, legend_pos='r')
+    else:
+        # Single series: no legend (it would just repeat the metric name or all category names)
+        _style_chart_axes(chart, y_num_fmt=y_fmt, show_legend=False)
+    # Skip x-axis tick labels when too many categories
+    if n_periods > 24:
+        chart.x_axis.tickLblSkip = max(2, n_periods // 12)
 
     cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
     for ci in range(2, 2 + num_series):
@@ -2428,7 +2452,7 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
             ser.graphicalProperties.solidFill = color
             ser.graphicalProperties.line.solidFill = color
     else:
-        # Single series (Period Totals): use first palette color uniformly — matches UI solid bar
+        # Single series (Period Totals): uniform color — matches UI solid bar style
         ser = chart.series[0]
         ser.graphicalProperties.solidFill = _UI_PALETTE[0]
         ser.graphicalProperties.line.solidFill = _UI_PALETTE[0]
