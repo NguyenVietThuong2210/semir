@@ -19,7 +19,7 @@ from django.db.models import Count, Q
 
 from App.models import Customer, SalesTransaction
 from .calculations import calculate_return_visits
-from .customer_utils import get_customer_info, build_customer_purchase_map, normalize_grade, _norm_vid
+from .customer_utils import get_customer_info, build_customer_purchase_map, normalize_grade, _norm_vid, count_new_members_with_invoice
 from .season_utils import (
     get_session_for_range, session_sort_key, month_sort_key,
     year_sort_key, week_sort_key,
@@ -183,7 +183,7 @@ def get_sales_tab(tab: str, date_from=None, date_to=None, shop_group=None) -> di
         return None
 
     if tab == 'grade':
-        return _sales_grade_with_overview(cp, ci, date_stats, date_from, date_to, shop_group)
+        return _sales_grade_with_overview(cp, ci, date_stats, date_from, date_to)
 
     if tab == 'season':
         return {'by_session': aggregate_by_season(cp, ci)}
@@ -226,7 +226,7 @@ def get_sales_tab(tab: str, date_from=None, date_to=None, shop_group=None) -> di
     raise ValueError(f"Unknown sales tab: {tab!r}")
 
 
-def _sales_grade_with_overview(customer_purchases, get_ci, date_stats, date_from, date_to, shop_group):
+def _sales_grade_with_overview(customer_purchases, get_ci, date_stats, date_from, date_to):
     """
     Compute grade tab data PLUS all overview metrics needed for the initial page render.
     Runs overview metrics and grade aggregation in one pass through customer_purchases.
@@ -255,7 +255,6 @@ def _sales_grade_with_overview(customer_purchases, get_ci, date_stats, date_from
 
     # Single-pass: build customer_details + accumulate overview metrics
     returning_customers = set()
-    new_members_count = 0
     customer_details = []
     total_amount_period = Decimal(0)
     returning_invoices = 0
@@ -278,8 +277,6 @@ def _sales_grade_with_overview(customer_purchases, get_ci, date_stats, date_from
             returning_customers.add(vip_id)
             returning_invoices += n
             returning_amount += amt
-        if reg_date and period_lo <= reg_date <= period_hi:
-            new_members_count += 1
         customer_details.append({
             'vip_id': vip_id,
             'name': name,
@@ -290,6 +287,8 @@ def _sales_grade_with_overview(customer_purchases, get_ci, date_stats, date_from
             'return_visits': rc,
             'total_spent': float(amt),
         })
+
+    new_members_count = count_new_members_with_invoice(customer_purchases, get_ci, period_lo, period_hi)
 
     total_active = len(customer_details)
     total_returning = len(returning_customers)

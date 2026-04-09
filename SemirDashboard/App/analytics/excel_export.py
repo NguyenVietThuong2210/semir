@@ -2104,4 +2104,613 @@ def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
             ws["A1"] = line
             ws["A1"].font = Font(italic=True, color="888888", size=9)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CHART PAGE EXCEL EXPORTS  (Option A: JS reads UI state → server generates)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
+_SALES_METRIC_LABEL = {
+    'total_customers': 'Active Customers',
+    'returning_customers': 'Returning Customers',
+    'return_rate': 'Return Rate (%)',
+    'returning_invoices': 'INV(RET)',
+    'total_invoices': 'INV(CUS)',
+    'total_invoices_with_vip0': 'Total Invoices',
+    'returning_amount': 'AMT(RET)',
+    'total_amount': 'AMT(CUS)',
+    'total_amount_with_vip0': 'Total Amount',
+}
+_CUSTOMER_METRIC_LABEL = {
+    'new_pos_inv': 'NEW POS (INV)', 'new_pos_no_inv': 'NEW POS (NO INV)',
+    'new_pos': 'NEW POS (TOTAL)', 'new_pos_only': 'POS ONLY',
+    'new_cnv': 'NEW CNV', 'new_cnv_only': 'CNV ONLY',
+    'zalo_app': 'ZALO APP', 'zalo_app_pct': '% APP/CNV',
+    'zalo_oa': 'ZALO OA', 'zalo_oa_pct': '% OA/CNV',
+}
+_COUPON_METRIC_LABEL = {
+    'used': 'Used Coupons', 'pct_of_used': '% Used / Used All',
+    'coupon_amount': 'Coupon Amount (VND)', 'unique_amount': 'Total Amount Unique (VND)',
+}
+_ALL_METRIC_LABELS = {**_SALES_METRIC_LABEL, **_CUSTOMER_METRIC_LABEL, **_COUPON_METRIC_LABEL}
+
+# Sales: map xaxis name → (by_shop sub-key, period label key in each entry)
+_SALES_AXIS = {
+    'season': ('by_session', 'session'),
+    'month':  ('by_month',   'month'),
+    'week':   ('by_week',    'week'),
+    'year':   ('by_year',    'year'),
+}
+# Customer: shop_stats[shop_name] keys and period label keys
+_CUSTOMER_AXIS = {
+    'season': ('season', 'label'),
+    'month':  ('month',  'month'),
+    'week':   ('week',   'week'),
+}
+# Coupon trend shop/camp series: xaxis → key in shop_series/camp_series
+_COUPON_AXIS_LABEL = {
+    'season': 'season', 'month': 'month', 'week': 'week', 'year': 'year',
+}
+
+
+def _is_pct_metric(metric):
+    return 'rate' in metric or 'pct' in metric
+
+
+def _is_amount_metric(metric):
+    return 'amount' in metric
+
+
+def _fmt_metric(metric):
+    """Format a cell value: percentages as float (0..1), amounts as #,##0."""
+    if _is_pct_metric(metric):
+        return ('pct', '0.0%')
+    if _is_amount_metric(metric):
+        return ('num', '#,##0')
+    return ('int', '0')
+
+
+def _build_sales_shop_map(data, xaxis, metric, selected_shops):
+    """
+    Returns (ordered_periods, {shop_name: {period_key: value}}).
+    selected_shops: list of shop names; empty = all shops.
+    """
+    axis_key, period_lbl_key = _SALES_AXIS.get(xaxis, _SALES_AXIS['month'])
+    result = {}
+    all_periods = None
+
+    for shop_entry in data.get('by_shop', []):
+        sname = shop_entry['shop_name']
+        if selected_shops and sname not in selected_shops:
+            continue
+        period_list = shop_entry.get(axis_key, [])
+        if all_periods is None:
+            all_periods = [e[period_lbl_key] for e in period_list]
+        # return_rate is stored 0-100 from backend; convert to fraction for Excel %
+        def _v(e):
+            v = e.get(metric, 0) or 0
+            return v / 100 if _is_pct_metric(metric) and v > 1 else v
+        result[sname] = {e[period_lbl_key]: _v(e) for e in period_list}
+
+    if all_periods is None:
+        # fallback: periods from aggregate data
+        agg_key = axis_key  # same key name in data top level
+        all_periods = [e[period_lbl_key] for e in data.get(agg_key, [])]
+
+    return all_periods or [], result
+
+
+def _extract_year_period(full_period, xaxis):
+    """Returns (year_str, period_within_year_str)."""
+    s = str(full_period)
+    if xaxis == 'month' and len(s) >= 7 and s[4] == '-':
+        return s[:4], s[5:]
+    if xaxis == 'week' and '-' in s:
+        parts = s.split('-', 1)
+        return parts[0], parts[1]
+    if xaxis == 'season' and s and s[-4:].isdigit():
+        return s[-4:], s[:-5].strip() if len(s) > 4 else s
+    return s, s
+
+
+def _build_yoy_data(shop_map, periods, xaxis, metric):
+    """
+    Group summed values by year.
+    Returns (period_within_year_list, year_list, {year: {period_within: value}}).
+    """
+    year_period_map = {}
+    for full_period in periods:
+        value = sum(sm.get(full_period, 0) for sm in shop_map.values())
+        year_str, within = _extract_year_period(full_period, xaxis)
+        if year_str not in year_period_map:
+            year_period_map[year_str] = {}
+        year_period_map[year_str][within] = year_period_map[year_str].get(within, 0) + value
+
+    years = sorted(year_period_map.keys())
+    all_within = sorted(set(p for y in year_period_map.values() for p in y.keys()))
+    return all_within, years, year_period_map
+
+
+def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric,
+                             x_label='Period', chart_title=''):
+    """
+    Write a sheet with:
+      Col A: period labels
+      Col B..N: one col per shop/entity, header = name
+      Below data: LineChart
+    """
+    from openpyxl.chart import LineChart, Reference
+
+    ws = wb.create_sheet(title=sheet_title[:31])
+    entities = list(shop_or_entity_map.keys())
+    fmt_type, num_fmt = _fmt_metric(metric)
+
+    # Header row
+    ws.cell(row=1, column=1, value=x_label).font = XL_HDR_FONT
+    ws.cell(row=1, column=1).fill = XL_HDR_FILL
+    ws.cell(row=1, column=1).alignment = XL_HDR_ALIGN
+    for ci, name in enumerate(entities, 2):
+        c = ws.cell(row=1, column=ci, value=name)
+        c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
+
+    # Data rows
+    data_start = 2
+    for ri, period in enumerate(periods, data_start):
+        ws.cell(row=ri, column=1, value=str(period))
+        for ci, name in enumerate(entities, 2):
+            v = shop_or_entity_map[name].get(period, 0)
+            c = ws.cell(row=ri, column=ci, value=v)
+            c.number_format = num_fmt
+
+    data_end = data_start + len(periods) - 1
+    if not periods or not entities:
+        return ws
+
+    # LineChart
+    chart = LineChart()
+    chart.title = chart_title or sheet_title
+    chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
+    chart.x_axis.title = x_label
+    chart.height = 15; chart.width = 28
+
+    cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
+    for ci, _ in enumerate(entities, 2):
+        ser_ref = Reference(ws, min_col=ci, min_row=1, max_row=data_end)
+        chart.add_data(ser_ref, titles_from_data=True)
+    chart.set_categories(cats)
+
+    for ser in chart.series:
+        ser.smooth = False
+
+    ws.add_chart(chart, f"A{data_end + 3}")
+
+    # Column widths
+    ws.column_dimensions['A'].width = 18
+    for ci in range(2, 2 + len(entities)):
+        ws.column_dimensions[get_column_letter(ci)].width = 16
+
+    return ws
+
+
+def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
+                            x_label='Period', chart_title=''):
+    """
+    Bar chart sheet.
+    data_map: {series_name: {period: value}} → grouped (multi-series, e.g. YOY)
+           or {period: value}               → single-series (e.g. Period Totals)
+    """
+    from openpyxl.chart import BarChart, Reference
+
+    ws = wb.create_sheet(title=sheet_title[:31])
+    fmt_type, num_fmt = _fmt_metric(metric)
+
+    if not isinstance(data_map, dict):
+        return ws
+
+    # Detect if multi-series or single-series
+    first_val = next(iter(data_map.values()), None)
+    multi_series = isinstance(first_val, dict)
+
+    if multi_series:
+        series_names = list(data_map.keys())
+        # Header: Period | Series1 | Series2 | ...
+        ws.cell(row=1, column=1, value=x_label).font = XL_HDR_FONT
+        ws.cell(row=1, column=1).fill = XL_HDR_FILL
+        ws.cell(row=1, column=1).alignment = XL_HDR_ALIGN
+        for ci, sname in enumerate(series_names, 2):
+            c = ws.cell(row=1, column=ci, value=sname)
+            c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
+
+        data_start = 2
+        for ri, period in enumerate(periods, data_start):
+            ws.cell(row=ri, column=1, value=str(period))
+            for ci, sname in enumerate(series_names, 2):
+                v = data_map[sname].get(period, 0)
+                c = ws.cell(row=ri, column=ci, value=v)
+                c.number_format = num_fmt
+        data_end = data_start + len(periods) - 1
+        num_series = len(series_names)
+    else:
+        # Single series: {period: value}
+        series_names = None
+        ws.cell(row=1, column=1, value=x_label).font = XL_HDR_FONT
+        ws.cell(row=1, column=1).fill = XL_HDR_FILL
+        ws.cell(row=1, column=1).alignment = XL_HDR_ALIGN
+        metric_lbl = _ALL_METRIC_LABELS.get(metric, metric)
+        c = ws.cell(row=1, column=2, value=metric_lbl)
+        c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
+
+        data_start = 2
+        for ri, period in enumerate(periods, data_start):
+            ws.cell(row=ri, column=1, value=str(period))
+            v = data_map.get(period, 0)
+            c = ws.cell(row=ri, column=2, value=v)
+            c.number_format = num_fmt
+        data_end = data_start + len(periods) - 1
+        num_series = 1
+
+    if not periods:
+        return ws
+
+    chart = BarChart()
+    chart.type = 'col'
+    chart.grouping = 'clustered'
+    chart.title = chart_title or sheet_title
+    metric_lbl = _SALES_METRIC_LABEL.get(metric, _CUSTOMER_METRIC_LABEL.get(metric, _COUPON_METRIC_LABEL.get(metric, metric)))
+    chart.y_axis.title = metric_lbl
+    chart.x_axis.title = x_label
+    chart.height = 15; chart.width = 28
+
+    cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
+    for ci in range(2, 2 + num_series):
+        ser_ref = Reference(ws, min_col=ci, min_row=1, max_row=data_end)
+        chart.add_data(ser_ref, titles_from_data=True)
+    chart.set_categories(cats)
+
+    ws.add_chart(chart, f"A{data_end + 3}")
+    ws.column_dimensions['A'].width = 18
+    for ci in range(2, 2 + num_series):
+        ws.column_dimensions[get_column_letter(ci)].width = 16
+
+    return ws
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sales Chart Excel Export
+# ─────────────────────────────────────────────────────────────────────────────
+
+def export_sales_chart_to_excel(
+    data, date_from=None, date_to=None, shop_group=None,
+    trend_xaxis='month', trend_metric='return_rate', trend_shops=None,
+    bar_xaxis='month', bar_metric='total_customers', bar_shops=None,
+    yoy_xaxis='month', yoy_metric='total_customers', yoy_shops=None,
+):
+    """
+    Build Excel workbook for the Sales Analytics Chart page.
+
+    Sheet 1 — Overview: summary metrics
+    Sheet 2 — Shop Trends: LineChart (one series per shop), metric & xaxis from UI
+    Sheet 3 — Period Totals: BarChart (total across selected shops per period)
+    Sheet 4 — Year-over-Year: BarChart (one series per year, sum of selected shops)
+    """
+    wb = Workbook()
+
+    # ── Overview sheet ────────────────────────────────────────────────────────
+    ws_ov = wb.active
+    ws_ov.title = "Overview"
+    ws_ov["A1"] = "Sales Analytics Chart — Overview"
+    ws_ov["A1"].font = XL_TITLE_FONT
+
+    row = 2
+    if date_from and date_to:
+        ws_ov[f"A{row}"] = "Period:"
+        ws_ov[f"B{row}"] = f"{date_from} → {date_to}"
+        ws_ov[f"B{row}"].font = Font(bold=True, color="0066CC")
+        row += 1
+    if shop_group:
+        ws_ov[f"A{row}"] = "Shop Group:"
+        ws_ov[f"B{row}"] = shop_group
+        ws_ov[f"B{row}"].font = Font(bold=True, color="0066CC")
+        row += 1
+    row += 1
+
+    ov = data.get("overview", {})
+    xl_write_header(ws_ov, ["Metric", "Value"], row=row)
+    row += 1
+    for label, value in [
+        ("Active Customers (Period)", ov.get("active_customers", 0)),
+        ("Returning Customers (Period)", ov.get("returning_customers", 0)),
+        ("Return Rate (Period %)", ov.get("return_rate", 0)),
+        ("Return Rate All-Time (%)", ov.get("return_rate_all_time", 0)),
+        ("New Members in Period", ov.get("new_members_in_period", 0)),
+        ("Total Customers in DB", ov.get("total_customers_in_db", 0)),
+        ("Member Active All Time", ov.get("member_active_all_time", 0)),
+        (None, None),
+        ("Total Invoices (excl. VIP0)", ov.get("total_invoices_without_vip0", 0)),
+        ("Total Amount (excl. VIP0)", ov.get("total_amount_without_vip0", ov.get("total_amount_period", 0))),
+        ("Total Invoices (incl. VIP0)", ov.get("total_invoices_with_vip0", 0)),
+        ("Total Amount (incl. VIP0)", ov.get("total_amount_with_vip0", 0)),
+    ]:
+        if label is None:
+            row += 1
+            continue
+        ws_ov.cell(row=row, column=1, value=label)
+        c = ws_ov.cell(row=row, column=2, value=value)
+        if "Amount" in label:
+            c.number_format = "#,##0"
+        row += 1
+    ws_ov.column_dimensions["A"].width = 38
+    ws_ov.column_dimensions["B"].width = 20
+
+    # ── Section 2: Shop Trends (Line chart) ───────────────────────────────────
+    trend_periods, trend_shop_map = _build_sales_shop_map(data, trend_xaxis, trend_metric, trend_shops or [])
+    metric_lbl = _SALES_METRIC_LABEL.get(trend_metric, trend_metric)
+    _write_line_chart_sheet(
+        wb, "Shop Trends", trend_periods, trend_shop_map, trend_metric,
+        x_label=trend_xaxis.capitalize(),
+        chart_title=f"Shop Trends — {metric_lbl} by {trend_xaxis.capitalize()}",
+    )
+
+    # ── Section 3: Period Totals (Bar chart) ──────────────────────────────────
+    bar_periods, bar_shop_map = _build_sales_shop_map(data, bar_xaxis, bar_metric, bar_shops or [])
+    _, bar_num_fmt = _fmt_metric(bar_metric)
+    bar_totals = {p: sum(sm.get(p, 0) for sm in bar_shop_map.values()) for p in bar_periods}
+    metric_lbl2 = _SALES_METRIC_LABEL.get(bar_metric, bar_metric)
+    _write_bar_chart_sheet(
+        wb, "Period Totals", bar_periods, bar_totals, bar_metric,
+        x_label=bar_xaxis.capitalize(),
+        chart_title=f"Period Totals — {metric_lbl2} by {bar_xaxis.capitalize()}",
+    )
+
+    # ── Section 4: Year-over-Year (Bar chart) ─────────────────────────────────
+    yoy_periods, yoy_shop_map = _build_sales_shop_map(data, yoy_xaxis, yoy_metric, yoy_shops or [])
+    within_periods, years, yoy_year_map = _build_yoy_data(yoy_shop_map, yoy_periods, yoy_xaxis, yoy_metric)
+    metric_lbl3 = _SALES_METRIC_LABEL.get(yoy_metric, yoy_metric)
+    _write_bar_chart_sheet(
+        wb, "Year-over-Year", within_periods, yoy_year_map, yoy_metric,
+        x_label=f"Period ({yoy_xaxis})",
+        chart_title=f"Year-over-Year — {metric_lbl3}",
+    )
+
+    return wb
+
+
+def export_customer_chart_to_excel(
+    data, start_date="", end_date="",
+    trend_xaxis='month', trend_metric='new_pos', trend_shops=None,
+    bar_xaxis='month', bar_metric='new_pos', bar_shops=None,
+    yoy_xaxis='month', yoy_metric='new_pos',
+):
+    """
+    Build Excel workbook for the Customer Analytics Chart page (CNV).
+
+    Sheet 1 — Overview: summary metrics
+    Sheet 2 — Shop Trends: LineChart (one series per shop), metric & xaxis from UI
+    Sheet 3 — Period Totals: BarChart (total across selected shops per period)
+    Sheet 4 — Year-over-Year: BarChart (one series per year, all-time data)
+    """
+    wb = Workbook()
+
+    # ── Overview sheet ────────────────────────────────────────────────────────
+    ws_ov = wb.active
+    ws_ov.title = "Overview"
+    ws_ov["A1"] = "Customer Analytics Chart — Overview"
+    ws_ov["A1"].font = XL_TITLE_FONT
+
+    row = 2
+    if start_date and end_date:
+        ws_ov[f"A{row}"] = "Period:"
+        ws_ov[f"B{row}"] = f"{start_date} → {end_date}"
+        ws_ov[f"B{row}"].font = Font(bold=True, color="0066CC")
+        row += 1
+    row += 1
+
+    ov = data.get("overview", {})
+    xl_write_header(ws_ov, ["Metric", "Value"], row=row)
+    row += 1
+    for label, value in [
+        ("Total CNV Customers", ov.get("total_cnv", 0)),
+        ("Total POS Customers", ov.get("total_pos", 0)),
+        ("Active Zalo (Mini App)", ov.get("active_zalo", 0)),
+        ("Follow OA", ov.get("follow_oa", 0)),
+        ("CNV Only", ov.get("cnv_only", 0)),
+        ("POS Only", ov.get("pos_only", 0)),
+    ]:
+        ws_ov.cell(row=row, column=1, value=label)
+        ws_ov.cell(row=row, column=2, value=value)
+        row += 1
+    ws_ov.column_dimensions["A"].width = 35
+    ws_ov.column_dimensions["B"].width = 20
+
+    # Helper: build {shop_name: {period: value}} from shop_stats
+    shop_stats = data.get("shop_stats", {})
+
+    def _cust_shop_map(xaxis, metric, selected_shops):
+        axis_key, period_key = _CUSTOMER_AXIS.get(xaxis, ('month', 'month'))
+        result = {}
+        for sname, sdata in shop_stats.items():
+            if selected_shops and sname not in selected_shops:
+                continue
+            period_list = sdata.get(axis_key, [])
+            def _v(e):
+                v = e.get(metric, 0) or 0
+                return v / 100 if _is_pct_metric(metric) and v > 1 else v
+            result[sname] = {e[period_key]: _v(e) for e in period_list}
+        return result
+
+    def _cust_periods(xaxis, selected_shops):
+        axis_key, period_key = _CUSTOMER_AXIS.get(xaxis, ('month', 'month'))
+        # Get from first matching shop
+        for sname, sdata in shop_stats.items():
+            if selected_shops and sname not in selected_shops:
+                continue
+            return [e[period_key] for e in sdata.get(axis_key, [])]
+        # Fallback from aggregate stats key
+        agg_key = {'season': 'season_stats', 'month': 'month_stats', 'week': 'week_stats'}.get(xaxis, 'month_stats')
+        pk = {'season': 'label', 'month': 'month', 'week': 'week'}.get(xaxis, 'month')
+        return [e[pk] for e in data.get(agg_key, [])]
+
+    # ── Section 2: Shop Trends (Line chart) ───────────────────────────────────
+    t_shops_sel = trend_shops or []
+    trend_periods = _cust_periods(trend_xaxis, t_shops_sel)
+    trend_shop_map = _cust_shop_map(trend_xaxis, trend_metric, t_shops_sel)
+    metric_lbl = _CUSTOMER_METRIC_LABEL.get(trend_metric, trend_metric)
+    _write_line_chart_sheet(
+        wb, "Shop Trends", trend_periods, trend_shop_map, trend_metric,
+        x_label=trend_xaxis.capitalize(),
+        chart_title=f"Shop Trends — {metric_lbl} by {trend_xaxis.capitalize()}",
+    )
+
+    # ── Section 3: Period Totals (Bar chart) ──────────────────────────────────
+    b_shops_sel = bar_shops or []
+    bar_periods = _cust_periods(bar_xaxis, b_shops_sel)
+    bar_shop_map = _cust_shop_map(bar_xaxis, bar_metric, b_shops_sel)
+    bar_totals = {p: sum(sm.get(p, 0) for sm in bar_shop_map.values()) for p in bar_periods}
+    metric_lbl2 = _CUSTOMER_METRIC_LABEL.get(bar_metric, bar_metric)
+    _write_bar_chart_sheet(
+        wb, "Period Totals", bar_periods, bar_totals, bar_metric,
+        x_label=bar_xaxis.capitalize(),
+        chart_title=f"Period Totals — {metric_lbl2} by {bar_xaxis.capitalize()}",
+    )
+
+    # ── Section 4: Year-over-Year (Bar chart, all-time data) ──────────────────
+    # Use all_month_stats / all_season_stats / all_week_stats (all-time, no period filter)
+    yoy_all_key = {'season': 'all_season_stats', 'month': 'all_month_stats', 'week': 'all_week_stats'}.get(yoy_xaxis, 'all_month_stats')
+    yoy_pk = {'season': 'label', 'month': 'month', 'week': 'week'}.get(yoy_xaxis, 'month')
+    yoy_all_periods = [e[yoy_pk] for e in data.get(yoy_all_key, [])]
+
+    def _v_yoy(e):
+        v = e.get(yoy_metric, 0) or 0
+        return v / 100 if _is_pct_metric(yoy_metric) and v > 1 else v
+
+    yoy_agg_map = {e[yoy_pk]: _v_yoy(e) for e in data.get(yoy_all_key, [])}
+    # Group by year
+    yoy_within_periods, yoy_years, yoy_year_map = _build_yoy_data(
+        {'__agg__': yoy_agg_map}, yoy_all_periods, yoy_xaxis, yoy_metric
+    )
+    metric_lbl3 = _CUSTOMER_METRIC_LABEL.get(yoy_metric, yoy_metric)
+    _write_bar_chart_sheet(
+        wb, "Year-over-Year", yoy_within_periods, yoy_year_map, yoy_metric,
+        x_label=f"Period ({yoy_xaxis})",
+        chart_title=f"Year-over-Year — {metric_lbl3} (All Time)",
+    )
+
+    return wb
+
+
+def export_coupon_chart_to_excel(
+    summary, trend, date_from=None, date_to=None,
+    coupon_id_prefix=None, shop_group=None,
+    shop_xaxis='month', shop_metric='used', shop_shops=None,
+    camp_xaxis='month', camp_metric='used', camp_campaigns=None,
+):
+    """
+    Build Excel workbook for the Coupon Analytics Chart page.
+
+    Sheet 1 — Overview: all_time + period summary metrics
+    Sheet 2 — Shop Trends: LineChart (one series per shop), metric & xaxis from UI
+    Sheet 3 — Campaign Trends: LineChart (one series per campaign)
+
+    summary: result of get_coupon_summary() → {all_time: {...}, period: {...}}
+    trend:   result of calculate_coupon_trend_data() → {time_labels, shops, shop_series, camp_series, ...}
+    """
+    wb = Workbook()
+
+    # ── Overview sheet ────────────────────────────────────────────────────────
+    ws_ov = wb.active
+    ws_ov.title = "Overview"
+    ws_ov["A1"] = "Coupon Analytics Chart — Overview"
+    ws_ov["A1"].font = XL_TITLE_FONT
+
+    row = 2
+    if date_from and date_to:
+        ws_ov[f"A{row}"] = "Period:"
+        ws_ov[f"B{row}"] = f"{date_from} → {date_to}"
+        ws_ov[f"B{row}"].font = Font(bold=True, color="0066CC")
+        row += 1
+    if coupon_id_prefix:
+        ws_ov[f"A{row}"] = "Coupon Prefix:"
+        ws_ov[f"B{row}"] = coupon_id_prefix
+        ws_ov[f"B{row}"].font = Font(bold=True, color="0066CC")
+        row += 1
+    if shop_group:
+        ws_ov[f"A{row}"] = "Shop Group:"
+        ws_ov[f"B{row}"] = shop_group
+        ws_ov[f"B{row}"].font = Font(bold=True, color="0066CC")
+        row += 1
+    row += 1
+
+    xl_write_header(ws_ov, ["Metric", "Value"], row=row)
+    row += 1
+    for section_label, section_key in [("All-Time", "all_time"), ("Period", "period")]:
+        sec = summary.get(section_key, {})
+        ws_ov.cell(row=row, column=1, value=f"── {section_label} ──")
+        ws_ov.cell(row=row, column=1).font = Font(bold=True)
+        row += 1
+        for label, key, fmt in [
+            ("Total Coupons", "total", "0"),
+            ("Used Count", "used_count", "0"),
+            ("Unused", "unused", "0"),
+            ("Usage Rate (%)", "usage_rate", "0.00"),
+            ("Total Coupon Amount", "total_coupon_amount", "#,##0"),
+            ("Total Invoice Amount", "total_invoice_amount", "#,##0"),
+        ]:
+            ws_ov.cell(row=row, column=1, value=label)
+            c = ws_ov.cell(row=row, column=2, value=sec.get(key, 0))
+            c.number_format = fmt
+            row += 1
+        row += 1
+    ws_ov.column_dimensions["A"].width = 35
+    ws_ov.column_dimensions["B"].width = 20
+
+    # ── Helper: build {entity_name: {period: value}} from trend series ────────
+    def _build_entity_map(series_dict, xaxis, metric, selected_entities):
+        """
+        series_dict: {entity_name: {period_key: {metric: value, ...}}}
+        Returns (periods_list, {entity_name: {period: value}})
+        """
+        axis_key = _COUPON_AXIS_LABEL.get(xaxis, 'month')
+        entity_series = series_dict.get(axis_key, {})
+        time_labels = trend.get("time_labels", {}).get(axis_key, [])
+
+        result = {}
+        for ename, period_map in entity_series.items():
+            if selected_entities and ename not in selected_entities:
+                continue
+            entry = {}
+            for pk in time_labels:
+                pk_str = str(pk)
+                row_data = period_map.get(pk_str, period_map.get(pk, {}))
+                v = row_data.get(metric, 0) or 0
+                if _is_pct_metric(metric) and v > 1:
+                    v /= 100
+                entry[pk_str] = v
+            result[ename] = entry
+
+        periods_str = [str(p) for p in time_labels]
+        return periods_str, result
+
+    # ── Section 2: Shop Trends (Line chart) ───────────────────────────────────
+    shop_periods, shop_entity_map = _build_entity_map(
+        trend.get("shop_series", {}), shop_xaxis, shop_metric, shop_shops or []
+    )
+    metric_lbl = _COUPON_METRIC_LABEL.get(shop_metric, shop_metric)
+    _write_line_chart_sheet(
+        wb, "Shop Trends", shop_periods, shop_entity_map, shop_metric,
+        x_label=shop_xaxis.capitalize(),
+        chart_title=f"Shop Trends — {metric_lbl} by {shop_xaxis.capitalize()}",
+    )
+
+    # ── Section 3: Campaign Trends (Line chart) ───────────────────────────────
+    camp_periods, camp_entity_map = _build_entity_map(
+        trend.get("camp_series", {}), camp_xaxis, camp_metric, camp_campaigns or []
+    )
+    metric_lbl2 = _COUPON_METRIC_LABEL.get(camp_metric, camp_metric)
+    _write_line_chart_sheet(
+        wb, "Campaign Trends", camp_periods, camp_entity_map, camp_metric,
+        x_label=camp_xaxis.capitalize(),
+        chart_title=f"Campaign Trends — {metric_lbl2} by {camp_xaxis.capitalize()}",
+    )
+
     return wb

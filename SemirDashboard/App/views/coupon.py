@@ -11,10 +11,12 @@ from App.permissions import requires_perm
 from App.analytics.coupon_analytics import (
     calculate_coupon_analytics,
     get_coupon_summary,
+    calculate_coupon_trend_data,
     export_coupon_to_excel,
     export_coupon_tab_to_excel,
     _COUPON_TAB_SHEETS,
 )
+from App.analytics.excel_export import export_coupon_chart_to_excel
 from App.analytics.tab_functions import get_coupon_tab, COUPON_TABS
 from App.models import CouponCampaign
 from App.views.view_utils import parse_date, filter_params_str
@@ -313,3 +315,57 @@ def manage_campaigns(request):
         return JsonResponse({"error": "Unknown action"}, status=400)
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
+
+
+@requires_perm("download_coupon_chart_excel")
+def export_coupon_chart_excel(request):
+    """Export Coupon Analytics Chart data to Excel workbook matching current UI state."""
+    start_date = request.GET.get("start_date", "")
+    end_date = request.GET.get("end_date", "")
+    coupon_id_prefix = request.GET.get("coupon_id_prefix", "").strip()
+    shop_group = request.GET.get("shop_group", "").strip()
+
+    date_from = parse_date(start_date, "start date", request)
+    date_to = parse_date(end_date, "end date", request)
+
+    logger.info(
+        "export_coupon_chart_excel: from=%s to=%s prefix=%s shop_group=%s user=%s",
+        date_from, date_to, coupon_id_prefix, shop_group, request.user,
+    )
+
+    def _shops(key):
+        return [s for s in request.GET.get(key, "").split(",") if s.strip()]
+
+    shop_xaxis    = request.GET.get("shop_xaxis", "month")
+    shop_metric   = request.GET.get("shop_metric", "used")
+    shop_shops    = _shops("shop_shops")
+    camp_xaxis    = request.GET.get("camp_xaxis", "month")
+    camp_metric   = request.GET.get("camp_metric", "used")
+    camp_campaigns = _shops("camp_campaigns")
+
+    summary = get_coupon_summary(
+        date_from=date_from, date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix or None,
+        shop_group=shop_group or None,
+    )
+    trend = calculate_coupon_trend_data(date_from, date_to, shop_group or None, coupon_id_prefix or None)
+
+    wb = export_coupon_chart_to_excel(
+        summary, trend,
+        date_from=date_from, date_to=date_to,
+        coupon_id_prefix=coupon_id_prefix or None,
+        shop_group=shop_group or None,
+        shop_xaxis=shop_xaxis, shop_metric=shop_metric, shop_shops=shop_shops,
+        camp_xaxis=camp_xaxis, camp_metric=camp_metric, camp_campaigns=camp_campaigns,
+    )
+
+    ts = datetime.now().strftime('%H%M%S')
+    period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
+    fn = f"coupon_chart_{period}_{ts}.xlsx"
+
+    resp = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{fn}"'
+    wb.save(resp)
+    return resp

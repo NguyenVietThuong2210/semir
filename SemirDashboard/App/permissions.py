@@ -13,15 +13,15 @@ PERMISSION_DEFS = [
     ("page_cnv_sync", "CNV Sync Status", "Pages"),
     ("page_cnv_comparison", "Customer Analytics", "Pages"),
     ("download_analytics", "Export Analytics (Excel)", "Downloads"),
-    ("download_chart_pdf", "Download Charts PDF", "Downloads"),
+    ("download_chart_excel", "Download Sales Charts Excel", "Downloads"),
     ("download_coupons", "Export Coupons (Excel)", "Downloads"),
-    ("download_coupon_chart_pdf", "Download Coupon Charts PDF", "Downloads"),
+    ("download_coupon_chart_excel", "Download Coupon Charts Excel", "Downloads"),
     ("download_cnv", "Export CNV Comparison (Excel)", "Downloads"),
     ("manage_users", "User Management", "Admin"),
     ("manage_campaigns", "Manage Coupon Campaigns", "Admin"),
     ("page_coupon_chart", "Coupon Analytics Charts", "Pages"),
     ("page_customer_chart", "Customer Analytics Charts", "Pages"),
-    ("download_customer_chart_pdf", "Download Customer Charts PDF", "Downloads"),
+    ("download_customer_chart_excel", "Download Customer Charts Excel", "Downloads"),
 ]
 
 ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]

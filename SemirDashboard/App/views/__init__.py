@@ -1,7 +1,7 @@
 from .home import home, formulas_page
 from .upload import upload_customers, upload_sales, upload_coupons, upload_used_points, upload_jobs_list, upload_job_status
-from .analytics import analytics_dashboard, analytics_chart, export_analytics, analytics_tab
-from .coupon import coupon_dashboard, export_coupons, coupon_chart, manage_campaigns, coupon_tab
+from .analytics import analytics_dashboard, analytics_chart, export_analytics, analytics_tab, export_sales_chart_excel
+from .coupon import coupon_dashboard, export_coupons, coupon_chart, manage_campaigns, coupon_tab, export_coupon_chart_excel
 from .customer import customer_detail
 from .admin_logs import admin_logs
 from . import auth, users
@@ -19,11 +19,13 @@ __all__ = [
     "analytics_chart",
     "export_analytics",
     "analytics_tab",
+    "export_sales_chart_excel",
     "coupon_dashboard",
     "export_coupons",
     "coupon_chart",
     "manage_campaigns",
     "coupon_tab",
+    "export_coupon_chart_excel",
     "customer_detail",
     "admin_logs",
 ]

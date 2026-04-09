@@ -17,7 +17,7 @@ from django.db.models import Count, Q
 from App.models import Customer, SalesTransaction
 
 from .calculations import calculate_return_visits
-from .customer_utils import get_customer_info
+from .customer_utils import get_customer_info, count_new_members_with_invoice
 from .season_utils import get_session_for_range, session_sort_key, month_sort_key, year_sort_key, week_sort_key
 from .aggregators import (
     aggregate_by_grade,
@@ -96,7 +96,6 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
     # PERIOD-LEVEL METRICS (EXCLUDING VIP ID = 0)
     # ========================================================================
     returning_customers = set()
-    new_members_count = 0
     customer_details = []
     total_amount_period = Decimal(0)
     returning_invoices = 0
@@ -125,9 +124,6 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
             returning_invoices += n
             returning_amount += amt
 
-        if reg_date and period_lo <= reg_date <= period_hi:
-            new_members_count += 1
-
         if not chart_only:
             customer_details.append({
                 'vip_id': vip_id,
@@ -140,6 +136,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
                 'total_spent': float(amt),
             })
 
+    new_members_count = count_new_members_with_invoice(customer_purchases, get_ci, period_lo, period_hi)
     logger.debug("new_members_count=%d", new_members_count)
 
     total_active = len([vid for vid in customer_purchases if vid != '0'])

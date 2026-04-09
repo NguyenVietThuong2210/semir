@@ -355,3 +355,41 @@ def classify_new_inv(inv_info, reg_sk=None, reg_mk=None, reg_yk=None, reg_wk=Non
         'year':   reg_yk is not None and reg_yk in inv_info.get('years',    set()),
         'week':   reg_wk is not None and reg_wk in inv_info.get('weeks',    set()),
     }
+
+
+# ---------------------------------------------------------------------------
+# Shared new-member-with-invoice counter
+# ---------------------------------------------------------------------------
+
+def count_new_members_with_invoice(customer_purchases, get_ci, period_lo, period_hi):
+    """
+    Count customers registered in [period_lo, period_hi] who also have at least
+    one invoice in the loaded period.
+
+    WHY zero extra DB queries:
+    - customer_purchases is built from SalesTransaction already filtered by
+      date_from/date_to/shop_group — every key in it implicitly "has invoice".
+    - get_ci() resolves against info_map (full Customer scan, cached in _load_sales)
+      so repeated calls are pure dict lookups.
+
+    Logic is equivalent to CNV's new_pos_inv:
+        "registered in period"  AND  "has invoice in period"
+    but uses vip_id join instead of phone join, so no phone requirement.
+
+    Args:
+        customer_purchases : dict  vip_id → list[purchase]  (from _load_sales)
+        get_ci             : callable(vip_id) → (grade, reg_date, name)
+        period_lo          : date — inclusive start
+        period_hi          : date — inclusive end
+
+    Returns:
+        int
+    """
+    count = 0
+    for vip_id, purchases in customer_purchases.items():
+        if vip_id == '0':
+            continue
+        _, reg_date, _ = get_ci(vip_id, purchases[0].get('customer'))
+        if reg_date and period_lo <= reg_date <= period_hi:
+            count += 1
+    return count

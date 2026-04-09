@@ -19,33 +19,23 @@
     <div class="collapse" id="maPeriod-{{ forloop.counter }}">
         <div class="card-body p-0">
             <div class="table-responsive tab-tbl-wrap">
-                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;table-layout:fixed;width:100%">
-                    <colgroup>
-                        <col style="min-width:200px">
-                        <col style="width:70px">
-                        <col style="width:80px">
-                        <col style="width:85px">
-                        <col style="width:75px">
-                        <col style="width:130px">
-                        <col style="width:75px">
-                        <col style="width:145px">
-                    </colgroup>
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem">
                     <thead style="background-color:#4a6785;color:white;">
                         <tr>
-                            <th>Shop</th>
-                            <th class="text-end">Active</th>
-                            <th class="text-end">Returning</th>
-                            <th class="text-end">Return Rate</th>
-                            <th class="text-end">INV(RET)</th>
-                            <th class="text-end">AMT(RET)</th>
-                            <th class="text-end">Total INV</th>
-                            <th class="text-end">Total Amount</th>
+                            <th style="min-width:180px">Shop</th>
+                            <th class="text-end" style="white-space:nowrap">Active</th>
+                            <th class="text-end" style="white-space:nowrap">Returning</th>
+                            <th class="text-end" style="white-space:nowrap">Return Rate</th>
+                            <th class="text-end" style="white-space:nowrap">INV(RET)</th>
+                            <th class="text-end" style="white-space:nowrap">AMT(RET)</th>
+                            <th class="text-end" style="white-space:nowrap">Total INV</th>
+                            <th class="text-end" style="white-space:nowrap">Total Amount</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for sh in p.shops %}
                     <tr>
-                        <td class="text-truncate" style="max-width:0"><strong>{{ sh.shop_name }}</strong></td>
+                        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>{{ sh.shop_name }}</strong></td>
                         <td class="text-end">{{ sh.total_customers }}</td>
                         <td class="text-end">{{ sh.returning_customers }}</td>
                         <td class="text-end"><span class="badge bg-primary">{{ sh.return_rate }}%</span></td>

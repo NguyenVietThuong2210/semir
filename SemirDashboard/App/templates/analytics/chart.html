@@ -128,10 +128,10 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-pie-chart"></i> Sales Analytics Charts</h2>
     <div class="d-flex gap-2">
-        {% check_perm 'download_chart_pdf' as can_dl %}
+        {% check_perm 'download_chart_excel' as can_dl %}
         {% if can_dl %}
-        <button id="btnDownloadPDF" class="btn btn-outline-danger btn-sm">
-            <i class="bi bi-file-pdf"></i> Download PDF
+        <button class="btn btn-outline-success btn-sm" onclick="downloadChartExcel()">
+            <i class="bi bi-file-earmark-excel"></i> Download Excel
         </button>
         {% endif %}
         <a href="{% url 'analytics_dashboard' %}?{% if start_date %}start_date={{ start_date }}&{% endif %}{% if end_date %}end_date={{ end_date }}&{% endif %}{% if shop_group %}shop_group={{ shop_group }}{% endif %}"
@@ -744,8 +744,6 @@
 {% block extra_js %}
 <!-- Chart.js 4 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<!-- jsPDF — used directly with addImage() for chart PNG export -->
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script id="cd-data" type="application/json">{{ chart_data_json|safe }}</script>
 <script>
@@ -1577,31 +1575,10 @@ buildBarChart();
 buildComparisonChart();
 renderOverviewTable();
 
-/* ══════════════════════════════════════════════
-   PDF DOWNLOAD
-   Uses jsPDF addImage() directly with canvas
-   PNG data-URLs — no html2canvas involved.
-══════════════════════════════════════════════ */
 
-// Capture a Chart.js canvas as white-bg PNG data URL
-function getCanvasPng(id) {
-    const c = document.getElementById(id);
-    if (!c || !c.width || !c.height) return null;
-    const tmp = document.createElement('canvas');
-    tmp.width  = c.width;
-    tmp.height = c.height;
-    const ctx  = tmp.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, tmp.width, tmp.height);
-    ctx.drawImage(c, 0, 0);
-    return tmp.toDataURL('image/png');
-}
-
-const btnPDF = document.getElementById('btnDownloadPDF');
-if (btnPDF) {
-    btnPDF.addEventListener('click', function() {
-        btnPDF.disabled = true;
-        btnPDF.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+if (false) {
+    // PDF download removed — replaced by server-side Excel export
+    (function() {
         try {
             const { jsPDF } = window.jspdf;
             // A4 landscape: 297 x 210 mm
@@ -1913,9 +1890,7 @@ if (btnPDF) {
         } catch(e) {
             alert('PDF generation failed: ' + e.message);
         }
-        btnPDF.disabled = false;
-        btnPDF.innerHTML = '<i class="bi bi-file-pdf"></i> Download PDF';
-    });
+    })();
 }
 
 /* ══════════════════════════════════════════════
@@ -1956,5 +1931,36 @@ document.querySelectorAll('.quick-year-btn').forEach(btn => {
         setDates(new Date(y, 0, 1), new Date(y, 11, 31));
     });
 });
+
+// ── Excel download: reads current UI state ────────────────────────────────
+function downloadChartExcel() {
+    const params = new URLSearchParams(window.location.search);
+
+    // Section 2: Shop Trends (Line chart)
+    const trendXaxis = document.querySelector('input[name="xaxis"]:checked');
+    params.set('trend_xaxis', trendXaxis ? trendXaxis.value : 'month');
+    params.set('trend_metric', document.getElementById('metricSelect')?.value || 'return_rate');
+    const trendShops = Array.from(document.querySelectorAll('.shop-check:checked'))
+        .map(cb => cb.value).filter(v => !v.startsWith('__'));
+    if (trendShops.length) params.set('trend_shops', trendShops.join(','));
+
+    // Section 3: Period Totals (Bar chart)
+    const barXaxis = document.querySelector('input[name="barXaxis"]:checked');
+    params.set('bar_xaxis', barXaxis ? barXaxis.value : 'month');
+    params.set('bar_metric', document.getElementById('barMetricSelect')?.value || 'total_customers');
+    const barShops = Array.from(document.querySelectorAll('.bar-shop-check:checked'))
+        .map(cb => cb.value).filter(v => !v.startsWith('__'));
+    if (barShops.length) params.set('bar_shops', barShops.join(','));
+
+    // Section 4: Year-over-Year (Bar chart)
+    const yoyXaxis = document.querySelector('input[name="compXaxis"]:checked');
+    params.set('yoy_xaxis', yoyXaxis ? yoyXaxis.value : 'month');
+    params.set('yoy_metric', document.getElementById('compMetricSelect')?.value || 'total_customers');
+    const yoyShops = Array.from(document.querySelectorAll('.comp-shop-check:checked'))
+        .map(cb => cb.value).filter(v => !v.startsWith('__'));
+    if (yoyShops.length) params.set('yoy_shops', yoyShops.join(','));
+
+    window.location.href = "{% url 'export_sales_chart_excel' %}?" + params.toString();
+}
 </script>
 {% endblock %}

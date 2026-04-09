@@ -18,23 +18,17 @@
     <div class="collapse" id="bdSaPeriod-{{ forloop.counter }}">
         <div class="card-body p-0">
             <div class="table-responsive tab-tbl-wrap">
-                <table class="table table-sm table-hover align-middle mb-0 bd-tbl" style="font-size:.82rem;table-layout:fixed;width:100%">
-                    <colgroup>
-                        <col style="min-width:180px">
-                        <col style="width:65px"><col style="width:80px"><col style="width:70px"><col style="width:65px">
-                        <col style="width:55px"><col style="width:65px">
-                        <col style="width:65px"><col style="width:50px"><col style="width:65px"><col style="width:50px">
-                    </colgroup>
+                <table class="table table-sm table-hover align-middle mb-0 bd-tbl" style="font-size:.82rem">
                     <thead style="background-color:#4a6785;color:white;"><tr>
-                        <th>Shop</th>
-                        <th class="text-end">POS(INV)</th><th class="text-end">POS(NO INV)</th><th class="text-end">POS Total</th><th class="text-end">POS Only</th>
-                        <th class="text-end">CNV</th><th class="text-end">CNV Only</th>
-                        <th class="text-end">Zalo App</th><th class="text-end">%App</th><th class="text-end">Zalo OA</th><th class="text-end">%OA</th>
+                        <th style="min-width:180px">Shop</th>
+                        <th class="text-end" style="white-space:nowrap">POS(INV)</th><th class="text-end" style="white-space:nowrap">POS(NO INV)</th><th class="text-end" style="white-space:nowrap">POS Total</th><th class="text-end" style="white-space:nowrap">POS Only</th>
+                        <th class="text-end" style="white-space:nowrap">CNV</th><th class="text-end" style="white-space:nowrap">CNV Only</th>
+                        <th class="text-end" style="white-space:nowrap">Zalo App</th><th class="text-end" style="white-space:nowrap">%App</th><th class="text-end" style="white-space:nowrap">Zalo OA</th><th class="text-end" style="white-space:nowrap">%OA</th>
                     </tr></thead>
                     <tbody>
                     {% for r in p.shops %}
                     <tr>
-                        <td class="text-truncate" style="max-width:0"><strong>{{ r.shop }}</strong></td>
+                        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>{{ r.shop }}</strong></td>
                         <td class="text-end">{{ r.new_pos_inv }}</td><td class="text-end">{{ r.new_pos_no_inv }}</td><td class="text-end">{{ r.new_pos }}</td><td class="text-end">{{ r.new_pos_only }}</td>
                         <td class="text-end">{{ r.new_cnv }}</td><td class="text-end">{{ r.new_cnv_only }}</td>
                         <td class="text-end">{{ r.zalo_app }}</td><td class="text-end">{{ r.zalo_app_pct }}%</td>

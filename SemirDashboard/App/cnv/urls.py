@@ -22,6 +22,7 @@ urlpatterns = [
 
     # Customer Analytics Charts
     path('customer-chart/', views.customer_chart, name='customer_chart'),
+    path('customer-chart/export/', views.export_customer_chart_excel, name='export_customer_chart_excel'),
 
     # AJAX: Manual sync triggers
     path('trigger-sync/', views.trigger_sync, name='trigger_sync'),

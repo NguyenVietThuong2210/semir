@@ -10,7 +10,7 @@ from django.http import HttpResponse, HttpResponseBadRequest
 from App.permissions import requires_perm
 from App.analytics.core import calculate_return_rate_analytics
 from App.analytics.tab_functions import get_sales_tab, SALES_TABS
-from App.analytics.excel_export import export_analytics_to_excel, export_tab_to_excel, _TAB_SHEETS
+from App.analytics.excel_export import export_analytics_to_excel, export_tab_to_excel, _TAB_SHEETS, export_sales_chart_to_excel
 from App.views.view_utils import parse_date, filter_params_str
 
 logger = logging.getLogger(__name__)
@@ -221,6 +221,62 @@ def export_analytics(request):
         fn = f"return_visit_rate_{period}_{ts}.xlsx"
 
     logger.info("export_analytics: file=%s user=%s", fn, request.user, extra={"step": "export_analytics"})
+    resp = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{fn}"'
+    wb.save(resp)
+    return resp
+
+
+@requires_perm("download_chart_excel")
+def export_sales_chart_excel(request):
+    """Export Sales Analytics Chart data to Excel workbook matching current UI state."""
+    start_date = request.GET.get("start_date", "")
+    end_date = request.GET.get("end_date", "")
+    shop_group = request.GET.get("shop_group", "").strip()
+
+    # Chart section params (set by JS reading UI state)
+    def _shops(key):
+        return [s for s in request.GET.get(key, "").split(",") if s.strip()]
+
+    trend_xaxis  = request.GET.get("trend_xaxis", "month")
+    trend_metric = request.GET.get("trend_metric", "return_rate")
+    trend_shops  = _shops("trend_shops")
+    bar_xaxis    = request.GET.get("bar_xaxis", "month")
+    bar_metric   = request.GET.get("bar_metric", "total_customers")
+    bar_shops    = _shops("bar_shops")
+    yoy_xaxis    = request.GET.get("yoy_xaxis", "month")
+    yoy_metric   = request.GET.get("yoy_metric", "total_customers")
+    yoy_shops    = _shops("yoy_shops")
+
+    date_from = parse_date(start_date, "start date", request)
+    date_to = parse_date(end_date, "end date", request)
+
+    logger.info(
+        "export_sales_chart_excel: from=%s to=%s shop_group=%s user=%s",
+        date_from, date_to, shop_group, request.user,
+    )
+
+    data = calculate_return_rate_analytics(
+        date_from=date_from, date_to=date_to,
+        shop_group=shop_group or None,
+    )
+    if not data:
+        messages.error(request, "No data to export")
+        return redirect("analytics_chart")
+
+    wb = export_sales_chart_to_excel(
+        data, date_from=date_from, date_to=date_to, shop_group=shop_group or None,
+        trend_xaxis=trend_xaxis, trend_metric=trend_metric, trend_shops=trend_shops,
+        bar_xaxis=bar_xaxis, bar_metric=bar_metric, bar_shops=bar_shops,
+        yoy_xaxis=yoy_xaxis, yoy_metric=yoy_metric, yoy_shops=yoy_shops,
+    )
+
+    ts = datetime.now().strftime('%H%M%S')
+    period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
+    fn = f"sales_chart_{period}_{ts}.xlsx"
+
     resp = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

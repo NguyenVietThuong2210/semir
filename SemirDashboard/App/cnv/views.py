@@ -688,3 +688,52 @@ def customer_chart(request):
     )
 
 
+
+
+@requires_perm("download_customer_chart_excel")
+def export_customer_chart_excel(request):
+    """Export Customer Analytics Chart data to Excel workbook matching current UI state."""
+    from App.analytics.excel_export import export_customer_chart_to_excel
+    from django.http import HttpResponse
+    from django.shortcuts import redirect
+
+    start_date = request.GET.get("start_date", "")
+    end_date = request.GET.get("end_date", "")
+
+    def _shops(key):
+        return [s for s in request.GET.get(key, "").split(",") if s.strip()]
+
+    trend_xaxis  = request.GET.get("trend_xaxis", "month")
+    trend_metric = request.GET.get("trend_metric", "new_pos")
+    trend_shops  = _shops("trend_shops")
+    bar_xaxis    = request.GET.get("bar_xaxis", "month")
+    bar_metric   = request.GET.get("bar_metric", "new_pos")
+    bar_shops    = _shops("bar_shops")
+    yoy_xaxis    = request.GET.get("yoy_xaxis", "month")
+    yoy_metric   = request.GET.get("yoy_metric", "new_pos")
+
+    logger.info(
+        "export_customer_chart_excel: from=%s to=%s user=%s",
+        start_date or "all", end_date or "all", request.user,
+        extra={"step": "export_customer_chart_excel"},
+    )
+
+    data = compute_customer_chart_data(start_date, end_date)
+
+    wb = export_customer_chart_to_excel(
+        data, start_date=start_date, end_date=end_date,
+        trend_xaxis=trend_xaxis, trend_metric=trend_metric, trend_shops=trend_shops,
+        bar_xaxis=bar_xaxis, bar_metric=bar_metric, bar_shops=bar_shops,
+        yoy_xaxis=yoy_xaxis, yoy_metric=yoy_metric,
+    )
+
+    ts = datetime.now().strftime('%H%M%S')
+    period = f"{start_date}_{end_date}" if start_date and end_date else datetime.now().strftime('%Y%m%d')
+    fn = f"customer_chart_{period}_{ts}.xlsx"
+
+    resp = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{fn}"'
+    wb.save(resp)
+    return resp

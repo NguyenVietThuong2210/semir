@@ -83,10 +83,10 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-people"></i> Customer Analytics Charts</h2>
     <div class="d-flex gap-2">
-        {% check_perm 'download_customer_chart_pdf' as can_dl_pdf %}
-        {% if can_dl_pdf %}
-        <button id="btnDownloadPDF" class="btn btn-outline-danger btn-sm">
-            <i class="bi bi-file-pdf"></i> Download PDF
+        {% check_perm 'download_customer_chart_excel' as can_dl_excel %}
+        {% if can_dl_excel %}
+        <button class="btn btn-outline-success btn-sm" onclick="downloadChartExcel()">
+            <i class="bi bi-file-earmark-excel"></i> Download Excel
         </button>
         {% endif %}
         <a href="{% url 'cnv:customer_analytics' %}{% if start_date and end_date %}?start_date={{ start_date }}&end_date={{ end_date }}{% endif %}"
@@ -503,7 +503,6 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script id="cd-data" type="application/json">{{ chart_data_json|safe }}</script>
 <script>
@@ -1156,24 +1155,9 @@ document.getElementById('btnThisYear').addEventListener('click', () => {
     _form.submit();
 });
 
-/* ══════════════════════════════════════════════
-   PDF DOWNLOAD
-══════════════════════════════════════════════ */
-function getCanvasPng(id) {
-    const c = document.getElementById(id);
-    if (!c || !c.width || !c.height) return null;
-    const tmp = document.createElement('canvas');
-    tmp.width = c.width; tmp.height = c.height;
-    const ctx2 = tmp.getContext('2d');
-    ctx2.fillStyle = '#ffffff';
-    ctx2.fillRect(0, 0, tmp.width, tmp.height);
-    ctx2.drawImage(c, 0, 0);
-    return tmp.toDataURL('image/png');
-}
-
-document.getElementById('btnDownloadPDF')?.addEventListener('click', async () => {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+// PDF download removed — replaced by server-side Excel export
+if (false) {
+    (async () => {
     const PW = 297, PH = 210, M = 10;
 
     function pageHeader(title) {
@@ -1212,7 +1196,36 @@ document.getElementById('btnDownloadPDF')?.addEventListener('click', async () =>
     addChart('yoyBarChart',    'Year-over-Year Comparison');
 
     doc.save('customer_analytics_charts_{% if start_date %}{{ start_date }}_{{ end_date }}{% else %}alltime{% endif %}.pdf');
-});
+    })();
+}
+
+// ── Excel download: reads current UI state ────────────────────────────────
+function downloadChartExcel() {
+    const params = new URLSearchParams(window.location.search);
+
+    // Section 2: Shop Trends (Line chart)
+    const trendXaxis = document.querySelector('input[name="trendXaxis"]:checked');
+    params.set('trend_xaxis', trendXaxis ? trendXaxis.value : 'month');
+    params.set('trend_metric', document.getElementById('trendMetricSelect')?.value || 'new_pos');
+    const trendShops = Array.from(document.querySelectorAll('.shop-check:checked'))
+        .map(cb => cb.value).filter(v => !v.startsWith('__'));
+    if (trendShops.length) params.set('trend_shops', trendShops.join(','));
+
+    // Section 3: Period Totals (Bar chart)
+    const barXaxis = document.querySelector('input[name="barXaxis"]:checked');
+    params.set('bar_xaxis', barXaxis ? barXaxis.value : 'month');
+    params.set('bar_metric', document.getElementById('barMetricSelect')?.value || 'new_pos');
+    const barShops = Array.from(document.querySelectorAll('.bar-shop-check:checked'))
+        .map(cb => cb.value).filter(v => !v.startsWith('__'));
+    if (barShops.length) params.set('bar_shops', barShops.join(','));
+
+    // Section 4: Year-over-Year (Bar chart) — no shop filter (uses all-time data)
+    const yoyXaxis = document.querySelector('input[name="yoyXaxis"]:checked');
+    params.set('yoy_xaxis', yoyXaxis ? yoyXaxis.value : 'month');
+    params.set('yoy_metric', document.getElementById('yoyMetricSelect')?.value || 'new_pos');
+
+    window.location.href = "{% url 'cnv:export_customer_chart_excel' %}?" + params.toString();
+}
 </script>
 
 <!-- Filter JS (quick buttons already handled above) -->
