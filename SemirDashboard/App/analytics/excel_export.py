@@ -2232,13 +2232,23 @@ def _build_yoy_data(shop_map, periods, xaxis, metric):
     return all_within, years, year_period_map
 
 
+# UI palette — matches chart.html JS color arrays
+_UI_PALETTE = [
+    'E6194B', '3CB44B', '4363D8', 'F58231', '911EB4',
+    '42D4F4', 'F032E6', '469990', '9A6324', '800000',
+    'DCBEFF', 'AAFFC3', '808000', 'FFD8B1', '000075',
+    'A9A9A9', 'FFE119', 'FABEBE',
+]
+# Rows reserved for the chart at top (chart height ~15cm, ~30 rows at default row height)
+_CHART_DATA_OFFSET = 32
+
+
 def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric,
                              x_label='Period', chart_title=''):
     """
-    Write a sheet with:
+    Write a sheet with chart at top (A2) then data table below.
       Col A: period labels
       Col B..N: one col per shop/entity, header = name
-      Below data: LineChart
     """
     from openpyxl.chart import LineChart, Reference
 
@@ -2246,16 +2256,19 @@ def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric
     entities = list(shop_or_entity_map.keys())
     fmt_type, num_fmt = _fmt_metric(metric)
 
+    # Data table starts below the chart space
+    header_row = _CHART_DATA_OFFSET + 1
+    data_start = header_row + 1
+
     # Header row
-    ws.cell(row=1, column=1, value=x_label).font = XL_HDR_FONT
-    ws.cell(row=1, column=1).fill = XL_HDR_FILL
-    ws.cell(row=1, column=1).alignment = XL_HDR_ALIGN
+    ws.cell(row=header_row, column=1, value=x_label).font = XL_HDR_FONT
+    ws.cell(row=header_row, column=1).fill = XL_HDR_FILL
+    ws.cell(row=header_row, column=1).alignment = XL_HDR_ALIGN
     for ci, name in enumerate(entities, 2):
-        c = ws.cell(row=1, column=ci, value=name)
+        c = ws.cell(row=header_row, column=ci, value=name)
         c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
 
     # Data rows
-    data_start = 2
     for ri, period in enumerate(periods, data_start):
         ws.cell(row=ri, column=1, value=str(period))
         for ci, name in enumerate(entities, 2):
@@ -2272,18 +2285,27 @@ def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric
     chart.title = chart_title or sheet_title
     chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
     chart.x_axis.title = x_label
-    chart.height = 15; chart.width = 28
+    chart.height = 15
+    chart.width = 28
+    # Remove heavy default gridlines
+    chart.y_axis.majorGridlines = None
 
     cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
     for ci, _ in enumerate(entities, 2):
-        ser_ref = Reference(ws, min_col=ci, min_row=1, max_row=data_end)
+        ser_ref = Reference(ws, min_col=ci, min_row=header_row, max_row=data_end)
         chart.add_data(ser_ref, titles_from_data=True)
     chart.set_categories(cats)
 
-    for ser in chart.series:
+    # Apply UI palette: exact color per line + 1.5pt width, no markers
+    for i, ser in enumerate(chart.series):
+        color = _UI_PALETTE[i % len(_UI_PALETTE)]
+        ser.graphicalProperties.line.solidFill = color
+        ser.graphicalProperties.line.width = 19050  # 1.5pt in EMU
         ser.smooth = False
+        ser.marker.symbol = 'none'
 
-    ws.add_chart(chart, f"A{data_end + 3}")
+    # Place chart at top of sheet
+    ws.add_chart(chart, "A2")
 
     # Column widths
     ws.column_dimensions['A'].width = 18
@@ -2296,11 +2318,12 @@ def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric
 def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
                             x_label='Period', chart_title=''):
     """
-    Bar chart sheet.
-    data_map: {series_name: {period: value}} → grouped (multi-series, e.g. YOY)
+    Bar chart sheet with chart at top (A2), data table below.
+    data_map: {series_name: {period: value}} → grouped multi-series (e.g. YOY)
            or {period: value}               → single-series (e.g. Period Totals)
     """
     from openpyxl.chart import BarChart, Reference
+    from openpyxl.chart.series import DataPoint
 
     ws = wb.create_sheet(title=sheet_title[:31])
     fmt_type, num_fmt = _fmt_metric(metric)
@@ -2308,21 +2331,22 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
     if not isinstance(data_map, dict):
         return ws
 
-    # Detect if multi-series or single-series
+    # Detect multi-series vs single-series
     first_val = next(iter(data_map.values()), None)
     multi_series = isinstance(first_val, dict)
 
+    header_row = _CHART_DATA_OFFSET + 1
+    data_start = header_row + 1
+
     if multi_series:
         series_names = list(data_map.keys())
-        # Header: Period | Series1 | Series2 | ...
-        ws.cell(row=1, column=1, value=x_label).font = XL_HDR_FONT
-        ws.cell(row=1, column=1).fill = XL_HDR_FILL
-        ws.cell(row=1, column=1).alignment = XL_HDR_ALIGN
+        ws.cell(row=header_row, column=1, value=x_label).font = XL_HDR_FONT
+        ws.cell(row=header_row, column=1).fill = XL_HDR_FILL
+        ws.cell(row=header_row, column=1).alignment = XL_HDR_ALIGN
         for ci, sname in enumerate(series_names, 2):
-            c = ws.cell(row=1, column=ci, value=sname)
+            c = ws.cell(row=header_row, column=ci, value=sname)
             c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
 
-        data_start = 2
         for ri, period in enumerate(periods, data_start):
             ws.cell(row=ri, column=1, value=str(period))
             for ci, sname in enumerate(series_names, 2):
@@ -2334,14 +2358,13 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
     else:
         # Single series: {period: value}
         series_names = None
-        ws.cell(row=1, column=1, value=x_label).font = XL_HDR_FONT
-        ws.cell(row=1, column=1).fill = XL_HDR_FILL
-        ws.cell(row=1, column=1).alignment = XL_HDR_ALIGN
+        ws.cell(row=header_row, column=1, value=x_label).font = XL_HDR_FONT
+        ws.cell(row=header_row, column=1).fill = XL_HDR_FILL
+        ws.cell(row=header_row, column=1).alignment = XL_HDR_ALIGN
         metric_lbl = _ALL_METRIC_LABELS.get(metric, metric)
-        c = ws.cell(row=1, column=2, value=metric_lbl)
+        c = ws.cell(row=header_row, column=2, value=metric_lbl)
         c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
 
-        data_start = 2
         for ri, period in enumerate(periods, data_start):
             ws.cell(row=ri, column=1, value=str(period))
             v = data_map.get(period, 0)
@@ -2357,18 +2380,39 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
     chart.type = 'col'
     chart.grouping = 'clustered'
     chart.title = chart_title or sheet_title
-    metric_lbl = _SALES_METRIC_LABEL.get(metric, _CUSTOMER_METRIC_LABEL.get(metric, _COUPON_METRIC_LABEL.get(metric, metric)))
-    chart.y_axis.title = metric_lbl
+    chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
     chart.x_axis.title = x_label
-    chart.height = 15; chart.width = 28
+    chart.height = 15
+    chart.width = 28
+    # Remove heavy default gridlines
+    chart.y_axis.majorGridlines = None
 
     cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
     for ci in range(2, 2 + num_series):
-        ser_ref = Reference(ws, min_col=ci, min_row=1, max_row=data_end)
+        ser_ref = Reference(ws, min_col=ci, min_row=header_row, max_row=data_end)
         chart.add_data(ser_ref, titles_from_data=True)
     chart.set_categories(cats)
 
-    ws.add_chart(chart, f"A{data_end + 3}")
+    # Apply UI palette colors
+    if multi_series:
+        # Each series (e.g. each year in YOY) gets its own palette color
+        for i, ser in enumerate(chart.series):
+            color = _UI_PALETTE[i % len(_UI_PALETTE)]
+            ser.graphicalProperties.solidFill = color
+            ser.graphicalProperties.line.solidFill = color
+    else:
+        # Single series: color each bar individually from the palette
+        ser = chart.series[0]
+        for j in range(len(periods)):
+            color = _UI_PALETTE[j % len(_UI_PALETTE)]
+            pt = DataPoint(idx=j)
+            pt.graphicalProperties.solidFill = color
+            pt.graphicalProperties.line.solidFill = color
+            ser.dPt.append(pt)
+
+    # Place chart at top of sheet
+    ws.add_chart(chart, "A2")
+
     ws.column_dimensions['A'].width = 18
     for ci in range(2, 2 + num_series):
         ws.column_dimensions[get_column_letter(ci)].width = 16
