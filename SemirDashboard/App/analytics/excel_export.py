@@ -2243,6 +2243,33 @@ _UI_PALETTE = [
 _CHART_DATA_OFFSET = 32
 
 
+def _make_light_gridlines():
+    """Return ChartLines with light gray 0.5pt lines (matches UI subtle gridlines)."""
+    from openpyxl.chart.axis import ChartLines
+    from openpyxl.drawing.connector import GraphicalProperties
+    from openpyxl.drawing.line import LineProperties
+    gl = ChartLines()
+    lp = LineProperties(w=6350)   # 0.5pt in EMU
+    lp.solidFill = 'D9D9D9'       # light gray
+    gp = GraphicalProperties()
+    gp.ln = lp
+    gl.spPr = gp
+    return gl
+
+
+def _style_chart_axes(chart, y_num_fmt='General'):
+    """Apply axis label visibility and tick marks — mirrors UI appearance."""
+    from openpyxl.chart.legend import Legend
+    chart.y_axis.majorGridlines = _make_light_gridlines()
+    chart.y_axis.numFmt = y_num_fmt
+    chart.y_axis.majorTickMark = 'out'
+    chart.y_axis.minorTickMark = 'none'
+    chart.x_axis.majorTickMark = 'out'
+    # Legend at bottom so plot area is wider (more room for y-axis labels)
+    chart.legend = Legend()
+    chart.legend.position = 'b'
+
+
 def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric,
                              x_label='Period', chart_title=''):
     """
@@ -2287,8 +2314,9 @@ def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric
     chart.x_axis.title = x_label
     chart.height = 15
     chart.width = 28
-    # Remove heavy default gridlines
-    chart.y_axis.majorGridlines = None
+    # Light gridlines + axis tick labels matching UI
+    y_fmt = '0%' if _is_pct_metric(metric) else 'General'
+    _style_chart_axes(chart, y_num_fmt=y_fmt)
 
     cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
     for ci, _ in enumerate(entities, 2):
@@ -2323,7 +2351,6 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
            or {period: value}               → single-series (e.g. Period Totals)
     """
     from openpyxl.chart import BarChart, Reference
-    from openpyxl.chart.series import DataPoint
 
     ws = wb.create_sheet(title=sheet_title[:31])
     fmt_type, num_fmt = _fmt_metric(metric)
@@ -2384,8 +2411,8 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
     chart.x_axis.title = x_label
     chart.height = 15
     chart.width = 28
-    # Remove heavy default gridlines
-    chart.y_axis.majorGridlines = None
+    y_fmt = '0%' if _is_pct_metric(metric) else 'General'
+    _style_chart_axes(chart, y_num_fmt=y_fmt)
 
     cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
     for ci in range(2, 2 + num_series):
@@ -2401,14 +2428,10 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
             ser.graphicalProperties.solidFill = color
             ser.graphicalProperties.line.solidFill = color
     else:
-        # Single series: color each bar individually from the palette
+        # Single series (Period Totals): use first palette color uniformly — matches UI solid bar
         ser = chart.series[0]
-        for j in range(len(periods)):
-            color = _UI_PALETTE[j % len(_UI_PALETTE)]
-            pt = DataPoint(idx=j)
-            pt.graphicalProperties.solidFill = color
-            pt.graphicalProperties.line.solidFill = color
-            ser.dPt.append(pt)
+        ser.graphicalProperties.solidFill = _UI_PALETTE[0]
+        ser.graphicalProperties.line.solidFill = _UI_PALETTE[0]
 
     # Place chart at top of sheet
     ws.add_chart(chart, "A2")
