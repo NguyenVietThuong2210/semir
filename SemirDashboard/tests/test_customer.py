@@ -495,11 +495,22 @@ class CustomerTabSnapshotTest(SnapshotTestCase):
     def test_tab_snapshot_ca_points(self):
         t = self.timer("customer_tab_ca_points")
         data = self._tab('ca_points')
-        t.checkpoint(f"cnv_used_points → {data['cnv_used_points_count']} rows  [{t.total():.2f}s]")
+        t.checkpoint(
+            f"cnv_used_points={data['cnv_used_points_count']} "
+            f"mismatch={data['points_mismatch_count']} "
+            f"total_mismatch={data['total_points_mismatch_count']}  [{t.total():.2f}s]"
+        )
         t.report()
+        # Verify mismatch keys moved here from ca_pos_cnv
+        self.assertIn('points_mismatch', data, "points_mismatch must be in ca_points tab")
+        self.assertIn('total_points_mismatch', data, "total_points_mismatch must be in ca_points tab")
         self.assert_snapshot("customer_tab_ca_points", {
-            "cnv_used_points_count": data["cnv_used_points_count"],
-            "cnv_used_points_list": data["cnv_used_points_list"],
+            "cnv_used_points_count":       data["cnv_used_points_count"],
+            "cnv_used_points_list":        data["cnv_used_points_list"],
+            "points_mismatch_count":       data["points_mismatch_count"],
+            "total_points_mismatch_count": data["total_points_mismatch_count"],
+            "points_mismatch":             data["points_mismatch"],
+            "total_points_mismatch":       data["total_points_mismatch"],
         })
 
     def test_tab_snapshot_ca_zalo(self):
@@ -529,20 +540,18 @@ class CustomerTabSnapshotTest(SnapshotTestCase):
         t = self.timer("customer_tab_ca_pos_cnv")
         data = self._tab('ca_pos_cnv')
         t.checkpoint(
-            f"mismatch={data['points_mismatch_count']} "
             f"pos_only={data['pos_only_all_count']} "
             f"cnv_only={data['cnv_only_all_count']}  [{t.total():.2f}s]"
         )
         t.report()
+        # Mismatch tables have moved to ca_points tab — verify they are NOT here
+        self.assertNotIn('points_mismatch', data, "points_mismatch must NOT be in ca_pos_cnv tab")
+        self.assertNotIn('total_points_mismatch', data, "total_points_mismatch must NOT be in ca_pos_cnv tab")
         self.assert_snapshot("customer_tab_ca_pos_cnv", {
-            "points_mismatch_count": data["points_mismatch_count"],
-            "total_points_mismatch_count": data["total_points_mismatch_count"],
             "pos_only_all_count": data["pos_only_all_count"],
             "cnv_only_all_count": data["cnv_only_all_count"],
-            "points_mismatch": data["points_mismatch"],
-            "total_points_mismatch": data["total_points_mismatch"],
-            "pos_only_all": data["pos_only_all"],
-            "cnv_only_all": data["cnv_only_all"],
+            "pos_only_all":       data["pos_only_all"],
+            "cnv_only_all":       data["cnv_only_all"],
         })
 
 

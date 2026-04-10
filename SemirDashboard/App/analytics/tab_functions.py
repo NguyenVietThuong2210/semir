@@ -907,14 +907,26 @@ def _customer_bd_tab(tab: str, start_date: str, end_date: str) -> dict:
 def _customer_ca_points(start_date: str, end_date: str) -> dict:
     """
     Lean function for ca_points tab.
-    Fetches: CNV customers with used_points > 0, pos_phones for in_pos flag.
-    Does NOT compute: breakdown, zalo, pos_only/cnv_only lists, points_mismatch.
+    Fetches:
+      - CNV customers with used_points > 0 (+ in_pos flag)
+      - Points mismatch tables (moved here from ca_pos_cnv for logical grouping)
+
+    Performance: reuses the same POS/CNV querysets for both used_points in_pos check
+    and mismatch computation, avoiding duplicate broad phone-set queries.
     """
     from App.cnv.models import CNVCustomer
+    from App.models import Customer as _POS
 
-    # pos_phones_all needed only for in_pos flag
-    pos_phones_all, _ = _get_cnv_phone_sets()
+    pos_all = (
+        _POS.objects.filter(vip_id__isnull=False, phone__isnull=False)
+        .exclude(vip_id=0).exclude(phone='')
+    )
+    cnv_all = CNVCustomer.objects.filter(phone__isnull=False).exclude(phone='')
 
+    # pos_phones_all: full set for in_pos flag (any CNV customer may appear in POS)
+    pos_phones_all = set(pos_all.values_list('phone', flat=True))
+
+    # CNV used-points list
     _raw = list(
         CNVCustomer.objects.filter(used_points__gt=0)
         .values(
@@ -927,9 +939,63 @@ def _customer_ca_points(start_date: str, end_date: str) -> dict:
         {**r, 'in_pos': bool(r['phone']) and r['phone'] in pos_phones_all}
         for r in _raw
     ]
+
+    # Mismatch computation: only phones present in BOTH systems
+    _cnv_phone_qs = cnv_all.values('phone')
+    _pos_phone_qs = pos_all.values('phone')
+    _pos_map = {
+        c['phone']: c
+        for c in pos_all.filter(phone__in=_cnv_phone_qs)
+        .values('vip_id', 'phone', 'name', 'vip_grade', 'points', 'used_points')
+    }
+    _cnv_map = {
+        c['phone']: c
+        for c in cnv_all.filter(phone__in=_pos_phone_qs)
+        .values(
+            'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
+            'points', 'total_points', 'used_points',
+        )
+    }
+    points_mismatch = []
+    total_points_mismatch = []
+    for phone, pos_c in _pos_map.items():
+        cnv_c = _cnv_map.get(phone)
+        if not cnv_c:
+            continue
+        pos_pts  = int(pos_c.get('points') or 0)
+        pos_used = int(pos_c.get('used_points') or 0)
+        pos_net  = pos_pts - pos_used
+        cnv_pts  = int(cnv_c.get('points') or 0)
+        cnv_total = int(float(cnv_c.get('total_points') or 0))
+        base = {
+            'phone':            phone,
+            'pos_vip_id':       pos_c['vip_id'],
+            'pos_name':         pos_c['name'],
+            'pos_grade':        pos_c['vip_grade'],
+            'pos_points':       pos_pts,
+            'pos_used_points':  pos_used,
+            'pos_net_points':   pos_net,
+            'cnv_id':           cnv_c['cnv_id'],
+            'cnv_name':         f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
+            'cnv_level':        cnv_c['level_name'],
+            'cnv_points':       cnv_pts,
+            'cnv_used_points':  int(cnv_c.get('used_points') or 0),
+            'cnv_total_points': cnv_total,
+        }
+        if pos_net != cnv_pts:
+            points_mismatch.append({**base, 'diff': cnv_pts - pos_net})
+        if pos_net != cnv_total:
+            total_points_mismatch.append({**base, 'diff': cnv_total - pos_net})
+    points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
+    total_points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
+
     return {
-        'cnv_used_points_count': len(cnv_used_points_list),
-        'cnv_used_points_list': cnv_used_points_list,
+        'cnv_used_points_count':       len(cnv_used_points_list),
+        'cnv_used_points_list':        cnv_used_points_list,
+        'points_mismatch':             points_mismatch,
+        'points_mismatch_count':       len(points_mismatch),
+        'total_points_mismatch':       total_points_mismatch,
+        'total_points_mismatch_count': len(total_points_mismatch),
     }
 
 
@@ -1013,8 +1079,9 @@ def _customer_ca_zalo(start_date: str, end_date: str) -> dict:
 def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
     """
     Lean function for ca_pos_cnv tab.
-    Fetches: pos_only / cnv_only lists + points mismatch data.
-    Does NOT compute: breakdown, zalo, used_points.
+    Fetches: pos_only / cnv_only lists (all-time + period).
+    Points mismatch tables have moved to ca_points tab (_customer_ca_points).
+    Does NOT compute: breakdown, zalo, used_points, points_mismatch.
     """
     from App.models import Customer as _POS
     from App.cnv.models import CNVCustomer
@@ -1104,53 +1171,6 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
             .order_by('-cnv_created_at')
         )
 
-    # Points mismatch — SQL join avoids >65535 param limit
-    _pos_map = {
-        c['phone']: c
-        for c in pos_all.filter(phone__in=_cnv_phone_qs)
-        .values('vip_id', 'phone', 'name', 'vip_grade', 'points', 'used_points')
-    }
-    _cnv_map = {
-        c['phone']: c
-        for c in cnv_all.filter(phone__in=_pos_phone_qs)
-        .values(
-            'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
-            'points', 'total_points', 'used_points',
-        )
-    }
-    points_mismatch = []
-    total_points_mismatch = []
-    for phone, pos_c in _pos_map.items():
-        cnv_c = _cnv_map.get(phone)
-        if not cnv_c:
-            continue
-        pos_pts  = int(pos_c.get('points') or 0)
-        pos_used = int(pos_c.get('used_points') or 0)
-        pos_net  = pos_pts - pos_used
-        cnv_pts  = int(cnv_c.get('points') or 0)
-        cnv_total = int(float(cnv_c.get('total_points') or 0))
-        base = {
-            'phone':          phone,
-            'pos_vip_id':     pos_c['vip_id'],
-            'pos_name':       pos_c['name'],
-            'pos_grade':      pos_c['vip_grade'],
-            'pos_points':     pos_pts,
-            'pos_used_points': pos_used,
-            'pos_net_points': pos_net,
-            'cnv_id':         cnv_c['cnv_id'],
-            'cnv_name':       f"{cnv_c.get('last_name') or ''} {cnv_c.get('first_name') or ''}".strip(),
-            'cnv_level':      cnv_c['level_name'],
-            'cnv_points':     cnv_pts,
-            'cnv_total_points': cnv_c.get('total_points') or 0,
-            'cnv_used_points':  cnv_c.get('used_points') or 0,
-        }
-        if pos_net != cnv_pts:
-            points_mismatch.append({**base, 'diff': cnv_pts - pos_net})
-        if pos_net != cnv_total:
-            total_points_mismatch.append({**base, 'diff': cnv_total - pos_net})
-    points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
-    total_points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
-
     return {
         'pos_only_all':              pos_only_all,
         'cnv_only_all':              cnv_only_all,
@@ -1164,8 +1184,4 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
         'new_pos_inv_count':         new_pos_inv_count,
         'new_pos_no_inv_count':      new_pos_no_inv_count,
         'new_cnv_count':             new_cnv_count,
-        'points_mismatch':           points_mismatch,
-        'points_mismatch_count':     len(points_mismatch),
-        'total_points_mismatch':     total_points_mismatch,
-        'total_points_mismatch_count': len(total_points_mismatch),
     }

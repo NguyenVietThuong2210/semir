@@ -1729,24 +1729,30 @@ def _build_cnv_used_points_ws(wb, data, hf, font, align):
 
 def _build_mismatch_ws(wb, data, key, title, hf, font, align):
     ws = wb.create_sheet(title)
-    _cnv_hdr(ws, ["Phone", "POS VIP ID", "POS Name", "POS Grade", "POS Pts", "POS Used Pts",
-                  "CNV ID", "CNV Name", "CNV Level", "CNV Pts", "CNV Total Pts", "CNV Used Pts", "Diff"],
-             hf, font, align)
+    # Columns: POS Pts + Used + Net, then CNV Pts → Used Pts → Total Pts (order matches UI tables)
+    _cnv_hdr(ws, [
+        "Phone", "POS VIP ID", "POS Name", "POS Grade",
+        "POS Pts", "POS Used Pts", "POS Net Pts",
+        "CNV ID", "CNV Name", "CNV Level",
+        "CNV Points", "CNV Used Points", "CNV Total Points",
+        "Diff",
+    ], hf, font, align)
     for r, c in enumerate(data.get(key) or [], 2):
-        ws.cell(r, 1, c.get("phone", ""))
-        ws.cell(r, 2, c.get("pos_vip_id", ""))
-        ws.cell(r, 3, c.get("pos_name", ""))
-        ws.cell(r, 4, c.get("pos_grade", ""))
-        ws.cell(r, 5, c.get("pos_points") or 0)
-        ws.cell(r, 6, c.get("pos_used_points") or 0)
-        ws.cell(r, 7, c.get("cnv_id", ""))
-        ws.cell(r, 8, c.get("cnv_name", ""))
-        ws.cell(r, 9, c.get("cnv_level", ""))
-        ws.cell(r, 10, c.get("cnv_points") or 0)
-        ws.cell(r, 11, c.get("cnv_total_points") or 0)
+        ws.cell(r,  1, c.get("phone", ""))
+        ws.cell(r,  2, c.get("pos_vip_id", ""))
+        ws.cell(r,  3, c.get("pos_name", ""))
+        ws.cell(r,  4, c.get("pos_grade", ""))
+        ws.cell(r,  5, c.get("pos_points") or 0)
+        ws.cell(r,  6, c.get("pos_used_points") or 0)
+        ws.cell(r,  7, c.get("pos_net_points") or 0)
+        ws.cell(r,  8, c.get("cnv_id", ""))
+        ws.cell(r,  9, c.get("cnv_name", ""))
+        ws.cell(r, 10, c.get("cnv_level", ""))
+        ws.cell(r, 11, c.get("cnv_points") or 0)
         ws.cell(r, 12, c.get("cnv_used_points") or 0)
-        ws.cell(r, 13, c.get("diff") or 0)
-    for col, w in zip("ABCDEFGHIJKLM", [14, 12, 22, 10, 10, 12, 14, 22, 10, 10, 12, 12, 10]):
+        ws.cell(r, 13, c.get("cnv_total_points") or 0)
+        ws.cell(r, 14, c.get("diff") or 0)
+    for col, w in zip("ABCDEFGHIJKLMN", [14, 12, 22, 10, 10, 12, 10, 14, 22, 10, 10, 12, 12, 10]):
         ws.column_dimensions[col].width = w
 
 
@@ -2260,18 +2266,51 @@ def _make_light_gridlines():
     return gl
 
 
-def _style_chart_axes(chart, y_num_fmt='General', show_legend=True, legend_pos='b'):
-    """Apply axis label visibility, light gridlines, tick marks — mirrors UI appearance.
-    show_legend=False: hide legend (for single-series charts where legend is noise).
-    legend_pos='r':    right legend (for multi-series bar — avoids overlap with x-axis title).
-    legend_pos='b':    bottom legend (for line charts with many series).
+def _fix_cat_as_str(chart):
+    """Convert series cat from numRef → strRef.
+
+    Root-cause fix: openpyxl generates <cat><numRef> for all category references.
+    When the category labels look like dates (e.g. '2026-01', '2026-W01'), Excel
+    interprets them as a DATE axis and auto-scales to a full year/range — causing
+    the actual data to appear compressed into the left 30% of the chart with a flat
+    line extending right.  Changing to strRef forces Excel to treat categories as
+    plain text, filling the full plot area exactly as the UI chart does.
+    """
+    from openpyxl.chart.data_source import StrRef
+    for ser in chart.series:
+        cat = getattr(ser, 'cat', None)
+        if cat and getattr(cat, 'numRef', None):
+            f = cat.numRef.f
+            cat.numRef = None
+            cat.strRef = StrRef(f=f)
+
+
+def _apply_chart_style(chart, y_num_fmt='General', show_legend=True, legend_pos='b',
+                       is_bar=False):
+    """Apply UI-matching style to chart.
+
+    For both LineChart and BarChart (col), x_axis is the bottom/category axis and
+    y_axis is the left/value axis in openpyxl's axis model.
+
+    Key axis fixes applied here:
+      x_axis.axPos='b'         — explicitly place category axis at bottom
+      x_axis.auto=1            — auto-count categories (prevents axis over-extension)
+      x_axis.tickLblPos='nextTo'— show tick labels adjacent to axis ticks
+      y_axis.tickLblPos='nextTo'— show value labels adjacent to axis ticks
     """
     from openpyxl.chart.legend import Legend
+    # Value (Y) axis — left side, shows numbers
     chart.y_axis.majorGridlines = _make_light_gridlines()
     chart.y_axis.numFmt = y_num_fmt
     chart.y_axis.majorTickMark = 'out'
     chart.y_axis.minorTickMark = 'none'
+    chart.y_axis.tickLblPos = 'nextTo'
+    # Category (X) axis — bottom, shows period labels
+    chart.x_axis.axPos = 'b'          # bottom — prevents both axes collapsing to left
+    chart.x_axis.auto = 1             # let Excel count categories automatically
+    chart.x_axis.tickLblPos = 'nextTo'
     chart.x_axis.majorTickMark = 'out'
+    chart.x_axis.minorTickMark = 'none'
     if show_legend:
         chart.legend = Legend()
         chart.legend.position = legend_pos
@@ -2279,32 +2318,37 @@ def _style_chart_axes(chart, y_num_fmt='General', show_legend=True, legend_pos='
         chart.legend = None
 
 
+def _chart_width(n_periods):
+    """Dynamic chart width: enough room for category labels without over-stretching."""
+    if n_periods <= 12:
+        return 26
+    if n_periods <= 24:
+        return 32
+    return 40   # 52 weeks: wide enough to show all labels with skip
+
+
 def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric,
                              x_label='Period', chart_title=''):
     """
-    Write a sheet with chart at top (A2) then data table below.
+    Write a sheet with LineChart at top (A2) then data table below (row 33+).
       Col A: period labels
-      Col B..N: one col per shop/entity, header = name
+      Col B..N: one col per shop/entity, header = shop name
     """
     from openpyxl.chart import LineChart, Reference
 
     ws = wb.create_sheet(title=sheet_title[:31])
     entities = list(shop_or_entity_map.keys())
-    fmt_type, num_fmt = _fmt_metric(metric)
+    _, num_fmt = _fmt_metric(metric)
 
-    # Data table starts below the chart space
-    header_row = _CHART_DATA_OFFSET + 1
-    data_start = header_row + 1
-
-    # Header row
+    # ── Data table (below chart space) ────────────────────────────────────
+    header_row = _CHART_DATA_OFFSET + 1   # row 33
+    data_start  = header_row + 1          # row 34
     ws.cell(row=header_row, column=1, value=x_label).font = XL_HDR_FONT
     ws.cell(row=header_row, column=1).fill = XL_HDR_FILL
     ws.cell(row=header_row, column=1).alignment = XL_HDR_ALIGN
     for ci, name in enumerate(entities, 2):
         c = ws.cell(row=header_row, column=ci, value=name)
         c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
-
-    # Data rows
     for ri, period in enumerate(periods, data_start):
         ws.cell(row=ri, column=1, value=str(period))
         for ci, name in enumerate(entities, 2):
@@ -2316,39 +2360,42 @@ def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric
     if not periods or not entities:
         return ws
 
-    # LineChart — wider when many periods to give x-axis labels room
-    n_periods = len(periods)
+    # ── LineChart ─────────────────────────────────────────────────────────
+    n = len(periods)
     chart = LineChart()
-    chart.title = chart_title or sheet_title
-    chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
-    chart.x_axis.title = x_label
+    chart.title  = chart_title or sheet_title
     chart.height = 15
-    chart.width = 36 if n_periods > 24 else 28
-    y_fmt = '0%' if _is_pct_metric(metric) else 'General'
-    # Line charts have multiple series → legend at bottom
-    _style_chart_axes(chart, y_num_fmt=y_fmt, show_legend=True, legend_pos='b')
-    # Skip x-axis labels when too many categories to avoid cramping
-    if n_periods > 24:
-        chart.x_axis.tickLblSkip = max(2, n_periods // 12)
+    chart.width  = _chart_width(n)
+    # Metric label on value (Y) axis only; no x_axis.title (redundant + causes crowding)
+    chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
 
+    y_fmt = '0%' if _is_pct_metric(metric) else 'General'
+    _apply_chart_style(chart, y_num_fmt=y_fmt, show_legend=True, legend_pos='b')
+
+    # Add data then categories
     cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
     for ci, _ in enumerate(entities, 2):
-        ser_ref = Reference(ws, min_col=ci, min_row=header_row, max_row=data_end)
-        chart.add_data(ser_ref, titles_from_data=True)
+        chart.add_data(
+            Reference(ws, min_col=ci, min_row=header_row, max_row=data_end),
+            titles_from_data=True,
+        )
     chart.set_categories(cats)
+    # *** Critical: force strRef so Excel treats labels as TEXT not dates ***
+    _fix_cat_as_str(chart)
 
-    # Apply UI palette: exact color per line + 1.5pt width, no markers
+    # Skip every Nth label for very large datasets (>52 periods)
+    if n > 52:
+        chart.x_axis.tickLblSkip = max(2, n // 26)
+
+    # UI palette: per-line color, 1.5pt width, no markers
     for i, ser in enumerate(chart.series):
         color = _UI_PALETTE[i % len(_UI_PALETTE)]
         ser.graphicalProperties.line.solidFill = color
-        ser.graphicalProperties.line.width = 19050  # 1.5pt in EMU
+        ser.graphicalProperties.line.width = 19050  # 1.5pt
         ser.smooth = False
         ser.marker.symbol = 'none'
 
-    # Place chart at top of sheet
     ws.add_chart(chart, "A2")
-
-    # Column widths
     ws.column_dimensions['A'].width = 18
     for ci in range(2, 2 + len(entities)):
         ws.column_dimensions[get_column_letter(ci)].width = 16
@@ -2359,25 +2406,25 @@ def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric
 def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
                             x_label='Period', chart_title=''):
     """
-    Bar chart sheet with chart at top (A2), data table below.
-    data_map: {series_name: {period: value}} → grouped multi-series (e.g. YOY)
-           or {period: value}               → single-series (e.g. Period Totals)
+    Bar chart (col) sheet with chart at top (A2), data table below (row 33+).
+    data_map: {series_name: {period: value}} — multi-series (YOY)
+           or {period: value}               — single-series (Period Totals)
     """
     from openpyxl.chart import BarChart, Reference
 
     ws = wb.create_sheet(title=sheet_title[:31])
-    fmt_type, num_fmt = _fmt_metric(metric)
+    _, num_fmt = _fmt_metric(metric)
 
     if not isinstance(data_map, dict):
         return ws
 
-    # Detect multi-series vs single-series
     first_val = next(iter(data_map.values()), None)
     multi_series = isinstance(first_val, dict)
 
     header_row = _CHART_DATA_OFFSET + 1
-    data_start = header_row + 1
+    data_start  = header_row + 1
 
+    # ── Data table ────────────────────────────────────────────────────────
     if multi_series:
         series_names = list(data_map.keys())
         ws.cell(row=header_row, column=1, value=x_label).font = XL_HDR_FONT
@@ -2386,80 +2433,76 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
         for ci, sname in enumerate(series_names, 2):
             c = ws.cell(row=header_row, column=ci, value=sname)
             c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
-
         for ri, period in enumerate(periods, data_start):
             ws.cell(row=ri, column=1, value=str(period))
             for ci, sname in enumerate(series_names, 2):
                 v = data_map[sname].get(period, 0)
                 c = ws.cell(row=ri, column=ci, value=v)
                 c.number_format = num_fmt
-        data_end = data_start + len(periods) - 1
+        data_end   = data_start + len(periods) - 1
         num_series = len(series_names)
     else:
-        # Single series: {period: value}
         series_names = None
         ws.cell(row=header_row, column=1, value=x_label).font = XL_HDR_FONT
         ws.cell(row=header_row, column=1).fill = XL_HDR_FILL
         ws.cell(row=header_row, column=1).alignment = XL_HDR_ALIGN
-        metric_lbl = _ALL_METRIC_LABELS.get(metric, metric)
-        c = ws.cell(row=header_row, column=2, value=metric_lbl)
+        c = ws.cell(row=header_row, column=2, value=_ALL_METRIC_LABELS.get(metric, metric))
         c.font = XL_HDR_FONT; c.fill = XL_HDR_FILL; c.alignment = XL_HDR_ALIGN
-
         for ri, period in enumerate(periods, data_start):
             ws.cell(row=ri, column=1, value=str(period))
-            v = data_map.get(period, 0)
-            c = ws.cell(row=ri, column=2, value=v)
+            c = ws.cell(row=ri, column=2, value=data_map.get(period, 0))
             c.number_format = num_fmt
-        data_end = data_start + len(periods) - 1
+        data_end   = data_start + len(periods) - 1
         num_series = 1
 
     if not periods:
         return ws
 
-    n_periods = len(periods)
+    # ── BarChart ──────────────────────────────────────────────────────────
+    n = len(periods)
     chart = BarChart()
-    chart.type = 'col'
+    chart.type     = 'col'
     chart.grouping = 'clustered'
-    chart.title = chart_title or sheet_title
+    chart.title    = chart_title or sheet_title
+    chart.height   = 15
+    chart.width    = _chart_width(n)
+    # Metric label on value (Y) axis; no x_axis.title (avoids overlap with category labels)
     chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
-    # x_axis title only when periods are few enough to not conflict with legend
-    if n_periods <= 24:
-        chart.x_axis.title = x_label
-    chart.height = 15
-    chart.width = 36 if n_periods > 24 else 28
+
     y_fmt = '0%' if _is_pct_metric(metric) else 'General'
     if multi_series:
-        # Multi-series (YOY): legend at right — avoids overlap with x-axis title/labels
-        _style_chart_axes(chart, y_num_fmt=y_fmt, show_legend=True, legend_pos='r')
+        # YOY: legend at right — leaves room for category labels at bottom
+        _apply_chart_style(chart, y_num_fmt=y_fmt, show_legend=True, legend_pos='r')
     else:
-        # Single series: no legend (it would just repeat the metric name or all category names)
-        _style_chart_axes(chart, y_num_fmt=y_fmt, show_legend=False)
-    # Skip x-axis tick labels when too many categories
-    if n_periods > 24:
-        chart.x_axis.tickLblSkip = max(2, n_periods // 12)
+        # Single series: no legend needed
+        _apply_chart_style(chart, y_num_fmt=y_fmt, show_legend=False)
+
+    # Skip labels only for very large datasets
+    if n > 52:
+        chart.x_axis.tickLblSkip = max(2, n // 26)
 
     cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
     for ci in range(2, 2 + num_series):
-        ser_ref = Reference(ws, min_col=ci, min_row=header_row, max_row=data_end)
-        chart.add_data(ser_ref, titles_from_data=True)
+        chart.add_data(
+            Reference(ws, min_col=ci, min_row=header_row, max_row=data_end),
+            titles_from_data=True,
+        )
     chart.set_categories(cats)
+    # *** Critical: force strRef so Excel treats labels as TEXT not dates ***
+    _fix_cat_as_str(chart)
 
-    # Apply UI palette colors
+    # UI palette colors
     if multi_series:
-        # Each series (e.g. each year in YOY) gets its own palette color
         for i, ser in enumerate(chart.series):
             color = _UI_PALETTE[i % len(_UI_PALETTE)]
             ser.graphicalProperties.solidFill = color
             ser.graphicalProperties.line.solidFill = color
     else:
-        # Single series (Period Totals): uniform color — matches UI solid bar style
         ser = chart.series[0]
         ser.graphicalProperties.solidFill = _UI_PALETTE[0]
         ser.graphicalProperties.line.solidFill = _UI_PALETTE[0]
 
-    # Place chart at top of sheet
     ws.add_chart(chart, "A2")
-
     ws.column_dimensions['A'].width = 18
     for ci in range(2, 2 + num_series):
         ws.column_dimensions[get_column_letter(ci)].width = 16
