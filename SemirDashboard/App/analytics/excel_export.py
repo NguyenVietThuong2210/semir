@@ -2142,10 +2142,12 @@ _COUPON_METRIC_LABEL = {
 _ALL_METRIC_LABELS = {**_SALES_METRIC_LABEL, **_CUSTOMER_METRIC_LABEL, **_COUPON_METRIC_LABEL}
 
 # Sales: map xaxis name → (by_shop sub-key, period label key in each entry)
+# NOTE: by_week entries use 'week_label' (display: "Week 1 (6/1-12/1)") and
+#       'week_sort' (key: "2025-W01"). We use week_label for display on chart.
 _SALES_AXIS = {
     'season': ('by_session', 'session'),
     'month':  ('by_month',   'month'),
-    'week':   ('by_week',    'week'),
+    'week':   ('by_week',    'week_label'),   # was 'week' — no such key in data
     'year':   ('by_year',    'year'),
 }
 # Customer: shop_stats[shop_name] keys and period label keys
@@ -2254,13 +2256,22 @@ _COMP_YEAR_PALETTE = [
 # Single-series bar chart colour (matches BAR_GRADIENT_COLOR in UI)
 _BAR_SINGLE_COLOR = '#0047B3'
 
-# Rows reserved for the chart image at top of sheet
-_CHART_DATA_OFFSET = 32
+# Chart figure dimensions for rendering
+_CHART_FIG_W_IN  = 14.0   # inches wide at render DPI
+_CHART_FIG_H_IN  =  5.5   # inches tall at render DPI
+_CHART_DPI       = 150    # render DPI — high quality PNG
 
-# Chart image dimensions (cm) — matches UI chart canvas proportions
-_CHART_FIG_W_IN  = 14.0   # inches wide  (~35cm, spans A-Q)
-_CHART_FIG_H_IN  =  6.5   # inches tall  (~17cm, ~30 rows)
-_CHART_DPI       = 150    # render quality
+# Display pixel size passed to openpyxl Image.
+# Excel renders image at native pixel dimensions (no DPI rescaling).
+# We tell openpyxl to display at screen-DPI (96) equivalent of our figure size:
+#   display_px = fig_in × 96   →  14.0 × 96 = 1344px wide, 5.5 × 96 = 528px tall
+# At default Excel row height 15pt (≈ 20px), 528px ≈ 26 rows.
+_CHART_DISP_W_PX = int(_CHART_FIG_W_IN * 96)   # 1344
+_CHART_DISP_H_PX = int(_CHART_FIG_H_IN * 96)   # 528
+
+# Rows reserved above data table — must be > display height in rows + 2 buffer.
+# 528px / 20px/row ≈ 26 rows → use 30 for safety.
+_CHART_DATA_OFFSET = 30
 
 
 def _hex_to_rgb(h):
@@ -2365,8 +2376,16 @@ def _fig_to_xl_image(fig):
 
 
 def _write_chart_image_to_sheet(ws, img):
-    """Anchor image at B2 and set row heights so chart sits above data."""
-    img.anchor = 'B2'
+    """Anchor image at A2 with explicit display size so it never overlaps the data table.
+
+    openpyxl passes the raw PNG pixel dimensions to Excel (no DPI correction).
+    Setting img.width/img.height explicitly overrides this, telling Excel to
+    display at exactly _CHART_DISP_W_PX × _CHART_DISP_H_PX screen pixels —
+    equivalent to _CHART_FIG_W_IN × _CHART_FIG_H_IN inches at 96 DPI.
+    """
+    img.width  = _CHART_DISP_W_PX
+    img.height = _CHART_DISP_H_PX
+    img.anchor = 'A2'
     ws.add_image(img)
 
 
@@ -2869,35 +2888,44 @@ def export_coupon_chart_to_excel(
     ws_ov.column_dimensions["B"].width = 20
 
     # ── Helper: build {entity_name: {period: value}} from trend series ────────
-    def _build_entity_map(series_dict, xaxis, metric, selected_entities):
+    def _build_entity_map(series_dict, xaxis, metric, selected_entities,
+                          time_labels_key="time_labels"):
         """
         series_dict: {entity_name: {period_key: {metric: value, ...}}}
+        time_labels_key: 'time_labels' (shop chart) or 'time_labels_camp' (campaign chart)
         Returns (periods_list, {entity_name: {period: value}})
+
+        For weekly xaxis: time_labels contains week_sort keys (e.g. '2025-W01').
+        We translate these to display labels using week_label_map before returning.
         """
-        axis_key = _COUPON_AXIS_LABEL.get(xaxis, 'month')
+        axis_key    = _COUPON_AXIS_LABEL.get(xaxis, 'month')
         entity_series = series_dict.get(axis_key, {})
-        time_labels = trend.get("time_labels", {}).get(axis_key, [])
+        raw_labels  = trend.get(time_labels_key, {}).get(axis_key, [])
+
+        # Translate week_sort → week_label for display
+        week_lbl_map = trend.get("week_label_map", {}) if xaxis == 'week' else {}
+        display_labels = [week_lbl_map.get(str(p), str(p)) for p in raw_labels]
 
         result = {}
         for ename, period_map in entity_series.items():
             if selected_entities and ename not in selected_entities:
                 continue
             entry = {}
-            for pk in time_labels:
-                pk_str = str(pk)
-                row_data = period_map.get(pk_str, period_map.get(pk, {}))
+            for raw_pk, disp_pk in zip(raw_labels, display_labels):
+                raw_str  = str(raw_pk)
+                row_data = period_map.get(raw_str, period_map.get(raw_pk, {}))
                 v = row_data.get(metric, 0) or 0
                 if _is_pct_metric(metric) and v > 1:
                     v /= 100
-                entry[pk_str] = v
+                entry[disp_pk] = v
             result[ename] = entry
 
-        periods_str = [str(p) for p in time_labels]
-        return periods_str, result
+        return display_labels, result
 
     # ── Section 2: Shop Trends (Line chart) ───────────────────────────────────
     shop_periods, shop_entity_map = _build_entity_map(
-        trend.get("shop_series", {}), shop_xaxis, shop_metric, shop_shops or []
+        trend.get("shop_series", {}), shop_xaxis, shop_metric, shop_shops or [],
+        time_labels_key="time_labels",
     )
     metric_lbl = _COUPON_METRIC_LABEL.get(shop_metric, shop_metric)
     _write_line_chart_sheet(
@@ -2907,8 +2935,11 @@ def export_coupon_chart_to_excel(
     )
 
     # ── Section 3: Campaign Trends (Line chart) ───────────────────────────────
+    # Key is 'campaign_series' (not 'camp_series') in calculate_coupon_trend_data().
+    # Campaign chart uses its own time_labels_camp (all-time, unfiltered).
     camp_periods, camp_entity_map = _build_entity_map(
-        trend.get("camp_series", {}), camp_xaxis, camp_metric, camp_campaigns or []
+        trend.get("campaign_series", {}), camp_xaxis, camp_metric, camp_campaigns or [],
+        time_labels_key="time_labels_camp",
     )
     metric_lbl2 = _COUPON_METRIC_LABEL.get(camp_metric, camp_metric)
     _write_line_chart_sheet(
