@@ -2238,113 +2238,161 @@ def _build_yoy_data(shop_map, periods, xaxis, metric):
     return all_within, years, year_period_map
 
 
-# UI palette — matches chart.html JS color arrays
-_UI_PALETTE = [
-    'E6194B', '3CB44B', '4363D8', 'F58231', '911EB4',
-    '42D4F4', 'F032E6', '469990', '9A6324', '800000',
-    'DCBEFF', 'AAFFC3', '808000', 'FFD8B1', '000075',
-    'A9A9A9', 'FFE119', 'FABEBE',
+# ── UI colour palettes — match chart.html JS exactly ─────────────────────────
+# SHOP_PALETTE: used for line chart series (one colour per shop)
+_SHOP_PALETTE = [
+    '#e6194B', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+    '#42d4f4', '#f032e6', '#469990', '#9a6324', '#800000',
+    '#dcbeff', '#aaffc3', '#808000', '#ffd8b1', '#000075',
+    '#a9a9a9', '#ffe119', '#fabebe',
 ]
-# Rows reserved for the chart at top (chart height ~15cm, ~30 rows at default row height)
+# COMP_YEAR_PALETTE: used for YOY bar chart series (one colour per year)
+_COMP_YEAR_PALETTE = [
+    '#1565C0', '#E53935', '#2E7D32', '#F57C00', '#6A1B9A',
+    '#00838F', '#AD1457', '#558B2F', '#4527A0', '#FF6F00',
+]
+# Single-series bar chart colour (matches BAR_GRADIENT_COLOR in UI)
+_BAR_SINGLE_COLOR = '#0047B3'
+
+# Rows reserved for the chart image at top of sheet
 _CHART_DATA_OFFSET = 32
 
+# Chart image dimensions (cm) — matches UI chart canvas proportions
+_CHART_FIG_W_IN  = 14.0   # inches wide  (~35cm, spans A-Q)
+_CHART_FIG_H_IN  =  6.5   # inches tall  (~17cm, ~30 rows)
+_CHART_DPI       = 150    # render quality
 
-def _make_light_gridlines():
-    """Return ChartLines with light gray 0.5pt lines (matches UI subtle gridlines).
-    Must use openpyxl.chart.shapes.GraphicalProperties — ChartLines.spPr is typed to that class.
-    Using openpyxl.drawing.connector.GraphicalProperties (wrong type) corrupts y_axis XML
-    and makes BOTH axes go blank in Excel.
+
+def _hex_to_rgb(h):
+    """'#RRGGBB' or 'RRGGBB' → (r,g,b) floats 0-1."""
+    h = h.lstrip('#')
+    return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
+
+
+def _fmt_large(val, is_pct=False, is_amount=False):
+    """Format y-axis tick label: compact thousands/millions, or percent."""
+    if is_pct:
+        return f'{val*100:.1f}%' if val < 1.01 else f'{val:.1f}%'
+    if is_amount:
+        if abs(val) >= 1_000_000_000:
+            return f'{val/1_000_000_000:.1f}B'
+        if abs(val) >= 1_000_000:
+            return f'{val/1_000_000:.1f}M'
+        if abs(val) >= 1_000:
+            return f'{val/1_000:.0f}K'
+    if abs(val) >= 1_000_000:
+        return f'{val/1_000_000:.1f}M'
+    if abs(val) >= 1_000:
+        return f'{val/1_000:.0f}K'
+    return f'{val:,.0f}'
+
+
+def _chart_fig_setup(title, ylabel, n_periods, vertical_grid=False):
+    """Create a matplotlib Figure styled to match the UI chart.
+
+    vertical_grid=True  → add subtle vertical gridlines (for line charts).
+                          Each vertical line aligns with an x tick, so when it
+                          crosses a data line the dot at that intersection is
+                          clearly visible — matching the UI tooltip crosshair feel.
     """
-    from openpyxl.chart.axis import ChartLines
-    from openpyxl.chart.shapes import GraphicalProperties, LineProperties
-    gl = ChartLines()
-    lp = LineProperties(w=6350)   # 0.5pt in EMU
-    lp.solidFill = 'D9D9D9'       # light gray
-    gp = GraphicalProperties()
-    gp.ln = lp
-    gl.spPr = gp
-    return gl
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
 
+    fig, ax = plt.subplots(figsize=(_CHART_FIG_W_IN, _CHART_FIG_H_IN), dpi=_CHART_DPI)
 
-def _fix_cat_as_str(chart):
-    """Convert series cat from numRef → strRef.
+    # Background
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
 
-    Root-cause fix: openpyxl generates <cat><numRef> for all category references.
-    When the category labels look like dates (e.g. '2026-01', '2026-W01'), Excel
-    interprets them as a DATE axis and auto-scales to a full year/range — causing
-    the actual data to appear compressed into the left 30% of the chart with a flat
-    line extending right.  Changing to strRef forces Excel to treat categories as
-    plain text, filling the full plot area exactly as the UI chart does.
-    """
-    from openpyxl.chart.data_source import StrRef
-    for ser in chart.series:
-        cat = getattr(ser, 'cat', None)
-        if cat and getattr(cat, 'numRef', None):
-            f = cat.numRef.f
-            cat.numRef = None
-            cat.strRef = StrRef(f=f)
+    # Horizontal gridlines — always present (light grey, matches UI)
+    ax.yaxis.grid(True, color='#dee2e6', linewidth=0.6, linestyle='-', zorder=0)
 
-
-def _apply_chart_style(chart, y_num_fmt='General', show_legend=True, legend_pos='b',
-                       is_bar=False):
-    """Apply UI-matching style to chart.
-
-    For both LineChart and BarChart (col), x_axis is the bottom/category axis and
-    y_axis is the left/value axis in openpyxl's axis model.
-
-    Key axis fixes applied here:
-      x_axis.axPos='b'         — explicitly place category axis at bottom
-      x_axis.auto=1            — auto-count categories (prevents axis over-extension)
-      x_axis.tickLblPos='nextTo'— show tick labels adjacent to axis ticks
-      y_axis.tickLblPos='nextTo'— show value labels adjacent to axis ticks
-    """
-    from openpyxl.chart.legend import Legend
-    # Value (Y) axis — left side, shows numbers
-    chart.y_axis.majorGridlines = _make_light_gridlines()
-    chart.y_axis.numFmt = y_num_fmt
-    chart.y_axis.majorTickMark = 'out'
-    chart.y_axis.minorTickMark = 'none'
-    chart.y_axis.tickLblPos = 'nextTo'
-    # Category (X) axis — bottom, shows period labels
-    chart.x_axis.axPos = 'b'          # bottom — prevents both axes collapsing to left
-    chart.x_axis.auto = 1             # let Excel count categories automatically
-    chart.x_axis.tickLblPos = 'nextTo'
-    chart.x_axis.majorTickMark = 'out'
-    chart.x_axis.minorTickMark = 'none'
-    if show_legend:
-        chart.legend = Legend()
-        chart.legend.position = legend_pos
+    # Vertical gridlines — line charts only, even subtler than horizontal
+    if vertical_grid:
+        ax.xaxis.grid(True, color='#e9ecef', linewidth=0.5, linestyle='-', zorder=0)
     else:
-        chart.legend = None
+        ax.xaxis.grid(False)
+
+    ax.set_axisbelow(True)
+
+    # Spines — keep left, remove top/right, make bottom subtle
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#dee2e6')
+    ax.spines['bottom'].set_color('#dee2e6')
+
+    # Title
+    ax.set_title(title, fontsize=11, fontweight='bold', color='#2c3e50', pad=10, loc='left')
+
+    # Y axis label
+    ax.set_ylabel(ylabel, fontsize=9, color='#495057', labelpad=8)
+
+    # Tick style
+    ax.tick_params(axis='both', labelsize=8, colors='#495057', length=3)
+    ax.tick_params(axis='x', rotation=30)
+
+    # X tick label density — skip labels for large datasets
+    if n_periods > 26:
+        skip = max(2, n_periods // 26)
+        ax.xaxis.set_major_locator(mticker.MultipleLocator(skip))
+
+    return fig, ax
 
 
-def _chart_width(n_periods):
-    """Dynamic chart width: enough room for category labels without over-stretching."""
-    if n_periods <= 12:
-        return 26
-    if n_periods <= 24:
-        return 32
-    return 40   # 52 weeks: wide enough to show all labels with skip
+def _fig_to_xl_image(fig):
+    """Render matplotlib figure to PNG bytes, wrap in openpyxl Image.
+
+    Memory hygiene:
+      - plt.close(fig) releases the matplotlib Figure immediately.
+      - We copy bytes into a fresh BytesIO so the original buffer can be
+        garbage-collected; openpyxl holds only the small fresh buffer until
+        the workbook is saved.
+    """
+    import io
+    import matplotlib.pyplot as plt
+    from openpyxl.drawing.image import Image as XLImage
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=_CHART_DPI,
+                bbox_inches='tight', facecolor='white')
+    plt.close(fig)            # release Figure memory now
+    png_bytes = buf.getvalue()
+    buf.close()               # release original buffer
+    img = XLImage(io.BytesIO(png_bytes))  # fresh buffer owned by Image
+    return img
+
+
+def _write_chart_image_to_sheet(ws, img):
+    """Anchor image at B2 and set row heights so chart sits above data."""
+    img.anchor = 'B2'
+    ws.add_image(img)
 
 
 def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric,
                              x_label='Period', chart_title=''):
     """
-    Write a sheet with LineChart at top (A2) then data table below (row 33+).
-      Col A: period labels
-      Col B..N: one col per shop/entity, header = shop name
+    Sheet: matplotlib line chart image at top (B2), data table below (row 33+).
+    One line per shop/entity, UI palette colours, legend at bottom.
     """
-    from openpyxl.chart import LineChart, Reference
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
 
     ws = wb.create_sheet(title=sheet_title[:31])
     entities = list(shop_or_entity_map.keys())
     _, num_fmt = _fmt_metric(metric)
+    is_pct    = _is_pct_metric(metric)
+    is_amount = _is_amount_metric(metric)
+    ylabel    = _ALL_METRIC_LABELS.get(metric, metric)
 
-    # ── Data table (below chart space) ────────────────────────────────────
-    header_row = _CHART_DATA_OFFSET + 1   # row 33
-    data_start  = header_row + 1          # row 34
+    # ── Data table (row 33+) ──────────────────────────────────────────────
+    header_row = _CHART_DATA_OFFSET + 1
+    data_start = header_row + 1
     ws.cell(row=header_row, column=1, value=x_label).font = XL_HDR_FONT
-    ws.cell(row=header_row, column=1).fill = XL_HDR_FILL
+    ws.cell(row=header_row, column=1).fill  = XL_HDR_FILL
     ws.cell(row=header_row, column=1).alignment = XL_HDR_ALIGN
     for ci, name in enumerate(entities, 2):
         c = ws.cell(row=header_row, column=ci, value=name)
@@ -2355,74 +2403,90 @@ def _write_line_chart_sheet(wb, sheet_title, periods, shop_or_entity_map, metric
             v = shop_or_entity_map[name].get(period, 0)
             c = ws.cell(row=ri, column=ci, value=v)
             c.number_format = num_fmt
+    ws.column_dimensions['A'].width = 20
+    for ci in range(2, 2 + len(entities)):
+        ws.column_dimensions[get_column_letter(ci)].width = 15
 
-    data_end = data_start + len(periods) - 1
     if not periods or not entities:
         return ws
 
-    # ── LineChart ─────────────────────────────────────────────────────────
+    # ── Matplotlib line chart ─────────────────────────────────────────────
     n = len(periods)
-    chart = LineChart()
-    chart.title  = chart_title or sheet_title
-    chart.height = 15
-    chart.width  = _chart_width(n)
-    # Metric label on value (Y) axis only; no x_axis.title (redundant + causes crowding)
-    chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
+    # vertical_grid=True: subtle vertical lines at each x tick; dots at
+    # intersections make each data point clearly visible (matches UI crosshair)
+    fig, ax = _chart_fig_setup(chart_title or sheet_title, ylabel, n,
+                               vertical_grid=True)
+    x_idx = list(range(n))
 
-    y_fmt = '0%' if _is_pct_metric(metric) else 'General'
-    _apply_chart_style(chart, y_num_fmt=y_fmt, show_legend=True, legend_pos='b')
+    # Dot size scales down for large datasets to avoid clutter
+    dot_size = 5 if n <= 26 else (4 if n <= 52 else 3)
 
-    # Add data then categories
-    cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
-    for ci, _ in enumerate(entities, 2):
-        chart.add_data(
-            Reference(ws, min_col=ci, min_row=header_row, max_row=data_end),
-            titles_from_data=True,
-        )
-    chart.set_categories(cats)
-    # *** Critical: force strRef so Excel treats labels as TEXT not dates ***
-    _fix_cat_as_str(chart)
+    for i, name in enumerate(entities):
+        color  = _SHOP_PALETTE[i % len(_SHOP_PALETTE)]
+        values = [shop_or_entity_map[name].get(p, 0) for p in periods]
+        ax.plot(x_idx, values,
+                color=color, linewidth=2, label=name,
+                # Filled dot with thin white edge — visible at vertical grid intersections
+                marker='o', markersize=dot_size,
+                markerfacecolor=color,
+                markeredgecolor='white', markeredgewidth=0.8,
+                zorder=4)   # above gridlines
 
-    # Skip every Nth label for very large datasets (>52 periods)
-    if n > 52:
-        chart.x_axis.tickLblSkip = max(2, n // 26)
+    # X-axis ticks & labels — must align with vertical gridlines
+    ax.set_xticks(x_idx)
+    ax.set_xticklabels([str(p) for p in periods], rotation=35, ha='right', fontsize=7.5)
+    if n > 26:
+        skip = max(2, n // 26)
+        ax.set_xticks(x_idx[::skip])
+        ax.set_xticklabels([str(periods[j]) for j in x_idx[::skip]], rotation=35, ha='right', fontsize=7.5)
 
-    # UI palette: per-line color, 1.5pt width, no markers
-    for i, ser in enumerate(chart.series):
-        color = _UI_PALETTE[i % len(_UI_PALETTE)]
-        ser.graphicalProperties.line.solidFill = color
-        ser.graphicalProperties.line.width = 19050  # 1.5pt
-        ser.smooth = False
-        ser.marker.symbol = 'none'
+    # Y-axis formatter
+    ax.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda v, _: _fmt_large(v, is_pct=is_pct, is_amount=is_amount))
+    )
 
-    ws.add_chart(chart, "A2")
-    ws.column_dimensions['A'].width = 18
-    for ci in range(2, 2 + len(entities)):
-        ws.column_dimensions[get_column_letter(ci)].width = 16
+    # Legend — bottom outside plot, up to 6 per row
+    if entities:
+        ncol = min(len(entities), 6)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.20),
+                  ncol=ncol, fontsize=8, frameon=True,
+                  fancybox=False, edgecolor='#dee2e6',
+                  handlelength=1.5, handleheight=0.8,
+                  borderpad=0.6, columnspacing=1.0)
 
+    fig.tight_layout(rect=[0, 0.10, 1, 1])
+
+    img = _fig_to_xl_image(fig)
+    _write_chart_image_to_sheet(ws, img)
     return ws
 
 
 def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
                             x_label='Period', chart_title=''):
     """
-    Bar chart (col) sheet with chart at top (A2), data table below (row 33+).
+    Sheet: matplotlib bar chart image at top (B2), data table below (row 33+).
     data_map: {series_name: {period: value}} — multi-series (YOY)
            or {period: value}               — single-series (Period Totals)
     """
-    from openpyxl.chart import BarChart, Reference
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import numpy as np
 
     ws = wb.create_sheet(title=sheet_title[:31])
     _, num_fmt = _fmt_metric(metric)
+    is_pct    = _is_pct_metric(metric)
+    is_amount = _is_amount_metric(metric)
+    ylabel    = _ALL_METRIC_LABELS.get(metric, metric)
 
     if not isinstance(data_map, dict):
         return ws
 
-    first_val = next(iter(data_map.values()), None)
+    first_val  = next(iter(data_map.values()), None)
     multi_series = isinstance(first_val, dict)
 
     header_row = _CHART_DATA_OFFSET + 1
-    data_start  = header_row + 1
+    data_start = header_row + 1
 
     # ── Data table ────────────────────────────────────────────────────────
     if multi_series:
@@ -2439,7 +2503,6 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
                 v = data_map[sname].get(period, 0)
                 c = ws.cell(row=ri, column=ci, value=v)
                 c.number_format = num_fmt
-        data_end   = data_start + len(periods) - 1
         num_series = len(series_names)
     else:
         series_names = None
@@ -2452,61 +2515,63 @@ def _write_bar_chart_sheet(wb, sheet_title, periods, data_map, metric,
             ws.cell(row=ri, column=1, value=str(period))
             c = ws.cell(row=ri, column=2, value=data_map.get(period, 0))
             c.number_format = num_fmt
-        data_end   = data_start + len(periods) - 1
         num_series = 1
+
+    ws.column_dimensions['A'].width = 20
+    for ci in range(2, 2 + num_series):
+        ws.column_dimensions[get_column_letter(ci)].width = 15
 
     if not periods:
         return ws
 
-    # ── BarChart ──────────────────────────────────────────────────────────
+    # ── Matplotlib bar chart ──────────────────────────────────────────────
     n = len(periods)
-    chart = BarChart()
-    chart.type     = 'col'
-    chart.grouping = 'clustered'
-    chart.title    = chart_title or sheet_title
-    chart.height   = 15
-    chart.width    = _chart_width(n)
-    # Metric label on value (Y) axis; no x_axis.title (avoids overlap with category labels)
-    chart.y_axis.title = _ALL_METRIC_LABELS.get(metric, metric)
+    fig, ax = _chart_fig_setup(chart_title or sheet_title, ylabel, n)
+    x_idx = np.arange(n)
 
-    y_fmt = '0%' if _is_pct_metric(metric) else 'General'
     if multi_series:
-        # YOY: legend at right — leaves room for category labels at bottom
-        _apply_chart_style(chart, y_num_fmt=y_fmt, show_legend=True, legend_pos='r')
+        ns = len(series_names)
+        bar_w = max(0.12, min(0.75 / ns, 0.3))
+        offsets = np.linspace(-(ns-1)/2 * bar_w, (ns-1)/2 * bar_w, ns)
+        for i, sname in enumerate(series_names):
+            color  = _COMP_YEAR_PALETTE[i % len(_COMP_YEAR_PALETTE)]
+            values = [data_map[sname].get(p, 0) for p in periods]
+            ax.bar(x_idx + offsets[i], values, bar_w,
+                   color=color, label=str(sname),
+                   edgecolor='white', linewidth=0.4,
+                   alpha=0.85, zorder=3)
+        # Legend below chart
+        ncol = min(ns, 6)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.22),
+                  ncol=ncol, fontsize=8.5, frameon=True,
+                  fancybox=False, edgecolor='#dee2e6',
+                  handlelength=1.2, borderpad=0.6)
+        fig.tight_layout(rect=[0, 0.08, 1, 1])
     else:
-        # Single series: no legend needed
-        _apply_chart_style(chart, y_num_fmt=y_fmt, show_legend=False)
+        values = [data_map.get(p, 0) for p in periods]
+        bar_w  = max(0.3, min(0.7, 12 / max(n, 1)))
+        ax.bar(x_idx, values, bar_w,
+               color=_BAR_SINGLE_COLOR, alpha=0.85,
+               edgecolor='white', linewidth=0.3, zorder=3)
+        fig.tight_layout()
 
-    # Skip labels only for very large datasets
-    if n > 52:
-        chart.x_axis.tickLblSkip = max(2, n // 26)
+    # X-axis
+    ax.set_xticks(x_idx)
+    ax.set_xticklabels([str(p) for p in periods], rotation=35, ha='right', fontsize=7.5)
+    if n > 26:
+        skip = max(2, n // 26)
+        ax.set_xticks(x_idx[::skip])
+        ax.set_xticklabels([str(periods[j]) for j in range(0, n, skip)],
+                           rotation=35, ha='right', fontsize=7.5)
+    ax.set_xlim(-0.7, n - 0.3)
 
-    cats = Reference(ws, min_col=1, min_row=data_start, max_row=data_end)
-    for ci in range(2, 2 + num_series):
-        chart.add_data(
-            Reference(ws, min_col=ci, min_row=header_row, max_row=data_end),
-            titles_from_data=True,
-        )
-    chart.set_categories(cats)
-    # *** Critical: force strRef so Excel treats labels as TEXT not dates ***
-    _fix_cat_as_str(chart)
+    # Y-axis formatter
+    ax.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda v, _: _fmt_large(v, is_pct=is_pct, is_amount=is_amount))
+    )
 
-    # UI palette colors
-    if multi_series:
-        for i, ser in enumerate(chart.series):
-            color = _UI_PALETTE[i % len(_UI_PALETTE)]
-            ser.graphicalProperties.solidFill = color
-            ser.graphicalProperties.line.solidFill = color
-    else:
-        ser = chart.series[0]
-        ser.graphicalProperties.solidFill = _UI_PALETTE[0]
-        ser.graphicalProperties.line.solidFill = _UI_PALETTE[0]
-
-    ws.add_chart(chart, "A2")
-    ws.column_dimensions['A'].width = 18
-    for ci in range(2, 2 + num_series):
-        ws.column_dimensions[get_column_letter(ci)].width = 16
-
+    img = _fig_to_xl_image(fig)
+    _write_chart_image_to_sheet(ws, img)
     return ws
 
 
@@ -2658,7 +2723,12 @@ def export_customer_chart_to_excel(
     ws_ov.column_dimensions["B"].width = 20
 
     # Helper: build {shop_name: {period: value}} from shop_stats
-    shop_stats = data.get("shop_stats", {})
+    # shop_stats can be list [{shop_name, by_month, ...}] or dict {name: {...}}
+    _shop_stats_raw = data.get("shop_stats", [])
+    if isinstance(_shop_stats_raw, list):
+        shop_stats = {s['shop_name']: s for s in _shop_stats_raw}
+    else:
+        shop_stats = _shop_stats_raw
 
     def _cust_shop_map(xaxis, metric, selected_shops):
         axis_key, period_key = _CUSTOMER_AXIS.get(xaxis, ('month', 'month'))
@@ -2667,9 +2737,9 @@ def export_customer_chart_to_excel(
             if selected_shops and sname not in selected_shops:
                 continue
             period_list = sdata.get(axis_key, [])
-            def _v(e):
-                v = e.get(metric, 0) or 0
-                return v / 100 if _is_pct_metric(metric) and v > 1 else v
+            def _v(e, _m=metric):
+                v = e.get(_m, 0) or 0
+                return v / 100 if _is_pct_metric(_m) and v > 1 else v
             result[sname] = {e[period_key]: _v(e) for e in period_list}
         return result
 
