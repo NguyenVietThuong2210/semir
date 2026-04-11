@@ -6,6 +6,7 @@ from datetime import datetime
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponse
+from django.core.cache import cache
 
 from App.permissions import requires_perm
 from App.analytics.tab_functions import (
@@ -17,6 +18,39 @@ from App.models import SalesTransaction, Customer, Coupon, CouponCampaign
 from App.views.view_utils import parse_date
 
 logger = logging.getLogger(__name__)
+
+_DROPDOWN_TTL = 300  # 5 min cache for dropdown lists
+
+
+def _get_dropdown_options():
+    """Return (sales_shops, customer_shops, coupon_shops, campaigns) — cached 5 min."""
+    key = "shop_detail_dropdowns"
+    cached = cache.get(key)
+    if cached:
+        return cached
+
+    sales_shops = sorted(
+        SalesTransaction.objects
+        .exclude(shop_name__isnull=True).exclude(shop_name='')
+        .values_list('shop_name', flat=True).distinct()
+    )
+    customer_shops = sorted(
+        Customer.objects
+        .exclude(registration_store__isnull=True).exclude(registration_store='')
+        .values_list('registration_store', flat=True).distinct()
+    )
+    coupon_shops = sorted(
+        Coupon.objects
+        .exclude(using_shop__isnull=True).exclude(using_shop='')
+        .values_list('using_shop', flat=True).distinct()
+    )
+    campaigns = list(CouponCampaign.objects.values("id", "name", "prefix"))
+    for c in campaigns:
+        c["prefix_list"] = [p.strip() for p in (c["prefix"] or "").split(",") if p.strip()]
+
+    result = (sales_shops, customer_shops, coupon_shops, campaigns)
+    cache.set(key, result, _DROPDOWN_TTL)
+    return result
 
 QUICK_BTNS = [
     ("Last 7 Days", 7),
@@ -51,25 +85,8 @@ def shop_detail(request):
         messages.error(request, "Start date must be before end date")
         date_from = date_to = None
 
-    # ── Dropdown options ──────────────────────────────────────────────────────
-    sales_shops = sorted(
-        SalesTransaction.objects
-        .exclude(shop_name__isnull=True).exclude(shop_name='')
-        .values_list('shop_name', flat=True).distinct()
-    )
-    customer_shops = sorted(
-        Customer.objects
-        .exclude(registration_store__isnull=True).exclude(registration_store='')
-        .values_list('registration_store', flat=True).distinct()
-    )
-    coupon_shops = sorted(
-        Coupon.objects
-        .exclude(using_shop__isnull=True).exclude(using_shop='')
-        .values_list('using_shop', flat=True).distinct()
-    )
-    campaigns = list(CouponCampaign.objects.values("id", "name", "prefix"))
-    for c in campaigns:
-        c["prefix_list"] = [p.strip() for p in (c["prefix"] or "").split(",") if p.strip()]
+    # ── Dropdown options (cached 5 min) ───────────────────────────────────────
+    sales_shops, customer_shops, coupon_shops, campaigns = _get_dropdown_options()
 
     # ── Resolve campaign → effective prefix ───────────────────────────────────
     effective_prefix = coupon_prefix
