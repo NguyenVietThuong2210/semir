@@ -301,6 +301,14 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% check_perm 'page_shop_detail' as can_shop_detail %}
+                            {% if can_shop_detail %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'shop_detail' %}">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            {% endif %}
                         </ul>
                     </li>
 

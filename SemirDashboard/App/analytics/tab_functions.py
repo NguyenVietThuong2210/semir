@@ -383,13 +383,16 @@ def _build_customer_details(customer_purchases, get_customer_info_fn, date_from,
 COUPON_TABS = ('shop', 'detail', 'duplicates')
 
 
-def _build_coupon_qs(coupon_id_prefix=None, shop_group=None, date_from=None, date_to=None):
+def _build_coupon_qs(coupon_id_prefix=None, shop_group=None, date_from=None, date_to=None, using_shop_exact=None):
     """
     Build base Coupon queryset with shop_group + prefix filters applied.
     Returns (qs, period_qs).
     """
     from App.models import Coupon
     qs = Coupon.objects.all()
+
+    if using_shop_exact:
+        qs = qs.filter(using_shop=using_shop_exact)
 
     if shop_group:
         if shop_group == 'Bala Group':
@@ -1184,4 +1187,362 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
         'new_pos_inv_count':         new_pos_inv_count,
         'new_pos_no_inv_count':      new_pos_no_inv_count,
         'new_cnv_count':             new_cnv_count,
+    }
+
+
+# ── Shop Detail page helpers ──────────────────────────────────────────────────
+
+def get_shop_detail_sales_data(shop_name: str, date_from=None, date_to=None) -> dict | None:
+    """
+    Return sales analytics for a single shop, identical to what aggregate_by_shop
+    produces for that shop, but via a direct DB query filtered to shop_name.
+
+    Reuses: build_customer_purchase_map, aggregate_by_season, aggregate_by_month,
+            aggregate_by_week, calculate_return_visits — same functions as production path.
+
+    Returns shop dict matching the shape of each entry in get_sales_tab('shop')['by_shop'],
+    or None if no data.
+    """
+    from App.analytics.customer_utils import build_customer_purchase_map, _norm_vid
+    from App.analytics.calculations import calculate_return_visits
+    from App.analytics.aggregators import aggregate_by_season, aggregate_by_month, aggregate_by_week
+
+    # ── Direct DB query — filtered to one shop ─────────────────────────────
+    FIELDS = ('vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name')
+    qs = SalesTransaction.objects.filter(shop_name=shop_name).values(*FIELDS).order_by()
+    if date_from:
+        qs = qs.filter(sales_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(sales_date__lte=date_to)
+
+    sales_list = list(qs)
+    if not sales_list:
+        return None
+
+    # ── Same info_map build as _load_sales ────────────────────────────────
+    from App.models import Customer as _Cust
+    info_map = {
+        _norm_vid(str(c['vip_id'])): (
+            __import__('App.analytics.customer_utils', fromlist=['normalize_grade'])
+            .normalize_grade(c['vip_grade']),
+            c['registration_date'],
+            c['name'] or 'Unknown',
+        )
+        for c in _Cust.objects
+        .filter(vip_id__isnull=False).exclude(vip_id=0)
+        .values('vip_id', 'vip_grade', 'registration_date', 'name')
+        if c['vip_id']
+    }
+
+    def _get_ci(vip_id, customer_obj=None):
+        c = info_map.get(vip_id)
+        if c is not None:
+            return c
+        from App.analytics.customer_utils import get_customer_info
+        return get_customer_info(vip_id, customer_obj)
+
+    # ── Build purchase map (same function as production) ──────────────────
+    customer_purchases = build_customer_purchase_map(sales_list)
+    del sales_list
+
+    # ── Compute sub-breakdowns using the same aggregation functions ───────
+    by_session = aggregate_by_season(customer_purchases, _get_ci)
+    by_month   = aggregate_by_month(customer_purchases, _get_ci)
+    by_week    = aggregate_by_week(customer_purchases, _get_ci)
+
+    # ── Shop-level overview (single pass — same logic as aggregate_by_shop) ─
+    from decimal import Decimal
+    shop_customers     = set()
+    shop_returning     = set()
+    shop_invoices      = 0
+    shop_amount        = Decimal(0)
+    shop_ret_invoices  = 0
+    shop_ret_amount    = Decimal(0)
+    shop_vip0_inv      = 0
+    shop_vip0_amount   = Decimal(0)
+
+    for vip_id, purchases in customer_purchases.items():
+        if vip_id == '0':
+            shop_vip0_inv    += len(purchases)
+            shop_vip0_amount += sum(p['amount'] for p in purchases)
+            continue
+        _, reg_date, _ = _get_ci(vip_id, purchases[0].get('customer'))
+        _, ret = calculate_return_visits(purchases, reg_date)
+        amt = sum(p['amount'] for p in purchases)
+        shop_customers.add(vip_id)
+        shop_invoices += len(purchases)
+        shop_amount   += amt
+        if ret:
+            shop_returning.add(vip_id)
+            shop_ret_invoices += len(purchases)
+            shop_ret_amount   += amt
+
+    ac = len(shop_customers)
+    rc = len(shop_returning)
+
+    return {
+        'shop_name':                shop_name,
+        'total_customers':          ac,
+        'returning_customers':      rc,
+        'return_rate':              round(rc / ac * 100 if ac else 0, 2),
+        'returning_invoices':       shop_ret_invoices,
+        'returning_amount':         float(shop_ret_amount),
+        'total_invoices':           shop_invoices,
+        'total_amount':             float(shop_amount),
+        'total_invoices_with_vip0': shop_invoices + shop_vip0_inv,
+        'total_amount_with_vip0':   float(shop_amount + shop_vip0_amount),
+        'by_session':               by_session,
+        'by_month':                 by_month,
+        'by_week':                  by_week,
+    }
+
+
+def get_shop_detail_customer_data(registration_store: str,
+                                  start_date: str = '', end_date: str = '') -> dict | None:
+    """
+    Return customer analytics for a single registration_store.
+
+    Reuses: _fetch_bd_raw (cached), compute_cnv_breakdown with store_filter so only
+    that store's entries are accumulated — same logic as production bd_shop tab,
+    but O(store entries) instead of O(all entries).
+
+    Returns:
+        {
+            'summary': row-dict (same shape as by_shop rows from bd_shop tab),
+            'by_season': [...],
+            'by_month': [...],
+            'by_week': [...],
+        }
+    or None if no data for this store.
+    """
+    from App.cnv.service import compute_cnv_breakdown
+
+    period_filter, _ = _parse_cnv_period_filter(start_date, end_date)
+    pos_phones_all, cnv_phones_all = _get_cnv_phone_sets()
+
+    # compute_cnv_breakdown with store_filter — reuses cached _fetch_bd_raw DB data
+    bd = compute_cnv_breakdown(
+        period_filter, pos_phones_all, cnv_phones_all,
+        dims=frozenset({'shop', 'season_shop', 'month_shop', 'week_shop'}),
+        store_filter=registration_store,
+    )
+
+    summary = next((r for r in bd['shop'] if r['label'] == registration_store), None)
+    detail  = next((sh for sh in bd['shop_detail'] if sh['shop'] == registration_store), None)
+
+    if not summary and not detail:
+        return None
+
+    return {
+        'summary':   summary,
+        'by_season': detail['by_season'] if detail else [],
+        'by_month':  detail['by_month']  if detail else [],
+        'by_week':   detail['by_week']   if detail else [],
+    }
+
+
+def get_shop_detail_coupon_data(using_shop: str, date_from=None, date_to=None,
+                                coupon_id_prefix=None) -> dict:
+    """
+    Return coupon overview (all_time + period) and detail list filtered to a
+    single using_shop.  Used by the Shop Detail page.
+
+    Returns:
+        {
+            'all_time': {...},
+            'period': {...},
+            'details': [...],
+        }
+    """
+    from decimal import Decimal
+    from App.analytics.coupon_analytics import calc_coupon_amount, format_face_value
+
+    qs, period_qs = _build_coupon_qs(
+        coupon_id_prefix=coupon_id_prefix,
+        shop_group=None,
+        date_from=date_from,
+        date_to=date_to,
+        using_shop_exact=using_shop,
+    )
+
+    # ── All-time overview ─────────────────────────────────────────────────────
+    _at = qs.aggregate(
+        total=Count('id'),
+        used=Count('id', filter=Q(using_date__isnull=False)),
+    )
+    at_total = _at['total']
+    at_used  = _at['used']
+    at_unused = at_total - at_used
+    at_usage_rate = round(at_used / at_total * 100 if at_total else 0, 2)
+
+    _at_used_rows = list(qs.filter(using_date__isnull=False).values('pk', 'docket_number', 'face_value'))
+    _at_dockets = [r['docket_number'] for r in _at_used_rows if r['docket_number']]
+    _txn_at = {
+        t['invoice_number']: t
+        for t in SalesTransaction.objects.filter(invoice_number__in=_at_dockets)
+        .values('invoice_number', 'sales_amount')
+    }
+    at_amount = Decimal(0)
+    at_coupon_amount = Decimal(0)
+    at_unique_amount = Decimal(0)
+    _seen_at = set()
+    for r in _at_used_rows:
+        _txn = _txn_at.get(r['docket_number']) if r['docket_number'] else None
+        inv_amt = (Decimal(str(_txn['sales_amount'])) if _txn and _txn['sales_amount'] else None) or r['face_value'] or Decimal(0)
+        at_amount += inv_amt
+        at_coupon_amount += calc_coupon_amount(r['face_value'], inv_amt)
+        dk = r['docket_number'] or f'__pk{r["pk"]}'
+        if dk not in _seen_at:
+            _seen_at.add(dk)
+            at_unique_amount += inv_amt
+
+    _dup_at = (
+        qs.filter(using_date__isnull=False, docket_number__isnull=False)
+        .exclude(docket_number='')
+        .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1).count()
+    )
+
+    # ── Period overview ───────────────────────────────────────────────────────
+    if period_qs is qs:
+        pd_total, pd_used = at_total, at_used
+        pd_amount, pd_coupon_amount, pd_unique_amount = at_amount, at_coupon_amount, at_unique_amount
+        _dup_pd = _dup_at
+    else:
+        _pd = period_qs.aggregate(
+            total=Count('id'),
+            used=Count('id', filter=Q(using_date__isnull=False)),
+        )
+        pd_total = _pd['total']
+        pd_used  = _pd['used']
+
+        _pd_used_rows = list(period_qs.filter(using_date__isnull=False).values('pk', 'docket_number', 'face_value'))
+        _pd_dockets = [r['docket_number'] for r in _pd_used_rows if r['docket_number']]
+        _txn_pd = {
+            t['invoice_number']: t
+            for t in SalesTransaction.objects.filter(invoice_number__in=_pd_dockets)
+            .values('invoice_number', 'sales_amount')
+        }
+        pd_amount = Decimal(0)
+        pd_coupon_amount = Decimal(0)
+        pd_unique_amount = Decimal(0)
+        _seen_pd = set()
+        for r in _pd_used_rows:
+            _txn = _txn_pd.get(r['docket_number']) if r['docket_number'] else None
+            inv_amt = (Decimal(str(_txn['sales_amount'])) if _txn and _txn['sales_amount'] else None) or r['face_value'] or Decimal(0)
+            pd_amount += inv_amt
+            pd_coupon_amount += calc_coupon_amount(r['face_value'], inv_amt)
+            dk = r['docket_number'] or f'__pk{r["pk"]}'
+            if dk not in _seen_pd:
+                _seen_pd.add(dk)
+                pd_unique_amount += inv_amt
+
+        _dup_pd = (
+            period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
+            .exclude(docket_number='')
+            .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1).count()
+        )
+
+    pd_unused = pd_total - pd_used
+    pd_usage_rate = round(pd_used / pd_total * 100 if pd_total else 0, 2)
+
+    # ── Detail list (period used coupons) ────────────────────────────────────
+    from App.models import Customer as _Cust
+    try:
+        from App.cnv.models import CNVCustomer
+        _cnv_map = {
+            c.phone: c
+            for c in CNVCustomer.objects.all().only('phone', 'cnv_id', 'points', 'total_points')
+        }
+    except Exception:
+        _cnv_map = {}
+
+    _dup_set = set(
+        period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
+        .exclude(docket_number='')
+        .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1)
+        .values_list('docket_number', flat=True)
+    )
+
+    _period_used = list(period_qs.filter(using_date__isnull=False).order_by('-using_date')[:500])
+    if _period_used:
+        _dockets = [c.docket_number for c in _period_used if c.docket_number]
+        _txn_map = {t.invoice_number: t for t in SalesTransaction.objects.filter(invoice_number__in=_dockets).order_by()}
+        _vip_ids = {t.vip_id for t in _txn_map.values() if t.vip_id and t.vip_id != '0'}
+        _cust_map = {c.vip_id: c for c in _Cust.objects.filter(vip_id__in=_vip_ids).order_by()}
+
+        details = []
+        for coupon in _period_used:
+            vip_id   = coupon.member_id or None
+            vip_name = coupon.member_name or None
+            phone    = coupon.member_phone or None
+            sales_date = inv_shop = inv_amount = note = None
+
+            if coupon.docket_number:
+                txn = _txn_map.get(coupon.docket_number)
+                if txn:
+                    if not vip_id:
+                        vip_id = txn.vip_id
+                    if not vip_name and txn.vip_id and txn.vip_id != '0':
+                        cust = _cust_map.get(txn.vip_id)
+                        if cust:
+                            vip_name = cust.name
+                            phone = cust.phone
+                        else:
+                            vip_name = txn.vip_name
+                    sales_date = txn.sales_date
+                    inv_shop = txn.shop_name
+                    inv_amount = txn.sales_amount
+                    if coupon.using_shop and inv_shop and coupon.using_shop != inv_shop:
+                        note = f'Shop mismatch: Coupon@{coupon.using_shop} vs Invoice@{inv_shop}'
+                else:
+                    note = f'Invoice {coupon.docket_number} not found'
+
+            _coupon_amount = calc_coupon_amount(coupon.face_value, inv_amount)
+            _cnv = _cnv_map.get(phone) if phone else None
+            details.append({
+                'coupon_id':       coupon.coupon_id,
+                'creator':         coupon.creator,
+                'face_value_display': format_face_value(coupon.face_value),
+                'using_shop':      coupon.using_shop,
+                'using_date':      coupon.using_date,
+                'vip_id':          vip_id,
+                'customer_name':   vip_name,
+                'customer_phone':  phone,
+                'sales_day':       sales_date,
+                'inv_shop':        inv_shop,
+                'amount':          inv_amount or Decimal(0),
+                'coupon_amount':   _coupon_amount,
+                'note':            note,
+                'cnv_id':          _cnv.cnv_id if _cnv else '',
+                'cnv_points':      _cnv.points if _cnv else '',
+                'cnv_total_points': _cnv.total_points if _cnv else '',
+                'is_duplicate':    coupon.docket_number in _dup_set if coupon.docket_number else False,
+            })
+    else:
+        details = []
+
+    return {
+        'all_time': {
+            'total':                at_total,
+            'used':                 at_used,
+            'unused':               at_unused,
+            'usage_rate':           at_usage_rate,
+            'used_pct':             round(at_used / at_total * 100, 2) if at_total else 0,
+            'total_amount':         float(at_amount),
+            'total_coupon_amount':  float(at_coupon_amount),
+            'unique_invoice_amount': float(at_unique_amount),
+            'duplicate_invoice_count': _dup_at,
+        },
+        'period': {
+            'total':                pd_total,
+            'used':                 pd_used,
+            'unused':               pd_unused,
+            'usage_rate':           pd_usage_rate,
+            'used_pct':             round(pd_used / pd_total * 100, 2) if pd_total else 0,
+            'total_amount':         float(pd_amount),
+            'total_coupon_amount':  float(pd_coupon_amount),
+            'unique_invoice_amount': float(pd_unique_amount),
+            'duplicate_invoice_count': _dup_pd,
+        },
+        'details': details,
     }

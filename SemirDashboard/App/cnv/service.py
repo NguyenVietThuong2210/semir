@@ -186,7 +186,7 @@ def _fetch_bd_raw(period_filter):
     return result
 
 
-def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=None):
+def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=None, store_filter=None):
     """
     Compute registration breakdown tables: by season / month / week / shop
     and the cross-tab variants (season×shop, month×shop, week×shop).
@@ -194,6 +194,8 @@ def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=No
     period_filter: {"start": aware_datetime, "end": aware_datetime} or {}
     pos_phones_all / cnv_phones_all: all-time phone sets (for POS-only / CNV-only check).
     dims: frozenset of dimension names to compute, or None to compute all.
+    store_filter: if given, only process entries whose registration_store == store_filter.
+                  DB fetch is still the same cached call; only the Python accumulation is filtered.
 
     DB fetch is cached via _fetch_bd_raw() — tabs 2-N with same period pay only
     the fast Python accumulation cost (~0.2s) instead of the full DB fetch (~2.5s).
@@ -243,6 +245,8 @@ def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=No
             continue
         phone = c["phone"] or ""
         store = (c["registration_store"] or "").strip() or "Unknown"
+        if store_filter and store != store_filter:
+            continue
         is_pos_only = (not phone) or (phone not in cnv_phones_all)
 
         c_pk  = c.get("id")
@@ -320,6 +324,8 @@ def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=No
         reg_date    = dt.date() if hasattr(dt, "date") else dt
         is_cnv_only = phone not in pos_phones_all
         store       = phone_to_store.get(phone)
+        if store_filter and store != store_filter:
+            continue
 
         s_key         = get_session_key(reg_date)
         m_key         = get_month_key(reg_date)
@@ -394,6 +400,8 @@ def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=No
         reg_date = dt.date() if hasattr(dt, "date") else dt
         has_oa   = bool(z["zalo_oa_id"])
         store    = phone_to_store.get(phone)
+        if store_filter and store != store_filter:
+            continue
 
         s_key         = get_session_key(reg_date)
         m_key         = get_month_key(reg_date)

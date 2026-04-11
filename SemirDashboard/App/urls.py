@@ -41,6 +41,10 @@ urlpatterns = [
     # ── Customer ──────────────────────────────────────────────────────────────
     path("customer-detail/", views.customer_detail, name="customer_detail"),
 
+    # ── Shop Detail ───────────────────────────────────────────────────────────
+    path("shop-detail/",         views.shop_detail,              name="shop_detail"),
+    path("shop-detail/export/",  views.export_shop_detail_excel, name="export_shop_detail_excel"),
+
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/",       users.user_management, name="user_management"),
     path("admin-logs/",  views.admin_logs,       name="admin_logs"),

@@ -22,6 +22,8 @@ PERMISSION_DEFS = [
     ("page_coupon_chart", "Coupon Analytics Charts", "Pages"),
     ("page_customer_chart", "Customer Analytics Charts", "Pages"),
     ("download_customer_chart_excel", "Download Customer Charts Excel", "Downloads"),
+    ("page_shop_detail", "Shop Detail", "Pages"),
+    ("download_shop_detail", "Export Shop Detail (Excel)", "Downloads"),
 ]
 
 ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]
