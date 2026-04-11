@@ -1,8 +1,14 @@
 """
 tests/test_shop_detail.py — Shop Detail page consistency + performance tests.
 
-Verifies that shop_detail data EXACTLY matches what the original
-Sale / Customer / Coupon pages return for the same shop.
+Validates that shop_detail direct-query functions return data IDENTICAL to what
+the original Sale / Customer / Coupon pages produce for the same shop.
+
+Performance target:
+  - Sales (direct DB filter):  < original get_sales_tab('shop') (no all-shop pass)
+  - Customer (store_filter):   < original get_customer_tab('bd_shop') (same cached fetch,
+                                  only filtered Python accumulation)
+  - Coupon (direct DB filter): already fast (DB-scoped, ~0.1s)
 
 Run:
   cd SemirDashboard && python manage.py test tests.test_shop_detail -v 2
@@ -12,7 +18,6 @@ Regenerate snapshots:
 """
 import io
 from datetime import date
-from pathlib import Path
 
 from App.models import Customer, SalesTransaction, Coupon
 from App.services import process_customer_file, process_sales_file, process_coupon_file
@@ -20,6 +25,8 @@ from App.analytics.tab_functions import (
     get_sales_tab,
     get_customer_tab,
     get_coupon_tab,
+    get_shop_detail_sales_data,
+    get_shop_detail_customer_data,
     get_shop_detail_coupon_data,
 )
 
@@ -42,8 +49,8 @@ def _named(path):
 
 class ShopDetailConsistencyTest(SnapshotTestCase):
     """
-    Validates that data returned by shop_detail helpers is identical to what
-    the original pages return for the same shop.
+    Validates direct-query functions match the original all-shops path exactly,
+    and that direct queries are faster than loading all shops.
     """
 
     @classmethod
@@ -59,454 +66,447 @@ class ShopDetailConsistencyTest(SnapshotTestCase):
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _pick_sales_shop(self):
-        """Pick the first shop that has data from SalesTransaction."""
-        shop = (
+        return (
             SalesTransaction.objects
             .exclude(shop_name__isnull=True).exclude(shop_name='')
-            .values_list('shop_name', flat=True)
-            .order_by('shop_name')
-            .first()
+            .values_list('shop_name', flat=True).order_by('shop_name').first()
         )
-        return shop
 
     def _pick_customer_shop(self):
-        """Pick the first registration_store that has data."""
-        store = (
+        return (
             Customer.objects
             .exclude(registration_store__isnull=True).exclude(registration_store='')
-            .values_list('registration_store', flat=True)
-            .order_by('registration_store')
-            .first()
+            .values_list('registration_store', flat=True).order_by('registration_store').first()
         )
-        return store
 
     def _pick_coupon_shop(self):
-        """Pick the first using_shop that has used coupons."""
-        shop = (
-            Coupon.objects
-            .filter(using_date__isnull=False)
+        return (
+            Coupon.objects.filter(using_date__isnull=False)
             .exclude(using_shop__isnull=True).exclude(using_shop='')
-            .values_list('using_shop', flat=True)
-            .order_by('using_shop')
-            .first()
+            .values_list('using_shop', flat=True).order_by('using_shop').first()
         )
-        return shop
 
-    # ── Sales consistency ────────────────────────────────────────────────────
+    # ── Sales consistency: direct vs all-shop path ───────────────────────────
 
-    def test_sales_shop_detail_matches_shop_tab_alltime(self):
+    def test_sales_direct_matches_shop_tab_alltime(self):
         """
-        Sales data for shop X in shop_detail (all-time, no date filter) must
-        exactly equal the corresponding entry in get_sales_tab('shop')['by_shop'].
+        get_shop_detail_sales_data(shop) must return identical core metrics to
+        get_sales_tab('shop')['by_shop'] for the same shop (all-time).
         """
         if not SalesTransaction.objects.exists():
             self.skipTest("No sales data")
 
-        t = self.timer("shop_detail_sales_consistency_alltime")
-
+        t = self.timer("sales_direct_vs_shop_tab_alltime")
         shop_name = self._pick_sales_shop()
-        self.assertIsNotNone(shop_name, "No shop found in SalesTransaction")
+        self.assertIsNotNone(shop_name)
 
-        # Source of truth: original sales shop tab
+        # Source of truth: original all-shops tab
         tab_data = get_sales_tab('shop')
-        t.checkpoint(f"get_sales_tab(shop) done — shops={len(tab_data['by_shop']) if tab_data else 0}")
-        self.assertIsNotNone(tab_data, "get_sales_tab returned None")
+        t.checkpoint(f"get_sales_tab(shop) — shops={len(tab_data['by_shop']) if tab_data else 0}")
+        expected = next((s for s in (tab_data or {}).get('by_shop', []) if s['shop_name'] == shop_name), None)
+        self.assertIsNotNone(expected, f"'{shop_name}' not in shop tab")
 
-        expected = next((s for s in tab_data['by_shop'] if s['shop_name'] == shop_name), None)
+        # Direct query path
+        actual = get_shop_detail_sales_data(shop_name)
+        t.checkpoint(f"get_shop_detail_sales_data — shop={shop_name}")
 
-        # Shop detail path: same function, should return identical object
-        tab_data2 = get_sales_tab('shop')
-        actual = next((s for s in tab_data2['by_shop'] if s['shop_name'] == shop_name), None)
-        t.checkpoint(f"shop_detail sales lookup done — shop={shop_name}")
+        self.assertIsNotNone(actual, f"get_shop_detail_sales_data returned None for '{shop_name}'")
 
-        self.assertIsNotNone(expected, f"Shop '{shop_name}' not found in tab data")
-        self.assertIsNotNone(actual,   f"Shop '{shop_name}' not found in tab data (2nd call)")
-
-        # Core metrics must match exactly
         for key in ('total_customers', 'returning_customers', 'return_rate',
                     'returning_invoices', 'total_invoices_with_vip0'):
             self.assertEqual(expected[key], actual[key],
-                f"sales[{shop_name}].{key}: {expected[key]} vs {actual[key]}")
+                f"sales[{shop_name}].{key}: expected={expected[key]} actual={actual[key]}")
 
-        # Period counts by season / month / week must match
-        self.assertEqual(len(expected['by_session']), len(actual['by_session']),
-            "by_session length mismatch")
-        self.assertEqual(len(expected['by_month']),   len(actual['by_month']),
-            "by_month length mismatch")
-        self.assertEqual(len(expected['by_week']),    len(actual['by_week']),
-            "by_week length mismatch")
+        # Sub-breakdown row counts: filter empty-period rows from both paths.
+        # - tab path (aggregate_by_shop): fills all global period keys, some with zero data
+        # - direct path (aggregate_by_season): includes VIP0-only sessions (total_customers=0)
+        # Compare only rows where non-VIP0 customers actually transacted.
+        exp_by_session = [r for r in expected['by_session'] if r['total_customers'] > 0]
+        act_by_session = [r for r in actual['by_session']   if r['total_customers'] > 0]
+        exp_by_month   = [r for r in expected['by_month']   if r['total_customers'] > 0]
+        act_by_month   = [r for r in actual['by_month']     if r['total_customers'] > 0]
+        exp_by_week    = [r for r in expected['by_week']    if r['total_customers'] > 0]
+        act_by_week    = [r for r in actual['by_week']      if r['total_customers'] > 0]
+
+        self.assertEqual(len(exp_by_session), len(act_by_session), "by_session length mismatch")
+        self.assertEqual(len(exp_by_month),   len(act_by_month),   "by_month length mismatch")
+        self.assertEqual(len(exp_by_week),    len(act_by_week),    "by_week length mismatch")
+
+        # Sub-breakdown values for first season must match (using non-zero filtered lists)
+        if exp_by_session and act_by_session:
+            es, as_ = exp_by_session[0], act_by_session[0]
+            self.assertEqual(es['session'],           as_['session'])
+            self.assertEqual(es['total_customers'],   as_['total_customers'])
+            self.assertEqual(es['returning_customers'], as_['returning_customers'])
+            self.assertAlmostEqual(float(es['return_rate']), float(as_['return_rate']), places=2)
 
         get_run_log().log(
-            f"  [sales] shop={shop_name} total={expected['total_customers']} "
-            f"return_rate={expected['return_rate']}%"
+            f"  [sales alltime] shop={shop_name} total={expected['total_customers']} "
+            f"ret={expected['return_rate']}%"
         )
         t.report()
 
-    def test_sales_shop_detail_matches_shop_tab_with_date_filter(self):
-        """Sales consistency with date filter."""
+    def test_sales_direct_matches_shop_tab_with_date(self):
+        """Sales direct vs tab with 2025 date filter."""
         if not SalesTransaction.objects.exists():
             self.skipTest("No sales data")
 
-        t = self.timer("shop_detail_sales_consistency_date_filtered")
-
-        # Use 2025 as the period
-        date_from = date(2025, 1, 1)
-        date_to   = date(2025, 12, 31)
+        t = self.timer("sales_direct_vs_shop_tab_2025")
+        date_from, date_to = date(2025, 1, 1), date(2025, 12, 31)
 
         shop_name = (
             SalesTransaction.objects
             .filter(sales_date__gte=date_from, sales_date__lte=date_to)
             .exclude(shop_name__isnull=True).exclude(shop_name='')
-            .values_list('shop_name', flat=True)
-            .order_by('shop_name')
-            .first()
+            .values_list('shop_name', flat=True).order_by('shop_name').first()
         )
         if not shop_name:
-            self.skipTest("No sales data in 2025")
+            self.skipTest("No 2025 sales data")
 
         tab_data = get_sales_tab('shop', date_from=date_from, date_to=date_to)
-        t.checkpoint("get_sales_tab(shop, 2025) done")
-
+        t.checkpoint("get_sales_tab(shop, 2025)")
         expected = next((s for s in (tab_data or {}).get('by_shop', []) if s['shop_name'] == shop_name), None)
-        tab_data2 = get_sales_tab('shop', date_from=date_from, date_to=date_to)
-        actual    = next((s for s in (tab_data2 or {}).get('by_shop', []) if s['shop_name'] == shop_name), None)
-        t.checkpoint(f"shop_detail lookup done — shop={shop_name}")
+
+        actual = get_shop_detail_sales_data(shop_name, date_from=date_from, date_to=date_to)
+        t.checkpoint(f"get_shop_detail_sales_data(2025) — shop={shop_name}")
 
         self.assertIsNotNone(expected)
         self.assertIsNotNone(actual)
-        self.assertEqual(expected['total_customers'],    actual['total_customers'])
+        self.assertEqual(expected['total_customers'],     actual['total_customers'])
         self.assertEqual(expected['returning_customers'], actual['returning_customers'])
         self.assertEqual(expected['return_rate'],         actual['return_rate'])
+        self.assertEqual(len(expected['by_month']),       len(actual['by_month']))
 
         get_run_log().log(
             f"  [sales 2025] shop={shop_name} total={expected['total_customers']} "
-            f"return_rate={expected['return_rate']}%"
+            f"ret={expected['return_rate']}%"
         )
         t.report()
 
-    # ── Customer consistency ────────────────────────────────────────────────
-
-    def test_customer_shop_detail_matches_bd_shop_tab(self):
+    def test_sales_direct_is_faster_than_all_shops(self):
         """
-        Customer data for registration_store X in shop_detail must exactly equal
-        the corresponding entry in get_customer_tab('bd_shop')['by_shop'].
+        Direct shop query should be faster than loading all shops when many shops exist.
+        (Skipped if only 1 shop — no meaningful comparison.)
+        """
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+
+        n_shops = SalesTransaction.objects.values('shop_name').distinct().count()
+        if n_shops < 3:
+            self.skipTest(f"Only {n_shops} shops — comparison not meaningful")
+
+        import time
+        shop_name = self._pick_sales_shop()
+
+        t0 = time.perf_counter()
+        get_sales_tab('shop')
+        t_all = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        get_shop_detail_sales_data(shop_name)
+        t_direct = time.perf_counter() - t0
+
+        get_run_log().log(
+            f"  [sales speed] all_shops={t_all:.2f}s direct={t_direct:.2f}s "
+            f"speedup={t_all/t_direct:.1f}x shops={n_shops}"
+        )
+        self.assertLess(t_direct, t_all,
+            f"Direct query ({t_direct:.2f}s) not faster than all-shops ({t_all:.2f}s)")
+
+    # ── Customer consistency: store_filter vs all-shops path ─────────────────
+
+    def test_customer_direct_matches_bd_shop_tab(self):
+        """
+        get_shop_detail_customer_data(store) summary must match
+        get_customer_tab('bd_shop')['by_shop'] for the same store.
         """
         if not Customer.objects.exists():
             self.skipTest("No customer data")
 
-        t = self.timer("shop_detail_customer_consistency")
-
+        t = self.timer("customer_direct_vs_bd_shop_tab")
         store_name = self._pick_customer_shop()
-        self.assertIsNotNone(store_name, "No registration_store found in Customer")
+        self.assertIsNotNone(store_name)
 
+        # Source of truth
         tab_data = get_customer_tab('bd_shop')
         t.checkpoint(f"get_customer_tab(bd_shop) — shops={len(tab_data.get('by_shop',[]))}")
-
         expected_summary = next((r for r in tab_data.get('by_shop', []) if r['label'] == store_name), None)
         expected_detail  = next((sh for sh in tab_data.get('shop_detail', []) if sh['shop'] == store_name), None)
 
-        tab_data2 = get_customer_tab('bd_shop')
-        actual_summary = next((r for r in tab_data2.get('by_shop', []) if r['label'] == store_name), None)
-        actual_detail  = next((sh for sh in tab_data2.get('shop_detail', []) if sh['shop'] == store_name), None)
-        t.checkpoint(f"shop_detail customer lookup done — store={store_name}")
+        # Direct (store_filter) path
+        actual = get_shop_detail_customer_data(store_name)
+        t.checkpoint(f"get_shop_detail_customer_data — store={store_name}")
 
         if expected_summary:
-            for key in ('new_pos', 'new_pos_inv', 'new_cnv', 'new_pos_only', 'new_cnv_only', 'zalo_app', 'zalo_oa'):
-                self.assertEqual(expected_summary.get(key), actual_summary.get(key),
-                    f"customer[{store_name}].summary.{key}: {expected_summary.get(key)} vs {actual_summary.get(key)}")
+            self.assertIsNotNone(actual, f"store_filter returned None for '{store_name}'")
+            actual_summary = actual.get('summary', {}) or {}
+            for key in ('new_pos', 'new_pos_inv', 'new_cnv', 'new_pos_only', 'new_cnv_only',
+                        'zalo_app', 'zalo_oa'):
+                self.assertEqual(
+                    expected_summary.get(key), actual_summary.get(key),
+                    f"customer[{store_name}].{key}: expected={expected_summary.get(key)} "
+                    f"actual={actual_summary.get(key)}"
+                )
             get_run_log().log(
                 f"  [customer] store={store_name} new_pos={expected_summary.get('new_pos')} "
                 f"new_cnv={expected_summary.get('new_cnv')}"
             )
 
-        if expected_detail and actual_detail:
-            self.assertEqual(len(expected_detail.get('by_season', [])), len(actual_detail.get('by_season', [])),
-                "customer detail by_season length mismatch")
-            self.assertEqual(len(expected_detail.get('by_month', [])), len(actual_detail.get('by_month', [])),
-                "customer detail by_month length mismatch")
+        if expected_detail and actual:
+            self.assertEqual(
+                len(expected_detail.get('by_season', [])),
+                len(actual.get('by_season', [])),
+                "by_season length mismatch"
+            )
+            self.assertEqual(
+                len(expected_detail.get('by_month', [])),
+                len(actual.get('by_month', [])),
+                "by_month length mismatch"
+            )
+            self.assertEqual(
+                len(expected_detail.get('by_week', [])),
+                len(actual.get('by_week', [])),
+                "by_week length mismatch"
+            )
+            # First season row values
+            if expected_detail.get('by_season') and actual.get('by_season'):
+                es, as_ = expected_detail['by_season'][0], actual['by_season'][0]
+                self.assertEqual(es['label'],   as_['label'])
+                self.assertEqual(es['new_pos'], as_['new_pos'])
+                self.assertEqual(es['new_cnv'], as_['new_cnv'])
 
         t.report()
 
-    # ── Coupon consistency ───────────────────────────────────────────────────
-
-    def test_coupon_shop_detail_period_used_matches_shop_tab(self):
+    def test_customer_store_filter_is_faster_than_all_stores(self):
         """
-        Coupon period.used for shop X from get_shop_detail_coupon_data must equal
-        the 'used' field in get_coupon_tab('shop')['by_shop'] for that shop.
+        store_filter accumulation should be faster than loading all stores
+        (same cached DB fetch, but fewer Python loop iterations).
+        """
+        if not Customer.objects.exists():
+            self.skipTest("No customer data")
+
+        n_stores = Customer.objects.exclude(registration_store__isnull=True).exclude(
+            registration_store='').values('registration_store').distinct().count()
+        if n_stores < 3:
+            self.skipTest(f"Only {n_stores} stores — comparison not meaningful")
+
+        import time
+        store_name = self._pick_customer_shop()
+
+        t0 = time.perf_counter()
+        get_customer_tab('bd_shop')
+        t_all = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        get_shop_detail_customer_data(store_name)
+        t_direct = time.perf_counter() - t0
+
+        get_run_log().log(
+            f"  [customer speed] all_stores={t_all:.2f}s store_filter={t_direct:.2f}s "
+            f"speedup={t_all/t_direct:.1f}x stores={n_stores}"
+        )
+        self.assertLess(t_direct, t_all,
+            f"store_filter ({t_direct:.2f}s) not faster than all-stores ({t_all:.2f}s)")
+
+    # ── Coupon consistency: DB-filtered vs all-shops path ────────────────────
+
+    def test_coupon_direct_matches_shop_tab_alltime(self):
+        """
+        get_shop_detail_coupon_data(shop).period.used must equal
+        get_coupon_tab('shop')['by_shop'] used for the same shop (all-time).
         """
         if not Coupon.objects.exists():
             self.skipTest("No coupon data")
 
-        t = self.timer("shop_detail_coupon_consistency_alltime")
-
+        t = self.timer("coupon_direct_vs_shop_tab")
         coupon_shop = self._pick_coupon_shop()
         if not coupon_shop:
             self.skipTest("No used coupons found")
 
-        # Source of truth: coupon shop tab (no date filter = all-time)
         shop_tab = get_coupon_tab('shop')
-        t.checkpoint(f"get_coupon_tab(shop) — by_shop rows={len(shop_tab.get('by_shop',[]))}")
+        t.checkpoint(f"get_coupon_tab(shop) — rows={len(shop_tab.get('by_shop',[]))}")
+        expected = next((r for r in shop_tab.get('by_shop', []) if r['shop_name'] == coupon_shop), None)
+        self.assertIsNotNone(expected, f"'{coupon_shop}' not in coupon tab")
 
-        shop_row = next((r for r in shop_tab.get('by_shop', []) if r['shop_name'] == coupon_shop), None)
+        actual = get_shop_detail_coupon_data(coupon_shop)
+        t.checkpoint(f"get_shop_detail_coupon_data — shop={coupon_shop}")
 
-        # Shop detail coupon path
-        detail = get_shop_detail_coupon_data(coupon_shop)
-        t.checkpoint(f"get_shop_detail_coupon_data done — shop={coupon_shop}")
-
-        self.assertIsNotNone(shop_row, f"Shop '{coupon_shop}' not found in coupon shop tab")
-
-        # period.used must equal by_shop row's used (all-time, no date filter → period_qs = qs)
-        self.assertEqual(
-            detail['period']['used'],
-            shop_row['used'],
-            f"period.used mismatch for {coupon_shop}: "
-            f"shop_detail={detail['period']['used']} vs shop_tab={shop_row['used']}"
-        )
-
-        # period.unused must equal by_shop row's unused
-        self.assertEqual(
-            detail['period']['unused'],
-            shop_row['unused'],
-            f"period.unused mismatch for {coupon_shop}: "
-            f"shop_detail={detail['period']['unused']} vs shop_tab={shop_row['unused']}"
-        )
-
-        # usage_rate should match
+        self.assertEqual(actual['period']['used'],   expected['used'],
+            f"period.used: {actual['period']['used']} vs tab {expected['used']}")
+        self.assertEqual(actual['period']['unused'], expected['unused'],
+            f"period.unused: {actual['period']['unused']} vs tab {expected['unused']}")
+        self.assertAlmostEqual(actual['period']['usage_rate'], expected['usage_rate'], places=2)
         self.assertAlmostEqual(
-            detail['period']['usage_rate'],
-            shop_row['usage_rate'],
-            places=2,
-            msg=f"usage_rate mismatch for {coupon_shop}"
+            actual['period']['total_coupon_amount'], expected['coupon_amount'], places=1,
+            msg="period.coupon_amount mismatch"
         )
 
         get_run_log().log(
-            f"  [coupon] shop={coupon_shop} used={shop_row['used']} unused={shop_row['unused']} "
-            f"usage_rate={shop_row['usage_rate']}%"
+            f"  [coupon] shop={coupon_shop} used={expected['used']} rate={expected['usage_rate']}%"
         )
         t.report()
 
-    def test_coupon_shop_detail_period_used_with_date_filter(self):
-        """
-        Coupon period.used with date filter must equal the 'used' field in
-        by_shop from get_coupon_tab('shop') with the same date filter.
-        """
+    def test_coupon_direct_matches_shop_tab_2025(self):
+        """Coupon direct vs tab with 2025 date filter."""
         if not Coupon.objects.exists():
             self.skipTest("No coupon data")
 
-        t = self.timer("shop_detail_coupon_consistency_date_filtered")
-
-        date_from = date(2025, 1, 1)
-        date_to   = date(2025, 12, 31)
+        t = self.timer("coupon_direct_vs_shop_tab_2025")
+        date_from, date_to = date(2025, 1, 1), date(2025, 12, 31)
 
         coupon_shop = (
-            Coupon.objects
-            .filter(using_date__gte=date_from, using_date__lte=date_to)
+            Coupon.objects.filter(using_date__gte=date_from, using_date__lte=date_to)
             .exclude(using_shop__isnull=True).exclude(using_shop='')
-            .values_list('using_shop', flat=True)
-            .order_by('using_shop')
-            .first()
+            .values_list('using_shop', flat=True).order_by('using_shop').first()
         )
         if not coupon_shop:
-            self.skipTest("No used coupons in 2025")
+            self.skipTest("No 2025 coupon data")
 
         shop_tab = get_coupon_tab('shop', date_from=date_from, date_to=date_to)
-        t.checkpoint(f"get_coupon_tab(shop, 2025) done")
+        t.checkpoint("get_coupon_tab(shop, 2025)")
+        expected = next((r for r in shop_tab.get('by_shop', []) if r['shop_name'] == coupon_shop), None)
 
-        shop_row = next((r for r in shop_tab.get('by_shop', []) if r['shop_name'] == coupon_shop), None)
+        actual = get_shop_detail_coupon_data(coupon_shop, date_from=date_from, date_to=date_to)
+        t.checkpoint(f"get_shop_detail_coupon_data(2025) — shop={coupon_shop}")
 
-        detail = get_shop_detail_coupon_data(coupon_shop, date_from=date_from, date_to=date_to)
-        t.checkpoint(f"get_shop_detail_coupon_data(2025) done — shop={coupon_shop}")
-
-        self.assertIsNotNone(shop_row, f"Shop '{coupon_shop}' not found in coupon tab (2025)")
-
-        self.assertEqual(
-            detail['period']['used'],
-            shop_row['used'],
-            f"period.used mismatch (2025) for {coupon_shop}: "
-            f"shop_detail={detail['period']['used']} vs shop_tab={shop_row['used']}"
-        )
-
-        # coupon amount should match (float comparison with tolerance)
+        self.assertIsNotNone(expected)
+        self.assertEqual(actual['period']['used'],   expected['used'])
+        self.assertEqual(actual['period']['unused'], expected['unused'])
         self.assertAlmostEqual(
-            detail['period']['total_coupon_amount'],
-            shop_row['coupon_amount'],
-            places=1,
-            msg=f"period coupon_amount mismatch for {coupon_shop}"
+            actual['period']['total_coupon_amount'], expected['coupon_amount'], places=1
         )
 
         get_run_log().log(
-            f"  [coupon 2025] shop={coupon_shop} used={shop_row['used']} "
-            f"coupon_amt={shop_row['coupon_amount']:.0f}"
+            f"  [coupon 2025] shop={coupon_shop} used={expected['used']}"
         )
         t.report()
 
-    def test_coupon_all_time_is_shop_scoped(self):
-        """
-        all_time.total from get_shop_detail_coupon_data must equal the DB count
-        of ALL coupons (used + unused) for that shop.
-        """
+    def test_coupon_all_time_scoped_to_shop(self):
+        """all_time.total/used must equal direct DB count for that shop."""
         if not Coupon.objects.exists():
             self.skipTest("No coupon data")
 
-        t = self.timer("shop_detail_coupon_alltime_scoped")
-
+        t = self.timer("coupon_alltime_scope")
         coupon_shop = self._pick_coupon_shop()
         if not coupon_shop:
-            self.skipTest("No used coupons found")
+            self.skipTest("No used coupons")
 
-        # Direct DB count for that shop
         db_total = Coupon.objects.filter(using_shop=coupon_shop).count()
         db_used  = Coupon.objects.filter(using_shop=coupon_shop, using_date__isnull=False).count()
 
-        detail = get_shop_detail_coupon_data(coupon_shop)
-        t.checkpoint(f"get_shop_detail_coupon_data alltime — shop={coupon_shop}")
+        actual = get_shop_detail_coupon_data(coupon_shop)
+        t.checkpoint(f"get_shop_detail_coupon_data — shop={coupon_shop}")
 
-        self.assertEqual(detail['all_time']['total'], db_total,
-            f"all_time.total mismatch: {detail['all_time']['total']} vs DB {db_total}")
-        self.assertEqual(detail['all_time']['used'],  db_used,
-            f"all_time.used mismatch: {detail['all_time']['used']} vs DB {db_used}")
+        self.assertEqual(actual['all_time']['total'], db_total)
+        self.assertEqual(actual['all_time']['used'],  db_used)
 
-        get_run_log().log(
-            f"  [coupon all_time] shop={coupon_shop} total={db_total} used={db_used}"
-        )
+        get_run_log().log(f"  [coupon alltime] shop={coupon_shop} total={db_total} used={db_used}")
         t.report()
 
-    def test_coupon_detail_list_belongs_to_shop(self):
-        """
-        All rows in get_shop_detail_coupon_data.details must have using_shop == shop.
-        """
+    def test_coupon_details_all_belong_to_shop(self):
+        """Every row in details must have using_shop == requested shop."""
         if not Coupon.objects.exists():
             self.skipTest("No coupon data")
 
-        t = self.timer("shop_detail_coupon_detail_shop_filter")
-
+        t = self.timer("coupon_detail_filter")
         coupon_shop = self._pick_coupon_shop()
         if not coupon_shop:
-            self.skipTest("No used coupons found")
+            self.skipTest("No used coupons")
 
-        detail = get_shop_detail_coupon_data(coupon_shop)
-        t.checkpoint(f"get_shop_detail_coupon_data — shop={coupon_shop} rows={len(detail['details'])}")
+        actual = get_shop_detail_coupon_data(coupon_shop)
+        t.checkpoint(f"rows={len(actual['details'])}")
 
-        for i, row in enumerate(detail['details']):
-            self.assertEqual(
-                row['using_shop'], coupon_shop,
-                f"detail[{i}].using_shop={row['using_shop']!r} != {coupon_shop!r}"
-            )
+        for i, row in enumerate(actual['details']):
+            self.assertEqual(row['using_shop'], coupon_shop,
+                f"detail[{i}].using_shop={row['using_shop']!r} != {coupon_shop!r}")
 
-        get_run_log().log(
-            f"  [coupon details] shop={coupon_shop} rows={len(detail['details'])}"
-        )
         t.report()
 
-    # ── Snapshot tests ───────────────────────────────────────────────────────
+    # ── Snapshot tests ────────────────────────────────────────────────────────
 
     def test_snapshot_sales_shop_detail(self):
-        """Snapshot: sales data for a specific shop (all-time)."""
+        """Snapshot: direct sales query output (core metrics only)."""
         if not SalesTransaction.objects.exists():
             self.skipTest("No sales data")
 
-        t = self.timer("snapshot_sales_shop_detail")
-
+        t = self.timer("snapshot_sales_direct")
         shop_name = self._pick_sales_shop()
         self.assertIsNotNone(shop_name)
 
-        tab_data = get_sales_tab('shop')
-        t.checkpoint(f"get_sales_tab(shop) — shop={shop_name}")
+        data = get_shop_detail_sales_data(shop_name)
+        t.checkpoint(f"shop={shop_name}")
+        self.assertIsNotNone(data)
 
-        shop_data = next((s for s in (tab_data or {}).get('by_shop', []) if s['shop_name'] == shop_name), None)
-        self.assertIsNotNone(shop_data, f"Shop '{shop_name}' not in tab data")
-
-        # Snapshot only core metrics (not the full by_week list which can be huge)
-        snap = {
-            'shop_name':              shop_data['shop_name'],
-            'total_customers':        shop_data['total_customers'],
-            'returning_customers':    shop_data['returning_customers'],
-            'return_rate':            shop_data['return_rate'],
-            'returning_invoices':     shop_data['returning_invoices'],
-            'total_invoices_with_vip0': shop_data['total_invoices_with_vip0'],
-            'by_session_count':       len(shop_data.get('by_session', [])),
-            'by_month_count':         len(shop_data.get('by_month', [])),
-            'by_week_count':          len(shop_data.get('by_week', [])),
-        }
-        self.assert_snapshot('shop_detail_sales', snap)
+        self.assert_snapshot('shop_detail_sales', {
+            'shop_name':                data['shop_name'],
+            'total_customers':          data['total_customers'],
+            'returning_customers':      data['returning_customers'],
+            'return_rate':              data['return_rate'],
+            'returning_invoices':       data['returning_invoices'],
+            'total_invoices_with_vip0': data['total_invoices_with_vip0'],
+            'by_session_count':         len(data.get('by_session', [])),
+            'by_month_count':           len(data.get('by_month', [])),
+            'by_week_count':            len(data.get('by_week', [])),
+        })
         t.checkpoint("snapshot verified")
         t.report()
 
     def test_snapshot_customer_shop_detail(self):
-        """Snapshot: customer data for a specific store (all-time)."""
+        """Snapshot: store_filter customer output."""
         if not Customer.objects.exists():
             self.skipTest("No customer data")
 
-        t = self.timer("snapshot_customer_shop_detail")
-
+        t = self.timer("snapshot_customer_direct")
         store_name = self._pick_customer_shop()
         self.assertIsNotNone(store_name)
 
-        tab_data = get_customer_tab('bd_shop')
-        t.checkpoint(f"get_customer_tab(bd_shop) — store={store_name}")
+        data = get_shop_detail_customer_data(store_name)
+        t.checkpoint(f"store={store_name}")
 
-        summary = next((r for r in tab_data.get('by_shop', []) if r['label'] == store_name), None)
-        detail  = next((sh for sh in tab_data.get('shop_detail', []) if sh['shop'] == store_name), None)
-
-        snap = {
+        s = (data or {}).get('summary') or {}
+        self.assert_snapshot('shop_detail_customer', {
             'store': store_name,
-            'summary': {k: summary[k] for k in (
+            'summary': {k: s.get(k) for k in (
                 'new_pos', 'new_pos_inv', 'new_pos_no_inv', 'new_pos_only',
                 'new_cnv', 'new_cnv_only', 'zalo_app', 'zalo_oa',
-            )} if summary else None,
-            'detail_by_season_count': len(detail.get('by_season', [])) if detail else 0,
-            'detail_by_month_count':  len(detail.get('by_month',  [])) if detail else 0,
-            'detail_by_week_count':   len(detail.get('by_week',   [])) if detail else 0,
-        }
-        self.assert_snapshot('shop_detail_customer', snap)
+            )} if s else None,
+            'by_season_count': len((data or {}).get('by_season', [])),
+            'by_month_count':  len((data or {}).get('by_month',  [])),
+            'by_week_count':   len((data or {}).get('by_week',   [])),
+        })
         t.checkpoint("snapshot verified")
         t.report()
 
     def test_snapshot_coupon_shop_detail(self):
-        """Snapshot: coupon data for a specific shop (all-time)."""
+        """Snapshot: direct coupon query output."""
         if not Coupon.objects.exists():
             self.skipTest("No coupon data")
 
-        t = self.timer("snapshot_coupon_shop_detail")
-
+        t = self.timer("snapshot_coupon_direct")
         coupon_shop = self._pick_coupon_shop()
         if not coupon_shop:
-            self.skipTest("No used coupons found")
+            self.skipTest("No used coupons")
 
-        detail = get_shop_detail_coupon_data(coupon_shop)
-        t.checkpoint(f"get_shop_detail_coupon_data — shop={coupon_shop}")
+        data = get_shop_detail_coupon_data(coupon_shop)
+        t.checkpoint(f"shop={coupon_shop}")
 
-        snap = {
+        self.assert_snapshot('shop_detail_coupon', {
             'shop': coupon_shop,
-            'all_time': {
-                'total':       detail['all_time']['total'],
-                'used':        detail['all_time']['used'],
-                'unused':      detail['all_time']['unused'],
-                'usage_rate':  detail['all_time']['usage_rate'],
-            },
-            'period': {
-                'total':       detail['period']['total'],
-                'used':        detail['period']['used'],
-                'unused':      detail['period']['unused'],
-                'usage_rate':  detail['period']['usage_rate'],
-            },
-            'details_count': len(detail['details']),
-        }
-        self.assert_snapshot('shop_detail_coupon', snap)
+            'all_time': {k: data['all_time'][k] for k in ('total','used','unused','usage_rate')},
+            'period':   {k: data['period'][k]   for k in ('total','used','unused','usage_rate')},
+            'details_count': len(data['details']),
+        })
         t.checkpoint("snapshot verified")
         t.report()
 
-    # ── Performance timing ───────────────────────────────────────────────────
+    # ── Full page timing ──────────────────────────────────────────────────────
 
     def test_page_timing_all_three_sections(self):
-        """
-        Simulate a full shop_detail page load (all 3 sections simultaneously).
-        Measures how long each data-fetch step takes.
-        """
+        """Simulate full shop_detail page load with direct queries for all 3 sections."""
         if not SalesTransaction.objects.exists():
             self.skipTest("No sales data")
 
-        t = self.timer("shop_detail_full_page_timing")
+        t = self.timer("shop_detail_full_page_direct")
 
         sales_shop    = self._pick_sales_shop()
         customer_shop = self._pick_customer_shop()
@@ -516,28 +516,21 @@ class ShopDetailConsistencyTest(SnapshotTestCase):
             f"  shops: sales={sales_shop} customer={customer_shop} coupon={coupon_shop}"
         )
 
-        # Section 1: Sales
         if sales_shop:
-            tab = get_sales_tab('shop')
-            sales_data = next((s for s in (tab or {}).get('by_shop', []) if s['shop_name'] == sales_shop), None)
-            t.checkpoint(f"sales: {sales_shop} → {sales_data['total_customers'] if sales_data else 'no data'} customers")
+            sd = get_shop_detail_sales_data(sales_shop)
+            t.checkpoint(f"sales direct: {sales_shop} → {sd['total_customers'] if sd else 'no data'} customers")
 
-        # Section 2: Customer
         if customer_shop:
-            cust = get_customer_tab('bd_shop')
-            summary = next((r for r in cust.get('by_shop', []) if r['label'] == customer_shop), None)
-            t.checkpoint(f"customer: {customer_shop} → pos={summary['new_pos'] if summary else 'no data'}")
+            cd = get_shop_detail_customer_data(customer_shop)
+            s = (cd or {}).get('summary') or {}
+            t.checkpoint(f"customer store_filter: {customer_shop} → pos={s.get('new_pos','no data')}")
 
-        # Section 3: Coupon
         if coupon_shop:
-            cd = get_shop_detail_coupon_data(coupon_shop)
-            t.checkpoint(
-                f"coupon: {coupon_shop} → used={cd['period']['used']} "
-                f"details={len(cd['details'])}"
-            )
+            cpd = get_shop_detail_coupon_data(coupon_shop)
+            t.checkpoint(f"coupon direct: {coupon_shop} → used={cpd['period']['used']} details={len(cpd['details'])}")
 
         total = t.total()
-        self.record_page_timing("shop_detail_full", total, t._checkpoints)
+        self.record_page_timing("shop_detail_full_direct", total, t._checkpoints)
         t.report()
 
-        self.assertLess(total, 60, f"Full shop detail page too slow: {total:.1f}s > 60s limit")
+        self.assertLess(total, 60, f"Full page load too slow: {total:.1f}s")
