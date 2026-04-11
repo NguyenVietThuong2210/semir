@@ -102,13 +102,19 @@
             <div class="shop-select-row mb-3">
                 <div>
                     <label>Shop</label>
-                    <select name="sales_shop" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <select name="sales_shop" class="form-select form-select-sm">
                         <option value="">— Select shop —</option>
                         {% for s in sales_shops %}
                         <option value="{{ s }}" {% if s == sales_shop %}selected{% endif %}>{{ s }}</option>
                         {% endfor %}
                     </select>
                 </div>
+                <button type="submit" class="btn btn-primary btn-sm align-self-end">
+                    <i class="bi bi-search"></i> Load
+                </button>
+                {% if sales_shop %}
+                <a href="?{% if start_date %}start_date={{ start_date }}&{% endif %}{% if end_date %}end_date={{ end_date }}&{% endif %}{% if customer_shop %}customer_shop={{ customer_shop }}&{% endif %}{% if coupon_shop %}coupon_shop={{ coupon_shop }}&{% endif %}{% if coupon_prefix %}coupon_prefix={{ coupon_prefix }}&{% endif %}{% if coupon_campaign_id %}coupon_campaign={{ coupon_campaign_id }}&{% endif %}" class="btn btn-outline-secondary btn-sm align-self-end">Clear</a>
+                {% endif %}
             </div>
         </form>
 
@@ -258,13 +264,19 @@
             <div class="shop-select-row mb-3">
                 <div>
                     <label>Registration Store</label>
-                    <select name="customer_shop" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <select name="customer_shop" class="form-select form-select-sm">
                         <option value="">— Select store —</option>
                         {% for s in customer_shops %}
                         <option value="{{ s }}" {% if s == customer_shop %}selected{% endif %}>{{ s }}</option>
                         {% endfor %}
                     </select>
                 </div>
+                <button type="submit" class="btn btn-primary btn-sm align-self-end">
+                    <i class="bi bi-search"></i> Load
+                </button>
+                {% if customer_shop %}
+                <a href="?{% if start_date %}start_date={{ start_date }}&{% endif %}{% if end_date %}end_date={{ end_date }}&{% endif %}{% if sales_shop %}sales_shop={{ sales_shop }}&{% endif %}{% if coupon_shop %}coupon_shop={{ coupon_shop }}&{% endif %}{% if coupon_prefix %}coupon_prefix={{ coupon_prefix }}&{% endif %}{% if coupon_campaign_id %}coupon_campaign={{ coupon_campaign_id }}&{% endif %}" class="btn btn-outline-secondary btn-sm align-self-end">Clear</a>
+                {% endif %}
             </div>
         </form>
 
@@ -380,7 +392,7 @@
             <div class="shop-select-row mb-3">
                 <div>
                     <label>Using Shop</label>
-                    <select name="coupon_shop" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <select name="coupon_shop" class="form-select form-select-sm">
                         <option value="">— Select shop —</option>
                         {% for s in coupon_shops %}
                         <option value="{{ s }}" {% if s == coupon_shop %}selected{% endif %}>{{ s }}</option>
@@ -534,8 +546,7 @@
         const prefix = opt ? (opt.dataset.prefix || '') : '';
         const prefixInput = document.querySelector('input[name="coupon_prefix"]');
         if (prefixInput) prefixInput.value = prefix;
-        // submit is handled by the Apply Filters button or auto-submit below
-        document.getElementById('couponShopForm').submit();
+        // prefix field updated — user clicks Apply Filters button to submit
     }
     window.applyCampaignFilter = applyCampaignFilter;
 
