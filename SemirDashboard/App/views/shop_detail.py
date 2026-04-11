@@ -72,23 +72,81 @@ def shop_detail(request):
     start_date = request.GET.get("start_date", "")
     end_date   = request.GET.get("end_date", "")
 
-    sales_shop         = request.GET.get("sales_shop", "").strip()
-    customer_shop      = request.GET.get("customer_shop", "").strip()
-    coupon_shop        = request.GET.get("coupon_shop", "").strip()
-    coupon_prefix      = request.GET.get("coupon_prefix", "").strip()
-    coupon_campaign_id = request.GET.get("coupon_campaign", "").strip()
-
-    date_from = parse_date(start_date, "start date", request)
-    date_to   = parse_date(end_date,   "end date",   request)
-
-    if date_from and date_to and date_from > date_to:
-        messages.error(request, "Start date must be before end date")
-        date_from = date_to = None
-
     # ── Dropdown options (cached 5 min) ───────────────────────────────────────
     sales_shops, customer_shops, coupon_shops, campaigns = _get_dropdown_options()
 
-    # ── Resolve campaign → effective prefix ───────────────────────────────────
+    return render(request, "shop_detail.html", {
+        "start_date":        start_date,
+        "end_date":          end_date,
+        "quick_btns":        QUICK_BTNS,
+        "year_btns":         YEAR_BTNS,
+        "sales_shops":       sales_shops,
+        "customer_shops":    customer_shops,
+        "coupon_shops":      coupon_shops,
+        "campaigns_json":    json.dumps(campaigns),
+        "currency":          "VND",
+    })
+
+
+def _safe_date(val):
+    """Parse date string silently (no messages framework)."""
+    if not val:
+        return None
+    try:
+        return datetime.strptime(val.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+@requires_perm("page_shop_detail")
+def shop_detail_sales_partial(request):
+    """AJAX: render sales section data for one shop."""
+    shop_name  = request.GET.get("shop", "").strip()
+    start_date = request.GET.get("start_date", "")
+    end_date   = request.GET.get("end_date", "")
+    if not shop_name:
+        return HttpResponse('<div class="no-data-msg text-muted py-3">Select a shop to view sales analytics.</div>')
+    date_from = _safe_date(start_date)
+    date_to   = _safe_date(end_date)
+    logger.info("partial sales: shop=%s from=%s to=%s user=%s", shop_name, date_from, date_to, request.user)
+    data = get_shop_detail_sales_data(shop_name, date_from=date_from, date_to=date_to)
+    return render(request, "shop_detail/_sales_partial.html", {
+        "data": data, "shop_name": shop_name,
+        "start_date": start_date, "end_date": end_date,
+        "currency": "VND",
+    })
+
+
+@requires_perm("page_shop_detail")
+def shop_detail_customer_partial(request):
+    """AJAX: render customer section data for one store."""
+    store_name = request.GET.get("shop", "").strip()
+    start_date = request.GET.get("start_date", "")
+    end_date   = request.GET.get("end_date", "")
+    if not store_name:
+        return HttpResponse('<div class="no-data-msg text-muted py-3">Select a store to view customer analytics.</div>')
+    logger.info("partial customer: store=%s from=%s to=%s user=%s", store_name, start_date, end_date, request.user)
+    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
+    return render(request, "shop_detail/_customer_partial.html", {
+        "data": data, "store_name": store_name,
+        "start_date": start_date, "end_date": end_date,
+        "currency": "VND",
+    })
+
+
+@requires_perm("page_shop_detail")
+def shop_detail_coupon_partial(request):
+    """AJAX: render coupon section data for one shop."""
+    shop_name        = request.GET.get("shop", "").strip()
+    start_date       = request.GET.get("start_date", "")
+    end_date         = request.GET.get("end_date", "")
+    coupon_prefix    = request.GET.get("coupon_prefix", "").strip()
+    coupon_campaign_id = request.GET.get("coupon_campaign", "").strip()
+    if not shop_name:
+        return HttpResponse('<div class="no-data-msg text-muted py-3">Select a shop to view coupon analytics.</div>')
+    date_from = _safe_date(start_date)
+    date_to   = _safe_date(end_date)
+    # Resolve campaign → prefix
     effective_prefix = coupon_prefix
     if coupon_campaign_id:
         try:
@@ -96,55 +154,18 @@ def shop_detail(request):
             effective_prefix = camp.prefix
         except (CouponCampaign.DoesNotExist, ValueError):
             pass
-
-    # ── Sales section — direct DB query filtered to one shop ─────────────────
-    sales_data = None
-    if sales_shop:
-        logger.info("shop_detail sales: shop=%s from=%s to=%s user=%s",
-                    sales_shop, date_from, date_to, request.user)
-        sales_data = get_shop_detail_sales_data(sales_shop, date_from=date_from, date_to=date_to)
-
-    # ── Customer section — cached BD raw + store_filter accumulation ──────────
-    customer_data = None
-    if customer_shop:
-        logger.info("shop_detail customer: shop=%s from=%s to=%s user=%s",
-                    customer_shop, date_from, date_to, request.user)
-        customer_data = get_shop_detail_customer_data(
-            customer_shop, start_date=start_date, end_date=end_date
-        )
-
-    # ── Coupon section — direct DB query filtered to one shop ─────────────────
-    coupon_data = None
-    if coupon_shop:
-        logger.info("shop_detail coupon: shop=%s prefix=%s from=%s to=%s user=%s",
-                    coupon_shop, effective_prefix or '', date_from, date_to, request.user)
-        coupon_data = get_shop_detail_coupon_data(
-            coupon_shop,
-            date_from=date_from,
-            date_to=date_to,
-            coupon_id_prefix=effective_prefix or None,
-        )
-
-    return render(request, "shop_detail.html", {
-        "start_date":        start_date,
-        "end_date":          end_date,
-        "date_from":         date_from,
-        "date_to":           date_to,
-        "quick_btns":        QUICK_BTNS,
-        "year_btns":         YEAR_BTNS,
-        "sales_shops":       sales_shops,
-        "customer_shops":    customer_shops,
-        "coupon_shops":      coupon_shops,
-        "campaigns_json":    json.dumps(campaigns),
-        "sales_shop":        sales_shop,
-        "customer_shop":     customer_shop,
-        "coupon_shop":       coupon_shop,
-        "coupon_prefix":     coupon_prefix,
+    logger.info("partial coupon: shop=%s prefix=%s from=%s to=%s user=%s",
+                shop_name, effective_prefix or '', date_from, date_to, request.user)
+    data = get_shop_detail_coupon_data(
+        shop_name, date_from=date_from, date_to=date_to,
+        coupon_id_prefix=effective_prefix or None,
+    )
+    return render(request, "shop_detail/_coupon_partial.html", {
+        "data": data, "shop_name": shop_name,
+        "start_date": start_date, "end_date": end_date,
+        "coupon_prefix": coupon_prefix,
         "coupon_campaign_id": coupon_campaign_id,
-        "sales_data":        sales_data,
-        "customer_data":     customer_data,
-        "coupon_data":       coupon_data,
-        "currency":          "VND",
+        "currency": "VND",
     })
 
 

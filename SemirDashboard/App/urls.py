@@ -42,8 +42,11 @@ urlpatterns = [
     path("customer-detail/", views.customer_detail, name="customer_detail"),
 
     # ── Shop Detail ───────────────────────────────────────────────────────────
-    path("shop-detail/",         views.shop_detail,              name="shop_detail"),
-    path("shop-detail/export/",  views.export_shop_detail_excel, name="export_shop_detail_excel"),
+    path("shop-detail/",                  views.shop_detail,                   name="shop_detail"),
+    path("shop-detail/export/",           views.export_shop_detail_excel,      name="export_shop_detail_excel"),
+    path("shop-detail/partial/sales/",    views.shop_detail_sales_partial,     name="shop_detail_sales_partial"),
+    path("shop-detail/partial/customer/", views.shop_detail_customer_partial,  name="shop_detail_customer_partial"),
+    path("shop-detail/partial/coupon/",   views.shop_detail_coupon_partial,    name="shop_detail_coupon_partial"),
 
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/",       users.user_management, name="user_management"),

@@ -1,0 +1,107 @@
+{% load custom_filters perm_tags %}
+{% check_perm 'download_shop_detail' as can_dl %}
+
+{% if not data %}
+<div class="no-data-msg py-3 text-muted"><i class="bi bi-info-circle me-1"></i>
+    No customer data found for "{{ store_name }}"{% if start_date or end_date %} in this period{% endif %}.
+</div>
+{% else %}
+
+{% if can_dl %}
+<div class="d-flex justify-content-end mb-2">
+    <a href="{% url 'export_shop_detail_excel' %}?section=customer&customer_shop={{ store_name|urlencode }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+       class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+</div>
+{% endif %}
+
+{% with s=data.summary %}{% if s %}
+<div class="kpi-row mb-3">
+    <div class="kpi-card blue"><div class="kpi-val">{{ s.new_pos }}</div><div class="kpi-lbl">New POS</div></div>
+    <div class="kpi-card green"><div class="kpi-val">{{ s.new_pos_inv }}</div><div class="kpi-lbl">POS (w/ INV)</div></div>
+    <div class="kpi-card orange"><div class="kpi-val">{{ s.new_cnv }}</div><div class="kpi-lbl">New CNV</div></div>
+    <div class="kpi-card purple"><div class="kpi-val">{{ s.new_pos_only }}</div><div class="kpi-lbl">POS Only</div></div>
+    <div class="kpi-card blue"><div class="kpi-val">{{ s.new_cnv_only }}</div><div class="kpi-lbl">CNV Only</div></div>
+    <div class="kpi-card green"><div class="kpi-val">{{ s.zalo_app }}</div><div class="kpi-lbl">Zalo App</div></div>
+    <div class="kpi-card orange"><div class="kpi-val">{{ s.zalo_oa }}</div><div class="kpi-lbl">Zalo OA</div></div>
+</div>
+{% endif %}{% endwith %}
+
+{% with hdr="background:#1a5276;color:white;" ts="table-layout:fixed;font-size:.83rem;" %}
+
+<p class="sub-section-title"><i class="bi bi-calendar3-range me-1"></i>By Season</p>
+<div class="table-responsive tab-tbl-wrap mb-2">
+<table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
+<colgroup><col style="width:15%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:7%"></colgroup>
+<thead style="{{ hdr }}"><tr>
+    <th>Season</th><th class="text-end">POS(INV)</th><th class="text-end">POS(NO INV)</th>
+    <th class="text-end">POS Total</th><th class="text-end">POS Only</th>
+    <th class="text-end">New CNV</th><th class="text-end">CNV Only</th>
+    <th class="text-end">Zalo App</th><th class="text-end">%App</th>
+    <th class="text-end">Zalo OA</th><th class="text-end">%OA</th>
+</tr></thead>
+<tbody>
+{% for r in data.by_season %}
+<tr>
+    <td>{{ r.label }}</td><td class="text-end">{{ r.new_pos_inv }}</td><td class="text-end">{{ r.new_pos_no_inv }}</td>
+    <td class="text-end">{{ r.new_pos }}</td><td class="text-end">{{ r.new_pos_only }}</td>
+    <td class="text-end">{{ r.new_cnv }}</td><td class="text-end">{{ r.new_cnv_only }}</td>
+    <td class="text-end">{{ r.zalo_app }}</td><td class="text-end">{{ r.zalo_app_pct }}%</td>
+    <td class="text-end">{{ r.zalo_oa }}</td><td class="text-end">{{ r.zalo_oa_pct }}%</td>
+</tr>
+{% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+</tbody>
+</table>
+</div>
+
+<p class="sub-section-title"><i class="bi bi-calendar-month me-1"></i>By Month</p>
+<div class="table-responsive tab-tbl-wrap mb-2">
+<table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
+<colgroup><col style="width:15%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:7%"></colgroup>
+<thead style="{{ hdr }}"><tr>
+    <th>Month</th><th class="text-end">POS(INV)</th><th class="text-end">POS(NO INV)</th>
+    <th class="text-end">POS Total</th><th class="text-end">POS Only</th>
+    <th class="text-end">New CNV</th><th class="text-end">CNV Only</th>
+    <th class="text-end">Zalo App</th><th class="text-end">%App</th>
+    <th class="text-end">Zalo OA</th><th class="text-end">%OA</th>
+</tr></thead>
+<tbody>
+{% for r in data.by_month %}
+<tr>
+    <td>{{ r.label }}</td><td class="text-end">{{ r.new_pos_inv }}</td><td class="text-end">{{ r.new_pos_no_inv }}</td>
+    <td class="text-end">{{ r.new_pos }}</td><td class="text-end">{{ r.new_pos_only }}</td>
+    <td class="text-end">{{ r.new_cnv }}</td><td class="text-end">{{ r.new_cnv_only }}</td>
+    <td class="text-end">{{ r.zalo_app }}</td><td class="text-end">{{ r.zalo_app_pct }}%</td>
+    <td class="text-end">{{ r.zalo_oa }}</td><td class="text-end">{{ r.zalo_oa_pct }}%</td>
+</tr>
+{% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+</tbody>
+</table>
+</div>
+
+<p class="sub-section-title"><i class="bi bi-calendar-week me-1"></i>By Week</p>
+<div class="table-responsive tab-tbl-wrap">
+<table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
+<colgroup><col style="width:18%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:7%"></colgroup>
+<thead style="{{ hdr }}"><tr>
+    <th>Week</th><th class="text-end">POS(INV)</th><th class="text-end">POS(NO INV)</th>
+    <th class="text-end">POS Total</th><th class="text-end">POS Only</th>
+    <th class="text-end">New CNV</th><th class="text-end">CNV Only</th>
+    <th class="text-end">Zalo App</th><th class="text-end">%App</th>
+    <th class="text-end">Zalo OA</th><th class="text-end">%OA</th>
+</tr></thead>
+<tbody>
+{% for r in data.by_week %}
+<tr>
+    <td>{{ r.label }}</td><td class="text-end">{{ r.new_pos_inv }}</td><td class="text-end">{{ r.new_pos_no_inv }}</td>
+    <td class="text-end">{{ r.new_pos }}</td><td class="text-end">{{ r.new_pos_only }}</td>
+    <td class="text-end">{{ r.new_cnv }}</td><td class="text-end">{{ r.new_cnv_only }}</td>
+    <td class="text-end">{{ r.zalo_app }}</td><td class="text-end">{{ r.zalo_app_pct }}%</td>
+    <td class="text-end">{{ r.zalo_oa }}</td><td class="text-end">{{ r.zalo_oa_pct }}%</td>
+</tr>
+{% empty %}<tr><td colspan="11" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+</tbody>
+</table>
+</div>
+
+{% endwith %}
+{% endif %}

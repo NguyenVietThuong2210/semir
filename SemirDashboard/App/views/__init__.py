@@ -4,7 +4,10 @@ from .analytics import analytics_dashboard, analytics_chart, export_analytics, a
 from .coupon import coupon_dashboard, export_coupons, coupon_chart, manage_campaigns, coupon_tab, export_coupon_chart_excel
 from .customer import customer_detail
 from .admin_logs import admin_logs
-from .shop_detail import shop_detail, export_shop_detail_excel
+from .shop_detail import (
+    shop_detail, export_shop_detail_excel,
+    shop_detail_sales_partial, shop_detail_customer_partial, shop_detail_coupon_partial,
+)
 from . import auth, users
 
 __all__ = [
@@ -31,4 +34,7 @@ __all__ = [
     "admin_logs",
     "shop_detail",
     "export_shop_detail_excel",
+    "shop_detail_sales_partial",
+    "shop_detail_customer_partial",
+    "shop_detail_coupon_partial",
 ]

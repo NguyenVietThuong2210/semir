@@ -1,0 +1,105 @@
+{% load custom_filters perm_tags %}
+{% check_perm 'download_shop_detail' as can_dl %}
+
+{% if not data %}
+<div class="no-data-msg py-3 text-muted"><i class="bi bi-info-circle me-1"></i>
+    No sales data found for "{{ shop_name }}"{% if start_date or end_date %} in this period{% endif %}.
+</div>
+{% else %}
+
+{% if can_dl %}
+<div class="d-flex justify-content-end mb-2">
+    <a href="{% url 'export_shop_detail_excel' %}?section=sales&sales_shop={{ shop_name|urlencode }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+       class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+</div>
+{% endif %}
+
+<div class="kpi-row mb-3">
+    <div class="kpi-card blue"><div class="kpi-val">{{ data.total_customers }}</div><div class="kpi-lbl">Active Customers</div></div>
+    <div class="kpi-card green"><div class="kpi-val">{{ data.returning_customers }}</div><div class="kpi-lbl">Returning</div></div>
+    <div class="kpi-card orange"><div class="kpi-val">{{ data.return_rate }}%</div><div class="kpi-lbl">Return Rate</div></div>
+    <div class="kpi-card purple"><div class="kpi-val">{{ data.returning_invoices }}</div><div class="kpi-lbl">INV (Returning)</div></div>
+    <div class="kpi-card blue"><div class="kpi-val amount-vnd">{{ data.returning_amount|vnd }}</div><div class="kpi-lbl">AMT (Returning) {{ currency }}</div></div>
+    <div class="kpi-card green"><div class="kpi-val">{{ data.total_invoices_with_vip0 }}</div><div class="kpi-lbl">Total INV</div></div>
+    <div class="kpi-card orange"><div class="kpi-val amount-vnd">{{ data.total_amount_with_vip0|vnd }}</div><div class="kpi-lbl">Total Amount {{ currency }}</div></div>
+</div>
+
+{% with hdr="background:#366092;color:white;" ts="table-layout:fixed;font-size:.83rem;" %}
+
+<p class="sub-section-title"><i class="bi bi-calendar3-range me-1"></i>By Season</p>
+<div class="table-responsive tab-tbl-wrap mb-2">
+<table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
+<colgroup><col style="width:18%"><col style="width:10%"><col style="width:11%"><col style="width:11%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:17%"></colgroup>
+<thead style="{{ hdr }}"><tr>
+    <th>Season</th><th class="text-end">Active</th><th class="text-end">Returning</th>
+    <th class="text-end">Return Rate</th><th class="text-end">INV(RET)</th>
+    <th class="text-end">AMT(RET) {{ currency }}</th><th class="text-end">Total INV</th><th class="text-end">Total Amount {{ currency }}</th>
+</tr></thead>
+<tbody>
+{% for s in data.by_session %}
+<tr>
+    <td>{{ s.session }}</td><td class="text-end">{{ s.total_customers }}</td>
+    <td class="text-end">{{ s.returning_customers }}</td>
+    <td class="text-end"><span class="badge bg-primary">{{ s.return_rate }}%</span></td>
+    <td class="text-end text-success">{{ s.returning_invoices }}</td>
+    <td class="text-end text-success amount-vnd">{{ s.returning_amount|vnd }}</td>
+    <td class="text-end">{{ s.total_invoices_with_vip0 }}</td>
+    <td class="text-end amount-vnd">{{ s.total_amount_with_vip0|vnd }}</td>
+</tr>
+{% empty %}<tr><td colspan="8" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+</tbody>
+</table>
+</div>
+
+<p class="sub-section-title"><i class="bi bi-calendar-month me-1"></i>By Month</p>
+<div class="table-responsive tab-tbl-wrap mb-2">
+<table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
+<colgroup><col style="width:18%"><col style="width:10%"><col style="width:11%"><col style="width:11%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:17%"></colgroup>
+<thead style="{{ hdr }}"><tr>
+    <th>Month</th><th class="text-end">Active</th><th class="text-end">Returning</th>
+    <th class="text-end">Return Rate</th><th class="text-end">INV(RET)</th>
+    <th class="text-end">AMT(RET) {{ currency }}</th><th class="text-end">Total INV</th><th class="text-end">Total Amount {{ currency }}</th>
+</tr></thead>
+<tbody>
+{% for m in data.by_month %}
+<tr>
+    <td>{{ m.month }}</td><td class="text-end">{{ m.total_customers }}</td>
+    <td class="text-end">{{ m.returning_customers }}</td>
+    <td class="text-end"><span class="badge bg-primary">{{ m.return_rate }}%</span></td>
+    <td class="text-end text-success">{{ m.returning_invoices }}</td>
+    <td class="text-end text-success amount-vnd">{{ m.returning_amount|vnd }}</td>
+    <td class="text-end">{{ m.total_invoices_with_vip0 }}</td>
+    <td class="text-end amount-vnd">{{ m.total_amount_with_vip0|vnd }}</td>
+</tr>
+{% empty %}<tr><td colspan="8" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+</tbody>
+</table>
+</div>
+
+<p class="sub-section-title"><i class="bi bi-calendar-week me-1"></i>By Week</p>
+<div class="table-responsive tab-tbl-wrap">
+<table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
+<colgroup><col style="width:22%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:12%"><col style="width:10%"><col style="width:15%"></colgroup>
+<thead style="{{ hdr }}"><tr>
+    <th>Week</th><th class="text-end">Active</th><th class="text-end">Returning</th>
+    <th class="text-end">Return Rate</th><th class="text-end">INV(RET)</th>
+    <th class="text-end">AMT(RET) {{ currency }}</th><th class="text-end">Total INV</th><th class="text-end">Total Amount {{ currency }}</th>
+</tr></thead>
+<tbody>
+{% for w in data.by_week %}
+<tr>
+    <td>{{ w.week_label }}</td><td class="text-end">{{ w.total_customers }}</td>
+    <td class="text-end">{{ w.returning_customers }}</td>
+    <td class="text-end"><span class="badge bg-primary">{{ w.return_rate }}%</span></td>
+    <td class="text-end text-success">{{ w.returning_invoices }}</td>
+    <td class="text-end text-success amount-vnd">{{ w.returning_amount|vnd }}</td>
+    <td class="text-end">{{ w.total_invoices_with_vip0 }}</td>
+    <td class="text-end amount-vnd">{{ w.total_amount_with_vip0|vnd }}</td>
+</tr>
+{% empty %}<tr><td colspan="8" class="text-center text-muted py-2">No data</td></tr>{% endfor %}
+</tbody>
+</table>
+</div>
+
+{% endwith %}
+{% endif %}

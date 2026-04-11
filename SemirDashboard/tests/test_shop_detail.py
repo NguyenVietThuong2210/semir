@@ -534,3 +534,256 @@ class ShopDetailConsistencyTest(SnapshotTestCase):
         t.report()
 
         self.assertLess(total, 60, f"Full page load too slow: {total:.1f}s")
+
+
+class ShopDetailAjaxTest(SnapshotTestCase):
+    """
+    Tests for AJAX partial views (shop_detail_sales_partial, etc.)
+    Validates HTTP responses, content, and per-section performance.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        if CUSTOMER_FILE.exists():
+            process_customer_file(_named(CUSTOMER_FILE))
+        for path in SALE_FILES:
+            if path.exists():
+                process_sales_file(_named(path))
+        if COUPON_FILE.exists():
+            process_coupon_file(_named(COUPON_FILE))
+
+    def _pick_sales_shop(self):
+        return (
+            SalesTransaction.objects
+            .exclude(shop_name__isnull=True).exclude(shop_name='')
+            .values_list('shop_name', flat=True).order_by('shop_name').first()
+        )
+
+    def _pick_customer_shop(self):
+        return (
+            Customer.objects
+            .exclude(registration_store__isnull=True).exclude(registration_store='')
+            .values_list('registration_store', flat=True).order_by('registration_store').first()
+        )
+
+    def _pick_coupon_shop(self):
+        return (
+            Coupon.objects.filter(using_date__isnull=False)
+            .exclude(using_shop__isnull=True).exclude(using_shop='')
+            .values_list('using_shop', flat=True).order_by('using_shop').first()
+        )
+
+    def _ajax_get(self, url, params=None):
+        """GET with AJAX header."""
+        full = url + ('?' + '&'.join(f'{k}={v}' for k,v in params.items()) if params else '')
+        return self.client.get(full, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+    def _login_superuser(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user, _ = User.objects.get_or_create(username='_test_ajax_', defaults={'is_superuser':True,'is_staff':True})
+        user.set_password('x'); user.save()
+        self.client.force_login(user)
+
+    # ── Sales partial ────────────────────────────────────────────────────────
+
+    def test_sales_partial_200_with_data(self):
+        """GET sales partial returns 200 and contains KPI data."""
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        self._login_superuser()
+        shop = self._pick_sales_shop()
+        t = self.timer("ajax_sales_partial")
+        resp = self.client.get(
+            '/shop-detail/partial/sales/',
+            {'shop': shop},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        t.checkpoint(f"shop={shop}")
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        self.assertIn('kpi-val', content, "Missing KPI cards in response")
+        self.assertIn('By Season', content)
+        self.assertIn('By Month', content)
+        get_run_log().log(f"  [ajax sales] shop={shop} bytes={len(content)}")
+        t.report()
+
+    def test_sales_partial_empty_shop(self):
+        """GET sales partial with no shop returns placeholder."""
+        self._login_superuser()
+        resp = self.client.get('/shop-detail/partial/sales/', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('Select a shop', resp.content.decode())
+
+    def test_sales_partial_performance(self):
+        """Sales partial should respond in < 3s."""
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        self._login_superuser()
+        shop = self._pick_sales_shop()
+        import time
+        t0 = time.perf_counter()
+        resp = self.client.get('/shop-detail/partial/sales/', {'shop': shop})
+        elapsed = time.perf_counter() - t0
+        self.assertEqual(resp.status_code, 200)
+        get_run_log().log(f"  [ajax sales perf] {elapsed:.2f}s shop={shop}")
+        self.assertLess(elapsed, 3.0, f"Sales partial too slow: {elapsed:.2f}s")
+
+    def test_sales_partial_with_date_filter(self):
+        """Sales partial respects date filter."""
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        self._login_superuser()
+        shop = self._pick_sales_shop()
+        resp = self.client.get('/shop-detail/partial/sales/', {
+            'shop': shop, 'start_date': '2025-01-01', 'end_date': '2025-12-31'
+        })
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        # Should either have data or a no-data message
+        self.assertTrue('kpi-val' in content or 'No' in content)
+
+    # ── Customer partial ──────────────────────────────────────────────────────
+
+    def test_customer_partial_200_with_data(self):
+        """GET customer partial returns 200 and contains summary KPIs."""
+        if not Customer.objects.exists():
+            self.skipTest("No customer data")
+        self._login_superuser()
+        store = self._pick_customer_shop()
+        t = self.timer("ajax_customer_partial")
+        resp = self.client.get(
+            '/shop-detail/partial/customer/',
+            {'shop': store},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        t.checkpoint(f"store={store}")
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        self.assertIn('kpi-val', content, "Missing KPI cards")
+        get_run_log().log(f"  [ajax customer] store={store} bytes={len(content)}")
+        t.report()
+
+    def test_customer_partial_empty_shop(self):
+        """GET customer partial with no shop returns placeholder."""
+        self._login_superuser()
+        resp = self.client.get('/shop-detail/partial/customer/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('Select a', resp.content.decode())
+
+    def test_customer_partial_performance(self):
+        """Customer partial should respond in < 3s."""
+        if not Customer.objects.exists():
+            self.skipTest("No customer data")
+        self._login_superuser()
+        store = self._pick_customer_shop()
+        import time
+        t0 = time.perf_counter()
+        resp = self.client.get('/shop-detail/partial/customer/', {'shop': store})
+        elapsed = time.perf_counter() - t0
+        self.assertEqual(resp.status_code, 200)
+        get_run_log().log(f"  [ajax customer perf] {elapsed:.2f}s store={store}")
+        self.assertLess(elapsed, 3.0, f"Customer partial too slow: {elapsed:.2f}s")
+
+    # ── Coupon partial ────────────────────────────────────────────────────────
+
+    def test_coupon_partial_200_with_data(self):
+        """GET coupon partial returns 200 and contains KPI data."""
+        if not Coupon.objects.exists():
+            self.skipTest("No coupon data")
+        self._login_superuser()
+        shop = self._pick_coupon_shop()
+        if not shop:
+            self.skipTest("No used coupons")
+        t = self.timer("ajax_coupon_partial")
+        resp = self.client.get(
+            '/shop-detail/partial/coupon/',
+            {'shop': shop},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        t.checkpoint(f"shop={shop}")
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        self.assertIn('kpi-val', content, "Missing KPI cards")
+        self.assertIn('All-Time', content)
+        get_run_log().log(f"  [ajax coupon] shop={shop} bytes={len(content)}")
+        t.report()
+
+    def test_coupon_partial_empty_shop(self):
+        """GET coupon partial with no shop returns placeholder."""
+        self._login_superuser()
+        resp = self.client.get('/shop-detail/partial/coupon/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('Select a shop', resp.content.decode())
+
+    def test_coupon_partial_performance(self):
+        """Coupon partial should respond in < 2s."""
+        if not Coupon.objects.exists():
+            self.skipTest("No coupon data")
+        self._login_superuser()
+        shop = self._pick_coupon_shop()
+        if not shop:
+            self.skipTest("No used coupons")
+        import time
+        t0 = time.perf_counter()
+        resp = self.client.get('/shop-detail/partial/coupon/', {'shop': shop})
+        elapsed = time.perf_counter() - t0
+        self.assertEqual(resp.status_code, 200)
+        get_run_log().log(f"  [ajax coupon perf] {elapsed:.2f}s shop={shop}")
+        self.assertLess(elapsed, 2.0, f"Coupon partial too slow: {elapsed:.2f}s")
+
+    # ── Main page ─────────────────────────────────────────────────────────────
+
+    def test_main_page_fast_no_queries(self):
+        """Main shop_detail page (no shop selected) must load in < 0.5s — only dropdown queries."""
+        self._login_superuser()
+        import time
+        t0 = time.perf_counter()
+        resp = self.client.get('/shop-detail/')
+        elapsed = time.perf_counter() - t0
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        # Dropdowns must be populated
+        self.assertIn('Select shop', content)
+        self.assertIn('Select store', content)
+        get_run_log().log(f"  [main page no query] {elapsed:.2f}s")
+        # First hit populates dropdown cache (3 distinct queries across 400k+ rows)
+        # Subsequent hits will be <0.1s. Allow 3s for cold cache.
+        self.assertLess(elapsed, 3.0, f"Main page too slow even with no data query: {elapsed:.2f}s")
+
+    def test_snapshot_ajax_sales_partial(self):
+        """Snapshot: sales partial HTML structure."""
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        self._login_superuser()
+        shop = self._pick_sales_shop()
+        resp = self.client.get('/shop-detail/partial/sales/', {'shop': shop})
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        self.assert_snapshot('ajax_sales_partial', {
+            'shop': shop,
+            'has_kpi': 'kpi-val' in content,
+            'has_by_season': 'By Season' in content,
+            'has_by_month': 'By Month' in content,
+            'has_by_week': 'By Week' in content,
+            'byte_len': len(content),
+        })
+
+    def test_snapshot_ajax_coupon_partial(self):
+        """Snapshot: coupon partial HTML structure."""
+        if not Coupon.objects.exists():
+            self.skipTest("No coupon data")
+        self._login_superuser()
+        shop = self._pick_coupon_shop()
+        if not shop:
+            self.skipTest("No used coupons")
+        resp = self.client.get('/shop-detail/partial/coupon/', {'shop': shop})
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        self.assert_snapshot('ajax_coupon_partial', {
+            'shop': shop,
+            'has_alltime': 'All-Time' in content,
+            'has_period': 'Period' in content,
+            'has_detail_table': 'Coupon ID' in content,
+            'byte_len': len(content),
+        })

@@ -1,0 +1,113 @@
+{% load custom_filters perm_tags %}
+{% check_perm 'download_shop_detail' as can_dl %}
+
+{% if not data %}
+<div class="no-data-msg py-3 text-muted"><i class="bi bi-info-circle me-1"></i>
+    No coupon data found for "{{ shop_name }}"{% if start_date or end_date %} in this period{% endif %}.
+</div>
+{% else %}
+
+{% if can_dl %}
+<div class="d-flex justify-content-end mb-2">
+    <a href="{% url 'export_shop_detail_excel' %}?section=coupon&coupon_shop={{ shop_name|urlencode }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if coupon_prefix %}&coupon_prefix={{ coupon_prefix }}{% endif %}{% if coupon_campaign_id %}&coupon_campaign={{ coupon_campaign_id }}{% endif %}"
+       class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header py-2 fw-semibold" style="background:#7b4000;color:white;font-size:.85rem;">
+                <i class="bi bi-infinity me-1"></i>All-Time
+            </div>
+            <div class="card-body py-2">
+                <div class="kpi-row">
+                    <div class="kpi-card blue"><div class="kpi-val">{{ data.all_time.total }}</div><div class="kpi-lbl">Total</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ data.all_time.used }}</div><div class="kpi-lbl">Used</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val">{{ data.all_time.unused }}</div><div class="kpi-lbl">Unused</div></div>
+                    <div class="kpi-card purple"><div class="kpi-val">{{ data.all_time.usage_rate }}%</div><div class="kpi-lbl">Usage Rate</div></div>
+                </div>
+                <p class="small text-muted mt-1 mb-0">
+                    Coupon Amt: <strong>{{ data.all_time.total_coupon_amount|floatformat:0 }} VND</strong>
+                    &nbsp;|&nbsp; Invoice Amt: <strong>{{ data.all_time.total_amount|floatformat:0 }} VND</strong>
+                    &nbsp;|&nbsp; Dup INV: <strong>{{ data.all_time.duplicate_invoice_count }}</strong>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header py-2 fw-semibold" style="background:#5a6268;color:white;font-size:.85rem;">
+                <i class="bi bi-calendar-range me-1"></i>Period{% if start_date or end_date %}: {{ start_date|default:"all" }} → {{ end_date|default:"all" }}{% endif %}
+            </div>
+            <div class="card-body py-2">
+                <div class="kpi-row">
+                    <div class="kpi-card blue"><div class="kpi-val">{{ data.period.total }}</div><div class="kpi-lbl">Total</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ data.period.used }}</div><div class="kpi-lbl">Used</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val">{{ data.period.unused }}</div><div class="kpi-lbl">Unused</div></div>
+                    <div class="kpi-card purple"><div class="kpi-val">{{ data.period.usage_rate }}%</div><div class="kpi-lbl">Usage Rate</div></div>
+                </div>
+                <p class="small text-muted mt-1 mb-0">
+                    Coupon Amt: <strong>{{ data.period.total_coupon_amount|floatformat:0 }} VND</strong>
+                    &nbsp;|&nbsp; Invoice Amt: <strong>{{ data.period.total_amount|floatformat:0 }} VND</strong>
+                    &nbsp;|&nbsp; Dup INV: <strong>{{ data.period.duplicate_invoice_count }}</strong>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<p class="sub-section-title"><i class="bi bi-list-ul me-1"></i>Coupon Detail (used in period, max 500 rows)</p>
+<div class="table-responsive tab-tbl-wrap">
+<table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;min-width:1400px">
+<thead style="background:#7b4000;color:white;">
+<tr>
+    <th style="min-width:110px">Coupon ID</th>
+    <th style="min-width:80px">Creator</th>
+    <th class="text-end" style="min-width:80px">Face Value</th>
+    <th style="min-width:120px">Using Shop</th>
+    <th style="min-width:90px">Using Date</th>
+    <th style="min-width:80px">VIP ID</th>
+    <th style="min-width:110px">Customer Name</th>
+    <th style="min-width:100px">Phone</th>
+    <th style="min-width:90px">Sales Date</th>
+    <th style="min-width:120px">Invoice Shop</th>
+    <th class="text-end" style="min-width:110px">Amount (VND)</th>
+    <th class="text-end" style="min-width:110px">Coupon Amt</th>
+    <th style="min-width:100px">Note</th>
+    <th style="min-width:80px">CNV ID</th>
+    <th class="text-end" style="min-width:70px">CNV Pts</th>
+    <th class="text-end" style="min-width:80px">CNV Total</th>
+</tr>
+</thead>
+<tbody>
+{% for d in data.details %}
+<tr {% if d.note %}class="table-warning"{% endif %}>
+    <td><strong>{{ d.coupon_id }}</strong></td>
+    <td>{{ d.creator|default:"-" }}</td>
+    <td class="text-end">{{ d.face_value_display }}</td>
+    <td>{{ d.using_shop|default:"-" }}</td>
+    <td>{{ d.using_date|default:"-" }}</td>
+    <td>{{ d.vip_id|default:"-" }}</td>
+    <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ d.customer_name }}">{{ d.customer_name|default:"-" }}</td>
+    <td>{{ d.customer_phone|default:"-" }}</td>
+    <td>{{ d.sales_day|default:"-" }}</td>
+    <td>{{ d.inv_shop|default:"-" }}</td>
+    <td class="text-end amount-vnd">{{ d.amount|vnd }}</td>
+    <td class="text-end amount-vnd">{{ d.coupon_amount|vnd }}</td>
+    <td>{% if d.note %}<span class="badge bg-warning text-dark small" title="{{ d.note }}">&#9888; {{ d.note|truncatechars:25 }}</span>{% endif %}</td>
+    <td>{{ d.cnv_id|default:"-" }}</td>
+    <td class="text-end">{% if d.cnv_points != '' %}{{ d.cnv_points|floatformat:0 }}{% else %}-{% endif %}</td>
+    <td class="text-end">{% if d.cnv_total_points != '' %}{{ d.cnv_total_points|floatformat:0 }}{% else %}-{% endif %}</td>
+</tr>
+{% empty %}
+<tr><td colspan="16" class="text-center text-muted py-3">No coupon data for this shop/period.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% if data.details|length >= 500 %}
+<div class="p-2 text-muted small border-top">Showing first 500 rows. Export to Excel for all data.</div>
+{% endif %}
+
+{% endif %}
