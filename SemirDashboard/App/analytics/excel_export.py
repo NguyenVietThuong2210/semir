@@ -2108,7 +2108,8 @@ def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
         for ws in wb.worksheets:
             ws.insert_rows(1)
             ws["A1"] = line
-            ws["A1"].font = Font(italic=True, color="888888", size=9)
+            ws["A1"].font = Font(italic=True, color="888888", size=9)   
+    return wb
 
 
 # ─────────────────────────────────────────────────────────────────────────────
