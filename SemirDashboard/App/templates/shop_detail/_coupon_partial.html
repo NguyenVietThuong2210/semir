@@ -21,17 +21,18 @@
                 <i class="bi bi-infinity me-1"></i>All-Time
             </div>
             <div class="card-body py-2">
-                <div class="kpi-row">
+                <div class="kpi-row mb-2">
                     <div class="kpi-card blue"><div class="kpi-val">{{ data.all_time.total }}</div><div class="kpi-lbl">Total</div></div>
                     <div class="kpi-card green"><div class="kpi-val">{{ data.all_time.used }}</div><div class="kpi-lbl">Used</div></div>
                     <div class="kpi-card orange"><div class="kpi-val">{{ data.all_time.unused }}</div><div class="kpi-lbl">Unused</div></div>
                     <div class="kpi-card purple"><div class="kpi-val">{{ data.all_time.usage_rate }}%</div><div class="kpi-lbl">Usage Rate</div></div>
                 </div>
-                <p class="small text-muted mt-1 mb-0">
-                    Coupon Amt: <strong>{{ data.all_time.total_coupon_amount|floatformat:0 }} VND</strong>
-                    &nbsp;|&nbsp; Invoice Amt: <strong>{{ data.all_time.total_amount|floatformat:0 }} VND</strong>
-                    &nbsp;|&nbsp; Dup INV: <strong>{{ data.all_time.duplicate_invoice_count }}</strong>
-                </p>
+                <div class="kpi-row">
+                    <div class="kpi-card blue"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.all_time.total_coupon_amount|floatformat:0 }}</div><div class="kpi-lbl">Coupon Amt (VND)</div></div>
+                    <div class="kpi-card green"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.all_time.total_amount|floatformat:0 }}</div><div class="kpi-lbl">Invoice Amt (VND)</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.all_time.unique_invoice_amount|floatformat:0 }}</div><div class="kpi-lbl">Unique Inv Amt (VND)</div></div>
+                    <div class="kpi-card purple"><div class="kpi-val">{{ data.all_time.duplicate_invoice_count }}</div><div class="kpi-lbl">Dup INV</div></div>
+                </div>
             </div>
         </div>
     </div>
@@ -41,17 +42,18 @@
                 <i class="bi bi-calendar-range me-1"></i>Period{% if start_date or end_date %}: {{ start_date|default:"all" }} → {{ end_date|default:"all" }}{% endif %}
             </div>
             <div class="card-body py-2">
-                <div class="kpi-row">
+                <div class="kpi-row mb-2">
                     <div class="kpi-card blue"><div class="kpi-val">{{ data.period.total }}</div><div class="kpi-lbl">Total</div></div>
                     <div class="kpi-card green"><div class="kpi-val">{{ data.period.used }}</div><div class="kpi-lbl">Used</div></div>
                     <div class="kpi-card orange"><div class="kpi-val">{{ data.period.unused }}</div><div class="kpi-lbl">Unused</div></div>
                     <div class="kpi-card purple"><div class="kpi-val">{{ data.period.usage_rate }}%</div><div class="kpi-lbl">Usage Rate</div></div>
                 </div>
-                <p class="small text-muted mt-1 mb-0">
-                    Coupon Amt: <strong>{{ data.period.total_coupon_amount|floatformat:0 }} VND</strong>
-                    &nbsp;|&nbsp; Invoice Amt: <strong>{{ data.period.total_amount|floatformat:0 }} VND</strong>
-                    &nbsp;|&nbsp; Dup INV: <strong>{{ data.period.duplicate_invoice_count }}</strong>
-                </p>
+                <div class="kpi-row">
+                    <div class="kpi-card blue"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.period.total_coupon_amount|floatformat:0 }}</div><div class="kpi-lbl">Coupon Amt (VND)</div></div>
+                    <div class="kpi-card green"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.period.total_amount|floatformat:0 }}</div><div class="kpi-lbl">Invoice Amt (VND)</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.period.unique_invoice_amount|floatformat:0 }}</div><div class="kpi-lbl">Unique Inv Amt (VND)</div></div>
+                    <div class="kpi-card purple"><div class="kpi-val">{{ data.period.duplicate_invoice_count }}</div><div class="kpi-lbl">Dup INV</div></div>
+                </div>
             </div>
         </div>
     </div>

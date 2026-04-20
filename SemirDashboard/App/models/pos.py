@@ -17,7 +17,7 @@ class Customer(models.Model):
     country = models.CharField(max_length=1000, blank=True, null=True)
     email = models.EmailField(validators=[EmailValidator()], blank=True, null=True)
     contact_address = models.TextField(blank=True, null=True)
-    registration_store = models.CharField(max_length=1000, blank=True, null=True)
+    registration_store = models.CharField(max_length=1000, blank=True, null=True, db_index=True)
     registration_date = models.DateField(blank=True, null=True)
     points = models.IntegerField(default=0)
     used_points = models.IntegerField(default=0, null=True, blank=True)
@@ -39,7 +39,7 @@ class Customer(models.Model):
 class SalesTransaction(models.Model):
     invoice_number = models.CharField(max_length=1000, unique=True, db_index=True)
     shop_id = models.CharField(max_length=1000)
-    shop_name = models.CharField(max_length=1000)
+    shop_name = models.CharField(max_length=1000, db_index=True)
     country = models.CharField(max_length=1000)
     bu = models.CharField(max_length=1000, blank=True, null=True)
     sales_date = models.DateField(db_index=True)

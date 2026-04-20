@@ -77,8 +77,8 @@
         <div class="shop-select-row mb-3">
             <div>
                 <label>Shop</label>
-                <select id="salesShopSel" class="form-select form-select-sm">
-                    <option value="">— Select shop —</option>
+                <select id="salesShopSel" class="form-select form-select-sm"{% if not sales_shops %} disabled{% endif %}>
+                    <option value="">{% if sales_shops %}— Select shop —{% else %}No shops available{% endif %}</option>
                     {% for s in sales_shops %}
                     <option value="{{ s }}">{{ s }}</option>
                     {% endfor %}
@@ -135,8 +135,8 @@
         <div class="shop-select-row mb-3">
             <div>
                 <label>Using Shop</label>
-                <select id="couponShopSel" class="form-select form-select-sm">
-                    <option value="">— Select shop —</option>
+                <select id="couponShopSel" class="form-select form-select-sm"{% if not coupon_shops %} disabled{% endif %}>
+                    <option value="">{% if coupon_shops %}— Select shop —{% else %}No shops available{% endif %}</option>
                     {% for s in coupon_shops %}
                     <option value="{{ s }}">{{ s }}</option>
                     {% endfor %}
@@ -181,6 +181,14 @@
         customer: "{% url 'shop_detail_customer_partial' %}",
         coupon:   "{% url 'shop_detail_coupon_partial' %}",
     };
+
+    // ── Warn if any dropdown has no shops ─────────────────────────────
+    ['salesShopSel','customerShopSel','couponShopSel'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el && el.options.length <= 1) {
+            console.warn('[ShopDetail] ' + id + ' has no options — check server-side data.');
+        }
+    });
 
     // ── Campaign dropdown population ──────────────────────────────────
     const campsRaw = document.getElementById('campaigns-raw');

@@ -1219,20 +1219,24 @@ def get_shop_detail_sales_data(shop_name: str, date_from=None, date_to=None) -> 
     if not sales_list:
         return None
 
-    # ── Same info_map build as _load_sales ────────────────────────────────
+    # ── Customer info_map — cached 5 min to avoid loading 74k rows per call ─
+    from django.core.cache import cache as _djc2
     from App.models import Customer as _Cust
-    info_map = {
-        _norm_vid(str(c['vip_id'])): (
-            __import__('App.analytics.customer_utils', fromlist=['normalize_grade'])
-            .normalize_grade(c['vip_grade']),
-            c['registration_date'],
-            c['name'] or 'Unknown',
-        )
-        for c in _Cust.objects
-        .filter(vip_id__isnull=False).exclude(vip_id=0)
-        .values('vip_id', 'vip_grade', 'registration_date', 'name')
-        if c['vip_id']
-    }
+    _info_key = "shop_detail_sales_info_map"
+    info_map = _djc2.get(_info_key)
+    if info_map is None:
+        info_map = {
+            _norm_vid(str(c['vip_id'])): (
+                normalize_grade(c['vip_grade']),
+                c['registration_date'],
+                c['name'] or 'Unknown',
+            )
+            for c in _Cust.objects
+            .filter(vip_id__isnull=False).exclude(vip_id=0)
+            .values('vip_id', 'vip_grade', 'registration_date', 'name')
+            if c['vip_id']
+        }
+        _djc2.set(_info_key, info_map, 300)
 
     def _get_ci(vip_id, customer_obj=None):
         c = info_map.get(vip_id)

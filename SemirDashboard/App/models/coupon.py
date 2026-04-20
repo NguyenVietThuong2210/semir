@@ -12,7 +12,7 @@ class Coupon(models.Model):
     used = models.IntegerField(default=0)  # 0=unused, 1=used
     begin_date = models.DateField(blank=True, null=True)
     end_date = models.DateField(blank=True, null=True)
-    using_shop = models.CharField(max_length=1000, blank=True, null=True)
+    using_shop = models.CharField(max_length=1000, blank=True, null=True, db_index=True)
     using_date = models.DateField(blank=True, null=True)
     push = models.CharField(max_length=1000, blank=True, null=True)
     member_id = models.CharField(max_length=1000, blank=True, null=True)
