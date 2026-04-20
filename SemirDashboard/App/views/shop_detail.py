@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.core.cache import cache
 
-from App.permissions import requires_perm
+from App.permissions import requires_perm, user_has_perm
 from App.analytics.tab_functions import (
     get_shop_detail_sales_data,
     get_shop_detail_customer_data,
@@ -20,6 +20,22 @@ from App.views.view_utils import parse_date
 logger = logging.getLogger(__name__)
 
 _DROPDOWN_TTL = 300  # 5 min cache for dropdown lists
+
+
+def _ajax_perm_check(request, codename):
+    """Return an error HttpResponse for AJAX partial views, or None if OK."""
+    if not request.user.is_authenticated:
+        return HttpResponse(
+            '<div class="alert alert-warning m-0">Session expired. '
+            '<a href="/login/">Log in again</a>.</div>',
+            status=401,
+        )
+    if not user_has_perm(request.user, codename):
+        return HttpResponse(
+            '<div class="alert alert-danger m-0">Permission denied.</div>',
+            status=403,
+        )
+    return None
 
 
 def _get_dropdown_options():
@@ -98,9 +114,11 @@ def _safe_date(val):
         return None
 
 
-@requires_perm("page_shop_detail")
 def shop_detail_sales_partial(request):
     """AJAX: render sales section data for one shop."""
+    err = _ajax_perm_check(request, "page_shop_detail")
+    if err:
+        return err
     shop_name  = request.GET.get("shop", "").strip()
     start_date = request.GET.get("start_date", "")
     end_date   = request.GET.get("end_date", "")
@@ -117,9 +135,11 @@ def shop_detail_sales_partial(request):
     })
 
 
-@requires_perm("page_shop_detail")
 def shop_detail_customer_partial(request):
     """AJAX: render customer section data for one store."""
+    err = _ajax_perm_check(request, "page_shop_detail")
+    if err:
+        return err
     store_name = request.GET.get("shop", "").strip()
     start_date = request.GET.get("start_date", "")
     end_date   = request.GET.get("end_date", "")
@@ -134,9 +154,11 @@ def shop_detail_customer_partial(request):
     })
 
 
-@requires_perm("page_shop_detail")
 def shop_detail_coupon_partial(request):
     """AJAX: render coupon section data for one shop."""
+    err = _ajax_perm_check(request, "page_shop_detail")
+    if err:
+        return err
     shop_name        = request.GET.get("shop", "").strip()
     start_date       = request.GET.get("start_date", "")
     end_date         = request.GET.get("end_date", "")

@@ -183,7 +183,9 @@
     };
 
     // ── Campaign dropdown population ──────────────────────────────────
-    const camps = JSON.parse(document.getElementById('campaigns-raw').textContent || '[]');
+    const campsRaw = document.getElementById('campaigns-raw');
+    const campsData = campsRaw ? JSON.parse(campsRaw.textContent) : [];
+    const camps = Array.isArray(campsData) ? campsData : [];
     const campaignSel = document.getElementById('campaignSel');
     camps.forEach(c => {
         const opt = document.createElement('option');
@@ -250,17 +252,14 @@
         url += extraParams;
 
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(r => {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.text();
-            })
-            .then(html => {
+            .then(r => r.text().then(html => ({ ok: r.ok, html })))
+            .then(({ ok, html }) => {
                 spinner.style.display = 'none';
                 result.innerHTML = html;
             })
             .catch(err => {
                 spinner.style.display = 'none';
-                result.innerHTML = '<div class="alert alert-danger">Error loading data: ' + err.message + '</div>';
+                result.innerHTML = '<div class="alert alert-danger">Network error: ' + err.message + '</div>';
             });
     };
 })();
