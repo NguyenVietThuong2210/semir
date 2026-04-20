@@ -1,5 +1,4 @@
 """App/views/shop_detail.py — Shop Detail page: Sales + Customer + Coupon analytics by shop."""
-import json
 import logging
 from datetime import datetime
 
@@ -45,20 +44,25 @@ def _get_dropdown_options():
     if cached:
         return cached
 
+    # .order_by() clears Meta.ordering before DISTINCT — without this, Django
+    # includes ordering fields in SELECT DISTINCT, making every row unique.
     sales_shops = sorted(
         SalesTransaction.objects
         .exclude(shop_name__isnull=True).exclude(shop_name='')
-        .values_list('shop_name', flat=True).distinct()
+        .values_list('shop_name', flat=True)
+        .order_by().distinct()
     )
     customer_shops = sorted(
         Customer.objects
         .exclude(registration_store__isnull=True).exclude(registration_store='')
-        .values_list('registration_store', flat=True).distinct()
+        .values_list('registration_store', flat=True)
+        .order_by().distinct()
     )
     coupon_shops = sorted(
         Coupon.objects
         .exclude(using_shop__isnull=True).exclude(using_shop='')
-        .values_list('using_shop', flat=True).distinct()
+        .values_list('using_shop', flat=True)
+        .order_by().distinct()
     )
     campaigns = list(CouponCampaign.objects.values("id", "name", "prefix"))
     for c in campaigns:
@@ -99,7 +103,7 @@ def shop_detail(request):
         "sales_shops":       sales_shops,
         "customer_shops":    customer_shops,
         "coupon_shops":      coupon_shops,
-        "campaigns_json":    json.dumps(campaigns),
+        "campaigns":         campaigns,
         "currency":          "VND",
     })
 
