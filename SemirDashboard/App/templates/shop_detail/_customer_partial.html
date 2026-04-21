@@ -142,17 +142,27 @@
 </p>
 {% if data.zalo_active_list %}
 <div class="table-responsive" style="max-height:1600px;overflow-y:auto;">
-<table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;min-width:900px;">
+<table class="table table-sm table-hover align-middle mb-0 w-100" style="font-size:.82rem;table-layout:fixed;">
+<colgroup>
+    <col style="width:8%">   {# CNV ID #}
+    <col style="width:11%">  {# Phone #}
+    <col style="width:19%">  {# Name #}
+    <col style="width:9%">   {# Level #}
+    <col style="width:11%">  {# Zalo Created #}
+    <col style="width:16%">  {# Zalo App ID #}
+    <col style="width:14%">  {# Zalo OA ID #}
+    <col style="width:12%">  {# Zalo Active date #}
+</colgroup>
 <thead class="sticky-thead" style="background:#1a5276;color:white;">
 <tr>
-    <th style="width:90px;">CNV ID</th>
-    <th style="width:110px;">Phone</th>
+    <th>CNV ID</th>
+    <th>Phone</th>
     <th>Name</th>
-    <th style="width:90px;">Level</th>
-    <th style="width:110px;" class="text-end">Zalo Created</th>
-    <th style="width:120px;">Zalo App ID</th>
-    <th style="width:120px;">Zalo OA ID</th>
-    <th style="width:110px;" class="text-end">Zalo Active date</th>
+    <th>Level</th>
+    <th class="text-end">Zalo Created</th>
+    <th>Zalo App ID</th>
+    <th>Zalo OA ID</th>
+    <th class="text-end">Zalo Active date</th>
 </tr>
 </thead>
 <tbody>
@@ -160,11 +170,11 @@
 <tr>
     <td>{{ c.cnv_id }}</td>
     <td>{{ c.phone|default:"-" }}</td>
-    <td>{{ c.last_name|default:"" }} {{ c.first_name|default:"" }}</td>
+    <td class="text-truncate" title="{{ c.last_name|default:'' }} {{ c.first_name|default:'' }}">{{ c.last_name|default:"" }} {{ c.first_name|default:"" }}</td>
     <td>{{ c.level_name|default:"-" }}</td>
     <td class="text-end">{{ c.cnv_created_at|date:"d/m/Y"|default:"-" }}</td>
-    <td class="text-truncate" style="max-width:120px;" title="{{ c.zalo_app_id|default:'' }}">{{ c.zalo_app_id|default:"-" }}</td>
-    <td class="text-truncate" style="max-width:120px;" title="{{ c.zalo_oa_id|default:'' }}">{{ c.zalo_oa_id|default:"-" }}</td>
+    <td class="text-truncate" title="{{ c.zalo_app_id|default:'' }}">{{ c.zalo_app_id|default:"-" }}</td>
+    <td class="text-truncate" title="{{ c.zalo_oa_id|default:'' }}">{{ c.zalo_oa_id|default:"-" }}</td>
     <td class="text-end">{{ c.zalo_app_created_at|date:"d/m/Y"|default:"-" }}</td>
 </tr>
 {% endfor %}

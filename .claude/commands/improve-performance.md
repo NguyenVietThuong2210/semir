@@ -104,33 +104,100 @@ Record:
 
 ---
 
-## Step 3 — Scan and optimize each URL/API
+## Step 3 — Senior-engineer optimization pass
 
-For each URL in the todo list, **read the view file** (discovered in Step 1) and trace into every function it calls. Look for:
+You are now acting as a senior backend engineer doing a production performance review. Your job is not to enumerate issues — it is to **read the code, understand it deeply, and implement the best version of it**. Fix everything you find in the same pass. Leave the code better than you found it.
 
-**Query inefficiencies:**
-- N+1 queries — loop that hits DB inside a loop → batch with `select_related`, `prefetch_related`, or `filter(pk__in=ids)`
-- Fetching full model rows when only a few fields are needed → add `.only(...)` or `.values(...)`
-- `.distinct()` without `.order_by()` on `SalesTransaction` or `Customer` (both have `Meta.ordering`) → must call `.order_by()` first
-- Filter fields not in any index → check if `db_index=True` is missing
+### 3a — Instrument each view: count queries + measure wall time
 
-**Cache opportunities:**
-- Repeated identical DB queries across a request → `cache.get_or_set(key, fn, timeout)`
-- Already-cached: `_load_sales()` (5 min), `_fetch_bd_raw()` (5 min), dropdown options (5 min), CNV phone sets (10 min) — don't double-cache these
-- Do NOT cache: upload job status, sync status, any real-time data
+For every view in the URL list, instrument it in a shell session to see exactly what it costs:
 
-**Python-level:**
-- Dict/list lookup repeated inside hot loop → hoist to variable before loop
-- Multiple sorts of same list → sort once, slice/reuse
-- Building large intermediate lists → switch to generators where possible
+```python
+from django.test.utils import override_settings
+from django.db import connection, reset_queries
+import time
 
-**Template:**
-- `{% for x in queryset %}` without `.values()` in view → pass dicts instead of ORM objects
-- `{{ obj.related_field }}` access N times in loop without prefetch → annotate or prefetch in view
+with override_settings(DEBUG=True):
+    reset_queries()
+    t0 = time.perf_counter()
+    response = client.get(url)
+    elapsed = time.perf_counter() - t0
+    queries = connection.queries
+    print(f"{url}: {elapsed:.3f}s, {len(queries)} queries")
+    # Print the 3 slowest:
+    for q in sorted(queries, key=lambda x: float(x['time']), reverse=True)[:3]:
+        print(f"  {float(q['time']):.3f}s  {q['sql'][:120]}")
+```
 
-For each optimization: note file + approximate line, issue description, fix applied.
+Record: total wall time, query count, and the top-3 slowest queries per endpoint. This is your baseline — every optimization must show a measurable delta here.
 
-**Do NOT change business logic. Do NOT change return data shape** — snapshots in Step 4 must remain byte-identical (except `_last_run`).
+### 3b — Read every hot function end-to-end
+
+For each view, **fully read** the view function + every function it calls (trace the call tree). Read the actual source — do not skim. You are looking for:
+
+**DB layer (highest leverage — fix these first):**
+- Count queries fired per request. More than 5 for a page load is a smell.
+- N+1: any `for item in list: item.related` pattern without prefetch → batch with `select_related` / `prefetch_related` / `filter(id__in=ids)`
+- Unnecessary full-table fetch: `Model.objects.all()` when only a filtered subset is needed → add `.filter(...)` before `.values()`
+- Fetching all columns when only 2-3 are used → switch to `.values('f1','f2')` or `.only('f1','f2')`
+- Unindexed filter fields on hot queries → add `db_index=True` and generate migration
+- Python-set intermediate: `set(qs.values_list(..., flat=True))` then `filter(field__in=python_set)` → replace with subquery `filter(field__in=qs.values(...))`
+- Duplicate queries: same queryset evaluated twice (list + aggregate, or two `.count()` on same filter) → compute one, derive the other in Python
+- `.distinct()` on a model with `Meta.ordering` without `.order_by()` → always `.order_by().distinct()`
+
+**Cache layer (second priority):**
+- Already cached: `_load_sales()`, `_fetch_bd_raw()`, dropdown options, CNV phone sets — do NOT add a second cache around these
+- Cache candidates: any pure-read function that: (a) queries >10k rows, (b) result is deterministic for the same inputs, (c) called from multiple requests. Key format: `f"<area>:{param1}:{param2}"`, TTL 5 min for analytics, 10 min for rarely-changing reference data
+- Do NOT cache: sync status, upload job list, real-time counters
+
+**Algorithm layer (third priority):**
+- O(N×M) list scan inside a loop → pre-group into a dict before the loop, then O(1) lookup inside
+- Sorting the same list multiple times → sort once and reuse
+- `sum(x for x in large_list if condition)` computed multiple times → single pass with `collections.Counter` or accumulator
+- Large intermediate lists that are only iterated once → convert to generator
+- String formatting / regex inside a hot loop → precompile / hoist
+
+**Python object overhead:**
+- ORM objects in large loops (`.values()` not used) → switch to `.values()` to get plain dicts; avoids descriptor overhead
+- `getattr(obj, field)` called N times for same object → cache to local variable
+- `dict.get(key)` inside inner loop with same key per outer iteration → hoist lookup outside inner loop
+
+**Template layer (fix at view level, not template):**
+- Pass dicts from `.values()`, never raw querysets — templates must not trigger DB queries
+- Precompute any value the template computes multiple times (e.g. percentage, formatted date)
+
+### 3c — Implement every fix found
+
+For each issue found in 3b:
+1. **Implement the fix immediately** — do not just note it
+2. Re-run the instrumentation from 3a for that endpoint and record the new query count and wall time
+3. Confirm: query count decreased OR wall time improved by ≥10%
+4. If a fix makes no measurable difference → revert it (avoid premature abstraction)
+
+Constraints:
+- **Do NOT change business logic** — return values and data shapes must stay identical (snapshots verify this in Step 4)
+- **Do NOT refactor for its own sake** — only change what reduces measurable cost
+- **Do NOT add caching to already-cached callpaths** — check existing cache keys first
+
+### 3d — Index audit
+
+For every filter field used in a hot query that was slow in 3a:
+1. Check if `db_index=True` is set on the model field
+2. If missing and the field is used in `.filter(field=...)` on a table >10k rows → add the index
+3. Generate and apply the migration: `python manage.py makemigrations && python manage.py migrate`
+4. Re-run the query and confirm speedup
+
+### 3e — Summary table
+
+After all fixes are applied, produce a table:
+
+| File | Line | Issue | Fix | Query Δ | Time Δ |
+|------|------|-------|-----|---------|--------|
+| views/customer.py | 71 | select_related() JOIN not needed | removed | -1q | -120ms |
+| tab_functions.py | 1465 | objects.all() full scan | phone__in subquery | -1q | -80ms |
+| ... | | | | | |
+
+This table goes into the Step 7 report.
 
 ---
 
