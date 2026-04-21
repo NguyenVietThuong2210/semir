@@ -1,48 +1,78 @@
 #!/bin/bash
-set -e
+# =============================================================================
+# deploy.sh — Full deployment script for SemirDashboard
+#
+# Usage:  bash scripts/deploy.sh
+# Run on: Production server (/home/semir/semir/)
+#
+# Steps:
+#   1. Pull latest code from git (main branch)
+#   2. Rebuild the web Docker image
+#   3. Restart all containers
+#   4. Run DB migrations
+#   5. Sync role permissions (safe to run repeatedly)
+#   6. Collect static files
+# =============================================================================
+set -e  # Exit immediately on any error
 
-echo "🚀 Starting deployment..."
+PROJECT_DIR="/home/semir/semir"
+COMPOSE="docker compose -f $PROJECT_DIR/docker-compose.yml"
 
-cd /home/semir/semir
+echo "======================================================"
+echo " SemirDashboard — Deployment"
+echo " $(date '+%Y-%m-%d %H:%M:%S')"
+echo "======================================================"
 
-# Pull latest code
-echo "📥 Pulling latest code from git..."
+cd $PROJECT_DIR
+
+# Pull latest code from main branch
+echo ""
+echo "[1/6] Pulling latest code..."
 git pull origin main
 
-# Build new images
-echo "🔨 Building Docker images..."
-docker compose build --no-cache web
+# Rebuild only the web service image (skip redis/db/nginx — unchanged)
+echo ""
+echo "[2/6] Building web image..."
+$COMPOSE build --no-cache web
 
-# Stop old containers
-echo "🛑 Stopping old containers..."
-docker compose down
+# Bring down all containers cleanly, then start fresh
+echo ""
+echo "[3/6] Restarting containers..."
+$COMPOSE down
+$COMPOSE up -d
 
-# Start new containers
-echo "▶️  Starting new containers..."
-docker compose up -d
-
-# Wait for database
-echo "⏳ Waiting for database..."
+# Wait for PostgreSQL to be ready before running migrations
+echo ""
+echo "[4/6] Waiting for database to be ready..."
 sleep 10
 
-# Run migrations
-echo "🗄️  Running database migrations..."
-docker compose exec -T web python manage.py migrate
+# Apply any pending Django migrations
+echo ""
+echo "[5/6] Running database migrations..."
+$COMPOSE exec -T web python manage.py migrate
 
-# Sync role permissions (safe to run on every deploy)
-echo "🔐 Syncing role permissions..."
-docker compose exec -T web python manage.py perm sync
+# Sync PERMISSION_DEFS → Role.permissions in DB (idempotent, safe every deploy)
+echo ""
+echo "[5b/6] Syncing role permissions..."
+$COMPOSE exec -T web python manage.py perm sync
 
-# Collect static files
-echo "📦 Collecting static files..."
-docker compose exec -T web python manage.py collectstatic --noinput
+# Collect static files into STATIC_ROOT for WhiteNoise/nginx to serve
+echo ""
+echo "[6/6] Collecting static files..."
+$COMPOSE exec -T web python manage.py collectstatic --noinput
 
-# Check health
-echo "🏥 Checking service health..."
-docker compose ps
+# Final health check
+echo ""
+echo "[OK] Container status:"
+$COMPOSE ps
 
 echo ""
-echo "Deployment completed successfully!"
-echo "🌐 Visit: https://analytics-customer-dashboard.com"
+echo "======================================================"
+echo " Deployment completed successfully!"
+echo " https://analytics-customer-dashboard.com"
 echo ""
-echo "📊 View logs: docker compose logs -f web"
+echo " Useful commands:"
+echo "   docker compose logs -f web          # App logs"
+echo "   docker compose logs -f nginx        # Nginx logs"
+echo "   docker compose exec web python manage.py shell"
+echo "======================================================"

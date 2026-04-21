@@ -1,29 +1,15 @@
 ---
 name: SemirDashboard Analytics Engine
-description: Analytics engine details, return visit formula, season logic, Excel export structure
+description: Analytics engine, return visit formula, season logic, tab functions, shop detail, Excel export
 type: project
 ---
 
-## Entry Point
-`App/analytics/core.py` → `calculate_return_rate_analytics(date_from, date_to, shop_group)`
-
-Returns dict with all breakdowns:
-- Period-level metrics
-- By VIP Grade
-- By Season
-- By Month / Year / Week
-- By Shop (with nested breakdowns)
-- Customer details list
-- Buyer without info (VIP ID = 0)
-
----
-
-## CRITICAL: Return Visit Formula (LOCKED — user-confirmed)
-**File:** `App/analytics/calculations.py`
+## CRITICAL: Return Visit Formula (LOCKED — do not change without user approval)
+**File:** `App/analytics/calculations.py` → `calculate_return_visits(purchases_sorted, reg_date)`
 
 ```python
 if registration_date == first_purchase_date:
-    return_visits = total_invoices - 1  # First invoice on reg day is not a return
+    return_visits = total_invoices - 1  # Reg-day purchase is NOT a return
 else:
     return_visits = total_invoices      # All invoices count as returns
 
@@ -31,88 +17,186 @@ is_returning = (return_visits > 0)
 return_rate = returning_customers / total_customers * 100
 ```
 
-**Key rule:** Counts INVOICES, not unique days. This is intentional and confirmed by the user.
+**Key rule:** Counts INVOICES, not unique visit days. Intentional, confirmed by user.
 
 ---
 
-## Season Definitions (NEW — 4 seasons, updated Mar 2026)
+## Season Definitions
 **File:** `App/analytics/season_utils.py`
 
-| Season | Months | Notes |
-|--------|--------|-------|
-| M2-4 | Feb, Mar, Apr | Spring |
-| M5-7 | May, Jun, Jul | Summer |
-| M8-10 | Aug, Sep, Oct | Fall |
-| M11-1 | Nov, Dec, Jan | Winter (cross-year) |
+| Season | Months | Label format |
+|--------|--------|-------------|
+| M2-4 | Feb, Mar, Apr | `M2-4 2025` |
+| M5-7 | May, Jun, Jul | `M5-7 2025` |
+| M8-10 | Aug, Sep, Oct | `M8-10 2025` |
+| M11-1 | Nov, Dec, Jan | `M11-1 2024-2025` (cross-year: Jan belongs to next year) |
 
-**Old definition (OBSOLETE):** SS = Jan-Jun, AW = Jul-Dec
+**M11-1 label:** `f"M11-1 {y-1}-{y}"` where `y` is the January year.
+Example: Nov-Dec 2024 + Jan 2025 → `M11-1 2024-2025`.
 
-Season label format: `"M2-4 2025"`, `"M11-1 2025/2026"`
+**Old definition (OBSOLETE):** SS = Jan-Jun, AW = Jul-Dec → do NOT use.
+
+## Week Format
+`get_week_info(d)` → `(sort_key 'YYYY-WNN', label 'Week N (d/m-d/m)')`
+Example: `('2025-W01', 'Week 1 (30/12-5/1)')`
+
+## Grade Hierarchy
+**File:** `App/analytics/season_utils.py` → `GRADE_ORDER`
+```python
+GRADE_ORDER = {'No Grade': 0, 'Member': 1, 'Silver': 2, 'Gold': 3, 'Diamond': 4}
+```
+**NOT** VIP0/VIP1/VIP2/VIP3/DIAMOND — that's obsolete.
 
 ---
 
 ## Shop Group Logic
-**File:** `App/analytics/aggregators.py`
-
-- Shop ID: "HN01", "HN02", "SG01", "SG02"
-- Shop Group: first 2 chars of shop_id → "HN", "SG"
-- Custom groups: "Bala Group", "Semir Group", "Others Group"
-- Filter via `shop_group` param in `calculate_return_rate_analytics()`
+- Filter param: `shop_group`
+- `"Bala Group"` → shop_name contains "Bala" or "巴拉"
+- `"Semir Group"` → shop_name contains "Semir" or "森马"
+- `"Others Group"` → all other shops
 
 ---
 
-## VIP Grade Hierarchy
+## Analytics Pipeline (Sales Analytics)
+**Entry:** `App/analytics/core.py` → `calculate_return_rate_analytics(date_from, date_to, shop_group)`
+
+1. `_load_sales()` fetches `SalesTransaction` (5 fields only) + pre-loads `Customer` table separately (avoids JOIN on 118K rows)
+2. Builds `customer_purchases` map: `{vip_id: [sorted invoices]}`
+3. Passes to aggregators: `aggregate_by_grade`, `aggregate_by_season`, `aggregate_by_month`
+
+---
+
+## Tab Functions (KEY file)
+**File:** `App/analytics/tab_functions.py`
+
+This file powers ALL lazy-loaded AJAX tabs and the shop detail page.
+
+### `_load_sales(date_from, date_to, shop_group)`
+- Cached 5 min by `(date_from, date_to, shop_group)` key
+- Returns `(customer_purchases, customer_info_fn, date_stats)` or `(None, None, None)`
+
+### Sales analytics tabs
+`get_sales_tab(tab, date_from, date_to, shop_group)` — called by `analytics_tab` view
+
+| tab | content |
+|-----|---------|
+| `grade` | grade breakdown + overview metrics + buyer_without_info stats |
+| `season` | by season |
+| `month` | by month |
+| `week` | by week |
+| `shop` | by shop |
+| `grade_allshops` | grade breakdown across all shops |
+| `season_allshops` | season across all shops |
+| `month_allshops` | month across all shops |
+| `week_allshops` | week across all shops |
+
+### Coupon analytics tabs
+`get_coupon_tab(tab, date_from, date_to, coupon_id_prefix, shop_group)` — called by `coupon_tab` view
+
+| tab | content |
+|-----|---------|
+| `shop` | by shop (loaded on initial page) |
+| `detail` | coupon detail rows |
+| `duplicates` | invoices with multiple coupons |
+
+### Customer comparison tabs
+`get_customer_tab(tab, start_date, end_date)` — called by `customer_tab` CNV view
+
+| tab | content |
+|-----|---------|
+| `bd_season` | breakdown by season |
+| `bd_month` | breakdown by month |
+| `bd_week` | breakdown by week |
+| `bd_shop` | breakdown by shop |
+| `bd_season_allshops` | season across all shops |
+| `bd_month_allshops` | month across all shops |
+| `bd_week_allshops` | week across all shops |
+| `ca_points` | loyalty points analytics |
+| `ca_pos_cnv` | POS vs CNV matching detail |
+| `ca_zalo` | Zalo registration analytics |
+
+---
+
+## Shop Detail Data Functions
+**File:** `App/analytics/tab_functions.py`
+
+### `get_shop_detail_sales_data(shop, date_from, date_to)`
+One DB call → all-time + period + by_season/month/week.
+Returns:
+```python
+{
+    'shop_name': str,
+    'all_time': {total_customers, returning_customers, return_rate, returning_invoices,
+                 returning_amount, total_invoices_with_vip0, total_amount_with_vip0},
+    'period':   {same fields — filtered to date range},
+    'by_season': [{session, label, total_customers, returning_customers, return_rate, returning_invoices}],
+    'by_month':  [{month, label, ...}],
+    'by_week':   [{week_label, ...}],
+}
 ```
-VIP0 (lowest) → VIP1 → VIP2 → VIP3 → DIAMOND (highest)
+
+### `get_shop_detail_customer_data(store, start_date='', end_date='')`
+Returns CNV breakdown for one store (POS vs CNV customer comparison).
+- **No dates** → all-time data, returns dict with `all_time` key
+- **With dates** → period + breakdown by season/month/week, returns dict with `period` key
+- Returns `None` if store has no matching CNV data
+
+**Critical:** `parse_cnv_period_filter(start_date, end_date)` returns `({}, False)` when no dates given (empty dict, NOT None).
+Check with `if not period_filter:` — NOT `if period_filter is None:`.
+
+### `get_shop_detail_coupon_data(shop, date_from, date_to)`
+Returns coupon usage for one shop.
+```python
+{
+    'shop': str,
+    'all_time': {total, used, unused, usage_rate, total_coupon_amount, total_amount},
+    'period':   {same},
+    'details':  [coupon rows],
+}
 ```
-- VIP ID = "0" → non-VIP → excluded from grade analytics, tracked separately as "buyer without info"
 
 ---
 
-## Analytics Modules
-| File | Size | Purpose |
-|------|------|---------|
-| core.py | — | Main orchestrator |
-| aggregators.py | ~40KB | group by grade/season/month/year/week/shop |
-| calculations.py | — | Pure math (return rate formula) |
-| season_utils.py | — | Season detection + sort keys |
-| customer_utils.py | — | Customer cache + purchase map builder |
-| coupon_analytics.py | ~37KB | Coupon-specific analytics (usage, face value) |
-| excel_export.py | ~85KB | Excel export (13+ sheets) |
+## AJAX Partial Loading Pattern (Shop Detail Page)
+**URL:** `/shop-detail/` → `shop_detail.html`
 
----
+Page loads, then fires 3 AJAX calls:
+- `/shop-detail/?section=sales&shop=...` → `_sales_partial.html`
+- `/shop-detail/?section=customer&shop=...` → `_customer_partial.html`
+- `/shop-detail/?section=coupon&shop=...` → `_coupon_partial.html`
 
-## Excel Export Structure
-**`export_analytics_to_excel(data, date_from, date_to, shop_group)`**
-
-Sheets:
-1. Overview (filter info)
-2. By VIP Grade
-3. By Season
-4. By Month
-5. By Week
-6. By Shop
-7. By Shop Detail
-8. Grade Comparison
-9. Season Comparison
-10. Month Comparison
-11. Week Comparison
-12. Customer Details
-13. Buyer Without Info
-14. Reconciliation
-
-**`export_coupons_to_excel(data, date_from, date_to, shop_group)`** — parallel coupon structure
-
-**`export_customer_comparison_to_excel(pos_all, pos_period, cnv_all, cnv_period)`**
-- POS vs CNV comparison tables
-- CNV columns: Customer ID, Phone, Name, Level, Email, Reg Date, Points, Used Points
-
-**Formatting:** Blue headers (`#366092`), formatted numbers, auto-column width
+Views use `_ajax_perm_check(request, 'page_shop_detail')` (not `@requires_perm`) to avoid redirect-on-401.
 
 ---
 
 ## Coupon Analytics
-**`App/analytics/coupon_analytics.py`**
-- `calculate_coupon_analytics(date_from, date_to, shop_group)`
-- Metrics: issued count, used count, usage_rate, face_value totals
-- Same breakdowns as customer analytics (grade, season, shop, month, week)
+**File:** `App/analytics/coupon_analytics.py`
+
+### `calc_coupon_amount(face_value, invoice_amount)`
+- `face_value > 1` → cash discount in VND (return face_value as-is)
+- `0 < face_value ≤ 1` → percentage off (e.g. 0.9 = customer pays 90% → discount = 0.1 × invoice_amount)
+
+### `calculate_coupon_analytics(date_from, date_to, coupon_id_prefix, shop_group)`
+Returns: `{all_time, period, by_shop, details, duplicate_invoices}`
+- Detects duplicate invoices (multiple coupons per docket_number)
+- Matches with SalesTransaction.invoice_number for amounts
+- Enriches with CNV customer data via phone match
+
+### `calculate_coupon_trend_data(date_from, date_to, shop_group, coupon_id_prefix)`
+Returns time-series for chart:
+- `{time_labels, week_label_map, total_by_time, total_by_time_shop, shops, shop_series, campaigns, campaign_series, campaign_list}`
+- Buckets: week (YYYY-Www), month (YYYY-MM), season, year
+
+---
+
+## Analytics Module Summary
+
+| File | Purpose |
+|------|---------|
+| `calculations.py` | Return visit formula (LOCKED) |
+| `season_utils.py` | Season labels, week info, GRADE_ORDER |
+| `aggregators.py` | aggregate_by_grade/season/month |
+| `core.py` | Main pipeline orchestrator |
+| `customer_utils.py` | Customer cache + purchase map |
+| `coupon_analytics.py` | Coupon analytics + Excel export |
+| `tab_functions.py` | Per-tab data + shop detail functions (KEY) |

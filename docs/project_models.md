@@ -1,6 +1,6 @@
 ---
 name: SemirDashboard Database Models
-description: All database models, fields, and relationships for SemirDashboard
+description: All database models, fields, and relationships for SemirDashboard (accurate Apr 2026)
 type: project
 ---
 
@@ -9,25 +9,64 @@ type: project
 ### Customer
 | Field | Type | Notes |
 |-------|------|-------|
-| vip_id | CharField | Part of unique_together with phone |
-| phone | CharField | Part of unique_together with vip_id |
-| name | CharField | |
-| vip_grade | CharField | VIP0 / VIP1 / VIP2 / VIP3 / DIAMOND |
-| registration_date | DateField | |
-| points | IntegerField | |
-| (other fields) | | |
+| vip_id | CharField(50) | unique, db_index |
+| phone | CharField(20) | blank, db_index |
+| name | CharField(200) | blank |
+| id_number | CharField(50) | blank |
+| birthday_month | IntegerField | null, blank (1–12) |
+| birthday | DateField | null, blank |
+| race | CharField(50) | blank |
+| gender | CharField(10) | blank |
+| city_state | CharField(100) | blank |
+| postal_code | CharField(20) | blank |
+| country | CharField(50) | blank |
+| vip_grade | CharField(50) | blank — see grade hierarchy below |
+| registration_date | DateField | null, blank |
+| registration_store | CharField(200) | blank, db_index |
+| points | IntegerField | default=0 |
+| used_points | IntegerField | default=0 |
+| used_points_note | TextField | blank |
 
-**Rule:** vip_id = "0" → non-VIP customer, excluded from most analytics
+**Grade hierarchy (actual):** `No Grade` < `Member` < `Silver` < `Gold` < `Diamond`
+(NOT VIP0/VIP1/VIP2/VIP3/DIAMOND — that's obsolete)
+
+**Rule:** `vip_id = "0"` → non-VIP customer → excluded from grade analytics, tracked separately
 
 ### SalesTransaction
 | Field | Type | Notes |
 |-------|------|-------|
-| invoice_number | CharField | unique |
-| shop_id | CharField | e.g. "HN01", "SG02" |
-| vip_id | CharField | |
-| sales_date | DateField | |
-| settlement_amount | DecimalField | |
-| customer | FK → Customer | nullable |
+| invoice_number | CharField(100) | db_index |
+| shop_id | CharField(50) | blank |
+| shop_name | CharField(200) | blank, db_index |
+| country | CharField(50) | blank |
+| bu | CharField(50) | blank |
+| sales_date | DateField | db_index |
+| vip_id | CharField(50) | db_index |
+| vip_name | CharField(200) | blank |
+| quantity | IntegerField | default=0 |
+| settlement_amount | DecimalField(15,2) | |
+| sales_amount | DecimalField(15,2) | |
+| tag_amount | DecimalField(15,2) | default=0 |
+| per_customer_transaction | DecimalField(15,2) | default=0 |
+| discount | DecimalField(15,2) | default=0 |
+| rounding | DecimalField(15,2) | default=0 |
+| customer | FK → Customer | null, blank, on_delete=SET_NULL |
+
+```python
+class Meta:
+    ordering = ["sales_date", "invoice_number"]   # ⚠ FOOTGUN
+    unique_together = [["invoice_number", "vip_id"]]
+```
+
+**⚠ IMPORTANT — `Meta.ordering` footgun:** Django adds ordering fields to `SELECT DISTINCT`.
+Always call `.order_by()` before `.distinct()`:
+```python
+# WRONG — includes sales_date/invoice_number in DISTINCT
+SalesTransaction.objects.filter(...).distinct()
+
+# CORRECT
+SalesTransaction.objects.filter(...).order_by().distinct()
+```
 
 ---
 
@@ -36,18 +75,29 @@ type: project
 ### Coupon
 | Field | Type | Notes |
 |-------|------|-------|
-| coupon_id | CharField | indexed |
-| used | IntegerField | 0 = unused, 1 = used |
-| face_value | DecimalField | |
-| using_date | DateField | nullable |
-| docket_number | CharField | |
+| department | CharField(100) | blank |
+| creator | CharField(100) | blank |
+| document_number | CharField(100) | blank |
+| coupon_id | CharField(100) | db_index |
+| face_value | DecimalField(15,4) | >1 = VND cash; 0<x≤1 = % discount (e.g. 0.9 = pay 90% → 10% off) |
+| used | BooleanField | default=False |
+| begin_date | DateField | null, blank |
+| end_date | DateField | null, blank |
+| using_shop | CharField(200) | blank, db_index |
+| using_date | DateField | null, blank, db_index |
+| push | BooleanField | default=False |
+| member_id | CharField(50) | blank, db_index (= vip_id) |
+| member_name | CharField(200) | blank |
+| member_phone | CharField(20) | blank |
+| docket_number | CharField(100) | blank, db_index (= invoice_number) |
 
 ### CouponCampaign
 | Field | Type | Notes |
 |-------|------|-------|
-| name | CharField | unique |
-| prefix | TextField | comma-separated prefixes |
-| detail | TextField | |
+| name | CharField(200) | |
+| prefix | CharField(500) | comma-separated coupon_id prefixes e.g. `"BL2024,BL2025"` |
+
+**Coupon → campaign matching:** `coupon.coupon_id.startswith(prefix)` for each prefix in campaign.prefix.split(',')
 
 ---
 
@@ -56,96 +106,70 @@ type: project
 ### Role
 | Field | Type | Notes |
 |-------|------|-------|
-| name | CharField | unique |
-| permissions | JSONField | list of permission strings |
-| is_system | BooleanField | system roles can't be deleted |
+| name | CharField(100) | unique |
+| description | TextField | blank |
+| permissions | JSONField | list of permission keys from PERMISSION_DEFS |
 
 ### UserProfile
 | Field | Type | Notes |
 |-------|------|-------|
-| user | OneToOne → User | Django built-in User |
-| role | FK → Role | |
+| user | OneToOneField → User | Django built-in User |
+| role | FK → Role | null, blank, on_delete=SET_NULL |
 
-**Permissions strings:**
-- `page_analytics`, `page_coupons`, `page_cnv_sync`, `manage_users`
-- etc. (defined in `App/permissions.py`)
+Permission check: `user.is_superuser` OR `user.userprofile.role.permissions` contains the key.
 
 ---
 
-## CNV Models — `App/cnv/models.py` (restructured Feb 27, 2026)
+## CNV Models — `App/cnv/models.py`
 
-### CNVCustomer
+### CNVCustomer (table: `cnv_customers`)
 | Field | Type | Notes |
 |-------|------|-------|
-| id | AutoField | Primary key (new) |
-| cnv_id | BigIntegerField | unique — ID from CNV API |
-| last_name | CharField | Split from old full_name |
-| first_name | CharField | Split from old full_name |
-| phone | CharField | indexed — used for POS↔CNV matching |
-| email | CharField | nullable |
-| gender | CharField | nullable |
-| birthday_day | IntegerField | nullable |
-| birthday_month | IntegerField | nullable |
-| birthday_year | IntegerField | nullable |
-| points | IntegerField | |
-| exp_points | IntegerField | |
-| total_spending | DecimalField | |
-| total_points | IntegerField | |
-| level_name | CharField | indexed — membership level |
-| used_points | IntegerField | from /membership endpoint |
-| cnv_created_at | DateTimeField | renamed from created_at |
-| cnv_updated_at | DateTimeField | renamed from updated_at |
-| zalo_app_id | CharField | nullable |
-| zalo_oa_id | CharField | nullable |
-| zalo_app_created_at | DateTimeField | nullable |
+| cnv_id | CharField(100) | unique, db_index |
+| phone | CharField(20) | blank, db_index — used for POS↔CNV matching |
+| name | CharField(200) | blank |
+| email | CharField(200) | blank |
+| points | **DecimalField(15,2)** | default=0 — current redeemable points |
+| exp_points | **DecimalField(15,2)** | default=0 — expiring points |
+| total_spending | **DecimalField(15,2)** | default=0 |
+| total_points | **DecimalField(15,2)** | default=0 — all-time earned |
+| used_points | **DecimalField(15,2)** | default=0 |
+| tags | JSONField | default=list |
+| physical_card_code | CharField(100) | blank |
+| zalo_app_id | CharField(100) | blank — Zalo mini-app user ID |
+| zalo_oa_id | CharField(100) | blank — Zalo OA follower ID |
+| zalo_app_created_at | DateTimeField | null, blank |
+| cnv_created_at | DateTimeField | null, blank |
+| cnv_updated_at | DateTimeField | null, blank, db_index |
+| synced_at | DateTimeField | auto_now=True |
 
-**Properties:**
-- `full_name` → `f"{last_name} {first_name}"`
-- `registration_date` → alias for `cnv_created_at`
+**Note:** `points`, `exp_points`, `total_spending`, `total_points`, `used_points` are **Decimal**, not Integer.
 
-### CNVOrder
+### CNVOrder (table: `cnv_orders`)
 | Field | Type | Notes |
 |-------|------|-------|
-| order_code | CharField | Primary key |
-| order_id | IntegerField | |
-| customer_code | CharField | |
-| customer_name | CharField | |
-| customer_phone | CharField | |
-| order_date | DateTimeField | |
-| store_code | CharField | |
-| store_name | CharField | |
-| subtotal | DecimalField | |
-| discount_amount | DecimalField | |
-| tax_amount | DecimalField | |
-| shipping_fee | DecimalField | |
-| total_amount | DecimalField | |
-| points_earned | IntegerField | |
-| points_used | IntegerField | |
-| items | JSONField | |
-| raw_data | JSONField | |
+| order_id | CharField(100) | unique, db_index |
+| cnv_customer | FK → CNVCustomer | null, blank, on_delete=SET_NULL |
+| phone | CharField(20) | blank, db_index |
+| order_date | DateField | null, blank, db_index |
+| total_amount | DecimalField(15,2) | default=0 |
+| points_earned | DecimalField(15,2) | default=0 |
+| order_status | CharField(50) | blank |
+| payment_status | CharField(50) | blank |
+| payment_method | CharField(50) | blank |
+| notes | TextField | blank |
+| cnv_updated_at | DateTimeField | null, blank, db_index |
+| synced_at | DateTimeField | auto_now=True |
 
-### CNVSyncLog
+### CNVSyncLog (table: `cnv_sync_logs`)
 | Field | Type | Notes |
 |-------|------|-------|
-| sync_type | CharField | customers / orders / full / zalo_sync |
-| status | CharField | running / completed / failed |
-| checkpoint_updated_at | DateTimeField | for incremental sync |
-| total_records | IntegerField | |
-| created_count | IntegerField | |
-| updated_count | IntegerField | |
-| failed_count | IntegerField | |
-| error_message | TextField | |
-| error_details | JSONField | |
-
----
-
-## Migrations History
-- 0001: Customer, SalesTransaction
-- 0002: Coupon
-- 0003: CNVCustomer, CNVOrder, CNVSyncLog
-- 0004: CNVSyncLog.checkpoint_updated_at
-- 0005-0006: Index renames on CNVCustomer
-- 0007: Zalo fields on CNVCustomer
-- 0008: Role, UserProfile
-- 0009: CouponCampaign
-- 0010: Alter CouponCampaign.prefix
+| sync_type | CharField(50) | `customers` / `orders` / `zalo_sync` |
+| status | CharField(20) | `running` / `completed` / `failed` |
+| started_at | DateTimeField | auto_now_add=True |
+| completed_at | DateTimeField | null, blank |
+| checkpoint_updated_at | DateTimeField | null, blank — incremental sync bookmark |
+| total_records | IntegerField | default=0 |
+| updated_count | IntegerField | default=0 |
+| failed_count | IntegerField | default=0 |
+| error_message | TextField | blank |
