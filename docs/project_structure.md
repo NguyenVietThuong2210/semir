@@ -28,7 +28,15 @@ SemirDashboard/
 │   ├── wsgi.py
 │   └── asgi.py
 ├── tests/                            # Test suite
+│   ├── base.py                       # SnapshotTestCase, Timer, INPUT_DIR
+│   ├── test_pages.py                 # PageRenderTest (all GET routes smoke), ExportSmokeTest (Excel exports)
 │   ├── test_shop_detail.py           # ShopDetailTest (setUpTestData + snapshots)
+│   ├── test_sales.py                 # Sales analytics unit tests
+│   ├── test_coupon.py                # Coupon analytics unit tests
+│   ├── test_customer.py              # Customer analytics unit tests
+│   ├── test_customer_chart.py        # CNV customer chart tests
+│   ├── test_consistency.py           # Cross-tab consistency assertions
+│   ├── render_pages.py               # Standalone shell script: renders all GET pages, reports timing
 │   └── snapshots/                    # shop_detail_sales.json, shop_detail_customer.json, ...
 └── App/                              # Main Django application
 ```

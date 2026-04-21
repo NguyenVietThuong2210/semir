@@ -322,6 +322,20 @@ def export_shop_detail_excel(request):
                     r += 1
                 r += 1
 
+        # Zalo Active sheet
+        zalo_list = cd.get('zalo_active_list', []) if cd else []
+        if zalo_list:
+            ws2 = wb.create_sheet("CNV Zalo Active")
+            _hdr(ws2, ["CNV ID", "Phone", "Name", "Level",
+                       "Zalo Created", "Zalo App ID", "Zalo OA ID", "Zalo Active date"], row=1)
+            for z in zalo_list:
+                name = f"{z.get('last_name') or ''} {z.get('first_name') or ''}".strip()
+                ws2.append([
+                    z.get('cnv_id'), z.get('phone'), name, z.get('level_name'),
+                    z.get('cnv_created_at'), z.get('zalo_app_id'), z.get('zalo_oa_id'),
+                    z.get('zalo_app_created_at'),
+                ])
+
     elif section == "coupon" and coupon_shop:
         ws.title = "Coupon by Shop"
         cd = get_shop_detail_coupon_data(coupon_shop, date_from=date_from, date_to=date_to,

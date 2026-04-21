@@ -1,5 +1,7 @@
 """App/views/customer.py — Customer detail view."""
 import logging
+from decimal import Decimal
+
 from django.shortcuts import render
 from django.contrib import messages
 
@@ -64,10 +66,9 @@ def customer_detail(request):
                         customer.phone, cnv_customer.total_points, cnv_customer.used_points, cnv_customer.points,
                     )
 
-            # Get all invoices for this customer
-            invoices = (
+            # Get all invoices for this customer (no select_related — Customer FK not needed)
+            invoices = list(
                 SalesTransaction.objects.filter(vip_id=customer.vip_id)
-                .select_related()
                 .order_by("-sales_date")
             )
 
@@ -115,22 +116,14 @@ def customer_detail(request):
 
             invoices = invoices_with_coupons
 
-            # Calculate statistics
-            from decimal import Decimal
-            from django.db.models import Sum, Max, Count
-
-            invoice_stats = SalesTransaction.objects.filter(
-                vip_id=customer.vip_id
-            ).aggregate(
-                total=Count("id"),
-                total_amount=Sum("settlement_amount"),
-                last_date=Max("sales_date"),
-            )
-
+            # Compute stats from already-fetched invoices — no extra DB round-trip
             stats = {
-                "total_purchases": invoice_stats["total"] or 0,
-                "total_amount": invoice_stats["total_amount"] or Decimal(0),
-                "last_purchase_date": invoice_stats["last_date"],
+                "total_purchases": len(invoices),
+                "total_amount": sum((inv["amount"] or Decimal(0)) for inv in invoices),
+                "last_purchase_date": max(
+                    (inv["sales_day"] for inv in invoices if inv["sales_day"]),
+                    default=None,
+                ),
             }
 
     return render(

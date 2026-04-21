@@ -135,4 +135,44 @@
 </div>
 
 {% endwith %}
+
+<!-- CNV Zalo Active customers -->
+<p class="sub-section-title mt-3"><i class="bi bi-phone me-1"></i>CNV Zalo Active{% if start_date or end_date %} — {{ start_date|default:"all" }} → {{ end_date|default:"all" }}{% endif %}
+    <span class="badge bg-secondary ms-1" style="font-size:.75rem;">{{ data.zalo_active_list|length }}</span>
+</p>
+{% if data.zalo_active_list %}
+<div class="table-responsive" style="max-height:1600px;overflow-y:auto;">
+<table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;min-width:900px;">
+<thead class="sticky-thead" style="background:#1a5276;color:white;">
+<tr>
+    <th style="width:90px;">CNV ID</th>
+    <th style="width:110px;">Phone</th>
+    <th>Name</th>
+    <th style="width:90px;">Level</th>
+    <th style="width:110px;" class="text-end">Zalo Created</th>
+    <th style="width:120px;">Zalo App ID</th>
+    <th style="width:120px;">Zalo OA ID</th>
+    <th style="width:110px;" class="text-end">Zalo Active date</th>
+</tr>
+</thead>
+<tbody>
+{% for c in data.zalo_active_list %}
+<tr>
+    <td>{{ c.cnv_id }}</td>
+    <td>{{ c.phone|default:"-" }}</td>
+    <td>{{ c.last_name|default:"" }} {{ c.first_name|default:"" }}</td>
+    <td>{{ c.level_name|default:"-" }}</td>
+    <td class="text-end">{{ c.cnv_created_at|date:"d/m/Y"|default:"-" }}</td>
+    <td class="text-truncate" style="max-width:120px;" title="{{ c.zalo_app_id|default:'' }}">{{ c.zalo_app_id|default:"-" }}</td>
+    <td class="text-truncate" style="max-width:120px;" title="{{ c.zalo_oa_id|default:'' }}">{{ c.zalo_oa_id|default:"-" }}</td>
+    <td class="text-end">{{ c.zalo_app_created_at|date:"d/m/Y"|default:"-" }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<p class="text-muted small py-2 mb-0"><i class="bi bi-info-circle me-1"></i>No CNV Zalo Active customers found for this shop{% if start_date or end_date %} in this period{% endif %}.</p>
+{% endif %}
+
 {% endif %}

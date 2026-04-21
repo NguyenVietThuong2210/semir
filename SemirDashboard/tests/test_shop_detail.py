@@ -656,7 +656,7 @@ class ShopDetailTest(SnapshotTestCase):
         self.assertLess(elapsed, 3.0, f"Sales partial too slow: {elapsed:.2f}s")
 
     def test_customer_partial_200(self):
-        """Customer partial returns 200 with KPI cards and breakdown tables."""
+        """Customer partial returns 200 with KPI cards, breakdown tables, and Zalo Active section."""
         if not Customer.objects.exists():
             self.skipTest("No customer data")
         self._ajax_login()
@@ -672,8 +672,31 @@ class ShopDetailTest(SnapshotTestCase):
         self.assertIn('Period', html)
         self.assertIn('By Season', html)
         self.assertIn('By Month', html)
+        self.assertIn('CNV Zalo Active', html, "Missing Zalo Active section")
         get_run_log().log(f"  [ajax customer] store={store} bytes={len(html)}")
         t.report()
+
+    def test_customer_zalo_active_list_structure(self):
+        """get_shop_detail_customer_data returns zalo_active_list with correct field structure."""
+        if not Customer.objects.exists():
+            self.skipTest("No customer data")
+        store = self._pick_customer_shop()
+        data = get_shop_detail_customer_data(store)
+        self.assertIsNotNone(data)
+        self.assertIn('zalo_active_list', data, "Missing zalo_active_list key")
+        zlist = data['zalo_active_list']
+        self.assertIsInstance(zlist, list)
+        if zlist:
+            row = zlist[0]
+            for field in ('cnv_id', 'phone', 'level_name', 'cnv_created_at',
+                          'zalo_app_id', 'zalo_oa_id', 'zalo_app_created_at'):
+                self.assertIn(field, row, f"Missing field {field!r} in zalo_active_list row")
+            # Sorted newest-first: first row zalo_app_created_at >= last row
+            if len(zlist) > 1:
+                first_dt = zlist[0]['zalo_app_created_at']
+                last_dt  = zlist[-1]['zalo_app_created_at']
+                if first_dt and last_dt:
+                    self.assertGreaterEqual(first_dt, last_dt, "zalo_active_list not sorted newest-first")
 
     def test_customer_partial_empty_shop(self):
         """Customer partial with no shop returns placeholder."""

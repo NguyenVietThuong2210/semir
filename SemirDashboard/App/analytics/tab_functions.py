@@ -784,9 +784,14 @@ def _coupon_duplicates_tab(date_from, date_to, coupon_id_prefix, shop_group):
         .values('invoice_number', 'sales_amount', 'shop_name', 'sales_date')
     }
 
+    # Pre-group by docket to avoid O(N×M) scan per docket
+    _by_docket: dict = {}
+    for c in _dup_coupons:
+        _by_docket.setdefault(c.docket_number, []).append(c)
+
     duplicate_invoices = []
     for docket in sorted(_dup_dockets):
-        coupons_for_docket = [c for c in _dup_coupons if c.docket_number == docket]
+        coupons_for_docket = _by_docket.get(docket, [])
         txn = _txn_map.get(docket)
         if txn:
             inv_amount = txn['sales_amount'] or Decimal(0)
@@ -1348,12 +1353,39 @@ def get_shop_detail_customer_data(registration_store: str,
         )
         at_summary = next((r for r in bd_at['shop'] if r['label'] == registration_store), None)
 
+    # ── Zalo-active CNV customers for this shop ───────────────────────────────
+    # Match via phone: POS Customer.registration_store → CNVCustomer phone
+    # Use subquery to keep filtering in DB (avoids loading large phone set into Python)
+    from App.cnv.models import CNVCustomer as _CNVCust
+    _shop_phone_qs = (
+        Customer.objects.filter(registration_store=registration_store)
+        .exclude(phone='').exclude(phone__isnull=True)
+        .values('phone')
+    )
+    _zalo_qs = (
+        _CNVCust.objects.filter(phone__in=_shop_phone_qs)
+        .filter(zalo_app_id__isnull=False)
+        .exclude(zalo_app_id='')
+    )
+    if period_filter:
+        _zalo_qs = _zalo_qs.filter(
+            zalo_app_created_at__gte=period_filter['start'],
+            zalo_app_created_at__lte=period_filter['end'],
+        )
+    zalo_active_list = list(
+        _zalo_qs.order_by('-zalo_app_created_at')
+        .values('cnv_id', 'phone', 'last_name', 'first_name',
+                'level_name', 'cnv_created_at', 'zalo_app_id',
+                'zalo_oa_id', 'zalo_app_created_at')
+    )
+
     return {
-        'all_time':  at_summary,
-        'period':    period_summary,
-        'by_season': detail['by_season'] if detail else [],
-        'by_month':  detail['by_month']  if detail else [],
-        'by_week':   detail['by_week']   if detail else [],
+        'all_time':         at_summary,
+        'period':           period_summary,
+        'by_season':        detail['by_season'] if detail else [],
+        'by_month':         detail['by_month']  if detail else [],
+        'by_week':          detail['by_week']   if detail else [],
+        'zalo_active_list': zalo_active_list,
     }
 
 
@@ -1463,14 +1495,6 @@ def get_shop_detail_coupon_data(using_shop: str, date_from=None, date_to=None,
 
     # ── Detail list (period used coupons) ────────────────────────────────────
     from App.models import Customer as _Cust
-    try:
-        from App.cnv.models import CNVCustomer
-        _cnv_map = {
-            c.phone: c
-            for c in CNVCustomer.objects.all().only('phone', 'cnv_id', 'points', 'total_points')
-        }
-    except Exception:
-        _cnv_map = {}
 
     _dup_set = set(
         period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
@@ -1514,7 +1538,6 @@ def get_shop_detail_coupon_data(using_shop: str, date_from=None, date_to=None,
                     note = f'Invoice {coupon.docket_number} not found'
 
             _coupon_amount = calc_coupon_amount(coupon.face_value, inv_amount)
-            _cnv = _cnv_map.get(phone) if phone else None
             details.append({
                 'coupon_id':       coupon.coupon_id,
                 'creator':         coupon.creator,
@@ -1529,11 +1552,26 @@ def get_shop_detail_coupon_data(using_shop: str, date_from=None, date_to=None,
                 'amount':          inv_amount or Decimal(0),
                 'coupon_amount':   _coupon_amount,
                 'note':            note,
-                'cnv_id':          _cnv.cnv_id if _cnv else '',
-                'cnv_points':      _cnv.points if _cnv else '',
-                'cnv_total_points': _cnv.total_points if _cnv else '',
+                'cnv_id':          '',
+                'cnv_points':      '',
+                'cnv_total_points': '',
                 'is_duplicate':    coupon.docket_number in _dup_set if coupon.docket_number else False,
             })
+
+        # CNV enrichment: filter only phones present in details (avoids loading all CNV rows)
+        from App.cnv.models import CNVCustomer
+        _phones = {d['customer_phone'] for d in details if d['customer_phone']}
+        _cnv_map = {
+            c['phone']: c
+            for c in CNVCustomer.objects.filter(phone__in=_phones)
+            .values('phone', 'cnv_id', 'points', 'total_points')
+        }
+        for d in details:
+            cnv = _cnv_map.get(d['customer_phone'])
+            if cnv:
+                d['cnv_id'] = cnv['cnv_id']
+                d['cnv_points'] = cnv['points']
+                d['cnv_total_points'] = cnv['total_points']
     else:
         details = []
 
