@@ -14,14 +14,43 @@
 </div>
 {% endif %}
 
-<div class="kpi-row mb-3">
-    <div class="kpi-card blue"><div class="kpi-val">{{ data.total_customers }}</div><div class="kpi-lbl">Active Customers</div></div>
-    <div class="kpi-card green"><div class="kpi-val">{{ data.returning_customers }}</div><div class="kpi-lbl">Returning</div></div>
-    <div class="kpi-card orange"><div class="kpi-val">{{ data.return_rate }}%</div><div class="kpi-lbl">Return Rate</div></div>
-    <div class="kpi-card purple"><div class="kpi-val">{{ data.returning_invoices }}</div><div class="kpi-lbl">INV (Returning)</div></div>
-    <div class="kpi-card blue"><div class="kpi-val amount-vnd">{{ data.returning_amount|vnd }}</div><div class="kpi-lbl">AMT (Returning) {{ currency }}</div></div>
-    <div class="kpi-card green"><div class="kpi-val">{{ data.total_invoices_with_vip0 }}</div><div class="kpi-lbl">Total INV</div></div>
-    <div class="kpi-card orange"><div class="kpi-val amount-vnd">{{ data.total_amount_with_vip0|vnd }}</div><div class="kpi-lbl">Total Amount {{ currency }}</div></div>
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header py-2 fw-semibold" style="background:#366092;color:white;font-size:.85rem;">
+                <i class="bi bi-infinity me-1"></i>All-Time
+            </div>
+            <div class="card-body py-2">
+                <div class="kpi-row">
+                    <div class="kpi-card blue"><div class="kpi-val">{{ data.all_time.total_customers }}</div><div class="kpi-lbl">Active</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ data.all_time.returning_customers }}</div><div class="kpi-lbl">Returning</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val">{{ data.all_time.return_rate }}%</div><div class="kpi-lbl">Return Rate</div></div>
+                    <div class="kpi-card purple"><div class="kpi-val">{{ data.all_time.returning_invoices }}</div><div class="kpi-lbl">INV(RET)</div></div>
+                    <div class="kpi-card blue"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.all_time.returning_amount|vnd }}</div><div class="kpi-lbl">AMT(RET) {{ currency }}</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ data.all_time.total_invoices_with_vip0 }}</div><div class="kpi-lbl">Total INV</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.all_time.total_amount_with_vip0|vnd }}</div><div class="kpi-lbl">Total Amt {{ currency }}</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header py-2 fw-semibold" style="background:#5a6268;color:white;font-size:.85rem;">
+                <i class="bi bi-calendar-range me-1"></i>Period{% if start_date or end_date %}: {{ start_date|default:"all" }} → {{ end_date|default:"all" }}{% endif %}
+            </div>
+            <div class="card-body py-2">
+                <div class="kpi-row">
+                    <div class="kpi-card blue"><div class="kpi-val">{{ data.period.total_customers }}</div><div class="kpi-lbl">Active</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ data.period.returning_customers }}</div><div class="kpi-lbl">Returning</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val">{{ data.period.return_rate }}%</div><div class="kpi-lbl">Return Rate</div></div>
+                    <div class="kpi-card purple"><div class="kpi-val">{{ data.period.returning_invoices }}</div><div class="kpi-lbl">INV(RET)</div></div>
+                    <div class="kpi-card blue"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.period.returning_amount|vnd }}</div><div class="kpi-lbl">AMT(RET) {{ currency }}</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ data.period.total_invoices_with_vip0 }}</div><div class="kpi-lbl">Total INV</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val amount-vnd" style="font-size:1rem">{{ data.period.total_amount_with_vip0|vnd }}</div><div class="kpi-lbl">Total Amt {{ currency }}</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% with hdr="background:#366092;color:white;" ts="table-layout:fixed;font-size:.83rem;" %}
@@ -29,8 +58,8 @@
 <p class="sub-section-title"><i class="bi bi-calendar3-range me-1"></i>By Season</p>
 <div class="table-responsive tab-tbl-wrap mb-2">
 <table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
-<colgroup><col style="width:18%"><col style="width:10%"><col style="width:11%"><col style="width:11%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:17%"></colgroup>
-<thead style="{{ hdr }}"><tr>
+<colgroup><col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:14%"><col style="width:10%"><col style="width:15%"></colgroup>
+<thead class="sticky-thead" style="{{ hdr }}"><tr>
     <th>Season</th><th class="text-end">Active</th><th class="text-end">Returning</th>
     <th class="text-end">Return Rate</th><th class="text-end">INV(RET)</th>
     <th class="text-end">AMT(RET) {{ currency }}</th><th class="text-end">Total INV</th><th class="text-end">Total Amount {{ currency }}</th>
@@ -54,8 +83,8 @@
 <p class="sub-section-title"><i class="bi bi-calendar-month me-1"></i>By Month</p>
 <div class="table-responsive tab-tbl-wrap mb-2">
 <table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
-<colgroup><col style="width:18%"><col style="width:10%"><col style="width:11%"><col style="width:11%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:17%"></colgroup>
-<thead style="{{ hdr }}"><tr>
+<colgroup><col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:14%"><col style="width:10%"><col style="width:15%"></colgroup>
+<thead class="sticky-thead" style="{{ hdr }}"><tr>
     <th>Month</th><th class="text-end">Active</th><th class="text-end">Returning</th>
     <th class="text-end">Return Rate</th><th class="text-end">INV(RET)</th>
     <th class="text-end">AMT(RET) {{ currency }}</th><th class="text-end">Total INV</th><th class="text-end">Total Amount {{ currency }}</th>
@@ -79,8 +108,8 @@
 <p class="sub-section-title"><i class="bi bi-calendar-week me-1"></i>By Week</p>
 <div class="table-responsive tab-tbl-wrap">
 <table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
-<colgroup><col style="width:22%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:12%"><col style="width:10%"><col style="width:15%"></colgroup>
-<thead style="{{ hdr }}"><tr>
+<colgroup><col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:14%"><col style="width:10%"><col style="width:15%"></colgroup>
+<thead class="sticky-thead" style="{{ hdr }}"><tr>
     <th>Week</th><th class="text-end">Active</th><th class="text-end">Returning</th>
     <th class="text-end">Return Rate</th><th class="text-end">INV(RET)</th>
     <th class="text-end">AMT(RET) {{ currency }}</th><th class="text-end">Total INV</th><th class="text-end">Total Amount {{ currency }}</th>

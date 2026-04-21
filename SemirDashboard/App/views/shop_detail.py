@@ -245,14 +245,16 @@ def export_shop_detail_excel(request):
             ws['A2'] = f"Period: {date_from or 'all'} → {date_to or 'all'}"
 
         if sh:
-            _hdr(ws, ["Shop","Active","Returning","Return Rate","INV(RET)","AMT(RET)","Total INV","Total Amount"], row=4)
-            ws.append([
-                sh['shop_name'], sh['total_customers'], sh['returning_customers'],
-                f"{sh['return_rate']}%", sh['returning_invoices'],
-                float(sh['returning_amount']), sh['total_invoices_with_vip0'],
-                float(sh['total_amount_with_vip0']),
-            ])
-            r = 7
+            at, pd_ = sh.get('all_time', {}), sh.get('period', {})
+            _hdr(ws, ["","Active","Returning","Return Rate","INV(RET)","AMT(RET)","Total INV","Total Amount"], row=4)
+            for lbl, d in [("All-Time", at), ("Period", pd_)]:
+                ws.append([
+                    lbl, d.get('total_customers'), d.get('returning_customers'),
+                    f"{d.get('return_rate',0)}%", d.get('returning_invoices'),
+                    float(d.get('returning_amount', 0)), d.get('total_invoices_with_vip0'),
+                    float(d.get('total_amount_with_vip0', 0)),
+                ])
+            r = 8
             for period_label, rows, key in [
                 ("By Season", sh.get('by_session', []), 'session'),
                 ("By Month",  sh.get('by_month', []),   'month'),
@@ -282,19 +284,22 @@ def export_shop_detail_excel(request):
     elif section == "customer" and customer_shop:
         ws.title = "Customer by Shop"
         cd = get_shop_detail_customer_data(customer_shop, start_date=start_date, end_date=end_date)
-        summary = cd.get('summary') if cd else None
 
         ws['A1'] = f"Customer Analytics — {customer_shop}"
         ws['A1'].font = Font(bold=True, size=13)
+        if start_date or end_date:
+            ws['A2'] = f"Period: {start_date or 'all'} → {end_date or 'all'}"
 
-        if summary:
-            _hdr(ws, ["Shop","POS(INV)","POS(NO INV)","POS Total","POS Only",
-                      "New CNV","CNV Only","Zalo App","%App","Zalo OA","%OA"], row=3)
-            ws.append([summary['label'], summary.get('new_pos_inv'), summary.get('new_pos_no_inv'),
-                       summary.get('new_pos'), summary.get('new_pos_only'), summary.get('new_cnv'),
-                       summary.get('new_cnv_only'), summary.get('zalo_app'),
-                       f"{summary.get('zalo_app_pct',0)}%",
-                       summary.get('zalo_oa'), f"{summary.get('zalo_oa_pct',0)}%"])
+        if cd:
+            _hdr(ws, ["","POS(INV)","POS(NO INV)","POS Total","POS Only",
+                      "New CNV","CNV Only","Zalo App","%App","Zalo OA","%OA"], row=4)
+            for lbl, s in [("All-Time", cd.get('all_time')), ("Period", cd.get('period'))]:
+                if s:
+                    ws.append([lbl, s.get('new_pos_inv'), s.get('new_pos_no_inv'),
+                               s.get('new_pos'), s.get('new_pos_only'), s.get('new_cnv'),
+                               s.get('new_cnv_only'), s.get('zalo_app'),
+                               f"{s.get('zalo_app_pct',0)}%",
+                               s.get('zalo_oa'), f"{s.get('zalo_oa_pct',0)}%"])
 
         if cd:
             r = 7

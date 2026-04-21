@@ -1207,21 +1207,31 @@ def get_shop_detail_sales_data(shop_name: str, date_from=None, date_to=None) -> 
     from App.analytics.calculations import calculate_return_visits
     from App.analytics.aggregators import aggregate_by_season, aggregate_by_month, aggregate_by_week
 
-    # ── Direct DB query — filtered to one shop ─────────────────────────────
-    FIELDS = ('vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name')
-    qs = SalesTransaction.objects.filter(shop_name=shop_name).values(*FIELDS).order_by()
-    if date_from:
-        qs = qs.filter(sales_date__gte=date_from)
-    if date_to:
-        qs = qs.filter(sales_date__lte=date_to)
-
-    sales_list = list(qs)
-    if not sales_list:
-        return None
-
-    # ── Customer info_map — cached 5 min to avoid loading 74k rows per call ─
+    from decimal import Decimal
     from django.core.cache import cache as _djc2
     from App.models import Customer as _Cust
+
+    FIELDS = ('vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name')
+
+    # ── Load ALL-TIME sales for this shop (no date filter) ────────────────────
+    all_time_list = list(
+        SalesTransaction.objects.filter(shop_name=shop_name).values(*FIELDS).order_by()
+    )
+    if not all_time_list:
+        return None
+
+    # ── Filter to period in Python — avoids a second DB round-trip ───────────
+    has_filter = bool(date_from or date_to)
+    if has_filter:
+        period_list = [
+            s for s in all_time_list
+            if (date_from is None or s['sales_date'] >= date_from)
+            and (date_to is None or s['sales_date'] <= date_to)
+        ]
+    else:
+        period_list = all_time_list
+
+    # ── Customer info_map — cached 5 min to avoid loading 74k rows per call ─
     _info_key = "shop_detail_sales_info_map"
     info_map = _djc2.get(_info_key)
     if info_map is None:
@@ -1245,59 +1255,52 @@ def get_shop_detail_sales_data(shop_name: str, date_from=None, date_to=None) -> 
         from App.analytics.customer_utils import get_customer_info
         return get_customer_info(vip_id, customer_obj)
 
-    # ── Build purchase map (same function as production) ──────────────────
-    customer_purchases = build_customer_purchase_map(sales_list)
-    del sales_list
+    # ── Build purchase maps ───────────────────────────────────────────────────
+    at_purchases = build_customer_purchase_map(all_time_list)
+    pd_purchases = build_customer_purchase_map(period_list) if has_filter else at_purchases
 
-    # ── Compute sub-breakdowns using the same aggregation functions ───────
-    by_session = aggregate_by_season(customer_purchases, _get_ci)
-    by_month   = aggregate_by_month(customer_purchases, _get_ci)
-    by_week    = aggregate_by_week(customer_purchases, _get_ci)
+    # ── KPI helper (same logic as aggregate_by_shop) ─────────────────────────
+    def _kpis(purchases):
+        cust = set(); ret = set()
+        inv = ret_inv = vip0_inv = 0
+        amt = ret_amt = vip0_amt = Decimal(0)
+        for vid, purch in purchases.items():
+            if vid == '0':
+                vip0_inv += len(purch)
+                vip0_amt += sum(p['amount'] for p in purch)
+                continue
+            _, reg_date, _ = _get_ci(vid, purch[0].get('customer'))
+            _, is_ret = calculate_return_visits(purch, reg_date)
+            a = sum(p['amount'] for p in purch)
+            cust.add(vid); inv += len(purch); amt += a
+            if is_ret:
+                ret.add(vid); ret_inv += len(purch); ret_amt += a
+        ac, rc = len(cust), len(ret)
+        return {
+            'total_customers':          ac,
+            'returning_customers':      rc,
+            'return_rate':              round(rc / ac * 100 if ac else 0, 2),
+            'returning_invoices':       ret_inv,
+            'returning_amount':         float(ret_amt),
+            'total_invoices_with_vip0': inv + vip0_inv,
+            'total_amount_with_vip0':   float(amt + vip0_amt),
+        }
 
-    # ── Shop-level overview (single pass — same logic as aggregate_by_shop) ─
-    from decimal import Decimal
-    shop_customers     = set()
-    shop_returning     = set()
-    shop_invoices      = 0
-    shop_amount        = Decimal(0)
-    shop_ret_invoices  = 0
-    shop_ret_amount    = Decimal(0)
-    shop_vip0_inv      = 0
-    shop_vip0_amount   = Decimal(0)
+    at_kpis = _kpis(at_purchases)
+    pd_kpis  = _kpis(pd_purchases) if has_filter else at_kpis
 
-    for vip_id, purchases in customer_purchases.items():
-        if vip_id == '0':
-            shop_vip0_inv    += len(purchases)
-            shop_vip0_amount += sum(p['amount'] for p in purchases)
-            continue
-        _, reg_date, _ = _get_ci(vip_id, purchases[0].get('customer'))
-        _, ret = calculate_return_visits(purchases, reg_date)
-        amt = sum(p['amount'] for p in purchases)
-        shop_customers.add(vip_id)
-        shop_invoices += len(purchases)
-        shop_amount   += amt
-        if ret:
-            shop_returning.add(vip_id)
-            shop_ret_invoices += len(purchases)
-            shop_ret_amount   += amt
-
-    ac = len(shop_customers)
-    rc = len(shop_returning)
+    # ── Sub-breakdowns from period data ───────────────────────────────────────
+    by_session = aggregate_by_season(pd_purchases, _get_ci)
+    by_month   = aggregate_by_month(pd_purchases, _get_ci)
+    by_week    = aggregate_by_week(pd_purchases, _get_ci)
 
     return {
-        'shop_name':                shop_name,
-        'total_customers':          ac,
-        'returning_customers':      rc,
-        'return_rate':              round(rc / ac * 100 if ac else 0, 2),
-        'returning_invoices':       shop_ret_invoices,
-        'returning_amount':         float(shop_ret_amount),
-        'total_invoices':           shop_invoices,
-        'total_amount':             float(shop_amount),
-        'total_invoices_with_vip0': shop_invoices + shop_vip0_inv,
-        'total_amount_with_vip0':   float(shop_amount + shop_vip0_amount),
-        'by_session':               by_session,
-        'by_month':                 by_month,
-        'by_week':                  by_week,
+        'shop_name':  shop_name,
+        'all_time':   at_kpis,
+        'period':     pd_kpis,
+        'by_session': by_session,
+        'by_month':   by_month,
+        'by_week':    by_week,
     }
 
 
@@ -1306,16 +1309,13 @@ def get_shop_detail_customer_data(registration_store: str,
     """
     Return customer analytics for a single registration_store.
 
-    Reuses: _fetch_bd_raw (cached), compute_cnv_breakdown with store_filter so only
-    that store's entries are accumulated — same logic as production bd_shop tab,
-    but O(store entries) instead of O(all entries).
-
     Returns:
         {
-            'summary': row-dict (same shape as by_shop rows from bd_shop tab),
-            'by_season': [...],
-            'by_month': [...],
-            'by_week': [...],
+            'all_time': summary-row (no date filter),
+            'period':   summary-row (date-filtered, same as all_time if no filter),
+            'by_season': [...],   # period
+            'by_month':  [...],   # period
+            'by_week':   [...],   # period
         }
     or None if no data for this store.
     """
@@ -1324,21 +1324,33 @@ def get_shop_detail_customer_data(registration_store: str,
     period_filter, _ = _parse_cnv_period_filter(start_date, end_date)
     pos_phones_all, cnv_phones_all = _get_cnv_phone_sets()
 
-    # compute_cnv_breakdown with store_filter — reuses cached _fetch_bd_raw DB data
-    bd = compute_cnv_breakdown(
+    # ── Period data (includes breakdowns) ─────────────────────────────────────
+    bd_period = compute_cnv_breakdown(
         period_filter, pos_phones_all, cnv_phones_all,
         dims=frozenset({'shop', 'season_shop', 'month_shop', 'week_shop'}),
         store_filter=registration_store,
     )
+    period_summary = next((r for r in bd_period['shop'] if r['label'] == registration_store), None)
+    detail         = next((sh for sh in bd_period['shop_detail'] if sh['shop'] == registration_store), None)
 
-    summary = next((r for r in bd['shop'] if r['label'] == registration_store), None)
-    detail  = next((sh for sh in bd['shop_detail'] if sh['shop'] == registration_store), None)
-
-    if not summary and not detail:
+    if not period_summary and not detail:
         return None
 
+    # ── All-time data (only shop summary needed) ──────────────────────────────
+    # period_filter is {} (falsy) when no dates given — not None — so use `not`
+    if not period_filter:
+        at_summary = period_summary
+    else:
+        bd_at = compute_cnv_breakdown(
+            {}, pos_phones_all, cnv_phones_all,
+            dims=frozenset({'shop'}),
+            store_filter=registration_store,
+        )
+        at_summary = next((r for r in bd_at['shop'] if r['label'] == registration_store), None)
+
     return {
-        'summary':   summary,
+        'all_time':  at_summary,
+        'period':    period_summary,
         'by_season': detail['by_season'] if detail else [],
         'by_month':  detail['by_month']  if detail else [],
         'by_week':   detail['by_week']   if detail else [],

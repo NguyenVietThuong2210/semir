@@ -14,25 +14,56 @@
 </div>
 {% endif %}
 
-{% with s=data.summary %}{% if s %}
-<div class="kpi-row mb-3">
-    <div class="kpi-card blue"><div class="kpi-val">{{ s.new_pos }}</div><div class="kpi-lbl">New POS</div></div>
-    <div class="kpi-card green"><div class="kpi-val">{{ s.new_pos_inv }}</div><div class="kpi-lbl">POS (w/ INV)</div></div>
-    <div class="kpi-card orange"><div class="kpi-val">{{ s.new_cnv }}</div><div class="kpi-lbl">New CNV</div></div>
-    <div class="kpi-card purple"><div class="kpi-val">{{ s.new_pos_only }}</div><div class="kpi-lbl">POS Only</div></div>
-    <div class="kpi-card blue"><div class="kpi-val">{{ s.new_cnv_only }}</div><div class="kpi-lbl">CNV Only</div></div>
-    <div class="kpi-card green"><div class="kpi-val">{{ s.zalo_app }}</div><div class="kpi-lbl">Zalo App</div></div>
-    <div class="kpi-card orange"><div class="kpi-val">{{ s.zalo_oa }}</div><div class="kpi-lbl">Zalo OA</div></div>
+{% with at=data.all_time pd=data.period %}
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header py-2 fw-semibold" style="background:#1a5276;color:white;font-size:.85rem;">
+                <i class="bi bi-infinity me-1"></i>All-Time
+            </div>
+            <div class="card-body py-2">{% if at %}
+                <div class="kpi-row">
+                    <div class="kpi-card blue"><div class="kpi-val">{{ at.new_pos }}</div><div class="kpi-lbl">New POS</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ at.new_pos_inv }}</div><div class="kpi-lbl">POS (w/ INV)</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val">{{ at.new_cnv }}</div><div class="kpi-lbl">New CNV</div></div>
+                    <div class="kpi-card purple"><div class="kpi-val">{{ at.new_pos_only }}</div><div class="kpi-lbl">POS Only</div></div>
+                    <div class="kpi-card blue"><div class="kpi-val">{{ at.new_cnv_only }}</div><div class="kpi-lbl">CNV Only</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ at.zalo_app }}</div><div class="kpi-lbl">Zalo App</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val">{{ at.zalo_oa }}</div><div class="kpi-lbl">Zalo OA</div></div>
+                </div>
+            {% else %}<p class="text-muted small mb-0">No all-time data.</p>{% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header py-2 fw-semibold" style="background:#5a6268;color:white;font-size:.85rem;">
+                <i class="bi bi-calendar-range me-1"></i>Period{% if start_date or end_date %}: {{ start_date|default:"all" }} → {{ end_date|default:"all" }}{% endif %}
+            </div>
+            <div class="card-body py-2">{% if pd %}
+                <div class="kpi-row">
+                    <div class="kpi-card blue"><div class="kpi-val">{{ pd.new_pos }}</div><div class="kpi-lbl">New POS</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ pd.new_pos_inv }}</div><div class="kpi-lbl">POS (w/ INV)</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val">{{ pd.new_cnv }}</div><div class="kpi-lbl">New CNV</div></div>
+                    <div class="kpi-card purple"><div class="kpi-val">{{ pd.new_pos_only }}</div><div class="kpi-lbl">POS Only</div></div>
+                    <div class="kpi-card blue"><div class="kpi-val">{{ pd.new_cnv_only }}</div><div class="kpi-lbl">CNV Only</div></div>
+                    <div class="kpi-card green"><div class="kpi-val">{{ pd.zalo_app }}</div><div class="kpi-lbl">Zalo App</div></div>
+                    <div class="kpi-card orange"><div class="kpi-val">{{ pd.zalo_oa }}</div><div class="kpi-lbl">Zalo OA</div></div>
+                </div>
+            {% else %}<p class="text-muted small mb-0">No period data.</p>{% endif %}
+            </div>
+        </div>
+    </div>
 </div>
-{% endif %}{% endwith %}
+{% endwith %}
 
 {% with hdr="background:#1a5276;color:white;" ts="table-layout:fixed;font-size:.83rem;" %}
 
 <p class="sub-section-title"><i class="bi bi-calendar3-range me-1"></i>By Season</p>
 <div class="table-responsive tab-tbl-wrap mb-2">
 <table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
-<colgroup><col style="width:15%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:7%"></colgroup>
-<thead style="{{ hdr }}"><tr>
+<colgroup><col style="width:15%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:12%"></colgroup>
+<thead class="sticky-thead" style="{{ hdr }}"><tr>
     <th>Season</th><th class="text-end">POS(INV)</th><th class="text-end">POS(NO INV)</th>
     <th class="text-end">POS Total</th><th class="text-end">POS Only</th>
     <th class="text-end">New CNV</th><th class="text-end">CNV Only</th>
@@ -56,8 +87,8 @@
 <p class="sub-section-title"><i class="bi bi-calendar-month me-1"></i>By Month</p>
 <div class="table-responsive tab-tbl-wrap mb-2">
 <table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
-<colgroup><col style="width:15%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:7%"></colgroup>
-<thead style="{{ hdr }}"><tr>
+<colgroup><col style="width:15%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:12%"></colgroup>
+<thead class="sticky-thead" style="{{ hdr }}"><tr>
     <th>Month</th><th class="text-end">POS(INV)</th><th class="text-end">POS(NO INV)</th>
     <th class="text-end">POS Total</th><th class="text-end">POS Only</th>
     <th class="text-end">New CNV</th><th class="text-end">CNV Only</th>
@@ -81,8 +112,8 @@
 <p class="sub-section-title"><i class="bi bi-calendar-week me-1"></i>By Week</p>
 <div class="table-responsive tab-tbl-wrap">
 <table class="table table-sm table-hover align-middle mb-0 w-100" style="{{ ts }}">
-<colgroup><col style="width:18%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:7%"></colgroup>
-<thead style="{{ hdr }}"><tr>
+<colgroup><col style="width:15%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:12%"></colgroup>
+<thead class="sticky-thead" style="{{ hdr }}"><tr>
     <th>Week</th><th class="text-end">POS(INV)</th><th class="text-end">POS(NO INV)</th>
     <th class="text-end">POS Total</th><th class="text-end">POS Only</th>
     <th class="text-end">New CNV</th><th class="text-end">CNV Only</th>
