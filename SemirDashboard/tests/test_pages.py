@@ -100,7 +100,55 @@ class PageRenderTest(SnapshotTestCase):
         r = self.client.get(reverse("admin_logs"))
         self.assertEqual(r.status_code, 200)
 
+    # ── Analytics pages (period-filter) ──────────────────────────────────────
+
+    def test_analytics_dashboard_200(self):
+        t = self.timer("analytics_dashboard_alltime")
+        r = self.client.get(reverse("analytics_dashboard"))
+        t.checkpoint("GET /analytics/")
+        t.report()
+        self.assertEqual(r.status_code, 200)
+
+    def test_analytics_dashboard_2025_200(self):
+        r = self.client.get(reverse("analytics_dashboard") + PERIOD_2025_PARAMS)
+        self.assertEqual(r.status_code, 200)
+
+    def test_analytics_chart_200(self):
+        r = self.client.get(reverse("analytics_chart"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_analytics_chart_2025_200(self):
+        r = self.client.get(reverse("analytics_chart") + PERIOD_2025_PARAMS)
+        self.assertEqual(r.status_code, 200)
+
+    def test_analytics_tab_smoke(self):
+        # AJAX tab — representative tab: season
+        r = self.client.get(
+            reverse("analytics_tab", kwargs={"tab": "season"}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertIn(r.status_code, [200, 204])
+
     # ── Coupon pages (period-filter) ──────────────────────────────────────────
+
+    def test_coupon_dashboard_200(self):
+        t = self.timer("coupon_dashboard_alltime")
+        r = self.client.get(reverse("coupon_dashboard"))
+        t.checkpoint("GET /coupons/")
+        t.report()
+        self.assertEqual(r.status_code, 200)
+
+    def test_coupon_dashboard_2025_200(self):
+        r = self.client.get(reverse("coupon_dashboard") + PERIOD_2025_PARAMS)
+        self.assertEqual(r.status_code, 200)
+
+    def test_coupon_tab_smoke(self):
+        # 'shop' tab is rejected by coupon_tab (handled by coupon_dashboard); use 'detail'
+        r = self.client.get(
+            reverse("coupon_tab", kwargs={"tab": "detail"}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertIn(r.status_code, [200, 204])
 
     def test_coupon_chart_alltime_200(self):
         t = self.timer("coupon_chart_alltime")
@@ -120,7 +168,52 @@ class PageRenderTest(SnapshotTestCase):
         r = self.client.get(reverse("manage_campaigns"))
         self.assertEqual(r.status_code, 200)
 
+    # ── Upload jobs ───────────────────────────────────────────────────────────
+
+    def test_upload_job_status_404(self):
+        # Non-existent job_id → 404 JSON, no crash
+        r = self.client.get(reverse("upload_job_status", kwargs={"job_id": "nonexistent-job-id"}))
+        self.assertEqual(r.status_code, 404)
+
+    # ── Auth pages ────────────────────────────────────────────────────────────
+
+    def test_login_200(self):
+        self.client.logout()
+        r = self.client.get(reverse("login"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_register_200(self):
+        # register_view requires @login_required — superuser stays logged in
+        r = self.client.get(reverse("register"))
+        self.assertEqual(r.status_code, 200)
+
     # ── CNV pages ─────────────────────────────────────────────────────────────
+
+    def test_cnv_customer_analytics_200(self):
+        t = self.timer("cnv_customer_analytics_alltime")
+        r = self.client.get(reverse("cnv:customer_analytics"))
+        t.checkpoint("GET /cnv/customer-analytics/")
+        t.report()
+        self.assertEqual(r.status_code, 200)
+
+    def test_cnv_customer_analytics_2025_200(self):
+        r = self.client.get(reverse("cnv:customer_analytics") + PERIOD_2025_PARAMS)
+        self.assertEqual(r.status_code, 200)
+
+    def test_cnv_customer_tab_smoke(self):
+        r = self.client.get(
+            reverse("cnv:customer_tab", kwargs={"tab": "bd_season"}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertIn(r.status_code, [200, 204])
+
+    def test_cnv_customer_chart_200(self):
+        r = self.client.get(reverse("cnv:customer_chart"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_cnv_customer_chart_2025_200(self):
+        r = self.client.get(reverse("cnv:customer_chart") + PERIOD_2025_PARAMS)
+        self.assertEqual(r.status_code, 200)
 
     def test_cnv_sync_status_200(self):
         t = self.timer("cnv_sync_status")
@@ -146,6 +239,15 @@ class PageRenderTest(SnapshotTestCase):
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
         self.assertIn(r.status_code, [200, 302, 400, 429])
+
+    def test_sync_cnv_points_post(self):
+        # POST with empty phones list — expect JSON response, not 500
+        r = self.client.post(
+            reverse("cnv:sync_cnv_points"),
+            data={"phones": ""},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertIn(r.status_code, [200, 302, 400, 403, 429])
 
 
 class ExportSmokeTest(SnapshotTestCase):
@@ -277,5 +379,39 @@ class ExportSmokeTest(SnapshotTestCase):
         t = self.timer("cnv_chart_export_2025")
         r = self.client.get(reverse("cnv:export_customer_chart_excel") + PERIOD_2025_PARAMS)
         t.checkpoint("GET /cnv/customer-chart/export/ 2025 filter")
+        t.report()
+        self._assert_excel(r)
+
+    # ── Analytics full export [period-filter] ─────────────────────────────────
+
+    def test_export_analytics_alltime(self):
+        t = self.timer("export_analytics_alltime")
+        r = self.client.get(reverse("export_analytics"))
+        t.checkpoint("GET /analytics/export/ all-time")
+        t.report()
+        self._assert_excel(r)
+
+    def test_export_analytics_period_2025(self):
+        t = self.timer("export_analytics_2025")
+        r = self.client.get(reverse("export_analytics") + PERIOD_2025_PARAMS)
+        t.checkpoint("GET /analytics/export/ 2025 filter")
+        t.report()
+        self._assert_excel(r)
+
+    # ── Coupon full export ────────────────────────────────────────────────────
+
+    def test_export_coupons_alltime(self):
+        t = self.timer("export_coupons_alltime")
+        r = self.client.get(reverse("export_coupons"))
+        t.checkpoint("GET /coupons/export/ all-time")
+        t.report()
+        self._assert_excel(r)
+
+    # ── CNV customer analytics export ─────────────────────────────────────────
+
+    def test_export_customer_analytics_alltime(self):
+        t = self.timer("export_customer_analytics_alltime")
+        r = self.client.get(reverse("cnv:export_customer_analytics"))
+        t.checkpoint("GET /cnv/export-customer-analytics/ all-time")
         t.report()
         self._assert_excel(r)

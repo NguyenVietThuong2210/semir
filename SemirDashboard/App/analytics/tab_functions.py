@@ -931,8 +931,8 @@ def _customer_ca_points(start_date: str, end_date: str) -> dict:
     )
     cnv_all = CNVCustomer.objects.filter(phone__isnull=False).exclude(phone='')
 
-    # pos_phones_all: full set for in_pos flag (any CNV customer may appear in POS)
-    pos_phones_all = set(pos_all.values_list('phone', flat=True))
+    # Reuse cached phone sets (5-min TTL) instead of fetching 74k POS rows again
+    pos_phones_all, _ = _get_cnv_phone_sets()
 
     # CNV used-points list
     _raw = list(
@@ -1484,16 +1484,11 @@ def get_shop_detail_coupon_data(using_shop: str, date_from=None, date_to=None,
                 _seen_pd.add(dk)
                 pd_unique_amount += inv_amt
 
-        _dup_pd = (
-            period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
-            .exclude(docket_number='')
-            .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1).count()
-        )
-
     pd_unused = pd_total - pd_used
     pd_usage_rate = round(pd_used / pd_total * 100 if pd_total else 0, 2)
 
     # ── Detail list (period used coupons) ────────────────────────────────────
+    # _dup_set fetched once; _dup_pd derived from len to avoid a duplicate COUNT query
     from App.models import Customer as _Cust
 
     _dup_set = set(
@@ -1502,6 +1497,8 @@ def get_shop_detail_coupon_data(using_shop: str, date_from=None, date_to=None,
         .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1)
         .values_list('docket_number', flat=True)
     )
+    if period_qs is not qs:
+        _dup_pd = len(_dup_set)
 
     _period_used = list(period_qs.filter(using_date__isnull=False).order_by('-using_date')[:500])
     if _period_used:
