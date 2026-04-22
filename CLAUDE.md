@@ -127,3 +127,8 @@ Extended documentation is in `docs/`:
 - `project_cnv.md` — CNV API, sync service, service.py, scheduler, Zalo
 - `project_urls.md` — complete URL map (all 30+ endpoints)
 - `project_business_logic.md` — all 20 permissions, business rules, upload flow
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
