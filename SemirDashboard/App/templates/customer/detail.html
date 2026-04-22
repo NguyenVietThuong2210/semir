@@ -170,16 +170,10 @@
                     </p>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-6">
                 <div class="info-card p-3 rounded">
                     <h6 class="text-muted mb-2">Registration Date</h6>
                     <p class="h4 mb-0">{{ customer.registration_date|default:"-" }}</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="info-card p-3 rounded">
-                    <h6 class="text-muted mb-2">Registration Store</h6>
-                    <p class="h4 mb-0" style="font-size: 1rem;">{{ customer.registration_store|default:"-" }}</p>
                 </div>
             </div>
             <div class="col-md-6">
@@ -196,13 +190,25 @@
                         </span>
                         {% endif %}
                     </p>
-                    {% if cnv_customer.zalo_app_created_at %}
-                    <p class="mb-0 mt-2" style="font-size:0.85rem">
-                        <i class="bi bi-phone text-primary"></i>
-                        <span class="text-muted">Zalo Active:</span>
-                        <strong>{{ cnv_customer.zalo_app_created_at|date:"d/m/Y" }}</strong>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-card p-3 rounded">
+                    <h6 class="text-muted mb-2">Registration Store</h6>
+                    <p class="h4 mb-0" style="font-size: 1rem;">{{ customer.registration_store|default:"-" }}</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-card p-3 rounded">
+                    <h6 class="text-muted mb-2">Zalo Active Date</h6>
+                    <p class="h4 mb-0">
+                        {% if cnv_customer.zalo_app_created_at %}
+                        <i class="bi bi-phone text-primary" style="font-size:1.2rem"></i>
+                        <span style="font-size:1.1rem">{{ cnv_customer.zalo_app_created_at|date:"d/m/Y" }}</span>
+                        {% else %}
+                        <span class="text-muted fs-6">—</span>
+                        {% endif %}
                     </p>
-                    {% endif %}
                 </div>
             </div>
             <div class="col-md-6">
