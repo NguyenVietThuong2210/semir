@@ -55,7 +55,27 @@ class Command(BaseCommand):
     # When a codename is renamed/split, map old → list of new codenames.
     # _sync() will auto-migrate any role (including custom) that held the old key.
     PERM_RENAMES = {
-        'page_cnv': ['page_cnv_sync', 'page_cnv_comparison'],
+        'page_cnv':                      ['page_cnv_sync', 'page_cnv_comparison'],
+        'page_analytics':                ['sales.view'],
+        'page_chart':                    ['sales.chart'],
+        'download_analytics':            ['sales.export'],
+        'download_chart_excel':          ['sales.export_chart'],
+        'page_coupons':                  ['coupons.view'],
+        'page_coupon_chart':             ['coupons.chart'],
+        'download_coupons':              ['coupons.export'],
+        'download_coupon_chart_excel':   ['coupons.export_chart'],
+        'manage_campaigns':              ['coupons.manage'],
+        'page_cnv_comparison':           ['cnv.view'],
+        'page_customer_chart':           ['cnv.chart'],
+        'page_cnv_sync':                 ['cnv.sync'],
+        'download_cnv':                  ['cnv.export'],
+        'download_customer_chart_excel': ['cnv.export_chart'],
+        'page_customer_detail':          ['customers.detail'],
+        'page_shop_detail':              ['shops.view'],
+        'download_shop_detail':          ['shops.export'],
+        'page_upload':                   ['data.upload'],
+        'page_formulas':                 ['data.formulas'],
+        'manage_users':                  ['admin.users'],
     }
 
     # ------------------------------------------------------------------

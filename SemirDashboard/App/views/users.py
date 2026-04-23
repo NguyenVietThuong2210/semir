@@ -14,7 +14,7 @@ from App.models import Role, UserProfile
 logger = logging.getLogger(__name__)
 
 
-@requires_perm('manage_users')
+@requires_perm('admin.users')
 def user_management(request):
     """Main user management page with Users and Roles tabs."""
 

@@ -27,7 +27,7 @@ YEAR_BTNS = [2024, 2025, 2026]
 
 
 
-@requires_perm("page_analytics")
+@requires_perm("sales.view")
 def analytics_dashboard(request):
     """
     Main analytics dashboard showing return visit rate statistics.
@@ -81,7 +81,7 @@ def analytics_dashboard(request):
     return render(request, "analytics/dashboard.html", ctx)
 
 
-@requires_perm("page_analytics")
+@requires_perm("sales.view")
 def analytics_tab(request, tab: str):
     """
     AJAX endpoint: returns a rendered HTML fragment for one Sales Analytics tab.
@@ -118,7 +118,7 @@ def analytics_tab(request, tab: str):
     return render(request, f"analytics/tabs/{tab}.html", ctx)
 
 
-@requires_perm("page_chart")
+@requires_perm("sales.chart")
 def analytics_chart(request):
     """Overview chart page — donut summaries + interactive shop trend line chart."""
     start_date = request.GET.get("start_date", "")
@@ -182,7 +182,7 @@ def analytics_chart(request):
     )
 
 
-@requires_perm("download_analytics")
+@requires_perm("sales.export")
 def export_analytics(request):
     """Export analytics data to Excel file.
     If ?tab=<name> is provided, exports only that tab (Overview + tab sheet(s)).
@@ -229,7 +229,7 @@ def export_analytics(request):
     return resp
 
 
-@requires_perm("download_chart_excel")
+@requires_perm("sales.export_chart")
 def export_sales_chart_excel(request):
     """Export Sales Analytics Chart data to Excel workbook matching current UI state."""
     start_date = request.GET.get("start_date", "")

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 
-@requires_perm("page_coupons")
+@requires_perm("coupons.view")
 def coupon_dashboard(request):
     """
     Coupon analytics dashboard.
@@ -84,7 +84,7 @@ def coupon_dashboard(request):
     )
 
 
-@requires_perm("page_coupons")
+@requires_perm("coupons.view")
 def coupon_tab(request, tab: str):
     """
     AJAX endpoint: returns a rendered HTML fragment for one Coupon Analytics tab.
@@ -122,7 +122,7 @@ def coupon_tab(request, tab: str):
     return render(request, f"coupon/tabs/{tab}.html", ctx)
 
 
-@requires_perm("download_coupons")
+@requires_perm("coupons.export")
 def export_coupons(request):
     """Export coupon analytics to Excel.
     If ?tab=<name> is provided, exports only that tab (Summary + tab sheet).
@@ -175,7 +175,7 @@ def export_coupons(request):
     return resp
 
 
-@requires_perm("page_coupon_chart")
+@requires_perm("coupons.chart")
 def coupon_chart(request):
     """Coupon analytics chart page — overview pies + shop/campaign trend lines."""
     from App.analytics.coupon_analytics import calculate_coupon_trend_data
@@ -219,7 +219,7 @@ def coupon_chart(request):
     )
 
 
-@requires_perm("manage_campaigns")
+@requires_perm("coupons.manage")
 def manage_campaigns(request):
     """
     AJAX + page endpoint for CouponCampaign CRUD.
@@ -317,7 +317,7 @@ def manage_campaigns(request):
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
-@requires_perm("download_coupon_chart_excel")
+@requires_perm("coupons.export_chart")
 def export_coupon_chart_excel(request):
     """Export Coupon Analytics Chart data to Excel workbook matching current UI state."""
     start_date = request.GET.get("start_date", "")

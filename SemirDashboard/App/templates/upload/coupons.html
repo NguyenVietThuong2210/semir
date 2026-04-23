@@ -73,7 +73,7 @@
   </div>
 
   <!-- ── Right: Campaign management ── -->
-  {% check_perm 'manage_campaigns' as can_manage %}
+  {% check_perm 'coupons.manage' as can_manage %}
   {% if can_manage %}
   <div class="col-md-7">
     <div class="card shadow-sm">
@@ -193,7 +193,7 @@
   window.addEventListener('load', hideLoading);
 </script>
 
-{% check_perm 'manage_campaigns' as can_manage_js %}
+{% check_perm 'coupons.manage' as can_manage_js %}
 {% if can_manage_js %}
 <script type="application/json" id="__cpnUrl">"{% url 'manage_campaigns' %}"</script>
 <script type="application/json" id="__cpnCsrf">"{{ csrf_token }}"</script>

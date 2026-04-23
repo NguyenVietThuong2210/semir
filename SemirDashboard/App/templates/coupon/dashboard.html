@@ -141,7 +141,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-ticket-perforated"></i> Coupon Analytics</h2>
     <div class="d-flex gap-2 flex-wrap">
-        {% check_perm 'download_coupons' as can_dl_coupons %}
+        {% check_perm 'coupons.export' as can_dl_coupons %}
         {% if can_dl_coupons %}
         <a href="{% url 'export_coupons' %}?start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}"
             class="btn btn-success">

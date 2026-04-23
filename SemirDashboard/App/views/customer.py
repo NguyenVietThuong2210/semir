@@ -12,7 +12,7 @@ from App.cnv.models import CNVCustomer
 logger = logging.getLogger(__name__)
 
 
-@requires_perm("page_customer_detail")
+@requires_perm("customers.detail")
 def customer_detail(request):
     """
     Customer Detail Analytics - Search and view individual customer info.

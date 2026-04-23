@@ -51,37 +51,37 @@ Old definition (OBSOLETE): SS = Jan-Jun, AW = Jul-Dec.
 ## Permissions System
 **File:** `App/permissions.py`
 
-20 permissions in `PERMISSION_DEFS`:
+20 permissions in `PERMISSION_DEFS`, named `{domain}.{action}` and grouped into 7 domains:
 
-| Key | Access |
-|-----|--------|
-| `page_analytics` | Sales analytics dashboard |
-| `page_chart` | Sales chart page |
-| `page_coupons` | Coupon analytics dashboard |
-| `page_coupon_chart` | Coupon chart page |
-| `page_customer_detail` | Customer detail search |
-| `page_upload` | Data upload pages |
-| `page_formulas` | Formulas reference page |
-| `page_cnv_sync` | CNV sync status dashboard |
-| `page_cnv_comparison` | CNV vs POS comparison |
-| `page_shop_detail` | Shop-level analytics |
-| `page_customer_chart` | Customer comparison chart |
-| `download_analytics` | Analytics Excel export |
-| `download_chart_excel` | Sales chart Excel export |
-| `download_coupons` | Coupon Excel export |
-| `download_coupon_chart_excel` | Coupon chart Excel export |
-| `download_cnv` | CNV comparison Excel export |
-| `download_customer_chart_excel` | Customer chart Excel export |
-| `download_shop_detail` | Shop detail Excel export |
-| `manage_users` | User management |
-| `manage_campaigns` | Coupon campaign management |
+| Codename | Display label | Domain group |
+|---|---|---|
+| `sales.view` | View Sales Analytics | Sales Analytics |
+| `sales.chart` | View Sales Chart | Sales Analytics |
+| `sales.export` | Export Sales Analytics (Excel) | Sales Analytics |
+| `sales.export_chart` | Export Sales Chart (Excel) | Sales Analytics |
+| `coupons.view` | View Coupon Dashboard | Coupons |
+| `coupons.chart` | View Coupon Chart | Coupons |
+| `coupons.export` | Export Coupons (Excel) | Coupons |
+| `coupons.export_chart` | Export Coupon Chart (Excel) | Coupons |
+| `coupons.manage` | Manage Coupon Campaigns | Coupons |
+| `cnv.view` | View Customer Analytics (CNV) | CNV / Customer Analytics |
+| `cnv.chart` | View Customer Chart (CNV) | CNV / Customer Analytics |
+| `cnv.sync` | View CNV Sync Status | CNV / Customer Analytics |
+| `cnv.export` | Export Customer Analytics (Excel) | CNV / Customer Analytics |
+| `cnv.export_chart` | Export Customer Chart (Excel) | CNV / Customer Analytics |
+| `customers.detail` | View Customer Detail | Customers |
+| `shops.view` | View Shop Detail | Shop Detail |
+| `shops.export` | Export Shop Detail (Excel) | Shop Detail |
+| `data.upload` | Upload Data | Data Management |
+| `data.formulas` | View Formulas | Data Management |
+| `admin.users` | Manage Users | Admin |
 
-**Built-in:** `VIEWER_PERMISSIONS = ["page_analytics"]` — minimal viewer role.
+**Built-in:** `VIEWER_PERMISSIONS = ["sales.view"]` — minimal viewer role.
 
 **Check flow:**
 1. `user.is_superuser` → all permissions granted
-2. `@requires_perm('page_analytics')` → checks `user.userprofile.role.permissions`
-3. `_ajax_perm_check(request, 'page_shop_detail')` → used in AJAX views instead of `@requires_perm` (avoids 302 redirect on 401)
+2. `@requires_perm('sales.view')` → checks `user.userprofile.role.permissions`
+3. `_ajax_perm_check(request, 'shops.view')` → used in AJAX views instead of `@requires_perm` (avoids 302 redirect on 401)
 
 ## Data Upload Flow
 1. User uploads CSV/Excel via upload views (`/upload/customers/` etc.)

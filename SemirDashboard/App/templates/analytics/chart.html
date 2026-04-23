@@ -128,7 +128,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-pie-chart"></i> Sales Analytics Charts</h2>
     <div class="d-flex gap-2">
-        {% check_perm 'download_chart_excel' as can_dl %}
+        {% check_perm 'sales.export_chart' as can_dl %}
         {% if can_dl %}
         <button class="btn btn-outline-success btn-sm" onclick="downloadChartExcel()">
             <i class="bi bi-file-earmark-excel"></i> Download Excel

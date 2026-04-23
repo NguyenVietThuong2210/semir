@@ -62,7 +62,7 @@ def _start_thread(job_id, fn, file_bytes, filename, on_done_fn=None):
 
 # ── Upload views ──────────────────────────────────────────────────────────────
 
-@requires_perm("page_upload")
+@requires_perm("data.upload")
 def upload_customers(request):
     if request.method == "POST":
         form = CustomerUploadForm(request.POST, request.FILES)
@@ -96,7 +96,7 @@ def upload_customers(request):
     )
 
 
-@requires_perm("page_upload")
+@requires_perm("data.upload")
 def upload_used_points(request):
     if request.method == "POST":
         form = UsedPointsUploadForm(request.POST, request.FILES)
@@ -115,7 +115,7 @@ def upload_used_points(request):
     return redirect("upload_customers")
 
 
-@requires_perm("page_upload")
+@requires_perm("data.upload")
 def upload_sales(request):
     if request.method == "POST":
         form = SalesUploadForm(request.POST, request.FILES)
@@ -139,7 +139,7 @@ def upload_sales(request):
     return render(request, "upload/sales.html", {"form": SalesUploadForm(), "date_stats": date_stats})
 
 
-@requires_perm("page_upload")
+@requires_perm("data.upload")
 def upload_coupons(request):
     if request.method == "POST" and request.FILES.get("file"):
         if is_type_running("coupons"):
@@ -157,7 +157,7 @@ def upload_coupons(request):
 
 # ── Status API endpoints ──────────────────────────────────────────────────────
 
-@requires_perm("page_upload")
+@requires_perm("data.upload")
 def upload_job_status(request, job_id):
     """Return JSON status for a single job."""
     from App.upload_jobs import get_job
@@ -167,7 +167,7 @@ def upload_job_status(request, job_id):
     return JsonResponse(job)
 
 
-@requires_perm("page_upload")
+@requires_perm("data.upload")
 def upload_jobs_list(request):
     """Return JSON list of recent upload jobs."""
     jobs = get_recent_jobs(limit=30)

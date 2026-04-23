@@ -59,8 +59,6 @@ class JsonFormatter(logging.Formatter):
     """
     Emits one JSON object per line. Fields:
         time, level, logger, module, request_id, step, message[, exception]
-
-    Readable in /admin-logs/ or by tailing logs/app.log, logs/cnv_sync.log, logs/errors.log.
     """
 
     def format(self, record: logging.LogRecord) -> str:

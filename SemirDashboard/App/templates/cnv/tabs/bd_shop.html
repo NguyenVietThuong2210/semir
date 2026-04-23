@@ -1,5 +1,5 @@
 {% load perm_tags %}
-{% check_perm 'download_cnv' as can_dl_cnv %}
+{% check_perm 'cnv.export' as can_dl_cnv %}
 <div class="d-flex justify-content-end mb-2">
     {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=bd_shop{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
 </div>

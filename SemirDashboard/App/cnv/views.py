@@ -25,7 +25,7 @@ from App.cnv.service import (
 logger = logging.getLogger("App.cnv")
 
 
-@requires_perm("page_cnv_sync")
+@requires_perm("cnv.sync")
 def sync_status(request):
     """
     CNV Sync Status Dashboard
@@ -82,7 +82,7 @@ def sync_status(request):
 
 
 
-@requires_perm("page_cnv_comparison")
+@requires_perm("cnv.view")
 def customer_analytics(request):
     """
     Compare POS System vs CNV Loyalty customers.
@@ -183,7 +183,7 @@ def customer_analytics(request):
     return render(request, "cnv/customer_analytics.html", context)
 
 
-@requires_perm("page_cnv_comparison")
+@requires_perm("cnv.view")
 def customer_tab(request, tab: str):
     """
     AJAX endpoint: returns a rendered HTML fragment for one Customer Analytics tab.
@@ -215,7 +215,7 @@ def customer_tab(request, tab: str):
     return render(request, f"cnv/tabs/{tab}.html", ctx)
 
 
-@requires_perm("download_cnv")
+@requires_perm("cnv.export")
 def export_customer_analytics(request):
     """Export POS vs CNV comparison to Excel.
     If ?tab=<points|zalo|pos_cnv|breakdown> is given, exports only that tab's sheets.
@@ -282,7 +282,7 @@ def export_customer_analytics(request):
     return response
 
 
-@requires_perm("page_cnv_sync")
+@requires_perm("cnv.sync")
 def sync_cnv_points(request):
     """
     AJAX endpoint: sync points for a list of CNV customer IDs.
@@ -353,7 +353,7 @@ def sync_cnv_points(request):
 # ============================================================================
 
 
-@requires_perm("page_cnv_sync")
+@requires_perm("cnv.sync")
 @require_POST
 def trigger_sync(request):
     """
@@ -426,7 +426,7 @@ def trigger_sync(request):
     )
 
 
-@requires_perm("page_cnv_sync")
+@requires_perm("cnv.sync")
 @require_POST
 def trigger_zalo_sync(request):
     """
@@ -641,7 +641,7 @@ def compute_customer_chart_data(start_date: str = "", end_date: str = "") -> dic
     return result
 
 
-@requires_perm("page_customer_chart")
+@requires_perm("cnv.chart")
 def customer_chart(request):
     """Customer Analytics Charts — donut overview + trend lines + bar + YOY comparison."""
     import json
@@ -690,7 +690,7 @@ def customer_chart(request):
 
 
 
-@requires_perm("download_customer_chart_excel")
+@requires_perm("cnv.export_chart")
 def export_customer_chart_excel(request):
     """Export Customer Analytics Chart data to Excel workbook matching current UI state."""
     from App.analytics.excel_export import export_customer_chart_to_excel

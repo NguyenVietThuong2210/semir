@@ -4,32 +4,32 @@ from django.shortcuts import redirect
 from django.contrib import messages
 
 PERMISSION_DEFS = [
-    ("page_analytics", "Analytics Dashboard", "Pages"),
-    ("page_chart", "Overview Charts", "Pages"),
-    ("page_coupons", "Coupon Dashboard", "Pages"),
-    ("page_customer_detail", "Customer Detail", "Pages"),
-    ("page_upload", "Upload Data", "Pages"),
-    ("page_formulas", "Formulas", "Pages"),
-    ("page_cnv_sync", "CNV Sync Status", "Pages"),
-    ("page_cnv_comparison", "Customer Analytics", "Pages"),
-    ("download_analytics", "Export Analytics (Excel)", "Downloads"),
-    ("download_chart_excel", "Download Sales Charts Excel", "Downloads"),
-    ("download_coupons", "Export Coupons (Excel)", "Downloads"),
-    ("download_coupon_chart_excel", "Download Coupon Charts Excel", "Downloads"),
-    ("download_cnv", "Export CNV Comparison (Excel)", "Downloads"),
-    ("manage_users", "User Management", "Admin"),
-    ("manage_campaigns", "Manage Coupon Campaigns", "Admin"),
-    ("page_coupon_chart", "Coupon Analytics Charts", "Pages"),
-    ("page_customer_chart", "Customer Analytics Charts", "Pages"),
-    ("download_customer_chart_excel", "Download Customer Charts Excel", "Downloads"),
-    ("page_shop_detail", "Shop Detail", "Pages"),
-    ("download_shop_detail", "Export Shop Detail (Excel)", "Downloads"),
+    ("sales.view",          "View Sales Analytics",             "Sales Analytics"),
+    ("sales.chart",         "View Sales Chart",                 "Sales Analytics"),
+    ("sales.export",        "Export Sales Analytics (Excel)",   "Sales Analytics"),
+    ("sales.export_chart",  "Export Sales Chart (Excel)",       "Sales Analytics"),
+    ("coupons.view",        "View Coupon Dashboard",            "Coupons"),
+    ("coupons.chart",       "View Coupon Chart",                "Coupons"),
+    ("coupons.export",      "Export Coupons (Excel)",           "Coupons"),
+    ("coupons.export_chart","Export Coupon Chart (Excel)",      "Coupons"),
+    ("coupons.manage",      "Manage Coupon Campaigns",          "Coupons"),
+    ("cnv.view",            "View Customer Analytics (CNV)",    "CNV / Customer Analytics"),
+    ("cnv.chart",           "View Customer Chart (CNV)",        "CNV / Customer Analytics"),
+    ("cnv.sync",            "View CNV Sync Status",             "CNV / Customer Analytics"),
+    ("cnv.export",          "Export Customer Analytics (Excel)","CNV / Customer Analytics"),
+    ("cnv.export_chart",    "Export Customer Chart (Excel)",    "CNV / Customer Analytics"),
+    ("customers.detail",    "View Customer Detail",             "Customers"),
+    ("shops.view",          "View Shop Detail",                 "Shop Detail"),
+    ("shops.export",        "Export Shop Detail (Excel)",       "Shop Detail"),
+    ("data.upload",         "Upload Data",                      "Data Management"),
+    ("data.formulas",       "View Formulas",                    "Data Management"),
+    ("admin.users",         "Manage Users",                     "Admin"),
 ]
 
 ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]
 ADMIN_PERMISSIONS = ALL_PERMISSIONS
 VIEWER_PERMISSIONS = [
-    "page_analytics",
+    "sales.view",
 ]
 
 

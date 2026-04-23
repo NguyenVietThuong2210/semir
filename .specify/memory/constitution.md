@@ -1,50 +1,206 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+SYNC IMPACT REPORT
+==================
+Version change: 1.0.0 → 1.1.0 → 1.1.1
+Modified principles:
+  - I. Business Logic Lock: added Coupon face_value rule + Shop grouping rules
+  - III. Performance Budget: added Upload integrity rule (bulk_create mandate)
+Added sections:
+  - VI. Observability (new principle)
+Removed sections: none
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ Constitution Check references updated principles
+  - .specify/templates/spec-template.md ✅ No amendments needed
+  - .specify/templates/tasks-template.md ✅ No amendments needed
+Deferred TODOs: none
+Source audit: reviewed project_business_logic.md, project_analytics.md, project_cnv.md,
+              project_models.md — all gaps now codified in constitution.
+-->
+
+# SemirDashboard Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Business Logic Lock
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+The following rules are LOCKED. They MUST NOT be changed without explicit written approval
+from the product owner in this conversation:
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- **Return visit formula** (`App/analytics/calculations.py`):
+  `return_visits = total_invoices - 1` when `registration_date == first_purchase_date`,
+  else `return_visits = total_invoices`. Counts invoices, not unique visit days.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+- **Season definitions** (4 seasons, updated Mar 2026):
+  M2-4 (Feb–Apr), M5-7 (May–Jul), M8-10 (Aug–Oct), M11-1 (Nov–Jan cross-year).
+  Label format: `M11-1 2024-2025` (Jan belongs to the next year). SS/AW is obsolete.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+- **Grade hierarchy**: No Grade < Member < Silver < Gold < Diamond.
+  VIP0/VIP1/VIP2/VIP3/DIAMOND is obsolete — do not use.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- **VIP ID = "0"**: non-VIP customer — excluded from grade analytics, tracked separately
+  as "buyer without info".
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- **Coupon campaign prefix**: `CouponCampaign.prefix` is comma-separated; a coupon belongs
+  to a campaign if `coupon_id.startswith(prefix)` for any prefix in the list.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- **Coupon face_value interpretation** (`App/analytics/coupon_analytics.py` →
+  `calc_coupon_amount`):
+  - `face_value ≤ 0` or None → 0 (no discount)
+  - `face_value > 1` → cash discount in VND (return face_value as-is)
+  - `face_value == 1.0` exactly → 0 (customer pays 100%, no discount — special case)
+  - `0 < face_value < 1` → percentage (e.g. `0.9` = 90% pay → 10% off invoice amount)
+  This rule drives all coupon financial calculations. Inverting it silently mis-reports
+  coupon spend across the entire analytics dashboard.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- **Shop grouping** (used in `shop_group` query param on all analytics/coupon pages):
+  - `"Bala Group"` → shop_name contains `"Bala"` OR `"巴拉"`
+  - `"Semir Group"` → shop_name contains `"Semir"` OR `"森马"`
+  - `"Others Group"` → all remaining shops
+  Changing these strings breaks filter continuity across historical reports.
+
+Any spec or task that touches these rules MUST include a "Business Logic Lock" section
+explicitly noting which locked rule is affected and confirming approval was obtained.
+
+### II. Permission-Gated Access
+
+Every view MUST be protected. No exceptions:
+
+- Page views: `@requires_perm("permission_codename")` or `@login_required`.
+- AJAX partial views: `_ajax_perm_check(request, codename)` — returns 401/403 instead of
+  redirecting, because a redirect silently followed by `fetch()` returns wrong HTML.
+- Superusers bypass all permission checks (`user.is_superuser → True` in `permissions.py`).
+- New permissions MUST be documented in `docs/project_business_logic.md`
+  (20-permission table under `PERMISSION_DEFS`).
+
+### III. Performance Budget
+
+Every page load MUST stay within measurable bounds:
+
+- DB queries per request: ≤ 10 for analytics pages, ≤ 5 for CRUD pages.
+- Analytics data: MUST use `_load_sales()` cache (5-min TTL) — do NOT add a second cache
+  around already-cached callpaths.
+- `.order_by()` MUST precede `.distinct()` on any model with `Meta.ordering`
+  (SalesTransaction, Customer) — omitting it causes ordering fields in SELECT DISTINCT,
+  returning every row as unique.
+- `parse_cnv_period_filter()` returns `({}, False)` for empty dates — check
+  `if not period_filter:`, NEVER `if period_filter is None:`.
+- New DB-heavy functions (>10k rows, deterministic) MUST be evaluated for caching.
+  Cache key format: `"<area>:<param1>:<param2>"`, TTL 5 min (analytics) / 10 min (reference).
+- **Upload integrity**: all import functions MUST use `bulk_create` + `bulk_update`.
+  Two-level batching is intentional and MUST NOT be collapsed:
+  - Outer loop `BATCH_SIZE=5000`: slices the pandas DataFrame for memory control
+  - Inner Django call `batch_size=1000`: controls DB transaction size / lock duration
+  Single-row `.save()` inside a loop is PROHIBITED — causes timeouts on 100k+ row prod datasets.
+
+### IV. Test-First with Snapshots
+
+All analytics output changes MUST be validated via `SnapshotTestCase`:
+
+- Every URL in `App/urls.py` and `App/cnv/urls.py` MUST have ≥ 1 green test.
+- Period-filter views MUST have two test variants: `_alltime` (no params) and `_2025`
+  (with `start_date=2025-01-01&end_date=2025-12-31`).
+- Snapshots lock data shape — if a snapshot changes unexpectedly, the change MUST be
+  reviewed before regenerating with `UPDATE_SNAPSHOTS=1`.
+- Tests use `setUpTestData` (class-level), never `setUp` (too slow for 430k-row fixtures).
+- All test classes that share the same fixture set MUST be merged to avoid duplicate loads.
+
+### V. Spec-Driven Feature Development
+
+All new features MUST follow the full spec-kit workflow before any code is written:
+
+1. `/speckit-specify` — user stories + acceptance criteria
+2. `/speckit-clarify` — resolve edge cases (required if requirements are ambiguous)
+3. `/speckit-plan` — architecture + technical approach
+4. `/speckit-tasks` — dependency-ordered task list with exact file paths
+5. `/speckit-implement` — execute tasks
+
+Hotfixes (≤ 5 lines, isolated bug) MAY skip to implement with a one-sentence rationale.
+No feature branch without a `specs/<###-feature-name>/spec.md`.
+
+### VI. Observability
+
+Every HTTP request MUST be traceable end-to-end:
+
+- `RequestIDMiddleware` assigns a 12-character hex ID (`uuid4().hex[:12]`, e.g. `"a3f9c2b10d44"`)
+  to every request, stored in thread-local storage via `set_request_id()`.
+- `RequestIDFilter` injects `request_id` into every log record emitted during that request.
+- File handlers write structured JSON — one object per line. Actual schema:
+  `{"time": ..., "level": ..., "logger": ..., "module": ..., "request_id": ..., "step": ..., "message": ..., ["exception": ...]}`
+  Console handler uses human-readable format: `[LEVEL] time name req=... step=... — message`.
+- `X-Request-ID` response header MUST be set for client-side correlation.
+- Log files: `logs/app.log` (general), `logs/cnv_sync.log` (CNV), `logs/errors.log` (errors ≥ERROR).
+- New background jobs (upload threads, sync tasks) MUST log with the triggering `request_id`
+  or a job-scoped ID so failures can be traced without grepping full logs.
+
+## Technical Standards
+
+**Stack**: Python 3.x / Django, Bootstrap 5, SQLite3 (dev), PostgreSQL 16 (prod).
+
+**App layout**:
+- Models: `App/models/` (pos.py, coupon.py, user.py) — import via `from App.models import X`.
+- Views: `App/views/` — one file per page area.
+- Analytics engine: `App/analytics/` — `tab_functions.py` is the main entry point.
+- CNV integration: `App/cnv/` — matched POS↔CNV by phone number.
+
+**Model type gotcha — CNVCustomer points fields are `DecimalField`, not `IntegerField`**:
+`points`, `exp_points`, `total_spending`, `total_points`, `used_points` — treat as Decimal
+in all arithmetic. Mixing with Python `int` causes silent truncation on some DB backends.
+
+**CNV rules**:
+- `_fetch_bd_raw(period_filter)` — `period_filter` MUST be a dict (`{}` for no filter),
+  never `None`. Passing `None` causes `AttributeError` on `.get()` call.
+- Sync commands: `python manage.py sync_cnv_customers` / `sync_cnv_orders`.
+- CNV sync stale threshold: 2h (auto-mark failed). Zalo sync stale threshold: 4h.
+
+**Template rules**:
+- Views MUST pass plain dicts (`.values()` output), never raw querysets, to templates.
+- Templates MUST NOT trigger DB queries.
+- Custom filters: `|vnd` (VND number format) from `custom_filters.py`.
+
+**Migration discipline**:
+- Every model field change requires `makemigrations` + `migrate` before PR merge.
+- Index additions MUST be verified for speedup via query instrumentation.
+
+## Development Workflow
+
+**Branch naming**: `<###>-<feature-name>` (e.g., `001-customer-export`).
+
+**Test run commands**:
+```bash
+cd SemirDashboard && python manage.py test tests -v 2
+cd SemirDashboard && UPDATE_SNAPSHOTS=1 python manage.py test tests -v 2
+cd SemirDashboard && python manage.py test tests.test_shop_detail.ShopDetailTest.test_sales_alltime_matches_shop_tab -v 2
+```
+
+**Snapshot policy**: Snapshot changes from pure optimization (no business logic change)
+MUST show zero data-shape delta. If `assert_snapshot` fails after an optimization,
+revert the optimization — correctness over performance.
+
+**Docs to update after structural changes**:
+- New URL → `docs/project_urls.md`
+- New test file → `docs/project_structure.md`
+- View/service refactor → `docs/project_analytics.md` or `docs/project_cnv.md`
+- Cache key / TTL change → same docs as above
+- Model index added → `docs/project_models.md`
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution is the highest-authority document for SemirDashboard development.
+It supersedes any conflicting guidance in other files.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Amendment procedure**:
+1. Propose the change in conversation with the product owner.
+2. Receive explicit written approval for changes touching Principle I (Business Logic Lock).
+3. Update this file, increment version per semantic versioning, update `LAST_AMENDED_DATE`.
+4. Run consistency propagation: verify plan/spec/tasks templates still align.
+5. Commit with message: `docs: amend constitution to vX.Y.Z (<summary>)`.
+
+**Versioning policy**:
+- MAJOR: Locked business rule changed or principle removed.
+- MINOR: New principle added or material guidance added to existing principle.
+- PATCH: Wording clarification, typo fix, non-semantic refinement.
+
+**Compliance**: Every PR description MUST include a one-line "Constitution Check" confirming
+no locked rules were modified (or citing the approval if they were).
+
+**Version**: 1.1.1 | **Ratified**: 2026-04-22 | **Last Amended**: 2026-04-22

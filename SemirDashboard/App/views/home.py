@@ -10,7 +10,7 @@ def home(request):
     return render(request, "home.html")
 
 
-@requires_perm("page_formulas")
+@requires_perm("data.formulas")
 def formulas_page(request):
     """Display formulas and definitions used in analytics."""
     return render(request, "formulas.html")

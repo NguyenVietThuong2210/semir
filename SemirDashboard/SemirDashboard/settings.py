@@ -237,7 +237,7 @@ LOGGING = {
             "format": "[{levelname}] {asctime} {name} req={request_id} step={step} — {message}",
             "style": "{",
         },
-        # Machine-readable JSON for Loki — one object per line
+        # Machine-readable structured JSON — one object per line
         "json": {
             "()": "App.logging_utils.JsonFormatter",
         },

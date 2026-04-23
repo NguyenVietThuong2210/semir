@@ -1,5 +1,5 @@
 {% load custom_filters perm_tags %}
-{% check_perm 'download_analytics' as can_dl_analytics %}
+{% check_perm 'sales.export' as can_dl_analytics %}
 <div class="d-flex justify-content-between align-items-center mb-2">
     <p class="text-muted small mb-0">Compare all shops for each VIP grade.</p>
     {% if can_dl_analytics %}<a href="{% url 'export_analytics' %}?tab=grade_allshops{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}

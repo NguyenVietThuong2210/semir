@@ -66,11 +66,11 @@ def logout_view(request):
 @login_required
 def register_view(request):
     """
-    User registration - requires login and manage_users permission.
+    User registration - requires login and admin.users permission.
     Only admins can create new accounts.
     """
     from App.permissions import user_has_perm
-    if not user_has_perm(request.user, 'manage_users'):
+    if not user_has_perm(request.user, 'admin.users'):
         messages.error(request, 'You do not have permission to register new users.')
         return redirect('home')
 

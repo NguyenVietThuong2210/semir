@@ -81,7 +81,7 @@ QUICK_BTNS = [
 YEAR_BTNS = [2024, 2025, 2026]
 
 
-@requires_perm("page_shop_detail")
+@requires_perm("shops.view")
 def shop_detail(request):
     """
     Shop Detail page: 3 sections each filtered by a specific shop.
@@ -120,7 +120,7 @@ def _safe_date(val):
 
 def shop_detail_sales_partial(request):
     """AJAX: render sales section data for one shop."""
-    err = _ajax_perm_check(request, "page_shop_detail")
+    err = _ajax_perm_check(request, "shops.view")
     if err:
         return err
     shop_name  = request.GET.get("shop", "").strip()
@@ -141,7 +141,7 @@ def shop_detail_sales_partial(request):
 
 def shop_detail_customer_partial(request):
     """AJAX: render customer section data for one store."""
-    err = _ajax_perm_check(request, "page_shop_detail")
+    err = _ajax_perm_check(request, "shops.view")
     if err:
         return err
     store_name = request.GET.get("shop", "").strip()
@@ -160,7 +160,7 @@ def shop_detail_customer_partial(request):
 
 def shop_detail_coupon_partial(request):
     """AJAX: render coupon section data for one shop."""
-    err = _ajax_perm_check(request, "page_shop_detail")
+    err = _ajax_perm_check(request, "shops.view")
     if err:
         return err
     shop_name        = request.GET.get("shop", "").strip()
@@ -195,7 +195,7 @@ def shop_detail_coupon_partial(request):
     })
 
 
-@requires_perm("download_shop_detail")
+@requires_perm("shops.export")
 def export_shop_detail_excel(request):
     """Export Shop Detail data to Excel."""
     from openpyxl import Workbook

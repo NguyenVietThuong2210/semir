@@ -187,7 +187,7 @@
                         </a>
                     </li>
 
-                    {% check_perm 'page_upload' as can_upload %}
+                    {% check_perm 'data.upload' as can_upload %}
                     {% if can_upload %}
                     <!-- Upload Dropdown -->
                     <li class="nav-item dropdown">
@@ -214,7 +214,7 @@
                                     <i class="bi bi-ticket"></i> Upload Coupons
                                 </a>
                             </li>
-                            {% check_perm 'manage_campaigns' as can_campaigns %}
+                            {% check_perm 'coupons.manage' as can_campaigns %}
                             {% if can_campaigns %}
                             <li>
                                 <hr class="dropdown-divider">
@@ -242,7 +242,7 @@
                             <li>
                                 <h6 class="dropdown-header">Analytics &amp; Reports</h6>
                             </li>
-                            {% check_perm 'page_analytics' as can_analytics %}
+                            {% check_perm 'sales.view' as can_analytics %}
                             {% if can_analytics %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'analytics_dashboard' %}">
@@ -250,7 +250,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_chart' as can_chart %}
+                            {% check_perm 'sales.chart' as can_chart %}
                             {% if can_chart %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'analytics_chart' %}">
@@ -258,7 +258,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_cnv_comparison' as can_cnv_comparison %}
+                            {% check_perm 'cnv.view' as can_cnv_comparison %}
                             {% if can_cnv_comparison %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'cnv:customer_analytics' %}">
@@ -266,7 +266,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_customer_chart' as can_customer_chart_nav %}
+                            {% check_perm 'cnv.chart' as can_customer_chart_nav %}
                             {% if can_customer_chart_nav %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'cnv:customer_chart' %}">
@@ -274,7 +274,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_coupons' as can_coupons %}
+                            {% check_perm 'coupons.view' as can_coupons %}
                             {% if can_coupons %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'coupon_dashboard' %}">
@@ -282,7 +282,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_coupon_chart' as can_coupon_chart %}
+                            {% check_perm 'coupons.chart' as can_coupon_chart %}
                             {% if can_coupon_chart %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'coupon_chart' %}">
@@ -290,7 +290,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_customer_detail' as can_cust %}
+                            {% check_perm 'customers.detail' as can_cust %}
                             {% if can_cust %}
                             <li>
                                 <hr class="dropdown-divider">
@@ -301,7 +301,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_shop_detail' as can_shop_detail %}
+                            {% check_perm 'shops.view' as can_shop_detail %}
                             {% if can_shop_detail %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'shop_detail' %}">
@@ -322,7 +322,7 @@
                             <li>
                                 <h6 class="dropdown-header">Additional Tools</h6>
                             </li>
-                            {% check_perm 'page_formulas' as can_formulas %}
+                            {% check_perm 'data.formulas' as can_formulas %}
                             {% if can_formulas %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'formulas' %}">
@@ -330,7 +330,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'page_cnv_sync' as can_cnv_sync %}
+                            {% check_perm 'cnv.sync' as can_cnv_sync %}
                             {% if can_cnv_sync %}
                             <li>
                                 <hr class="dropdown-divider">
@@ -344,7 +344,7 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'manage_users' as can_manage %}
+                            {% check_perm 'admin.users' as can_manage %}
                             {% if can_manage %}
                             <li>
                                 <hr class="dropdown-divider">
