@@ -733,9 +733,9 @@
     const pd = JSON.parse(document.getElementById('__period').textContent);
 
     mkDonut('dChart1', 'dPct1', at.used, at.total, '#198754');
-    mkDonut('dChart2', 'dPct2', at.total_coupon_amount, at.unique_invoice_amount, '#6f42c1');
+    mkDonut('dChart2', 'dPct2', at.total_coupon_amount, at.unique_invoice_amount, '#ffc107');
     mkDonut('dChart3', 'dPct3', pd.used, pd.total, '#198754');
-    mkDonut('dChart4', 'dPct4', pd.total_coupon_amount, pd.unique_invoice_amount, '#6f42c1');
+    mkDonut('dChart4', 'dPct4', pd.total_coupon_amount, pd.unique_invoice_amount, '#ffc107');
 
     // ── Generic trend chart builder ───────────────────────────────────────────────
     // btype: 'week' | 'month' | 'season' | 'year' — used for display-label translation
@@ -946,7 +946,7 @@
             return `<tr><td>${label}</td>
                 <td class="text-end fw-bold">${fmtN(v, isAmt)}</td>
                 <td class="text-end text-muted">${fmtN(t, isAmt)} <small>(${tLbl})</small></td>
-                <td class="text-end fw-bold" style="color:#6f42c1;">${pctStr(v, t)}</td></tr>`;
+                <td class="text-end fw-bold" style="color:#ffc107;">${pctStr(v, t)}</td></tr>`;
         }
         function divRow(lbl) {
             return `<tr><td colspan="4" style="background:#f5f0fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;

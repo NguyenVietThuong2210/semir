@@ -5,7 +5,7 @@
 {% block extra_css %}
 <style>
 .search-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--primary);
     border-radius: 15px;
     padding: 2rem;
     margin-bottom: 2rem;
@@ -18,7 +18,7 @@
 }
 
 .info-card {
-    border-left: 4px solid #667eea;
+    border-left: 4px solid var(--primary);
     background: #f8f9fa;
     transition: transform 0.2s;
 }
@@ -30,7 +30,7 @@
 .stat-value-lg {
     font-size: 2rem;
     font-weight: 700;
-    color: #667eea;
+    color: var(--primary);
 }
 
 .badge-synced {
@@ -50,7 +50,7 @@
 }
 
 .invoice-table th {
-    background: #667eea;
+    background: var(--primary);
     color: white;
     font-weight: 600;
     position: sticky;
@@ -59,8 +59,8 @@
 }
 
 .coupon-badge {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: white;
+    background: var(--highlight);
+    color: var(--text);
     padding: 0.3rem 0.6rem;
     border-radius: 5px;
     font-size: 0.8rem;
@@ -126,7 +126,7 @@
 {% if customer %}
 <!-- SESSION 1: CUSTOMER INFO -->
 <div class="card shadow-sm mb-4">
-    <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <div class="card-header" style="background: var(--primary);">
         <h5 class="mb-0 text-white">
             <i class="bi bi-person-badge"></i> Customer Information
         </h5>
@@ -254,7 +254,7 @@
 
 <!-- SESSION 2: INVOICE HISTORY -->
 <div class="card shadow-sm mb-4">
-    <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <div class="card-header" style="background: var(--primary);">
         <h5 class="mb-0 text-white">
             <i class="bi bi-receipt"></i> Invoice History ({{ invoices|length }} invoices)
         </h5>
