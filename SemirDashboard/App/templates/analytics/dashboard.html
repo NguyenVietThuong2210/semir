@@ -16,46 +16,46 @@
 
 /* Period Metrics */
 .period-metrics .stat-card {
-    background: rgba(14,165,233,.09);
+    background: rgba(var(--primary-rgb),.09);
     border: none;
 }
 .period-metrics .stat-card .stat-label {
-    color: var(--primary);
+    color: var(--text);
     font-weight: 600;
 }
 .period-metrics .stat-card .stat-value {
-    color: var(--primary);
+    color: var(--text);
 }
 
 .alltime-metrics .stat-card {
-    background: rgba(234,179,8,.08);
+    background: rgba(var(--orange-rgb),.08);
     border: none;
 }
 .alltime-metrics .stat-card .stat-label {
-    color: #a16207;
+    color: var(--text);
     font-weight: 600;
 }
 .alltime-metrics .stat-card .stat-value {
-    color: #a16207;
+    color: var(--text);
 }
 
 /* Period Metrics - Total Invoices/Amount (wider cards) */
 .stat-card-wide { min-height:110px; }
 
 .dark-tabs .nav-link {
-    background:rgba(14,165,233,.12); color:var(--primary);
-    border:1px solid rgba(14,165,233,.3); border-radius:6px 6px 0 0;
+    background:rgba(var(--primary-rgb),.12); color:var(--text);
+    border:1px solid rgba(var(--primary-rgb),.3); border-radius:6px 6px 0 0;
     margin-right:3px; font-weight:500; font-size:.88rem;
 }
-.dark-tabs .nav-link:hover  { background:rgba(14,165,233,.22); color:var(--primary-hover); }
+.dark-tabs .nav-link:hover  { background:rgba(var(--primary-rgb),.22); color:var(--text); }
 .dark-tabs .nav-link.active { background:var(--primary); color:#fff; border-color:var(--primary); }
 .dark-tabs { border-bottom:none; }
 
-td.c-green { background:rgba(25,135,84,.08)!important;  color:#000!important; }
-td.c-info  { background:rgba(13,202,240,.09)!important; color:#000!important; }
-td.c-blue  { background:rgba(14,165,233,.08)!important;  color:#000!important; }
-td.c-gray  { background:#f0f2f5!important;               color:#000!important; }
-td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
+td.c-green { background:rgba(var(--success-rgb),.08)!important; color:#000!important; }
+td.c-info  { background:rgba(var(--accent-rgb),.09)!important;  color:#000!important; }
+td.c-blue  { background:rgba(var(--primary-rgb),.08)!important; color:#000!important; }
+td.c-gray  { background:#f0f2f5!important;                       color:#000!important; }
+td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!important; }
 
 /* ================================================================
    COLUMN WIDTH SYSTEM - same type = same width across all tables
@@ -102,8 +102,8 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 .sub-ses-tbl .sv-amt   { width: 10%; }
 
 .sub-tbl    .amount-vnd { white-space:nowrap; }
-.sub-hdr th { background:#bdd7ee!important; color:#1e40af!important; font-size:.8rem; }
-.sub-ses th { background:#d5e8d4!important; color:#166534!important; font-size:.8rem; }
+.sub-hdr th { background:rgba(var(--primary-rgb),.10)!important; color:var(--text)!important; font-size:.8rem; }
+.sub-ses th { background:rgba(var(--success-rgb),.10)!important; color:var(--text)!important; font-size:.8rem; }
 
 /* By Grade - All Shops (8 cols: shop + 2cnt + 1rate + 2inv + 2amt ≈ 99%) */
 .grade-compare-tbl { table-layout:fixed; width:100%; }
@@ -382,7 +382,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 </div>
 
 <!-- ABBREVIATIONS INFO CARD -->
-<div class="alert alert-info mb-3" style="background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%); border: none; border-left: 4px solid #00acc1;">
+<div class="alert alert-info mb-3" style="background: linear-gradient(135deg, rgba(var(--accent-rgb),.08) 0%, rgba(var(--accent-rgb),.15) 100%); border: none; border-left: 4px solid var(--accent);">
     <div class="d-flex align-items-center">
         <i class="bi bi-info-circle-fill text-info me-3" style="font-size: 1.5rem;"></i>
         <div>
@@ -467,7 +467,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             </div>
             <div class="table-responsive">
                 <table class="table table-striped table-hover align-middle mb-0 grade-tbl">
-                    <thead style="background-color: #38bdf8; color: white;">
+                    <thead style="background-color: var(--primary); color: white;">
                         <tr>
                             <th class="col-grade">VIP Grade</th>
                             <th class="col-cnt text-end">Active (Period)</th>
@@ -570,7 +570,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 <!-- BUYER WITHOUT INFO SECTION - Simple blue headers -->
 <!-- ============================================================================ -->
 <div class="card mb-4">
-    <div class="card-header" style="background-color: var(--primary); color: white;">
+    <div class="card-header" style="background:rgba(var(--primary-rgb),.12); color:var(--text); border-bottom:2px solid rgba(var(--primary-rgb),.3);">
         <i class="bi bi-question-circle"></i> Buyer Without Info (VIP ID = 0)
         <span class="badge bg-dark float-end">Excluded from Customer Metrics</span>
     </div>
@@ -581,7 +581,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <!-- Period Summary -->
             <div class="col-md-6">
                 <div class="card border">
-                    <div class="card-header" style="background-color: var(--primary); color: white;">
+                    <div class="card-header" style="background:rgba(var(--primary-rgb),.12); color:var(--text); border-bottom:2px solid rgba(var(--primary-rgb),.3);">
                         <h6 class="mb-0"><i class="bi bi-calendar-range"></i> Period Summary</h6>
                     </div>
                     <div class="card-body">
@@ -602,7 +602,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <!-- All-Time Summary -->
             <div class="col-md-6">
                 <div class="card border">
-                    <div class="card-header" style="background-color: var(--primary); color: white;">
+                    <div class="card-header" style="background:rgba(var(--primary-rgb),.12); color:var(--text); border-bottom:2px solid rgba(var(--primary-rgb),.3);">
                         <h6 class="mb-0"><i class="bi bi-clock-history"></i> All-Time Summary</h6>
                     </div>
                     <div class="card-body">
@@ -623,13 +623,13 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         
         <!-- By Shop Breakdown -->
         <div class="card">
-            <div class="card-header" style="background-color: var(--primary); color: white;">
+            <div class="card-header" style="background:rgba(var(--primary-rgb),.12); color:var(--text); border-bottom:2px solid rgba(var(--primary-rgb),.3);">
                 <i class="bi bi-shop"></i> By Shop Breakdown (Period)
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-striped table-hover mb-0">
-                        <thead style="background-color: #38bdf8; color: white;">
+                        <thead style="background-color: var(--primary); color: white;">
                             <tr>
                                 <th>Shop</th>
                                 <th class="text-end">Total Invoices</th>

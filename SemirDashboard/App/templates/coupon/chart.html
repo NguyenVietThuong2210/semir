@@ -5,9 +5,9 @@
 {% block extra_css %}
 <style>
     :root {
-        --c-coupon: #0ea5e9;
-        --c-used: #198754;
-        --c-amt: #eab308;
+        --c-coupon: var(--primary);
+        --c-used: var(--success);
+        --c-amt: var(--orange);
     }
 
     .filter-card {
@@ -33,7 +33,7 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: .5px;
-        color: #6c757d;
+        color: var(--text-muted);
         margin-bottom: .6rem;
         line-height: 1.3;
     }
@@ -59,13 +59,13 @@
     .donut-pct {
         font-size: 1.35rem;
         font-weight: 700;
-        color: #475569;
+        color: var(--text);
         display: block;
     }
 
     .donut-sub {
         font-size: .62rem;
-        color: #6c757d;
+        color: var(--text-muted);
         display: block;
     }
 
@@ -91,13 +91,13 @@
     }
 
     .label-period {
-        background: rgba(14, 165, 233, .1);
-        color: var(--primary);
+        background: rgba(var(--primary-rgb), .1);
+        color: var(--text);
     }
 
     .label-alltime {
-        background: rgba(234, 179, 8, .12);
-        color: #ca8a04;
+        background: rgba(var(--orange-rgb), .12);
+        color: var(--text);
     }
 
     /* Trend section */
@@ -107,7 +107,7 @@
         text-transform: uppercase;
         letter-spacing: .5px;
         color: #495057;
-        border-bottom: 2px solid #dee2e6;
+        border-bottom: 2px solid var(--border);
         padding-bottom: .4rem;
         margin-bottom: 1rem;
     }
@@ -115,7 +115,7 @@
     .shop-checklist {
         max-height: 280px;
         overflow-y: auto;
-        border: 1.5px solid #dee2e6;
+        border: 1.5px solid var(--border);
         border-radius: 8px;
         padding: .4rem .5rem;
         background: #fafbfc;
@@ -131,7 +131,7 @@
     }
 
     .shop-checklist .form-check:hover {
-        background: rgba(14, 165, 233, .06);
+        background: rgba(var(--primary-rgb), .06);
     }
 
     .shop-checklist .form-check:last-child {
@@ -154,8 +154,8 @@
     }
 
     .shop-checklist .avg-row {
-        background: rgba(14, 165, 233, .08);
-        border-bottom: 2px solid #dee2e6 !important;
+        background: rgba(var(--primary-rgb), .08);
+        border-bottom: 2px solid var(--border) !important;
         border-radius: 5px;
         margin-bottom: .2rem;
     }
@@ -171,7 +171,7 @@
 
     .metric-select-card,
     .xaxis-card {
-        background: #f8f9fa;
+        background: var(--bg-light);
         border-radius: 8px;
         padding: .75rem 1rem;
         height: 100%;
@@ -212,7 +212,7 @@
     .chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:var(--primary);box-shadow:2px 0 4px rgba(0,0,0,.12); }
     .chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
     /* column highlight on chart click */
-    .tbl-col-hl { background:#fff3cd !important; outline:2px solid #eab308; outline-offset:-1px; }
+    .tbl-col-hl { background:#fff3cd !important; outline:2px solid var(--orange); outline-offset:-1px; }
     /* row highlight on chart click */
     .tbl-row-hl > td:first-child { border-left:4px solid #0d6efd !important; background:#93c5fd !important; }
     .tbl-row-hl > td { background:#bfdbfe !important; }
@@ -293,7 +293,7 @@
         <div class="mt-2 pt-2 border-top" id="chartCpnFilterRow" style="display:none">
             <small class="text-muted d-block mb-1"><i class="bi bi-tags"></i> Filter by Campaign:</small>
             <div id="chartCpnFilterList"
-                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid #dee2e6;border-radius:8px;padding:.4rem .5rem;background:#fafbfc;">
+                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:.4rem .5rem;background:#fafbfc;">
             </div>
         </div>
 
@@ -439,12 +439,12 @@
                 <div class="shop-checklist" id="shopChecklist">
                     <label for="cbShopAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox" id="cbShopAvgAll" value="__avg_all__" style="flex-shrink:0;">
-                        <span class="shop-dot" id="dotShopAvgAll" style="background:#6c757d;flex-shrink:0;"></span>
+                        <span class="shop-dot" id="dotShopAvgAll" style="background:var(--text-muted);flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (all shops)</span>
                     </label>
                     <label for="cbShopAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox" id="cbShopAvg" value="__avg__" style="flex-shrink:0;">
-                        <span class="shop-dot" id="dotShopAvg" style="background:#475569;flex-shrink:0;"></span>
+                        <span class="shop-dot" id="dotShopAvg" style="background:var(--text);flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (average of selected)</span>
                     </label>
                     <!-- dynamic shop rows appended by JS -->
@@ -536,12 +536,12 @@
                 <div class="shop-checklist" id="campChecklist">
                     <label for="cbCampAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox" id="cbCampAvgAll" value="__avg_all__" style="flex-shrink:0;">
-                        <span class="shop-dot" id="dotCampAvgAll" style="background:#6c757d;flex-shrink:0;"></span>
+                        <span class="shop-dot" id="dotCampAvgAll" style="background:var(--text-muted);flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (all campaigns)</span>
                     </label>
                     <label for="cbCampAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox" id="cbCampAvg" value="__avg__" style="flex-shrink:0;">
-                        <span class="shop-dot" id="dotCampAvg" style="background:#475569;flex-shrink:0;"></span>
+                        <span class="shop-dot" id="dotCampAvg" style="background:var(--text);flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (average of selected)</span>
                     </label>
                     <!-- dynamic campaign rows by JS -->
@@ -673,7 +673,7 @@
         const el = document.getElementById(panelId);
         el.innerHTML =
             `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--primary);padding-bottom:4px;margin-bottom:5px;">
-                <strong style="font-size:.82rem;color:var(--primary);">${lbl}</strong>
+                <strong style="font-size:.82rem;color:var(--text);">${lbl}</strong>
                 <span id="_closeCard_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
              </div>` +
             rows.map(r =>
@@ -946,7 +946,7 @@
             return `<tr><td>${label}</td>
                 <td class="text-end fw-bold">${fmtN(v, isAmt)}</td>
                 <td class="text-end text-muted">${fmtN(t, isAmt)} <small>(${tLbl})</small></td>
-                <td class="text-end fw-bold" style="color:var(--primary);">${pctStr(v, t)}</td></tr>`;
+                <td class="text-end fw-bold">${pctStr(v, t)}</td></tr>`;
         }
         function divRow(lbl) {
             return `<tr><td colspan="4" style="background:#f5f0fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;
@@ -1155,7 +1155,7 @@
             var checked = isCampaignActive(c);
 
             var lbl = document.createElement('label');
-            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#0ea5e9' : '#dee2e6') + ';background:' + (checked ? '#0ea5e9' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
+            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? 'var(--primary)' : 'var(--border)') + ';background:' + (checked ? 'var(--primary)' : '#fff') + ';color:' + (checked ? '#fff' : 'var(--text)') + ';user-select:none;';
             lbl.title = pfxList.join(', ');
 
             var cb = document.createElement('input');
@@ -1163,11 +1163,11 @@
             cb.setAttribute('data-cpn-cb', '1');
             cb.dataset.cpnPfx = pfxVal;
             cb.checked = checked;
-            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#0ea5e9;';
+            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:var(--primary);';
             cb.addEventListener('change', function() {
-                lbl.style.background = cb.checked ? '#0ea5e9' : '#fff';
-                lbl.style.color = cb.checked ? '#fff' : '#212529';
-                lbl.style.borderColor = cb.checked ? '#0ea5e9' : '#dee2e6';
+                lbl.style.background = cb.checked ? 'var(--primary)' : '#fff';
+                lbl.style.color = cb.checked ? '#fff' : 'var(--text)';
+                lbl.style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
                 updateField();
             });
 
@@ -1266,7 +1266,7 @@
                     const ctx = cvs.getContext('2d');
                     ctx.fillStyle = '#f8f9fa';
                     ctx.fillRect(0, 0, PX_W, CVS_H);
-                    ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#0369a1'; ctx.lineWidth = 2;
                     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(PX_W, 0); ctx.stroke();
                     datasets.forEach((ds, i) => {
                         const col = i % COLS, row = Math.floor(i / COLS);
@@ -1325,7 +1325,7 @@
                             ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
 
                             // header
-                            ctx.fillStyle = '#0ea5e9'; ctx.fillRect(0, 0, PX_W, HH);
+                            ctx.fillStyle = '#0369a1'; ctx.fillRect(0, 0, PX_W, HH);
                             ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
                             gThs.forEach((th, i) => {
                                 const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
@@ -1357,7 +1357,7 @@
                                         const raw = td.textContent.trim(); if (!raw || raw === '—') return;
                                         const ml  = Math.max(4, Math.floor(cw(i)/7.5));
                                         const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
-                                        ctx.fillStyle = bld ? '#1d4ed8' : '#0ea5e9';
+                                        ctx.fillStyle = bld ? '#064e77' : '#0369a1';
                                         ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
                                         ctx.textAlign = i === 0 ? 'left' : 'right';
                                         ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);

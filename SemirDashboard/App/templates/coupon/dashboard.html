@@ -7,7 +7,7 @@
     .dark-tabs .nav-link {
         background: var(--primary);
         color: rgba(255,255,255,.8);
-        border: 1px solid #0284c7;
+        border: 1px solid var(--primary-hover);
         border-radius: 6px 6px 0 0;
         margin-right: 3px;
         font-weight: 500;
@@ -53,12 +53,12 @@
     }
 
     td.c-green {
-        background: rgba(25, 135, 84, .08) !important;
+        background: rgba(var(--success-rgb), .08) !important;
         color: #000 !important;
     }
 
     td.c-amber {
-        background: rgba(255, 193, 7, .12) !important;
+        background: rgba(var(--orange-rgb), .12) !important;
         color: #000 !important;
     }
 
@@ -68,7 +68,7 @@
     }
 
     td.c-blue {
-        background: rgba(14, 165, 233, .07) !important;
+        background: rgba(var(--primary-rgb), .07) !important;
         color: #000 !important;
     }
 
@@ -78,12 +78,12 @@
     }
 
     .tbl-hdr-used {
-        background: #198754 !important;
+        background: var(--success) !important;
         color: #fff !important;
     }
 
     .tbl-hdr-cnv {
-        background: #e6a817 !important;
+        background: var(--orange) !important;
         color: #fff !important;
     }
 
@@ -93,12 +93,12 @@
     }
 
     .tbl-hdr-pct2 {
-        background: #0891b2 !important;
+        background: var(--accent) !important;
         color: #fff !important;
     }
 
     .tbl-hdr-amt {
-        background: #198754 !important;
+        background: var(--success) !important;
         color: #fff !important;
     }
 
@@ -108,21 +108,21 @@
     }
 
     .tbl-hdr-red {
-        background: #198754 !important;
+        background: var(--success) !important;
         color: #fff !important;
     }
 
     /* Row cell background tints */
     td.cell-shop {
-        background: rgba(14, 165, 233, .07) !important;
+        background: rgba(var(--primary-rgb), .07) !important;
     }
 
     td.cell-used {
-        background: rgba(25, 135, 84, .07) !important;
+        background: rgba(var(--success-rgb), .07) !important;
     }
 
     td.cell-cnv {
-        background: rgba(230, 168, 23, .10) !important;
+        background: rgba(var(--orange-rgb), .10) !important;
     }
 
     .badge.bg-warning {
@@ -212,7 +212,7 @@
         <div class="mt-2 pt-2 border-top" id="cpnFilterRow" style="display:none">
             <small class="text-muted d-block mb-1"><i class="bi bi-tags"></i> Filter by Campaign:</small>
             <div id="cpnFilterList"
-                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid #dee2e6;border-radius:8px;padding:.4rem .5rem;background:#fafbfc;">
+                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:.4rem .5rem;background:#fafbfc;">
             </div>
         </div>
 
@@ -260,7 +260,7 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(25,135,84,.09)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--success-rgb),.09)">
             <div class="card-body">
                 <div class="stat-label text-success">Used (All Time)</div>
                 <div class="stat-value text-success">{{ s.used }}</div>
@@ -269,7 +269,7 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(220,53,69,.08)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--danger-rgb),.08)">
             <div class="card-body">
                 <div class="stat-label text-danger">Unused (All Time)</div>
                 <div class="stat-value text-danger">{{ s.unused }}</div>
@@ -278,10 +278,10 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(255,193,7,.14)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--orange-rgb),.14)">
             <div class="card-body">
-                <div class="stat-label" style="color:#856404">Total Amount (All Time)</div>
-                <div class="stat-value amount-vnd" style="color:#856404;font-size:1.15rem">
+                <div class="stat-label" style="color:var(--text)">Total Amount (All Time)</div>
+                <div class="stat-value amount-vnd" style="color:var(--text);font-size:1.15rem">
                     {{ s.total_amount|vnd }} VND
                 </div>
                 <small class="text-muted">From coupon-linked sales</small>
@@ -289,10 +289,10 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(255,193,7,.1)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--orange-rgb),.1)">
             <div class="card-body">
-                <div class="stat-label" style="color:var(--primary)">Total Coupon Amount (All Time)</div>
-                <div class="stat-value amount-vnd" style="color:var(--primary);font-size:1.15rem;font-weight:700">
+                <div class="stat-label" style="color:var(--text)">Total Coupon Amount (All Time)</div>
+                <div class="stat-value amount-vnd" style="color:var(--text);font-size:1.15rem;font-weight:700">
                     {{ s.total_coupon_amount|vnd }} VND
                 </div>
                 <small class="text-muted">Actual discount value</small>
@@ -300,10 +300,10 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(14,165,233,.07)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--primary-rgb),.07)">
             <div class="card-body">
-                <div class="stat-label" style="color:var(--primary)">Unique Invoice Amount (All Time)</div>
-                <div class="stat-value amount-vnd" style="color:var(--primary);font-size:1.15rem;font-weight:700">
+                <div class="stat-label" style="color:var(--text)">Unique Invoice Amount (All Time)</div>
+                <div class="stat-value amount-vnd" style="color:var(--text);font-size:1.15rem;font-weight:700">
                     {{ s.unique_invoice_amount|vnd }} VND
                 </div>
                 <small class="text-muted">Excl. {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
@@ -329,7 +329,7 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(25,135,84,.09)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--success-rgb),.09)">
             <div class="card-body">
                 <div class="stat-label text-success">Used (Period)</div>
                 <div class="stat-value text-success">{{ s.used }}</div>
@@ -338,7 +338,7 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(220,53,69,.08)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--danger-rgb),.08)">
             <div class="card-body">
                 <div class="stat-label text-danger">Unused (Period)</div>
                 <div class="stat-value text-danger">{{ s.unused }}</div>
@@ -347,10 +347,10 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(255,193,7,.14)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--orange-rgb),.14)">
             <div class="card-body">
-                <div class="stat-label" style="color:#856404">Total Amount (Period)</div>
-                <div class="stat-value amount-vnd" style="color:#856404;font-size:1.15rem">
+                <div class="stat-label" style="color:var(--text)">Total Amount (Period)</div>
+                <div class="stat-value amount-vnd" style="color:var(--text);font-size:1.15rem">
                     {{ s.total_amount|vnd }} VND
                 </div>
                 <small class="text-muted">From coupon-linked sales</small>
@@ -358,10 +358,10 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(255,193,7,.1)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--orange-rgb),.1)">
             <div class="card-body">
-                <div class="stat-label" style="color:var(--primary)">Total Coupon Amount (Period)</div>
-                <div class="stat-value amount-vnd" style="color:var(--primary);font-size:1.15rem;font-weight:700">
+                <div class="stat-label" style="color:var(--text)">Total Coupon Amount (Period)</div>
+                <div class="stat-value amount-vnd" style="color:var(--text);font-size:1.15rem;font-weight:700">
                     {{ s.total_coupon_amount|vnd }} VND
                 </div>
                 <small class="text-muted">Actual discount value</small>
@@ -369,10 +369,10 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(14,165,233,.07)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(var(--primary-rgb),.07)">
             <div class="card-body">
-                <div class="stat-label" style="color:var(--primary)">Unique Invoice Amount (Period)</div>
-                <div class="stat-value amount-vnd" style="color:var(--primary);font-size:1.15rem;font-weight:700">
+                <div class="stat-label" style="color:var(--text)">Unique Invoice Amount (Period)</div>
+                <div class="stat-value amount-vnd" style="color:var(--text);font-size:1.15rem;font-weight:700">
                     {{ s.unique_invoice_amount|vnd }} VND
                 </div>
                 <small class="text-muted">Excl. {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
@@ -432,7 +432,7 @@
                             <td><strong>{{ s.shop_name }}</strong></td>
                             <td class="text-end c-green"><strong>{{ s.used }}</strong></td>
                             <td class="text-end c-blue">
-                                <span class="badge" style="background:#0891b2">{{ s.used_pct_of_used }}%</span>
+                                <span class="badge" style="background:var(--accent)">{{ s.used_pct_of_used }}%</span>
                             </td>
                             <td class="text-end cell-cnv amount-vnd">{{ s.coupon_amount|vnd }} VND</td>
                             <td class="text-end c-amber amount-vnd">{{ s.total_amount|vnd }} VND</td>
@@ -587,7 +587,7 @@
             var checked = isCampaignActive(c);
 
             var lbl = document.createElement('label');
-            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#0ea5e9' : '#dee2e6') + ';background:' + (checked ? '#0ea5e9' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
+            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? 'var(--primary)' : 'var(--border)') + ';background:' + (checked ? 'var(--primary)' : '#fff') + ';color:' + (checked ? '#fff' : 'var(--text)') + ';user-select:none;';
             lbl.title = pfxList.join(', ');
 
             var cb = document.createElement('input');
@@ -595,11 +595,11 @@
             cb.setAttribute('data-cpn-cb', '1');
             cb.dataset.cpnPfx = pfxVal;
             cb.checked = checked;
-            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#0ea5e9;';
+            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:var(--primary);';
             cb.addEventListener('change', function() {
-                lbl.style.background = cb.checked ? '#0ea5e9' : '#fff';
-                lbl.style.color = cb.checked ? '#fff' : '#212529';
-                lbl.style.borderColor = cb.checked ? '#0ea5e9' : '#dee2e6';
+                lbl.style.background = cb.checked ? 'var(--primary)' : '#fff';
+                lbl.style.color = cb.checked ? '#fff' : 'var(--text)';
+                lbl.style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
                 updateField();
             });
 

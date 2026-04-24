@@ -55,7 +55,18 @@
       "Bash(cp \"d:/New-jouney/semir/COMPLETED_DEPLOYMENT.md\" \"d:/New-jouney/semir/docs/COMPLETED_DEPLOYMENT.md\")",
       "Bash(cp \"d:/New-jouney/semir/NEXT.md\" \"d:/New-jouney/semir/docs/NEXT.md\")",
       "Bash(grep -v \"^$\")",
-      "Bash(python manage.py test tests.test_consistency -v 2)"
+      "Bash(python manage.py test tests.test_consistency -v 2)",
+      "Bash(grep -v \"//.*rgba\")",
+      "Bash(grep -E \"rgba\\\\\\(\\([0-9]+,\\\\s*\\){2}[0-9]+\")",
+      "Bash(grep -rn \"#[0-9a-fA-F]\\\\{3,6\\\\}\" --include=\"*.html\")",
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(grep -rn \"#[0-9a-fA-F]\\\\{3,6\\\\}\\\\|rgba\\(\" --include=\"*.html\" analytics/tabs/)",
+      "Bash(grep -v \"<script\\\\b\\\\|//.*rgba\\\\|backgroundColor\\\\|borderColor\\\\|color:rgba\\(255,255,255\\\\|color: rgba\\(255, 255, 255\\\\|rgba\\(0,0,0\\\\|rgba\\(0, 0, 0\")",
+      "Bash(grep -v \"<script\\\\b\\\\|//.*#\")",
+      "Bash(grep -v \"<script\\\\b\\\\|//.*#\\\\|backgroundColor\\\\|borderColor\")",
+      "Bash(grep -v \"backgroundColor\\\\|borderColor\\\\|\\\\.html:[0-9]*:.*<script\\\\b\\\\|//.*rgba\")",
+      "Bash(grep -v \"<script\\\\b\\\\|//.*color\\\\|backgroundColor\\\\|borderColor\")",
+      "Bash(grep -v \"//.*color\\\\|background\\\\|borderColor\\\\|accent-color\")"
     ],
     "additionalDirectories": [
       "D:\\New-jouney\\semir\\archive\\customer_chart",
