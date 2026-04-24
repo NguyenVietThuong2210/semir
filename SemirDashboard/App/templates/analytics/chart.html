@@ -5,7 +5,7 @@
 
 {% block extra_css %}
 <style>
-:root { --c-period:#0047B3; --c-alltime:#0d6efd; }
+:root { --c-period:#3b82f6; --c-alltime:#0d6efd; }
 
 /* ─── Filter bar ─── */
 .filter-card { background:#fff; border-radius:10px; }
@@ -50,8 +50,8 @@
     letter-spacing:.6px; padding:.3rem .6rem; border-radius:4px;
     display:inline-block; margin-bottom:.5rem;
 }
-.label-period { background:rgba(0,71,179,.1); color:#0047B3; }
-.label-alltime { background:rgba(13,110,253,.1); color:#0047B3; }
+.label-period { background:rgba(0,71,179,.1); color:#3b82f6; }
+.label-alltime { background:rgba(13,110,253,.1); color:#3b82f6; }
 
 /* ─── Shop trend chart section ─── */
 .chart-section-header {
@@ -77,7 +77,7 @@
 }
 .shop-checklist .form-check-label { cursor:pointer; width:100%; font-size:.85rem; }
 .shop-checklist .avg-row {
-    background:rgba(26,60,140,0.08); border-bottom:2px solid #dee2e6 !important;
+    background:rgba(59,130,246,0.08); border-bottom:2px solid #dee2e6 !important;
     border-radius:5px; margin-bottom:.2rem;
 }
 .shop-dot {
@@ -756,7 +756,7 @@ const OV = CD.overview;
 /* ══════════════════════════════════════════════
    Colour palettes
 ══════════════════════════════════════════════ */
-const PERIOD_COLOR  = '#0047B3';
+const PERIOD_COLOR  = '#3b82f6';
 const ALLTIME_COLOR = '#0d6efd';
 const REST_COLOR    = '#e9ecef';
 
@@ -913,8 +913,8 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) 
     const panel = document.getElementById(panelId);
     panel.innerHTML =
         `<div style="display:flex;justify-content:space-between;align-items:center;
-                     border-bottom:2px solid #0047B3;padding-bottom:4px;margin-bottom:5px;">
-            <strong style="font-size:.82rem;color:#0047B3;">${lbl}</strong>
+                     border-bottom:2px solid #3b82f6;padding-bottom:4px;margin-bottom:5px;">
+            <strong style="font-size:.82rem;color:#3b82f6;">${lbl}</strong>
             <span id="_closeCard_${panelId}"
                   style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;
                          border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
@@ -1127,7 +1127,7 @@ function buildChart() {
 ══════════════════════════════════════════════ */
 let barChart = null;
 
-const BAR_GRADIENT_COLOR = '#0047B3';
+const BAR_GRADIENT_COLOR = '#3b82f6';
 
 function getGlobalRows(xAxis) {
     if (xAxis === 'month')  return { rows: CD.month_stats,   key: 'month'     };
@@ -1231,7 +1231,7 @@ function buildBarChart() {
         });
         return { label: sName, data: _d, borderColor: BAR_GRADIENT_COLOR };
     }).filter(Boolean);
-    _tblShopRows.push({ label: 'Total (selected)', data: values, borderColor: '#1a3c8c', _isTotal: true });
+    _tblShopRows.push({ label: 'Total (selected)', data: values, borderColor: '#3b82f6', _isTotal: true });
     renderDataTable('barDataWrap', 'barDataCaption', xLabels, _tblShopRows, metric, xAxis === 'week');
 }
 
@@ -1463,7 +1463,7 @@ function renderOverviewTable() {
         return `<tr><td>${label}</td>
             <td class="text-end fw-bold">${fmtN(v, isAmt)}</td>
             <td class="text-end text-muted">${fmtN(t, isAmt)} <small>(${tLbl})</small></td>
-            <td class="text-end fw-bold" style="color:#0047b3;">${pctStr(v, t)}</td></tr>`;
+            <td class="text-end fw-bold" style="color:#3b82f6;">${pctStr(v, t)}</td></tr>`;
     }
     function divRow(lbl) {
         return `<tr><td colspan="4" style="background:#f0f4fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;
@@ -1650,7 +1650,7 @@ if (false) {
                 ctx.fillStyle = '#f8f9fa';
                 ctx.fillRect(0, 0, PX_W, CVS_H);
                 // top border
-                ctx.strokeStyle = '#0047B3';
+                ctx.strokeStyle = '#3b82f6';
                 ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(PX_W, 0); ctx.stroke();
 
@@ -1727,7 +1727,7 @@ if (false) {
                         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
 
                         // header
-                        ctx.fillStyle = '#1a3c8c'; ctx.fillRect(0, 0, PX_W, HH);
+                        ctx.fillStyle = '#3b82f6'; ctx.fillRect(0, 0, PX_W, HH);
                         ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
                         gThs.forEach((th, i) => {
                             const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
@@ -1760,7 +1760,7 @@ if (false) {
                                     const raw = td.textContent.trim(); if (!raw || raw === '—') return;
                                     const ml  = Math.max(4, Math.floor(cw(i)/7.5));
                                     const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
-                                    ctx.fillStyle = bld ? '#0d3a7a' : '#1a3c8c';
+                                    ctx.fillStyle = bld ? '#1d4ed8' : '#3b82f6';
                                     ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
                                     ctx.textAlign = i === 0 ? 'left' : 'right';
                                     ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);

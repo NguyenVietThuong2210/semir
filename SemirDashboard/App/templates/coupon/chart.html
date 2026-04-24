@@ -5,7 +5,7 @@
 {% block extra_css %}
 <style>
     :root {
-        --c-coupon: #1a3c8c;
+        --c-coupon: #3b82f6;
         --c-used: #198754;
         --c-amt: #f97316;
     }
@@ -91,7 +91,7 @@
     }
 
     .label-period {
-        background: rgba(26, 60, 140, .1);
+        background: rgba(59, 130, 246, .1);
         color: var(--primary);
     }
 
@@ -131,7 +131,7 @@
     }
 
     .shop-checklist .form-check:hover {
-        background: rgba(26, 60, 140, .06);
+        background: rgba(59, 130, 246, .06);
     }
 
     .shop-checklist .form-check:last-child {
@@ -154,7 +154,7 @@
     }
 
     .shop-checklist .avg-row {
-        background: rgba(26, 60, 140, .08);
+        background: rgba(59, 130, 246, .08);
         border-bottom: 2px solid #dee2e6 !important;
         border-radius: 5px;
         margin-bottom: .2rem;
@@ -1155,7 +1155,7 @@
             var checked = isCampaignActive(c);
 
             var lbl = document.createElement('label');
-            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#1a3c8c' : '#dee2e6') + ';background:' + (checked ? '#1a3c8c' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
+            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#3b82f6' : '#dee2e6') + ';background:' + (checked ? '#3b82f6' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
             lbl.title = pfxList.join(', ');
 
             var cb = document.createElement('input');
@@ -1163,11 +1163,11 @@
             cb.setAttribute('data-cpn-cb', '1');
             cb.dataset.cpnPfx = pfxVal;
             cb.checked = checked;
-            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#1a3c8c;';
+            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#3b82f6;';
             cb.addEventListener('change', function() {
-                lbl.style.background = cb.checked ? '#1a3c8c' : '#fff';
+                lbl.style.background = cb.checked ? '#3b82f6' : '#fff';
                 lbl.style.color = cb.checked ? '#fff' : '#212529';
-                lbl.style.borderColor = cb.checked ? '#1a3c8c' : '#dee2e6';
+                lbl.style.borderColor = cb.checked ? '#3b82f6' : '#dee2e6';
                 updateField();
             });
 
@@ -1266,7 +1266,7 @@
                     const ctx = cvs.getContext('2d');
                     ctx.fillStyle = '#f8f9fa';
                     ctx.fillRect(0, 0, PX_W, CVS_H);
-                    ctx.strokeStyle = '#1a3c8c'; ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2;
                     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(PX_W, 0); ctx.stroke();
                     datasets.forEach((ds, i) => {
                         const col = i % COLS, row = Math.floor(i / COLS);
@@ -1325,7 +1325,7 @@
                             ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
 
                             // header
-                            ctx.fillStyle = '#1a3c8c'; ctx.fillRect(0, 0, PX_W, HH);
+                            ctx.fillStyle = '#3b82f6'; ctx.fillRect(0, 0, PX_W, HH);
                             ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
                             gThs.forEach((th, i) => {
                                 const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
@@ -1357,7 +1357,7 @@
                                         const raw = td.textContent.trim(); if (!raw || raw === '—') return;
                                         const ml  = Math.max(4, Math.floor(cw(i)/7.5));
                                         const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
-                                        ctx.fillStyle = bld ? '#0d3a7a' : '#1a3c8c';
+                                        ctx.fillStyle = bld ? '#1d4ed8' : '#3b82f6';
                                         ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
                                         ctx.textAlign = i === 0 ? 'left' : 'right';
                                         ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);

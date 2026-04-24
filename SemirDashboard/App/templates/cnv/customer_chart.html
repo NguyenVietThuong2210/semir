@@ -4,7 +4,7 @@
 
 {% block extra_css %}
 <style>
-:root { --c-pos:#E53935; --c-cnv:#0047B3; --c-zalo:#2E7D32; --c-oa:#F57C00; }
+:root { --c-pos:#E53935; --c-cnv:#3b82f6; --c-zalo:#2E7D32; --c-oa:#F57C00; }
 
 /* ─── Filter bar ─── */
 .filter-card { background:#fff; border-radius:10px; }
@@ -47,7 +47,7 @@
 .shop-checklist .form-check-input { cursor:pointer; width:1.1em; height:1.1em; margin-top:.15em; float:none; margin-left:0; }
 .shop-checklist .form-check-label { cursor:pointer; width:100%; font-size:.85rem; }
 .shop-checklist .avg-row {
-    background:rgba(26,60,140,0.08); border-bottom:2px solid #dee2e6 !important;
+    background:rgba(59,130,246,0.08); border-bottom:2px solid #dee2e6 !important;
     border-radius:5px; margin-bottom:.2rem;
 }
 .shop-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:4px; flex-shrink:0; }
@@ -630,8 +630,8 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) 
     const panel = document.getElementById(panelId);
     panel.innerHTML =
         `<div style="display:flex;justify-content:space-between;align-items:center;
-                     border-bottom:2px solid #0047B3;padding-bottom:4px;margin-bottom:5px;">
-            <strong style="font-size:.82rem;color:#0047B3;">${lbl}</strong>
+                     border-bottom:2px solid #3b82f6;padding-bottom:4px;margin-bottom:5px;">
+            <strong style="font-size:.82rem;color:#3b82f6;">${lbl}</strong>
             <span id="_closeCard_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;
                   padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
          </div>` +
@@ -876,7 +876,7 @@ document.getElementById('btnSelTop5').addEventListener('click', () => {
    SECTION 3: PERIOD TOTALS — Bar chart (sum selected shops)
 ══════════════════════════════════════════════ */
 let barChart = null;
-const BAR_COLOR = '#0047B3';
+const BAR_COLOR = '#3b82f6';
 
 function buildBarChart() {
     sortChecklistAlpha('barShopChecklist');
@@ -960,7 +960,7 @@ function buildBarChart() {
         });
         return { label: sName, data: d, borderColor: BAR_COLOR };
     }).filter(Boolean);
-    tblRows.push({ label: 'Total (selected)', data: values, borderColor: '#1a3c8c', _isTotal: true });
+    tblRows.push({ label: 'Total (selected)', data: values, borderColor: '#3b82f6', _isTotal: true });
     renderDataTable('barDataWrap', 'barDataCaption', xLabels, tblRows, metric, xAxis === 'week');
 }
 
