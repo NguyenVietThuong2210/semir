@@ -4,30 +4,18 @@
 
 {% block extra_css %}
 <style>
+    .dark-tabs { border-bottom: none; }
     .dark-tabs .nav-link {
-        background: var(--primary);
-        color: rgba(255,255,255,.8);
-        border: 1px solid var(--primary-hover);
+        background: rgba(255,255,255,.08);
+        color: rgba(255,255,255,.85);
+        border: 1px solid rgba(255,255,255,.15);
         border-radius: 6px 6px 0 0;
         margin-right: 3px;
         font-weight: 500;
-        font-size: .9rem;
+        font-size: .88rem;
     }
-
-    .dark-tabs .nav-link:hover {
-        background: var(--primary-hover);
-        color: #fff;
-    }
-
-    .dark-tabs .nav-link.active {
-        background: var(--primary);
-        color: #fff;
-        border-color: var(--primary);
-    }
-
-    .dark-tabs {
-        border-bottom: none;
-    }
+    .dark-tabs .nav-link:hover  { background: rgba(255,255,255,.18); color: #fff; }
+    .dark-tabs .nav-link.active { background: #fff; color: var(--nav-bg); border-color: #fff; font-weight: 600; }
 
     .stat-card {
         min-height: 120px;
@@ -63,7 +51,7 @@
     }
 
     td.c-gray {
-        background: #f0f2f5 !important;
+        background: var(--gray-tint) !important;
         color: #000 !important;
     }
 
@@ -77,38 +65,14 @@
         color: #fff !important;
     }
 
-    .tbl-hdr-used {
-        background: var(--success) !important;
-        color: #fff !important;
-    }
-
-    .tbl-hdr-cnv {
-        background: var(--orange) !important;
-        color: #fff !important;
-    }
-
-    .tbl-hdr-pct {
-        background: var(--primary) !important;
-        color: #fff !important;
-    }
-
-    .tbl-hdr-pct2 {
-        background: var(--accent) !important;
-        color: #fff !important;
-    }
-
-    .tbl-hdr-amt {
-        background: var(--success) !important;
-        color: #fff !important;
-    }
-
-    .tbl-hdr-gray {
-        background: var(--primary) !important;
-        color: #fff !important;
-    }
-
+    .tbl-hdr-used,
+    .tbl-hdr-cnv,
+    .tbl-hdr-pct,
+    .tbl-hdr-pct2,
+    .tbl-hdr-amt,
+    .tbl-hdr-gray,
     .tbl-hdr-red {
-        background: var(--success) !important;
+        background: var(--primary) !important;
         color: #fff !important;
     }
 
@@ -212,7 +176,7 @@
         <div class="mt-2 pt-2 border-top" id="cpnFilterRow" style="display:none">
             <small class="text-muted d-block mb-1"><i class="bi bi-tags"></i> Filter by Campaign:</small>
             <div id="cpnFilterList"
-                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:.4rem .5rem;background:#fafbfc;">
+                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:.4rem .5rem;background:var(--bg);">
             </div>
         </div>
 
@@ -432,7 +396,7 @@
                             <td><strong>{{ s.shop_name }}</strong></td>
                             <td class="text-end c-green"><strong>{{ s.used }}</strong></td>
                             <td class="text-end c-blue">
-                                <span class="badge" style="background:var(--accent)">{{ s.used_pct_of_used }}%</span>
+                                <span class="badge" style="background:var(--primary)">{{ s.used_pct_of_used }}%</span>
                             </td>
                             <td class="text-end cell-cnv amount-vnd">{{ s.coupon_amount|vnd }} VND</td>
                             <td class="text-end c-amber amount-vnd">{{ s.total_amount|vnd }} VND</td>
@@ -567,15 +531,15 @@
         // "Clear all" link
         var clearA = document.createElement('a');
         clearA.href = '#';
-        clearA.style.cssText = 'font-size:.8rem;color:#6c757d;text-decoration:none;margin-right:4px;align-self:center;';
+        clearA.style.cssText = 'font-size:.8rem;color:var(--text-muted);text-decoration:none;margin-right:4px;align-self:center;';
         clearA.textContent = 'Clear all';
         clearA.addEventListener('click', function(e) {
             e.preventDefault();
             list.querySelectorAll('input[data-cpn-cb]').forEach(function(cb) {
                 cb.checked = false;
-                cb.closest('label').style.background = '#fff';
-                cb.closest('label').style.color = '#212529';
-                cb.closest('label').style.borderColor = '#dee2e6';
+                cb.closest('label').style.background = 'var(--bg-light)';
+                cb.closest('label').style.color = 'var(--text-dark)';
+                cb.closest('label').style.borderColor = 'var(--border)';
             });
             fld.value = '';
         });
@@ -587,7 +551,7 @@
             var checked = isCampaignActive(c);
 
             var lbl = document.createElement('label');
-            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? 'var(--primary)' : 'var(--border)') + ';background:' + (checked ? 'var(--primary)' : '#fff') + ';color:' + (checked ? '#fff' : 'var(--text)') + ';user-select:none;';
+            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? 'var(--primary)' : 'var(--border)') + ';background:' + (checked ? 'var(--primary)' : 'var(--bg-light)') + ';color:' + (checked ? 'var(--bg-light)' : 'var(--text)') + ';user-select:none;';
             lbl.title = pfxList.join(', ');
 
             var cb = document.createElement('input');
@@ -597,8 +561,8 @@
             cb.checked = checked;
             cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:var(--primary);';
             cb.addEventListener('change', function() {
-                lbl.style.background = cb.checked ? 'var(--primary)' : '#fff';
-                lbl.style.color = cb.checked ? '#fff' : 'var(--text)';
+                lbl.style.background = cb.checked ? 'var(--primary)' : 'var(--bg-light)';
+                lbl.style.color = cb.checked ? 'var(--bg-light)' : 'var(--text)';
                 lbl.style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
                 updateField();
             });

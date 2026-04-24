@@ -1,6 +1,6 @@
 # SemirDashboard — Full Project Analysis
 
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-04-24
 **Status:** Current & accurate
 
 ---
@@ -16,6 +16,7 @@
 | How does CNV sync work? | [project_cnv.md](project_cnv.md) |
 | What URLs exist? | [project_urls.md](project_urls.md) |
 | What permissions/business rules exist? | [project_business_logic.md](project_business_logic.md) |
+| UI design system, tokens, color rules | [project_ui.md](project_ui.md) |
 | Snapshot test checklist | [SNAPSHOT_CHECKLIST.md](SNAPSHOT_CHECKLIST.md) |
 | Post-deployment tasks | [NEXT.md](NEXT.md) |
 

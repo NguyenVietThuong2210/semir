@@ -16,17 +16,19 @@
     margin-bottom: 1rem;
 }
 .table-header {
-    background: var(--bg-light);
+    background: var(--primary);
     padding: 0.75rem 1rem;
-    border-bottom: 2px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
-.table-header h6 { margin:0; font-weight:600; color:#212529; }
+.table-header h6 { margin:0; font-weight:600; color:#fff; }
 .expand-btn {
-    background: white;
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.3);
+    color: #fff;
     padding: 0.25rem 0.75rem;
     border-radius: 4px;
     font-size: 0.875rem;
@@ -40,7 +42,7 @@
 .table-scroll thead th {
     position: sticky; top:0; z-index:2;
     background-color: var(--primary) !important;
-    color: #e2e8f0 !important;
+    color: #fff !important;
     box-shadow: inset 0 -2px 0 rgba(255,255,255,.15);
     font-weight:600; letter-spacing:.03em;
 }
@@ -97,7 +99,7 @@
 
 .badge-level-diamond { background-color:var(--cnv-purple) !important; color:#fff; }
 .badge-level-gold    { background-color:var(--orange) !important; color:#fff; }
-.badge-level-silver  { background-color:#94a3b8 !important; color:#fff; }
+.badge-level-silver  { background-color:var(--silver) !important; color:#fff; }
 .badge-level-member  { background-color:var(--primary) !important; color:#fff; }
 .badge-level-vip0    { background-color:var(--text-muted) !important; color:#fff; }
 .badge-level-vip1    { background-color:var(--primary) !important; color:#fff; }
@@ -109,9 +111,9 @@
 .diff-negative { color:var(--text); font-weight:600; }
 .pts-highlight { color:var(--text); font-weight:700; }
 
-.dark-tabs .nav-link { background:var(--primary); color:rgba(255,255,255,.8); border-radius:4px 4px 0 0; margin-right:2px; }
-.dark-tabs .nav-link:hover  { background:var(--primary-hover); color:#fff; }
-.dark-tabs .nav-link.active { background:var(--primary); color:#fff; border-color:var(--primary); border-bottom:2px solid var(--accent); }
+.dark-tabs .nav-link { background:rgba(255,255,255,.08); color:rgba(255,255,255,.85); border:1px solid rgba(255,255,255,.15); border-radius:6px 6px 0 0; margin-right:3px; font-weight:500; font-size:.88rem; }
+.dark-tabs .nav-link:hover  { background:rgba(255,255,255,.18); color:#fff; }
+.dark-tabs .nav-link.active { background:#fff; color:var(--nav-bg); border-color:#fff; font-weight:600; }
 .dark-tabs { border-bottom:none; }
 
 /* Zalo table — 10 cols */
@@ -208,22 +210,22 @@
 <!-- ALL-TIME METRICS -->
 <p class="text-muted small mb-1 fw-semibold text-uppercase"><i class="bi bi-infinity"></i> All-Time Overview</p>
 <div class="row row-cols-2 row-cols-md-4 g-2 mb-2">
-    <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
+    <div class="col"><div class="stat-card card border-0 shadow-sm"><div class="card-body">
         <div class="stat-label opacity-75">Total Customers (POS System)</div>
         <div class="stat-value">{{ total_pos|default:0 }}</div>
         <small class="opacity-75">In POS system</small>
     </div></div></div>
-    <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
+    <div class="col"><div class="stat-card card border-0 shadow-sm"><div class="card-body">
         <div class="stat-label opacity-75">Total CNV Customers</div>
         <div class="stat-value">{{ total_cnv|default:0 }}</div>
         <small class="opacity-75">In CNV Loyalty</small>
     </div></div></div>
-    <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
+    <div class="col"><div class="stat-card card border-0 shadow-sm"><div class="card-body">
         <div class="stat-label opacity-75">POS Only (Not in CNV)</div>
         <div class="stat-value">{{ pos_only_all_count|default:0 }}</div>
         <small class="opacity-75">By phone number</small>
     </div></div></div>
-    <div class="col"><div class="stat-card card bg-primary bg-gradient text-white border-0"><div class="card-body">
+    <div class="col"><div class="stat-card card border-0 shadow-sm"><div class="card-body">
         <div class="stat-label opacity-75">CNV Only (Not in POS)</div>
         <div class="stat-value">{{ cnv_only_all_count|default:0 }}</div>
         <small class="opacity-75">By phone number</small>
@@ -233,22 +235,22 @@
 {% if has_filter %}
 <p class="text-muted small mb-1 mt-3 fw-semibold text-uppercase"><i class="bi bi-calendar-range"></i> Period Overview ({{ period_label }})</p>
 <div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
-    <div class="col"><div class="stat-card card text-white border-0" style="background:var(--primary)"><div class="card-body">
+    <div class="col"><div class="stat-card card border-0 shadow-sm" style="background:rgba(var(--primary-rgb),.09)"><div class="card-body">
         <div class="stat-label opacity-75">New Customers (POS)</div>
         <div class="stat-value">{{ new_pos_count|default:0 }}</div>
         <small class="opacity-75"><span class="text-success fw-semibold">{{ new_pos_inv_count|default:0 }}</span> NEW (INV) · <span class="text-warning fw-semibold">{{ new_pos_no_inv_count|default:0 }}</span> NEW (NO INV)</small>
     </div></div></div>
-    <div class="col"><div class="stat-card card text-white border-0" style="background:var(--primary)"><div class="card-body">
+    <div class="col"><div class="stat-card card border-0 shadow-sm" style="background:rgba(var(--primary-rgb),.09)"><div class="card-body">
         <div class="stat-label opacity-75">New CNV Customers</div>
         <div class="stat-value">{{ new_cnv_count|default:0 }}</div>
         <small class="opacity-75">Registered in period</small>
     </div></div></div>
-    <div class="col"><div class="stat-card card text-white border-0" style="background:var(--primary)"><div class="card-body">
+    <div class="col"><div class="stat-card card border-0 shadow-sm" style="background:rgba(var(--primary-rgb),.09)"><div class="card-body">
         <div class="stat-label opacity-75">New POS Only (Period)</div>
         <div class="stat-value">{{ pos_only_period_count|default:0 }}</div>
         <small class="opacity-75">Not in CNV</small>
     </div></div></div>
-    <div class="col"><div class="stat-card card text-white border-0" style="background:var(--primary)"><div class="card-body">
+    <div class="col"><div class="stat-card card border-0 shadow-sm" style="background:rgba(var(--primary-rgb),.09)"><div class="card-body">
         <div class="stat-label opacity-75">New CNV Only (Period)</div>
         <div class="stat-value">{{ cnv_only_period_count|default:0 }}</div>
         <small class="opacity-75">Not in POS</small>
@@ -498,7 +500,7 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
                 row.style.opacity = '1';
 
                 if (!result || result.status !== 'ok') {
-                    row.style.background = '#fff3cd'; // yellow = warning
+                    row.style.background = 'var(--highlight-warn)'; // yellow = warning
                     return;
                 }
 
@@ -525,7 +527,7 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
                     const diff = result.total_points - (posP - posUsed);
                     cells[12].innerHTML = `<span class="${diff > 0 ? 'diff-positive' : 'diff-negative'}">${diff > 0 ? '+' : ''}${diff}</span>`;
                 }
-                row.style.background = '#f0fdf4'; // green = success
+                row.style.background = 'var(--highlight-ok)'; // green = success
             });
 
             // Count results

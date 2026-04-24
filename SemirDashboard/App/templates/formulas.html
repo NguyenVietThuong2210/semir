@@ -5,7 +5,7 @@
 <style>
 .formula-card { border-left: 4px solid var(--primary); }
 .formula-code { background: var(--bg-light); padding: 1rem; border-radius: 6px; font-family: 'Courier New', monospace; }
-.example-box { background: #eef3fb; border-left: 3px solid var(--accent); padding: 1rem; margin: 1rem 0; }
+.example-box { background: var(--example-bg); border-left: 3px solid var(--accent); padding: 1rem; margin: 1rem 0; }
 .def-term { font-weight: 600; color: var(--text); }
 .formula-math { font-size: 1.05rem; color: var(--text); font-weight: 500; }
 </style>
@@ -93,15 +93,15 @@
         <div class="formula-code">
             <strong>Complete Formula:</strong><br><br>
             
-            <span style="color: #0066CC;">IF</span> first_purchase_date == registration_date:<br>
+            <span style="color:var(--code-keyword)">IF</span> first_purchase_date == registration_date:<br>
             &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases - 1<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #666;"># First invoice on reg day = first visit (NOT a return)</span><br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #666;"># All subsequent invoices = return visits</span><br><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--code-comment)"># First invoice on reg day = first visit (NOT a return)</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--code-comment)"># All subsequent invoices = return visits</span><br><br>
             
-            <span style="color: #0066CC;">ELSE</span> (first_purchase_date != registration_date OR no reg date):<br>
+            <span style="color:var(--code-keyword)">ELSE</span> (first_purchase_date != registration_date OR no reg date):<br>
             &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #666;"># Customer already visited to register</span><br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #666;"># ALL purchases = return visits</span><br><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--code-comment)"># Customer already visited to register</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--code-comment)"># ALL purchases = return visits</span><br><br>
             
             is_returning = (return_visits > 0)<br>
             <strong>Note:</strong> We count INVOICES, not unique days
