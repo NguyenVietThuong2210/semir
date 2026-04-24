@@ -5,9 +5,9 @@
 {% block extra_css %}
 <style>
     .dark-tabs .nav-link {
-        background: #2c3e50;
-        color: #bdc3c7;
-        border: 1px solid #1a252f;
+        background: var(--primary);
+        color: rgba(255,255,255,.8);
+        border: 1px solid #152d6e;
         border-radius: 6px 6px 0 0;
         margin-right: 3px;
         font-weight: 500;
@@ -15,14 +15,14 @@
     }
 
     .dark-tabs .nav-link:hover {
-        background: #34495e;
-        color: #ecf0f1;
+        background: var(--primary-hover);
+        color: #fff;
     }
 
     .dark-tabs .nav-link.active {
-        background: #366092;
+        background: var(--primary);
         color: #fff;
-        border-color: #366092;
+        border-color: var(--primary);
     }
 
     .dark-tabs {
@@ -68,12 +68,12 @@
     }
 
     td.c-blue {
-        background: rgba(13, 110, 253, .07) !important;
+        background: rgba(26, 60, 140, .07) !important;
         color: #000 !important;
     }
 
     .tbl-hdr-shop {
-        background: #366092 !important;
+        background: var(--primary) !important;
         color: #fff !important;
     }
 
@@ -88,7 +88,7 @@
     }
 
     .tbl-hdr-pct {
-        background: #0d6efd !important;
+        background: var(--primary) !important;
         color: #fff !important;
     }
 
@@ -103,7 +103,7 @@
     }
 
     .tbl-hdr-gray {
-        background: #366092 !important;
+        background: var(--primary) !important;
         color: #fff !important;
     }
 
@@ -114,7 +114,7 @@
 
     /* Row cell background tints */
     td.cell-shop {
-        background: rgba(54, 96, 146, .07) !important;
+        background: rgba(26, 60, 140, .07) !important;
     }
 
     td.cell-used {
@@ -291,8 +291,8 @@
     <div class="col-6 col-md-3 d-flex">
         <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(255,193,7,.1)">
             <div class="card-body">
-                <div class="stat-label" style="color:var(--highlight)">Total Coupon Amount (All Time)</div>
-                <div class="stat-value amount-vnd" style="color:var(--highlight);font-size:1.15rem">
+                <div class="stat-label" style="color:var(--primary)">Total Coupon Amount (All Time)</div>
+                <div class="stat-value amount-vnd" style="color:var(--primary);font-size:1.15rem;font-weight:700">
                     {{ s.total_coupon_amount|vnd }} VND
                 </div>
                 <small class="text-muted">Actual discount value</small>
@@ -300,10 +300,10 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(13,110,253,.07)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(26,60,140,.07)">
             <div class="card-body">
-                <div class="stat-label" style="color:#0d6efd">Unique Invoice Amount (All Time)</div>
-                <div class="stat-value amount-vnd" style="color:#0d6efd;font-size:1.15rem">
+                <div class="stat-label" style="color:var(--primary)">Unique Invoice Amount (All Time)</div>
+                <div class="stat-value amount-vnd" style="color:var(--primary);font-size:1.15rem;font-weight:700">
                     {{ s.unique_invoice_amount|vnd }} VND
                 </div>
                 <small class="text-muted">Excl. {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
@@ -360,8 +360,8 @@
     <div class="col-6 col-md-3 d-flex">
         <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(255,193,7,.1)">
             <div class="card-body">
-                <div class="stat-label" style="color:var(--highlight)">Total Coupon Amount (Period)</div>
-                <div class="stat-value amount-vnd" style="color:var(--highlight);font-size:1.15rem">
+                <div class="stat-label" style="color:var(--primary)">Total Coupon Amount (Period)</div>
+                <div class="stat-value amount-vnd" style="color:var(--primary);font-size:1.15rem;font-weight:700">
                     {{ s.total_coupon_amount|vnd }} VND
                 </div>
                 <small class="text-muted">Actual discount value</small>
@@ -369,10 +369,10 @@
         </div>
     </div>
     <div class="col-6 col-md-3 d-flex">
-        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(13,110,253,.07)">
+        <div class="card stat-card w-100 border-0 shadow-sm" style="background:rgba(26,60,140,.07)">
             <div class="card-body">
-                <div class="stat-label" style="color:#0d6efd">Unique Invoice Amount (Period)</div>
-                <div class="stat-value amount-vnd" style="color:#0d6efd;font-size:1.15rem">
+                <div class="stat-label" style="color:var(--primary)">Unique Invoice Amount (Period)</div>
+                <div class="stat-value amount-vnd" style="color:var(--primary);font-size:1.15rem;font-weight:700">
                     {{ s.unique_invoice_amount|vnd }} VND
                 </div>
                 <small class="text-muted">Excl. {{ s.duplicate_invoice_count }} duplicate invoice{{ s.duplicate_invoice_count|pluralize }}</small>
@@ -384,7 +384,7 @@
 
 <!-- TABS -->
 <div class="card mb-4">
-    <div class="card-header p-0 border-0" style="background:#1a252f">
+    <div class="card-header p-0 border-0" style="background:var(--nav-bg)">
         <ul class="nav dark-tabs px-3 pt-2" id="couponTabs" role="tablist">
             <li class="nav-item">
                 <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#shopTab" type="button">
@@ -587,7 +587,7 @@
             var checked = isCampaignActive(c);
 
             var lbl = document.createElement('label');
-            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#0d6efd' : '#dee2e6') + ';background:' + (checked ? '#0d6efd' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
+            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#1a3c8c' : '#dee2e6') + ';background:' + (checked ? '#1a3c8c' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
             lbl.title = pfxList.join(', ');
 
             var cb = document.createElement('input');
@@ -595,11 +595,11 @@
             cb.setAttribute('data-cpn-cb', '1');
             cb.dataset.cpnPfx = pfxVal;
             cb.checked = checked;
-            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#0d6efd;';
+            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#1a3c8c;';
             cb.addEventListener('change', function() {
-                lbl.style.background = cb.checked ? '#0d6efd' : '#fff';
+                lbl.style.background = cb.checked ? '#1a3c8c' : '#fff';
                 lbl.style.color = cb.checked ? '#fff' : '#212529';
-                lbl.style.borderColor = cb.checked ? '#0d6efd' : '#dee2e6';
+                lbl.style.borderColor = cb.checked ? '#1a3c8c' : '#dee2e6';
                 updateField();
             });
 

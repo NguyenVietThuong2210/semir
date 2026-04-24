@@ -112,7 +112,7 @@
 .tbl-toggle-btn .bi-chevron-down { transition:transform .2s ease; }
 .tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform:rotate(180deg); }
 /* sticky first column */
-.chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:#2c3e50;box-shadow:2px 0 4px rgba(0,0,0,.12); }
+.chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:var(--primary);box-shadow:2px 0 4px rgba(0,0,0,.12); }
 .chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
 /* column highlight on chart click */
 .tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
@@ -1231,7 +1231,7 @@ function buildBarChart() {
         });
         return { label: sName, data: _d, borderColor: BAR_GRADIENT_COLOR };
     }).filter(Boolean);
-    _tblShopRows.push({ label: 'Total (selected)', data: values, borderColor: '#2c3e50', _isTotal: true });
+    _tblShopRows.push({ label: 'Total (selected)', data: values, borderColor: '#1a3c8c', _isTotal: true });
     renderDataTable('barDataWrap', 'barDataCaption', xLabels, _tblShopRows, metric, xAxis === 'week');
 }
 
@@ -1469,7 +1469,7 @@ function renderOverviewTable() {
         return `<tr><td colspan="4" style="background:#f0f4fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;
     }
     let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
-        <thead><tr style="background:#2c3e50;color:#fff;">
+        <thead><tr style="background:var(--primary);color:#fff;">
             <th>Metric</th><th class="text-end">Value</th><th class="text-end">Reference</th><th class="text-end">Rate</th>
         </tr></thead><tbody>` +
         divRow('Customer Metrics') +
@@ -1518,7 +1518,7 @@ function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, e
     const n = xLabels.length;
     const minW = isWeek && n > 0 ? 'min-width:' + Math.max(5, Math.floor(70 / n)) + '%;' : 'min-width:70px;';
     let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
-        <thead><tr style="background:#2c3e50;color:#fff;">
+        <thead><tr style="background:var(--primary);color:#fff;">
             <th style="min-width:140px;">${entityLabel}</th>`;
     xLabels.forEach(lbl => {
         html += `<th style="${minW}text-align:center;">${lbl}</th>`;
@@ -1727,7 +1727,7 @@ if (false) {
                         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
 
                         // header
-                        ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 0, PX_W, HH);
+                        ctx.fillStyle = '#1a3c8c'; ctx.fillRect(0, 0, PX_W, HH);
                         ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
                         gThs.forEach((th, i) => {
                             const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
@@ -1760,7 +1760,7 @@ if (false) {
                                     const raw = td.textContent.trim(); if (!raw || raw === '—') return;
                                     const ml  = Math.max(4, Math.floor(cw(i)/7.5));
                                     const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
-                                    ctx.fillStyle = bld ? '#0d3a7a' : '#2c3e50';
+                                    ctx.fillStyle = bld ? '#0d3a7a' : '#1a3c8c';
                                     ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
                                     ctx.textAlign = i === 0 ? 'left' : 'right';
                                     ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);

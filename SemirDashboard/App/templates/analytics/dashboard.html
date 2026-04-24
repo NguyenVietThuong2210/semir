@@ -16,7 +16,7 @@
 
 /* Period Metrics */
 .period-metrics .stat-card {
-    background: #0047B3;
+    background: var(--primary);
     color: white;
     border: none;
 }
@@ -25,27 +25,27 @@
     color: white;
 }
 
-/* All-Time Metrics */
+/* All-Time Metrics — warm orange to contrast with cool Period navy */
 .alltime-metrics .stat-card {
-    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
-    color: white;
+    background: var(--orange);
+    color: var(--text);
     border: none;
 }
 .alltime-metrics .stat-card .stat-label,
 .alltime-metrics .stat-card .stat-value {
-    color: white;
+    color: var(--text);
 }
 
 /* Period Metrics - Total Invoices/Amount (wider cards) */
 .stat-card-wide { min-height:110px; }
 
 .dark-tabs .nav-link {
-    background:#2c3e50; color:#bdc3c7;
-    border:1px solid #1a252f; border-radius:6px 6px 0 0;
+    background:#3d5a99; color:rgba(255,255,255,.8);
+    border:1px solid #2d4580; border-radius:6px 6px 0 0;
     margin-right:3px; font-weight:500; font-size:.88rem;
 }
-.dark-tabs .nav-link:hover  { background:#34495e; color:#ecf0f1; }
-.dark-tabs .nav-link.active { background:#366092; color:#fff; border-color:#366092; }
+.dark-tabs .nav-link:hover  { background:#4a6ab3; color:#fff; }
+.dark-tabs .nav-link.active { background:var(--primary); color:#fff; border-color:var(--primary); }
 .dark-tabs { border-bottom:none; }
 
 td.c-green { background:rgba(25,135,84,.08)!important;  color:#000!important; }
@@ -396,7 +396,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 
 <!-- ANALYSIS TABS -->
 <div class="card mb-4">
-    <div class="card-header p-0 border-0" style="background:#1a252f">
+    <div class="card-header p-0 border-0" style="background:var(--nav-bg)">
         <ul class="nav dark-tabs px-3 pt-2 flex-wrap" id="analysisTabs" role="tablist">
             <li class="nav-item">
                 <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#gradeTab" type="button">
@@ -567,7 +567,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
 <!-- BUYER WITHOUT INFO SECTION - Simple blue headers -->
 <!-- ============================================================================ -->
 <div class="card mb-4">
-    <div class="card-header" style="background-color: #366092; color: white;">
+    <div class="card-header" style="background-color: var(--primary); color: white;">
         <i class="bi bi-question-circle"></i> Buyer Without Info (VIP ID = 0)
         <span class="badge bg-dark float-end">Excluded from Customer Metrics</span>
     </div>
@@ -578,7 +578,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <!-- Period Summary -->
             <div class="col-md-6">
                 <div class="card border">
-                    <div class="card-header" style="background-color: #366092; color: white;">
+                    <div class="card-header" style="background-color: var(--primary); color: white;">
                         <h6 class="mb-0"><i class="bi bi-calendar-range"></i> Period Summary</h6>
                     </div>
                     <div class="card-body">
@@ -599,7 +599,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
             <!-- All-Time Summary -->
             <div class="col-md-6">
                 <div class="card border">
-                    <div class="card-header" style="background-color: #366092; color: white;">
+                    <div class="card-header" style="background-color: var(--primary); color: white;">
                         <h6 class="mb-0"><i class="bi bi-clock-history"></i> All-Time Summary</h6>
                     </div>
                     <div class="card-body">
@@ -620,7 +620,7 @@ td.c-amber { background:rgba(255,193,7,.12)!important;   color:#000!important; }
         
         <!-- By Shop Breakdown -->
         <div class="card">
-            <div class="card-header" style="background-color: #366092; color: white;">
+            <div class="card-header" style="background-color: var(--primary); color: white;">
                 <i class="bi bi-shop"></i> By Shop Breakdown (Period)
             </div>
             <div class="card-body p-0">

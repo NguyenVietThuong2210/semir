@@ -5,9 +5,9 @@
 {% block extra_css %}
 <style>
     :root {
-        --c-coupon: #6F42C1;
+        --c-coupon: #1a3c8c;
         --c-used: #198754;
-        --c-amt: #0d6efd;
+        --c-amt: #f97316;
     }
 
     .filter-card {
@@ -91,13 +91,13 @@
     }
 
     .label-period {
-        background: rgba(111, 66, 193, .1);
-        color: #6F42C1;
+        background: rgba(26, 60, 140, .1);
+        color: var(--primary);
     }
 
     .label-alltime {
-        background: rgba(13, 110, 253, .1);
-        color: #0047B3;
+        background: rgba(249, 115, 22, .12);
+        color: #c2410c;
     }
 
     /* Trend section */
@@ -131,7 +131,7 @@
     }
 
     .shop-checklist .form-check:hover {
-        background: rgba(111, 66, 193, .06);
+        background: rgba(26, 60, 140, .06);
     }
 
     .shop-checklist .form-check:last-child {
@@ -154,7 +154,7 @@
     }
 
     .shop-checklist .avg-row {
-        background: rgba(111, 66, 193, .08);
+        background: rgba(26, 60, 140, .08);
         border-bottom: 2px solid #dee2e6 !important;
         border-radius: 5px;
         margin-bottom: .2rem;
@@ -209,7 +209,7 @@
     .tbl-toggle-btn .bi-chevron-down { transition: transform .2s ease; }
     .tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform: rotate(180deg); }
     /* sticky first column */
-    .chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:#2c3e50;box-shadow:2px 0 4px rgba(0,0,0,.12); }
+    .chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:var(--primary);box-shadow:2px 0 4px rgba(0,0,0,.12); }
     .chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
     /* column highlight on chart click */
     .tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
@@ -672,8 +672,8 @@
         const total = rows.reduce((s, r) => s + r.value, 0);
         const el = document.getElementById(panelId);
         el.innerHTML =
-            `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #6F42C1;padding-bottom:4px;margin-bottom:5px;">
-                <strong style="font-size:.82rem;color:#6F42C1;">${lbl}</strong>
+            `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--primary);padding-bottom:4px;margin-bottom:5px;">
+                <strong style="font-size:.82rem;color:var(--primary);">${lbl}</strong>
                 <span id="_closeCard_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
              </div>` +
             rows.map(r =>
@@ -946,13 +946,13 @@
             return `<tr><td>${label}</td>
                 <td class="text-end fw-bold">${fmtN(v, isAmt)}</td>
                 <td class="text-end text-muted">${fmtN(t, isAmt)} <small>(${tLbl})</small></td>
-                <td class="text-end fw-bold" style="color:#ffc107;">${pctStr(v, t)}</td></tr>`;
+                <td class="text-end fw-bold" style="color:var(--primary);">${pctStr(v, t)}</td></tr>`;
         }
         function divRow(lbl) {
             return `<tr><td colspan="4" style="background:#f5f0fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;
         }
         let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
-            <thead><tr style="background:#2c3e50;color:#fff;">
+            <thead><tr style="background:var(--primary);color:#fff;">
                 <th>Metric</th><th class="text-end">Value</th><th class="text-end">Reference</th><th class="text-end">Rate</th>
             </tr></thead><tbody>` +
             divRow('All Time') +
@@ -976,7 +976,7 @@
         const n = xLabels.length;
         const minW = isWeek && n > 0 ? 'min-width:' + Math.max(5, Math.floor(70 / n)) + '%;' : 'min-width:70px;';
         let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
-            <thead><tr style="background:#2c3e50;color:#fff;">
+            <thead><tr style="background:var(--primary);color:#fff;">
                 <th style="min-width:140px;">${entityLabel}</th>`;
         xLabels.forEach(lbl => {
             html += `<th style="${minW}text-align:center;">${lbl}</th>`;
@@ -1155,7 +1155,7 @@
             var checked = isCampaignActive(c);
 
             var lbl = document.createElement('label');
-            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#0d6efd' : '#dee2e6') + ';background:' + (checked ? '#0d6efd' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
+            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? '#1a3c8c' : '#dee2e6') + ';background:' + (checked ? '#1a3c8c' : '#fff') + ';color:' + (checked ? '#fff' : '#212529') + ';user-select:none;';
             lbl.title = pfxList.join(', ');
 
             var cb = document.createElement('input');
@@ -1163,11 +1163,11 @@
             cb.setAttribute('data-cpn-cb', '1');
             cb.dataset.cpnPfx = pfxVal;
             cb.checked = checked;
-            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#0d6efd;';
+            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:#1a3c8c;';
             cb.addEventListener('change', function() {
-                lbl.style.background = cb.checked ? '#0d6efd' : '#fff';
+                lbl.style.background = cb.checked ? '#1a3c8c' : '#fff';
                 lbl.style.color = cb.checked ? '#fff' : '#212529';
-                lbl.style.borderColor = cb.checked ? '#0d6efd' : '#dee2e6';
+                lbl.style.borderColor = cb.checked ? '#1a3c8c' : '#dee2e6';
                 updateField();
             });
 
@@ -1266,7 +1266,7 @@
                     const ctx = cvs.getContext('2d');
                     ctx.fillStyle = '#f8f9fa';
                     ctx.fillRect(0, 0, PX_W, CVS_H);
-                    ctx.strokeStyle = '#6F42C1'; ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#1a3c8c'; ctx.lineWidth = 2;
                     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(PX_W, 0); ctx.stroke();
                     datasets.forEach((ds, i) => {
                         const col = i % COLS, row = Math.floor(i / COLS);
@@ -1325,7 +1325,7 @@
                             ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
 
                             // header
-                            ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 0, PX_W, HH);
+                            ctx.fillStyle = '#1a3c8c'; ctx.fillRect(0, 0, PX_W, HH);
                             ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
                             gThs.forEach((th, i) => {
                                 const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
@@ -1357,7 +1357,7 @@
                                         const raw = td.textContent.trim(); if (!raw || raw === '—') return;
                                         const ml  = Math.max(4, Math.floor(cw(i)/7.5));
                                         const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
-                                        ctx.fillStyle = bld ? '#0d3a7a' : '#2c3e50';
+                                        ctx.fillStyle = bld ? '#0d3a7a' : '#1a3c8c';
                                         ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
                                         ctx.textAlign = i === 0 ? 'left' : 'right';
                                         ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);
