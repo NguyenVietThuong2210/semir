@@ -5,7 +5,7 @@
 
 {% block extra_css %}
 <style>
-:root { --c-period:#3b82f6; --c-alltime:#0d6efd; }
+:root { --c-period:#0ea5e9; --c-alltime:#0d6efd; }
 
 /* ─── Filter bar ─── */
 .filter-card { background:#fff; border-radius:10px; }
@@ -34,7 +34,7 @@
     pointer-events:none; text-align:center; line-height:1.15;
 }
 .donut-pct {
-    font-size:1.35rem; font-weight:700; color:#2C3E50; display:block;
+    font-size:1.35rem; font-weight:700; color:#475569; display:block;
 }
 .donut-sub {
     font-size:.62rem; color:#6c757d; display:block;
@@ -50,8 +50,8 @@
     letter-spacing:.6px; padding:.3rem .6rem; border-radius:4px;
     display:inline-block; margin-bottom:.5rem;
 }
-.label-period { background:rgba(0,71,179,.1); color:#3b82f6; }
-.label-alltime { background:rgba(13,110,253,.1); color:#3b82f6; }
+.label-period { background:rgba(0,71,179,.1); color:#0ea5e9; }
+.label-alltime { background:rgba(13,110,253,.1); color:#0ea5e9; }
 
 /* ─── Shop trend chart section ─── */
 .chart-section-header {
@@ -77,7 +77,7 @@
 }
 .shop-checklist .form-check-label { cursor:pointer; width:100%; font-size:.85rem; }
 .shop-checklist .avg-row {
-    background:rgba(59,130,246,0.08); border-bottom:2px solid #dee2e6 !important;
+    background:rgba(14,165,233,0.08); border-bottom:2px solid #dee2e6 !important;
     border-radius:5px; margin-bottom:.2rem;
 }
 .shop-dot {
@@ -115,7 +115,7 @@
 .chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:var(--primary);box-shadow:2px 0 4px rgba(0,0,0,.12); }
 .chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
 /* column highlight on chart click */
-.tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
+.tbl-col-hl { background:#fff3cd !important; outline:2px solid #eab308; outline-offset:-1px; }
 /* row highlight on chart click */
 .tbl-row-hl > td:first-child { border-left:4px solid #0d6efd !important; background:#93c5fd !important; }
 .tbl-row-hl > td { background:#bfdbfe !important; }
@@ -422,7 +422,7 @@
                     <label for="cbAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox"
                                id="cbAvg" value="__avg__" style="flex-shrink:0;">
-                        <span class="shop-dot" id="dot_avg" style="background:#2C3E50;flex-shrink:0;"></span>
+                        <span class="shop-dot" id="dot_avg" style="background:#475569;flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (average of selected)</span>
                     </label>
                     {% for shop in shop_stats %}
@@ -756,7 +756,7 @@ const OV = CD.overview;
 /* ══════════════════════════════════════════════
    Colour palettes
 ══════════════════════════════════════════════ */
-const PERIOD_COLOR  = '#3b82f6';
+const PERIOD_COLOR  = '#0ea5e9';
 const ALLTIME_COLOR = '#0d6efd';
 const REST_COLOR    = '#e9ecef';
 
@@ -913,8 +913,8 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) 
     const panel = document.getElementById(panelId);
     panel.innerHTML =
         `<div style="display:flex;justify-content:space-between;align-items:center;
-                     border-bottom:2px solid #3b82f6;padding-bottom:4px;margin-bottom:5px;">
-            <strong style="font-size:.82rem;color:#3b82f6;">${lbl}</strong>
+                     border-bottom:2px solid #0ea5e9;padding-bottom:4px;margin-bottom:5px;">
+            <strong style="font-size:.82rem;color:#0ea5e9;">${lbl}</strong>
             <span id="_closeCard_${panelId}"
                   style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;
                          border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
@@ -943,7 +943,7 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) 
                     <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;
                                  white-space:nowrap;" title="${r.label}">${r.label}</span>
                 </div>
-                <div style="width:20%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;
+                <div style="width:20%;text-align:right;font-size:.76rem;font-weight:700;color:#475569;
                              flex-shrink:0;padding-left:4px;">
                     ${fmtVal(r.value, metric)}
                     ${pctHtml}
@@ -954,7 +954,7 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) 
         .addEventListener('click', onClose);
 }
 
-const AVG_COLOR     = '#2C3E50';
+const AVG_COLOR     = '#475569';
 const AVG_ALL_COLOR = '#6c757d';
 
 // Manage hover highlight on mousemove — make hovered line thicker
@@ -1127,7 +1127,7 @@ function buildChart() {
 ══════════════════════════════════════════════ */
 let barChart = null;
 
-const BAR_GRADIENT_COLOR = '#3b82f6';
+const BAR_GRADIENT_COLOR = '#0ea5e9';
 
 function getGlobalRows(xAxis) {
     if (xAxis === 'month')  return { rows: CD.month_stats,   key: 'month'     };
@@ -1231,7 +1231,7 @@ function buildBarChart() {
         });
         return { label: sName, data: _d, borderColor: BAR_GRADIENT_COLOR };
     }).filter(Boolean);
-    _tblShopRows.push({ label: 'Total (selected)', data: values, borderColor: '#3b82f6', _isTotal: true });
+    _tblShopRows.push({ label: 'Total (selected)', data: values, borderColor: '#0ea5e9', _isTotal: true });
     renderDataTable('barDataWrap', 'barDataCaption', xLabels, _tblShopRows, metric, xAxis === 'week');
 }
 
@@ -1463,7 +1463,7 @@ function renderOverviewTable() {
         return `<tr><td>${label}</td>
             <td class="text-end fw-bold">${fmtN(v, isAmt)}</td>
             <td class="text-end text-muted">${fmtN(t, isAmt)} <small>(${tLbl})</small></td>
-            <td class="text-end fw-bold" style="color:#3b82f6;">${pctStr(v, t)}</td></tr>`;
+            <td class="text-end fw-bold" style="color:#0ea5e9;">${pctStr(v, t)}</td></tr>`;
     }
     function divRow(lbl) {
         return `<tr><td colspan="4" style="background:#f0f4fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;
@@ -1650,7 +1650,7 @@ if (false) {
                 ctx.fillStyle = '#f8f9fa';
                 ctx.fillRect(0, 0, PX_W, CVS_H);
                 // top border
-                ctx.strokeStyle = '#3b82f6';
+                ctx.strokeStyle = '#0ea5e9';
                 ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(PX_W, 0); ctx.stroke();
 
@@ -1666,7 +1666,7 @@ if (false) {
                     ctx.fillRect(x, y - DOT_H - 1, DOT_W, DOT_H);
 
                     // shop name
-                    ctx.fillStyle = '#2C3E50';
+                    ctx.fillStyle = '#475569';
                     ctx.font      = FONT;
                     const raw  = ds.label || '';
                     const name = raw.length > MAX_CH ? raw.slice(0, MAX_CH - 1) + '…' : raw;
@@ -1727,7 +1727,7 @@ if (false) {
                         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
 
                         // header
-                        ctx.fillStyle = '#3b82f6'; ctx.fillRect(0, 0, PX_W, HH);
+                        ctx.fillStyle = '#0ea5e9'; ctx.fillRect(0, 0, PX_W, HH);
                         ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
                         gThs.forEach((th, i) => {
                             const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
@@ -1760,7 +1760,7 @@ if (false) {
                                     const raw = td.textContent.trim(); if (!raw || raw === '—') return;
                                     const ml  = Math.max(4, Math.floor(cw(i)/7.5));
                                     const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
-                                    ctx.fillStyle = bld ? '#1d4ed8' : '#3b82f6';
+                                    ctx.fillStyle = bld ? '#1d4ed8' : '#0ea5e9';
                                     ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
                                     ctx.textAlign = i === 0 ? 'left' : 'right';
                                     ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);

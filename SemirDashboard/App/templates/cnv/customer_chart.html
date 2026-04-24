@@ -4,7 +4,7 @@
 
 {% block extra_css %}
 <style>
-:root { --c-pos:#E53935; --c-cnv:#3b82f6; --c-zalo:#2E7D32; --c-oa:#F57C00; }
+:root { --c-pos:#E53935; --c-cnv:#0ea5e9; --c-zalo:#2E7D32; --c-oa:#F57C00; }
 
 /* ─── Filter bar ─── */
 .filter-card { background:#fff; border-radius:10px; }
@@ -27,7 +27,7 @@
     transform:translate(-50%,-50%);
     pointer-events:none; text-align:center; line-height:1.15;
 }
-.donut-pct  { font-size:1.35rem; font-weight:700; color:#2C3E50; display:block; }
+.donut-pct  { font-size:1.35rem; font-weight:700; color:#475569; display:block; }
 .donut-sub  { font-size:.62rem; color:#6c757d; display:block; }
 .donut-footer { margin-top:.55rem; font-size:.72rem; color:#495057; }
 .donut-footer strong { font-weight:700; }
@@ -47,7 +47,7 @@
 .shop-checklist .form-check-input { cursor:pointer; width:1.1em; height:1.1em; margin-top:.15em; float:none; margin-left:0; }
 .shop-checklist .form-check-label { cursor:pointer; width:100%; font-size:.85rem; }
 .shop-checklist .avg-row {
-    background:rgba(59,130,246,0.08); border-bottom:2px solid #dee2e6 !important;
+    background:rgba(14,165,233,0.08); border-bottom:2px solid #dee2e6 !important;
     border-radius:5px; margin-bottom:.2rem;
 }
 .shop-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:4px; flex-shrink:0; }
@@ -70,7 +70,7 @@
 .tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform:rotate(180deg); }
 .chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:var(--primary);box-shadow:2px 0 4px rgba(0,0,0,.12); }
 .chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
-.tbl-col-hl { background:#fff3cd !important; outline:2px solid #ffc107; outline-offset:-1px; }
+.tbl-col-hl { background:#fff3cd !important; outline:2px solid #eab308; outline-offset:-1px; }
 .tbl-row-hl > td:first-child { border-left:4px solid #0d6efd !important; background:#93c5fd !important; }
 .tbl-row-hl > td { background:#bfdbfe !important; }
 .tbl-row-hl > td.tbl-col-hl { background:#ffe066 !important; }
@@ -240,7 +240,7 @@
                     </label>
                     <label for="cbAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
                         <input class="form-check-input" type="checkbox" id="cbAvg" value="__avg__" style="flex-shrink:0;">
-                        <span class="shop-dot" id="dot_avg" style="background:#2C3E50;flex-shrink:0;"></span>
+                        <span class="shop-dot" id="dot_avg" style="background:#475569;flex-shrink:0;"></span>
                         <span class="fw-semibold" style="font-size:.85rem;">AVG (selected)</span>
                     </label>
                     {% for shop_name in chart_shops %}
@@ -630,8 +630,8 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) 
     const panel = document.getElementById(panelId);
     panel.innerHTML =
         `<div style="display:flex;justify-content:space-between;align-items:center;
-                     border-bottom:2px solid #3b82f6;padding-bottom:4px;margin-bottom:5px;">
-            <strong style="font-size:.82rem;color:#3b82f6;">${lbl}</strong>
+                     border-bottom:2px solid #0ea5e9;padding-bottom:4px;margin-bottom:5px;">
+            <strong style="font-size:.82rem;color:#0ea5e9;">${lbl}</strong>
             <span id="_closeCard_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;
                   padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
          </div>` +
@@ -654,7 +654,7 @@ function renderClickCard(panelId, lbl, rows, metric, showPct, onClose, pctMode) 
                     <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;
                                  white-space:nowrap;" title="${r.label}">${r.label}</span>
                 </div>
-                <div style="width:25%;text-align:right;font-size:.76rem;font-weight:700;color:#2C3E50;flex-shrink:0;padding-left:4px;">
+                <div style="width:25%;text-align:right;font-size:.76rem;font-weight:700;color:#475569;flex-shrink:0;padding-left:4px;">
                     ${fmtVal(r.value, metric)}${pctHtml}
                 </div>
             </div>`;
@@ -809,7 +809,7 @@ function buildTrendChart() {
 
     const datasets = [];
     if (wantAvgAll) datasets.push({ label: 'AVG (all shops)', data: avgAllData, borderColor: '#6c757d', backgroundColor: '#6c757d18', borderWidth: 2, borderDash: [6,3], pointRadius: 0, tension: 0.35, fill: false });
-    if (wantAvgSel) datasets.push({ label: 'AVG (selected)',  data: avgSelData, borderColor: '#2C3E50', backgroundColor: '#2C3E5018', borderWidth: 2, borderDash: [4,4], pointRadius: 0, tension: 0.35, fill: false });
+    if (wantAvgSel) datasets.push({ label: 'AVG (selected)',  data: avgSelData, borderColor: '#475569', backgroundColor: '#47556918', borderWidth: 2, borderDash: [4,4], pointRadius: 0, tension: 0.35, fill: false });
     datasets.push(...shopDatasets);
 
     if (trendChart) trendChart.destroy();
@@ -876,7 +876,7 @@ document.getElementById('btnSelTop5').addEventListener('click', () => {
    SECTION 3: PERIOD TOTALS — Bar chart (sum selected shops)
 ══════════════════════════════════════════════ */
 let barChart = null;
-const BAR_COLOR = '#3b82f6';
+const BAR_COLOR = '#0ea5e9';
 
 function buildBarChart() {
     sortChecklistAlpha('barShopChecklist');
@@ -960,7 +960,7 @@ function buildBarChart() {
         });
         return { label: sName, data: d, borderColor: BAR_COLOR };
     }).filter(Boolean);
-    tblRows.push({ label: 'Total (selected)', data: values, borderColor: '#3b82f6', _isTotal: true });
+    tblRows.push({ label: 'Total (selected)', data: values, borderColor: '#0ea5e9', _isTotal: true });
     renderDataTable('barDataWrap', 'barDataCaption', xLabels, tblRows, metric, xAxis === 'week');
 }
 
