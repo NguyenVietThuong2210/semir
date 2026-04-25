@@ -27,7 +27,19 @@ cd SemirDashboard && python manage.py test tests -v 2
 
 # Regenerate stale snapshots (after template or data shape changes)
 cd SemirDashboard && UPDATE_SNAPSHOTS=1 python manage.py test tests.test_shop_detail -v 2
+
+# Regenerate visual UI snapshots (REQUIRED after ANY template change)
+cd SemirDashboard && python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"
+cd SemirDashboard && python tests/snapshot_visual.py
 ```
+
+## UI Snapshot Rule
+
+After editing **any** template under `App/templates/`, regenerate the visual snapshots in `render/`:
+1. `python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"` — writes HTML + table summaries + `token_issues.txt` for any hardcoded color violations
+2. `python tests/snapshot_visual.py` — generates PDF + PNG via Chrome headless
+
+The `render/` folder is the canonical visual reference — open `render/png/*.png` to verify changes look correct, and check `render/_index.md` for token compliance (must be 0 issues).
 
 Test input files live in `SemirDashboard/tests/input/`. Snapshots live in `SemirDashboard/tests/snapshots/`. Run logs are written to `SemirDashboard/tests/output/`.
 

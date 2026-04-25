@@ -229,3 +229,56 @@ JavaScript `element.style.background = 'var(--primary)'` **does** support CSS va
 - **Coupon page:** `App/templates/coupon/dashboard.html`
 - **Shop Detail:** `App/templates/shop_detail.html`
 - **Home:** `App/templates/home.html`
+
+---
+
+## Visual Snapshot System — `render/`
+
+Every UI change MUST be visually verified by regenerating snapshots in the `render/` folder.
+
+### What's snapshotted
+
+For each key page (home, sales, customer, coupon, shop_detail, customer_detail, formulas, charts, sync, upload, user mgmt, admin logs), 4 artifacts are written:
+
+1. `render/<label>.html` — raw rendered HTML for grep/diff
+2. `render/<label>.tables.txt` — per-table summary (headers + first rows)
+3. `render/<label>.token_issues.txt` — only created when hardcoded colors found
+4. `render/pdf/<label>.pdf` + `render/png/<label>.png` — full-page visual
+
+### Regenerate after every template change
+
+```bash
+cd SemirDashboard
+python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"
+python tests/snapshot_visual.py
+```
+
+Target: `render/_index.md` should show **0 token issues** across all pages.
+
+### What the snapshot script checks
+
+- Inline `style="..."` attributes in static HTML (not inside `<script>` blocks)
+- `<style>...</style>` blocks (excluding the canonical `:root { ... }` token-definition block)
+- Allowed exceptions: `#fff`, `#ffffff`, `#000`, `#000000` (pure white/black)
+- Canvas API calls (`ctx.fillStyle = '#xxx'`) and Chart.js palette arrays inside `<script>` are exempt — they cannot accept CSS `var()`
+
+### Adding a new page to snapshot list
+
+Edit `SemirDashboard/tests/snapshot_render.py` and append to the `pages` list:
+
+```python
+pages = [
+    ...
+    ("/your/new-route/", "18_new_page"),
+]
+```
+
+### Visual review workflow
+
+After making template changes:
+
+1. Run both scripts above
+2. Open `render/_index.md` — verify Token issues = 0
+3. Open the relevant `render/png/<label>.png` files for changed pages
+4. Compare against the design rules above (text color, dark-tabs, section headers, stat cards, table headers)
+5. Iterate until visual matches the rules

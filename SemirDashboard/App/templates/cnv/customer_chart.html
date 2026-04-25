@@ -4,7 +4,7 @@
 
 {% block extra_css %}
 <style>
-:root { --c-pos:#E53935; --c-cnv:var(--primary); --c-zalo:#2E7D32; --c-oa:#F57C00; }
+/* page-local series aliases (canonical values defined in base.html) */
 
 /* ─── Filter bar ─── */
 .filter-card { background:#fff; border-radius:10px; }
@@ -29,17 +29,17 @@
 }
 .donut-pct  { font-size:1.35rem; font-weight:700; color:var(--text); display:block; }
 .donut-sub  { font-size:.62rem; color:var(--text-muted); display:block; }
-.donut-footer { margin-top:.55rem; font-size:.72rem; color:#495057; }
+.donut-footer { margin-top:.55rem; font-size:.72rem; color:var(--text-muted); }
 .donut-footer strong { font-weight:700; }
 
 /* ─── Shop checklist ─── */
 .shop-checklist {
     max-height:280px; overflow-y:auto;
     border:1.5px solid var(--border); border-radius:8px; padding:.4rem .5rem;
-    background:#fafbfc;
+    background:var(--bg);
 }
 .shop-checklist .form-check {
-    padding:.4rem .5rem; border-bottom:1px solid #f0f0f0;
+    padding:.4rem .5rem; border-bottom:1px solid var(--border-light);
     border-radius:5px; cursor:pointer; transition:background .12s; margin-bottom:0;
 }
 .shop-checklist .form-check:hover { background:rgba(var(--primary-rgb),.06); }
@@ -54,7 +54,7 @@
 
 /* ─── Controls ─── */
 .metric-select-card { background:var(--bg-light); border-radius:8px; padding:.75rem 1rem; height:100%; }
-.control-label { font-size:.8rem; font-weight:700; color:#495057; text-transform:uppercase; letter-spacing:.4px; margin-bottom:.5rem; }
+.control-label { font-size:.8rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:.5rem; }
 .shop-select-actions { margin-bottom:.4rem; }
 .shop-select-actions button { font-size:.78rem; }
 
@@ -70,10 +70,10 @@
 .tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform:rotate(180deg); }
 .chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:var(--primary);box-shadow:2px 0 4px rgba(0,0,0,.12); }
 .chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
-.tbl-col-hl { background:#fff3cd !important; outline:2px solid var(--orange); outline-offset:-1px; }
-.tbl-row-hl > td:first-child { border-left:4px solid #0d6efd !important; background:#93c5fd !important; }
-.tbl-row-hl > td { background:#bfdbfe !important; }
-.tbl-row-hl > td.tbl-col-hl { background:#ffe066 !important; }
+.tbl-col-hl { background:var(--highlight-warn) !important; outline:2px solid var(--orange); outline-offset:-1px; }
+.tbl-row-hl > td:first-child { border-left:4px solid var(--c-alltime) !important; background:var(--hl-row) !important; }
+.tbl-row-hl > td { background:var(--hl-row-light) !important; }
+.tbl-row-hl > td.tbl-col-hl { background:var(--hl-cell) !important; }
 </style>
 {% endblock %}
 
