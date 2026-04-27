@@ -1,0 +1,1660 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            /* ── Brand blues ─────────────────────── */
+            --primary:        #0369a1;
+            --primary-rgb:    3, 105, 161;
+            --primary-hover:  #075985;
+            --bs-primary:     #0369a1;
+            --bs-primary-rgb: 3, 105, 161;
+            --nav-bg:         #064e77;
+            --secondary:      #4a6785;
+
+            /* ── Accents ─────────────────────────── */
+            --accent:         #06b6d4;
+            --accent-rgb:     6, 182, 212;
+            --coupon:         #7b4000;
+            --success:        #198754;
+            --success-rgb:    25, 135, 84;
+            --danger:         #dc3545;
+            --danger-rgb:     220, 53, 69;
+
+            /* ── Amber / Yellow ──────────────────── */
+            --orange:         #eab308;
+            --orange-rgb:     234, 179, 8;
+            --orange-dark:    #a16207;
+            --highlight:      #fef08a;
+
+            /* ── CNV section palette ────────────── */
+            --cnv-purple:     #7b3f9e;
+            --cnv-navy:       #1a5cb0;
+            --cnv-forest:     #156f3a;
+
+            /* ── Status gradients ────────────────── */
+            --gradient-synced:     linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-not-synced: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+
+            /* ── Grade badges ───────────────────── */
+            --silver:         #94a3b8;
+
+            /* ── Chart series & highlights ──────── */
+            --c-alltime:      #0d6efd;
+            --c-pos:          #e53935;
+            --c-cnv:          #0369a1;
+            --c-zalo:         #2e7d32;
+            --c-oa:           #f57c00;
+            --hl-row:         #93c5fd;
+            --hl-row-light:   #bfdbfe;
+            --hl-cell:        #ffe066;
+            --border-light:   #f0f0f0;
+
+            /* ── Row highlight tints ─────────────── */
+            --highlight-warn: #fff3cd;
+            --highlight-ok:   #f0fdf4;
+
+            /* ── Code syntax ────────────────────── */
+            --code-keyword:   #0066cc;
+            --code-comment:   #666666;
+            --example-bg:     #eef3fb;
+
+            /* ── Neutrals ────────────────────────── */
+            --text:           #374151;
+            --text-dark:      #212529;
+            --text-muted:     #6c757d;
+            --border:         #dee2e6;
+            --bg:             #f8fafc;
+            --bg-light:       #f8f9fa;
+            --gray-tint:      #f0f2f5;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .navbar {
+            background: var(--nav-bg) !important;
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.35);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.3rem;
+        }
+
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, .9) !important;
+            transition: color .2s;
+            font-size: .93rem;
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link.active {
+            color: #fff !important;
+            font-weight: 500;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            border-radius: 8px;
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            transition: all .2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .table th {
+            background: var(--bg-light);
+            font-weight: 600;
+            font-size: .9rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5 {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .badge {
+            padding: .35em .65em;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1.5px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 .2rem rgba(var(--accent-rgb), 0.15);
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+            border: none;
+        }
+
+        .dropdown-item {
+            padding: .65rem 1.25rem;
+            transition: background .15s;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(var(--accent-rgb), 0.08);
+        }
+
+        .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem 0.25rem;
+        }
+
+        .page-link {
+            position: relative;
+            padding: .4rem 0;
+            margin: 0 .75rem;
+        }
+
+        .page-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #fff;
+            transition: width .2s;
+        }
+
+        .page-link:hover::after,
+        .page-link.active::after {
+            width: 100%;
+        }
+
+        @media(max-width:991px) {
+            .navbar-nav {
+                margin-top: 1rem;
+            }
+
+            .nav-item {
+                margin: .25rem 0;
+            }
+
+            .page-link {
+                margin: .25rem 0;
+                padding: .5rem 0;
+            }
+        }
+
+        .kpi-card {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .kpi-card .text-muted {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-link:focus {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .badge.bg-warning,
+        .badge.text-bg-warning {
+            color: var(--text) !important;
+        }
+    </style>
+    
+</head>
+
+<body>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow"></i> Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link page-link" href="/">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+
+                    
+                    
+                    <!-- Upload Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Data Upload</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/customers/">
+                                    <i class="bi bi-people"></i> Upload Customers
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/sales/">
+                                    <i class="bi bi-cart"></i> Upload Sales
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/">
+                                    <i class="bi bi-ticket"></i> Upload Coupons
+                                </a>
+                            </li>
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/#campaigns">
+                                    <i class="bi bi-tags"></i> Manage Campaigns
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+                    
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-bar-chart-line"></i> Analytics
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/">
+                                    <i class="bi bi-graph-up"></i> Sales Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/chart/">
+                                    <i class="bi bi-pie-chart"></i> Sales Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-analytics/">
+                                    <i class="bi bi-people-fill"></i> Customer Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-chart/">
+                                    <i class="bi bi-people"></i> Customer Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/">
+                                    <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/chart/">
+                                    <i class="bi bi-pie-chart-fill"></i> Coupon Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/customer-detail/">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/shop-detail/">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- Tools Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Tools
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Additional Tools</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/formulas/">
+                                    <i class="bi bi-calculator"></i> Formulas
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">CNV Loyalty</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/cnv/sync-status/">
+                                    <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/users/">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            
+
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin-logs/">
+                                    <i class="bi bi-journal-text"></i> Admin Logs
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> alex
+                            
+                            
+                            <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
+                            
+                            
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/logout/">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="DuUOlTTVYniGxQD2uFuTy8gI2X8O4VoBnlu6uFJOByWXAIutPvyUtS20iK3kWNfP">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+
+    <main class="">
+        <div class="container-fluid px-3">
+            
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-people-fill"></i> User Management</h2>
+    <a href="/register/" class="btn btn-primary btn-sm">
+        <i class="bi bi-person-plus me-1"></i> Add User
+    </a>
+</div>
+
+
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="mgmtTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-pane"
+                type="button" role="tab">
+            <i class="bi bi-person-lines-fill me-1"></i> Users
+            <span class="badge bg-primary ms-1">4</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles-pane"
+                type="button" role="tab">
+            <i class="bi bi-shield-lock me-1"></i> Roles
+            <span class="badge bg-primary ms-1">2</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="mgmtTabsContent">
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- USERS TAB                                                      -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade show active" id="users-pane" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person-lines-fill me-2"></i>All Users
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Date Joined</th>
+                                <th>Last Login</th>
+                                <th>Role</th>
+                                <th class="text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            
+                            <tr>
+                                <td>
+                                    <strong>_dbg_</strong>
+                                    
+                                        <span class="badge bg-danger ms-1">superuser</span>
+                                    
+                                    
+                                </td>
+                                <td>—</td>
+                                <td>2026-04-11</td>
+                                <td>2026-04-11 08:03</td>
+                                <td>
+                                    
+                                        <span class="badge bg-primary">admin</span>
+                                    
+                                </td>
+                                <td class="text-center">
+                                    <form method="post" class="d-inline-flex align-items-center gap-2">
+                                        <input type="hidden" name="csrfmiddlewaretoken" value="DuUOlTTVYniGxQD2uFuTy8gI2X8O4VoBnlu6uFJOByWXAIutPvyUtS20iK3kWNfP">
+                                        <input type="hidden" name="action" value="set_user_role">
+                                        <input type="hidden" name="user_id" value="5">
+                                        <select name="role_id" class="form-select form-select-sm" style="min-width:130px;">
+                                            <option value="">— No Role —</option>
+                                            
+                                                <option value="1"
+                                                    selected>
+                                                    admin
+                                                </option>
+                                            
+                                                <option value="2"
+                                                    >
+                                                    viewer
+                                                </option>
+                                            
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <strong>_render_check_</strong>
+                                    
+                                        <span class="badge bg-danger ms-1">superuser</span>
+                                    
+                                    
+                                </td>
+                                <td>—</td>
+                                <td>2026-04-21</td>
+                                <td>2026-04-21 02:27</td>
+                                <td>
+                                    
+                                        <span class="badge bg-primary">admin</span>
+                                    
+                                </td>
+                                <td class="text-center">
+                                    <form method="post" class="d-inline-flex align-items-center gap-2">
+                                        <input type="hidden" name="csrfmiddlewaretoken" value="DuUOlTTVYniGxQD2uFuTy8gI2X8O4VoBnlu6uFJOByWXAIutPvyUtS20iK3kWNfP">
+                                        <input type="hidden" name="action" value="set_user_role">
+                                        <input type="hidden" name="user_id" value="6">
+                                        <select name="role_id" class="form-select form-select-sm" style="min-width:130px;">
+                                            <option value="">— No Role —</option>
+                                            
+                                                <option value="1"
+                                                    selected>
+                                                    admin
+                                                </option>
+                                            
+                                                <option value="2"
+                                                    >
+                                                    viewer
+                                                </option>
+                                            
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <strong>alex</strong>
+                                    
+                                        <span class="badge bg-danger ms-1">superuser</span>
+                                    
+                                    
+                                        <span class="badge bg-secondary ms-1">you</span>
+                                    
+                                </td>
+                                <td>alex@gmail.com</td>
+                                <td>2026-02-09</td>
+                                <td>2026-04-25 02:11</td>
+                                <td>
+                                    
+                                        <span class="badge bg-primary">admin</span>
+                                    
+                                </td>
+                                <td class="text-center">
+                                    <form method="post" class="d-inline-flex align-items-center gap-2">
+                                        <input type="hidden" name="csrfmiddlewaretoken" value="DuUOlTTVYniGxQD2uFuTy8gI2X8O4VoBnlu6uFJOByWXAIutPvyUtS20iK3kWNfP">
+                                        <input type="hidden" name="action" value="set_user_role">
+                                        <input type="hidden" name="user_id" value="1">
+                                        <select name="role_id" class="form-select form-select-sm" style="min-width:130px;">
+                                            <option value="">— No Role —</option>
+                                            
+                                                <option value="1"
+                                                    selected>
+                                                    admin
+                                                </option>
+                                            
+                                                <option value="2"
+                                                    >
+                                                    viewer
+                                                </option>
+                                            
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <strong>alex@221096</strong>
+                                    
+                                    
+                                </td>
+                                <td>—</td>
+                                <td>2026-03-14</td>
+                                <td>2026-03-14 08:27</td>
+                                <td>
+                                    
+                                        <span class="badge bg-primary">viewer</span>
+                                    
+                                </td>
+                                <td class="text-center">
+                                    <form method="post" class="d-inline-flex align-items-center gap-2">
+                                        <input type="hidden" name="csrfmiddlewaretoken" value="DuUOlTTVYniGxQD2uFuTy8gI2X8O4VoBnlu6uFJOByWXAIutPvyUtS20iK3kWNfP">
+                                        <input type="hidden" name="action" value="set_user_role">
+                                        <input type="hidden" name="user_id" value="4">
+                                        <select name="role_id" class="form-select form-select-sm" style="min-width:130px;">
+                                            <option value="">— No Role —</option>
+                                            
+                                                <option value="1"
+                                                    >
+                                                    admin
+                                                </option>
+                                            
+                                                <option value="2"
+                                                    selected>
+                                                    viewer
+                                                </option>
+                                            
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ROLES TAB                                                      -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="roles-pane" role="tabpanel">
+
+        <div class="row g-3">
+            
+            <div class="col-12 col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-shield me-1"></i>
+                            <strong>admin</strong>
+                            
+                                <span class="badge bg-warning text-dark ms-2" title="Built-in role — cannot be deleted">Built-in</span>
+                            
+                            <span class="badge bg-primary ms-1">3 users</span>
+                        </div>
+                        
+                        <button type="button" class="btn btn-sm btn-outline-danger disabled"
+                                title="Built-in roles cannot be deleted">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                        
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            <input type="hidden" name="csrfmiddlewaretoken" value="DuUOlTTVYniGxQD2uFuTy8gI2X8O4VoBnlu6uFJOByWXAIutPvyUtS20iK3kWNfP">
+                            <input type="hidden" name="action" value="save_role_permissions">
+                            <input type="hidden" name="role_id" value="1">
+
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="1"
+                                       data-group="Sales Analytics"
+                                       id="group_1_1"
+                                       title="Toggle all Sales Analytics permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_1_1"
+                                       style="cursor:pointer">Sales Analytics</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="sales.view"
+                                       id="perm_1_sales.view"
+                                       data-role="1"
+                                       data-group="Sales Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_sales.view">
+                                    View Sales Analytics
+                                    <code class="text-muted small ms-1">sales.view</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="sales.chart"
+                                       id="perm_1_sales.chart"
+                                       data-role="1"
+                                       data-group="Sales Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_sales.chart">
+                                    View Sales Chart
+                                    <code class="text-muted small ms-1">sales.chart</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="sales.export"
+                                       id="perm_1_sales.export"
+                                       data-role="1"
+                                       data-group="Sales Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_sales.export">
+                                    Export Sales Analytics (Excel)
+                                    <code class="text-muted small ms-1">sales.export</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="sales.export_chart"
+                                       id="perm_1_sales.export_chart"
+                                       data-role="1"
+                                       data-group="Sales Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_sales.export_chart">
+                                    Export Sales Chart (Excel)
+                                    <code class="text-muted small ms-1">sales.export_chart</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="1"
+                                       data-group="Coupons"
+                                       id="group_1_2"
+                                       title="Toggle all Coupons permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_1_2"
+                                       style="cursor:pointer">Coupons</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="coupons.view"
+                                       id="perm_1_coupons.view"
+                                       data-role="1"
+                                       data-group="Coupons"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_coupons.view">
+                                    View Coupon Dashboard
+                                    <code class="text-muted small ms-1">coupons.view</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="coupons.chart"
+                                       id="perm_1_coupons.chart"
+                                       data-role="1"
+                                       data-group="Coupons"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_coupons.chart">
+                                    View Coupon Chart
+                                    <code class="text-muted small ms-1">coupons.chart</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="coupons.export"
+                                       id="perm_1_coupons.export"
+                                       data-role="1"
+                                       data-group="Coupons"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_coupons.export">
+                                    Export Coupons (Excel)
+                                    <code class="text-muted small ms-1">coupons.export</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="coupons.export_chart"
+                                       id="perm_1_coupons.export_chart"
+                                       data-role="1"
+                                       data-group="Coupons"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_coupons.export_chart">
+                                    Export Coupon Chart (Excel)
+                                    <code class="text-muted small ms-1">coupons.export_chart</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="coupons.manage"
+                                       id="perm_1_coupons.manage"
+                                       data-role="1"
+                                       data-group="Coupons"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_coupons.manage">
+                                    Manage Coupon Campaigns
+                                    <code class="text-muted small ms-1">coupons.manage</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="1"
+                                       data-group="CNV / Customer Analytics"
+                                       id="group_1_3"
+                                       title="Toggle all CNV / Customer Analytics permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_1_3"
+                                       style="cursor:pointer">CNV / Customer Analytics</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="cnv.view"
+                                       id="perm_1_cnv.view"
+                                       data-role="1"
+                                       data-group="CNV / Customer Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_cnv.view">
+                                    View Customer Analytics (CNV)
+                                    <code class="text-muted small ms-1">cnv.view</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="cnv.chart"
+                                       id="perm_1_cnv.chart"
+                                       data-role="1"
+                                       data-group="CNV / Customer Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_cnv.chart">
+                                    View Customer Chart (CNV)
+                                    <code class="text-muted small ms-1">cnv.chart</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="cnv.sync"
+                                       id="perm_1_cnv.sync"
+                                       data-role="1"
+                                       data-group="CNV / Customer Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_cnv.sync">
+                                    View CNV Sync Status
+                                    <code class="text-muted small ms-1">cnv.sync</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="cnv.export"
+                                       id="perm_1_cnv.export"
+                                       data-role="1"
+                                       data-group="CNV / Customer Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_cnv.export">
+                                    Export Customer Analytics (Excel)
+                                    <code class="text-muted small ms-1">cnv.export</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="cnv.export_chart"
+                                       id="perm_1_cnv.export_chart"
+                                       data-role="1"
+                                       data-group="CNV / Customer Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_cnv.export_chart">
+                                    Export Customer Chart (Excel)
+                                    <code class="text-muted small ms-1">cnv.export_chart</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="1"
+                                       data-group="Customers"
+                                       id="group_1_4"
+                                       title="Toggle all Customers permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_1_4"
+                                       style="cursor:pointer">Customers</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="customers.detail"
+                                       id="perm_1_customers.detail"
+                                       data-role="1"
+                                       data-group="Customers"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_customers.detail">
+                                    View Customer Detail
+                                    <code class="text-muted small ms-1">customers.detail</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="1"
+                                       data-group="Shop Detail"
+                                       id="group_1_5"
+                                       title="Toggle all Shop Detail permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_1_5"
+                                       style="cursor:pointer">Shop Detail</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="shops.view"
+                                       id="perm_1_shops.view"
+                                       data-role="1"
+                                       data-group="Shop Detail"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_shops.view">
+                                    View Shop Detail
+                                    <code class="text-muted small ms-1">shops.view</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="shops.export"
+                                       id="perm_1_shops.export"
+                                       data-role="1"
+                                       data-group="Shop Detail"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_shops.export">
+                                    Export Shop Detail (Excel)
+                                    <code class="text-muted small ms-1">shops.export</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="1"
+                                       data-group="Data Management"
+                                       id="group_1_6"
+                                       title="Toggle all Data Management permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_1_6"
+                                       style="cursor:pointer">Data Management</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="data.upload"
+                                       id="perm_1_data.upload"
+                                       data-role="1"
+                                       data-group="Data Management"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_data.upload">
+                                    Upload Data
+                                    <code class="text-muted small ms-1">data.upload</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="data.formulas"
+                                       id="perm_1_data.formulas"
+                                       data-role="1"
+                                       data-group="Data Management"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_data.formulas">
+                                    View Formulas
+                                    <code class="text-muted small ms-1">data.formulas</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="1"
+                                       data-group="Admin"
+                                       id="group_1_7"
+                                       title="Toggle all Admin permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_1_7"
+                                       style="cursor:pointer">Admin</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_1"
+                                       value="admin.users"
+                                       id="perm_1_admin.users"
+                                       data-role="1"
+                                       data-group="Admin"
+                                       checked>
+                                <label class="form-check-label" for="perm_1_admin.users">
+                                    Manage Users
+                                    <code class="text-muted small ms-1">admin.users</code>
+                                </label>
+                            </div>
+                            
+                            
+
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-save me-1"></i> Save Permissions
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-12 col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-shield me-1"></i>
+                            <strong>viewer</strong>
+                            
+                                <span class="badge bg-warning text-dark ms-2" title="Built-in role — cannot be deleted">Built-in</span>
+                            
+                            <span class="badge bg-primary ms-1">1 user</span>
+                        </div>
+                        
+                        <button type="button" class="btn btn-sm btn-outline-danger disabled"
+                                title="Built-in roles cannot be deleted">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                        
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            <input type="hidden" name="csrfmiddlewaretoken" value="DuUOlTTVYniGxQD2uFuTy8gI2X8O4VoBnlu6uFJOByWXAIutPvyUtS20iK3kWNfP">
+                            <input type="hidden" name="action" value="save_role_permissions">
+                            <input type="hidden" name="role_id" value="2">
+
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="2"
+                                       data-group="Sales Analytics"
+                                       id="group_2_1"
+                                       title="Toggle all Sales Analytics permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_2_1"
+                                       style="cursor:pointer">Sales Analytics</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="sales.view"
+                                       id="perm_2_sales.view"
+                                       data-role="2"
+                                       data-group="Sales Analytics"
+                                       checked>
+                                <label class="form-check-label" for="perm_2_sales.view">
+                                    View Sales Analytics
+                                    <code class="text-muted small ms-1">sales.view</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="sales.chart"
+                                       id="perm_2_sales.chart"
+                                       data-role="2"
+                                       data-group="Sales Analytics"
+                                       >
+                                <label class="form-check-label" for="perm_2_sales.chart">
+                                    View Sales Chart
+                                    <code class="text-muted small ms-1">sales.chart</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="sales.export"
+                                       id="perm_2_sales.export"
+                                       data-role="2"
+                                       data-group="Sales Analytics"
+                                       >
+                                <label class="form-check-label" for="perm_2_sales.export">
+                                    Export Sales Analytics (Excel)
+                                    <code class="text-muted small ms-1">sales.export</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="sales.export_chart"
+                                       id="perm_2_sales.export_chart"
+                                       data-role="2"
+                                       data-group="Sales Analytics"
+                                       >
+                                <label class="form-check-label" for="perm_2_sales.export_chart">
+                                    Export Sales Chart (Excel)
+                                    <code class="text-muted small ms-1">sales.export_chart</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="2"
+                                       data-group="Coupons"
+                                       id="group_2_2"
+                                       title="Toggle all Coupons permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_2_2"
+                                       style="cursor:pointer">Coupons</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="coupons.view"
+                                       id="perm_2_coupons.view"
+                                       data-role="2"
+                                       data-group="Coupons"
+                                       >
+                                <label class="form-check-label" for="perm_2_coupons.view">
+                                    View Coupon Dashboard
+                                    <code class="text-muted small ms-1">coupons.view</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="coupons.chart"
+                                       id="perm_2_coupons.chart"
+                                       data-role="2"
+                                       data-group="Coupons"
+                                       >
+                                <label class="form-check-label" for="perm_2_coupons.chart">
+                                    View Coupon Chart
+                                    <code class="text-muted small ms-1">coupons.chart</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="coupons.export"
+                                       id="perm_2_coupons.export"
+                                       data-role="2"
+                                       data-group="Coupons"
+                                       >
+                                <label class="form-check-label" for="perm_2_coupons.export">
+                                    Export Coupons (Excel)
+                                    <code class="text-muted small ms-1">coupons.export</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="coupons.export_chart"
+                                       id="perm_2_coupons.export_chart"
+                                       data-role="2"
+                                       data-group="Coupons"
+                                       >
+                                <label class="form-check-label" for="perm_2_coupons.export_chart">
+                                    Export Coupon Chart (Excel)
+                                    <code class="text-muted small ms-1">coupons.export_chart</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="coupons.manage"
+                                       id="perm_2_coupons.manage"
+                                       data-role="2"
+                                       data-group="Coupons"
+                                       >
+                                <label class="form-check-label" for="perm_2_coupons.manage">
+                                    Manage Coupon Campaigns
+                                    <code class="text-muted small ms-1">coupons.manage</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="2"
+                                       data-group="CNV / Customer Analytics"
+                                       id="group_2_3"
+                                       title="Toggle all CNV / Customer Analytics permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_2_3"
+                                       style="cursor:pointer">CNV / Customer Analytics</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="cnv.view"
+                                       id="perm_2_cnv.view"
+                                       data-role="2"
+                                       data-group="CNV / Customer Analytics"
+                                       >
+                                <label class="form-check-label" for="perm_2_cnv.view">
+                                    View Customer Analytics (CNV)
+                                    <code class="text-muted small ms-1">cnv.view</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="cnv.chart"
+                                       id="perm_2_cnv.chart"
+                                       data-role="2"
+                                       data-group="CNV / Customer Analytics"
+                                       >
+                                <label class="form-check-label" for="perm_2_cnv.chart">
+                                    View Customer Chart (CNV)
+                                    <code class="text-muted small ms-1">cnv.chart</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="cnv.sync"
+                                       id="perm_2_cnv.sync"
+                                       data-role="2"
+                                       data-group="CNV / Customer Analytics"
+                                       >
+                                <label class="form-check-label" for="perm_2_cnv.sync">
+                                    View CNV Sync Status
+                                    <code class="text-muted small ms-1">cnv.sync</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="cnv.export"
+                                       id="perm_2_cnv.export"
+                                       data-role="2"
+                                       data-group="CNV / Customer Analytics"
+                                       >
+                                <label class="form-check-label" for="perm_2_cnv.export">
+                                    Export Customer Analytics (Excel)
+                                    <code class="text-muted small ms-1">cnv.export</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="cnv.export_chart"
+                                       id="perm_2_cnv.export_chart"
+                                       data-role="2"
+                                       data-group="CNV / Customer Analytics"
+                                       >
+                                <label class="form-check-label" for="perm_2_cnv.export_chart">
+                                    Export Customer Chart (Excel)
+                                    <code class="text-muted small ms-1">cnv.export_chart</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="2"
+                                       data-group="Customers"
+                                       id="group_2_4"
+                                       title="Toggle all Customers permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_2_4"
+                                       style="cursor:pointer">Customers</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="customers.detail"
+                                       id="perm_2_customers.detail"
+                                       data-role="2"
+                                       data-group="Customers"
+                                       >
+                                <label class="form-check-label" for="perm_2_customers.detail">
+                                    View Customer Detail
+                                    <code class="text-muted small ms-1">customers.detail</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="2"
+                                       data-group="Shop Detail"
+                                       id="group_2_5"
+                                       title="Toggle all Shop Detail permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_2_5"
+                                       style="cursor:pointer">Shop Detail</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="shops.view"
+                                       id="perm_2_shops.view"
+                                       data-role="2"
+                                       data-group="Shop Detail"
+                                       >
+                                <label class="form-check-label" for="perm_2_shops.view">
+                                    View Shop Detail
+                                    <code class="text-muted small ms-1">shops.view</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="shops.export"
+                                       id="perm_2_shops.export"
+                                       data-role="2"
+                                       data-group="Shop Detail"
+                                       >
+                                <label class="form-check-label" for="perm_2_shops.export">
+                                    Export Shop Detail (Excel)
+                                    <code class="text-muted small ms-1">shops.export</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="2"
+                                       data-group="Data Management"
+                                       id="group_2_6"
+                                       title="Toggle all Data Management permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_2_6"
+                                       style="cursor:pointer">Data Management</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="data.upload"
+                                       id="perm_2_data.upload"
+                                       data-role="2"
+                                       data-group="Data Management"
+                                       >
+                                <label class="form-check-label" for="perm_2_data.upload">
+                                    Upload Data
+                                    <code class="text-muted small ms-1">data.upload</code>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="data.formulas"
+                                       id="perm_2_data.formulas"
+                                       data-role="2"
+                                       data-group="Data Management"
+                                       >
+                                <label class="form-check-label" for="perm_2_data.formulas">
+                                    View Formulas
+                                    <code class="text-muted small ms-1">data.formulas</code>
+                                </label>
+                            </div>
+                            
+                            
+                            <div class="d-flex align-items-center mt-3 mb-1">
+                                <input class="form-check-input perm-group-toggle me-2"
+                                       type="checkbox"
+                                       data-role="2"
+                                       data-group="Admin"
+                                       id="group_2_7"
+                                       title="Toggle all Admin permissions">
+                                <label class="fw-semibold text-uppercase text-muted small mb-0"
+                                       for="group_2_7"
+                                       style="cursor:pointer">Admin</label>
+                            </div>
+                            
+                            <div class="form-check mb-1 ms-3">
+                                <input class="form-check-input perm-child"
+                                       type="checkbox"
+                                       name="perm_2"
+                                       value="admin.users"
+                                       id="perm_2_admin.users"
+                                       data-role="2"
+                                       data-group="Admin"
+                                       >
+                                <label class="form-check-label" for="perm_2_admin.users">
+                                    Manage Users
+                                    <code class="text-muted small ms-1">admin.users</code>
+                                </label>
+                            </div>
+                            
+                            
+
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-save me-1"></i> Save Permissions
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- Create New Role -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-plus-circle me-1"></i> Create New Role
+            </div>
+            <div class="card-body">
+                <form method="post" class="d-flex gap-2 align-items-end">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="DuUOlTTVYniGxQD2uFuTy8gI2X8O4VoBnlu6uFJOByWXAIutPvyUtS20iK3kWNfP">
+                    <input type="hidden" name="action" value="create_role">
+                    <div>
+                        <label class="form-label mb-1 fw-semibold">Role Name</label>
+                        <input type="text" name="role_name" class="form-control"
+                               placeholder="e.g. manager" required style="min-width:200px;">
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-plus me-1"></i> Create Role
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    </div><!-- /roles-pane -->
+</div><!-- /tab-content -->
+
+
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+<script>
+(function () {
+    function updateGroupHeader(roleId, group) {
+        var children = document.querySelectorAll(
+            '.perm-child[data-role="' + roleId + '"][data-group="' + group + '"]'
+        );
+        var header = document.querySelector(
+            '.perm-group-toggle[data-role="' + roleId + '"][data-group="' + group + '"]'
+        );
+        if (!header || children.length === 0) return;
+        var checkedCount = Array.from(children).filter(function (c) { return c.checked; }).length;
+        if (checkedCount === 0) {
+            header.checked = false;
+            header.indeterminate = false;
+        } else if (checkedCount === children.length) {
+            header.checked = true;
+            header.indeterminate = false;
+        } else {
+            header.checked = false;
+            header.indeterminate = true;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Initialise group header states from pre-rendered child checkbox state
+        document.querySelectorAll('.perm-group-toggle').forEach(function (header) {
+            updateGroupHeader(header.dataset.role, header.dataset.group);
+        });
+
+        // Group header click → toggle all children in same role+group
+        document.querySelectorAll('.perm-group-toggle').forEach(function (header) {
+            header.addEventListener('change', function () {
+                var roleId = this.dataset.role;
+                var group  = this.dataset.group;
+                var state  = this.checked;
+                document.querySelectorAll(
+                    '.perm-child[data-role="' + roleId + '"][data-group="' + group + '"]'
+                ).forEach(function (child) {
+                    child.checked = state;
+                });
+                this.indeterminate = false;
+            });
+        });
+
+        // Child checkbox change → re-evaluate group header state
+        document.querySelectorAll('.perm-child').forEach(function (child) {
+            child.addEventListener('change', function () {
+                updateGroupHeader(this.dataset.role, this.dataset.group);
+            });
+        });
+    });
+}());
+</script>
+
+</body>
+
+</html>

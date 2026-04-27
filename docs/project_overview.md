@@ -1,15 +1,17 @@
 ---
-name: SemirDashboard Project Overview
-description: Framework, paths, deployment, infrastructure, dependencies for SemirDashboard
+name: Semir Project Overview
+description: Framework, paths, deployment, infrastructure, dependencies for SemirDashboard (Django) and SemirPhone (Flutter)
 type: project
 ---
 
-## Identity
+## SemirDashboard (Django web app)
+
+### Identity
 - **Name:** SemirDashboard
 - **Framework:** Django 4.x (Python 3.11)
 - **Purpose:** Retail analytics dashboard + CNV Loyalty API integration for SEMIR brand (Vietnam)
 
-## Paths
+### Paths
 - **Project root:** `D:\New-jouney\semir\`
 - **Django root:** `D:\New-jouney\semir\SemirDashboard\`
 - **Django app:** `D:\New-jouney\semir\SemirDashboard\App\`
@@ -17,7 +19,7 @@ type: project
 - **Docs:** `D:\New-jouney\semir\docs\`
 - **Log files:** `SemirDashboard/logs/` → `app.log`, `cnv_sync.log`, `errors.log`
 
-## Run Commands
+### Run Commands
 ```bash
 # Dev server
 cd SemirDashboard && python manage.py runserver
@@ -37,17 +39,22 @@ python manage.py test tests
 
 # Regenerate snapshots
 UPDATE_SNAPSHOTS=1 python manage.py test tests.test_shop_detail
+
+# Visual UI snapshots (after any template change)
+python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"
+python tests/snapshot_visual.py
+# Output: SemirDashboard/tests/render/
 ```
 
-## Databases
+### Databases
 - **Dev:** SQLite3 (`SemirDashboard/db.sqlite3`)
 - **Prod:** PostgreSQL 16 (Alpine, via Docker), `CONN_MAX_AGE=600`
 
-## Cache
+### Cache
 - **Dev:** LocMemCache (in-process)
 - **Prod:** Redis via django-redis, key prefix `semir`, default TTL 600s
 
-## Deployment
+### Deployment
 - **Domain:** `analytics-customer-dashboard.com`
 - **VPS:** Vietnix SSD 3 — 2 vCPU, 4GB RAM, 60GB SSD, Ubuntu 22.04 LTS
 - **Server IP:** 14.225.254.192
@@ -56,21 +63,59 @@ UPDATE_SNAPSHOTS=1 python manage.py test tests.test_shop_detail
 - **Stack:** Docker Compose → Nginx → Gunicorn → Django
 - **Docker services:** redis, db (postgres:16), web (Django/Gunicorn), nginx, loki, promtail, prometheus, cadvisor, grafana
 
-## Monitoring (added Mar 24 2026)
+### Monitoring (added Mar 24 2026)
 - **Grafana:** `http://SERVER_IP:3000` — accessible via Tools → Monitoring in Django navbar (superuser only)
 - **Loki:** log aggregation — ingests structured JSON logs from all containers via Promtail
 - **Structured logging:** `RequestIDFilter` + `JsonFormatter` — all logs are JSON with `request_id`, `step`, `level`, `time`, `message`
 - **Prometheus:** scrapes cAdvisor for container CPU/memory/network metrics
 - **Configs:** `monitoring/` folder (prometheus.yml, loki-config.yml, promtail-config.yml)
 
-## Key Dependencies
+### Key Dependencies
 - Django, pandas, openpyxl, requests
 - python-dotenv, gunicorn, whitenoise
 - psycopg2-binary (PostgreSQL), django-apscheduler (APScheduler)
 - django-redis (caching), numpy, xlrd
 
-## Security
+### Security
 - SECURE_SSL_REDIRECT, HSTS (31536000s), secure cookies, CSRF protection
 - Non-root Docker user (appuser:1000)
 - PBKDF2 password hashing, session timeout 24h with auto-refresh (`SESSION_SAVE_EVERY_REQUEST=True`)
 - CNV credentials in settings: `CNV_USERNAME`, `CNV_PASSWORD`
+
+---
+
+## SemirPhone (Flutter mobile app)
+
+### Identity
+- **Name:** SemirPhone (`semir_phone`)
+- **Framework:** Flutter 3.x / Dart 3 SDK ≥3.0
+- **Purpose:** iOS/Android companion — same analytics data as the web app, optimised for mobile
+
+### Paths
+- **App root:** `D:\New-jouney\semir\semir-phone\`
+- **Source:** `semir-phone/lib/`
+- **Tests:** `semir-phone/test/` (unit / widget / golden)
+- **Golden images:** `semir-phone/test/goldens/`
+
+### Run Commands
+```bash
+# Debug (local backend)
+cd semir-phone
+flutter run --dart-define=API_BASE_URL=http://localhost:8000/api/v1
+
+# All tests (198 tests)
+flutter test
+
+# Update golden images after visual changes
+flutter test test/golden/golden_test.dart --update-goldens
+
+# Regenerate Riverpod code
+dart run build_runner build --delete-conflicting-outputs
+```
+
+### API Connection
+- Connects to `SemirDashboard/App/api/` REST endpoints under `/api/v1/`
+- `BuildConfig.apiBaseUrl` set at build time via `--dart-define=API_BASE_URL=...` — never from files
+- Production base URL: `https://analytics-customer-dashboard.com/api/v1`
+
+For full architecture, auth flow, navigation, and test details → [project_mobile.md](project_mobile.md)

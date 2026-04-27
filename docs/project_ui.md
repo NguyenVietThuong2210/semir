@@ -232,18 +232,18 @@ JavaScript `element.style.background = 'var(--primary)'` **does** support CSS va
 
 ---
 
-## Visual Snapshot System — `render/`
+## Visual Snapshot System — `tests/render/`
 
-Every UI change MUST be visually verified by regenerating snapshots in the `render/` folder.
+Every UI change MUST be visually verified by regenerating snapshots in `SemirDashboard/tests/render/`.
 
 ### What's snapshotted
 
 For each key page (home, sales, customer, coupon, shop_detail, customer_detail, formulas, charts, sync, upload, user mgmt, admin logs), 4 artifacts are written:
 
-1. `render/<label>.html` — raw rendered HTML for grep/diff
-2. `render/<label>.tables.txt` — per-table summary (headers + first rows)
-3. `render/<label>.token_issues.txt` — only created when hardcoded colors found
-4. `render/pdf/<label>.pdf` + `render/png/<label>.png` — full-page visual
+1. `tests/render/<label>.html` — raw rendered HTML for grep/diff
+2. `tests/render/<label>.tables.txt` — per-table summary (headers + first rows)
+3. `tests/render/<label>.token_issues.txt` — only created when hardcoded colors found
+4. `tests/render/pdf/<label>.pdf` + `tests/render/png/<label>.png` — full-page visual
 
 ### Regenerate after every template change
 
@@ -253,7 +253,7 @@ python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"
 python tests/snapshot_visual.py
 ```
 
-Target: `render/_index.md` should show **0 token issues** across all pages.
+Target: `tests/render/_index.md` should show **0 token issues** across all pages.
 
 ### What the snapshot script checks
 
@@ -278,7 +278,7 @@ pages = [
 After making template changes:
 
 1. Run both scripts above
-2. Open `render/_index.md` — verify Token issues = 0
-3. Open the relevant `render/png/<label>.png` files for changed pages
+2. Open `tests/render/_index.md` — verify Token issues = 0
+3. Open the relevant `tests/render/png/<label>.png` files for changed pages
 4. Compare against the design rules above (text color, dark-tabs, section headers, stat cards, table headers)
 5. Iterate until visual matches the rules

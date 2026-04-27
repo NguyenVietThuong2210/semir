@@ -1,0 +1,2964 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Analytics Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            /* ── Brand blues ─────────────────────── */
+            --primary:        #0369a1;
+            --primary-rgb:    3, 105, 161;
+            --primary-hover:  #075985;
+            --bs-primary:     #0369a1;
+            --bs-primary-rgb: 3, 105, 161;
+            --nav-bg:         #064e77;
+            --secondary:      #4a6785;
+
+            /* ── Accents ─────────────────────────── */
+            --accent:         #06b6d4;
+            --accent-rgb:     6, 182, 212;
+            --coupon:         #7b4000;
+            --success:        #198754;
+            --success-rgb:    25, 135, 84;
+            --danger:         #dc3545;
+            --danger-rgb:     220, 53, 69;
+
+            /* ── Amber / Yellow ──────────────────── */
+            --orange:         #eab308;
+            --orange-rgb:     234, 179, 8;
+            --orange-dark:    #a16207;
+            --highlight:      #fef08a;
+
+            /* ── CNV section palette ────────────── */
+            --cnv-purple:     #7b3f9e;
+            --cnv-navy:       #1a5cb0;
+            --cnv-forest:     #156f3a;
+
+            /* ── Status gradients ────────────────── */
+            --gradient-synced:     linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-not-synced: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+
+            /* ── Grade badges ───────────────────── */
+            --silver:         #94a3b8;
+
+            /* ── Chart series & highlights ──────── */
+            --c-alltime:      #0d6efd;
+            --c-pos:          #e53935;
+            --c-cnv:          #0369a1;
+            --c-zalo:         #2e7d32;
+            --c-oa:           #f57c00;
+            --hl-row:         #93c5fd;
+            --hl-row-light:   #bfdbfe;
+            --hl-cell:        #ffe066;
+            --border-light:   #f0f0f0;
+
+            /* ── Row highlight tints ─────────────── */
+            --highlight-warn: #fff3cd;
+            --highlight-ok:   #f0fdf4;
+
+            /* ── Code syntax ────────────────────── */
+            --code-keyword:   #0066cc;
+            --code-comment:   #666666;
+            --example-bg:     #eef3fb;
+
+            /* ── Neutrals ────────────────────────── */
+            --text:           #374151;
+            --text-dark:      #212529;
+            --text-muted:     #6c757d;
+            --border:         #dee2e6;
+            --bg:             #f8fafc;
+            --bg-light:       #f8f9fa;
+            --gray-tint:      #f0f2f5;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .navbar {
+            background: var(--nav-bg) !important;
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.35);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.3rem;
+        }
+
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, .9) !important;
+            transition: color .2s;
+            font-size: .93rem;
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link.active {
+            color: #fff !important;
+            font-weight: 500;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            border-radius: 8px;
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            transition: all .2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .table th {
+            background: var(--bg-light);
+            font-weight: 600;
+            font-size: .9rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5 {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .badge {
+            padding: .35em .65em;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1.5px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 .2rem rgba(var(--accent-rgb), 0.15);
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+            border: none;
+        }
+
+        .dropdown-item {
+            padding: .65rem 1.25rem;
+            transition: background .15s;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(var(--accent-rgb), 0.08);
+        }
+
+        .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem 0.25rem;
+        }
+
+        .page-link {
+            position: relative;
+            padding: .4rem 0;
+            margin: 0 .75rem;
+        }
+
+        .page-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #fff;
+            transition: width .2s;
+        }
+
+        .page-link:hover::after,
+        .page-link.active::after {
+            width: 100%;
+        }
+
+        @media(max-width:991px) {
+            .navbar-nav {
+                margin-top: 1rem;
+            }
+
+            .nav-item {
+                margin: .25rem 0;
+            }
+
+            .page-link {
+                margin: .25rem 0;
+                padding: .5rem 0;
+            }
+        }
+
+        .kpi-card {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .kpi-card .text-muted {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-link:focus {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .badge.bg-warning,
+        .badge.text-bg-warning {
+            color: var(--text) !important;
+        }
+    </style>
+    
+<style>
+/* Currency variable */
+:root {
+    --currency: 'VND';
+}
+
+.stat-card { min-height:130px; border-radius:10px; }
+.stat-card .card-body { display:flex; flex-direction:column; justify-content:space-between; }
+.stat-value { font-size:1.65rem; font-weight:700; margin:5px 0; }
+.stat-label { font-size:.74rem; text-transform:uppercase; letter-spacing:.5px; }
+
+/* Period Metrics */
+.period-metrics .stat-card {
+    background: rgba(var(--primary-rgb),.09);
+    border: none;
+}
+.period-metrics .stat-card .stat-label {
+    color: var(--text);
+    font-weight: 600;
+}
+.period-metrics .stat-card .stat-value {
+    color: var(--text);
+}
+
+.alltime-metrics .stat-card {
+    background: rgba(var(--orange-rgb),.08);
+    border: none;
+}
+.alltime-metrics .stat-card .stat-label {
+    color: var(--text);
+    font-weight: 600;
+}
+.alltime-metrics .stat-card .stat-value {
+    color: var(--text);
+}
+
+/* Period Metrics - Total Invoices/Amount (wider cards) */
+.stat-card-wide { min-height:110px; }
+
+.dark-tabs .nav-link {
+    background:rgba(255,255,255,.08); color:rgba(255,255,255,.85);
+    border:1px solid rgba(255,255,255,.15); border-radius:6px 6px 0 0;
+    margin-right:3px; font-weight:500; font-size:.88rem;
+}
+.dark-tabs .nav-link:hover  { background:rgba(255,255,255,.18); color:#fff; }
+.dark-tabs .nav-link.active { background:#fff; color:var(--nav-bg); border-color:#fff; font-weight:600; }
+.dark-tabs { border-bottom:none; }
+
+td.c-green { background:rgba(var(--success-rgb),.08)!important; color:#000!important; }
+td.c-info  { background:rgba(var(--accent-rgb),.09)!important;  color:#000!important; }
+td.c-blue  { background:rgba(var(--primary-rgb),.08)!important; color:#000!important; }
+td.c-gray  { background:var(--gray-tint)!important;              color:#000!important; }
+td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!important; }
+
+/* ================================================================
+   COLUMN WIDTH SYSTEM - same type = same width across all tables
+   cnt=count  rate=percentage  inv=invoice#  amt=amount(VND)
+   ================================================================ */
+
+/* By VIP Grade top-level (10 cols: label + 3cnt + 2rate + 2inv + 2amt = 100%) */
+.grade-tbl  { table-layout:fixed; width:100%; }
+.grade-tbl  .col-grade { width: 10%; }
+.grade-tbl  .col-cnt   { width: 10%; }
+.grade-tbl  .col-rate  { width: 10%; }
+.grade-tbl  .col-inv   { width: 10%; }
+.grade-tbl  .col-amt   { width: 10%; }
+
+/* By Season top-level (12 cols: label + 3cnt + 2rate + 3inv + 3amt = 100%) */
+.season-tbl { table-layout:fixed; width:100%; }
+.season-tbl .col-ses   { width:11%; }
+.season-tbl .col-cnt   { width: 7%; }
+.season-tbl .col-rate  { width: 7%; }
+.season-tbl .col-inv   { width: 7%; }
+.season-tbl .col-amt   { width:11%; }
+
+/* By Shop main row (12 cols: label + 3cnt + 2rate + 3inv + 3amt = 100%) */
+.shop-tbl   { table-layout:fixed; width:100%; }
+.shop-tbl   .cn        { width:14%; }
+.shop-tbl   .cv-cnt    { width: 7%; }
+.shop-tbl   .cv-rate   { width: 7%; }
+.shop-tbl   .cv-inv    { width: 7%; }
+.shop-tbl   .cv-amt    { width:10%; }
+
+/* Shop → By Grade sub-table (8 cols: label + 2cnt + 1rate + 2inv + 2amt = 100%) */
+.sub-tbl    { table-layout:fixed; width:100%; font-size:.85rem; }
+.sub-tbl    .sl        { width: 14%; }
+.sub-tbl    .sv-cnt    { width: 7%; }
+.sub-tbl    .sv-rate   { width: 7%; }
+.sub-tbl    .sv-inv    { width: 7%; }
+.sub-tbl    .sv-amt    { width: 10%; }
+
+/* Shop → By Season sub-table (12 cols: label + 3cnt + 2rate + 3inv + 3amt = 100%) */
+.sub-ses-tbl .sl       { width: 14%; }
+.sub-ses-tbl .sv-cnt   { width: 7%; }
+.sub-ses-tbl .sv-rate  { width: 7%; }
+.sub-ses-tbl .sv-inv   { width: 7%; }
+.sub-ses-tbl .sv-amt   { width: 10%; }
+
+.sub-tbl    .amount-vnd { white-space:nowrap; }
+.sub-hdr th { background:rgba(var(--primary-rgb),.10)!important; color:var(--text)!important; font-size:.8rem; }
+.sub-ses th { background:rgba(var(--success-rgb),.10)!important; color:var(--text)!important; font-size:.8rem; }
+
+/* By Grade - All Shops (8 cols: shop + 2cnt + 1rate + 2inv + 2amt ≈ 99%) */
+.grade-compare-tbl { table-layout:fixed; width:100%; }
+.grade-compare-tbl .shop-col  { width:22%; }
+.grade-compare-tbl .val-cnt   { width: 7%; }
+.grade-compare-tbl .val-rate  { width: 7%; }
+.grade-compare-tbl .val-inv   { width: 7%; }
+.grade-compare-tbl .val-amt   { width:21%; }
+
+/* By Season - All Shops (12 cols) */
+.season-compare-tbl { table-layout:fixed; width:100%; }
+.season-compare-tbl .shop-col { width:18%; }
+.season-compare-tbl .val-cnt  { width: 6%; }
+.season-compare-tbl .val-rate { width: 6%; }
+.season-compare-tbl .val-inv  { width: 6%; }
+.season-compare-tbl .val-amt  { width:10%; }
+
+.amount-vnd { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.badge.bg-warning { color:#000!important; }
+</style>
+
+</head>
+
+<body>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow"></i> Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link page-link" href="/">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+
+                    
+                    
+                    <!-- Upload Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Data Upload</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/customers/">
+                                    <i class="bi bi-people"></i> Upload Customers
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/sales/">
+                                    <i class="bi bi-cart"></i> Upload Sales
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/">
+                                    <i class="bi bi-ticket"></i> Upload Coupons
+                                </a>
+                            </li>
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/#campaigns">
+                                    <i class="bi bi-tags"></i> Manage Campaigns
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+                    
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-bar-chart-line"></i> Analytics
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/">
+                                    <i class="bi bi-graph-up"></i> Sales Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/chart/">
+                                    <i class="bi bi-pie-chart"></i> Sales Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-analytics/">
+                                    <i class="bi bi-people-fill"></i> Customer Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-chart/">
+                                    <i class="bi bi-people"></i> Customer Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/">
+                                    <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/chart/">
+                                    <i class="bi bi-pie-chart-fill"></i> Coupon Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/customer-detail/">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/shop-detail/">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- Tools Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Tools
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Additional Tools</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/formulas/">
+                                    <i class="bi bi-calculator"></i> Formulas
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">CNV Loyalty</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/cnv/sync-status/">
+                                    <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/users/">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            
+
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin-logs/">
+                                    <i class="bi bi-journal-text"></i> Admin Logs
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> alex
+                            
+                            
+                            <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
+                            
+                            
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/logout/">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="pq4RTQ06w54l6XA2XZ0a4Oe95kpq9y7b9hE92CQZ9gIC9PrtiP4bZy0rl7kW1qYp">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+
+    <main class="">
+        <div class="container-fluid px-3">
+            
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-bar-chart"></i> Sales Analytics</h2>
+    
+    
+    <a href="/analytics/export/?start_date=2025-01-01&end_date=2025-12-31"
+       class="btn btn-success">
+        <i class="bi bi-download"></i> Export to Excel
+    </a>
+    
+</div>
+
+<!-- Date filter -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" id="dateFilterForm" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-calendar"></i> Start Date</label>
+                <input type="date" class="form-control" name="start_date" value="2025-01-01">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-calendar"></i> End Date</label>
+                <input type="date" class="form-control" name="end_date" value="2025-12-31">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-shop"></i> Shop Group</label>
+                <select class="form-select" name="shop_group">
+                    <option value="">All Shops</option>
+                    <option value="Bala Group" >Bala Group</option>
+                    <option value="Semir Group" >Semir Group</option>
+                    <option value="Others Group" >Others Group</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="bi bi-funnel"></i> Apply
+                </button>
+                <a href="/analytics/" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+            </div>
+        </form>
+        <div class="mt-2 pt-2 border-top">
+            <small class="text-muted me-2">Quick:</small>
+            <div class="btn-group btn-group-sm flex-wrap" id="quickBtnGroup">
+                
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="7">Last 7 Days</button>
+                
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="30">Last 30 Days</button>
+                
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="90">Last 90 Days</button>
+                
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="365">Last Year</button>
+                
+                <button class="btn btn-outline-secondary" id="btnThisMonth">This Month</button>
+                <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
+                <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
+                
+                <button class="btn btn-outline-secondary quick-year-btn" data-year="2024">Year 2024</button>
+                
+                <button class="btn btn-outline-secondary quick-year-btn" data-year="2025">Year 2025</button>
+                
+                <button class="btn btn-outline-secondary quick-year-btn" data-year="2026">Year 2026</button>
+                
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-2 mb-0 py-2">
+            <i class="bi bi-funnel-fill"></i>
+            Period: <strong>2025-01-01</strong> to <strong>2025-12-31</strong>
+            
+            
+        </div>
+        
+    </div>
+</div>
+
+<div class="card mb-3 border-0 bg-light">
+    <div class="card-body py-2">
+        <i class="bi bi-calendar-range text-primary"></i>
+        <strong>Data range:</strong>
+        01 Jan 2025 to 31 Dec 2025
+    </div>
+</div>
+
+<!-- PERIOD METRICS (3 rows) -->
+<p class="text-muted small mb-1 mt-1 fw-semibold text-uppercase">
+    <i class="bi bi-calendar-range"></i> Period Metrics
+</p>
+
+<div class="period-metrics">
+    <!-- Line 1: New Members - Returning Customers - Active - Return Visit Rate -->
+    <div class="row row-cols-2 row-cols-md-4 g-2 mb-2">
+        <div class="col d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">New Members (Period)</div>
+                    <div class="stat-value">28038</div>
+                    <small>New members with invoice</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">Returning Customers (Period)</div>
+                    <div class="stat-value">13156</div>
+                    <small>Came back in period</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">Active (Period)</div>
+                    <div class="stat-value">33050</div>
+                    <small>Unique customers</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">Return Visit Rate (Period)</div>
+                    <div class="stat-value">39.81%</div>
+                    <small>Returning / Active</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Line 2: INV(CUS) - AMT(CUS) - INV(RET) - AMT(RET) -->
+    <div class="row row-cols-2 row-cols-md-4 g-2 mb-2">
+        <div class="col d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">INV(CUS)</div>
+                    <div class="stat-value">65385</div>
+                    <small>VIP customers only</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">AMT(CUS)</div>
+                    <div class="stat-value amount-vnd" style="font-size:1.2rem">
+                        80,202,921,759 VND
+                    </div>
+                    <small>VIP customers only</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">INV(RET)</div>
+                    <div class="stat-value">45491</div>
+                    <small>From returning customers</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">AMT(RET)</div>
+                    <div class="stat-value amount-vnd" style="font-size:1.2rem">
+                        56,106,017,595 VND
+                    </div>
+                    <small>From returning customers</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Line 3: Total Invoices - Total Amount (2 cards spanning 4 columns width) -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-6 d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">Total Invoices</div>
+                    <div class="stat-value">71531</div>
+                    <small>All invoices incl. non-VIP</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 d-flex">
+            <div class="card stat-card w-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="stat-label">Total Amount</div>
+                    <div class="stat-value amount-vnd" style="font-size:1.3rem">
+                        86,627,003,204 VND
+                    </div>
+                    <small>All amounts incl. non-VIP</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ALL-TIME METRICS (4 cards) -->
+<p class="text-muted small mb-1 fw-semibold text-uppercase">
+    <i class="bi bi-infinity"></i> All-Time Metrics
+</p>
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-4 alltime-metrics">
+
+    <div class="col d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="stat-label">Total Customers (All Time)</div>
+                <div class="stat-value">74631</div>
+                <small>In system</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="stat-label">Member Active (All Time)</div>
+                <div class="stat-value">44016</div>
+                <small>Has invoice (all time)</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="stat-label">Member Inactive (All Time)</div>
+                <div class="stat-value">30615</div>
+                <small>No invoice yet (all time)</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col d-flex">
+        <div class="card stat-card w-100 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="stat-label">Return Visit Rate (All Time)</div>
+                <div class="stat-value">17.63%</div>
+                <small>Returning / Total customers</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ABBREVIATIONS INFO CARD -->
+<div class="alert alert-info mb-3" style="background: linear-gradient(135deg, rgba(var(--accent-rgb),.08) 0%, rgba(var(--accent-rgb),.15) 100%); border: none; border-left: 4px solid var(--accent);">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-info-circle-fill text-info me-3" style="font-size: 1.5rem;"></i>
+        <div>
+            <strong class="text-info">Table Column Abbreviations:</strong>
+            <span class="ms-3">
+                <span class="badge bg-primary me-2">INV(RET)</span> = Returning Invoices
+                <span class="badge bg-success me-2 ms-2">AMT(RET)</span> = Returning Amount
+                <span class="badge bg-info me-2 ms-2">INV(CUS)</span> = Customer Invoices
+                <span class="badge bg-warning text-dark me-2 ms-2">AMT(CUS)</span> = Customer Amount
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- ANALYSIS TABS -->
+<div class="card mb-4">
+    <div class="card-header p-0 border-0" style="background:var(--nav-bg)">
+        <ul class="nav dark-tabs px-3 pt-2 flex-wrap" id="analysisTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#gradeTab" type="button">
+                    <i class="bi bi-star-half"></i> By VIP Grade
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sessionTab" type="button"
+                        data-lazy-url="/analytics/tab/season/" data-lazy-params="start_date=2025-01-01&amp;end_date=2025-12-31">
+                    <i class="bi bi-calendar3"></i> By Season
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#monthTab" type="button"
+                        data-lazy-url="/analytics/tab/month/" data-lazy-params="start_date=2025-01-01&amp;end_date=2025-12-31">
+                    <i class="bi bi-calendar-month"></i> By Month
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#weekTab" type="button"
+                        data-lazy-url="/analytics/tab/week/" data-lazy-params="start_date=2025-01-01&amp;end_date=2025-12-31">
+                    <i class="bi bi-calendar-week"></i> By Week
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#shopTab" type="button"
+                        data-lazy-url="/analytics/tab/shop/" data-lazy-params="start_date=2025-01-01&amp;end_date=2025-12-31">
+                    <i class="bi bi-shop"></i> By Shop
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#gradeCompareTab" type="button"
+                        data-lazy-url="/analytics/tab/grade_allshops/" data-lazy-params="start_date=2025-01-01&amp;end_date=2025-12-31">
+                    <i class="bi bi-award"></i> By Grade - All Shops
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#seasonCompareTab" type="button"
+                        data-lazy-url="/analytics/tab/season_allshops/" data-lazy-params="start_date=2025-01-01&amp;end_date=2025-12-31">
+                    <i class="bi bi-calendar3"></i> By Season - All Shops
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#monthCompareTab" type="button"
+                        data-lazy-url="/analytics/tab/month_allshops/" data-lazy-params="start_date=2025-01-01&amp;end_date=2025-12-31">
+                    <i class="bi bi-calendar-month"></i> By Month - All Shops
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#weekCompareTab" type="button"
+                        data-lazy-url="/analytics/tab/week_allshops/" data-lazy-params="start_date=2025-01-01&amp;end_date=2025-12-31">
+                    <i class="bi bi-calendar-week"></i> By Week - All Shops
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card-body tab-content p-0">
+
+        <!-- BY VIP GRADE TAB -->
+        <div class="tab-pane fade show active p-3" id="gradeTab">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <p class="text-muted small mb-0">Grade order: No Grade to Member to Silver to Gold to Diamond.</p>
+                <a href="/analytics/export/?tab=grade&start_date=2025-01-01&end_date=2025-12-31" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle mb-0 grade-tbl">
+                    <thead style="background-color: var(--primary); color: white;">
+                        <tr>
+                            <th class="col-grade">VIP Grade</th>
+                            <th class="col-cnt text-end">Active (Period)</th>
+                            <th class="col-cnt text-end">Returning</th>
+                            <th class="col-rate text-end">Return Visit Rate</th>
+                            <th class="col-cnt text-end">Total (All Time)</th>
+                            <th class="col-rate text-end">Return Visit Rate (All Time)</th>
+                            <th class="col-inv text-end">INV(RET)</th>
+                            <th class="col-amt text-end">AMT(RET)</th>
+                            <th class="col-inv text-end">Total INV</th>
+                            <th class="col-amt text-end">Total Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td><strong>No Grade</strong></td>
+                            <td class="col-cnt text-end">0</td>
+                            <td class="col-cnt text-end">0</td>
+                            <td class="col-rate text-end"><span class="badge bg-primary">0%</span></td>
+                            <td class="col-cnt text-end">0</td>
+                            <td class="col-rate text-end"><span class="badge bg-warning">0%</span></td>
+                            <td class="col-inv text-end text-success">0</td>
+                            <td class="col-amt text-end text-success amount-vnd">0 VND</td>
+                            <td class="col-inv text-end">0</td>
+                            <td class="col-amt text-end amount-vnd">0 VND</td>
+                        </tr>
+                        
+                        <tr>
+                            <td><strong>Member</strong></td>
+                            <td class="col-cnt text-end">29730</td>
+                            <td class="col-cnt text-end">10006</td>
+                            <td class="col-rate text-end"><span class="badge bg-primary">33.66%</span></td>
+                            <td class="col-cnt text-end">70581</td>
+                            <td class="col-rate text-end"><span class="badge bg-warning">14.18%</span></td>
+                            <td class="col-inv text-end text-success">22280</td>
+                            <td class="col-amt text-end text-success amount-vnd">22,883,920,086 VND</td>
+                            <td class="col-inv text-end">42004</td>
+                            <td class="col-amt text-end amount-vnd">45,903,114,930 VND</td>
+                        </tr>
+                        
+                        <tr>
+                            <td><strong>Silver</strong></td>
+                            <td class="col-cnt text-end">2257</td>
+                            <td class="col-cnt text-end">2103</td>
+                            <td class="col-rate text-end"><span class="badge bg-primary">93.18%</span></td>
+                            <td class="col-cnt text-end">2810</td>
+                            <td class="col-rate text-end"><span class="badge bg-warning">74.84%</span></td>
+                            <td class="col-inv text-end text-success">9719</td>
+                            <td class="col-amt text-end text-success amount-vnd">13,908,509,605 VND</td>
+                            <td class="col-inv text-end">9873</td>
+                            <td class="col-amt text-end amount-vnd">14,852,817,145 VND</td>
+                        </tr>
+                        
+                        <tr>
+                            <td><strong>Gold</strong></td>
+                            <td class="col-cnt text-end">682</td>
+                            <td class="col-cnt text-end">669</td>
+                            <td class="col-rate text-end"><span class="badge bg-primary">98.09%</span></td>
+                            <td class="col-cnt text-end">852</td>
+                            <td class="col-rate text-end"><span class="badge bg-warning">78.52%</span></td>
+                            <td class="col-inv text-end text-success">4676</td>
+                            <td class="col-amt text-end text-success amount-vnd">7,323,616,216 VND</td>
+                            <td class="col-inv text-end">4689</td>
+                            <td class="col-amt text-end amount-vnd">7,450,534,746 VND</td>
+                        </tr>
+                        
+                        <tr>
+                            <td><strong>Diamond</strong></td>
+                            <td class="col-cnt text-end">381</td>
+                            <td class="col-cnt text-end">378</td>
+                            <td class="col-rate text-end"><span class="badge bg-primary">99.21%</span></td>
+                            <td class="col-cnt text-end">388</td>
+                            <td class="col-rate text-end"><span class="badge bg-warning">97.42%</span></td>
+                            <td class="col-inv text-end text-success">8816</td>
+                            <td class="col-amt text-end text-success amount-vnd">11,989,971,688 VND</td>
+                            <td class="col-inv text-end">8819</td>
+                            <td class="col-amt text-end amount-vnd">11,996,454,938 VND</td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- BY SEASON TAB — lazy loaded -->
+        <div class="tab-pane fade p-3" id="sessionTab">
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data…
+            </div>
+        </div>
+
+        <!-- BY MONTH TAB — lazy loaded -->
+        <div class="tab-pane fade p-3" id="monthTab">
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data…
+            </div>
+        </div>
+
+        <!-- BY WEEK TAB — lazy loaded -->
+        <div class="tab-pane fade p-3" id="weekTab">
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data…
+            </div>
+        </div>
+
+        <!-- BY SHOP TAB —  lazy loaded -->
+        <div class="tab-pane fade p-3" id="shopTab">
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data…
+            </div>
+        </div>
+        <!-- BY GRADE - ALL SHOPS TAB -->
+        <div class="tab-pane fade p-3" id="gradeCompareTab">
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data…
+            </div>
+        </div>
+        <!-- BY SEASON - ALL SHOPS TAB -->
+        <div class="tab-pane fade p-3" id="seasonCompareTab">
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data…
+            </div>
+        </div>
+        <!-- BY MONTH - ALL SHOPS TAB -->
+        <div class="tab-pane fade p-3" id="monthCompareTab">
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data…
+            </div>
+        </div>
+        <!-- BY WEEK - ALL SHOPS TAB -->
+        <div class="tab-pane fade p-3" id="weekCompareTab">
+            <div class="lazy-tab-placeholder d-flex align-items-center justify-content-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading</span></div>
+                Loading data…
+            </div>
+        </div>
+    
+<script>
+(function () {
+    "use strict";
+
+    function loadLazyTab(btn, pane) {
+        var url = btn.dataset.lazyUrl;
+        if (!url || btn.dataset.loaded === "true") return;
+
+        // Build URL with any extra params encoded on the button
+        var params = btn.dataset.lazyParams || "";
+        var fullUrl = params ? (url + (url.includes("?") ? "&" : "?") + params) : url;
+
+        var placeholder = pane.querySelector(".lazy-tab-placeholder");
+        if (!placeholder) return;
+
+        fetch(fullUrl, {headers: {"X-Requested-With": "XMLHttpRequest"}})
+            .then(function (r) {
+                if (!r.ok) throw new Error("HTTP " + r.status);
+                return r.text();
+            })
+            .then(function (html) {
+                placeholder.outerHTML = html;
+                btn.dataset.loaded = "true";
+                // Trigger custom event so page JS can post-process (e.g. init DataTables)
+                pane.dispatchEvent(new CustomEvent("lazyTabLoaded", {bubbles: true}));
+            })
+            .catch(function (err) {
+                placeholder.innerHTML =
+                    '<div class="alert alert-danger m-3">Failed to load tab: ' + err.message + '</div>';
+            });
+    }
+
+    document.addEventListener("show.bs.tab", function (e) {
+        var btn  = e.target;          // the newly activated tab button
+        var paneId = btn.dataset.bsTarget;
+        if (!paneId) return;
+        var pane = document.querySelector(paneId);
+        if (pane) loadLazyTab(btn, pane);
+    });
+
+    // Trigger loading for any initially active tab that has a placeholder
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll(".tab-pane.show.active .lazy-tab-placeholder").forEach(function (ph) {
+            var pane = ph.closest(".tab-pane");
+            if (!pane) return;
+            var btn = document.querySelector('[data-bs-target="#' + pane.id + '"][data-lazy-url]');
+            if (btn) loadLazyTab(btn, pane);
+        });
+    });
+})();
+</script>
+
+    </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- BUYER WITHOUT INFO SECTION - Simple blue headers -->
+<!-- ============================================================================ -->
+<div class="card mb-4">
+    <div class="card-header" style="background:var(--primary); color:#fff; border-bottom:none;">
+        <i class="bi bi-question-circle"></i> Buyer Without Info (VIP ID = 0)
+        <span class="badge bg-dark float-end">Excluded from Customer Metrics</span>
+    </div>
+    <div class="card-body">
+        
+        <!-- Period and All-Time Summary -->
+        <div class="row mb-4">
+            <!-- Period Summary -->
+            <div class="col-md-6">
+                <div class="card border">
+                    <div class="card-header" style="background:var(--primary); color:#fff; border-bottom:none;">
+                        <h6 class="mb-0"><i class="bi bi-calendar-range"></i> Period Summary</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <h4>6146</h4>
+                                <small class="text-muted">(8.59% of all)</small>
+                            </div>
+                            <div class="col-6">
+                                <h4>6,424,081,445</h4>
+                                <small class="text-muted">(7.42% of all)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- All-Time Summary -->
+            <div class="col-md-6">
+                <div class="card border">
+                    <div class="card-header" style="background:var(--primary); color:#fff; border-bottom:none;">
+                        <h6 class="mb-0"><i class="bi bi-clock-history"></i> All-Time Summary</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <h4>23981</h4>
+                                <small class="text-muted">Invoices</small>
+                            </div>
+                            <div class="col-6">
+                                <h4>34,934,165,723</h4>
+                                <small class="text-muted">VND</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- By Shop Breakdown -->
+        <div class="card">
+            <div class="card-header" style="background:var(--primary); color:#fff; border-bottom:none;">
+                <i class="bi bi-shop"></i> By Shop Breakdown (Period)
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead style="background-color: var(--primary); color: white;">
+                            <tr>
+                                <th>Shop</th>
+                                <th class="text-end">Total Invoices</th>
+                                <th class="text-end">Total Amount</th>
+                                <th class="text-end">% Inv (All Period)</th>
+                                <th class="text-end">% Amt (All Period)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            
+                            <tr>
+                                <td><strong>Bala VN Haiphong AEON MALL- Direct</strong></td>
+                                <td class="text-end">283</td>
+                                <td class="text-end">226,440,780 VND</td>
+                                <td class="text-end">0.4%</td>
+                                <td class="text-end">0.26%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Hanoi AEON MALL HA DONG - Direct</strong></td>
+                                <td class="text-end">339</td>
+                                <td class="text-end">251,434,300 VND</td>
+                                <td class="text-end">0.47%</td>
+                                <td class="text-end">0.29%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Hanoi AEON MALL LONG BIEN- Direct</strong></td>
+                                <td class="text-end">597</td>
+                                <td class="text-end">561,217,934 VND</td>
+                                <td class="text-end">0.83%</td>
+                                <td class="text-end">0.65%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Hanoi Lotte Westlake Mall - Direct</strong></td>
+                                <td class="text-end">1096</td>
+                                <td class="text-end">2,092,802,050 VND</td>
+                                <td class="text-end">1.53%</td>
+                                <td class="text-end">2.42%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Hanoi SAVICO MEGAMALL- Direct</strong></td>
+                                <td class="text-end">3</td>
+                                <td class="text-end">239,000 VND</td>
+                                <td class="text-end">0.0%</td>
+                                <td class="text-end">0.0%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Hanoi Vincom Royal City- Direct</strong></td>
+                                <td class="text-end">509</td>
+                                <td class="text-end">319,402,850 VND</td>
+                                <td class="text-end">0.71%</td>
+                                <td class="text-end">0.37%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Hanoi Vincom Times City- Direct</strong></td>
+                                <td class="text-end">46</td>
+                                <td class="text-end">25,063,505 VND</td>
+                                <td class="text-end">0.06%</td>
+                                <td class="text-end">0.03%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct</strong></td>
+                                <td class="text-end">54</td>
+                                <td class="text-end">21,090,550 VND</td>
+                                <td class="text-end">0.08%</td>
+                                <td class="text-end">0.02%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Ho Chi Minh Crescent Mall - Direct</strong></td>
+                                <td class="text-end">103</td>
+                                <td class="text-end">114,579,600 VND</td>
+                                <td class="text-end">0.14%</td>
+                                <td class="text-end">0.13%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Ho Chi Minh HMC Takashimaya Dept.- Direct</strong></td>
+                                <td class="text-end">1382</td>
+                                <td class="text-end">1,502,718,225 VND</td>
+                                <td class="text-end">1.93%</td>
+                                <td class="text-end">1.73%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Ho Chi Minh Thiso Mall Sala - Direct</strong></td>
+                                <td class="text-end">194</td>
+                                <td class="text-end">190,135,901 VND</td>
+                                <td class="text-end">0.27%</td>
+                                <td class="text-end">0.22%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Ho Chi Minh VAN HANH MALL- Direct</strong></td>
+                                <td class="text-end">101</td>
+                                <td class="text-end">35,240,050 VND</td>
+                                <td class="text-end">0.14%</td>
+                                <td class="text-end">0.04%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Bala VN Hue Aeon Mall Hue-  POP-UP</strong></td>
+                                <td class="text-end">59</td>
+                                <td class="text-end">40,579,100 VND</td>
+                                <td class="text-end">0.08%</td>
+                                <td class="text-end">0.05%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Semir VN HUE AEON Mall- Direct</strong></td>
+                                <td class="text-end">870</td>
+                                <td class="text-end">698,229,300 VND</td>
+                                <td class="text-end">1.22%</td>
+                                <td class="text-end">0.81%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Semir VN Hanoi VINCOM TIMES CITY- Direct</strong></td>
+                                <td class="text-end">441</td>
+                                <td class="text-end">294,991,250 VND</td>
+                                <td class="text-end">0.62%</td>
+                                <td class="text-end">0.34%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>巴拉越南顺化Aeon Hue-直营快闪店(24SHAR0323)</strong></td>
+                                <td class="text-end">64</td>
+                                <td class="text-end">52,551,000 VND</td>
+                                <td class="text-end">0.09%</td>
+                                <td class="text-end">0.06%</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>森马越南胡志明VHM 临时特卖店</strong></td>
+                                <td class="text-end">5</td>
+                                <td class="text-end">-2,633,950 VND</td>
+                                <td class="text-end">0.01%</td>
+                                <td class="text-end">-0.0%</td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-people"></i> Customer Details
+        
+        <span class="badge bg-info float-end">Top 100 of 33050</span>
+        
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>VIP ID</th><th>Name</th><th>Grade</th>
+                        <th>Reg. Date</th><th>First Purchase (Period)</th>
+                        <th class="text-end">Purchases (Period)</th>
+                        <th class="text-end">Return Visits (Period)</th>
+                        <th class="text-end">Total Spent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>1460925</strong></td>
+                        <td>Nguyễn Thị Thuỳ Linh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-08-23</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">348</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">348</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">262971550 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1461344</strong></td>
+                        <td>Chị Dung</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-05</td>
+                        <td class="text-end">243</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">243</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">192543350 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1500999</strong></td>
+                        <td>MWRIHM</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-05-07</td>
+                        <td>2025-05-07</td>
+                        <td class="text-end">204</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">203</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">90931136 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1489934</strong></td>
+                        <td>Chị Yến</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-11-14</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">199</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">199</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">158741831 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1499198</strong></td>
+                        <td>Kiệt</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-04-17</td>
+                        <td>2025-04-19</td>
+                        <td class="text-end">167</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">167</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">99908209 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1490647</strong></td>
+                        <td>Chị Nguyên</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-12-01</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">160</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">160</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">266720910 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1460923</strong></td>
+                        <td>Chị Thuỳ</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-08-23</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">149</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">149</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">79637920 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1502493</strong></td>
+                        <td>Ánh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-05-27</td>
+                        <td>2025-07-01</td>
+                        <td class="text-end">146</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">146</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">69363242 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1504880</strong></td>
+                        <td>c Oanh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-06-21</td>
+                        <td>2025-06-25</td>
+                        <td class="text-end">143</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">143</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">62220699 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1471981</strong></td>
+                        <td>chị Ngọc</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">141</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">141</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">93415961 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1492165</strong></td>
+                        <td>Duong</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-12-28</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">135</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">135</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">94958370 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1477753</strong></td>
+                        <td>C.Huyền</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-03</td>
+                        <td class="text-end">129</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">129</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">89632700 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496142</strong></td>
+                        <td>c hiền</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-02-19</td>
+                        <td>2025-02-19</td>
+                        <td class="text-end">130</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">129</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">81418209 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1491390</strong></td>
+                        <td>anh hiếu</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-12-17</td>
+                        <td>2025-01-03</td>
+                        <td class="text-end">128</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">128</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">68162853 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1490655</strong></td>
+                        <td>Chị Chi</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2024-12-01</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">111</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">111</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">84000180 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1481762</strong></td>
+                        <td>Hải Anh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">100</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">100</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">73681046 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1489520</strong></td>
+                        <td>Tuyết Anh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-11-01</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">96</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">96</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">62024234 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496724</strong></td>
+                        <td>Thắm</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-03-03</td>
+                        <td>2025-03-07</td>
+                        <td class="text-end">94</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">94</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">83205439 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1497425</strong></td>
+                        <td>CHI TAM</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-03-16</td>
+                        <td>2025-03-16</td>
+                        <td class="text-end">87</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">86</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">43593745 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1460680</strong></td>
+                        <td>Lê Nguyễn nguyệt Quế</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-08-06</td>
+                        <td>2025-01-03</td>
+                        <td class="text-end">85</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">85</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">138997940 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496733</strong></td>
+                        <td>Chị Tâm</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-03-03</td>
+                        <td>2025-03-03</td>
+                        <td class="text-end">84</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">83</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">54170350 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1460545</strong></td>
+                        <td>TA VINH DUC</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-07-04</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">81</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">81</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">112288200 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1519700</strong></td>
+                        <td>Bala Lotte</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-11-01</td>
+                        <td>2025-11-01</td>
+                        <td class="text-end">82</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">81</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">225108316 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1504165</strong></td>
+                        <td>chj quyen</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-06-10</td>
+                        <td>2025-06-14</td>
+                        <td class="text-end">80</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">80</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">33131964 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1490729</strong></td>
+                        <td>Tin</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2024-12-01</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">78</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">78</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">121545530 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1492825</strong></td>
+                        <td>CHỊ Khang</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-01-05</td>
+                        <td>2025-01-06</td>
+                        <td class="text-end">75</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">75</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">74058440 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1492467</strong></td>
+                        <td>LINH</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-01-01</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">69</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">68</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">64388582 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496868</strong></td>
+                        <td>C HÀ</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-03-07</td>
+                        <td>2025-03-12</td>
+                        <td class="text-end">65</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">65</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">55984980 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1499729</strong></td>
+                        <td>CHỊ LYLY</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-04-25</td>
+                        <td>2025-04-25</td>
+                        <td class="text-end">66</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">65</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">74091630 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1494566</strong></td>
+                        <td>Anh Sơn</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-01-23</td>
+                        <td>2025-01-23</td>
+                        <td class="text-end">65</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">64</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">67524035 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1492378</strong></td>
+                        <td>NGỌC ANH</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-01-01</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">64</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">63</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">74211897 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1492580</strong></td>
+                        <td>Tuyết Nhi</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-01-02</td>
+                        <td>2025-01-03</td>
+                        <td class="text-end">60</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">60</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">41509500 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1503132</strong></td>
+                        <td>ANH HIẾU</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-06-01</td>
+                        <td>2025-06-01</td>
+                        <td class="text-end">61</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">60</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">42201960 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1489460</strong></td>
+                        <td>Anh Thắng</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-10-29</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">58</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">58</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">78157441 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1489756</strong></td>
+                        <td>Đặng Thảo</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-11-08</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">55</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">55</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">33897690 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1509106</strong></td>
+                        <td>CHỊ YẾN</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-07-31</td>
+                        <td>2025-07-31</td>
+                        <td class="text-end">56</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">55</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">23782900 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1513029</strong></td>
+                        <td>NHU</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-08-29</td>
+                        <td>2025-09-12</td>
+                        <td class="text-end">55</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">55</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">49823730 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1490833</strong></td>
+                        <td>C Hường</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-12-05</td>
+                        <td>2025-01-02</td>
+                        <td class="text-end">54</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">54</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">31945600 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1488977</strong></td>
+                        <td>C.Ánh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-10-07</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">53</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">38931100 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1488733</strong></td>
+                        <td>Chị Julia</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-24</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">53</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">46126398 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1492576</strong></td>
+                        <td>phúc</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-01-02</td>
+                        <td>2025-01-04</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">53</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">34073260 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1492721</strong></td>
+                        <td>nguyễn ngọc nhi</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-01-04</td>
+                        <td>2025-01-15</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">53</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">33528450 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1501350</strong></td>
+                        <td>chi minh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-05-12</td>
+                        <td>2025-06-05</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">53</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">22607191 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1507101</strong></td>
+                        <td>C THUY</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2025-07-12</td>
+                        <td>2025-07-15</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">53</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">19686490 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1495454</strong></td>
+                        <td>Anh Trung</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-02-02</td>
+                        <td>2025-02-02</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">52</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">30124035 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496143</strong></td>
+                        <td>Chị Hải Anh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-02-19</td>
+                        <td>2025-02-19</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">52</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">31294140 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1499555</strong></td>
+                        <td>c hương</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-04-21</td>
+                        <td>2025-04-21</td>
+                        <td class="text-end">53</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">52</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">37338710 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1489339</strong></td>
+                        <td>Lê Tài</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-10-23</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">51</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">51</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">29709416 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1473848</strong></td>
+                        <td>c quỳnh chi</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">51</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">51</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">37462535 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496835</strong></td>
+                        <td>CHỊ ANH THƯ</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-03-06</td>
+                        <td>2025-03-09</td>
+                        <td class="text-end">51</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">51</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">45477000 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1467888</strong></td>
+                        <td>CÔ QUYNH</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-03</td>
+                        <td class="text-end">49</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">49</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">30591130 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1506794</strong></td>
+                        <td>c huyền</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2025-07-08</td>
+                        <td>2025-07-08</td>
+                        <td class="text-end">46</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">45</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">17471647 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1518175</strong></td>
+                        <td>Anh Hào</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-10-08</td>
+                        <td>2025-10-08</td>
+                        <td class="text-end">45</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">44</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">36212184 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1509523</strong></td>
+                        <td>Anh Nam</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-08-03</td>
+                        <td>2025-08-03</td>
+                        <td class="text-end">44</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">43</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">104880862 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1518737</strong></td>
+                        <td>NGỌC ANH</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-10-18</td>
+                        <td>2025-11-14</td>
+                        <td class="text-end">43</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">43</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">27665570 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1501737</strong></td>
+                        <td>chị Trúc</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-05-19</td>
+                        <td>2025-05-25</td>
+                        <td class="text-end">42</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">42</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">31485650 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1489004</strong></td>
+                        <td>A Kim Long</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-10-07</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">41</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">41</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">35082466 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1499142</strong></td>
+                        <td>Chị A</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-04-16</td>
+                        <td>2025-05-03</td>
+                        <td class="text-end">40</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">40</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">27102000 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1471097</strong></td>
+                        <td>c ly</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-10</td>
+                        <td class="text-end">39</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">39</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">46264840 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1495826</strong></td>
+                        <td>Trắng</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-02-11</td>
+                        <td>2025-02-12</td>
+                        <td class="text-end">39</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">39</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">61467488 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1497376</strong></td>
+                        <td>Chị Ngọc Anh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-03-16</td>
+                        <td>2025-03-16</td>
+                        <td class="text-end">40</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">39</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">24928990 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1506008</strong></td>
+                        <td>c Trang</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-07-02</td>
+                        <td>2025-07-02</td>
+                        <td class="text-end">40</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">39</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">24923440 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1506748</strong></td>
+                        <td>nhi</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-07-08</td>
+                        <td>2025-07-08</td>
+                        <td class="text-end">40</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">39</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">64832865 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1488111</strong></td>
+                        <td>Phạm Hoàng Mỹ Linh</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-14</td>
+                        <td>2025-02-08</td>
+                        <td class="text-end">38</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">38</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">47597641 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1500643</strong></td>
+                        <td>Hiền</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2025-05-02</td>
+                        <td>2025-05-03</td>
+                        <td class="text-end">38</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">38</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">14216470 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496889</strong></td>
+                        <td>C hảo</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2025-03-08</td>
+                        <td>2025-03-08</td>
+                        <td class="text-end">38</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">37</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">18111249 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1491656</strong></td>
+                        <td>Chị Phương</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-12-22</td>
+                        <td>2025-01-05</td>
+                        <td class="text-end">36</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">36</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">20110120 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1505208</strong></td>
+                        <td>Thái</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2025-06-25</td>
+                        <td>2025-06-25</td>
+                        <td class="text-end">37</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">36</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">14056255 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1521682</strong></td>
+                        <td>Khách nước ngoài</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-11-22</td>
+                        <td>2025-11-22</td>
+                        <td class="text-end">37</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">36</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">99174563 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1488426</strong></td>
+                        <td>Mai Thị Tường Vy</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-16</td>
+                        <td>2025-01-28</td>
+                        <td class="text-end">35</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">35</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">34348292 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1497145</strong></td>
+                        <td>Bảo</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2025-03-10</td>
+                        <td>2025-03-16</td>
+                        <td class="text-end">35</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">35</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">17385806 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1460812</strong></td>
+                        <td>Ngọc My</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-08-21</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">34</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">34</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">21753955 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1461018</strong></td>
+                        <td>chị hoà</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-08-23</td>
+                        <td>2025-01-07</td>
+                        <td class="text-end">34</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">34</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">38198773 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1483408</strong></td>
+                        <td>c thủy</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-20</td>
+                        <td class="text-end">34</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">34</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">86091147 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1490220</strong></td>
+                        <td>Phan Bảo Thành</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-11-23</td>
+                        <td>2025-02-02</td>
+                        <td class="text-end">34</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">34</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">32451598 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1461851</strong></td>
+                        <td>anh Huy</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-10-27</td>
+                        <td class="text-end">34</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">34</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">16505800 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1495621</strong></td>
+                        <td>Thao</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-02-06</td>
+                        <td>2025-02-06</td>
+                        <td class="text-end">34</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">33</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">22131000 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496218</strong></td>
+                        <td>c hang</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-02-21</td>
+                        <td>2025-03-06</td>
+                        <td class="text-end">33</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">33</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">26979230 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1489822</strong></td>
+                        <td>c tRang</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-11-10</td>
+                        <td>2025-01-13</td>
+                        <td class="text-end">32</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">32</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">47522196 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1460748</strong></td>
+                        <td>Chị Châu</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-08-13</td>
+                        <td>2025-02-07</td>
+                        <td class="text-end">32</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">32</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">48809040 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1511919</strong></td>
+                        <td>ANH MINH</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-08-18</td>
+                        <td>2025-08-18</td>
+                        <td class="text-end">33</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">32</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">20618068 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1491962</strong></td>
+                        <td>c ngân</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-12-26</td>
+                        <td>2025-01-02</td>
+                        <td class="text-end">31</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">31</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">23821750 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1490470</strong></td>
+                        <td>A Chiến</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2024-11-29</td>
+                        <td>2025-01-04</td>
+                        <td class="text-end">31</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">31</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">17403700 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1496802</strong></td>
+                        <td>c Xuân</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-03-05</td>
+                        <td>2025-03-05</td>
+                        <td class="text-end">32</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">31</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">29721831 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1487107</strong></td>
+                        <td>chi nga</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-04</td>
+                        <td>2025-01-24</td>
+                        <td class="text-end">30</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">30</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">86737205 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1497281</strong></td>
+                        <td>anh phụng</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-03-14</td>
+                        <td>2025-03-14</td>
+                        <td class="text-end">31</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">30</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">28350400 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1513784</strong></td>
+                        <td>Chị Hiền</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-09-01</td>
+                        <td>2025-09-01</td>
+                        <td class="text-end">31</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">30</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">21964900 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1460628</strong></td>
+                        <td>Chị Lý</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2024-08-03</td>
+                        <td>2025-01-08</td>
+                        <td class="text-end">29</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">29</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">16314675 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1495827</strong></td>
+                        <td>Hoài Lan</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-02-11</td>
+                        <td>2025-03-26</td>
+                        <td class="text-end">29</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">29</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">38796087 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1491102</strong></td>
+                        <td>Chị Lý</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-12-10</td>
+                        <td>2025-01-08</td>
+                        <td class="text-end">28</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">28</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">30521100 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1477535</strong></td>
+                        <td>c trang</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-01-11</td>
+                        <td class="text-end">28</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">28</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">35669820 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1490388</strong></td>
+                        <td>Chị Thu Trang</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-11-25</td>
+                        <td>2025-01-21</td>
+                        <td class="text-end">28</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">28</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">31433860 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1503636</strong></td>
+                        <td>CHỊ LINH</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-06-02</td>
+                        <td>2025-06-02</td>
+                        <td class="text-end">29</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">28</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">20702200 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1504277</strong></td>
+                        <td>QUYNH</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-06-12</td>
+                        <td>2025-06-12</td>
+                        <td class="text-end">29</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">28</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">45411808 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1504940</strong></td>
+                        <td>C Hân</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2025-06-21</td>
+                        <td>2025-06-21</td>
+                        <td class="text-end">29</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">28</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">15715346 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1512278</strong></td>
+                        <td>NHI NHI</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2025-08-22</td>
+                        <td>2025-08-22</td>
+                        <td class="text-end">29</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">28</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">26306280 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1489886</strong></td>
+                        <td>C. Linh</td>
+                        <td><span class="badge bg-secondary">Gold</span></td>
+                        <td>2024-11-11</td>
+                        <td>2025-01-01</td>
+                        <td class="text-end">27</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">27</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">12265228 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1460833</strong></td>
+                        <td>chị Trang</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-08-21</td>
+                        <td>2025-01-16</td>
+                        <td class="text-end">27</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">27</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">102398270 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1488919</strong></td>
+                        <td>chị huyen</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-10-05</td>
+                        <td>2025-03-17</td>
+                        <td class="text-end">27</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">27</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">53997180 VND</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>1477047</strong></td>
+                        <td>A.Sơn</td>
+                        <td><span class="badge bg-secondary">Diamond</span></td>
+                        <td>2024-09-02</td>
+                        <td>2025-04-12</td>
+                        <td class="text-end">27</td>
+                        <td class="text-end">
+                            
+                            <span class="badge bg-success">27</span>
+                            
+                        </td>
+                        <td class="text-end amount-vnd">34929095 VND</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="p-3 text-muted small border-top">
+            Showing top 100 by return visits. Export to Excel for all 33050 records.
+        </div>
+        
+    </div>
+</div>
+
+<div class="text-center mb-4">
+    <a href="/" class="btn btn-outline-secondary page-link">
+        <i class="bi bi-arrow-left"></i> Back to Home
+    </a>
+</div>
+
+
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+<script>
+function _fmt(d) {
+    return d.getFullYear() + '-'
+        + String(d.getMonth() + 1).padStart(2, '0') + '-'
+        + String(d.getDate()).padStart(2, '0');
+}
+function _submit(s, e) {
+    document.querySelector('[name=start_date]').value = s;
+    document.querySelector('[name=end_date]').value   = e;
+    showLoading('Loading analytics...');
+    document.getElementById('dateFilterForm').submit();
+}
+document.querySelectorAll('.quick-days-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var n = parseInt(this.dataset.days, 10), end = new Date(), start = new Date();
+        start.setDate(start.getDate() - n);
+        _submit(_fmt(start), _fmt(end));
+    });
+});
+document.getElementById('btnThisMonth').addEventListener('click', function() {
+    var n = new Date();
+    _submit(_fmt(new Date(n.getFullYear(), n.getMonth(), 1)),
+            _fmt(new Date(n.getFullYear(), n.getMonth() + 1, 0)));
+});
+document.getElementById('btnLastMonth').addEventListener('click', function() {
+    var n = new Date();
+    _submit(_fmt(new Date(n.getFullYear(), n.getMonth() - 1, 1)),
+            _fmt(new Date(n.getFullYear(), n.getMonth(), 0)));
+});
+document.getElementById('btnThisYear').addEventListener('click', function() {
+    var y = new Date().getFullYear();
+    _submit(y + '-01-01', y + '-12-31');
+});
+document.querySelectorAll('.quick-year-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var year = this.dataset.year;
+        _submit(year + '-01-01', year + '-12-31');
+    });
+});
+document.getElementById('dateFilterForm').addEventListener('submit', function() {
+    showLoading('Loading analytics...');
+});
+</script>
+
+</body>
+
+</html>

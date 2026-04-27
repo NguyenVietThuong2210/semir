@@ -1,0 +1,1916 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Logs</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            /* ── Brand blues ─────────────────────── */
+            --primary:        #0369a1;
+            --primary-rgb:    3, 105, 161;
+            --primary-hover:  #075985;
+            --bs-primary:     #0369a1;
+            --bs-primary-rgb: 3, 105, 161;
+            --nav-bg:         #064e77;
+            --secondary:      #4a6785;
+
+            /* ── Accents ─────────────────────────── */
+            --accent:         #06b6d4;
+            --accent-rgb:     6, 182, 212;
+            --coupon:         #7b4000;
+            --success:        #198754;
+            --success-rgb:    25, 135, 84;
+            --danger:         #dc3545;
+            --danger-rgb:     220, 53, 69;
+
+            /* ── Amber / Yellow ──────────────────── */
+            --orange:         #eab308;
+            --orange-rgb:     234, 179, 8;
+            --orange-dark:    #a16207;
+            --highlight:      #fef08a;
+
+            /* ── CNV section palette ────────────── */
+            --cnv-purple:     #7b3f9e;
+            --cnv-navy:       #1a5cb0;
+            --cnv-forest:     #156f3a;
+
+            /* ── Status gradients ────────────────── */
+            --gradient-synced:     linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-not-synced: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+
+            /* ── Grade badges ───────────────────── */
+            --silver:         #94a3b8;
+
+            /* ── Chart series & highlights ──────── */
+            --c-alltime:      #0d6efd;
+            --c-pos:          #e53935;
+            --c-cnv:          #0369a1;
+            --c-zalo:         #2e7d32;
+            --c-oa:           #f57c00;
+            --hl-row:         #93c5fd;
+            --hl-row-light:   #bfdbfe;
+            --hl-cell:        #ffe066;
+            --border-light:   #f0f0f0;
+
+            /* ── Row highlight tints ─────────────── */
+            --highlight-warn: #fff3cd;
+            --highlight-ok:   #f0fdf4;
+
+            /* ── Code syntax ────────────────────── */
+            --code-keyword:   #0066cc;
+            --code-comment:   #666666;
+            --example-bg:     #eef3fb;
+
+            /* ── Neutrals ────────────────────────── */
+            --text:           #374151;
+            --text-dark:      #212529;
+            --text-muted:     #6c757d;
+            --border:         #dee2e6;
+            --bg:             #f8fafc;
+            --bg-light:       #f8f9fa;
+            --gray-tint:      #f0f2f5;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .navbar {
+            background: var(--nav-bg) !important;
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.35);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.3rem;
+        }
+
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, .9) !important;
+            transition: color .2s;
+            font-size: .93rem;
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link.active {
+            color: #fff !important;
+            font-weight: 500;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            border-radius: 8px;
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            transition: all .2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .table th {
+            background: var(--bg-light);
+            font-weight: 600;
+            font-size: .9rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5 {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .badge {
+            padding: .35em .65em;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1.5px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 .2rem rgba(var(--accent-rgb), 0.15);
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+            border: none;
+        }
+
+        .dropdown-item {
+            padding: .65rem 1.25rem;
+            transition: background .15s;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(var(--accent-rgb), 0.08);
+        }
+
+        .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem 0.25rem;
+        }
+
+        .page-link {
+            position: relative;
+            padding: .4rem 0;
+            margin: 0 .75rem;
+        }
+
+        .page-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #fff;
+            transition: width .2s;
+        }
+
+        .page-link:hover::after,
+        .page-link.active::after {
+            width: 100%;
+        }
+
+        @media(max-width:991px) {
+            .navbar-nav {
+                margin-top: 1rem;
+            }
+
+            .nav-item {
+                margin: .25rem 0;
+            }
+
+            .page-link {
+                margin: .25rem 0;
+                padding: .5rem 0;
+            }
+        }
+
+        .kpi-card {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .kpi-card .text-muted {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-link:focus {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .badge.bg-warning,
+        .badge.text-bg-warning {
+            color: var(--text) !important;
+        }
+    </style>
+    
+</head>
+
+<body>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow"></i> Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link page-link" href="/">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+
+                    
+                    
+                    <!-- Upload Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Data Upload</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/customers/">
+                                    <i class="bi bi-people"></i> Upload Customers
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/sales/">
+                                    <i class="bi bi-cart"></i> Upload Sales
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/">
+                                    <i class="bi bi-ticket"></i> Upload Coupons
+                                </a>
+                            </li>
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/#campaigns">
+                                    <i class="bi bi-tags"></i> Manage Campaigns
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+                    
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-bar-chart-line"></i> Analytics
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/">
+                                    <i class="bi bi-graph-up"></i> Sales Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/chart/">
+                                    <i class="bi bi-pie-chart"></i> Sales Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-analytics/">
+                                    <i class="bi bi-people-fill"></i> Customer Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-chart/">
+                                    <i class="bi bi-people"></i> Customer Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/">
+                                    <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/chart/">
+                                    <i class="bi bi-pie-chart-fill"></i> Coupon Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/customer-detail/">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/shop-detail/">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- Tools Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Tools
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Additional Tools</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/formulas/">
+                                    <i class="bi bi-calculator"></i> Formulas
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">CNV Loyalty</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/cnv/sync-status/">
+                                    <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/users/">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            
+
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin-logs/">
+                                    <i class="bi bi-journal-text"></i> Admin Logs
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> alex
+                            
+                            
+                            <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
+                            
+                            
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/logout/">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="7LowQpjpZlbia2Khy6QI3qlzan5y5xhIRCYOZb9iCwPzdUBITWUJYa7Rqa04Xp8W">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+
+    <main class="">
+        <div class="container-fluid px-3">
+            
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center mb-4">
+    <i class="bi bi-journal-text fs-3 me-2" style="color:var(--primary)"></i>
+    <div>
+      <h2 class="mb-0">Admin Log Viewer</h2>
+      <small class="text-muted">Last 50 entries per level &mdash; D:\New-jouney\semir\SemirDashboard\logs</small>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="location.reload()">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+  </div>
+
+  <!-- ── ERROR ────────────────────────────────────────────────────────── -->
+  <div class="card mb-4 border-danger">
+    <div class="card-header bg-danger text-white d-flex align-items-center">
+      <i class="bi bi-x-octagon me-2"></i>
+      <strong>ERROR</strong>
+      <span class="badge bg-light text-danger ms-2">23</span>
+    </div>
+    <div class="card-body p-0">
+      
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 log-table">
+          <thead class="table-danger">
+            <tr>
+              <th style="width:160px">Time</th>
+              <th style="width:130px">Logger</th>
+              <th style="width:100px">Step</th>
+              <th style="width:90px">Req ID</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:29:53,959</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.scheduler">App.cnv.scheduler</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Full traceback:
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\sqlite3\base.py&quot;, line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+sqlite3.OperationalError: database is locked
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\scheduler.py&quot;, line 76, in sync_cnv_customers_only
+    created, updated, failed = service.initial_sync_customers_from_ids()
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\sync_service.py&quot;, line 851, in initial_sync_customers_from_ids
+    created, updated, failed = self._process_customer_batch(batch)
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\sync_service.py&quot;, line 281, in _process_customer_batch
+    existing_cnv_ids = set(
+        CNVCustomer.objects.filter(cnv_id__in=cnv_ids)
+        .values_list(&#x27;cnv_id&#x27;, flat=True)
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 390, in __iter__
+    self._fetch_all()
+    ~~~~~~~~~~~~~~~^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 2000, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+                         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 277, in __iter__
+    for row in compiler.results_iter(
+               ~~~~~~~~~~~~~~~~~~~~~^
+        chunked_fetch=self.chunked_fetch, chunk_size=self.chunk_size
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\compiler.py&quot;, line 1573, in results_iter
+    results = self.execute_sql(
+        MULTI, chunked_fetch=chunked_fetch, chunk_size=chunk_size
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\compiler.py&quot;, line 1624, in execute_sql
+    cursor.execute(sql, params)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 122, in execute
+    return super().execute(sql, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\utils.py&quot;, line 94, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\sqlite3\base.py&quot;, line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+django.db.utils.OperationalError: database is locked</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:29:53,958</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.scheduler">App.cnv.scheduler</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                ============================================================
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:29:53,958</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.scheduler">App.cnv.scheduler</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                CUSTOMERS SYNC FAILED: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:29:49,823</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                initial_sync_customers: failed: database is locked
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\sqlite3\base.py&quot;, line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+sqlite3.OperationalError: database is locked
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\sync_service.py&quot;, line 851, in initial_sync_customers_from_ids
+    created, updated, failed = self._process_customer_batch(batch)
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\sync_service.py&quot;, line 281, in _process_customer_batch
+    existing_cnv_ids = set(
+        CNVCustomer.objects.filter(cnv_id__in=cnv_ids)
+        .values_list(&#x27;cnv_id&#x27;, flat=True)
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 390, in __iter__
+    self._fetch_all()
+    ~~~~~~~~~~~~~~~^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 2000, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+                         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 277, in __iter__
+    for row in compiler.results_iter(
+               ~~~~~~~~~~~~~~~~~~~~~^
+        chunked_fetch=self.chunked_fetch, chunk_size=self.chunk_size
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\compiler.py&quot;, line 1573, in results_iter
+    results = self.execute_sql(
+        MULTI, chunked_fetch=chunked_fetch, chunk_size=chunk_size
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\compiler.py&quot;, line 1624, in execute_sql
+    cursor.execute(sql, params)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 122, in execute
+    return super().execute(sql, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\utils.py&quot;, line 94, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\sqlite3\base.py&quot;, line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+django.db.utils.OperationalError: database is locked</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:26:58,609</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35578749: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:26:45,407</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35578389: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:23:37,995</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35578257: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:23:30,653</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35578256: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:23:07,882</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577832: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:20:44,343</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577816: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:20:32,478</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577449: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:20:23,934</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577726: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:20:10,896</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577382: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:19:57,730</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577333: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:19:50,345</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577332: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:17:24,204</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577176: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:16:46,725</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35577158: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:16:25,667</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Update failed for CNV#35576941: database is locked
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 06:47:31,924</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">ebbf020…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/customer/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
+    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
+    bd_at = compute_cnv_breakdown(
+        None, pos_phones_all, cnv_phones_all,
+        dims=frozenset({&#x27;shop&#x27;}),
+        store_filter=registration_store,
+    )
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
+    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
+                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
+    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
+                     ^^^^^^^^^^^^^^^^^
+AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 06:40:28,679</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">0b21162…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/customer/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
+    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
+    bd_at = compute_cnv_breakdown(
+        None, pos_phones_all, cnv_phones_all,
+        dims=frozenset({&#x27;shop&#x27;}),
+        store_filter=registration_store,
+    )
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
+    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
+                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
+    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
+                     ^^^^^^^^^^^^^^^^^
+AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 01:36:07,884</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">1b1136e…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/customer/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
+    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
+    bd_at = compute_cnv_breakdown(
+        None, pos_phones_all, cnv_phones_all,
+        dims=frozenset({&#x27;shop&#x27;}),
+        store_filter=registration_store,
+    )
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
+    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
+                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
+    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
+                     ^^^^^^^^^^^^^^^^^
+AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 01:35:57,789</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">770a036…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/customer/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
+    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
+    bd_at = compute_cnv_breakdown(
+        None, pos_phones_all, cnv_phones_all,
+        dims=frozenset({&#x27;shop&#x27;}),
+        store_filter=registration_store,
+    )
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
+    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
+                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
+    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
+                     ^^^^^^^^^^^^^^^^^
+AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 01:35:54,847</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">adb4d93…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/customer/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
+    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
+    bd_at = compute_cnv_breakdown(
+        None, pos_phones_all, cnv_phones_all,
+        dims=frozenset({&#x27;shop&#x27;}),
+        store_filter=registration_store,
+    )
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
+    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
+                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
+    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
+                     ^^^^^^^^^^^^^^^^^
+AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+      
+    </div>
+  </div>
+
+  <!-- ── WARNING ──────────────────────────────────────────────────────── -->
+  <div class="card mb-4 border-warning">
+    <div class="card-header bg-warning text-dark d-flex align-items-center">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <strong>WARNING</strong>
+      <span class="badge bg-dark text-warning ms-2">50</span>
+    </div>
+    <div class="card-body p-0">
+      
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 log-table">
+          <thead class="table-warning">
+            <tr>
+              <th style="width:160px">Time</th>
+              <th style="width:130px">Logger</th>
+              <th style="width:100px">Step</th>
+              <th style="width:90px">Req ID</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:40:14,636</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">50a50f0…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:18:40,447</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">ac38108…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 23:07:38,543</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">fd11f85…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 12:10:00,019</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 11:05:00,019</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 09:10:00,008</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 09:05:00,007</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 07:48:24,174</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">d1dcbff…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 07:37:14,697</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">35a26c2…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 07:23:50,781</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">df6709d…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 05:05:00,007</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 04:05:00,015</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 02:10:00,020</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 01:05:00,014</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 00:10:00,014</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 00:05:00,019</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 20:10:00,019</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 18:10:00,013</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 15:12:31,510</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">7f3c488…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 15:05:00,011</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 14:05:00,008</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 13:10:00,017</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 12:10:00,007</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 11:12:14,237</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">f1bf4ce…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 10:05:00,016</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 09:47:37,618</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">f94457e…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 09:10:00,006</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 07:12:41,301</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">327ed2b…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 06:10:00,020</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 05:05:00,016</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 03:10:00,014</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 01:10:00,013</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-22 00:10:00,012</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 23:04:59,050</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">efdec02…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 22:10:00,017</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 22:05:00,024</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 21:15:34,494</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">b9ca90e…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 20:26:28,668</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">af6e0f5…</td>
+              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 19:05:00,008</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 17:10:00,006</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 16:10:00,020</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 15:10:00,010</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 14:10:00,008</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:29:54,212</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;atomic_update_or_create&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-21 10:05:00,018</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 12:10:01,154</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 11:10:01,211</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 10:10:01,210</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 09:10:01,108</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-23 08:10:01,223</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+      
+    </div>
+  </div>
+
+  <!-- ── INFO ─────────────────────────────────────────────────────────── -->
+  <div class="card mb-4">
+    <div class="card-header bg-info text-dark d-flex align-items-center">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>INFO</strong>
+      <span class="badge bg-dark text-info ms-2">50</span>
+    </div>
+    <div class="card-body p-0">
+      
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 log-table">
+          <thead class="table-info">
+            <tr>
+              <th style="width:160px">Time</th>
+              <th style="width:130px">Logger</th>
+              <th style="width:100px">Step</th>
+              <th style="width:90px">Req ID</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:11:28,562</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">analytics_chart</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">15c0b47…</td>
+              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:11:28,416</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">61d2eff…</td>
+              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:11:28,305</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">4ac445c…</td>
+              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:11:16,792</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">2eab65b…</td>
+              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:11:13,763</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">7abb147…</td>
+              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:03:21,433</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">analytics_chart</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">e924692…</td>
+              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:03:21,281</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">d2b25ec…</td>
+              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:03:21,189</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">732f373…</td>
+              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:03:11,294</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">fd79915…</td>
+              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:03:08,188</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">d3dc727…</td>
+              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:00:34,697</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">analytics_chart</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">dce4dee…</td>
+              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:00:34,516</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">4fc1789…</td>
+              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:00:34,408</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">0c2a887…</td>
+              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:00:24,205</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">d954b7d…</td>
+              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 09:00:21,081</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">6cb9121…</td>
+              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:54:13,943</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">analytics_chart</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">b59e4d4…</td>
+              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:54:13,801</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">94707b7…</td>
+              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:54:13,710</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">8fac09f…</td>
+              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:54:03,268</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">5ef4bc0…</td>
+              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:53:59,896</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">979126a…</td>
+              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:49:57,580</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">analytics_chart</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">858c441…</td>
+              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:49:57,375</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">abf51b8…</td>
+              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:49:57,283</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">c69fd2e…</td>
+              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:49:46,658</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">edcf77f…</td>
+              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:49:43,464</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">da11ad1…</td>
+              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:48:37,518</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">analytics_chart</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">5ec7372…</td>
+              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:48:36,925</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">abbd185…</td>
+              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:48:35,652</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">51d7c9d…</td>
+              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:48:15,571</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">2952cee…</td>
+              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 08:47:55,831</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">d228ba9…</td>
+              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:45,141</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">2666d2f…</td>
+              <td class="small">partial sales: shop=Bala VN Haiphong AEON MALL- Direct from=None to=None user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:43,402</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">7f37ebb…</td>
+              <td class="small">partial customer: store=BL VN North Warehouse from= to= user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:42,119</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">1715aa1…</td>
+              <td class="small">partial coupon: shop=Bala VN Haiphong AEON MALL- Direct prefix= from=None to=None user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:37,941</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">c482ed5…</td>
+              <td class="small">partial sales: shop=Bala VN Haiphong AEON MALL- Direct from=2025-01-01 to=2025-12-31 user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:36,439</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">4a62a45…</td>
+              <td class="small">partial sales: shop=Bala VN Haiphong AEON MALL- Direct from=None to=None user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:33,729</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">484c2bf…</td>
+              <td class="small">partial sales: shop=Bala VN Haiphong AEON MALL- Direct from=None to=None user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:23,775</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">a4b2ceb…</td>
+              <td class="small">partial customer: store=BL VN North Warehouse from= to= user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:20,744</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">fa627c4…</td>
+              <td class="small">partial customer: store=BL VN North Warehouse from= to= user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:12,148</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">50d7e94…</td>
+              <td class="small">partial coupon: shop=Bala VN Haiphong AEON MALL- Direct prefix= from=None to=None user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:09,644</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">ef7f6c0…</td>
+              <td class="small">partial coupon: shop=Bala VN Haiphong AEON MALL- Direct prefix= from=None to=None user=_test_ajax_</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:07,893</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">coupon_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">=== DONE Coupon Import: created=239514 updated=0 errors=0 ===</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:07,893</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 48] created=4514</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:06,515</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 48] rows 235001-239514</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:06,514</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 47] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:04,944</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 47] rows 230001-235000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:04,943</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 46] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:03,389</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 46] rows 225001-230000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:03,388</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 45] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:01,863</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 45] rows 220001-225000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-24 07:49:01,863</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 44] created=5000</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+      
+    </div>
+  </div>
+
+</div>
+
+<style>
+.log-table td, .log-table th { vertical-align: middle; }
+</style>
+
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+</body>
+
+</html>

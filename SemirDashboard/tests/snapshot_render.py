@@ -1,7 +1,7 @@
 """
 Render every key GET page with sample data and snapshot the HTML output.
 
-Outputs are written to:  <repo-root>/render/
+Outputs are written to:  SemirDashboard/tests/render/
   - <label>.html       — full rendered HTML for visual inspection
   - <label>.tables.txt — extracted table-by-table summary (header rows + first data rows)
   - _index.md          — index of all snapshots with timestamps + sizes
@@ -23,8 +23,8 @@ settings.ALLOWED_HOSTS = list(set(settings.ALLOWED_HOSTS) | {'testserver', 'loca
 from django.test import Client
 from django.contrib.auth.models import User
 
-# Output folder at repo root (one level above SemirDashboard/)
-RENDER_DIR = Path(settings.BASE_DIR).resolve().parent / "render"
+# Output folder alongside tests/
+RENDER_DIR = Path(settings.BASE_DIR).resolve() / "tests" / "render"
 RENDER_DIR.mkdir(parents=True, exist_ok=True)
 
 c = Client()

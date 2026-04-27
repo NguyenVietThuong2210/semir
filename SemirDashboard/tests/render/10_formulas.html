@@ -1,0 +1,919 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulas & Definitions</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            /* ── Brand blues ─────────────────────── */
+            --primary:        #0369a1;
+            --primary-rgb:    3, 105, 161;
+            --primary-hover:  #075985;
+            --bs-primary:     #0369a1;
+            --bs-primary-rgb: 3, 105, 161;
+            --nav-bg:         #064e77;
+            --secondary:      #4a6785;
+
+            /* ── Accents ─────────────────────────── */
+            --accent:         #06b6d4;
+            --accent-rgb:     6, 182, 212;
+            --coupon:         #7b4000;
+            --success:        #198754;
+            --success-rgb:    25, 135, 84;
+            --danger:         #dc3545;
+            --danger-rgb:     220, 53, 69;
+
+            /* ── Amber / Yellow ──────────────────── */
+            --orange:         #eab308;
+            --orange-rgb:     234, 179, 8;
+            --orange-dark:    #a16207;
+            --highlight:      #fef08a;
+
+            /* ── CNV section palette ────────────── */
+            --cnv-purple:     #7b3f9e;
+            --cnv-navy:       #1a5cb0;
+            --cnv-forest:     #156f3a;
+
+            /* ── Status gradients ────────────────── */
+            --gradient-synced:     linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-not-synced: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+
+            /* ── Grade badges ───────────────────── */
+            --silver:         #94a3b8;
+
+            /* ── Chart series & highlights ──────── */
+            --c-alltime:      #0d6efd;
+            --c-pos:          #e53935;
+            --c-cnv:          #0369a1;
+            --c-zalo:         #2e7d32;
+            --c-oa:           #f57c00;
+            --hl-row:         #93c5fd;
+            --hl-row-light:   #bfdbfe;
+            --hl-cell:        #ffe066;
+            --border-light:   #f0f0f0;
+
+            /* ── Row highlight tints ─────────────── */
+            --highlight-warn: #fff3cd;
+            --highlight-ok:   #f0fdf4;
+
+            /* ── Code syntax ────────────────────── */
+            --code-keyword:   #0066cc;
+            --code-comment:   #666666;
+            --example-bg:     #eef3fb;
+
+            /* ── Neutrals ────────────────────────── */
+            --text:           #374151;
+            --text-dark:      #212529;
+            --text-muted:     #6c757d;
+            --border:         #dee2e6;
+            --bg:             #f8fafc;
+            --bg-light:       #f8f9fa;
+            --gray-tint:      #f0f2f5;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .navbar {
+            background: var(--nav-bg) !important;
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.35);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.3rem;
+        }
+
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, .9) !important;
+            transition: color .2s;
+            font-size: .93rem;
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link.active {
+            color: #fff !important;
+            font-weight: 500;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            border-radius: 8px;
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            transition: all .2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .table th {
+            background: var(--bg-light);
+            font-weight: 600;
+            font-size: .9rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5 {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .badge {
+            padding: .35em .65em;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1.5px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 .2rem rgba(var(--accent-rgb), 0.15);
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+            border: none;
+        }
+
+        .dropdown-item {
+            padding: .65rem 1.25rem;
+            transition: background .15s;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(var(--accent-rgb), 0.08);
+        }
+
+        .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem 0.25rem;
+        }
+
+        .page-link {
+            position: relative;
+            padding: .4rem 0;
+            margin: 0 .75rem;
+        }
+
+        .page-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #fff;
+            transition: width .2s;
+        }
+
+        .page-link:hover::after,
+        .page-link.active::after {
+            width: 100%;
+        }
+
+        @media(max-width:991px) {
+            .navbar-nav {
+                margin-top: 1rem;
+            }
+
+            .nav-item {
+                margin: .25rem 0;
+            }
+
+            .page-link {
+                margin: .25rem 0;
+                padding: .5rem 0;
+            }
+        }
+
+        .kpi-card {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .kpi-card .text-muted {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-link:focus {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .badge.bg-warning,
+        .badge.text-bg-warning {
+            color: var(--text) !important;
+        }
+    </style>
+    
+<style>
+.formula-card { border-left: 4px solid var(--primary); }
+.formula-code { background: var(--bg-light); padding: 1rem; border-radius: 6px; font-family: 'Courier New', monospace; }
+.example-box { background: var(--example-bg); border-left: 3px solid var(--accent); padding: 1rem; margin: 1rem 0; }
+.def-term { font-weight: 600; color: var(--text); }
+.formula-math { font-size: 1.05rem; color: var(--text); font-weight: 500; }
+</style>
+
+</head>
+
+<body>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow"></i> Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link page-link" href="/">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+
+                    
+                    
+                    <!-- Upload Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Data Upload</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/customers/">
+                                    <i class="bi bi-people"></i> Upload Customers
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/sales/">
+                                    <i class="bi bi-cart"></i> Upload Sales
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/">
+                                    <i class="bi bi-ticket"></i> Upload Coupons
+                                </a>
+                            </li>
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/#campaigns">
+                                    <i class="bi bi-tags"></i> Manage Campaigns
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+                    
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-bar-chart-line"></i> Analytics
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/">
+                                    <i class="bi bi-graph-up"></i> Sales Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/chart/">
+                                    <i class="bi bi-pie-chart"></i> Sales Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-analytics/">
+                                    <i class="bi bi-people-fill"></i> Customer Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-chart/">
+                                    <i class="bi bi-people"></i> Customer Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/">
+                                    <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/chart/">
+                                    <i class="bi bi-pie-chart-fill"></i> Coupon Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/customer-detail/">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/shop-detail/">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- Tools Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Tools
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Additional Tools</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/formulas/">
+                                    <i class="bi bi-calculator"></i> Formulas
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">CNV Loyalty</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/cnv/sync-status/">
+                                    <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/users/">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            
+
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin-logs/">
+                                    <i class="bi bi-journal-text"></i> Admin Logs
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> alex
+                            
+                            
+                            <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
+                            
+                            
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/logout/">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="QRhGaUieHd9TbYn4iBPLYlT3VOY0V9FgAIRYjG87koNaeQevDrTMT5FlbBTwN1wu">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+
+    <main class="">
+        <div class="container-fluid px-3">
+            
+
+<div class="mb-4">
+    <h2><i class="bi bi-calculator"></i> Formulas & Definitions</h2>
+    <p class="text-muted">
+        This page explains all calculations and metrics used in the Customer Analytics and Coupon Analytics dashboards.
+    </p>
+</div>
+
+<!-- KEY METRICS DEFINITIONS (MOVED TO TOP) -->
+<div class="card formula-card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-book"></i> Key Metric Definitions</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="fw-bold">Period Metrics</h6>
+                <dl>
+                    <dt>New Members (Period)</dt>
+                    <dd>Customers whose Registration Date falls within the selected period</dd>
+                    
+                    <dt>Returning Customers (Period)</dt>
+                    <dd>Count of customers with at least 1 return visit in the period</dd>
+                    
+                    <dt>Active (Period)</dt>
+                    <dd>Total unique customers (VIP IDs, excluding VIP ID = 0) who made purchases in the period</dd>
+                    
+                    <dt>Return Visit Rate (Period)</dt>
+                    <dd>(Returning Customers / Active Customers) × 100</dd>
+                    
+                    <dt>Invoices (Customers)</dt>
+                    <dd>Total invoices from customers with valid VIP IDs (excludes VIP ID = 0)</dd>
+                    
+                    <dt>Amount (Customers)</dt>
+                    <dd>Sum of sales_amount for transactions with valid VIP IDs (excludes VIP ID = 0)</dd>
+                    
+                    <dt>Total Invoices</dt>
+                    <dd>All invoices in period including VIP ID = 0</dd>
+                    
+                    <dt>Total Amount</dt>
+                    <dd>Sum of all sales_amount in period including VIP ID = 0</dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <h6 class="fw-bold">All-Time Metrics</h6>
+                <dl>
+                    <dt>Total Customers (All Time)</dt>
+                    <dd>Total count of records in Customer table</dd>
+                    
+                    <dt>Member Active (All Time)</dt>
+                    <dd>Customers with points > 0</dd>
+                    
+                    <dt>Member Inactive (All Time)</dt>
+                    <dd>Customers with points = 0</dd>
+                    
+                    <dt>Return Visit Rate (All Time)</dt>
+                    <dd>(Returning Customers / Total Customers in DB) × 100</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CUSTOMER ANALYTICS SECTION -->
+<div class="card formula-card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-person-check"></i> Customer Analytics Formulas</h5>
+    </div>
+    <div class="card-body">
+
+        <!-- Return Visits Formula -->
+        <h6 class="fw-bold mb-3">1. Return Visits Calculation ⚠️ CRITICAL FORMULA</h6>
+        <p>The <span class="def-term">Return Visits</span> metric counts how many invoices a customer had AFTER their first visit.</p>
+        
+        <div class="alert alert-warning">
+            <strong>⚠️ IMPORTANT:</strong> This formula considers the <strong>Registration Date</strong> to determine if the first purchase is a "first visit" or a "return visit".
+        </div>
+        
+        <div class="formula-code">
+            <strong>Complete Formula:</strong><br><br>
+            
+            <span style="color:var(--code-keyword)">IF</span> first_purchase_date == registration_date:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases - 1<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--code-comment)"># First invoice on reg day = first visit (NOT a return)</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--code-comment)"># All subsequent invoices = return visits</span><br><br>
+            
+            <span style="color:var(--code-keyword)">ELSE</span> (first_purchase_date != registration_date OR no reg date):<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;return_visits = total_purchases<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--code-comment)"># Customer already visited to register</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--code-comment)"># ALL purchases = return visits</span><br><br>
+            
+            is_returning = (return_visits > 0)<br>
+            <strong>Note:</strong> We count INVOICES, not unique days
+        </div>
+
+        <div class="alert alert-info mt-3">
+            <strong>Key Insight:</strong> The formula is applied <strong>CONSISTENTLY</strong> at all levels (Global, Shop, Season), 
+            but uses <strong>DIFFERENT purchase lists</strong> for each context, resulting in <strong>different "first_purchase_date"</strong> values.
+        </div>
+
+        <div class="example-box">
+            <strong>Example 1:</strong> Registration day purchase (Same Day)<br>
+            - Registration Date: <strong>2026-01-01</strong><br>
+            - Purchases: <strong>2026-01-01</strong> (3 invoices on same day)<br>
+            - first_date == reg_date ✅<br>
+            - <strong>Return Visits = 3 - 1 = 2</strong><br>
+            - Is Returning = True (had 2 return visits on reg day)
+        </div>
+
+        <div class="example-box">
+            <strong>Example 2:</strong> Registered before, buying later (Different Day)<br>
+            - Registration Date: <strong>2026-01-01</strong><br>
+            - Purchases: <strong>2026-02-15</strong> (2 invoices)<br>
+            - first_date != reg_date ✅<br>
+            - <strong>Return Visits = 2</strong> (all purchases are returns)<br>
+            - Is Returning = True
+        </div>
+
+        <div class="example-box">
+            <strong>Example 3:</strong> Single purchase on registration day<br>
+            - Registration Date: <strong>2026-01-01</strong><br>
+            - Purchases: <strong>2026-01-01</strong> (1 invoice)<br>
+            - first_date == reg_date ✅<br>
+            - <strong>Return Visits = 1 - 1 = 0</strong><br>
+            - Is Returning = False (no returns yet)
+        </div>
+        
+        <div class="example-box">
+            <strong>Example 4:</strong> No registration date<br>
+            - Registration Date: <strong>NULL</strong><br>
+            - Purchases: <strong>2026-03-10</strong> (2 invoices)<br>
+            - first_date != reg_date ✅ (NULL comparison)<br>
+            - <strong>Return Visits = 2</strong> (assume already visited to get VIP ID)<br>
+            - Is Returning = True
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Context-Dependent Calculation -->
+        <h6 class="fw-bold mb-3">🔍 Context-Dependent Calculations</h6>
+        <p><strong>CRITICAL:</strong> The same customer can have DIFFERENT returning status in different contexts!</p>
+        
+        <div class="alert alert-danger">
+            <strong>⚠️ Why Totals Don't Match:</strong> This is <strong>CORRECT</strong> behavior, not a bug!<br>
+            Global returning invoices ≠ Sum of shop returning invoices ≠ Sum of season returning invoices
+        </div>
+
+        <div class="example-box">
+            <strong>Real Example - Customer A:</strong><br><br>
+            
+            <strong>Registration:</strong> 2026-01-01<br>
+            <strong>Purchases:</strong><br>
+            • Invoice #1: Shop X, 2026-01-01 (reg day)<br>
+            • Invoice #2: Shop Y, 2026-02-01<br>
+            • Invoice #3: Shop C, 2026-03-01<br>
+            • Invoice #4: Shop C, 2026-03-01<br><br>
+            
+            <table class="table table-sm table-bordered">
+                <thead class="table-primary">
+                    <tr>
+                        <th>Context</th>
+                        <th>Purchases</th>
+                        <th>First Date</th>
+                        <th>Reg Date</th>
+                        <th>Formula</th>
+                        <th>Return Visits</th>
+                        <th>Is Returning?</th>
+                        <th>Ret Invoices</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-success">
+                        <td><strong>GLOBAL</strong></td>
+                        <td>4 invoices</td>
+                        <td>1/1</td>
+                        <td>1/1</td>
+                        <td>4 - 1 = 3</td>
+                        <td>3</td>
+                        <td>YES</td>
+                        <td><strong>4</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Shop X</td>
+                        <td>1 invoice</td>
+                        <td>1/1</td>
+                        <td>1/1</td>
+                        <td>1 - 1 = 0</td>
+                        <td>0</td>
+                        <td>NO</td>
+                        <td>0</td>
+                    </tr>
+                    <tr class="table-info">
+                        <td>Shop Y</td>
+                        <td>1 invoice</td>
+                        <td>2/1</td>
+                        <td>1/1</td>
+                        <td>1 (!=)</td>
+                        <td>1</td>
+                        <td>YES</td>
+                        <td>1</td>
+                    </tr>
+                    <tr class="table-info">
+                        <td>Shop C</td>
+                        <td>2 invoices</td>
+                        <td>3/1</td>
+                        <td>1/1</td>
+                        <td>2 (!=)</td>
+                        <td>2</td>
+                        <td>YES</td>
+                        <td>2</td>
+                    </tr>
+                </tbody>
+                <tfoot class="table-warning">
+                    <tr>
+                        <td colspan="7"><strong>TOTALS:</strong></td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td colspan="7">Global Returning Invoices:</td>
+                        <td><strong>4</strong></td>
+                    </tr>
+                    <tr>
+                        <td colspan="7">Sum of Shop Returning Invoices (X+Y+C):</td>
+                        <td><strong>0+1+2 = 3</strong></td>
+                    </tr>
+                    <tr class="table-danger">
+                        <td colspan="7"><strong>Difference:</strong></td>
+                        <td><strong>1 invoice</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <strong>Why Different?</strong><br>
+            • <strong>Shop X:</strong> First purchase at Shop X on reg day (1/1 == 1/1) → NOT returning at Shop X<br>
+            • <strong>Shop Y:</strong> First purchase at Shop Y after reg day (2/1 != 1/1) → IS returning at Shop Y<br>
+            • <strong>Globally:</strong> First purchase on reg day (1/1 == 1/1), but has 4 total → IS returning globally<br><br>
+            
+            <strong class="text-success">✅ This is CORRECT!</strong> Same customer, different "first_purchase_date" per context.
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Return Visit Rate -->
+        <h6 class="fw-bold mb-3">2. Return Visit Rate</h6>
+        <p class="formula-math">
+            Return Visit Rate (Period) % = (Returning Customers / Active Customers) × 100
+        </p>
+        <ul>
+            <li><span class="def-term">Returning Customers</span>: Number of customers with return_visits > 0</li>
+            <li><span class="def-term">Active Customers</span>: Total unique customers who made purchases in the period</li>
+        </ul>
+
+        <div class="example-box">
+            <strong>Example:</strong> In January 2026:<br>
+            - 100 unique customers made purchases<br>
+            - 75 of them have return_visits > 0<br>
+            - <strong>Return Visit Rate = (75 / 100) × 100 = 75%</strong>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- VIP ID = 0 Handling -->
+        <h6 class="fw-bold mb-3">3. VIP ID = 0 (Buyer Without Info)</h6>
+        <p>Purchases with <code>VIP ID = 0</code>, blank, or null are <strong>EXCLUDED</strong> from customer metrics but <strong>INCLUDED</strong> in total invoice/amount metrics.</p>
+        
+        <dl>
+            <dt>Invoices (Customers)</dt>
+            <dd>Total invoices from customers with valid VIP IDs (excludes VIP ID = 0)</dd>
+            
+            <dt>Amount (Customers)</dt>
+            <dd>Sum of sales_amount from customers with valid VIP IDs (excludes VIP ID = 0)</dd>
+            
+            <dt>Total Invoices</dt>
+            <dd>ALL invoices including VIP ID = 0</dd>
+            
+            <dt>Total Amount</dt>
+            <dd>Sum of ALL sales_amount including VIP ID = 0</dd>
+        </dl>
+
+        <div class="example-box">
+            <strong>Example:</strong><br>
+            - 100 customers made 500 invoices totaling 250M VND<br>
+            - 50 invoices (25M VND) have VIP ID = 0<br>
+            <br>
+            <strong>Results:</strong><br>
+            - Active (Period): 100 (excludes VIP 0)<br>
+            - Invoices (Customers): 450<br>
+            - Amount (Customers): 225M VND<br>
+            - Total Invoices: 500 (includes VIP 0)<br>
+            - Total Amount: 250M VND (includes VIP 0)
+        </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Season Logic -->
+        <h6 class="fw-bold mb-3">4. Season (Year-Aware)</h6>
+        <p>Seasons are defined as:</p>
+        <ul>
+            <li><strong>M2-4</strong> (Feb–Apr): February, March, April</li>
+            <li><strong>M5-7</strong> (May–Jul): May, June, July</li>
+            <li><strong>M8-10</strong> (Aug–Oct): August, September, October</li>
+            <li><strong>M11-1</strong> (Nov–Jan): November, December, January (spans 2 years)</li>
+        </ul>
+        <p>Each season is labeled with the year(s) it covers:</p>
+
+        <div class="example-box">
+            <strong>Examples of year-aware season labels:</strong><br>
+            - <code>M2-4 2025</code>: Feb-Apr 2025<br>
+            - <code>M11-1 2025-2026</code>: Nov 2025 + Dec 2025 + Jan 2026<br>
+            - <code>M11-1 2024-2025</code>: Nov 2024 + Dec 2024 + Jan 2025
+        </div>
+
+        <p class="mt-3">For date range Jan 2025 to May 2026, the "By Season" table shows all season windows with data:</p>
+        <ul>
+            <li>M11-1 2024-2025 (if Jan 2025 has data)</li>
+            <li>M2-4 2025</li>
+            <li>M5-7 2025</li>
+            <li>M8-10 2025</li>
+            <li>M11-1 2025-2026</li>
+            <li>M2-4 2026</li>
+            <li>M5-7 2026 (if May 2026 has data)</li>
+        </ul>
+
+        <hr class="my-4">
+
+        <!-- Grade Order -->
+        <h6 class="fw-bold mb-3">5. VIP Grade Order</h6>
+        <p>Grades are always sorted in this order:</p>
+        <ol>
+            <li>No Grade</li>
+            <li>Member</li>
+            <li>Silver</li>
+            <li>Gold</li>
+            <li>Diamond</li>
+        </ol>
+        <p class="small text-muted">Note: "Olden" and "Golden" are automatically normalized to "Gold"</p>
+
+    </div>
+</div>
+
+<!-- COUPON ANALYTICS SECTION -->
+<div class="card formula-card mb-4">
+    <div class="card-header" style="background:var(--primary);color:#fff">
+        <h5 class="mb-0"><i class="bi bi-ticket-perforated"></i> Coupon Analytics Formulas</h5>
+    </div>
+    <div class="card-body">
+
+        <!-- Used % Calculations -->
+        <h6 class="fw-bold mb-3">1. Coupon Usage Percentages</h6>
+        
+        <p><span class="def-term">By Shop Table</span> shows two percentage calculations:</p>
+        
+        <div class="formula-code mb-3">
+            <strong>% Used / Total (Period):</strong><br>
+            = (Used Coupons at Shop / Total Coupons in Period - All Shops) × 100<br><br>
+            
+            <strong>% Used / Total Used (All Shops):</strong><br>
+            = (Used Coupons at Shop / Total USED Coupons - All Shops) × 100
+        </div>
+
+        <div class="example-box">
+            <strong>Example:</strong> Period has 1000 coupons total across all shops, 400 are used.<br>
+            - Shop A used 100 coupons<br>
+            - <strong>% Used / Total (Period) = (100 / 1000) × 100 = 10%</strong><br>
+            - <strong>% Used / Total Used (All Shops) = (100 / 400) × 100 = 25%</strong>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Coupon ID Prefix Filter -->
+        <h6 class="fw-bold mb-3">2. Coupon ID Prefix Filter</h6>
+        <p>The prefix filter is <strong>case-insensitive</strong> and matches the beginning of the Coupon ID.</p>
+        
+        <div class="example-box">
+            <strong>Example:</strong> Filter = <code>SEMIR50K</code><br>
+            Matches:<br>
+            - SEMIR50K001<br>
+            - SEMIR50K002<br>
+            - semir50k003 (case-insensitive)<br><br>
+            Does NOT match:<br>
+            - ABC-SEMIR50K (prefix must be at start)<br>
+            - SEMIR40K001 (different prefix)
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Customer Lookup -->
+        <h6 class="fw-bold mb-3">3. Customer Name & Phone in Coupon Detail</h6>
+        <p>When a coupon is used, we lookup the customer's name and phone number using the VIP ID from the matched invoice.</p>
+        <ul>
+            <li>If no invoice match: VIP ID, Name, Phone are blank</li>
+            <li>If invoice found but VIP ID = 0: Name = "-", Phone = "-"</li>
+            <li>If invoice found with valid VIP ID: Name and Phone from Customer table</li>
+        </ul>
+
+    </div>
+</div>
+
+<!-- FOOTER NAVIGATION -->
+<div class="text-center mb-4">
+    <a href="/analytics/" class="btn btn-outline-primary me-2 page-link">
+        <i class="bi bi-bar-chart"></i> Customer Analytics
+    </a>
+    <a href="/coupons/" class="btn btn-outline-secondary me-2 page-link">
+        <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+    </a>
+    <a href="/" class="btn btn-outline-secondary page-link">
+        <i class="bi bi-house"></i> Home
+    </a>
+</div>
+
+
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+</body>
+
+</html>

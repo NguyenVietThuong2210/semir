@@ -1,0 +1,939 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNV Sync Status</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            /* ── Brand blues ─────────────────────── */
+            --primary:        #0369a1;
+            --primary-rgb:    3, 105, 161;
+            --primary-hover:  #075985;
+            --bs-primary:     #0369a1;
+            --bs-primary-rgb: 3, 105, 161;
+            --nav-bg:         #064e77;
+            --secondary:      #4a6785;
+
+            /* ── Accents ─────────────────────────── */
+            --accent:         #06b6d4;
+            --accent-rgb:     6, 182, 212;
+            --coupon:         #7b4000;
+            --success:        #198754;
+            --success-rgb:    25, 135, 84;
+            --danger:         #dc3545;
+            --danger-rgb:     220, 53, 69;
+
+            /* ── Amber / Yellow ──────────────────── */
+            --orange:         #eab308;
+            --orange-rgb:     234, 179, 8;
+            --orange-dark:    #a16207;
+            --highlight:      #fef08a;
+
+            /* ── CNV section palette ────────────── */
+            --cnv-purple:     #7b3f9e;
+            --cnv-navy:       #1a5cb0;
+            --cnv-forest:     #156f3a;
+
+            /* ── Status gradients ────────────────── */
+            --gradient-synced:     linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-not-synced: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+
+            /* ── Grade badges ───────────────────── */
+            --silver:         #94a3b8;
+
+            /* ── Chart series & highlights ──────── */
+            --c-alltime:      #0d6efd;
+            --c-pos:          #e53935;
+            --c-cnv:          #0369a1;
+            --c-zalo:         #2e7d32;
+            --c-oa:           #f57c00;
+            --hl-row:         #93c5fd;
+            --hl-row-light:   #bfdbfe;
+            --hl-cell:        #ffe066;
+            --border-light:   #f0f0f0;
+
+            /* ── Row highlight tints ─────────────── */
+            --highlight-warn: #fff3cd;
+            --highlight-ok:   #f0fdf4;
+
+            /* ── Code syntax ────────────────────── */
+            --code-keyword:   #0066cc;
+            --code-comment:   #666666;
+            --example-bg:     #eef3fb;
+
+            /* ── Neutrals ────────────────────────── */
+            --text:           #374151;
+            --text-dark:      #212529;
+            --text-muted:     #6c757d;
+            --border:         #dee2e6;
+            --bg:             #f8fafc;
+            --bg-light:       #f8f9fa;
+            --gray-tint:      #f0f2f5;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .navbar {
+            background: var(--nav-bg) !important;
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.35);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.3rem;
+        }
+
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, .9) !important;
+            transition: color .2s;
+            font-size: .93rem;
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link.active {
+            color: #fff !important;
+            font-weight: 500;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            border-radius: 8px;
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            transition: all .2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .table th {
+            background: var(--bg-light);
+            font-weight: 600;
+            font-size: .9rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5 {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .badge {
+            padding: .35em .65em;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1.5px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 .2rem rgba(var(--accent-rgb), 0.15);
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+            border: none;
+        }
+
+        .dropdown-item {
+            padding: .65rem 1.25rem;
+            transition: background .15s;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(var(--accent-rgb), 0.08);
+        }
+
+        .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem 0.25rem;
+        }
+
+        .page-link {
+            position: relative;
+            padding: .4rem 0;
+            margin: 0 .75rem;
+        }
+
+        .page-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #fff;
+            transition: width .2s;
+        }
+
+        .page-link:hover::after,
+        .page-link.active::after {
+            width: 100%;
+        }
+
+        @media(max-width:991px) {
+            .navbar-nav {
+                margin-top: 1rem;
+            }
+
+            .nav-item {
+                margin: .25rem 0;
+            }
+
+            .page-link {
+                margin: .25rem 0;
+                padding: .5rem 0;
+            }
+        }
+
+        .kpi-card {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .kpi-card .text-muted {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-link:focus {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .badge.bg-warning,
+        .badge.text-bg-warning {
+            color: var(--text) !important;
+        }
+    </style>
+    
+<style>
+.stat-card { 
+    min-height: 120px; 
+    border-radius: 10px; 
+}
+.stat-card .card-body { 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: space-between; 
+}
+.stat-value { 
+    font-size: 1.7rem; 
+    font-weight: 700; 
+    margin: 4px 0; 
+}
+.stat-label { 
+    font-size: .75rem; 
+    text-transform: uppercase; 
+    letter-spacing: .5px; 
+}
+</style>
+
+</head>
+
+<body>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow"></i> Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link page-link" href="/">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+
+                    
+                    
+                    <!-- Upload Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Data Upload</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/customers/">
+                                    <i class="bi bi-people"></i> Upload Customers
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/sales/">
+                                    <i class="bi bi-cart"></i> Upload Sales
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/">
+                                    <i class="bi bi-ticket"></i> Upload Coupons
+                                </a>
+                            </li>
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/#campaigns">
+                                    <i class="bi bi-tags"></i> Manage Campaigns
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+                    
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-bar-chart-line"></i> Analytics
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/">
+                                    <i class="bi bi-graph-up"></i> Sales Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/chart/">
+                                    <i class="bi bi-pie-chart"></i> Sales Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-analytics/">
+                                    <i class="bi bi-people-fill"></i> Customer Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-chart/">
+                                    <i class="bi bi-people"></i> Customer Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/">
+                                    <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/chart/">
+                                    <i class="bi bi-pie-chart-fill"></i> Coupon Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/customer-detail/">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/shop-detail/">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- Tools Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Tools
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Additional Tools</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/formulas/">
+                                    <i class="bi bi-calculator"></i> Formulas
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">CNV Loyalty</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/cnv/sync-status/">
+                                    <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/users/">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            
+
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin-logs/">
+                                    <i class="bi bi-journal-text"></i> Admin Logs
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> alex
+                            
+                            
+                            <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
+                            
+                            
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/logout/">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="9rRIpEto77HJ1zfeQDdbCURRjuYRaReQTir0yqjhKil04r6FbthcxED9zhTn2J54">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+
+    <main class="">
+        <div class="container-fluid px-3">
+            
+
+<!-- Page Header -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-arrow-repeat"></i> CNV Sync Status</h2>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card card bg-primary text-white">
+            <div class="card-body text-center">
+                <div class="stat-label opacity-75">Total Customers</div>
+                <div class="stat-value">76875</div>
+                <small class="opacity-75">Synced from CNV</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card card text-white" style="background:var(--nav-bg)">
+            <div class="card-body text-center">
+                <div class="stat-label opacity-75">Total Orders</div>
+                <div class="stat-value">5868</div>
+                <small class="opacity-75">Synced from CNV</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card card bg-success text-white">
+            <div class="card-body text-center">
+                <div class="stat-label opacity-75">Last Customer Sync</div>
+                <h5 class="mb-1">2026-04-23 05:05</h5>
+                <small class="opacity-75">17 created</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card card bg-warning" style="color:var(--text)">
+            <div class="card-body text-center">
+                <div class="stat-label opacity-75">Last Order Sync</div>
+                <h5 class="mb-1">2026-04-23 05:10</h5>
+                <small class="opacity-75">8 created</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Sync Controls -->
+<div class="row g-3 mb-4">
+    <!-- Customer & Order Sync -->
+    <div class="col-md-6">
+        <div class="card border">
+            <div class="card-header py-2"><h6 class="mb-0"><i class="bi bi-cloud-download"></i> Manual Sync</h6></div>
+            <div class="card-body">
+                
+                
+                <div class="d-flex gap-2">
+                    <button id="btnSyncCustomers" class="btn btn-primary btn-sm "
+                            >
+                        <i class="bi bi-people-fill"></i> Sync Customers
+                    </button>
+                    <button id="btnSyncOrders" class="btn btn-info btn-sm "
+                            >
+                        <i class="bi bi-bag-fill"></i> Sync Orders
+                    </button>
+                </div>
+                <div id="syncMsg" class="mt-2 small"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zalo Sync -->
+    <div class="col-md-6">
+        <div class="card border">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-chat-dots-fill text-primary"></i> Zalo Sync</h6>
+                
+                <small class="text-muted">Last: 2026-03-10 13:08
+                    (1000 updated)</small>
+                
+            </div>
+            <div class="card-body">
+                
+                <div class="mb-2">
+                    <label class="form-label form-label-sm mb-1">CNV Cookie <span class="text-danger">*</span></label>
+                    <textarea id="zaloCookie" class="form-control form-control-sm font-monospace"
+                              rows="3" placeholder="Paste full cookie string here…"
+                              ></textarea>
+                    <div class="form-text">Cookie from browser DevTools → Network → any request to app.cnvloyalty.com</div>
+                </div>
+                <button id="btnZaloSync" class="btn btn-primary btn-sm "
+                        >
+                    <i class="bi bi-arrow-repeat"></i> Start Zalo Sync
+                </button>
+                <div id="zaloMsg" class="mt-2 small"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sync History -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Sync History</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Type</th>
+                        <th>Started</th>
+                        <th>Completed</th>
+                        <th>Status</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Created</th>
+                        <th class="text-end">Updated</th>
+                        <th class="text-end">Failed</th>
+                        <th>Checkpoint</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-info">
+                                Orders
+                            </span>
+                        </td>
+                        <td>2026-04-23 05:10:00</td>
+                        <td>2026-04-23 05:10:01</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">9</td>
+                        <td class="text-end">8</td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-23 05:05
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-primary">
+                                Customers
+                            </span>
+                        </td>
+                        <td>2026-04-23 05:05:00</td>
+                        <td>2026-04-23 05:05:05</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">24</td>
+                        <td class="text-end">17</td>
+                        <td class="text-end">7</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-23 05:00
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-info">
+                                Orders
+                            </span>
+                        </td>
+                        <td>2026-04-23 04:10:00</td>
+                        <td>2026-04-23 04:10:01</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">7</td>
+                        <td class="text-end">6</td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-23 04:10
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-primary">
+                                Customers
+                            </span>
+                        </td>
+                        <td>2026-04-23 04:05:00</td>
+                        <td>2026-04-23 04:05:04</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">15</td>
+                        <td class="text-end">10</td>
+                        <td class="text-end">5</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-23 04:04
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-info">
+                                Orders
+                            </span>
+                        </td>
+                        <td>2026-04-23 03:10:00</td>
+                        <td>2026-04-23 03:10:01</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-22 15:00
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-primary">
+                                Customers
+                            </span>
+                        </td>
+                        <td>2026-04-23 03:05:00</td>
+                        <td>2026-04-23 03:05:02</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-22 15:36
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-info">
+                                Orders
+                            </span>
+                        </td>
+                        <td>2026-04-23 02:10:00</td>
+                        <td>2026-04-23 02:10:01</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-22 15:00
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-primary">
+                                Customers
+                            </span>
+                        </td>
+                        <td>2026-04-23 02:05:00</td>
+                        <td>2026-04-23 02:05:01</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-22 15:36
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-info">
+                                Orders
+                            </span>
+                        </td>
+                        <td>2026-04-23 01:10:00</td>
+                        <td>2026-04-23 01:10:01</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-22 15:00
+                            </small>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>
+                            <span class="badge bg-primary">
+                                Customers
+                            </span>
+                        </td>
+                        <td>2026-04-23 01:05:00</td>
+                        <td>2026-04-23 01:05:01</td>
+                        <td>
+                            <span class="badge bg-success">
+                                Completed
+                            </span>
+                        </td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td class="text-end">1</td>
+                        <td class="text-end">0</td>
+                        <td>
+                            <small class="text-muted">
+                                2026-04-22 15:36
+                            </small>
+                        </td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+<script>
+const csrfToken = '9rRIpEto77HJ1zfeQDdbCURRjuYRaReQTir0yqjhKil04r6FbthcxED9zhTn2J54';
+
+async function postJSON(url, data) {
+    const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify(data),
+    });
+    return r.json();
+}
+
+function showMsg(el, msg, isWarning) {
+    el.className = 'mt-2 small ' + (isWarning ? 'text-warning fw-semibold' : 'text-success fw-semibold');
+    el.textContent = msg;
+}
+
+document.getElementById('btnSyncCustomers').addEventListener('click', async function () {
+    this.disabled = true;
+    const msg = document.getElementById('syncMsg');
+    msg.textContent = 'Starting…';
+    const res = await postJSON("/cnv/trigger-sync/", { sync_type: 'customers' });
+    showMsg(msg, res.message, res.status === 'skipped');
+    if (res.status !== 'skipped') setTimeout(() => location.reload(), 2000);
+    else this.disabled = false;
+});
+
+document.getElementById('btnSyncOrders').addEventListener('click', async function () {
+    this.disabled = true;
+    const msg = document.getElementById('syncMsg');
+    msg.textContent = 'Starting…';
+    const res = await postJSON("/cnv/trigger-sync/", { sync_type: 'orders' });
+    showMsg(msg, res.message, res.status === 'skipped');
+    if (res.status !== 'skipped') setTimeout(() => location.reload(), 2000);
+    else this.disabled = false;
+});
+
+document.getElementById('btnZaloSync').addEventListener('click', async function () {
+    const cookie = document.getElementById('zaloCookie').value.trim();
+    if (!cookie) { alert('Please paste the CNV cookie first.'); return; }
+    this.disabled = true;
+    const msg = document.getElementById('zaloMsg');
+    msg.textContent = 'Starting…';
+    const res = await postJSON("/cnv/trigger-zalo-sync/", { cookie });
+    showMsg(msg, res.message, res.status === 'skipped');
+    if (res.status !== 'skipped') setTimeout(() => location.reload(), 2000);
+    else this.disabled = false;
+});
+</script>
+
+</body>
+
+</html>

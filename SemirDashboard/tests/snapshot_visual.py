@@ -1,5 +1,5 @@
 """
-Visual snapshot generator: takes the rendered HTML files in <repo-root>/render/
+Visual snapshot generator: takes the rendered HTML files in SemirDashboard/tests/render/
 and produces PDF + full-page PNG screenshots using headless Chrome.
 
 Output:
@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent  # repo root
+ROOT = Path(__file__).resolve().parent  # tests/ directory
 RENDER_DIR = ROOT / "render"
 PDF_DIR = RENDER_DIR / "pdf"
 PNG_DIR = RENDER_DIR / "png"

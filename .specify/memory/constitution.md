@@ -1,23 +1,26 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.0.0 → 1.1.0 → 1.1.1
-Modified principles:
-  - I. Business Logic Lock: added Coupon face_value rule + Shop grouping rules
-  - III. Performance Budget: added Upload integrity rule (bulk_create mandate)
-Added sections:
-  - VI. Observability (new principle)
+Version change: 1.1.1 → 1.2.0 → 1.2.1
+Modified principles: none
+Added sections (1.2.0):
+  - VII. Mobile App Standards (new principle — SemirPhone Flutter app)
+  - Technical Standards: Flutter/Dart section added
+  - Development Workflow: Flutter commands added
+  - Title updated: "SemirDashboard Constitution" → "Semir Project Constitution"
+Added sections (1.2.1):
+  - Development Workflow: Post-task documentation rule (docs/ + .specify/ + CLAUDE.md must
+    be updated after every task — task is not complete until all three layers are consistent)
 Removed sections: none
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ Constitution Check references updated principles
+  - .specify/templates/plan-template.md ✅ Constitution Check section covers both platforms
   - .specify/templates/spec-template.md ✅ No amendments needed
   - .specify/templates/tasks-template.md ✅ No amendments needed
 Deferred TODOs: none
-Source audit: reviewed project_business_logic.md, project_analytics.md, project_cnv.md,
-              project_models.md — all gaps now codified in constitution.
+Source audit: reviewed docs/project_mobile.md, semir-phone/lib/ source — gaps now codified.
 -->
 
-# SemirDashboard Constitution
+# Semir Project Constitution
 
 ## Core Principles
 
@@ -117,6 +120,44 @@ All new features MUST follow the full spec-kit workflow before any code is writt
 Hotfixes (≤ 5 lines, isolated bug) MAY skip to implement with a one-sentence rationale.
 No feature branch without a `specs/<###-feature-name>/spec.md`.
 
+### VII. Mobile App Standards (SemirPhone)
+
+All development on the Flutter iOS/Android companion app (`semir-phone/`) MUST follow these rules:
+
+- **Compile-time config only**: All secrets, base URLs, TLS pins, and Sentry DSN MUST be injected
+  via `--dart-define` flags at build time. No `.env` files, no runtime file reads. Source of truth:
+  `BuildConfig` in `core/config/app_config.dart`.
+
+- **Single exception source**: `ApiException`, `PermissionException`, and `ParseException` are
+  defined ONLY in `shared/models/analytics_models.dart`. MUST NOT be re-defined in any feature
+  service file. All services import from this single source.
+
+- **Controlled dropdown widgets**: `ShopGroupFilter` uses `DropdownButton(value:)` inside
+  `InputDecorator` — NOT `DropdownButtonFormField(initialValue:)`. The `initialValue:` API is
+  uncontrolled (FormField owns state) and will not respond to externally-driven state resets.
+  Do not revert this to `DropdownButtonFormField`.
+
+- **Token storage format**: Permissions are stored as `jsonEncode(List<String>)` in
+  `flutter_secure_storage`. MUST NOT use CSV (`join(',')`) — JSON handles permission strings
+  with commas and is unambiguous to parse.
+
+- **Auth interceptor DI**: `AuthInterceptor._retryClient` MUST be injected via `bareDioProvider`
+  in production. An `assert(_retryClient != null)` enforces this. The bare Dio has no auth
+  interceptor — this prevents infinite retry loops on token refresh.
+
+- **`ref.listenManual` for router bridge**: `_AuthListenable` in `app.dart` MUST use
+  `ref.listenManual` (returns `ProviderSubscription`) so the subscription can be closed in
+  `dispose()`. Do NOT use `ref.listen` here — it returns `void` and cannot be closed outside
+  a widget context.
+
+- **Permissions at two levels**: Every protected route has a GoRouter `redirect` guard AND the
+  corresponding `NavCard` on `HomePage` sets `hasAccess` from the session permissions. Both
+  must be kept in sync when adding a new feature.
+
+- **Test gate before release**: All 198 tests (`flutter test`) MUST pass. Golden images MUST be
+  regenerated (`--update-goldens`) whenever any visual component changes. No release without
+  a clean test run.
+
 ### VI. Observability
 
 Every HTTP request MUST be traceable end-to-end:
@@ -134,7 +175,10 @@ Every HTTP request MUST be traceable end-to-end:
 
 ## Technical Standards
 
-**Stack**: Python 3.x / Django, Bootstrap 5, SQLite3 (dev), PostgreSQL 16 (prod).
+**Backend stack**: Python 3.x / Django, Bootstrap 5, SQLite3 (dev), PostgreSQL 16 (prod).
+
+**Mobile stack**: Flutter 3.x / Dart 3, Riverpod 2 (`AsyncNotifierProvider`), GoRouter 13,
+Dio 5 (JWT interceptor), `flutter_secure_storage` 9, `fl_chart` 0.67, Sentry Flutter 8.
 
 **App layout**:
 - Models: `App/models/` (pos.py, coupon.py, user.py) — import via `from App.models import X`.
@@ -165,28 +209,56 @@ in all arithmetic. Mixing with Python `int` causes silent truncation on some DB 
 
 **Branch naming**: `<###>-<feature-name>` (e.g., `001-customer-export`).
 
-**Test run commands**:
+**Test run commands (SemirDashboard)**:
 ```bash
 cd SemirDashboard && python manage.py test tests -v 2
 cd SemirDashboard && UPDATE_SNAPSHOTS=1 python manage.py test tests -v 2
 cd SemirDashboard && python manage.py test tests.test_shop_detail.ShopDetailTest.test_sales_alltime_matches_shop_tab -v 2
 ```
 
+**Test run commands (SemirPhone)**:
+```bash
+cd semir-phone && flutter test
+cd semir-phone && flutter test test/golden/golden_test.dart --update-goldens
+```
+
 **Snapshot policy**: Snapshot changes from pure optimization (no business logic change)
 MUST show zero data-shape delta. If `assert_snapshot` fails after an optimization,
 revert the optimization — correctness over performance.
 
-**Docs to update after structural changes**:
-- New URL → `docs/project_urls.md`
-- New test file → `docs/project_structure.md`
-- View/service refactor → `docs/project_analytics.md` or `docs/project_cnv.md`
-- Cache key / TTL change → same docs as above
-- Model index added → `docs/project_models.md`
+**Post-task documentation rule** (REQUIRED after every completed task):
+
+After any task is done — feature, fix, refactor, or config change — review and update all
+three layers if the change affects them. This is not optional and is part of task completion.
+
+1. **`docs/`** — update the relevant doc file(s):
+   - New URL → `docs/project_urls.md`
+   - New test file → `docs/project_structure.md`
+   - View/service refactor → `docs/project_analytics.md` or `docs/project_cnv.md`
+   - Cache key / TTL change → same docs as above
+   - Model index added → `docs/project_models.md`
+   - New mobile route or permission → `docs/project_mobile.md`
+   - New shared widget or model type → `docs/project_mobile.md`
+   - Any architectural decision → `docs/ANALYSIS.md` or `docs/project_overview.md`
+
+2. **`.specify/memory/constitution.md`** — amend if the task:
+   - Establishes a new invariant or non-obvious rule that future tasks must not violate
+   - Changes a locked business rule (requires product owner approval first)
+   - Introduces a new platform, layer, or technology to the project
+   - Bumps version per semantic versioning and updates `LAST_AMENDED_DATE`
+
+3. **`CLAUDE.md`** — update if the task:
+   - Adds or changes a run command, test command, or migration step
+   - Changes the location of a canonical folder (e.g., render/, snapshots/)
+   - Introduces a new non-obvious rule that Claude needs to apply in every session
+   - Adds a new doc file to the Detailed Docs list
+
+A task is NOT complete until these three layers are consistent with the code.
 
 ## Governance
 
-This constitution is the highest-authority document for SemirDashboard development.
-It supersedes any conflicting guidance in other files.
+This constitution is the highest-authority document for all Semir project development
+(SemirDashboard + SemirPhone). It supersedes any conflicting guidance in other files.
 
 **Amendment procedure**:
 1. Propose the change in conversation with the product owner.
@@ -203,4 +275,4 @@ It supersedes any conflicting guidance in other files.
 **Compliance**: Every PR description MUST include a one-line "Constitution Check" confirming
 no locked rules were modified (or citing the approval if they were).
 
-**Version**: 1.1.1 | **Ratified**: 2026-04-22 | **Last Amended**: 2026-04-22
+**Version**: 1.2.1 | **Ratified**: 2026-04-22 | **Last Amended**: 2026-04-27

@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Post-Task Rule (enforced)
+
+**A task is not complete until `docs/`, `.specify/`, and `CLAUDE.md` are consistent with the code.**
+
+After every completed task, review and update each layer that the change touches:
+
+| Layer | Update when… |
+|-------|-------------|
+| `docs/` | New URL, model, view, service, test file, mobile route, architectural decision |
+| `.specify/memory/constitution.md` | New invariant, locked rule change, new platform/technology — bump version |
+| `CLAUDE.md` | New run command, folder location change, new rule Claude must apply every session |
+
+If nothing changed in a layer, no update is needed — but the review is still required.
+
 ## Commands
 
 ```bash
@@ -35,13 +49,13 @@ cd SemirDashboard && python tests/snapshot_visual.py
 
 ## UI Snapshot Rule
 
-After editing **any** template under `App/templates/`, regenerate the visual snapshots in `render/`:
+After editing **any** template under `App/templates/`, regenerate the visual snapshots in `SemirDashboard/tests/render/`:
 1. `python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"` — writes HTML + table summaries + `token_issues.txt` for any hardcoded color violations
 2. `python tests/snapshot_visual.py` — generates PDF + PNG via Chrome headless
 
-The `render/` folder is the canonical visual reference — open `render/png/*.png` to verify changes look correct, and check `render/_index.md` for token compliance (must be 0 issues).
+The `tests/render/` folder is the canonical visual reference — open `tests/render/png/*.png` to verify changes look correct, and check `tests/render/_index.md` for token compliance (must be 0 issues).
 
-Test input files live in `SemirDashboard/tests/input/`. Snapshots live in `SemirDashboard/tests/snapshots/`. Run logs are written to `SemirDashboard/tests/output/`.
+Test input files live in `SemirDashboard/tests/input/`. Snapshots live in `SemirDashboard/tests/snapshots/`. Visual renders live in `SemirDashboard/tests/render/`. Run logs are written to `SemirDashboard/tests/output/`.
 
 ## Architecture Overview
 
@@ -131,8 +145,9 @@ Dev: SQLite3 (`SemirDashboard/db.sqlite3`). Prod: PostgreSQL 16.
 ## Detailed Docs
 
 Extended documentation is in `docs/`:
-- `ANALYSIS.md` — navigation index + architecture summary
-- `project_overview.md` — stack, paths, deploy, commands
+- `ANALYSIS.md` — navigation index + architecture summary (both web + mobile)
+- `project_overview.md` — stack, paths, deploy, commands (both web + mobile)
+- `project_mobile.md` — SemirPhone Flutter app: auth, navigation, API, widgets, tests, release checklist
 - `project_structure.md` — file tree + task→file mapping
 - `project_models.md` — all model fields (accurate)
 - `project_analytics.md` — analytics engine, season labels, grades, tab_functions.py

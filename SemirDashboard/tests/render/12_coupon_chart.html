@@ -1,0 +1,1962 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coupon Analytics Charts</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            /* ── Brand blues ─────────────────────── */
+            --primary:        #0369a1;
+            --primary-rgb:    3, 105, 161;
+            --primary-hover:  #075985;
+            --bs-primary:     #0369a1;
+            --bs-primary-rgb: 3, 105, 161;
+            --nav-bg:         #064e77;
+            --secondary:      #4a6785;
+
+            /* ── Accents ─────────────────────────── */
+            --accent:         #06b6d4;
+            --accent-rgb:     6, 182, 212;
+            --coupon:         #7b4000;
+            --success:        #198754;
+            --success-rgb:    25, 135, 84;
+            --danger:         #dc3545;
+            --danger-rgb:     220, 53, 69;
+
+            /* ── Amber / Yellow ──────────────────── */
+            --orange:         #eab308;
+            --orange-rgb:     234, 179, 8;
+            --orange-dark:    #a16207;
+            --highlight:      #fef08a;
+
+            /* ── CNV section palette ────────────── */
+            --cnv-purple:     #7b3f9e;
+            --cnv-navy:       #1a5cb0;
+            --cnv-forest:     #156f3a;
+
+            /* ── Status gradients ────────────────── */
+            --gradient-synced:     linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-not-synced: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+
+            /* ── Grade badges ───────────────────── */
+            --silver:         #94a3b8;
+
+            /* ── Chart series & highlights ──────── */
+            --c-alltime:      #0d6efd;
+            --c-pos:          #e53935;
+            --c-cnv:          #0369a1;
+            --c-zalo:         #2e7d32;
+            --c-oa:           #f57c00;
+            --hl-row:         #93c5fd;
+            --hl-row-light:   #bfdbfe;
+            --hl-cell:        #ffe066;
+            --border-light:   #f0f0f0;
+
+            /* ── Row highlight tints ─────────────── */
+            --highlight-warn: #fff3cd;
+            --highlight-ok:   #f0fdf4;
+
+            /* ── Code syntax ────────────────────── */
+            --code-keyword:   #0066cc;
+            --code-comment:   #666666;
+            --example-bg:     #eef3fb;
+
+            /* ── Neutrals ────────────────────────── */
+            --text:           #374151;
+            --text-dark:      #212529;
+            --text-muted:     #6c757d;
+            --border:         #dee2e6;
+            --bg:             #f8fafc;
+            --bg-light:       #f8f9fa;
+            --gray-tint:      #f0f2f5;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .navbar {
+            background: var(--nav-bg) !important;
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.35);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.3rem;
+        }
+
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, .9) !important;
+            transition: color .2s;
+            font-size: .93rem;
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link.active {
+            color: #fff !important;
+            font-weight: 500;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            border-radius: 8px;
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            transition: all .2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .table th {
+            background: var(--bg-light);
+            font-weight: 600;
+            font-size: .9rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5 {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .badge {
+            padding: .35em .65em;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1.5px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 .2rem rgba(var(--accent-rgb), 0.15);
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+            border: none;
+        }
+
+        .dropdown-item {
+            padding: .65rem 1.25rem;
+            transition: background .15s;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(var(--accent-rgb), 0.08);
+        }
+
+        .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem 0.25rem;
+        }
+
+        .page-link {
+            position: relative;
+            padding: .4rem 0;
+            margin: 0 .75rem;
+        }
+
+        .page-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #fff;
+            transition: width .2s;
+        }
+
+        .page-link:hover::after,
+        .page-link.active::after {
+            width: 100%;
+        }
+
+        @media(max-width:991px) {
+            .navbar-nav {
+                margin-top: 1rem;
+            }
+
+            .nav-item {
+                margin: .25rem 0;
+            }
+
+            .page-link {
+                margin: .25rem 0;
+                padding: .5rem 0;
+            }
+        }
+
+        .kpi-card {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .kpi-card .text-muted {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-link:focus {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .badge.bg-warning,
+        .badge.text-bg-warning {
+            color: var(--text) !important;
+        }
+    </style>
+    
+<style>
+    :root {
+        --c-coupon: var(--primary);
+        --c-used: var(--success);
+        --c-amt: var(--orange);
+    }
+
+    .filter-card {
+        background: #fff;
+        border-radius: 10px;
+    }
+
+    /* Donut cards */
+    .donut-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+        padding: 1.1rem .75rem .9rem;
+        text-align: center;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .donut-title {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: var(--text-muted);
+        margin-bottom: .6rem;
+        line-height: 1.3;
+    }
+
+    .donut-wrapper {
+        position: relative;
+        width: 140px;
+        height: 140px;
+        margin: auto;
+        flex-shrink: 0;
+    }
+
+    .donut-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        text-align: center;
+        line-height: 1.15;
+    }
+
+    .donut-pct {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--text);
+        display: block;
+    }
+
+    .donut-sub {
+        font-size: .62rem;
+        color: var(--text-muted);
+        display: block;
+    }
+
+    .donut-footer {
+        margin-top: .55rem;
+        font-size: .72rem;
+        color: var(--text-muted);
+    }
+
+    .donut-footer strong {
+        font-weight: 700;
+    }
+
+    .row-section-label {
+        font-size: .75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        padding: .3rem .6rem;
+        border-radius: 4px;
+        display: inline-block;
+        margin-bottom: .5rem;
+    }
+
+    .label-period {
+        background: rgba(var(--primary-rgb), .1);
+        color: var(--text);
+    }
+
+    .label-alltime {
+        background: rgba(var(--orange-rgb), .12);
+        color: var(--text);
+    }
+
+    /* Trend section */
+    .chart-section-header {
+        font-size: .85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: var(--text-muted);
+        border-bottom: 2px solid var(--border);
+        padding-bottom: .4rem;
+        margin-bottom: 1rem;
+    }
+
+    .shop-checklist {
+        max-height: 280px;
+        overflow-y: auto;
+        border: 1.5px solid var(--border);
+        border-radius: 8px;
+        padding: .4rem .5rem;
+        background: var(--bg);
+    }
+
+    .shop-checklist .form-check {
+        padding: .4rem .5rem;
+        border-bottom: 1px solid var(--border-light);
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background .12s;
+        margin-bottom: 0;
+    }
+
+    .shop-checklist .form-check:hover {
+        background: rgba(var(--primary-rgb), .06);
+    }
+
+    .shop-checklist .form-check:last-child {
+        border-bottom: none;
+    }
+
+    .shop-checklist .form-check-input {
+        cursor: pointer;
+        width: 1.1em;
+        height: 1.1em;
+        margin-top: .15em;
+        float: none;
+        margin-left: 0;
+    }
+
+    .shop-checklist .form-check-label {
+        cursor: pointer;
+        width: 100%;
+        font-size: .85rem;
+    }
+
+    .shop-checklist .avg-row {
+        background: rgba(var(--primary-rgb), .08);
+        border-bottom: 2px solid var(--border) !important;
+        border-radius: 5px;
+        margin-bottom: .2rem;
+    }
+
+    .shop-dot {
+        display: inline-block;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        margin-right: 4px;
+        flex-shrink: 0;
+    }
+
+    .metric-select-card,
+    .xaxis-card {
+        background: var(--bg-light);
+        border-radius: 8px;
+        padding: .75rem 1rem;
+        height: 100%;
+    }
+
+    .control-label {
+        font-size: .8rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        margin-bottom: .5rem;
+    }
+
+    .trend-chart-wrap {
+        position: relative;
+        height: 420px;
+        background: #fff;
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .07);
+    }
+
+    .shop-select-actions {
+        margin-bottom: .4rem;
+    }
+
+    .shop-select-actions button {
+        font-size: .78rem;
+    }
+
+    /* ─── Chart data tables ─── */
+    .chart-tbl-wrap { overflow-x: auto; }
+    .chart-data-tbl th, .chart-data-tbl td { white-space: nowrap; }
+    .tbl-toggle-btn .bi-chevron-down { transition: transform .2s ease; }
+    .tbl-toggle-btn:not(.collapsed) .bi-chevron-down { transform: rotate(180deg); }
+    /* sticky first column */
+    .chart-data-tbl thead th:first-child { position:sticky;left:0;z-index:3;background:var(--primary);box-shadow:2px 0 4px rgba(0,0,0,.12); }
+    .chart-data-tbl tbody td:first-child  { position:sticky;left:0;z-index:1;background:inherit;box-shadow:2px 0 3px rgba(0,0,0,.06); }
+    /* column highlight on chart click */
+    .tbl-col-hl { background:var(--highlight-warn) !important; outline:2px solid var(--orange); outline-offset:-1px; }
+    /* row highlight on chart click */
+    .tbl-row-hl > td:first-child { border-left:4px solid var(--c-alltime) !important; background:var(--hl-row) !important; }
+    .tbl-row-hl > td { background:var(--hl-row-light) !important; }
+    .tbl-row-hl > td.tbl-col-hl { background:var(--hl-cell) !important; }
+</style>
+
+</head>
+
+<body>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow"></i> Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link page-link" href="/">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+
+                    
+                    
+                    <!-- Upload Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Data Upload</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/customers/">
+                                    <i class="bi bi-people"></i> Upload Customers
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/sales/">
+                                    <i class="bi bi-cart"></i> Upload Sales
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/">
+                                    <i class="bi bi-ticket"></i> Upload Coupons
+                                </a>
+                            </li>
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/#campaigns">
+                                    <i class="bi bi-tags"></i> Manage Campaigns
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+                    
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-bar-chart-line"></i> Analytics
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/">
+                                    <i class="bi bi-graph-up"></i> Sales Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/chart/">
+                                    <i class="bi bi-pie-chart"></i> Sales Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-analytics/">
+                                    <i class="bi bi-people-fill"></i> Customer Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-chart/">
+                                    <i class="bi bi-people"></i> Customer Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/">
+                                    <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/chart/">
+                                    <i class="bi bi-pie-chart-fill"></i> Coupon Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/customer-detail/">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/shop-detail/">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- Tools Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Tools
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Additional Tools</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/formulas/">
+                                    <i class="bi bi-calculator"></i> Formulas
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">CNV Loyalty</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/cnv/sync-status/">
+                                    <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/users/">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            
+
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin-logs/">
+                                    <i class="bi bi-journal-text"></i> Admin Logs
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> alex
+                            
+                            
+                            <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
+                            
+                            
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/logout/">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="oQu2NNHKSJ0Ap0IeACjkRuVrYsoNXVX68H4kWzxDvUERsSzFVsnlMeHJefjjPNOk">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+
+    <main class="">
+        <div class="container-fluid px-3">
+            
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-pie-chart"></i> Coupon Analytics Charts</h2>
+    <div class="d-flex gap-2">
+        
+        
+        <button class="btn btn-outline-success btn-sm" onclick="downloadChartExcel()">
+            <i class="bi bi-file-earmark-excel"></i> Download Excel
+        </button>
+        
+        <a href="/coupons/?"
+            class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-table"></i> Switch to Table View
+        </a>
+    </div>
+</div>
+
+<!-- ═══ FILTER BAR ═══ -->
+<div class="card filter-card mb-3">
+    <div class="card-body">
+        <form method="get" id="chartFilterForm" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label"><i class="bi bi-calendar"></i> Start Date</label>
+                <input type="date" class="form-control" name="start_date" id="fieldStartDate" value="">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label"><i class="bi bi-calendar"></i> End Date</label>
+                <input type="date" class="form-control" name="end_date" id="fieldEndDate" value="">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-search"></i> Coupon ID Prefix</label>
+                <input type="text" class="form-control" name="coupon_id_prefix" id="fieldPrefix"
+                    value="" placeholder="Free text filter…">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label"><i class="bi bi-building"></i> Shop Group</label>
+                <select class="form-select" name="shop_group">
+                    <option value="">All Shops</option>
+                    <option value="Bala Group" >Bala Group</option>
+                    <option value="Semir Group" >Semir Group
+                    </option>
+                    <option value="Others Group" >Others Group
+                    </option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2 align-items-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel"></i> Apply
+                </button>
+                <a href="/coupons/chart/" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+            </div>
+        </form>
+        <div class="mt-2 pt-2 border-top">
+            <small class="text-muted me-2">Quick:</small>
+            <div class="btn-group btn-group-sm flex-wrap">
+                
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="7">Last 7 Days</button>
+                
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="30">Last 30 Days</button>
+                
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="90">Last 90 Days</button>
+                
+                <button class="btn btn-outline-secondary quick-days-btn" data-days="365">Last Year</button>
+                
+                <button class="btn btn-outline-secondary" id="btnThisMonth">This Month</button>
+                <button class="btn btn-outline-secondary" id="btnLastMonth">Last Month</button>
+                <button class="btn btn-outline-secondary" id="btnThisYear">This Year</button>
+                
+                <button class="btn btn-outline-secondary quick-year-btn" data-year="2024">Year 2024</button>
+                
+                <button class="btn btn-outline-secondary quick-year-btn" data-year="2025">Year 2025</button>
+                
+                <button class="btn btn-outline-secondary quick-year-btn" data-year="2026">Year 2026</button>
+                
+            </div>
+        </div>
+        <!-- Campaign checklist filter (populated by JS from CAMPAIGNS) -->
+        <div class="mt-2 pt-2 border-top" id="chartCpnFilterRow" style="display:none">
+            <small class="text-muted d-block mb-1"><i class="bi bi-tags"></i> Filter by Campaign:</small>
+            <div id="chartCpnFilterList"
+                style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:.4rem .5rem;background:var(--bg);">
+            </div>
+        </div>
+
+        
+    </div>
+</div>
+
+<!-- ═══ SECTION 1 — OVERVIEW PIES ═══ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-pie-chart-fill text-primary"></i>
+        <strong>Period Overview</strong>
+        <small class="text-muted ms-2">Coupon usage metrics — period vs all-time</small>
+    </div>
+    <div class="card-body">
+
+        <!-- All Time -->
+        <div class="mb-1">
+            <span class="row-section-label label-alltime"><i class="bi bi-infinity"></i> All Time</span>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Used (All Time)<br>vs Total Coupons</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart1"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct1">—</span>
+                            <span class="donut-sub">used rate</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>1369</strong> / 8198
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Coupon Amount (AT)<br>vs Invoice Amount (AT)</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart2"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct2">—</span>
+                            <span class="donut-sub">of invoice</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>125075242</strong>
+                        / 2365894686 VND
+                    </div>
+                </div>
+            </div>
+            <!-- spacer cols on larger screens -->
+            <div class="col-6 col-md-3 d-none d-md-block"></div>
+            <div class="col-6 col-md-3 d-none d-md-block"></div>
+        </div>
+
+        <!-- Period -->
+        <div class="mb-1">
+            <span class="row-section-label label-period"><i class="bi bi-calendar-range"></i> Period Filter</span>
+        </div>
+        <div class="row g-3">
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Used (Period)<br>vs Total Coupons</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart3"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct3">—</span>
+                            <span class="donut-sub">used rate</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>1369</strong> / 8198
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="donut-card">
+                    <div class="donut-title">Coupon Amount (Period)<br>vs Invoice Amount (Period)</div>
+                    <div class="donut-wrapper">
+                        <canvas id="dChart4"></canvas>
+                        <div class="donut-center">
+                            <span class="donut-pct" id="dPct4">—</span>
+                            <span class="donut-sub">of invoice</span>
+                        </div>
+                    </div>
+                    <div class="donut-footer">
+                        <strong>125075242</strong>
+                        / 2365894686 VND
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3 d-none d-md-block"></div>
+            <div class="col-6 col-md-3 d-none d-md-block"></div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ─── Overview Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Period Overview — Data Table</strong></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#couponOvDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="couponOvDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="couponOvDataWrap" class="chart-tbl-wrap"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SECTION 2 — SHOP TRENDS ═══ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-graph-up text-primary"></i>
+        <strong>Shop Trends</strong>
+        <small class="text-muted ms-2">Compare shops across time periods</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+
+            <!-- Shop checklist -->
+            <div class="col-lg-4 col-md-5">
+                <div class="control-label"><i class="bi bi-shop"></i> Select Shops</div>
+                <div class="shop-select-actions d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm" id="shopSelAll">All</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="shopSelNone">None</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="shopSelTop5">First 5</button>
+                </div>
+                <div class="shop-checklist" id="shopChecklist">
+                    <label for="cbShopAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbShopAvgAll" value="__avg_all__" style="flex-shrink:0;">
+                        <span class="shop-dot" id="dotShopAvgAll" style="background:var(--text-muted);flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (all shops)</span>
+                    </label>
+                    <label for="cbShopAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbShopAvg" value="__avg__" style="flex-shrink:0;">
+                        <span class="shop-dot" id="dotShopAvg" style="background:var(--text);flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (average of selected)</span>
+                    </label>
+                    <!-- dynamic shop rows appended by JS -->
+                </div>
+            </div>
+
+            <!-- Time Axis (radio) + Metric -->
+            <div class="col-lg-3 col-md-3">
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="shopXAxis" id="sxWeek" value="week">
+                        <label class="form-check-label" for="sxWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="shopXAxis" id="sxMonth" value="month" checked>
+                        <label class="form-check-label" for="sxMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="shopXAxis" id="sxSeason" value="season">
+                        <label class="form-check-label" for="sxSeason">By Season</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="shopXAxis" id="sxYear" value="year">
+                        <label class="form-check-label" for="sxYear">By Year</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label mt-1"><i class="bi bi-bar-chart"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm mt-1" id="shopMetric">
+                        <option value="used">Used Coupons</option>
+                        <option value="pct_of_used">% Used / Used All</option>
+                        <option value="coupon_amount">Coupon Amount (VND)</option>
+                        <option value="unique_amount">Total Amount Unique (VND)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Legend panel -->
+            <div class="col-lg-5 col-md-4 d-none d-md-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Legend</div>
+                    <div id="shopLegendPanel" class="mt-1" style="font-size:.8rem;max-height:220px;overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="trend-chart-wrap">
+            <canvas id="shopTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Shop Trends Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Shop Trends — Data Table</strong>
+            <small class="text-muted ms-2" id="shopDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#shopDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="shopDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="shopDataWrap" class="chart-tbl-wrap"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SECTION 3 — CAMPAIGN TRENDS ═══ -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <i class="bi bi-tags text-primary"></i>
+        <strong>Campaign Trends</strong>
+        <small class="text-muted ms-2">Compare campaigns across time periods (all coupons, no prefix filter)</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+
+            <!-- Campaign checklist -->
+            <div class="col-lg-4 col-md-5">
+                <div class="control-label"><i class="bi bi-tag"></i> Select Campaigns</div>
+                <div class="shop-select-actions d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm" id="campSelAll">All</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="campSelNone">None</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="campSelTop5">First 5</button>
+                </div>
+                <div class="shop-checklist" id="campChecklist">
+                    <label for="cbCampAvgAll" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbCampAvgAll" value="__avg_all__" style="flex-shrink:0;">
+                        <span class="shop-dot" id="dotCampAvgAll" style="background:var(--text-muted);flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (all campaigns)</span>
+                    </label>
+                    <label for="cbCampAvg" class="form-check d-flex align-items-center gap-1 avg-row" style="cursor:pointer;margin-bottom:0;">
+                        <input class="form-check-input" type="checkbox" id="cbCampAvg" value="__avg__" style="flex-shrink:0;">
+                        <span class="shop-dot" id="dotCampAvg" style="background:var(--text);flex-shrink:0;"></span>
+                        <span class="fw-semibold" style="font-size:.85rem;">AVG (average of selected)</span>
+                    </label>
+                    <!-- dynamic campaign rows by JS -->
+                </div>
+            </div>
+
+            <!-- Time Axis (radio) + Metric -->
+            <div class="col-lg-3 col-md-3">
+                <div class="metric-select-card">
+                    <div class="control-label"><i class="bi bi-calendar3"></i> Time Axis (X)</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="radio" name="campXAxis" id="cxWeek" value="week">
+                        <label class="form-check-label" for="cxWeek">By Week</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="campXAxis" id="cxMonth" value="month" checked>
+                        <label class="form-check-label" for="cxMonth">By Month</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="campXAxis" id="cxSeason" value="season">
+                        <label class="form-check-label" for="cxSeason">By Season</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="campXAxis" id="cxYear" value="year">
+                        <label class="form-check-label" for="cxYear">By Year</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="control-label mt-1"><i class="bi bi-bar-chart"></i> Metric (Y)</div>
+                    <select class="form-select form-select-sm mt-1" id="campMetric">
+                        <option value="used">Used Coupons</option>
+                        <option value="pct_of_used">% Used / Used All</option>
+                        <option value="coupon_amount">Coupon Amount (VND)</option>
+                        <option value="unique_amount">Total Amount Unique (VND)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Legend panel -->
+            <div class="col-lg-5 col-md-4 d-none d-md-flex align-items-start">
+                <div class="w-100">
+                    <div class="control-label"><i class="bi bi-info-circle"></i> Legend</div>
+                    <div id="campLegendPanel" class="mt-1" style="font-size:.8rem;max-height:220px;overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="trend-chart-wrap">
+            <canvas id="campTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Campaign Trends Data Table ─── -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-table text-primary me-1"></i><strong>Campaign Trends — Data Table</strong>
+            <small class="text-muted ms-2" id="campDataCaption"></small></span>
+        <button class="btn btn-sm btn-outline-secondary tbl-toggle-btn collapsed"
+                type="button" data-bs-toggle="collapse" data-bs-target="#campDataCollapse"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down"></i> Table
+        </button>
+    </div>
+    <div id="campDataCollapse" class="collapse">
+        <div class="card-body p-0">
+            <div id="campDataWrap" class="chart-tbl-wrap"></div>
+        </div>
+    </div>
+</div>
+
+
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+
+<script type="application/json" id="__trendData">{"time_labels": {"week": ["2025-W45", "2025-W46", "2025-W49", "2025-W50", "2025-W51", "2025-W52", "2026-W01", "2026-W02", "2026-W03", "2026-W04", "2026-W05"], "month": ["2025-11", "2025-12", "2026-01", "2026-02"], "season": ["M11-1 2025-2026", "M2-4 2026"], "year": ["2025", "2026"]}, "time_labels_camp": {"week": ["2025-W45", "2025-W46", "2025-W49", "2025-W50", "2025-W51", "2025-W52", "2026-W01", "2026-W02", "2026-W03", "2026-W04", "2026-W05"], "month": ["2025-11", "2025-12", "2026-01", "2026-02"], "season": ["M11-1 2025-2026", "M2-4 2026"], "year": ["2025", "2026"]}, "week_label_map": {"2025-W52": "Week 52 (29/12-4/1)", "2025-W50": "Week 50 (15/12-21/12)", "2025-W51": "Week 51 (22/12-28/12)", "2026-W03": "Week 3 (19/1-25/1)", "2026-W05": "Week 5 (2/2-8/2)", "2025-W49": "Week 49 (8/12-14/12)", "2026-W02": "Week 2 (12/1-18/1)", "2026-W04": "Week 4 (26/1-1/2)", "2026-W01": "Week 1 (5/1-11/1)", "2025-W45": "Week 45 (10/11-16/11)", "2025-W46": "Week 46 (17/11-23/11)"}, "total_by_time": {"week": {"2025-W52": 147, "2025-W50": 380, "2025-W51": 451, "2026-W03": 29, "2026-W05": 6, "2025-W49": 205, "2026-W02": 67, "2026-W04": 25, "2026-W01": 51, "2025-W45": 6, "2025-W46": 2}, "month": {"2026-01": 263, "2025-12": 1087, "2026-02": 11, "2025-11": 8}, "season": {"M11-1 2025-2026": 1358, "M2-4 2026": 11}, "year": {"2026": 274, "2025": 1095}}, "total_by_time_shop": {"week": {"2025-W52": 147, "2025-W50": 380, "2025-W51": 451, "2026-W03": 29, "2026-W05": 6, "2025-W49": 205, "2026-W02": 67, "2026-W04": 25, "2026-W01": 51, "2025-W45": 6, "2025-W46": 2}, "month": {"2026-01": 263, "2025-12": 1087, "2026-02": 11, "2025-11": 8}, "season": {"M11-1 2025-2026": 1358, "M2-4 2026": 11}, "year": {"2026": 274, "2025": 1095}}, "shops": ["Bala VN Haiphong AEON MALL- Direct", "Bala VN Hanoi AEON MALL HA DONG - Direct", "Bala VN Hanoi AEON MALL LONG BIEN- Direct", "Bala VN Hanoi Lotte Westlake Mall - Direct", "Bala VN Hanoi Vincom Royal City- Direct", "Bala VN Hanoi Vincom Times City- Direct", "Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct", "Bala VN Ho Chi Minh Crescent Mall - Direct", "Bala VN Ho Chi Minh Thiso Mall Sala - Direct", "Bala VN Ho Chi Minh VAN HANH MALL- Direct", "Semir VN HUE AEON Mall- Direct", "Semir VN Hanoi VINCOM TIMES CITY- Direct", "Unknown"], "shop_series": {"week": {"Bala VN Haiphong AEON MALL- Direct": {"2025-W52": {"used": 12, "coupon_amount": 600000.0, "unique_amount": 11353020.0}, "2025-W50": {"used": 29, "coupon_amount": 1450000.0, "unique_amount": 34771500.0}, "2025-W51": {"used": 31, "coupon_amount": 1550000.0, "unique_amount": 27961940.0}, "2026-W03": {"used": 3, "coupon_amount": 3000000.0, "unique_amount": 16281000.0}, "2026-W05": {"used": 3, "coupon_amount": 3000000.0, "unique_amount": 15216000.0}, "2025-W49": {"used": 1, "coupon_amount": 50000.0, "unique_amount": 422750.0}}, "Bala VN Hanoi AEON MALL HA DONG - Direct": {"2025-W50": {"used": 22, "coupon_amount": 1100000.0, "unique_amount": 32416530.0}, "2026-W02": {"used": 4, "coupon_amount": 1696244.4444444445, "unique_amount": 11495200.0}, "2025-W52": {"used": 8, "coupon_amount": 400000.0, "unique_amount": 17793550.0}, "2025-W49": {"used": 10, "coupon_amount": 500000.0, "unique_amount": 13538250.0}, "2025-W51": {"used": 37, "coupon_amount": 1850000.0, "unique_amount": 47741916.0}, "2026-W04": {"used": 1, "coupon_amount": 221800.0, "unique_amount": 1996200.0}, "2026-W01": {"used": 2, "coupon_amount": 100000.0, "unique_amount": 2930000.0}, "2026-W03": {"used": 2, "coupon_amount": 150000.0, "unique_amount": 1998000.0}}, "Bala VN Hanoi AEON MALL LONG BIEN- Direct": {"2025-W51": {"used": 37, "coupon_amount": 1850000.0, "unique_amount": 60491511.0}, "2025-W52": {"used": 33, "coupon_amount": 1650000.0, "unique_amount": 71889830.0}, "2025-W49": {"used": 24, "coupon_amount": 1200000.0, "unique_amount": 57175103.0}, "2025-W50": {"used": 27, "coupon_amount": 1350000.0, "unique_amount": 39251475.0}, "2026-W01": {"used": 4, "coupon_amount": 548600.0, "unique_amount": 8462200.0}, "2026-W03": {"used": 4, "coupon_amount": 1091000.0, "unique_amount": 9987000.0}, "2026-W02": {"used": 14, "coupon_amount": 6072907.777777778, "unique_amount": 54656170.0}}, "Bala VN Hanoi Lotte Westlake Mall - Direct": {"2025-W50": {"used": 39, "coupon_amount": 1950000.0, "unique_amount": 96293850.0}, "2025-W51": {"used": 29, "coupon_amount": 1450000.0, "unique_amount": 98235808.0}, "2025-W52": {"used": 6, "coupon_amount": 300000.0, "unique_amount": 16901750.0}, "2026-W02": {"used": 18, "coupon_amount": 8177800.0, "unique_amount": 73600200.0}, "2025-W49": {"used": 24, "coupon_amount": 1200000.0, "unique_amount": 60531860.0}, "2026-W04": {"used": 1, "coupon_amount": 1000000.0, "unique_amount": 5415000.0}, "2026-W05": {"used": 2, "coupon_amount": 2000000.0, "unique_amount": 10443000.0}, "2026-W03": {"used": 4, "coupon_amount": 3767200.0, "unique_amount": 25312800.0}}, "Bala VN Hanoi Vincom Royal City- Direct": {"2026-W02": {"used": 2, "coupon_amount": 1773900.0, "unique_amount": 12018100.0}, "2025-W49": {"used": 27, "coupon_amount": 1350000.0, "unique_amount": 34536925.0}, "2025-W50": {"used": 65, "coupon_amount": 3250000.0, "unique_amount": 84873217.0}, "2025-W52": {"used": 7, "coupon_amount": 350000.0, "unique_amount": 10390860.0}, "2025-W51": {"used": 47, "coupon_amount": 2350000.0, "unique_amount": 68567606.0}, "2026-W04": {"used": 1, "coupon_amount": 398600.0, "unique_amount": 3587400.0}, "2026-W03": {"used": 4, "coupon_amount": 971200.0, "unique_amount": 8818800.0}}, "Bala VN Hanoi Vincom Times City- Direct": {"2025-W51": {"used": 22, "coupon_amount": 1100000.0, "unique_amount": 30921682.0}, "2025-W52": {"used": 8, "coupon_amount": 400000.0, "unique_amount": 11563886.0}, "2025-W49": {"used": 19, "coupon_amount": 950000.0, "unique_amount": 25816410.0}, "2025-W50": {"used": 26, "coupon_amount": 1300000.0, "unique_amount": 36055430.0}, "2026-W04": {"used": 1, "coupon_amount": 100000.0, "unique_amount": 1358000.0}, "2026-W02": {"used": 2, "coupon_amount": 398600.0, "unique_amount": 3587400.0}}, "Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct": {"2025-W49": {"used": 18, "coupon_amount": 900000.0, "unique_amount": 28525190.0}, "2025-W51": {"used": 14, "coupon_amount": 700000.0, "unique_amount": 19450050.0}, "2026-W02": {"used": 8, "coupon_amount": 1069950.0, "unique_amount": 11470050.0}, "2025-W50": {"used": 7, "coupon_amount": 350000.0, "unique_amount": 7192315.0}, "2025-W52": {"used": 8, "coupon_amount": 400000.0, "unique_amount": 9381650.0}, "2026-W04": {"used": 7, "coupon_amount": 2321900.0, "unique_amount": 17799100.0}, "2026-W01": {"used": 12, "coupon_amount": 4504614.222222222, "unique_amount": 44158028.0}, "2026-W03": {"used": 2, "coupon_amount": 1032850.0, "unique_amount": 6597150.0}}, "Bala VN Ho Chi Minh Crescent Mall - Direct": {"2025-W52": {"used": 27, "coupon_amount": 1350000.0, "unique_amount": 60228500.0}, "2025-W51": {"used": 26, "coupon_amount": 1300000.0, "unique_amount": 39416716.0}, "2025-W49": {"used": 22, "coupon_amount": 1100000.0, "unique_amount": 25057130.0}, "2026-W03": {"used": 3, "coupon_amount": 2100000.0, "unique_amount": 11550000.0}, "2025-W45": {"used": 6, "coupon_amount": 1800000.0, "unique_amount": 8736000.0}, "2026-W01": {"used": 8, "coupon_amount": 400000.0, "unique_amount": 11295885.0}, "2026-W02": {"used": 3, "coupon_amount": 250000.0, "unique_amount": 5573000.0}, "2025-W50": {"used": 2, "coupon_amount": 100000.0, "unique_amount": 5409015.0}, "2025-W46": {"used": 2, "coupon_amount": 700000.0, "unique_amount": 2325000.0}, "2026-W04": {"used": 1, "coupon_amount": 1000000.0, "unique_amount": 5041000.0}}, "Bala VN Ho Chi Minh Thiso Mall Sala - Direct": {"2026-W04": {"used": 5, "coupon_amount": 500000.0, "unique_amount": 4895000.0}, "2025-W51": {"used": 28, "coupon_amount": 1400000.0, "unique_amount": 30306415.0}, "2025-W50": {"used": 35, "coupon_amount": 1750000.0, "unique_amount": 65167079.0}, "2025-W49": {"used": 7, "coupon_amount": 350000.0, "unique_amount": 10644175.0}, "2026-W02": {"used": 2, "coupon_amount": 200000.0, "unique_amount": 2578000.0}, "2026-W01": {"used": 4, "coupon_amount": 2638000.0, "unique_amount": 23742000.0}, "2026-W03": {"used": 4, "coupon_amount": 639400.0, "unique_amount": 8946600.0}, "2026-W05": {"used": 1, "coupon_amount": 100000.0, "unique_amount": 878000.0}}, "Bala VN Ho Chi Minh VAN HANH MALL- Direct": {"2025-W50": {"used": 58, "coupon_amount": 2900000.0, "unique_amount": 74460329.0}, "2025-W49": {"used": 38, "coupon_amount": 1900000.0, "unique_amount": 55670450.0}, "2025-W51": {"used": 21, "coupon_amount": 1050000.0, "unique_amount": 33592169.0}, "2025-W52": {"used": 23, "coupon_amount": 1150000.0, "unique_amount": 50910870.0}, "2026-W01": {"used": 12, "coupon_amount": 5773831.111111111, "unique_amount": 52889780.0}, "2026-W02": {"used": 7, "coupon_amount": 1591144.4444444445, "unique_amount": 17451900.0}, "2026-W04": {"used": 1, "coupon_amount": 1000000.0, "unique_amount": 5306000.0}, "2026-W03": {"used": 1, "coupon_amount": 249700.0, "unique_amount": 2247300.0}}, "Semir VN HUE AEON Mall- Direct": {"2025-W49": {"used": 7, "coupon_amount": 350000.0, "unique_amount": 18159500.0}, "2025-W50": {"used": 9, "coupon_amount": 450000.0, "unique_amount": 15197330.0}, "2025-W51": {"used": 33, "coupon_amount": 1650000.0, "unique_amount": 44968811.0}, "2025-W52": {"used": 15, "coupon_amount": 750000.0, "unique_amount": 20935970.0}, "2026-W01": {"used": 7, "coupon_amount": 350000.0, "unique_amount": 8130000.0}, "2026-W04": {"used": 4, "coupon_amount": 400000.0, "unique_amount": 4064000.0}, "2026-W02": {"used": 2, "coupon_amount": 150000.0, "unique_amount": 218000.0}, "2026-W03": {"used": 1, "coupon_amount": 50000.0, "unique_amount": 749000.0}}, "Semir VN Hanoi VINCOM TIMES CITY- Direct": {"2025-W51": {"used": 126, "coupon_amount": 6300000.0, "unique_amount": 114862400.0}, "2025-W49": {"used": 8, "coupon_amount": 400000.0, "unique_amount": 18916200.0}, "2025-W50": {"used": 61, "coupon_amount": 3050000.0, "unique_amount": 79212500.0}, "2026-W04": {"used": 3, "coupon_amount": 200000.0, "unique_amount": 2847000.0}, "2026-W03": {"used": 1, "coupon_amount": 100000.0, "unique_amount": 1059000.0}}, "Unknown": {"2026-W02": {"used": 5, "coupon_amount": 1826700.0, "unique_amount": 16440300.0}, "2026-W01": {"used": 2, "coupon_amount": 509300.0, "unique_amount": 4583700.0}}}, "month": {"Bala VN Haiphong AEON MALL- Direct": {"2026-01": {"used": 8, "coupon_amount": 3250000.0, "unique_amount": 23177000.0}, "2025-12": {"used": 68, "coupon_amount": 3400000.0, "unique_amount": 67613210.0}, "2026-02": {"used": 3, "coupon_amount": 3000000.0, "unique_amount": 15216000.0}}, "Bala VN Hanoi AEON MALL HA DONG - Direct": {"2025-12": {"used": 70, "coupon_amount": 3500000.0, "unique_amount": 94455496.0}, "2026-01": {"used": 16, "coupon_amount": 2518044.4444444445, "unique_amount": 35454150.0}}, "Bala VN Hanoi AEON MALL LONG BIEN- Direct": {"2025-12": {"used": 96, "coupon_amount": 4800000.0, "unique_amount": 167816989.0}, "2026-01": {"used": 47, "coupon_amount": 8962507.777777778, "unique_amount": 134096300.0}}, "Bala VN Hanoi Lotte Westlake Mall - Direct": {"2025-12": {"used": 98, "coupon_amount": 4900000.0, "unique_amount": 271963268.0}, "2026-01": {"used": 22, "coupon_amount": 11945000.0, "unique_amount": 98913000.0}, "2026-02": {"used": 3, "coupon_amount": 3000000.0, "unique_amount": 15858000.0}}, "Bala VN Hanoi Vincom Royal City- Direct": {"2026-01": {"used": 7, "coupon_amount": 3143700.0, "unique_amount": 24424300.0}, "2025-12": {"used": 146, "coupon_amount": 7300000.0, "unique_amount": 198368608.0}}, "Bala VN Hanoi Vincom Times City- Direct": {"2025-12": {"used": 75, "coupon_amount": 3750000.0, "unique_amount": 104357408.0}, "2026-01": {"used": 3, "coupon_amount": 498600.0, "unique_amount": 4945400.0}}, "Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct": {"2025-12": {"used": 42, "coupon_amount": 2100000.0, "unique_amount": 57403505.0}, "2026-01": {"used": 32, "coupon_amount": 9107364.222222222, "unique_amount": 86184978.0}, "2026-02": {"used": 2, "coupon_amount": 71950.0, "unique_amount": 985050.0}}, "Bala VN Ho Chi Minh Crescent Mall - Direct": {"2026-01": {"used": 40, "coupon_amount": 5000000.0, "unique_amount": 87140985.0}, "2025-12": {"used": 52, "coupon_amount": 2600000.0, "unique_amount": 76430261.0}, "2025-11": {"used": 8, "coupon_amount": 2500000.0, "unique_amount": 11061000.0}}, "Bala VN Ho Chi Minh Thiso Mall Sala - Direct": {"2026-01": {"used": 13, "coupon_amount": 3777400.0, "unique_amount": 38163600.0}, "2025-12": {"used": 70, "coupon_amount": 3500000.0, "unique_amount": 106117669.0}, "2026-02": {"used": 3, "coupon_amount": 300000.0, "unique_amount": 2876000.0}}, "Bala VN Ho Chi Minh VAN HANH MALL- Direct": {"2025-12": {"used": 126, "coupon_amount": 6300000.0, "unique_amount": 177860068.0}, "2026-01": {"used": 35, "coupon_amount": 9314675.555555556, "unique_amount": 114668730.0}}, "Semir VN HUE AEON Mall- Direct": {"2025-12": {"used": 49, "coupon_amount": 2450000.0, "unique_amount": 78325641.0}, "2026-01": {"used": 29, "coupon_amount": 1700000.0, "unique_amount": 34096970.0}}, "Semir VN Hanoi VINCOM TIMES CITY- Direct": {"2025-12": {"used": 195, "coupon_amount": 9750000.0, "unique_amount": 212991100.0}, "2026-01": {"used": 4, "coupon_amount": 300000.0, "unique_amount": 3906000.0}}, "Unknown": {"2026-01": {"used": 7, "coupon_amount": 2336000.0, "unique_amount": 21024000.0}}}, "season": {"Bala VN Haiphong AEON MALL- Direct": {"M11-1 2025-2026": {"used": 76, "coupon_amount": 6650000.0, "unique_amount": 90790210.0}, "M2-4 2026": {"used": 3, "coupon_amount": 3000000.0, "unique_amount": 15216000.0}}, "Bala VN Hanoi AEON MALL HA DONG - Direct": {"M11-1 2025-2026": {"used": 86, "coupon_amount": 6018044.444444444, "unique_amount": 129909646.0}}, "Bala VN Hanoi AEON MALL LONG BIEN- Direct": {"M11-1 2025-2026": {"used": 143, "coupon_amount": 13762507.777777778, "unique_amount": 301913289.0}}, "Bala VN Hanoi Lotte Westlake Mall - Direct": {"M11-1 2025-2026": {"used": 120, "coupon_amount": 16845000.0, "unique_amount": 370876268.0}, "M2-4 2026": {"used": 3, "coupon_amount": 3000000.0, "unique_amount": 15858000.0}}, "Bala VN Hanoi Vincom Royal City- Direct": {"M11-1 2025-2026": {"used": 153, "coupon_amount": 10443700.0, "unique_amount": 222792908.0}}, "Bala VN Hanoi Vincom Times City- Direct": {"M11-1 2025-2026": {"used": 78, "coupon_amount": 4248600.0, "unique_amount": 109302808.0}}, "Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct": {"M11-1 2025-2026": {"used": 74, "coupon_amount": 11207364.222222222, "unique_amount": 143588483.0}, "M2-4 2026": {"used": 2, "coupon_amount": 71950.0, "unique_amount": 985050.0}}, "Bala VN Ho Chi Minh Crescent Mall - Direct": {"M11-1 2025-2026": {"used": 100, "coupon_amount": 10100000.0, "unique_amount": 174632246.0}}, "Bala VN Ho Chi Minh Thiso Mall Sala - Direct": {"M11-1 2025-2026": {"used": 83, "coupon_amount": 7277400.0, "unique_amount": 144281269.0}, "M2-4 2026": {"used": 3, "coupon_amount": 300000.0, "unique_amount": 2876000.0}}, "Bala VN Ho Chi Minh VAN HANH MALL- Direct": {"M11-1 2025-2026": {"used": 161, "coupon_amount": 15614675.555555556, "unique_amount": 292528798.0}}, "Semir VN HUE AEON Mall- Direct": {"M11-1 2025-2026": {"used": 78, "coupon_amount": 4150000.0, "unique_amount": 112422611.0}}, "Semir VN Hanoi VINCOM TIMES CITY- Direct": {"M11-1 2025-2026": {"used": 199, "coupon_amount": 10050000.0, "unique_amount": 216897100.0}}, "Unknown": {"M11-1 2025-2026": {"used": 7, "coupon_amount": 2336000.0, "unique_amount": 21024000.0}}}, "year": {"Bala VN Haiphong AEON MALL- Direct": {"2026": {"used": 11, "coupon_amount": 6250000.0, "unique_amount": 38393000.0}, "2025": {"used": 68, "coupon_amount": 3400000.0, "unique_amount": 67613210.0}}, "Bala VN Hanoi AEON MALL HA DONG - Direct": {"2025": {"used": 70, "coupon_amount": 3500000.0, "unique_amount": 94455496.0}, "2026": {"used": 16, "coupon_amount": 2518044.4444444445, "unique_amount": 35454150.0}}, "Bala VN Hanoi AEON MALL LONG BIEN- Direct": {"2025": {"used": 96, "coupon_amount": 4800000.0, "unique_amount": 167816989.0}, "2026": {"used": 47, "coupon_amount": 8962507.777777778, "unique_amount": 134096300.0}}, "Bala VN Hanoi Lotte Westlake Mall - Direct": {"2025": {"used": 98, "coupon_amount": 4900000.0, "unique_amount": 271963268.0}, "2026": {"used": 25, "coupon_amount": 14945000.0, "unique_amount": 114771000.0}}, "Bala VN Hanoi Vincom Royal City- Direct": {"2026": {"used": 7, "coupon_amount": 3143700.0, "unique_amount": 24424300.0}, "2025": {"used": 146, "coupon_amount": 7300000.0, "unique_amount": 198368608.0}}, "Bala VN Hanoi Vincom Times City- Direct": {"2025": {"used": 75, "coupon_amount": 3750000.0, "unique_amount": 104357408.0}, "2026": {"used": 3, "coupon_amount": 498600.0, "unique_amount": 4945400.0}}, "Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct": {"2025": {"used": 42, "coupon_amount": 2100000.0, "unique_amount": 57403505.0}, "2026": {"used": 34, "coupon_amount": 9179314.222222222, "unique_amount": 87170028.0}}, "Bala VN Ho Chi Minh Crescent Mall - Direct": {"2026": {"used": 40, "coupon_amount": 5000000.0, "unique_amount": 87140985.0}, "2025": {"used": 60, "coupon_amount": 5100000.0, "unique_amount": 87491261.0}}, "Bala VN Ho Chi Minh Thiso Mall Sala - Direct": {"2026": {"used": 16, "coupon_amount": 4077400.0, "unique_amount": 41039600.0}, "2025": {"used": 70, "coupon_amount": 3500000.0, "unique_amount": 106117669.0}}, "Bala VN Ho Chi Minh VAN HANH MALL- Direct": {"2025": {"used": 126, "coupon_amount": 6300000.0, "unique_amount": 177860068.0}, "2026": {"used": 35, "coupon_amount": 9314675.555555556, "unique_amount": 114668730.0}}, "Semir VN HUE AEON Mall- Direct": {"2025": {"used": 49, "coupon_amount": 2450000.0, "unique_amount": 78325641.0}, "2026": {"used": 29, "coupon_amount": 1700000.0, "unique_amount": 34096970.0}}, "Semir VN Hanoi VINCOM TIMES CITY- Direct": {"2025": {"used": 195, "coupon_amount": 9750000.0, "unique_amount": 212991100.0}, "2026": {"used": 4, "coupon_amount": 300000.0, "unique_amount": 3906000.0}}, "Unknown": {"2026": {"used": 7, "coupon_amount": 2336000.0, "unique_amount": 21024000.0}}}}, "campaigns": ["(No Campaign)"], "campaign_series": {"week": {"(No Campaign)": {"2025-W52": {"used": 147, "coupon_amount": 7350000.0, "unique_amount": 281349886.0}, "2025-W50": {"used": 380, "coupon_amount": 19000000.0, "unique_amount": 570300570.0}, "2025-W51": {"used": 451, "coupon_amount": 22550000.0, "unique_amount": 616517024.0}, "2026-W03": {"used": 29, "coupon_amount": 13151350.0, "unique_amount": 93546650.0}, "2026-W05": {"used": 6, "coupon_amount": 5100000.0, "unique_amount": 26537000.0}, "2025-W49": {"used": 205, "coupon_amount": 10250000.0, "unique_amount": 348993943.0}, "2026-W02": {"used": 67, "coupon_amount": 23207246.666666668, "unique_amount": 209088320.0}, "2026-W04": {"used": 25, "coupon_amount": 7142300.0, "unique_amount": 52308700.0}, "2026-W01": {"used": 51, "coupon_amount": 14824345.333333334, "unique_amount": 156191593.0}, "2025-W45": {"used": 6, "coupon_amount": 1800000.0, "unique_amount": 8736000.0}, "2025-W46": {"used": 2, "coupon_amount": 700000.0, "unique_amount": 2325000.0}}}, "month": {"(No Campaign)": {"2026-01": {"used": 263, "coupon_amount": 61853292.00000001, "unique_amount": 706195413.0}, "2025-12": {"used": 1087, "coupon_amount": 54350000.0, "unique_amount": 1613703223.0}, "2026-02": {"used": 11, "coupon_amount": 6371950.0, "unique_amount": 34935050.0}, "2025-11": {"used": 8, "coupon_amount": 2500000.0, "unique_amount": 11061000.0}}}, "season": {"(No Campaign)": {"M11-1 2025-2026": {"used": 1358, "coupon_amount": 118703292.00000001, "unique_amount": 2330959636.0}, "M2-4 2026": {"used": 11, "coupon_amount": 6371950.0, "unique_amount": 34935050.0}}}, "year": {"(No Campaign)": {"2026": {"used": 274, "coupon_amount": 68225242.0, "unique_amount": 741130463.0}, "2025": {"used": 1095, "coupon_amount": 56850000.0, "unique_amount": 1624764223.0}}}}, "campaign_list": []}</script>
+<script type="application/json" id="__campaigns">[]</script>
+<script type="application/json" id="__allTime">{"total": 8198, "used": 1369, "unused": 6829, "used_pct": 16.7, "unused_pct": 83.3, "usage_rate": 16.7, "total_amount": 2365894686.0, "total_coupon_amount": 125075242.0, "unique_invoice_amount": 2365894686.0, "duplicate_invoice_count": 0}</script>
+<script type="application/json" id="__period">{"total": 8198, "used": 1369, "unused": 6829, "used_pct": 16.7, "unused_pct": 83.3, "usage_rate": 16.7, "total_amount": 2365894686.0, "total_coupon_amount": 125075242.0, "unique_invoice_amount": 2365894686.0, "duplicate_invoice_count": 0}</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    // ── Data from server ──────────────────────────────────────────────────────────
+    const TREND = JSON.parse(document.getElementById('__trendData').textContent);
+    const CAMPAIGNS = JSON.parse(document.getElementById('__campaigns').textContent);
+    // week_label_map: "2025-W01" → "Week 1 (1/1-7/1)" — for human-readable X axis
+    const WEEK_LABEL_MAP = TREND.week_label_map || {};
+    // total_by_time: denominator for campaign chart (all coupons, no prefix filter)
+    const TOTAL_BY_TIME = TREND.total_by_time || {};
+    // total_by_time_shop: denominator for shop chart (prefix-filtered)
+    const TOTAL_BY_TIME_SHOP = TREND.total_by_time_shop || TOTAL_BY_TIME;
+
+    // Palette (same as Sales Analytics Charts)
+    const PALETTE = [
+        '#e6194B','#3cb44b','#4363d8','#f58231','#911eb4',
+        '#42d4f4','#f032e6','#469990','#9A6324','#800000',
+        '#dcbeff','#aaffc3','#808000','#ffd8b1','#000075',
+        '#a9a9a9','#ffe119','#fabebe',
+    ];
+    function getColor(i) { return PALETTE[i % PALETTE.length]; }
+
+    const AVG_ALL_COLOR = '#6c757d';
+    const AVG_SEL_COLOR = '#475569';
+
+    // ── Format helpers ────────────────────────────────────────────────────────────
+    function fmtVal(v, metric) {
+        if (metric === 'pct_of_used') return v.toFixed(1) + '%';
+        if (metric.includes('amount')) return Math.round(v).toLocaleString() + ' VND';
+        return Math.round(v).toLocaleString();
+    }
+    function yLabel(metric) {
+        return { used: 'Used Coupons', pct_of_used: '% Used / Used All', coupon_amount: 'Coupon Amount (VND)', unique_amount: 'Total Amount Unique (VND)' }[metric] || metric;
+    }
+
+    // ── Legend panel ──────────────────────────────────────────────────────────────
+    function updateLegendPanel(panelId, datasets) {
+        const el = document.getElementById(panelId);
+        if (!el) return;
+        el.innerHTML = datasets.map(ds =>
+            `<div class="d-flex align-items-center mb-1" title="${ds._fullLabel || ds.label}">
+               <span style="display:inline-block;width:24px;height:3px;background:${ds.borderColor};border-radius:2px;margin-right:6px;flex-shrink:0;"></span>
+               <span style="font-size:.8rem;word-break:break-word;white-space:normal;">${ds._fullLabel || ds.label}</span>
+             </div>`
+        ).join('');
+    }
+
+    // ── Click card ────────────────────────────────────────────────────────────────
+    function renderClickCard(panelId, lbl, rows, metric, onClose) {
+        const total = rows.reduce((s, r) => s + r.value, 0);
+        const el = document.getElementById(panelId);
+        el.innerHTML =
+            `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--primary);padding-bottom:4px;margin-bottom:5px;">
+                <strong style="font-size:.82rem;color:var(--text);">${lbl}</strong>
+                <span id="_closeCard_${panelId}" style="cursor:pointer;font-size:.72rem;color:#888;padding:1px 6px;border:1px solid #dee2e6;border-radius:3px;">&#10005; close</span>
+             </div>` +
+            rows.map(r =>
+                `<div style="display:flex;align-items:center;margin-bottom:3px;">
+                    <div style="width:80%;display:flex;align-items:center;min-width:0;overflow:hidden;">
+                        <span style="display:inline-block;width:20px;height:2.5px;background:${r.color};margin-right:5px;flex-shrink:0;border-radius:2px;"></span>
+                        <span style="font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.label}">${r.label}</span>
+                    </div>
+                    <div style="width:20%;text-align:right;font-size:.76rem;font-weight:700;color:#475569;flex-shrink:0;padding-left:4px;">
+                        ${fmtVal(r.value, metric)}
+                    </div>
+                 </div>`
+            ).join('');
+        document.getElementById('_closeCard_' + panelId).addEventListener('click', onClose);
+    }
+
+    // ── Line highlight on hover ───────────────────────────────────────────────────
+    function attachLineHighlight(chart) {
+        const canvas = chart.canvas;
+        canvas.addEventListener('mousemove', function(e) {
+            const pts = chart.getElementsAtEventForMode(e, 'nearest', { intersect: false }, true);
+            const hovered = pts.length ? pts[0].datasetIndex : null;
+            chart.data.datasets.forEach((ds, i) => {
+                if (!('_origBW' in ds)) ds._origBW = ds.borderWidth ?? 2;
+                ds.borderWidth = (hovered !== null && i === hovered) ? ds._origBW * 2 : ds._origBW;
+            });
+            chart.update('none');
+        });
+        canvas.addEventListener('mouseleave', function() {
+            chart.data.datasets.forEach(ds => { if ('_origBW' in ds) ds.borderWidth = ds._origBW; });
+            chart.update('none');
+        });
+    }
+
+    // ── Donut helpers ─────────────────────────────────────────────────────────────
+    function mkDonut(id, pctId, val, total, color) {
+        const pct = total > 0 ? Math.round(val / total * 100) : 0;
+        document.getElementById(pctId).textContent = pct + '%';
+        const ctx = document.getElementById(id).getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [val, Math.max(0, total - val)],
+                    backgroundColor: [color, '#e9ecef'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                cutout: '72%', responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } }
+            }
+        });
+    }
+
+    const at = JSON.parse(document.getElementById('__allTime').textContent);
+    const pd = JSON.parse(document.getElementById('__period').textContent);
+
+    mkDonut('dChart1', 'dPct1', at.used, at.total, '#198754');
+    mkDonut('dChart2', 'dPct2', at.total_coupon_amount, at.unique_invoice_amount, '#eab308');
+    mkDonut('dChart3', 'dPct3', pd.used, pd.total, '#198754');
+    mkDonut('dChart4', 'dPct4', pd.total_coupon_amount, pd.unique_invoice_amount, '#eab308');
+
+    // ── Generic trend chart builder ───────────────────────────────────────────────
+    // btype: 'week' | 'month' | 'season' | 'year' — used for display-label translation
+    // and correct pct_of_used denominator passed per-chart
+    function highlightTableCol(wrapId, colIndex, rowLabel) {
+        const wrap = document.getElementById(wrapId);
+        if (!wrap) return;
+        const collapseEl = wrap.closest('.collapse');
+        if (collapseEl && !collapseEl.classList.contains('show')) {
+            bootstrap.Collapse.getOrCreateInstance(collapseEl).show();
+        }
+        wrap.querySelectorAll('.tbl-col-hl').forEach(el => el.classList.remove('tbl-col-hl'));
+        wrap.querySelectorAll('.tbl-row-hl').forEach(el => el.classList.remove('tbl-row-hl'));
+        const nth = colIndex + 2; // col 1 = entity, data starts at col 2
+        wrap.querySelectorAll(`thead th:nth-child(${nth}), tbody td:nth-child(${nth})`).forEach(el => el.classList.add('tbl-col-hl'));
+        if (rowLabel) {
+            for (const tr of wrap.querySelectorAll('tbody tr')) {
+                const td = tr.querySelector('td');
+                if (td && td.textContent.trim() === rowLabel.trim()) { tr.classList.add('tbl-row-hl'); break; }
+            }
+        }
+        const hdrCell = wrap.querySelector(`thead th:nth-child(${nth})`);
+        if (hdrCell) hdrCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+
+    function buildTrendChart(canvasId, legendPanelId, series, timeLabels, selected, metric, colorFn, btype, totalByTime, tableWrapId) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        const isAmt = metric.includes('amount');
+        const isPct = metric === 'pct_of_used';
+
+        // X-axis display labels: week sort keys → "Week N (d/m-d/m)", others unchanged
+        const displayLabels = btype === 'week'
+            ? timeLabels.map(tk => WEEK_LABEL_MAP[tk] || tk)
+            : timeLabels;
+
+        // Denominator for pct_of_used: caller passes the correct total for this chart
+        const totalRef = ((totalByTime || TOTAL_BY_TIME)[btype]) || {};
+        const totals = {};
+        timeLabels.forEach(tk => {
+            totals[tk] = totalRef[tk] !== undefined
+                ? totalRef[tk]
+                : Object.values(series).reduce((s, d) => s + ((d[tk] || {})['used'] || 0), 0);
+        });
+
+        const datasets = [];
+        let ci = 0;
+
+        const rawField = isPct ? 'used' : metric;
+
+        selected.forEach(sel => {
+            if (sel === '__avg_all__') {
+                const all = Object.keys(series);
+                if (!all.length) return;
+                const vals = timeLabels.map(tk => {
+                    const entityVals = all.map(e => {
+                        const raw = (series[e][tk] || {})[rawField] || 0;
+                        return isPct ? (totals[tk] ? raw / totals[tk] * 100 : 0) : raw;
+                    }).filter(v => v > 0);
+                    if (!entityVals.length) return 0;
+                    return +(entityVals.reduce((a, b) => a + b, 0) / entityVals.length).toFixed(1);
+                });
+                datasets.push({ label: 'AVG (all)', _fullLabel: 'AVG (all)', data: vals, borderColor: AVG_ALL_COLOR, backgroundColor: 'transparent', pointBackgroundColor: AVG_ALL_COLOR, borderWidth: 2.5, borderDash: [4, 4], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
+                return;
+            }
+            if (sel === '__avg__') {
+                const selE = selected.filter(s => s !== '__avg_all__' && s !== '__avg__').filter(e => series[e]);
+                if (!selE.length) return;
+                const vals = timeLabels.map(tk => {
+                    const entityVals = selE.map(e => {
+                        const raw = (series[e][tk] || {})[rawField] || 0;
+                        return isPct ? (totals[tk] ? raw / totals[tk] * 100 : 0) : raw;
+                    }).filter(v => v > 0);
+                    if (!entityVals.length) return 0;
+                    return +(entityVals.reduce((a, b) => a + b, 0) / entityVals.length).toFixed(1);
+                });
+                datasets.push({ label: 'AVG (average of selected)', _fullLabel: 'AVG (average of selected)', data: vals, borderColor: AVG_SEL_COLOR, backgroundColor: 'transparent', pointBackgroundColor: AVG_SEL_COLOR, borderWidth: 2.5, borderDash: [6, 3], pointRadius: vals.map(v => v > 0 ? 4 : 0), pointHoverRadius: 6, tension: .35, fill: false });
+                return;
+            }
+            if (!series[sel]) return;
+            const color = colorFn(ci++);
+            const vals = timeLabels.map(tk => {
+                const raw = (series[sel][tk] || {})[rawField] || 0;
+                return isPct ? (totals[tk] ? +(raw / totals[tk] * 100).toFixed(1) : 0) : raw;
+            });
+            datasets.push({
+                label: sel,
+                _fullLabel: sel,
+                data: vals, borderColor: color, backgroundColor: color + '18',
+                pointBackgroundColor: color,
+                borderWidth: 2,
+                pointRadius: vals.map(v => v > 0 ? 4 : 0),
+                pointHoverRadius: 6, pointHitRadius: 8,
+                tension: .35, fill: false,
+            });
+        });
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: displayLabels, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: { duration: 500 },
+                events: ['click', 'mousemove', 'mouseout'],
+                interaction: { mode: 'nearest', intersect: true },
+                onClick(evt, elements) {
+                    if (!elements.length) { updateLegendPanel(legendPanelId, datasets); return; }
+                    const di = elements[0].index;
+                    const lbl = chart.data.labels[di];
+                    const rows = datasets
+                        .map(ds => ({ label: ds.label, color: ds.borderColor, value: ds.data[di] ?? 0 }))
+                        .filter(r => r.value > 0)
+                        .sort((a, b) => b.value - a.value);
+                    renderClickCard(legendPanelId, lbl, rows, metric, () => updateLegendPanel(legendPanelId, datasets));
+                    if (tableWrapId) {
+                        const ds = datasets[elements[0].datasetIndex];
+                        highlightTableCol(tableWrapId, di, ds ? (ds._fullLabel || ds.label) : undefined);
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,30,30,.92)',
+                        titleFont: { weight: '700' },
+                        filter: item => item.raw > 0,
+                        itemSort: (a, b) => b.raw - a.raw,
+                        callbacks: {
+                            label: ctx => '  ' + ctx.dataset.label + ': ' + fmtVal(ctx.raw, metric),
+                        },
+                    },
+                },
+                scales: {
+                    x: { grid: { color: 'rgba(0,0,0,.12)' }, ticks: { font: { size: 11 } } },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(0,0,0,.12)' },
+                        title: { display: true, text: yLabel(metric), font: { size: 11 } },
+                        ticks: {
+                            font: { size: 11 },
+                            callback: v => isPct ? v.toFixed(1) + '%' : isAmt ? (v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v.toLocaleString()) : v.toLocaleString(),
+                        },
+                    },
+                },
+            },
+        });
+        attachLineHighlight(chart);
+        updateLegendPanel(legendPanelId, datasets);
+        return chart;
+    }
+
+    // ── SHOP TREND ────────────────────────────────────────────────────────────────
+    const SHOP_SERIES = TREND.shop_series || {};
+    const ALL_SHOPS = TREND.shops || [];
+
+    let shopChart = null;
+    let shopChecked = new Set();
+
+    function getShopXAxis() { return document.querySelector('input[name="shopXAxis"]:checked').value; }
+    function getShopMetric() { return document.getElementById('shopMetric').value; }
+
+    function buildShopList() {
+        ALL_SHOPS.sort((a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'}));
+        const cl = document.getElementById('shopChecklist');
+        // remove existing shop rows (keep avg rows = first 2 labels)
+        cl.querySelectorAll('.shop-item').forEach(el => el.remove());
+        // only show shops that have data in the current filtered series
+        const seriesShops = new Set();
+        Object.values(SHOP_SERIES).forEach(function(byShop) {
+            Object.keys(byShop).forEach(function(s) { seriesShops.add(s); });
+        });
+        const visibleShops = ALL_SHOPS.filter(s => seriesShops.has(s));
+        visibleShops.forEach((shop, i) => {
+            const color = getColor(i);
+            const lbl = document.createElement('label');
+            lbl.className = 'form-check d-flex align-items-center gap-1 shop-item';
+            lbl.setAttribute('for', `sc_s${i}`);
+            lbl.innerHTML = `
+            <input class="form-check-input shop-check-s" type="checkbox" id="sc_s${i}" value="${shop.replace(/"/g, '&quot;')}">
+            <span class="shop-dot" style="background:${color};flex-shrink:0;"></span>
+            <span style="font-size:.85rem;">${shop}</span>`;
+            cl.appendChild(lbl);
+            if (i < 5) {
+                lbl.querySelector('input').checked = true;
+                shopChecked.add(shop);
+            }
+        });
+    }
+
+    function getShopSelected() {
+        const sel = [];
+        if (document.getElementById('cbShopAvgAll').checked) sel.push('__avg_all__');
+        if (document.getElementById('cbShopAvg').checked) sel.push('__avg__');
+        document.querySelectorAll('.shop-check-s:checked').forEach(cb => sel.push(cb.value));
+        return sel;
+    }
+
+    /* ══════════════════════════════════════════════
+       DATA TABLE RENDERING
+    ══════════════════════════════════════════════ */
+    function renderCouponOverviewTable() {
+        const wrap = document.getElementById('couponOvDataWrap');
+        if (!wrap) return;
+        function fmtN(v, isAmt) {
+            v = Number(v) || 0;
+            return isAmt ? v.toLocaleString() + ' VND' : v.toLocaleString();
+        }
+        function pctStr(v, t) { return Number(t) > 0 ? (Number(v) / Number(t) * 100).toFixed(1) + '%' : '—'; }
+        function tr(label, v, t, tLbl, isAmt) {
+            return `<tr><td>${label}</td>
+                <td class="text-end fw-bold">${fmtN(v, isAmt)}</td>
+                <td class="text-end text-muted">${fmtN(t, isAmt)} <small>(${tLbl})</small></td>
+                <td class="text-end fw-bold">${pctStr(v, t)}</td></tr>`;
+        }
+        function divRow(lbl) {
+            return `<tr><td colspan="4" style="background:#f5f0fa;font-size:.7rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;padding:4px 10px;">${lbl}</td></tr>`;
+        }
+        let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
+            <thead><tr style="background:var(--primary);color:#fff;">
+                <th>Metric</th><th class="text-end">Value</th><th class="text-end">Reference</th><th class="text-end">Rate</th>
+            </tr></thead><tbody>` +
+            divRow('All Time') +
+            tr('Used Coupons (All Time)', at.used, at.total, 'Total Coupons') +
+            tr('Coupon Amount (All Time)', at.total_coupon_amount, at.unique_invoice_amount, 'Invoice Amount (AT)', true) +
+            divRow('Period Filter') +
+            tr('Used Coupons (Period)', pd.used, pd.total, 'Total Coupons') +
+            tr('Coupon Amount (Period)', pd.total_coupon_amount, pd.unique_invoice_amount, 'Invoice Amount (Period)', true) +
+            `</tbody></table>`;
+        wrap.innerHTML = html;
+    }
+
+    function renderDataTable(wrapId, captionId, xLabels, datasets, metric, isWeek, entityLabel) {
+        entityLabel = entityLabel || 'Shop';
+        const wrap = document.getElementById(wrapId);
+        if (!wrap) return;
+        if (!datasets.length || !xLabels.length) {
+            wrap.innerHTML = '<p class="text-muted p-3 mb-0 small">No data to display.</p>';
+            return;
+        }
+        const n = xLabels.length;
+        const minW = isWeek && n > 0 ? 'min-width:' + Math.max(5, Math.floor(70 / n)) + '%;' : 'min-width:70px;';
+        let html = `<table class="table table-sm table-hover table-bordered mb-0 chart-data-tbl" style="font-size:.78rem;">
+            <thead><tr style="background:var(--primary);color:#fff;">
+                <th style="min-width:140px;">${entityLabel}</th>`;
+        xLabels.forEach(lbl => {
+            html += `<th style="${minW}text-align:center;">${lbl}</th>`;
+        });
+        html += `</tr></thead><tbody>`;
+        // Sort rows: AVG lines first, then A-Z by name
+        const _avgDs    = datasets.filter(ds => ds.label && ds.label.startsWith('AVG'));
+        const _normalDs = datasets.filter(ds => !(ds.label && ds.label.startsWith('AVG')));
+        _normalDs.sort((a, b) => (a._fullLabel || a.label || '').localeCompare(b._fullLabel || b.label || '', undefined, {sensitivity: 'base'}));
+        const _sortedDs = [..._avgDs, ..._normalDs];
+        _sortedDs.forEach((ds, idx) => {
+            const isSpec = ds.label && ds.label.startsWith('AVG');
+            const bgColor = isSpec ? '#f4f6f8' : idx % 2 === 1 ? '#fafbfc' : '#ffffff';
+            html += `<tr style="background:${bgColor};${isSpec ? 'font-style:italic;' : ''}">`;
+            html += `<td style="white-space:nowrap;font-weight:600;">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ds.borderColor || '#aaa'};margin-right:5px;vertical-align:middle;"></span>
+                ${ds._fullLabel || ds.label}</td>`;
+            (ds.data || []).forEach(v => {
+                const disp = v === 0 ? '<span style="color:#ccc">—</span>' : (v ? fmtVal(v, metric) : '—');
+                html += `<td style="text-align:right;">${disp}</td>`;
+            });
+            html += `</tr>`;
+        });
+        html += `</tbody></table>`;
+        wrap.innerHTML = html;
+        const capEl = document.getElementById(captionId);
+        if (capEl) capEl.textContent = yLabel(metric) + ' · ' + n + (n === 1 ? ' period' : ' periods');
+    }
+
+    function refreshShopChart() {
+        if (shopChart) shopChart.destroy();
+        const btype = getShopXAxis();
+        const metric = getShopMetric();
+        const series = SHOP_SERIES[btype] || {};
+        const labels = (TREND.time_labels || {})[btype] || [];
+        shopChart = buildTrendChart('shopTrendChart', 'shopLegendPanel', series, labels, getShopSelected(), metric, getColor, btype, TOTAL_BY_TIME_SHOP, 'shopDataWrap');
+        const dispLabels = btype === 'week' ? labels.map(tk => WEEK_LABEL_MAP[tk] || tk) : labels;
+        renderDataTable('shopDataWrap', 'shopDataCaption', dispLabels, shopChart.data.datasets, metric, btype === 'week');
+    }
+
+    buildShopList();
+
+    document.getElementById('shopSelAll').onclick = () => { document.querySelectorAll('.shop-check-s').forEach(c => c.checked = true); refreshShopChart(); };
+    document.getElementById('shopSelNone').onclick = () => { document.querySelectorAll('.shop-check-s').forEach(c => c.checked = false); refreshShopChart(); };
+    document.getElementById('shopSelTop5').onclick = () => {
+        document.querySelectorAll('.shop-check-s').forEach((c, i) => c.checked = i < 5);
+        refreshShopChart();
+    };
+    document.querySelectorAll('input[name="shopXAxis"]').forEach(r => r.addEventListener('change', refreshShopChart));
+    document.getElementById('shopMetric').addEventListener('change', refreshShopChart);
+    document.getElementById('shopChecklist').addEventListener('change', refreshShopChart);
+    // AVG dots
+    document.getElementById('dotShopAvgAll').style.background = AVG_ALL_COLOR;
+    document.getElementById('dotShopAvg').style.background = AVG_SEL_COLOR;
+
+    refreshShopChart();
+
+    // ── CAMPAIGN TREND ────────────────────────────────────────────────────────────
+    const CAMP_SERIES = TREND.campaign_series || {};
+    const ALL_CAMPS = TREND.campaigns || [];
+
+    let campChart = null;
+
+    function getCampXAxis() { return document.querySelector('input[name="campXAxis"]:checked').value; }
+    function getCampMetric() { return document.getElementById('campMetric').value; }
+
+    function buildCampList() {
+        ALL_CAMPS.sort((a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'}));
+        const cl = document.getElementById('campChecklist');
+        cl.querySelectorAll('.camp-item').forEach(el => el.remove());
+        ALL_CAMPS.forEach((camp, i) => {
+            const color = getColor(i);
+            const lbl = document.createElement('label');
+            lbl.className = 'form-check d-flex align-items-center gap-1 camp-item';
+            lbl.setAttribute('for', `sc_c${i}`);
+            // Find matching campaign detail from CAMPAIGNS list
+            const ci = CAMPAIGNS.find(c => c.name === camp);
+            const subtitle = ci ? ` <code style="font-size:.75rem;">${ci.prefix}</code>` : '';
+            lbl.innerHTML = `
+            <input class="form-check-input camp-check" type="checkbox" id="sc_c${i}" value="${camp.replace(/"/g, '&quot;')}" ${i < 5 ? 'checked' : ''}>
+            <span class="shop-dot" style="background:${color};flex-shrink:0;"></span>
+            <span style="font-size:.85rem;">${camp}${subtitle}</span>`;
+            cl.appendChild(lbl);
+        });
+    }
+
+    function getCampSelected() {
+        const sel = [];
+        if (document.getElementById('cbCampAvgAll').checked) sel.push('__avg_all__');
+        if (document.getElementById('cbCampAvg').checked) sel.push('__avg__');
+        document.querySelectorAll('.camp-check:checked').forEach(cb => sel.push(cb.value));
+        return sel;
+    }
+
+    function refreshCampChart() {
+        if (campChart) campChart.destroy();
+        const btype = getCampXAxis();
+        const metric = getCampMetric();
+        const series = CAMP_SERIES[btype] || {};
+        const labels = (TREND.time_labels_camp || TREND.time_labels || {})[btype] || [];
+        campChart = buildTrendChart('campTrendChart', 'campLegendPanel', series, labels, getCampSelected(), metric, getColor, btype, TOTAL_BY_TIME, 'campDataWrap');
+        const dispLabels = btype === 'week' ? labels.map(tk => WEEK_LABEL_MAP[tk] || tk) : labels;
+        renderDataTable('campDataWrap', 'campDataCaption', dispLabels, campChart.data.datasets, metric, btype === 'week', 'Campaign');
+    }
+
+    buildCampList();
+
+    document.getElementById('campSelAll').onclick = () => { document.querySelectorAll('.camp-check').forEach(c => c.checked = true); refreshCampChart(); };
+    document.getElementById('campSelNone').onclick = () => { document.querySelectorAll('.camp-check').forEach(c => c.checked = false); refreshCampChart(); };
+    document.getElementById('campSelTop5').onclick = () => { document.querySelectorAll('.camp-check').forEach((c, i) => c.checked = i < 5); refreshCampChart(); };
+    document.querySelectorAll('input[name="campXAxis"]').forEach(r => r.addEventListener('change', refreshCampChart));
+    document.getElementById('campMetric').addEventListener('change', refreshCampChart);
+    document.getElementById('campChecklist').addEventListener('change', refreshCampChart);
+    document.getElementById('dotCampAvgAll').style.background = AVG_ALL_COLOR;
+    document.getElementById('dotCampAvg').style.background = AVG_SEL_COLOR;
+
+    refreshCampChart();
+    renderCouponOverviewTable();
+
+    // ── Campaign multi-select checkbox filter ─────────────────────────────────
+    (function buildChartCpnFilter() {
+        const row = document.getElementById('chartCpnFilterRow');
+        const list = document.getElementById('chartCpnFilterList');
+        row.style.display = '';
+
+        if (!CAMPAIGNS.length) {
+            list.innerHTML = '<span class="text-muted small fst-italic">No campaigns configured.</span>';
+            return;
+        }
+
+        const fld = document.getElementById('fieldPrefix');
+        const curParts = (fld.value || '').split(',').map(function(p) { return p.trim().toLowerCase(); }).filter(Boolean);
+
+        function getPfxList(c) {
+            return (c.prefix_list && c.prefix_list.length)
+                ? c.prefix_list
+                : (c.prefix || '').split(',').map(function(p) { return p.trim(); }).filter(Boolean);
+        }
+
+        function isCampaignActive(c) {
+            if (!curParts.length) return false;
+            return getPfxList(c).some(function(p) { return curParts.indexOf(p.toLowerCase()) !== -1; });
+        }
+
+        function updateField() {
+            var vals = [];
+            list.querySelectorAll('input[data-cpn-cb]:checked').forEach(function(cb) {
+                cb.dataset.cpnPfx.split(',').forEach(function(p) {
+                    var t = p.trim();
+                    if (t && vals.indexOf(t) === -1) vals.push(t);
+                });
+            });
+            fld.value = vals.join(',');
+        }
+
+        // "Clear all" link
+        var clearA = document.createElement('a');
+        clearA.href = '#';
+        clearA.style.cssText = 'font-size:.8rem;color:#6c757d;text-decoration:none;margin-right:4px;align-self:center;';
+        clearA.textContent = 'Clear all';
+        clearA.addEventListener('click', function(e) {
+            e.preventDefault();
+            list.querySelectorAll('input[data-cpn-cb]').forEach(function(cb) {
+                cb.checked = false;
+                cb.closest('label').style.background = '#fff';
+                cb.closest('label').style.color = '#212529';
+                cb.closest('label').style.borderColor = '#dee2e6';
+            });
+            fld.value = '';
+        });
+        list.appendChild(clearA);
+
+        CAMPAIGNS.forEach(function(c) {
+            var pfxVal = c.prefix || '';
+            var pfxList = getPfxList(c);
+            var checked = isCampaignActive(c);
+
+            var lbl = document.createElement('label');
+            lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:.82rem;border:1.5px solid ' + (checked ? 'var(--primary)' : 'var(--border)') + ';background:' + (checked ? 'var(--primary)' : '#fff') + ';color:' + (checked ? '#fff' : 'var(--text)') + ';user-select:none;';
+            lbl.title = pfxList.join(', ');
+
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.setAttribute('data-cpn-cb', '1');
+            cb.dataset.cpnPfx = pfxVal;
+            cb.checked = checked;
+            cb.style.cssText = 'width:13px;height:13px;flex-shrink:0;accent-color:var(--primary);';
+            cb.addEventListener('change', function() {
+                lbl.style.background = cb.checked ? 'var(--primary)' : '#fff';
+                lbl.style.color = cb.checked ? '#fff' : 'var(--text)';
+                lbl.style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
+                updateField();
+            });
+
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(' ' + c.name));
+            list.appendChild(lbl);
+        });
+    })();
+
+    // ── Quick filter date buttons ─────────────────────────────────────────────────
+    function _fmt(d) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function _submitDates(s, e) {
+        document.getElementById('fieldStartDate').value = s;
+        document.getElementById('fieldEndDate').value = e;
+        document.getElementById('chartFilterForm').submit();
+    }
+    document.querySelectorAll('.quick-days-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const days = parseInt(this.dataset.days, 10);
+            const end = new Date(), start = new Date();
+            start.setDate(start.getDate() - days);
+            _submitDates(_fmt(start), _fmt(end));
+        });
+    });
+    document.querySelectorAll('.quick-year-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const y = parseInt(this.dataset.year, 10);
+            _submitDates(y + '-01-01', y + '-12-31');
+        });
+    });
+    document.getElementById('btnThisMonth').addEventListener('click', () => {
+        const n = new Date();
+        _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth(), 1)), _fmt(new Date(n.getFullYear(), n.getMonth() + 1, 0)));
+    });
+    document.getElementById('btnLastMonth').addEventListener('click', () => {
+        const n = new Date();
+        _submitDates(_fmt(new Date(n.getFullYear(), n.getMonth() - 1, 1)), _fmt(new Date(n.getFullYear(), n.getMonth(), 0)));
+    });
+    document.getElementById('btnThisYear').addEventListener('click', () => {
+        const y = new Date().getFullYear();
+        _submitDates(y + '-01-01', y + '-12-31');
+    });
+    document.getElementById('chartFilterForm').addEventListener('submit', () => showLoading('Loading chart data…'));
+
+    // PDF download removed — replaced by server-side Excel export
+    if (false) {
+        (function () {
+            btnPDF.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+            try {
+                const { jsPDF } = window.jspdf;
+                const PW = 297, PH = 210, M = 10;
+                const CW = PW - M * 2;
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+                const sd = document.getElementById('fieldStartDate').value;
+                const ed = document.getElementById('fieldEndDate').value;
+                const sg = document.querySelector('[name="shop_group"]').value;
+                const pfx = document.getElementById('fieldPrefix').value;
+                const parts = [];
+                if (sd && ed) parts.push('Period: ' + sd + ' → ' + ed);
+                if (pfx) parts.push('Prefix: ' + pfx);
+                if (sg) parts.push('Shop Group: ' + sg);
+                const filterStr = parts.join('  |  ') || 'All data (no filter)';
+                const now = new Date().toLocaleString('en-GB');
+
+                function pageHeader(title, subtitle) {
+                    doc.setFontSize(14); doc.setTextColor(0, 71, 179);
+                    doc.text(title, M, 14);
+                    doc.setFontSize(8); doc.setTextColor(110);
+                    doc.text((subtitle || filterStr) + '   |   Generated: ' + now, M, 20);
+                    doc.setDrawColor(0, 71, 179); doc.setLineWidth(0.4);
+                    doc.line(M, 23, PW - M, 23);
+                    return 27;
+                }
+
+                function addChartImage(png, canvasId, x, y, maxW, maxH) {
+                    if (!png) return y;
+                    const c = document.getElementById(canvasId);
+                    const ratio = c.height / c.width;
+                    const imgH = Math.min(maxW * ratio, maxH);
+                    const imgW = imgH / ratio;
+                    doc.addImage(png, 'PNG', x, y, imgW, imgH);
+                    return y + imgH;
+                }
+
+                function addLegend(datasets, startY) {
+                    if (!datasets || !datasets.length) return startY;
+                    const COLS = 2, PX_W = 1100, COL_W = PX_W / COLS;
+                    const ROW_H = 26, PAD_X = 10;
+                    const rows = Math.ceil(datasets.length / COLS);
+                    const CVS_H = rows * ROW_H + 10;
+                    const cvs = document.createElement('canvas');
+                    cvs.width = PX_W; cvs.height = CVS_H;
+                    const ctx = cvs.getContext('2d');
+                    ctx.fillStyle = '#f8f9fa';
+                    ctx.fillRect(0, 0, PX_W, CVS_H);
+                    ctx.strokeStyle = '#0369a1'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(PX_W, 0); ctx.stroke();
+                    datasets.forEach((ds, i) => {
+                        const col = i % COLS, row = Math.floor(i / COLS);
+                        const x = col * COL_W + PAD_X;
+                        const y = row * ROW_H + ROW_H * 0.72 + 6;
+                        const hex = (ds.borderColor || '#aaa').replace('#', '');
+                        const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+                        ctx.fillStyle = `rgb(${r},${g},${b})`;
+                        ctx.fillRect(x, y - 5, 22, 4);
+                        ctx.fillStyle = '#475569';
+                        ctx.font = '13px system-ui,-apple-system,Arial,sans-serif';
+                        const raw = ds.label || '';
+                        ctx.fillText(raw.length > 42 ? raw.slice(0, 41) + '…' : raw, x + 30, y);
+                    });
+                    const imgW = CW, imgH = imgW * (CVS_H / PX_W);
+                    if (startY + 3 + imgH <= PH - M) {
+                        doc.addImage(cvs.toDataURL('image/png'), 'PNG', M, startY + 3, imgW, imgH);
+                        return startY + 3 + imgH;
+                    }
+                    return startY;
+                }
+
+                function addTablePage(wrapId, title) {
+                    const wrap = document.getElementById(wrapId);
+                    if (!wrap) return;
+                    const tbl = wrap.querySelector('table');
+                    if (!tbl) return;
+
+                    const PX_W = 1600, RH = 22, HH = 28, pxMm = PX_W / CW;
+                    const allThs = [...tbl.querySelectorAll('thead th')];
+                    const FC     = Math.min(280, PX_W * 0.22);
+                    const MIN_CC = 110;
+                    const nData  = allThs.length - 1;
+                    const maxDC  = Math.max(1, Math.floor((PX_W - FC) / MIN_CC));
+                    const allTrs = [...tbl.querySelectorAll('tbody tr')];
+
+                    const colGroups = [];
+                    for (let cf = 0; cf < Math.max(nData, 1); cf += maxDC) {
+                        colGroups.push({ cf, ct: Math.min(cf + maxDC, nData) });
+                    }
+
+                    colGroups.forEach((cg) => {
+                        const nCols   = cg.ct - cg.cf;
+                        const CC      = nCols > 0 ? (PX_W - FC) / nCols : PX_W - FC;
+                        const cx      = i => i === 0 ? 0 : FC + (i - 1) * CC;
+                        const cw      = i => i === 0 ? FC : CC;
+                        const gThs    = [allThs[0], ...allThs.slice(cg.cf + 1, cg.ct + 1)];
+                        const cgLbl   = colGroups.length > 1 ? ` — cols ${cg.cf + 1}–${cg.ct} of ${nData}` : '';
+                        const pgTitle = title + cgLbl;
+
+                        function renderRows(rows) {
+                            const h   = HH + rows.length * RH + 2;
+                            const cvs = document.createElement('canvas');
+                            cvs.width = PX_W; cvs.height = h;
+                            const ctx = cvs.getContext('2d');
+                            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PX_W, h);
+
+                            // header
+                            ctx.fillStyle = '#0369a1'; ctx.fillRect(0, 0, PX_W, HH);
+                            ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui,Arial,sans-serif';
+                            gThs.forEach((th, i) => {
+                                const t = th.textContent.trim(), ml = Math.max(4, Math.floor(cw(i) / 8.5));
+                                ctx.textAlign = i === 0 ? 'left' : 'center';
+                                ctx.fillText(t.length > ml ? t.slice(0, ml-1)+'…' : t,
+                                             i === 0 ? cx(0)+6 : cx(i)+cw(i)/2, HH-9);
+                            });
+
+                            // body rows
+                            rows.forEach((tr, ri) => {
+                                const ry     = HH + ri * RH;
+                                const allTds = [...tr.querySelectorAll('td')];
+                                const div    = allTds.length === 1 && allTds[0].colSpan > 1;
+                                const st     = tr.getAttribute('style') || '';
+
+                                if (div) {
+                                    ctx.fillStyle = '#e8f0fb'; ctx.fillRect(0, ry, PX_W, RH);
+                                    ctx.fillStyle = '#495057'; ctx.font = 'bold 11px system-ui,Arial,sans-serif';
+                                    ctx.textAlign = 'left'; ctx.fillText(allTds[0].textContent.trim(), 6, ry+RH-7);
+                                } else {
+                                    if      (st.includes('#e8f0fe'))                        { ctx.fillStyle='#dce9ff'; ctx.fillRect(0,ry,PX_W,RH); }
+                                    else if (st.includes('#f4f6f8')||st.includes('italic')) { ctx.fillStyle='#f5f6f8'; ctx.fillRect(0,ry,PX_W,RH); }
+                                    else if (ri % 2 === 1)                                  { ctx.fillStyle='#fafbfc'; ctx.fillRect(0,ry,PX_W,RH); }
+
+                                    const itl  = st.includes('italic')||st.includes('#f4f6f8');
+                                    const bld  = st.includes('#e8f0fe');
+                                    const gTds = [allTds[0], ...allTds.slice(cg.cf + 1, cg.ct + 1)];
+                                    gTds.forEach((td, i) => {
+                                        const raw = td.textContent.trim(); if (!raw || raw === '—') return;
+                                        const ml  = Math.max(4, Math.floor(cw(i)/7.5));
+                                        const txt = raw.length > ml ? raw.slice(0, ml-1)+'…' : raw;
+                                        ctx.fillStyle = bld ? '#064e77' : '#0369a1';
+                                        ctx.font = (itl?'italic ':'')+((i===0||bld)?'bold ':'')+' 11px system-ui,Arial,sans-serif';
+                                        ctx.textAlign = i === 0 ? 'left' : 'right';
+                                        ctx.fillText(txt, i===0 ? cx(0)+6 : cx(i)+cw(i)-4, ry+RH-7);
+                                    });
+                                }
+                                ctx.strokeStyle='#e9ecef'; ctx.lineWidth=0.5;
+                                ctx.beginPath(); ctx.moveTo(0,ry+RH); ctx.lineTo(PX_W,ry+RH); ctx.stroke();
+                            });
+
+                            ctx.strokeStyle='#dee2e6'; ctx.lineWidth=1; ctx.strokeRect(0,0,PX_W,h);
+                            return { png: cvs.toDataURL('image/png'), imgH: CW * h / PX_W };
+                        }
+
+                        doc.addPage();
+                        let y    = pageHeader(pgTitle);
+                        let start = 0;
+                        while (start < allTrs.length) {
+                            const maxRows = Math.max(1, Math.floor(((PH - M - y) * pxMm - HH - 2) / RH));
+                            const batch   = allTrs.slice(start, start + maxRows);
+                            const { png, imgH } = renderRows(batch);
+                            doc.addImage(png, 'PNG', M, y, CW, imgH);
+                            y += imgH;
+                            start += batch.length;
+                            if (start < allTrs.length) { doc.addPage(); y = pageHeader(pgTitle + ' (cont.)'); }
+                        }
+                    });
+                }
+
+                /* Page 1 — Overview Pies */
+                let y = pageHeader('Coupon Analytics Charts — Overview');
+                const donutIds = ['dChart1', 'dChart2', 'dChart3', 'dChart4'];
+                const donutLabels = [
+                    'Used / Total\n(All Time)', 'Coupon Amt / Invoice Amt\n(All Time)',
+                    'Used / Total\n(Period)', 'Coupon Amt / Invoice Amt\n(Period)',
+                ];
+                const dSize = 50;
+                const dGap = (CW - dSize * 4) / 3;
+                let dx = M;
+                donutIds.forEach((id, i) => {
+                    const png = getCanvasPng(id);
+                    if (png) {
+                        doc.addImage(png, 'PNG', dx, y, dSize, dSize);
+                        doc.setFontSize(7); doc.setTextColor(90);
+                        donutLabels[i].split('\n').forEach((line, li) => {
+                            doc.text(line, dx + dSize / 2, y + dSize + 5 + li * 4.5, { align: 'center' });
+                        });
+                    }
+                    dx += dSize + dGap;
+                });
+                addTablePage('couponOvDataWrap', 'Period Overview — Data Table');
+
+                /* Page 2 — Shop Trends */
+                doc.addPage();
+                y = pageHeader('Shop Trends');
+                const _shopXEl = document.querySelector('input[name="shopXAxis"]:checked');
+                const shopXLbl = (_shopXEl ? document.querySelector(`label[for="${_shopXEl.id}"]`)?.textContent?.trim() : '') || '';
+                const shopMetLbl = document.getElementById('shopMetric')?.selectedOptions[0]?.text || '';
+                doc.setFontSize(8); doc.setTextColor(100);
+                doc.text('Time Axis: ' + shopXLbl + '   |   Metric: ' + shopMetLbl, M, y); y += 5;
+                const shopDs = shopChart ? shopChart.data.datasets : [];
+                const shopListH = shopDs.length > 0 ? (Math.ceil(shopDs.length / 2) * 26 + 13) * CW / 1100 : 0;
+                const shopChartBot = addChartImage(getCanvasPng('shopTrendChart'), 'shopTrendChart', M, y, CW, PH - y - M - shopListH - 3);
+                addLegend(shopDs, shopChartBot);
+                addTablePage('shopDataWrap', 'Shop Trends — Data Table');
+
+                /* Page 3 — Campaign Trends */
+                doc.addPage();
+                y = pageHeader('Campaign Trends', 'All coupons — no filter applied');
+                const _campXEl = document.querySelector('input[name="campXAxis"]:checked');
+                const campXLbl = (_campXEl ? document.querySelector(`label[for="${_campXEl.id}"]`)?.textContent?.trim() : '') || '';
+                const campMetLbl = document.getElementById('campMetric')?.selectedOptions[0]?.text || '';
+                doc.setFontSize(8); doc.setTextColor(100);
+                doc.text('Time Axis: ' + campXLbl + '   |   Metric: ' + campMetLbl, M, y); y += 5;
+                const campDs = campChart ? campChart.data.datasets : [];
+                const campListH = campDs.length > 0 ? (Math.ceil(campDs.length / 2) * 26 + 13) * CW / 1100 : 0;
+                const campChartBot = addChartImage(getCanvasPng('campTrendChart'), 'campTrendChart', M, y, CW, PH - y - M - campListH - 3);
+                addLegend(campDs, campChartBot);
+                addTablePage('campDataWrap', 'Campaign Trends — Data Table');
+
+                doc.save('Coupon_Analytics_Charts.pdf');
+            } catch (e) {
+                alert('PDF generation failed: ' + e.message);
+            }
+        })();
+    }
+
+// ── Excel download: reads current UI state ────────────────────────────────
+function downloadChartExcel() {
+    const params = new URLSearchParams(window.location.search);
+
+    // Section 2: Shop Trends (Line chart)
+    const shopXaxis = document.querySelector('input[name="shopXAxis"]:checked');
+    params.set('shop_xaxis', shopXaxis ? shopXaxis.value : 'month');
+    params.set('shop_metric', document.getElementById('shopMetric')?.value || 'used');
+    const shopShops = Array.from(document.querySelectorAll('#shopChecklist input[type="checkbox"]:checked'))
+        .map(cb => cb.value).filter(v => !v.startsWith('__'));
+    if (shopShops.length) params.set('shop_shops', shopShops.join(','));
+
+    // Section 3: Campaign Trends (Line chart)
+    const campXaxis = document.querySelector('input[name="campXAxis"]:checked');
+    params.set('camp_xaxis', campXaxis ? campXaxis.value : 'month');
+    params.set('camp_metric', document.getElementById('campMetric')?.value || 'used');
+    const campCamps = Array.from(document.querySelectorAll('#campChecklist input[type="checkbox"]:checked'))
+        .map(cb => cb.value).filter(v => !v.startsWith('__'));
+    if (campCamps.length) params.set('camp_campaigns', campCamps.join(','));
+
+    window.location.href = "/coupons/chart/export/?" + params.toString();
+}
+</script>
+
+</body>
+
+</html>
