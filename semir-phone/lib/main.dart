@@ -33,20 +33,43 @@ SentryEvent? scrubPiiForTest(SentryEvent event, Hint hint) => _scrubPii(event, h
 
 SentryEvent? _scrubPii(SentryEvent event, Hint hint) {
   const sensitiveKeys = ['phone', 'vip_id', 'invoice', 'token', 'password'];
-  Map<String, dynamic> scrub(Map<String, dynamic> map) {
-    return map.map((key, value) {
-      final lowerKey = key.toLowerCase();
-      final isSensitive =
-          sensitiveKeys.any((k) => lowerKey.contains(k));
-      if (isSensitive) return MapEntry(key, '[REDACTED]');
-      if (value is Map<String, dynamic>) return MapEntry(key, scrub(value));
-      return MapEntry(key, value);
-    });
-  }
 
-  final extra = event.extra;
-  if (extra != null) {
-    return event.copyWith(extra: scrub(extra.cast<String, dynamic>()));
+  // Scrub sensitive keys from event tags (string map, safe to filter).
+  final tags = event.tags;
+  if (tags != null) {
+    final scrubbedTags = Map<String, String>.fromEntries(
+      tags.entries.map((e) {
+        final isSensitive = sensitiveKeys.any((k) => e.key.toLowerCase().contains(k));
+        return MapEntry(e.key, isSensitive ? '[REDACTED]' : e.value);
+      }),
+    );
+    return SentryEvent(
+      eventId: event.eventId,
+      timestamp: event.timestamp,
+      platform: event.platform,
+      logger: event.logger,
+      serverName: event.serverName,
+      release: event.release,
+      dist: event.dist,
+      environment: event.environment,
+      message: event.message,
+      transaction: event.transaction,
+      throwable: event.throwable,
+      level: event.level,
+      culprit: event.culprit,
+      tags: scrubbedTags,
+      modules: event.modules,
+      breadcrumbs: event.breadcrumbs,
+      sdk: event.sdk,
+      request: event.request,
+      contexts: event.contexts,
+      user: event.user,
+      fingerprint: event.fingerprint,
+      exceptions: event.exceptions,
+      threads: event.threads,
+      debugMeta: event.debugMeta,
+      type: event.type,
+    );
   }
   return event;
 }

@@ -1,72 +1,199 @@
 # iOS — App Store
 
-> ⚠️ **Yêu cầu Mac với macOS 13+ và Xcode 15+. Không thể build iOS trên Windows.**
+> ⚠️ **Bắt buộc phải có Mac với macOS 13+. Không thể build iOS trên Windows.**
 
 ---
 
-## Part 1: Chạy local → Simulator → Thiết bị thật
+## Part 1: Cài đặt môi trường (Mac mới, chưa có gì)
 
-### 1.1 Cài đặt môi trường (làm 1 lần)
+### 1.1 Cài Homebrew (package manager cho Mac)
 
-**Xcode**
-1. Mở App Store trên Mac → tìm "Xcode" → Install (khoảng 15 GB, mất 30–60 phút)
-2. Chấp nhận license:
-   ```bash
-   sudo xcodebuild -license accept
-   ```
-3. Cài command-line tools:
-   ```bash
-   xcode-select --install
-   ```
+Mở **Terminal** (Spotlight → gõ "Terminal" → Enter):
 
-**Flutter SDK**
 ```bash
-# Cài qua Homebrew (khuyến nghị)
-brew install --cask flutter
-
-# Kiểm tra — mục "Xcode" phải có ✓
-flutter doctor
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-**CocoaPods** (quản lý dependency iOS)
+Làm theo hướng dẫn trên màn hình (sẽ hỏi password của Mac). Sau khi xong:
+
+```bash
+# Nếu dùng chip Apple Silicon (M1/M2/M3), chạy thêm lệnh này:
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# Kiểm tra
+brew --version
+```
+
+---
+
+### 1.2 Cài Git
+
+```bash
+brew install git
+
+# Kiểm tra
+git --version
+
+# Cấu hình tên và email (dùng 1 lần)
+git config --global user.name "Your Name"
+git config --global user.email "your@email.com"
+```
+
+---
+
+### 1.3 Cài Xcode
+
+1. Mở **App Store** trên Mac → tìm **"Xcode"** → nhấn **Get** → **Install**
+   > Khoảng 15 GB, mất 30–60 phút tuỳ tốc độ mạng
+
+2. Sau khi cài xong, mở Xcode một lần để nó cài thêm components → chờ xong → đóng lại
+
+3. Chấp nhận license:
+   ```bash
+   sudo xcodebuild -license accept
+   # Nhập password Mac → gõ "agree" → Enter
+   ```
+
+4. Cài command-line tools:
+   ```bash
+   xcode-select --install
+   # Một cửa sổ sẽ hiện ra → nhấn Install → chờ xong
+   ```
+
+5. Kiểm tra:
+   ```bash
+   xcode-select -p
+   # Phải in ra: /Applications/Xcode.app/Contents/Developer
+   ```
+
+---
+
+### 1.4 Cài Flutter SDK
+
+```bash
+brew install --cask flutter
+
+# Mở terminal mới, kiểm tra
+flutter --version
+```
+
+Nếu `flutter: command not found`, thêm vào PATH:
+
+```bash
+echo 'export PATH="$PATH:/opt/homebrew/bin"' >> ~/.zshrc
+source ~/.zshrc
+flutter --version
+```
+
+---
+
+### 1.5 Cài CocoaPods (dependency manager cho iOS)
+
 ```bash
 sudo gem install cocoapods
+
+# Kiểm tra
 pod --version   # in ra số version là OK
 ```
 
-**Ruby + Bundler** (dùng cho Fastlane ở Part 2)
+Nếu báo lỗi permission:
 ```bash
 brew install rbenv ruby-build
 rbenv install 3.2.0
 rbenv global 3.2.0
+echo 'eval "$(rbenv init -)"' >> ~/.zshrc
+source ~/.zshrc
+gem install cocoapods
+```
 
-# Mở terminal mới, rồi:
+---
+
+### 1.6 Cài Ruby + Bundler (dùng cho Fastlane ở Part 2)
+
+```bash
+brew install rbenv ruby-build
+
+# Cài Ruby 3.2.0
+rbenv install 3.2.0
+rbenv global 3.2.0
+
+# Thêm vào shell profile
+echo 'eval "$(rbenv init -)"' >> ~/.zshrc
+source ~/.zshrc
+
+# Kiểm tra
+ruby --version   # phải thấy 3.2.0
+
+# Cài Bundler
 gem install bundler
 ```
 
 ---
 
-### 1.2 Tạo platform files iOS (làm 1 lần)
-
-Thư mục `ios/` chưa tồn tại. Chạy lệnh này từ thư mục dự án:
+### 1.7 Chạy flutter doctor — kiểm tra toàn bộ
 
 ```bash
-cd /path/to/semir-phone
-flutter create --platforms=ios .
+flutter doctor
 ```
 
-Lệnh này tạo ra `ios/` với Xcode project. Code trong `lib/` không bị ảnh hưởng.
+Kết quả mong đợi — **tất cả phải có ✓**:
 
-Cài dependencies iOS:
+```
+[✓] Flutter
+[✓] Xcode
+[✓] Chrome (không bắt buộc)
+[✓] Android toolchain (không bắt buộc cho iOS)
+[✓] CocoaPods
+```
+
+Nếu có mục nào ✗, đọc thông báo lỗi và làm theo hướng dẫn của nó.
+
+---
+
+## Part 2: Lấy code và cấu hình project
+
+### 2.1 Clone project về Mac
+
 ```bash
-cd ios && pod install && cd ..
+# Tạo thư mục làm việc
+mkdir -p ~/Projects
+cd ~/Projects
+
+# Clone repo
+git clone <repo-url> semir
+cd semir/semir-phone
+
+# Cài dependencies Flutter
+flutter pub get
 ```
 
 ---
 
-### 1.3 Cấu hình tên app và bundle ID
+### 2.2 Tạo platform files iOS (làm 1 lần)
 
-**Tên hiển thị** — Mở `ios/Runner/Info.plist`, thêm 2 key sau vào trong `<dict>` gốc:
+Thư mục `ios/` chưa tồn tại. Chạy từ thư mục `semir-phone/`:
+
+```bash
+cd ~/Projects/semir/semir-phone
+flutter create --platforms=ios .
+```
+
+> Lệnh này tạo `ios/` với toàn bộ Xcode project. Code trong `lib/` không bị ảnh hưởng.
+
+Cài iOS dependencies:
+```bash
+cd ios && pod install && cd ..
+```
+
+> Lần đầu `pod install` có thể mất 5–10 phút.
+
+---
+
+### 2.3 Cấu hình tên app và Bundle ID
+
+**Tên hiển thị** — mở `ios/Runner/Info.plist`, thêm 2 key vào trong `<dict>` gốc:
+
 ```xml
 <key>CFBundleDisplayName</key>
 <string>S&amp;B Dashboard</string>
@@ -74,165 +201,196 @@ cd ios && pod install && cd ..
 <string>SandBDashboard</string>
 ```
 
-**Bundle ID** — Mở Xcode:
+**Bundle ID** — mở Xcode:
+
 ```bash
 open ios/Runner.xcworkspace
 ```
+
 Trong Xcode:
 1. Click **Runner** ở sidebar trái
-2. Chọn target **Runner** → tab General
-3. Bundle Identifier: `com.semir.semirphone`
-4. Version: `1.0.0`, Build: `1` (phải khớp `pubspec.yaml`)
+2. Chọn target **Runner** → tab **General**
+3. **Bundle Identifier**: `com.semir.semirphone`
+4. **Version**: `1.0.0` — **Build**: `1` (phải khớp `pubspec.yaml`)
+5. **⌘S** để lưu → đóng Xcode
 
 ---
 
-### 1.4 Chạy trên iOS Simulator
+## Part 3: Chạy app local
 
-1. Mở Simulator:
-   ```bash
-   open -a Simulator
-   ```
-2. Kiểm tra simulator đã chạy:
-   ```bash
-   flutter devices
-   # Phải thấy: "iPhone 15 Pro (simulator)"
-   ```
-3. Chạy app:
-   ```bash
-   cd /path/to/semir-phone
-   flutter run --dart-define=API_BASE_URL=http://localhost:8000/api/v1 --dart-define=ENVIRONMENT=debug
-   ```
-   > `localhost` kết nối thẳng đến backend đang chạy trên máy Mac.
-
-Hot reload: bấm `r` trong terminal để reload ngay mà không cần restart app.
-
----
-
-### 1.5 Chạy trên thiết bị iPhone thật
-
-**Bước 1 — Thêm Apple ID vào Xcode:**
-- Xcode → Settings → Accounts → `+` → Apple ID → đăng nhập
-
-**Bước 2 — Cắm iPhone qua USB:**
-- iPhone hiện thông báo "Trust This Computer?" → bấm **Trust**
-- Kiểm tra:
-  ```bash
-  flutter devices
-  # Phải thấy tên iPhone trong danh sách
-  ```
-
-**Bước 3 — Cấu hình signing trong Xcode:**
-- Runner → Signing & Capabilities → chọn **Team** (Apple ID của bạn)
-- Xcode sẽ tự tạo provisioning profile cho development
-
-**Bước 4 — Tìm IP của Mac (để app kết nối đến backend):**
-```bash
-ifconfig | grep "inet 192"
-# Ghi lại địa chỉ IPv4, ví dụ: 192.168.1.10
-```
-
-**Bước 5 — Chạy:**
-```bash
-flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8000/api/v1 --dart-define=ENVIRONMENT=debug
-```
-> iPhone và Mac phải cùng mạng WiFi.
-
-Lần đầu chạy trên iPhone: vào Settings → General → VPN & Device Management → trust developer certificate.
-
----
-
-### 1.6 Build IPA debug để chia sẻ kiểm thử (không qua App Store)
+### 3.1 Chạy trên iOS Simulator
 
 ```bash
-flutter build ios --debug \
-  --dart-define=API_BASE_URL=https://analytics-customer-dashboard.com/api/v1/ \
+# Mở Simulator
+open -a Simulator
+
+# Kiểm tra Flutter thấy simulator
+flutter devices
+# Phải thấy: "iPhone ## (simulator)"
+
+# Chạy app (kết nối backend trên cùng máy Mac)
+cd ~/Projects/semir/semir-phone
+flutter run \
+  --dart-define=API_BASE_URL=http://localhost:8000/api/v1 \
   --dart-define=ENVIRONMENT=debug
 ```
 
-Cài trực tiếp qua Xcode: Devices and Simulators → chọn iPhone → `+` → chọn file `.app` trong `build/ios/`.
+> Bấm **`r`** trong terminal để hot reload — app cập nhật ngay không cần restart.
 
----
-
-### 1.7 Chạy tests
-
+**Chọn simulator khác:**
 ```bash
-# Chạy toàn bộ widget tests (không cần thiết bị)
-flutter test test/widget/
+# Xem danh sách simulator
+flutter emulators
 
-# Chạy một test cụ thể
-flutter test test/widget/login_page_test.dart
+# Chạy trên simulator cụ thể
+flutter emulators --launch apple_ios_simulator
 ```
 
 ---
 
-## Part 2: Build release → Đẩy lên App Store
+### 3.2 Chạy trên iPhone thật
 
-### 2.1 Tạo Apple Developer account (làm 1 lần)
+**Bước 1 — Thêm Apple ID vào Xcode:**
+- Xcode → **Settings** (⌘,) → **Accounts** → **+** → Apple ID → đăng nhập
 
-1. Truy cập https://developer.apple.com → **Enroll** vào Apple Developer Program
-2. Chi phí: **$99/năm** (bắt buộc để publish lên App Store)
-3. Quá trình duyệt mất 1–2 ngày làm việc
+**Bước 2 — Cắm iPhone qua cáp Lightning/USB-C:**
+- iPhone hiện thông báo "Trust This Computer?" → nhấn **Trust** → nhập passcode iPhone
+
+**Bước 3 — Kiểm tra Flutter thấy iPhone:**
+```bash
+flutter devices
+# Phải thấy tên iPhone trong danh sách
+```
+
+**Bước 4 — Cấu hình signing trong Xcode:**
+```bash
+open ios/Runner.xcworkspace
+```
+- Click **Runner** → tab **Signing & Capabilities**
+- Tích **Automatically manage signing**
+- Chọn **Team** (Apple ID của bạn)
+- Xcode sẽ tự tạo provisioning profile
+
+**Bước 5 — Tìm IP của Mac:**
+```bash
+ifconfig | grep "inet 192"
+# Ghi lại địa chỉ, ví dụ: 192.168.1.10
+```
+
+**Bước 6 — Chạy:**
+```bash
+flutter run \
+  --dart-define=API_BASE_URL=http://192.168.1.10:8000/api/v1 \
+  --dart-define=ENVIRONMENT=debug
+```
+
+> iPhone và Mac phải cùng mạng WiFi.
+
+**Lần đầu chạy trên iPhone:** vào **Settings → General → VPN & Device Management** → trust certificate của developer.
 
 ---
 
-### 2.2 Tạo App ID và app trên App Store Connect (làm 1 lần)
-
-**App ID (bundle identifier):**
-1. https://developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → `+`
-2. Chọn App IDs → App
-3. Bundle ID: `com.semir.semirphone` (explicit, không dùng wildcard)
-
-**App trên App Store Connect:**
-1. https://appstoreconnect.apple.com → My Apps → `+` → New App
-2. Platform: iOS
-3. Name: **S&B Dashboard**
-4. Bundle ID: `com.semir.semirphone`
-5. SKU: `semirphone`
-6. Hoàn thành store listing, content rating, pricing
-
----
-
-### 2.3 Cài đặt Fastlane (làm 1 lần)
+### 3.3 Chạy tests
 
 ```bash
-cd /path/to/semir-phone
+# Toàn bộ tests (không cần thiết bị)
+cd ~/Projects/semir/semir-phone
+flutter test
+
+# Widget tests
+flutter test test/widget/
+
+# Một test cụ thể
+flutter test test/widget/login_page_test.dart
+
+# Cập nhật golden images (sau khi thay đổi UI)
+flutter test test/golden/golden_test.dart --update-goldens
+```
+
+---
+
+## Part 4: Build release → Đẩy lên App Store
+
+### 4.1 Đăng ký Apple Developer Program (làm 1 lần — $99/năm)
+
+1. Truy cập https://developer.apple.com → nhấn **Enroll**
+2. Chọn Individual (cá nhân) hoặc Organization (công ty)
+3. Thanh toán $99/năm bằng thẻ tín dụng
+4. Quá trình duyệt mất **1–2 ngày làm việc**
+
+---
+
+### 4.2 Tạo App ID (làm 1 lần)
+
+1. Truy cập https://developer.apple.com → **Account** → **Certificates, Identifiers & Profiles**
+2. **Identifiers** → **+** → **App IDs** → **App** → Continue
+3. Description: `SemirPhone`
+4. Bundle ID: chọn **Explicit** → nhập `com.semir.semirphone`
+5. Capabilities: giữ mặc định → **Register**
+
+---
+
+### 4.3 Tạo app trên App Store Connect (làm 1 lần)
+
+1. Truy cập https://appstoreconnect.apple.com
+2. **My Apps** → **+** → **New App**
+3. Platform: **iOS**
+4. Name: **S&B Dashboard**
+5. Primary Language: English
+6. Bundle ID: chọn `com.semir.semirphone` (từ bước 4.2)
+7. SKU: `semirphone`
+8. User Access: Full Access → **Create**
+
+---
+
+### 4.4 Cài Fastlane
+
+```bash
+cd ~/Projects/semir/semir-phone
 bundle install
 ```
 
-Nếu chưa có `Gemfile`:
+Nếu chưa có `Gemfile`, tạo file `Gemfile`:
 ```ruby
-# Gemfile
 source "https://rubygems.org"
 gem "fastlane"
 ```
-Rồi chạy `bundle install` lại.
+
+Rồi chạy:
+```bash
+bundle install
+```
 
 ---
 
-### 2.4 Tạo certificates với Fastlane Match (làm 1 lần)
+### 4.5 Tạo certificates với Fastlane Match (làm 1 lần)
 
-Match lưu certificate vào private git repo để cả team dùng chung.
+Match lưu certificate vào private git repo để dùng chung và tránh mất certificate.
 
-**Tạo private repo chứa certificates:**
-1. GitHub → New repository → đặt tên `semir-certs` → **Private** → Create
+**Bước 1 — Tạo private repo chứa certificates:**
+- GitHub → **New repository** → tên: `semir-certs` → chọn **Private** → **Create repository**
 
-**Khởi tạo Match:**
+**Bước 2 — Khởi tạo Match:**
 ```bash
-cd /path/to/semir-phone
+cd ~/Projects/semir/semir-phone
 bundle exec fastlane match init
 # Chọn: git
-# Nhập SSH URL của repo semir-certs: git@github.com:your-org/semir-certs.git
+# Nhập SSH URL của repo: git@github.com:<your-username>/semir-certs.git
 ```
 
-**Tạo App Store certificate:**
+**Bước 3 — Tạo App Store certificate:**
 ```bash
 bundle exec fastlane match appstore
-# Nhập password mạnh khi được hỏi → lưu password này vào password manager (MATCH_PASSWORD)
+# Nhập password mạnh khi được hỏi
+# → lưu password này ngay vào password manager (đây là MATCH_PASSWORD)
 ```
 
 ---
 
-### 2.5 Tạo ExportOptions.plist (làm 1 lần)
+### 4.6 Tạo file ExportOptions.plist (làm 1 lần)
+
+**Tìm Team ID:**
+- https://developer.apple.com → **Account** → **Membership Details** → ghi lại **Team ID** (dạng `AB12CD34EF`)
 
 Tạo file `ios/ExportOptions.plist`:
 ```xml
@@ -243,7 +401,7 @@ Tạo file `ios/ExportOptions.plist`:
     <key>method</key>
     <string>app-store</string>
     <key>teamID</key>
-    <string>YOUR_APPLE_TEAM_ID</string>
+    <string>AB12CD34EF</string>
     <key>uploadBitcode</key>
     <false/>
     <key>uploadSymbols</key>
@@ -254,43 +412,43 @@ Tạo file `ios/ExportOptions.plist`:
 </plist>
 ```
 
-Tìm Team ID tại: https://developer.apple.com → Account → Membership → Team ID (chuỗi chữ số + chữ cái).
+> Thay `AB12CD34EF` bằng Team ID thật của bạn.
 
 ---
 
-### 2.6 Cấu hình secrets (làm 1 lần)
+### 4.7 Cấu hình secrets (làm 1 lần)
 
 ```bash
 cp scripts/.env.ios.template .env.ios
-nano .env.ios   # điền tất cả các giá trị
+nano .env.ios
 ```
 
 | Biến | Lấy ở đâu |
 |------|-----------|
-| `APPLE_ID` | Email Apple ID của bạn |
-| `ITC_TEAM_ID` | App Store Connect → Users → account → cuộn xuống → Team ID (số) |
-| `APPLE_TEAM_ID` | developer.apple.com → Account → Membership → Team ID (chữ + số) |
-| `MATCH_GIT_URL` | SSH URL của repo `semir-certs` (bước 2.4) |
-| `MATCH_PASSWORD` | Password bạn đặt trong bước 2.4 |
+| `APPLE_ID` | Email đăng ký Apple Developer |
+| `ITC_TEAM_ID` | App Store Connect → Users → chọn account → cuộn xuống → Team ID (toàn số) |
+| `APPLE_TEAM_ID` | developer.apple.com → Account → Membership → Team ID (chữ + số, ví dụ `AB12CD34EF`) |
+| `MATCH_GIT_URL` | SSH URL của repo `semir-certs` (bước 4.5) |
+| `MATCH_PASSWORD` | Password đặt trong bước 4.5 |
 | `API_BASE_URL` | `https://analytics-customer-dashboard.com/api/v1/` |
 
 ---
 
-### 2.7 Tăng version trước mỗi lần release
+### 4.8 Tăng version trước mỗi lần release
 
 Mở `pubspec.yaml`, tăng build number:
 ```yaml
 version: 1.0.0+1   # lần đầu
-version: 1.0.0+2   # lần 2 (bắt buộc phải tăng, dù code không đổi)
+version: 1.0.0+2   # lần 2 (bắt buộc tăng dù code không đổi)
 version: 1.0.1+3   # bug fix
 version: 1.1.0+4   # tính năng mới
 ```
 
-Đồng bộ version vào Xcode: Runner → General → Version + Build phải khớp.
+Đồng bộ vào Xcode: **Runner → General → Version** và **Build** phải khớp với `pubspec.yaml`.
 
 ---
 
-### 2.8 Build IPA và upload lên TestFlight
+### 4.9 Build IPA và upload lên TestFlight
 
 ```bash
 # Chạy từ thư mục semir-phone
@@ -305,55 +463,57 @@ Script tự động:
 2. Load secrets từ `.env.ios`
 3. Hỏi có muốn tăng build number không
 4. `flutter clean && flutter pub get`
-5. Chạy toàn bộ widget tests (dừng nếu có test fail)
+5. Chạy toàn bộ tests — dừng nếu có test fail
 6. Sync certificates qua Fastlane Match
 7. Build signed IPA (`flutter build ipa`)
 8. Upload lên TestFlight
 
 ---
 
-### 2.9 TestFlight testing
+### 4.10 TestFlight testing
 
-1. App Store Connect → S&B Dashboard → TestFlight
+1. App Store Connect → **S&B Dashboard** → **TestFlight**
 2. Thêm internal testers (Apple ID của team)
-3. Họ nhận email → cài TestFlight app → cài S&B Dashboard
-4. Build processing thường mất 5–15 phút sau khi upload
+3. Họ nhận email → cài app **TestFlight** → cài **S&B Dashboard**
+
+> Build processing mất **5–15 phút** sau khi upload.
 
 **Checklist test TestFlight:**
 - [ ] App khởi động không crash
 - [ ] Đăng nhập → hiển thị đúng username
 - [ ] Trang Sales load dữ liệu trong 4 giây (WiFi)
-- [ ] Customer Lookup: tìm theo phone → hiện số đã mask
-- [ ] Store Detail: chọn store → đủ 3 section load
+- [ ] Customer Lookup: tìm theo số điện thoại → hiện số đã mask
+- [ ] Store Detail: chọn cửa hàng → đủ 3 section load
 - [ ] Đăng xuất → quay về màn login
 - [ ] Kill app → mở lại → vẫn còn đăng nhập (session persist)
 - [ ] Không có crash trong App Store Connect → TestFlight → Crashes
 
 ---
 
-### 2.10 Submit lên App Store
+### 4.11 Submit lên App Store
 
 Sau khi TestFlight pass:
+
 ```bash
 bash scripts/deploy_ios.sh release
 ```
 
-Trong App Store Connect:
-1. S&B Dashboard → App Store → `+` Version
-2. Chọn build từ TestFlight
+Trên App Store Connect:
+1. **S&B Dashboard** → **App Store** → **+** Version
+2. Chọn build vừa upload từ TestFlight
 3. Viết release notes (tiếng Anh)
-4. Thêm screenshots (bắt buộc: 6.5" iPhone, 5.5" iPhone)
-5. Submit for Review
+4. Thêm screenshots (bắt buộc: **6.5" iPhone** và **5.5" iPhone**)
+5. **Submit for Review**
 
-Apple review thường mất **24–48 giờ**.
+> Apple review thường mất **24–48 giờ**.
 
 ---
 
-### Checklist mỗi lần release
+## Checklist mỗi lần release
 
-- [ ] Version đã tăng trong `pubspec.yaml` (ví dụ `1.0.1+3`)
+- [ ] Version đã tăng trong `pubspec.yaml`
 - [ ] Version và Build khớp trong Xcode Runner → General
-- [ ] `flutter test test/widget/` pass toàn bộ
+- [ ] `flutter test` pass toàn bộ 198 tests
 - [ ] Đã test trên iPhone thật (debug build)
 - [ ] `API_BASE_URL` trỏ đúng server production trong `.env.ios`
 - [ ] Bundle ID là `com.semir.semirphone` trong Xcode
@@ -363,16 +523,19 @@ Apple review thường mất **24–48 giờ**.
 
 ---
 
-### Lỗi thường gặp
+## Lỗi thường gặp
 
 | Lỗi | Cách sửa |
 |-----|----------|
+| `brew: command not found` | Chạy lại lệnh cài Homebrew ở bước 1.1 |
+| `flutter: command not found` | Mở terminal mới sau khi cài; hoặc `source ~/.zshrc` |
+| `xcode-select: error` | Chạy `xcode-select --install` và chờ xong |
 | `CocoaPods not installed` | `sudo gem install cocoapods` |
-| `flutter: command not found` | Chạy `brew install --cask flutter`, mở terminal mới |
-| `No profiles for com.semir.semirphone` | Chạy `bundle exec fastlane match appstore` |
+| `pod install` fails | `cd ios && pod repo update && pod install` |
+| `No profiles for com.semir.semirphone` | `bundle exec fastlane match appstore` |
 | `Provisioning profile doesn't include signing cert` | `bundle exec fastlane match appstore --force` |
 | `No account found for apple_id` | Điền `APPLE_ID` vào `.env.ios` |
-| `Upload failed: authentication credentials` | App Store Connect API key có thể đã hết hạn |
-| `flutter build ipa` lỗi code signing | Mở `ios/Runner.xcworkspace` → fix signing thủ công → build lại |
-| `pod install` fails | `gem install cocoapods` hoặc `cd ios && pod repo update && pod install` |
+| `Upload failed: authentication credentials` | App Store Connect API key hết hạn — tạo lại |
+| `flutter build ipa` lỗi code signing | `open ios/Runner.xcworkspace` → Signing & Capabilities → fix thủ công → build lại |
 | Trust certificate trên iPhone | Settings → General → VPN & Device Management → trust |
+| `ruby: command not found` | `brew install rbenv ruby-build` → `rbenv install 3.2.0` → `rbenv global 3.2.0` → `source ~/.zshrc` |

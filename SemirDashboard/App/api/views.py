@@ -72,7 +72,7 @@ def _get_user_permissions(user) -> list[str]:
     """
     mobile_perm_map = {
         'sales.view':       'sales.view',
-        'cnv.view':         'cnv.view',
+        'cnv.view':         'customers.view',        # mobile uses 'customers.view'
         'coupons.view':     'coupons.view',
         'shops.view':       'shop_detail.view',      # Django → mobile alias
         'customers.detail': 'customer_detail.view',  # Django → mobile alias

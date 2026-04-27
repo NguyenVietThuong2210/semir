@@ -16,11 +16,24 @@
    Mục "Android toolchain" phải có ✓ trước khi tiếp tục.
 
 **Android Studio**
-1. Tải tại https://developer.android.com/studio → cài đặt, chọn: Android SDK, Android Virtual Device
-2. Chấp nhận license:
+1. Tải tại https://developer.android.com/studio → cài đặt, giữ tất cả mặc định → Android Studio sẽ tự cài Android SDK
+2. Mở Android Studio lần đầu → để setup wizard chạy xong
+3. Cài **Command-line Tools** (bắt buộc — Flutter cần tool này):
+   - Trong Android Studio: **More Actions** → **SDK Manager** → tab **SDK Tools**
+   - Tích chọn **Android SDK Command-line Tools (latest)** → nhấn **OK** → chờ cài xong
+4. Trỏ Flutter đến SDK:
+   ```powershell
+   flutter config --android-sdk "C:\Users\ASUS\AppData\Local\Android\Sdk"
+   ```
+5. Chấp nhận license:
    ```powershell
    flutter doctor --android-licenses
    # Bấm "y" cho tất cả câu hỏi
+   ```
+6. Kiểm tra:
+   ```powershell
+   flutter doctor
+   # Android toolchain phải hiện ✓ trước khi tiếp tục
    ```
 
 **Java (JDK 17)**
@@ -68,7 +81,9 @@ android {
 
 ### 1.4 Chạy trên Emulator (Android Simulator)
 
-1. Mở Android Studio → Device Manager → Create Virtual Device → chọn Pixel 7 → API 33 → Finish → Start
+1. Mở Android Studio → Device Manager → **+** → Create Virtual Device → chọn Pixel 7 → API 33 → Next → Finish
+2. **Nếu emulator bị crash (emulator process terminated):** Click biểu tượng bút chì (edit) cạnh Pixel 7 → Show Advanced Settings → Emulated Performance → Graphics acceleration → chọn **Software** → Finish
+3. Start emulator
 2. Kiểm tra emulator đã chạy:
    ```powershell
    flutter devices
@@ -313,6 +328,9 @@ Mục tiêu: crash-free sessions > 99.5%
 |-----|----------|
 | `flutter: command not found` | Thêm `C:\flutter\bin` vào PATH, mở terminal mới |
 | `Android license status unknown` | Chạy `flutter doctor --android-licenses` |
+| `Android sdkmanager not found` | Mở Android Studio → SDK Manager → SDK Tools → tích **Android SDK Command-line Tools (latest)** → OK. Sau đó chạy `flutter config --android-sdk "C:\Users\ASUS\AppData\Local\Android\Sdk"` |
+| `Emulator process terminated` (crash khi start) | Edit AVD → Show Advanced Settings → Graphics acceleration → chọn **Software** → Finish → Start lại |
+| `Unable to locate Android SDK` | Chạy `flutter config --android-sdk "C:\Users\ASUS\AppData\Local\Android\Sdk"` |
 | `keytool: command not found` | Cài JDK 17, mở terminal mới |
 | `Keystore file not found` | Kiểm tra `KEYSTORE_PATH` trong `.env.android` — dùng đường dẫn tuyệt đối |
 | `Package not found` trên upload | App chưa được tạo trong Play Console, hoặc package name sai |
