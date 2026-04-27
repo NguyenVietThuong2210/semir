@@ -1,0 +1,78 @@
+name: semir_phone
+description: S&B Dashboard — Analytics dashboard for iOS/Android.
+version: 1.0.0+1
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP client + JWT interceptor
+  dio: ^5.4.0
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.4
+
+  # Secure token storage
+  flutter_secure_storage: ^9.0.0
+
+  # Biometric authentication
+  local_auth: ^2.1.8
+
+  # Charts
+  fl_chart: ^0.67.0
+
+  # Crash reporting
+  sentry_flutter: ^8.3.0
+
+  # Navigation
+  go_router: ^13.2.0
+
+  # Splash screen
+  flutter_native_splash: ^2.3.10
+
+  # Number formatting (VND)
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # Visual golden snapshot testing
+  golden_toolkit: ^0.15.0
+
+  # Code generation for Riverpod
+  riverpod_generator: ^2.4.0
+  build_runner: ^2.4.8
+
+  # App icon generation
+  flutter_launcher_icons: ^0.13.1
+
+  # Mocking for unit tests
+  mockito: ^5.4.4
+
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/
+    - assets/certs/
+
+flutter_native_splash:
+  color: "#0d6efd"
+  image: assets/icons/app_icon.png
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icons/app_icon.png"
+  min_sdk_android: 26

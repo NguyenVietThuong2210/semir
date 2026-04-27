@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "PowerShell(*)",
+      "Bash(*)",
       "Bash(python -c \":*)",
       "Bash(ls \"D:\\\\New-jouney\\\\semir\\\\SemirDashboard\\\\App\\\\templatetags\"\" 2>/dev/null && echo \"exists\" || echo \"not found \")",
       "Bash(\"D:\\\\New-jouney\\\\semir\\\\venv\\\\Scripts\\\\python.exe\" manage.py makemigrations App)",
@@ -80,7 +82,27 @@
       "Bash(python -c \"import weasyprint\")",
       "Bash(python -c \"from selenium import webdriver\")",
       "Bash(python tests/snapshot_visual.py)",
-      "Bash(git status *)"
+      "Bash(git status *)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \".specify/extensions/git/scripts/powershell/create-new-feature.ps1\" -Json -ShortName \"semir-phone-app\" \"SemirPhone mobile app for iOS and Android — login, home, analytics & reports calling SemirDashboard backend\")",
+      "Bash(powershell.exe -NonInteractive -File \".specify/scripts/powershell/check-prerequisites.ps1\" -Json -PathsOnly)",
+      "Bash(powershell.exe -NonInteractive -File \".specify/scripts/powershell/setup-plan.ps1\" -Json)",
+      "WebSearch",
+      "Bash(powershell -Command \"Get-ChildItem specs/003-semir-phone-app -Recurse | Select-Object FullName\")",
+      "Bash(powershell -Command \"\\(Get-Content specs/003-semir-phone-app/plan.md\\).Count\")",
+      "Bash(powershell.exe -NonInteractive -File \".specify/scripts/powershell/check-prerequisites.ps1\" -Json)",
+      "Bash(powershell.exe -NonInteractive -File \".specify/scripts/powershell/check-prerequisites.ps1\" -Json -RequireTasks -IncludeTasks)",
+      "Bash(flutter --version)",
+      "PowerShell(flutter --version 2>&1)",
+      "Bash(pip install *)",
+      "Bash(python manage.py makemigrations)",
+      "Bash(python -c ' *)",
+      "Bash(timeout 120 python manage.py test tests -v 1 --failfast)",
+      "Bash(python manage.py test tests.test_analytics tests.test_shop_detail -v 1)",
+      "Bash(python manage.py test tests.test_analytics -v 0)",
+      "Bash(python manage.py test tests.test_analytics -v 1)",
+      "Bash(python -c \"from tests import test_analytics; print\\('OK'\\)\")",
+      "Bash(flutter devices *)",
+      "Bash(powershell.exe -Command \"flutter --version 2>&1 | Select-Object -First 5\")"
     ],
     "additionalDirectories": [
       "D:\\New-jouney\\semir\\archive\\customer_chart",

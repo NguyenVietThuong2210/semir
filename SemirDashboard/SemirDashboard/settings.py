@@ -77,11 +77,17 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "App",
     "django_apscheduler",
+    # SemirPhone API layer (Sprint 0)
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",       # Must be before CommonMiddleware
     "App.middleware.RequestIDMiddleware",           # Request ID for log correlation
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -312,3 +318,54 @@ LOGGING = {
         },
     },
 }
+
+# ============================================================================
+# DJANGO REST FRAMEWORK — SemirPhone JSON API (Sprint 0)
+# ============================================================================
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+    ],
+    "EXCEPTION_HANDLER": "App.api.views.custom_exception_handler",
+}
+
+# ============================================================================
+# SIMPLE JWT CONFIGURATION
+# ============================================================================
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    # Single-use refresh tokens — rotate on every refresh, blacklist old ones.
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# ============================================================================
+# CORS — Allow mobile app origins (native apps don't send CORS, but web admin
+# console on the same domain may call the API from a browser).
+# ============================================================================
+
+CORS_ALLOW_ALL_ORIGINS = False
+_cors_raw = os.getenv("CORS_ALLOWED_ORIGINS", "")
+CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+CORS_ALLOW_CREDENTIALS = True
+
+# In development, allow localhost origins for browser-based testing.
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True

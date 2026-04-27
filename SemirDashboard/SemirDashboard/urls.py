@@ -5,8 +5,9 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('App.urls')), # Include URLs from the 'App' application
+    path('', include('App.urls')),  # Existing web views
     path('cnv/', include('App.cnv.urls')),
+    path('api/v1/', include('App.api.urls')),  # SemirPhone JSON API (Sprint 0)
 ]
 
 if settings.DEBUG:
