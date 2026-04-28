@@ -7,50 +7,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:semir_phone/core/theme/app_colors.dart';
 import 'package:semir_phone/core/theme/app_theme.dart';
 import 'package:semir_phone/features/analytics/shop_detail/shop_detail_page.dart';
-import 'package:semir_phone/shared/models/analytics_models.dart';
 import 'package:semir_phone/features/analytics/shop_detail/shop_detail_provider.dart';
 import 'package:semir_phone/features/analytics/shop_detail/shop_detail_service.dart';
+import 'package:semir_phone/shared/models/analytics_models.dart';
 import 'package:semir_phone/shared/widgets/error_banner.dart';
 import 'package:semir_phone/shared/widgets/kpi_card.dart';
 import 'package:semir_phone/shared/widgets/loading_overlay.dart';
 
 const _mockShops = ['HN01', 'HN02', 'HCM01'];
 
-ShopDetailPayload _fixturePayload() {
-  return ShopDetailPayload(
-    salesAllTimeKpis: [
-      const KpiItem(label: 'Tổng doanh thu', value: '5,000,000,000'),
+ShopSalesPayload _fixtureSalesPayload() {
+  return ShopSalesPayload(
+    allTimeKpis: const [
+      KpiItem(label: 'Active', value: '1,234'),
+      KpiItem(label: 'Returning', value: '890'),
+      KpiItem(label: 'Return Rate', value: '72.12%'),
     ],
-    salesPeriodKpis: [
-      const KpiItem(label: 'Doanh thu kỳ', value: '1,200,000,000'),
+    periodKpis: const [
+      KpiItem(label: 'Active', value: '400'),
     ],
-    salesTabs: [
-      const TableTab(
+    tabs: const [
+      TableTab(
         tabKey: 'by_session',
-        label: 'Theo Phiên',
-        headers: ['Phiên', 'Doanh thu'],
-        rows: [],
-      ),
-    ],
-    customerKpis: [
-      const KpiItem(label: 'Tổng KH', value: '1,234'),
-    ],
-    customerTabs: [
-      const TableTab(
-        tabKey: 'breakdown',
-        label: 'Breakdown',
-        headers: ['Hạng', 'Số KH'],
-        rows: [],
-      ),
-    ],
-    couponKpis: [
-      const KpiItem(label: 'Tổng coupon', value: '500'),
-    ],
-    couponTabs: [
-      const TableTab(
-        tabKey: 'detail',
-        label: 'Chi tiết',
-        headers: ['Coupon', 'Trạng thái'],
+        label: 'By Season',
+        headers: ['Season', 'Active'],
         rows: [],
       ),
     ],
@@ -59,7 +39,7 @@ ShopDetailPayload _fixturePayload() {
 
 Widget buildSubject({
   AsyncValue<List<String>> shopsState = const AsyncValue.data(_mockShops),
-  AsyncValue<ShopDetailPayload?> detailState = const AsyncValue.data(null),
+  AsyncValue<ShopSalesPayload?> salesState = const AsyncValue.data(null),
   String? selectedShop,
 }) {
   return ProviderScope(
@@ -73,7 +53,8 @@ Widget buildSubject({
         }
         return (shopsState as AsyncData<List<String>>).value;
       }),
-      shopDetailProvider.overrideWith(() => _FakeDetailNotifier(detailState)),
+      shopDetailSalesProvider
+          .overrideWith(() => _FakeSalesNotifier(salesState)),
       if (selectedShop != null)
         selectedShopProvider.overrideWith((ref) => selectedShop),
     ],
@@ -104,46 +85,59 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // With empty list the page renders a Text notice instead of a dropdown.
     expect(find.text('No stores available'), findsOneWidget);
     expect(find.byType(DropdownButtonFormField<String>), findsNothing);
   });
 
   testWidgets('no shop selected → detail sections not shown', (tester) async {
-    await tester.pumpWidget(buildSubject(detailState: const AsyncValue.data(null)));
+    await tester.pumpWidget(buildSubject(salesState: const AsyncValue.data(null)));
     await tester.pumpAndSettle();
 
     expect(find.byType(KpiCard), findsNothing);
   });
 
-  testWidgets('data loaded → 3 section headers visible', (tester) async {
+  testWidgets('data loaded → section tab bar visible', (tester) async {
     await tester.pumpWidget(
       buildSubject(
-        detailState: AsyncValue.data(_fixturePayload()),
+        salesState: AsyncValue.data(_fixtureSalesPayload()),
         selectedShop: 'HN01',
       ),
     );
     await tester.pumpAndSettle();
 
-    // All 3 sections: Sales, Customer, Coupon
-    expect(find.text('Sales'), findsWidgets);
-    expect(find.text('Customers'), findsWidgets);
-    expect(find.text('Coupon'), findsWidgets);
+    // Section tab buttons should be visible
+    expect(find.text('Sales'), findsOneWidget);
+    expect(find.text('Customers'), findsOneWidget);
+    expect(find.text('Coupon'), findsOneWidget);
+  });
+
+  testWidgets('data loaded → KPI cards visible for sales section', (tester) async {
+    await tester.pumpWidget(
+      buildSubject(
+        salesState: AsyncValue.data(_fixtureSalesPayload()),
+        selectedShop: 'HN01',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(KpiCard), findsWidgets);
+    expect(find.text('Active'), findsWidgets);
   });
 
   testWidgets('loading state → LoadingOverlay visible', (tester) async {
     await tester.pumpWidget(
-      buildSubject(detailState: const AsyncValue.loading()),
+      buildSubject(salesState: const AsyncValue.loading()),
     );
     await tester.pump();
 
     expect(find.byType(LoadingOverlay), findsOneWidget);
   });
 
-  testWidgets('error state → ErrorBanner visible', (tester) async {
+  testWidgets('error state → ErrorBanner visible when shop is selected',
+      (tester) async {
     await tester.pumpWidget(
       buildSubject(
-        detailState: AsyncValue.error('Network error', StackTrace.empty),
+        salesState: AsyncValue.error('Network error', StackTrace.empty),
         selectedShop: 'HN01',
       ),
     );
@@ -155,13 +149,12 @@ void main() {
   testWidgets('section card top-border uses AppColors.primary', (tester) async {
     await tester.pumpWidget(
       buildSubject(
-        detailState: AsyncValue.data(_fixturePayload()),
+        salesState: AsyncValue.data(_fixtureSalesPayload()),
         selectedShop: 'HN01',
       ),
     );
     await tester.pumpAndSettle();
 
-    // Find containers with top-border decoration using primary color
     final containers = tester.widgetList<Container>(find.byType(Container));
     bool foundPrimaryBorder = false;
     for (final container in containers) {
@@ -179,13 +172,13 @@ void main() {
   });
 }
 
-class _FakeDetailNotifier extends ShopDetailNotifier {
-  _FakeDetailNotifier(this._state);
-  final AsyncValue<ShopDetailPayload?> _state;
+class _FakeSalesNotifier extends ShopDetailSalesNotifier {
+  _FakeSalesNotifier(this._state);
+  final AsyncValue<ShopSalesPayload?> _state;
 
   @override
-  Future<ShopDetailPayload?> build() {
-    if (_state.isLoading) return Completer<ShopDetailPayload?>().future;
+  Future<ShopSalesPayload?> build() {
+    if (_state.isLoading) return Completer<ShopSalesPayload?>().future;
     if (_state.hasError) return Future.error(_state.error!, _state.stackTrace);
     return Future.value(_state.valueOrNull);
   }

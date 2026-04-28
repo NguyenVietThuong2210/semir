@@ -13,23 +13,31 @@ import '../../../shared/models/analytics_models.dart';
 import 'shop_detail_provider.dart';
 import 'shop_detail_service.dart';
 
-class ShopDetailPage extends ConsumerWidget {
+const _kSectionLabels = ['Sales', 'Customers', 'Coupon'];
+
+class ShopDetailPage extends ConsumerStatefulWidget {
   const ShopDetailPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ShopDetailPage> createState() => _ShopDetailPageState();
+}
+
+class _ShopDetailPageState extends ConsumerState<ShopDetailPage> {
+  int _section = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final shopsAsync = ref.watch(shopsListProvider);
     final selectedShop = ref.watch(selectedShopProvider);
     final filter = ref.watch(shopDetailFilterProvider);
-    final detailAsync = ref.watch(shopDetailProvider);
+    final salesAsync = ref.watch(shopDetailSalesProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Store Detail')),
       body: Stack(
         children: [
           PullToRefresh(
-            onRefresh: () =>
-                ref.read(shopDetailProvider.notifier).refresh(),
+            onRefresh: () => ref.read(shopDetailSalesProvider.notifier).refresh(),
             child: ListView(
               children: [
                 Padding(
@@ -52,12 +60,12 @@ class ShopDetailPage extends ConsumerWidget {
                                 .map((s) => DropdownMenuItem(
                                     value: s, child: Text(s)))
                                 .toList(),
-                            onChanged: (v) => ref
-                                .read(selectedShopProvider.notifier)
-                                .state = v,
-                            decoration: const InputDecoration(
-                              labelText: 'Store',
-                            ),
+                            onChanged: (v) {
+                              ref.read(selectedShopProvider.notifier).state = v;
+                              setState(() => _section = 0);
+                            },
+                            decoration:
+                                const InputDecoration(labelText: 'Store'),
                           );
                         },
                       ),
@@ -65,8 +73,7 @@ class ShopDetailPage extends ConsumerWidget {
                       DateFilterBar(
                         initialFilter: filter,
                         onFilterChanged: (f) =>
-                            ref.read(shopDetailFilterProvider.notifier).state =
-                                f,
+                            ref.read(shopDetailFilterProvider.notifier).state = f,
                       ),
                     ],
                   ),
@@ -78,68 +85,161 @@ class ShopDetailPage extends ConsumerWidget {
                       child: Text('Please select a store to view details'),
                     ),
                   )
-                else
-                  detailAsync.when(
+                else ...[
+                  // Section tab bar (Sales / Customers / Coupon)
+                  _SectionTabBar(
+                    selected: _section,
+                    onSelected: (i) => setState(() => _section = i),
+                  ),
+                  salesAsync.when(
                     loading: () => const SizedBox.shrink(),
                     error: (e, _) => Padding(
                       padding: const EdgeInsets.all(24),
                       child: ErrorBanner(
                         message: e.toString(),
                         onRetry: () =>
-                            ref.read(shopDetailProvider.notifier).refresh(),
+                            ref.read(shopDetailSalesProvider.notifier).refresh(),
                       ),
                     ),
-                    data: (payload) {
-                      if (payload == null) return const SizedBox.shrink();
-                      return _DetailSections(payload: payload);
+                    data: (sales) {
+                      if (sales == null) return const SizedBox.shrink();
+                      return _SectionContent(
+                        section: _section,
+                        shop: selectedShop,
+                        filter: filter,
+                        sales: sales,
+                      );
                     },
                   ),
+                ],
                 const SizedBox(height: 32),
               ],
             ),
           ),
-          if (detailAsync.isLoading) const LoadingOverlay(),
+          if (salesAsync.isLoading) const LoadingOverlay(),
         ],
       ),
     );
   }
 }
 
-class _DetailSections extends StatelessWidget {
-  const _DetailSections({required this.payload});
-  final ShopDetailPayload payload;
+class _SectionTabBar extends StatelessWidget {
+  const _SectionTabBar({required this.selected, required this.onSelected});
+  final int selected;
+  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _Section(
-          title: 'Sales',
-          allTimeKpis: payload.salesAllTimeKpis,
-          periodKpis: payload.salesPeriodKpis,
-          tabs: payload.salesTabs,
-        ),
-        const SizedBox(height: 12),
-        _Section(
-          title: 'Customers',
-          allTimeKpis: payload.customerKpis,
-          periodKpis: const [],
-          tabs: payload.customerTabs,
-        ),
-        const SizedBox(height: 12),
-        _Section(
-          title: 'Coupon',
-          allTimeKpis: payload.couponKpis,
-          periodKpis: const [],
-          tabs: payload.couponTabs,
-        ),
-      ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: List.generate(_kSectionLabels.length, (i) {
+          final active = i == selected;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: TextButton(
+              onPressed: () => onSelected(i),
+              style: TextButton.styleFrom(
+                backgroundColor:
+                    active ? AppColors.primary : Colors.transparent,
+                foregroundColor: active ? Colors.white : AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: AppColors.primary),
+                ),
+              ),
+              child: Text(_kSectionLabels[i]),
+            ),
+          );
+        }),
+      ),
     );
   }
 }
 
-class _Section extends StatefulWidget {
-  const _Section({
+/// Renders the active section. Sales is always loaded; customer/coupon are lazy.
+class _SectionContent extends ConsumerWidget {
+  const _SectionContent({
+    required this.section,
+    required this.shop,
+    required this.filter,
+    required this.sales,
+  });
+
+  final int section;
+  final String shop;
+  final DateRangeFilter filter;
+  final ShopSalesPayload sales;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    switch (section) {
+      case 0:
+        return _KpiSection(
+          title: 'Sales',
+          allTimeKpis: sales.allTimeKpis,
+          periodKpis: sales.periodKpis,
+          tabs: sales.tabs,
+        );
+
+      case 1:
+        final key = (
+          shop: shop,
+          dateFrom: filter.fromParam ?? '',
+          dateTo: filter.toParam ?? '',
+        );
+        final customerAsync = ref.watch(shopCustomerProvider(key));
+        return customerAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Failed to load customers: $e',
+                style: const TextStyle(color: Colors.red)),
+          ),
+          data: (c) => _KpiSection(
+            title: 'Customers',
+            allTimeKpis: c.allTimeKpis,
+            periodKpis: c.periodKpis,
+            tabs: c.tabs,
+          ),
+        );
+
+      case 2:
+        final key = (
+          shop: shop,
+          dateFrom: filter.fromParam ?? '',
+          dateTo: filter.toParam ?? '',
+        );
+        final couponAsync = ref.watch(shopCouponProvider(key));
+        return couponAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Failed to load coupons: $e',
+                style: const TextStyle(color: Colors.red)),
+          ),
+          data: (c) => _KpiSection(
+            title: 'Coupon',
+            allTimeKpis: c.allTimeKpis,
+            periodKpis: c.periodKpis,
+            tabs: c.detailTable != null ? [c.detailTable!] : [],
+          ),
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+class _KpiSection extends StatefulWidget {
+  const _KpiSection({
     required this.title,
     required this.allTimeKpis,
     required this.periodKpis,
@@ -152,97 +252,83 @@ class _Section extends StatefulWidget {
   final List<TableTab> tabs;
 
   @override
-  State<_Section> createState() => _SectionState();
+  State<_KpiSection> createState() => _KpiSectionState();
 }
 
-class _SectionState extends State<_Section> {
-  int _selectedTab = 0;
+class _KpiSectionState extends State<_KpiSection> {
+  int _tab = 0;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: AppColors.primary, width: 4),
-        ),
+        border: Border(top: BorderSide(color: AppColors.primary, width: 4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SectionHeader(title: widget.title),
           if (widget.allTimeKpis.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: widget.allTimeKpis
-                    .map((k) => SizedBox(
-                          width:
-                              (MediaQuery.of(context).size.width - 40) / 2,
-                          child: KpiCard(
-                            label: k.label,
-                            value: k.value,
-                            variant: KpiVariant.allTime,
-                          ),
-                        ))
-                    .toList(),
-              ),
-            ),
+            _kpiGrid(context, widget.allTimeKpis, KpiVariant.allTime),
           if (widget.periodKpis.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: widget.periodKpis
-                    .map((k) => SizedBox(
-                          width:
-                              (MediaQuery.of(context).size.width - 40) / 2,
-                          child: KpiCard(
-                            label: k.label,
-                            value: k.value,
-                            variant: KpiVariant.period,
-                          ),
-                        ))
-                    .toList(),
-              ),
-            ),
+            _kpiGrid(context, widget.periodKpis, KpiVariant.period),
           if (widget.tabs.isNotEmpty) ...[
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(
-                  widget.tabs.length,
-                  (i) => TextButton(
-                    onPressed: () => setState(() => _selectedTab = i),
-                    child: Text(
-                      widget.tabs[i].label,
-                      style: TextStyle(
-                        color: _selectedTab == i
-                            ? AppColors.primary
-                            : AppColors.textMuted,
-                        fontWeight: _selectedTab == i
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+            if (widget.tabs.length > 1)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: List.generate(
+                    widget.tabs.length,
+                    (i) => TextButton(
+                      onPressed: () => setState(() => _tab = i),
+                      child: Text(
+                        widget.tabs[i].label,
+                        style: TextStyle(
+                          color: _tab == i
+                              ? AppColors.primary
+                              : AppColors.textMuted,
+                          fontWeight: _tab == i
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: SizedBox(
                 height: 250,
                 child: DataTableWidget(
-                  headers: widget.tabs[_selectedTab].headers,
-                  rows: widget.tabs[_selectedTab].rows,
+                  headers: widget.tabs[_tab].headers,
+                  rows: widget.tabs[_tab].rows,
                 ),
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _kpiGrid(
+      BuildContext context, List<KpiItem> kpis, KpiVariant variant) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: kpis
+            .map((k) => SizedBox(
+                  width: (MediaQuery.of(context).size.width - 40) / 2,
+                  child: KpiCard(
+                    label: k.label,
+                    value: k.value,
+                    variant: variant,
+                  ),
+                ))
+            .toList(),
       ),
     );
   }

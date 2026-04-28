@@ -157,6 +157,20 @@ def _group_flat_by_period(flat, label_key='label'):
 
 # ── Sales per-tab functions ───────────────────────────────────────────────────
 
+def _get_cached_by_shop(cp, ci, date_from, date_to, shop_group):
+    """Return (by_shop, all_sk, all_mk, all_yk, all_wk), cached per filter combo."""
+    from django.core.cache import cache as _djc
+    _key = f"sales_by_shop:{date_from}:{date_to}:{shop_group}"
+    hit = _djc.get(_key)
+    if hit is not None:
+        return hit
+    all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
+    by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
+    result = (by_shop, all_sk, all_mk, all_yk, all_wk)
+    _djc.set(_key, result, timeout=300)
+    return result
+
+
 SALES_TABS = (
     'grade', 'season', 'month', 'week', 'shop',
     'grade_allshops', 'season_allshops', 'month_allshops', 'week_allshops',
@@ -195,29 +209,25 @@ def get_sales_tab(tab: str, date_from=None, date_to=None, shop_group=None) -> di
         return {'by_week': aggregate_by_week(cp, ci)}
 
     if tab == 'shop':
-        all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
-        return {'by_shop': aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)}
+        by_shop, all_sk, all_mk, all_yk, all_wk = _get_cached_by_shop(cp, ci, date_from, date_to, shop_group)
+        return {'by_shop': by_shop}
 
     if tab == 'grade_allshops':
         details = _build_customer_details(cp, ci, date_from, date_to)
-        all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
-        by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
+        by_shop, all_sk, all_mk, all_yk, all_wk = _get_cached_by_shop(cp, ci, date_from, date_to, shop_group)
         grade_keys = [g['grade'] for g in aggregate_by_grade(details)]
         return {'periods_by_grade': _group_periods(by_shop, grade_keys, 'by_grade', 'grade')}
 
     if tab == 'season_allshops':
-        all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
-        by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
+        by_shop, all_sk, all_mk, all_yk, all_wk = _get_cached_by_shop(cp, ci, date_from, date_to, shop_group)
         return {'periods_by_season': _group_periods(by_shop, all_sk, 'by_session', 'session')}
 
     if tab == 'month_allshops':
-        all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
-        by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
+        by_shop, all_sk, all_mk, all_yk, all_wk = _get_cached_by_shop(cp, ci, date_from, date_to, shop_group)
         return {'periods_by_month': _group_periods(by_shop, all_mk, 'by_month', 'month')}
 
     if tab == 'week_allshops':
-        all_sk, all_mk, all_yk, all_wk = _get_period_keys(cp)
-        by_shop = aggregate_by_shop(cp, ci, all_sk, all_mk, all_yk, all_wk)
+        by_shop, all_sk, all_mk, all_yk, all_wk = _get_cached_by_shop(cp, ci, date_from, date_to, shop_group)
         return {'periods_by_week': _group_periods(
             by_shop, all_wk, 'by_week', 'week_sort',
             label_fn=lambda r: r['week_label'],

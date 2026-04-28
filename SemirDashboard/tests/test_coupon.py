@@ -60,77 +60,28 @@ class CouponAnalyticsTest(SnapshotTestCase):
     # ── Full page timing ──────────────────────────────────────────────────
 
     def test_page_timing_alltime(self):
-        """Simulate coupon dashboard page load, instrument each phase."""
-        from django.db.models import Q
-        from App.models import Coupon, SalesTransaction, Customer
-
+        """Simulate coupon dashboard page load using the production aggregate path."""
         log = get_run_log()
-        log.section("COUPON PAGE TIMING (all-time) — per-function breakdown")
+        log.section("COUPON PAGE TIMING (all-time) — production path")
         t = self.timer("coupon_page_alltime")
 
         if not Coupon.objects.exists():
             self.skipTest("No coupon data")
 
-        # Phase 1: Coupon queryset fetch (all-time)
-        _t = time.perf_counter()
-        all_coupons = list(Coupon.objects.all().order_by())
-        t.checkpoint(f"DB fetch all coupons → {len(all_coupons)} rows")
-
-        # Phase 2: Filter used coupons
-        all_used = [c for c in all_coupons if c.using_date is not None]
-        all_dockets = [c.docket_number for c in all_used if c.docket_number]
-        t.checkpoint(f"Python filter used coupons → {len(all_used)} used, {len(all_dockets)} with docket")
-
-        # Phase 3: Bulk fetch SalesTransactions for all dockets
-        txn_map_all = {t2.invoice_number: t2 for t2 in
-                       SalesTransaction.objects.filter(invoice_number__in=all_dockets).order_by()}
-        t.checkpoint(f"DB fetch SalesTransactions (all dockets) → {len(txn_map_all)} txns")
-
-        # Phase 4: Period coupon fetch
-        period_used = [c for c in all_coupons if c.using_date is not None]
-        period_dockets = [c.docket_number for c in period_used if c.docket_number]
-        txn_map_period = {t2.invoice_number: t2 for t2 in
-                          SalesTransaction.objects.filter(invoice_number__in=period_dockets).order_by()}
-        t.checkpoint(f"DB fetch SalesTransactions (period dockets) → {len(txn_map_period)} txns")
-
-        # Phase 5: Customer lookup
-        vip_ids = {t2.vip_id for t2 in txn_map_period.values() if t2.vip_id and t2.vip_id != '0'}
-        customer_map = {c.vip_id: c for c in Customer.objects.filter(vip_id__in=vip_ids).order_by()}
-        t.checkpoint(f"DB fetch Customers for period invoices → {len(customer_map)} customers")
-
-        # Phase 6: All-time aggregation loop (Python)
-        at_total = len(all_coupons)
-        at_used  = len(all_used)
-        at_amount = sum(
-            float(txn_map_all[c.docket_number].sales_amount)
-            for c in all_used
-            if c.docket_number and c.docket_number in txn_map_all
+        # Production path: get_coupon_tab uses DB aggregates — no full row scan
+        data = get_coupon_tab('shop')
+        t.checkpoint(
+            f"get_coupon_tab('shop') all-time → "
+            f"total={data.get('all_time_total', 0)} used={data.get('all_time_used', 0)}"
         )
-        t.checkpoint(f"Python all-time aggregation → total={at_total} used={at_used} amount={at_amount:,.0f}")
 
-        # Phase 7: By-shop grouping
-        shop_groups: dict = {}
-        for c in period_used:
-            shop = c.using_shop or "Unknown"
-            shop_groups.setdefault(shop, []).append(c)
-        t.checkpoint(f"Python by-shop grouping → {len(shop_groups)} shops")
-
-        # Phase 8: Details list build
-        details = []
-        for c in period_used[:5000]:  # cap for timing
-            txn = txn_map_period.get(c.docket_number) if c.docket_number else None
-            cust = customer_map.get(txn.vip_id) if txn and txn.vip_id else None
-            details.append({
-                "coupon_id": c.coupon_id,
-                "amount": float(txn.sales_amount) if txn else 0,
-                "customer": cust.name if cust else None,
-            })
-        t.checkpoint(f"Python build details list → {len(details)} entries")
+        data2 = get_coupon_tab('detail')
+        t.checkpoint(f"get_coupon_tab('detail') → {len(data2.get('period_details', []))} rows")
 
         total = t.total()
         t.report()
         self.record_page_timing("COUPON (all-time)", total, t._checkpoints)
-        self.assertLess(total, 20, f"Coupon page all-time took {total:.1f}s > 20s threshold")
+        self.assertLess(total, 5, f"Coupon page all-time took {total:.1f}s > 5s target")
 
     def test_page_timing_via_analytics_fn(self):
         """Time the official calculate_coupon_analytics function end-to-end."""

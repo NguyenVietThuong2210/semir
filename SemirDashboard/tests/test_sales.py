@@ -68,95 +68,36 @@ class SalesAnalyticsTest(SnapshotTestCase):
         for path in SALE_FILES:
             if path.exists():
                 process_sales_file(_named(path))
+        # Pre-warm sales caches — all tab tests in this class get cache hits
+        from App.analytics.tab_functions import get_sales_tab
+        from datetime import date as _date
+        get_sales_tab('grade')  # warms _load_sales() all-time + overview
+        get_sales_tab('shop')   # warms aggregate_by_shop all-time
+        get_sales_tab('grade', date_from=_date(2025, 1, 1), date_to=_date(2025, 12, 31))
+        get_sales_tab('shop',  date_from=_date(2025, 1, 1), date_to=_date(2025, 12, 31))
 
     # ── Full page timing (views → data ready for render) ──────────────────
 
     def test_page_timing_alltime(self):
-        """Simulate full sales page load: measure each sub-step."""
-        from django.db.models import Count, Q, Sum
-        from decimal import Decimal
-
+        """Simulate full sales page load using production path (cached after setUpTestData)."""
         log = get_run_log()
-        log.section("SALES PAGE TIMING (all-time) — per-function breakdown")
+        log.section("SALES PAGE TIMING (all-time) — production path")
         t = self.timer("sales_page_alltime")
 
-        # Step 1: DB fetch (the main query)
-        _t0 = time.perf_counter()
-        SALES_FIELDS = ('vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name', 'customer')
-        CUST_FIELDS  = ('customer__id', 'customer__vip_id', 'customer__vip_grade',
-                        'customer__registration_date', 'customer__name')
-        qs = (SalesTransaction.objects
-              .select_related('customer')
-              .only(*SALES_FIELDS, *CUST_FIELDS)
-              .order_by())
-        sales_list = list(qs)
-        t.checkpoint(f"DB fetch SalesTransaction (select_related) → {len(sales_list)} rows")
+        # Production path: get_sales_tab uses _load_sales() (cached) + aggregators
+        data = get_sales_tab('grade')  # grade tab includes overview metrics
+        t.checkpoint(
+            f"get_sales_tab('grade') → "
+            f"active={data['overview']['active_customers'] if data else 0} customers"
+        )
 
-        # Step 2: VIP0 aggregate
-        _vip0_q = Q(vip_id='') | Q(vip_id='0') | Q(vip_id__isnull=True)
-        SalesTransaction.objects.filter(_vip0_q).aggregate(cnt=Count('id'), total=Sum('sales_amount'))
-        t.checkpoint("DB aggregate VIP0 all-time counts")
-
-        # Step 3: Customer totals
-        Customer.objects.count()
-        SalesTransaction.objects.exclude(_vip0_q).values('vip_id').distinct().count()
-        t.checkpoint("DB count total_customers + member_active_all_time")
-
-        # Step 4: Build purchase map (pure Python)
-        customer_purchases = build_customer_purchase_map(sales_list)
-        t.checkpoint(f"build_customer_purchase_map → {len(customer_purchases)} customers")
-
-        # Step 5: Per-customer loop (return visits + get_customer_info)
-        customer_details = []
-        returning = set()
-        for vip_id, purchases in customer_purchases.items():
-            if vip_id == '0':
-                continue
-            purchases_sorted = sorted(purchases, key=lambda x: x['date'])
-            grade, reg_date, name = get_customer_info(vip_id, purchases_sorted[0]['customer'])
-            rc, is_ret = calculate_return_visits(purchases_sorted, reg_date)
-            if is_ret:
-                returning.add(vip_id)
-            customer_details.append({
-                'vip_id': vip_id, 'name': name, 'vip_grade': grade,
-                'registration_date': reg_date,
-                'first_purchase_date': purchases_sorted[0]['date'],
-                'total_purchases': len(purchases_sorted),
-                'return_visits': rc,
-                'total_spent': float(sum(p['amount'] for p in purchases_sorted)),
-            })
-        t.checkpoint(f"per-customer loop (return_visits + customer_info) → {len(customer_details)} details")
-
-        # Step 6: Aggregations
-        grade_stats = aggregate_by_grade(customer_details)
-        t.checkpoint(f"aggregate_by_grade → {len(grade_stats)} grades")
-
-        session_stats = aggregate_by_season(customer_purchases, get_customer_info)
-        t.checkpoint(f"aggregate_by_season → {len(session_stats)} sessions")
-
-        month_stats = aggregate_by_month(customer_purchases, get_customer_info)
-        t.checkpoint(f"aggregate_by_month → {len(month_stats)} months")
-
-        year_stats = aggregate_by_year(customer_purchases, get_customer_info)
-        t.checkpoint(f"aggregate_by_year → {len(year_stats)} years")
-
-        week_stats = aggregate_by_week(customer_purchases, get_customer_info)
-        t.checkpoint(f"aggregate_by_week → {len(week_stats)} weeks")
-
-        from App.analytics.season_utils import session_sort_key, month_sort_key, year_sort_key, week_sort_key
-        all_sk = sorted([s['session'] for s in session_stats], key=session_sort_key)
-        all_mk = sorted([m['month'] for m in month_stats], key=month_sort_key)
-        all_yk = sorted([y['year'] for y in year_stats], key=year_sort_key)
-        all_wk = sorted([w['week_sort'] for w in week_stats], key=week_sort_key)
-        shop_stats = aggregate_by_shop(customer_purchases, get_customer_info, all_sk, all_mk, all_yk, all_wk)
-        t.checkpoint(f"aggregate_by_shop → {len(shop_stats)} shops")
+        data_shop = get_sales_tab('shop')
+        t.checkpoint(f"get_sales_tab('shop') → {len(data_shop.get('by_shop', []))} shops")
 
         total = t.total()
         t.report()
         self.record_page_timing("SALES (all-time)", total, t._checkpoints)
-
-        # Threshold check
-        self.assertLess(total, 30, f"Sales page all-time took {total:.1f}s > 30s threshold")
+        self.assertLess(total, 5, f"Sales page all-time took {total:.1f}s > 5s target")
 
     def test_page_timing_2025(self):
         log = get_run_log()

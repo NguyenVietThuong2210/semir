@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client_provider.dart';
+import '../../../shared/models/analytics_models.dart';
 import '../../../shared/utils/date_utils.dart';
 import '../../../shared/widgets/date_filter_bar.dart';
 import 'sales_service.dart';
@@ -22,7 +23,7 @@ final salesFilterProvider = StateProvider<DateRangeFilter>((ref) {
 
 final salesShopGroupProvider = StateProvider<String>((ref) => 'All');
 
-// Analytics data — fetches when filter changes, caches last result
+// Initial data — KPIs + first tab (by_grade)
 final salesAnalyticsProvider =
     AsyncNotifierProvider<SalesAnalyticsNotifier, SalesAnalyticsPayload?>(
   SalesAnalyticsNotifier.new,
@@ -55,3 +56,18 @@ class SalesAnalyticsNotifier extends AsyncNotifier<SalesAnalyticsPayload?> {
     state = await AsyncValue.guard(() => _fetch(filter, shopGroup));
   }
 }
+
+// Per-tab lazy loader — family key: (tabKey, dateFrom, dateTo, shopGroup)
+// Triggered only when the user first taps a tab that hasn't loaded yet.
+typedef _SalesTabKey = ({String tab, String dateFrom, String dateTo, String shopGroup});
+
+final salesTabProvider =
+    FutureProvider.family<TableTab?, _SalesTabKey>((ref, key) async {
+  final service = ref.read(salesServiceProvider);
+  return service.getSalesTab(
+    tab: key.tab,
+    dateFrom: key.dateFrom.isEmpty ? null : key.dateFrom,
+    dateTo: key.dateTo.isEmpty ? null : key.dateTo,
+    shopGroup: key.shopGroup == 'All' ? null : key.shopGroup,
+  );
+});

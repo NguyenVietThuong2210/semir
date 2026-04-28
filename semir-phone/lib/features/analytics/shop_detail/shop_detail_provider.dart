@@ -24,18 +24,23 @@ final shopDetailFilterProvider = StateProvider<DateRangeFilter>((ref) {
   );
 });
 
-final shopDetailProvider =
-    AsyncNotifierProvider<ShopDetailNotifier, ShopDetailPayload?>(
-  ShopDetailNotifier.new,
+// Initial load — sales section only (fast; also validates shop exists).
+final shopDetailSalesProvider =
+    AsyncNotifierProvider<ShopDetailSalesNotifier, ShopSalesPayload?>(
+  ShopDetailSalesNotifier.new,
 );
 
-class ShopDetailNotifier extends AsyncNotifier<ShopDetailPayload?> {
+class ShopDetailSalesNotifier extends AsyncNotifier<ShopSalesPayload?> {
   @override
-  Future<ShopDetailPayload?> build() async {
+  Future<ShopSalesPayload?> build() async {
     final shop = ref.watch(selectedShopProvider);
     final filter = ref.watch(shopDetailFilterProvider);
     if (shop == null) return null;
-    return ref.read(shopDetailServiceProvider).getShopDetail(
+    return _fetch(shop, filter);
+  }
+
+  Future<ShopSalesPayload?> _fetch(String shop, DateRangeFilter filter) async {
+    return ref.read(shopDetailServiceProvider).getShopSales(
           shop: shop,
           dateFrom: filter.fromParam,
           dateTo: filter.toParam,
@@ -47,11 +52,28 @@ class ShopDetailNotifier extends AsyncNotifier<ShopDetailPayload?> {
     final filter = ref.read(shopDetailFilterProvider);
     if (shop == null) return;
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() =>
-        ref.read(shopDetailServiceProvider).getShopDetail(
-              shop: shop,
-              dateFrom: filter.fromParam,
-              dateTo: filter.toParam,
-            ));
+    state = await AsyncValue.guard(() => _fetch(shop, filter));
   }
 }
+
+// Lazy-loaded customer section — triggered when user selects Customer tab.
+typedef _ShopSectionKey = ({String shop, String dateFrom, String dateTo});
+
+final shopCustomerProvider =
+    FutureProvider.family<ShopCustomerPayload, _ShopSectionKey>((ref, key) async {
+  return ref.read(shopDetailServiceProvider).getShopCustomer(
+        shop: key.shop,
+        dateFrom: key.dateFrom.isEmpty ? null : key.dateFrom,
+        dateTo: key.dateTo.isEmpty ? null : key.dateTo,
+      );
+});
+
+// Lazy-loaded coupon section — triggered when user selects Coupon tab.
+final shopCouponProvider =
+    FutureProvider.family<ShopCouponPayload, _ShopSectionKey>((ref, key) async {
+  return ref.read(shopDetailServiceProvider).getShopCoupon(
+        shop: key.shop,
+        dateFrom: key.dateFrom.isEmpty ? null : key.dateFrom,
+        dateTo: key.dateTo.isEmpty ? null : key.dateTo,
+      );
+});

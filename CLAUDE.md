@@ -47,6 +47,69 @@ cd SemirDashboard && python manage.py shell -c "exec(open('tests/snapshot_render
 cd SemirDashboard && python tests/snapshot_visual.py
 ```
 
+## Testing for Release
+
+When the user says **"testing for release"**, execute this checklist in full — do not skip steps:
+
+### Step 1 — Run all unit tests (green gate)
+```bash
+cd SemirDashboard && python manage.py test tests -v 2 2>&1
+```
+All tests must pass. Fix any failures before proceeding.
+
+### Step 2 — Run mobile API tests with performance assertions
+```bash
+cd SemirDashboard && python manage.py test tests.test_api -v 2 2>&1
+```
+Covers: auth guards, structure parity, period ≤ all-time assertions, lazy tab/section loading, response time limits.
+
+### Step 3 — Regenerate all snapshots (confirm no silent data changes)
+```bash
+cd SemirDashboard && UPDATE_SNAPSHOTS=1 python manage.py test tests -v 2 2>&1
+```
+Review diff: only `_last_run` lines should differ. Any other field change = regression.
+
+### Step 4 — Verify all web pages render (200 smoke test)
+```bash
+cd SemirDashboard && python manage.py shell -c "
+import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'SemirDashboard.settings')
+from django.test import Client; from django.contrib.auth.models import User
+c = Client()
+c.force_login(User.objects.filter(is_superuser=True).first())
+pages = ['/', '/analytics/', '/coupon/', '/customer/', '/shop-detail/']
+for p in pages:
+    r = c.get(p, follow=True)
+    print(f'[{r.status_code}] {p}')
+"
+```
+All pages must return 200.
+
+### Step 5 — Visual snapshot check (after any template change)
+```bash
+cd SemirDashboard && python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"
+cd SemirDashboard && python tests/snapshot_visual.py
+```
+Open `tests/render/png/*.png` and verify UI. Check `tests/render/_index.md` — must show **0 token issues**.
+
+### Step 6 — Mobile build check
+```bash
+cd semir-phone && flutter analyze 2>&1 | grep -E "error|warning"
+cd semir-phone && flutter build apk --debug 2>&1 | tail -5
+```
+Zero errors required. Warnings reviewed.
+
+### Pass criteria
+| Check | Requirement |
+|-------|-------------|
+| Unit tests | All green |
+| API parity tests | All green, perf within limits |
+| Snapshot diff | Only `_last_run` lines changed |
+| Web pages | All 200 |
+| Visual tokens | 0 issues |
+| Flutter analyze | 0 errors |
+
+---
+
 ## UI Snapshot Rule
 
 After editing **any** template under `App/templates/`, regenerate the visual snapshots in `SemirDashboard/tests/render/`:

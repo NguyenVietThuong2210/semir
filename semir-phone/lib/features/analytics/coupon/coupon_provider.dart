@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client_provider.dart';
+import '../../../shared/models/analytics_models.dart';
 import '../../../shared/utils/date_utils.dart';
 import '../../../shared/widgets/date_filter_bar.dart';
 import 'coupon_service.dart';
@@ -53,3 +54,24 @@ class CouponAnalyticsNotifier extends AsyncNotifier<CouponAnalyticsPayload?> {
     state = await AsyncValue.guard(() => _fetch(filter, shopGroup, prefix));
   }
 }
+
+// Per-tab lazy loader for detail and duplicates tabs.
+typedef _CouponTabKey = ({
+  String tab,
+  String dateFrom,
+  String dateTo,
+  String shopGroup,
+  String prefix,
+});
+
+final couponTabProvider =
+    FutureProvider.family<TableTab?, _CouponTabKey>((ref, key) async {
+  final service = ref.read(couponServiceProvider);
+  return service.getCouponTab(
+    tab: key.tab,
+    dateFrom: key.dateFrom.isEmpty ? null : key.dateFrom,
+    dateTo: key.dateTo.isEmpty ? null : key.dateTo,
+    shopGroup: key.shopGroup == 'All' ? null : key.shopGroup,
+    prefix: key.prefix.isEmpty ? null : key.prefix,
+  );
+});

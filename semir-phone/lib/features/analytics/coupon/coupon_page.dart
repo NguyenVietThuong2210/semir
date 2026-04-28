@@ -12,6 +12,11 @@ import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/shop_group_filter.dart';
 import '../../../shared/models/analytics_models.dart';
 import 'coupon_provider.dart';
+import 'coupon_service.dart';
+
+// Tab order matches backend available_tabs: ['by_shop', 'detail', 'duplicates']
+const _kTabKeys = ['by_shop', 'detail', 'duplicates'];
+const _kTabLabels = ['By Store', 'Detail', 'Duplicates'];
 
 class CouponPage extends ConsumerStatefulWidget {
   const CouponPage({super.key});
@@ -24,8 +29,6 @@ class _CouponPageState extends ConsumerState<CouponPage> {
   int _selectedTab = 0;
   final _prefixController = TextEditingController();
 
-  static const _tabLabels = ['By Store', 'Detail', 'Duplicates'];
-
   @override
   void dispose() {
     _prefixController.dispose();
@@ -37,6 +40,7 @@ class _CouponPageState extends ConsumerState<CouponPage> {
     final analyticsAsync = ref.watch(couponAnalyticsProvider);
     final filter = ref.watch(couponFilterProvider);
     final shopGroup = ref.watch(couponShopGroupProvider);
+    final prefix = ref.watch(couponPrefixProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Coupon')),
@@ -58,7 +62,6 @@ class _CouponPageState extends ConsumerState<CouponPage> {
                 ),
               ),
               data: (payload) {
-                final tabs = payload?.tabs ?? [];
                 return ListView(
                   children: [
                     Padding(
@@ -99,24 +102,21 @@ class _CouponPageState extends ConsumerState<CouponPage> {
                           variant: KpiVariant.allTime),
                       const SectionHeader(title: 'Selected Period'),
                       _KpiRow(
-                          kpis: payload.periodKpis, variant: KpiVariant.period),
+                          kpis: payload.periodKpis,
+                          variant: KpiVariant.period),
                       const SectionHeader(title: 'Detailed Analysis'),
                       DarkTabs(
-                        tabs: _tabLabels,
+                        tabs: _kTabLabels,
                         selectedIndex: _selectedTab,
                         onTabSelected: (i) => setState(() => _selectedTab = i),
                       ),
-                      if (_selectedTab < tabs.length)
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: SizedBox(
-                            height: 400,
-                            child: DataTableWidget(
-                              headers: tabs[_selectedTab].headers,
-                              rows: tabs[_selectedTab].rows,
-                            ),
-                          ),
-                        ),
+                      _LazyTabContent(
+                        tabIndex: _selectedTab,
+                        payload: payload,
+                        filter: filter,
+                        shopGroup: shopGroup,
+                        prefix: prefix,
+                      ),
                     ],
                     const SizedBox(height: 32),
                   ],
@@ -126,6 +126,74 @@ class _CouponPageState extends ConsumerState<CouponPage> {
           ),
           if (analyticsAsync.isLoading) const LoadingOverlay(),
         ],
+      ),
+    );
+  }
+}
+
+/// Tab 0 (by_shop) uses the data already in the initial payload.
+/// Tabs 1 (detail) and 2 (duplicates) are fetched lazily via couponTabProvider.
+class _LazyTabContent extends ConsumerWidget {
+  const _LazyTabContent({
+    required this.tabIndex,
+    required this.payload,
+    required this.filter,
+    required this.shopGroup,
+    required this.prefix,
+  });
+
+  final int tabIndex;
+  final CouponAnalyticsPayload payload;
+  final DateRangeFilter filter;
+  final String shopGroup;
+  final String prefix;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Tab 0 is always present in the initial payload
+    if (tabIndex == 0) {
+      final tab = payload.tabs.isNotEmpty ? payload.tabs.first : null;
+      return _tabContent(tab);
+    }
+
+    if (tabIndex >= _kTabKeys.length) return const SizedBox.shrink();
+
+    final tabKey = _kTabKeys[tabIndex];
+    final key = (
+      tab: tabKey,
+      dateFrom: filter.fromParam ?? '',
+      dateTo: filter.toParam ?? '',
+      shopGroup: shopGroup,
+      prefix: prefix,
+    );
+    final tabAsync = ref.watch(couponTabProvider(key));
+
+    return tabAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('Failed to load: $e',
+            style: const TextStyle(color: Colors.red)),
+      ),
+      data: (tab) => _tabContent(tab),
+    );
+  }
+
+  Widget _tabContent(TableTab? tab) {
+    if (tab == null) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: Text('No data for this tab')),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: SizedBox(
+        height: 400,
+        child: DataTableWidget(headers: tab.headers, rows: tab.rows),
       ),
     );
   }

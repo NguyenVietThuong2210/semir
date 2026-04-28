@@ -193,14 +193,20 @@ def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=No
 
     period_filter: {"start": aware_datetime, "end": aware_datetime} or {}
     pos_phones_all / cnv_phones_all: all-time phone sets (for POS-only / CNV-only check).
-    dims: frozenset of dimension names to compute, or None to compute all.
+    dims: accepted but ignored — always computes all dims and caches the full result.
     store_filter: if given, only process entries whose registration_store == store_filter.
-                  DB fetch is still the same cached call; only the Python accumulation is filtered.
 
-    DB fetch is cached via _fetch_bd_raw() — tabs 2-N with same period pay only
-    the fast Python accumulation cost (~0.2s) instead of the full DB fetch (~2.5s).
+    Full result is cached for 5 minutes per (period_filter, store_filter).
     """
-    _want = dims if dims is not None else frozenset({
+    from django.core.cache import cache as _djc
+    _period_key = f"{period_filter.get('start', '')}:{period_filter.get('end', '')}"
+    _store_key = store_filter or ""
+    _bd_cache_key = f"cnv_breakdown:{_period_key}:{_store_key}"
+    _bd_hit = _djc.get(_bd_cache_key)
+    if _bd_hit is not None:
+        return _bd_hit
+
+    _want = frozenset({
         'season', 'month', 'week', 'shop',
         'season_shop', 'month_shop', 'week_shop',
     })
@@ -555,19 +561,21 @@ def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=No
     else:
         shop_detail = []
 
-    return {
-        "season":      _flat_rows(season_data, session_sort_key) if 'season' in _want else [],
-        "month":       _flat_rows(month_data,  month_sort_key)   if 'month'  in _want else [],
-        "week":        _week_rows(week_data)                     if 'week'   in _want else [],
-        "shop":        _flat_rows(shop_data,   lambda x: x)      if 'shop'   in _want else [],
-        "season_shop": _cross_rows(season_shop_data, session_sort_key) if 'season_shop' in _want else [],
-        "month_shop":  _cross_rows(month_shop_data,  month_sort_key)   if 'month_shop'  in _want else [],
-        "week_shop":   _week_cross_rows(week_shop_data)                if 'week_shop'   in _want else [],
+    _bd_result = {
+        "season":      _flat_rows(season_data, session_sort_key),
+        "month":       _flat_rows(month_data,  month_sort_key),
+        "week":        _week_rows(week_data),
+        "shop":        _flat_rows(shop_data,   lambda x: x),
+        "season_shop": _cross_rows(season_shop_data, session_sort_key),
+        "month_shop":  _cross_rows(month_shop_data,  month_sort_key),
+        "week_shop":   _week_cross_rows(week_shop_data),
         "shop_season": _r_shop_season,
         "shop_month":  _r_shop_month,
         "shop_week":   _r_shop_week,
         "shop_detail": shop_detail,
     }
+    _djc.set(_bd_cache_key, _bd_result, timeout=300)
+    return _bd_result
 
 
 # ── Full comparison (used by export + tests) ──────────────────────────────────
@@ -578,7 +586,14 @@ def compute_cnv_comparison(start_date, end_date):
     This is the full computation including all lists (pos_only, cnv_only,
     points_mismatch, zalo lists, breakdown). For tab-level lazy loading
     use get_customer_tab() instead.
+    Result is cached for 5 minutes per (start_date, end_date).
     """
+    from django.core.cache import cache as _djc
+    _cache_key = f"cnv_comparison:{start_date}:{end_date}"
+    _cached = _djc.get(_cache_key)
+    if _cached is not None:
+        return _cached
+
     period_filter, has_filter = parse_cnv_period_filter(start_date, end_date)
 
     pos_all = (
@@ -587,26 +602,33 @@ def compute_cnv_comparison(start_date, end_date):
     )
     cnv_all = CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
 
-    _cnv_phone_qs = cnv_all.values("phone")
-    _pos_phone_qs = pos_all.values("phone")
-
     total_pos_all = POSCustomer.objects.filter(vip_id__isnull=False).exclude(vip_id=0).count()
     total_cnv_all = CNVCustomer.objects.count()
 
-    pos_phones_all = set(pos_all.values_list("phone", flat=True))
-    cnv_phones_all = set(cnv_all.values_list("phone", flat=True))
+    # Bulk fetch all rows in 2 queries, then use Python set ops — avoids slow SQL anti-joins
+    _POS_FIELDS = ("vip_id", "phone", "name", "vip_grade", "email",
+                   "registration_date", "points", "used_points")
+    _CNV_FIELDS = ("cnv_id", "phone", "last_name", "first_name", "level_name",
+                   "email", "cnv_created_at", "points", "total_points", "used_points")
+    _all_pos_rows = list(pos_all.values(*_POS_FIELDS).order_by())
+    _all_cnv_rows = list(cnv_all.values(*_CNV_FIELDS).order_by())
 
-    pos_only_all = list(
-        pos_all.exclude(phone__in=_cnv_phone_qs)
-        .values("vip_id", "phone", "name", "vip_grade", "email", "registration_date", "points")
-        .order_by("-registration_date")
+    pos_phones_all = {r["phone"] for r in _all_pos_rows}
+    cnv_phones_all = {r["phone"] for r in _all_cnv_rows}
+    _pos_only_phones = pos_phones_all - cnv_phones_all
+    _cnv_only_phones = cnv_phones_all - pos_phones_all
+    _shared_phones   = pos_phones_all & cnv_phones_all
+
+    pos_only_all = sorted(
+        [r for r in _all_pos_rows if r["phone"] in _pos_only_phones],
+        key=lambda r: r["registration_date"] or _date.min, reverse=True,
     )
-    cnv_only_all = list(
-        cnv_all.exclude(phone__in=_pos_phone_qs)
-        .values("cnv_id", "phone", "last_name", "first_name", "level_name",
-                "email", "cnv_created_at", "points", "total_points", "used_points")
-        .order_by("-cnv_created_at")
+    cnv_only_all = sorted(
+        [r for r in _all_cnv_rows if r["phone"] in _cnv_only_phones],
+        key=lambda r: r["cnv_created_at"] or datetime.min, reverse=True,
     )
+    pos_map = {r["phone"]: r for r in _all_pos_rows if r["phone"] in _shared_phones}
+    cnv_map = {r["phone"]: r for r in _all_cnv_rows if r["phone"] in _shared_phones}
 
     pos_only_period = []
     cnv_only_period = []
@@ -647,33 +669,27 @@ def compute_cnv_comparison(start_date, end_date):
         )
         new_cnv_count = cnv_period.count()
 
-        pos_only_period_qs    = pos_period.exclude(phone__in=_cnv_phone_qs)
-        pos_only_period_count = pos_only_period_qs.count()
-        pos_only_period = list(
-            pos_only_period_qs
-            .values("vip_id", "phone", "name", "vip_grade", "email", "registration_date", "points")
-            .order_by("-registration_date")
+        # Python set ops — avoids anti-join subqueries
+        _period_pos_rows = list(
+            pos_period.values("vip_id", "phone", "name", "vip_grade",
+                              "email", "registration_date", "points").order_by()
         )
-        cnv_only_period_qs    = cnv_period.exclude(phone__in=_pos_phone_qs)
-        cnv_only_period_count = cnv_only_period_qs.count()
-        cnv_only_period = list(
-            cnv_only_period_qs
-            .values("cnv_id", "phone", "last_name", "first_name", "level_name",
-                    "email", "cnv_created_at", "points", "total_points", "used_points")
-            .order_by("-cnv_created_at")
+        pos_only_period = sorted(
+            [r for r in _period_pos_rows if r["phone"] not in cnv_phones_all],
+            key=lambda r: r["registration_date"] or _date.min, reverse=True,
         )
+        pos_only_period_count = len(pos_only_period)
 
-    pos_map = {
-        c["phone"]: c
-        for c in pos_all.filter(phone__in=_cnv_phone_qs)
-        .values("vip_id", "phone", "name", "vip_grade", "points", "used_points")
-    }
-    cnv_map = {
-        c["phone"]: c
-        for c in cnv_all.filter(phone__in=_pos_phone_qs)
-        .values("cnv_id", "phone", "last_name", "first_name", "level_name",
-                "points", "total_points", "used_points")
-    }
+        _period_cnv_rows = list(
+            cnv_period.values("cnv_id", "phone", "last_name", "first_name",
+                              "level_name", "email", "cnv_created_at",
+                              "points", "total_points", "used_points").order_by()
+        )
+        cnv_only_period = sorted(
+            [r for r in _period_cnv_rows if r["phone"] not in pos_phones_all],
+            key=lambda r: r["cnv_created_at"] or datetime.min, reverse=True,
+        )
+        cnv_only_period_count = len(cnv_only_period)
 
     points_mismatch = []
     total_points_mismatch = []
@@ -758,7 +774,7 @@ def compute_cnv_comparison(start_date, end_date):
     for r in zalo_oa_list:
         r["in_pos"] = r["phone"] in _pos_z_phones
 
-    return {
+    result = {
         "has_filter":                has_filter,
         "period_label":              f"{start_date} to {end_date}" if has_filter else "All Time",
         "total_pos":                 total_pos_all,
@@ -793,6 +809,8 @@ def compute_cnv_comparison(start_date, end_date):
         "zalo_oa_list":              zalo_oa_list,
         "breakdown": compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all),
     }
+    _djc.set(_cache_key, result, timeout=300)
+    return result
 
 
 def get_cnv_comparison_data(start_date, end_date):

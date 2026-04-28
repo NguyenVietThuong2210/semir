@@ -328,12 +328,14 @@ def export_shop_detail_excel(request):
             ws2 = wb.create_sheet("CNV Zalo Active")
             _hdr(ws2, ["CNV ID", "Phone", "Name", "Level",
                        "Zalo Created", "Zalo App ID", "Zalo OA ID", "Zalo Active date"], row=1)
+            # openpyxl cannot serialize tz-aware datetimes (USE_TZ=True) — strip tzinfo
+            _naive = lambda dt: dt.replace(tzinfo=None) if dt and getattr(dt, 'tzinfo', None) else dt
             for z in zalo_list:
                 name = f"{z.get('last_name') or ''} {z.get('first_name') or ''}".strip()
                 ws2.append([
                     z.get('cnv_id'), z.get('phone'), name, z.get('level_name'),
-                    z.get('cnv_created_at'), z.get('zalo_app_id'), z.get('zalo_oa_id'),
-                    z.get('zalo_app_created_at'),
+                    _naive(z.get('cnv_created_at')), z.get('zalo_app_id'), z.get('zalo_oa_id'),
+                    _naive(z.get('zalo_app_created_at')),
                 ])
 
     elif section == "coupon" and coupon_shop:

@@ -178,7 +178,12 @@ class LogoutView(APIView):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class SalesAnalyticsView(APIView):
-    """GET /api/v1/analytics/sales/"""
+    """
+    GET /api/v1/analytics/sales/
+    Optional: ?tab=by_grade|by_season|by_month|by_week|by_shop
+      — returns only that tab's table data alongside KPIs (lazy loading).
+      Omit tab to load KPIs + grade tab (initial page load).
+    """
     permission_classes = [IsAuthenticated, make_perm_class('sales.view')]
 
     def get(self, request):
@@ -187,15 +192,16 @@ class SalesAnalyticsView(APIView):
         date_from = _parse_date(request.GET.get('date_from'), 'date_from')
         date_to = _parse_date(request.GET.get('date_to'), 'date_to')
         shop_group = request.GET.get('shop_group') or None
+        tab = request.GET.get('tab', '').strip()  # empty = initial load (grade tab)
 
-        # Period data (grade tab also returns overview metrics)
+        # grade tab always loads — it carries the overview KPIs
         period_data = get_sales_tab(
             'grade', date_from=date_from, date_to=date_to, shop_group=shop_group
         )
         if period_data is None:
             return Response({'detail': 'No sales data available.'}, status=404)
 
-        # All-time data (reuse from cache if no date filter applied)
+        # All-time overview (cached; negligible cost on second call)
         if date_from is None and date_to is None:
             at_data = period_data
         else:
@@ -203,133 +209,153 @@ class SalesAnalyticsView(APIView):
             if at_data is None:
                 at_data = period_data
 
-        # Build all_time_kpis
+        # KPIs — keys are human-readable labels (displayed directly on mobile KPI cards)
+        # All-Time section matches web's 4-card layout exactly
         at_ov = at_data['overview']
-        at_invoices = at_ov.get('total_invoices_with_vip0', 0)
-        at_revenue = at_ov.get('total_amount_with_vip0', 0)
-        at_customers = at_ov.get('total_customers_in_db', 0)
-        at_avg = round(at_revenue / at_invoices, 0) if at_invoices else 0
-
         all_time_kpis = {
-            'total_invoices': at_invoices,
-            'total_revenue': _fmt(at_revenue),
-            'avg_invoice': _fmt(at_avg),
-            'total_customers': at_customers,
+            'Total Customers': _fmt(at_ov.get('total_customers_in_db', 0)),
+            'Member Active': _fmt(at_ov.get('member_active_all_time', 0)),
+            'Member Inactive': _fmt(at_ov.get('member_inactive_all_time', 0)),
+            'Return Rate (All Time)': _pct(at_ov.get('return_rate_all_time', 0)) + '%',
         }
 
-        # Build period_kpis
+        # Period section matches web's 10-metric layout exactly
         ov = period_data['overview']
         pd_invoices = ov.get('total_invoices_with_vip0', 0)
-        pd_revenue = ov.get('total_amount_with_vip0', 0)
-        pd_avg = round(pd_revenue / pd_invoices, 0) if pd_invoices else 0
         pd_active = ov.get('active_customers', 0)
-        pd_returning = ov.get('returning_customers', 0)
-
         period_kpis = {
-            'total_invoices': pd_invoices,
-            'total_revenue': _fmt(pd_revenue),
-            'avg_invoice': _fmt(pd_avg),
-            'returning_customers': pd_returning,
-            'return_rate': _pct(ov.get('return_rate', 0)),
-            'new_customers': ov.get('new_members_in_period', 0),
-            'avg_visits': _fmtd(pd_invoices / pd_active if pd_active else 0),
-            'new_no_invoice': max(0, ov.get('total_customers_in_db', 0) - pd_active),
+            'New Members': _fmt(ov.get('new_members_in_period', 0)),
+            'Returning Customers': _fmt(ov.get('returning_customers', 0)),
+            'Active Customers': _fmt(pd_active),
+            'Return Visit Rate': _pct(ov.get('return_rate', 0)) + '%',
+            'INV(CUS)': _fmt(ov.get('total_invoices_without_vip0', 0)),
+            'AMT(CUS)': _fmt(ov.get('total_amount_without_vip0', 0)),
+            'INV(RET)': _fmt(ov.get('returning_invoices', 0)),
+            'AMT(RET)': _fmt(ov.get('returning_amount', 0)),
+            'Total Invoices': _fmt(pd_invoices),
+            'Total Amount': _fmt(ov.get('total_amount_with_vip0', 0)),
         }
 
-        # Build tabs
-        tabs = {
-            'by_grade': _sales_grade_table(period_data.get('by_grade', [])),
-            'by_season': _sales_season_table(
-                get_sales_tab('season', date_from=date_from, date_to=date_to, shop_group=shop_group)
-            ),
-            'by_month': _sales_month_table(
-                get_sales_tab('month', date_from=date_from, date_to=date_to, shop_group=shop_group)
-            ),
-            'by_week': _sales_week_table(
-                get_sales_tab('week', date_from=date_from, date_to=date_to, shop_group=shop_group)
-            ),
-            'by_shop': _sales_shop_table(
-                get_sales_tab('shop', date_from=date_from, date_to=date_to, shop_group=shop_group)
-            ),
+        # Lazy tab loading: only compute the requested tab
+        _tab_map = {
+            'by_grade':  lambda: _sales_grade_table(period_data.get('by_grade', [])),
+            'by_season': lambda: _sales_season_table(
+                get_sales_tab('season', date_from=date_from, date_to=date_to, shop_group=shop_group)),
+            'by_month':  lambda: _sales_month_table(
+                get_sales_tab('month', date_from=date_from, date_to=date_to, shop_group=shop_group)),
+            'by_week':   lambda: _sales_week_table(
+                get_sales_tab('week', date_from=date_from, date_to=date_to, shop_group=shop_group)),
+            'by_shop':   lambda: _sales_shop_table(
+                get_sales_tab('shop', date_from=date_from, date_to=date_to, shop_group=shop_group)),
         }
+
+        if tab and tab in _tab_map:
+            # Lazy: return only the requested tab (Flutter loads one tab at a time)
+            tabs = {tab: _tab_map[tab]()}
+        else:
+            # Initial load: grade tab only (fastest — already loaded above)
+            tabs = {'by_grade': _sales_grade_table(period_data.get('by_grade', []))}
 
         return Response({
             'all_time_kpis': all_time_kpis,
             'period_kpis': period_kpis,
             'tabs': tabs,
+            'available_tabs': list(_tab_map.keys()),
         })
 
 
 def _sales_grade_table(by_grade: list) -> dict:
-    headers = ['Grade', 'Invoices', 'Revenue (VND)', 'Customers', 'Return Rate']
+    # Matches web: Grade | Active | Returning | Return Rate | Total (DB) | Return Rate (AT) | INV(RET) | AMT(RET) | Total INV | Total Amount
+    headers = ['Grade', 'Active', 'Returning', 'Return Rate', 'Total (DB)', 'Return Rate (AT)', 'INV(RET)', 'AMT(RET)', 'Total INV', 'Total Amount']
     rows = []
     for g in (by_grade or []):
         rows.append([
             str(g.get('grade', '')),
+            _fmt(g.get('total_customers', 0)),
+            _fmt(g.get('returning_customers', 0)),
+            _pct_cell(g.get('return_rate', 0)),
+            _fmt(g.get('total_in_db', 0)),
+            _pct_cell(g.get('return_rate_all_time', 0)),
+            _fmt(g.get('returning_invoices', 0)),
+            _fmt(g.get('returning_amount', 0)),
             _fmt(g.get('total_invoices', 0)),
             _fmt(g.get('total_amount', 0)),
-            _fmt(g.get('total_customers', 0)),
-            _pct_cell(g.get('return_rate', 0)),
         ])
     return {'headers': headers, 'rows': rows}
 
 
 def _sales_season_table(data: dict | None) -> dict:
-    headers = ['Season', 'Invoices', 'Revenue (VND)', 'Customers', 'Return Rate']
+    # Matches web: Season | Active | Returning | Return Rate | INV(RET) | AMT(RET) | Total INV | Total Amount
+    headers = ['Season', 'Active', 'Returning', 'Return Rate', 'INV(RET)', 'AMT(RET)', 'Total INV', 'Total Amount']
     rows = []
     if data:
         for s in data.get('by_session', []):
             rows.append([
                 str(s.get('session', '')),
+                _fmt(s.get('total_customers', 0)),
+                _fmt(s.get('returning_customers', 0)),
+                _pct_cell(s.get('return_rate', 0)),
+                _fmt(s.get('returning_invoices', 0)),
+                _fmt(s.get('returning_amount', 0)),
                 _fmt(s.get('total_invoices_with_vip0', s.get('total_invoices', 0))),
                 _fmt(s.get('total_amount_with_vip0', s.get('total_amount', 0))),
-                _fmt(s.get('total_customers', 0)),
-                _pct_cell(s.get('return_rate', 0)),
             ])
     return {'headers': headers, 'rows': rows}
 
 
 def _sales_month_table(data: dict | None) -> dict:
-    headers = ['Month', 'Invoices', 'Revenue (VND)', 'Customers', 'Return Rate']
+    # Matches web: Month | Active | Returning | Return Rate | INV(RET) | AMT(RET) | Total INV | Total Amount
+    headers = ['Month', 'Active', 'Returning', 'Return Rate', 'INV(RET)', 'AMT(RET)', 'Total INV', 'Total Amount']
     rows = []
     if data:
         for m in data.get('by_month', []):
             rows.append([
                 str(m.get('month', '')),
+                _fmt(m.get('total_customers', 0)),
+                _fmt(m.get('returning_customers', 0)),
+                _pct_cell(m.get('return_rate', 0)),
+                _fmt(m.get('returning_invoices', 0)),
+                _fmt(m.get('returning_amount', 0)),
                 _fmt(m.get('total_invoices_with_vip0', m.get('total_invoices', 0))),
                 _fmt(m.get('total_amount_with_vip0', m.get('total_amount', 0))),
-                _fmt(m.get('total_customers', 0)),
-                _pct_cell(m.get('return_rate', 0)),
             ])
     return {'headers': headers, 'rows': rows}
 
 
 def _sales_week_table(data: dict | None) -> dict:
-    headers = ['Week', 'Invoices', 'Revenue (VND)', 'Customers', 'Return Rate']
+    # Matches web: Week | Active | Returning | Return Rate | INV(RET) | AMT(RET) | Total INV | Total Amount
+    headers = ['Week', 'Active', 'Returning', 'Return Rate', 'INV(RET)', 'AMT(RET)', 'Total INV', 'Total Amount']
     rows = []
     if data:
         for w in data.get('by_week', []):
             rows.append([
                 str(w.get('week_label', w.get('week', ''))),
+                _fmt(w.get('total_customers', 0)),
+                _fmt(w.get('returning_customers', 0)),
+                _pct_cell(w.get('return_rate', 0)),
+                _fmt(w.get('returning_invoices', 0)),
+                _fmt(w.get('returning_amount', 0)),
                 _fmt(w.get('total_invoices_with_vip0', w.get('total_invoices', 0))),
                 _fmt(w.get('total_amount_with_vip0', w.get('total_amount', 0))),
-                _fmt(w.get('total_customers', 0)),
-                _pct_cell(w.get('return_rate', 0)),
             ])
     return {'headers': headers, 'rows': rows}
 
 
 def _sales_shop_table(data: dict | None) -> dict:
-    headers = ['Shop', 'Invoices', 'Revenue (VND)', 'Customers', 'Return Rate']
+    # Matches web: Shop | Active | Returning | Return Rate | INV(RET) | AMT(RET) | Total INV | Total Amount
+    headers = ['Shop', 'Active', 'Returning', 'Return Rate', 'INV(RET)', 'AMT(RET)', 'Total INV', 'Total Amount']
     rows = []
     if data:
         for s in data.get('by_shop', []):
             rows.append([
                 str(s.get('shop_name', '')),
+                _fmt(s.get('total_customers', 0)),
+                _fmt(s.get('returning_customers', 0)),
+                _pct_cell(s.get('return_rate', 0)),
+                _fmt(s.get('returning_invoices', 0)),
+                _fmt(s.get('returning_amount', 0)),
                 _fmt(s.get('total_invoices_with_vip0', s.get('total_invoices', 0))),
                 _fmt(s.get('total_amount_with_vip0', s.get('total_amount', 0))),
-                _fmt(s.get('total_customers', 0)),
-                _pct_cell(s.get('return_rate', 0)),
             ])
     return {'headers': headers, 'rows': rows}
 
@@ -378,17 +404,18 @@ class CustomerAnalyticsView(APIView):
         pd_synced = pd_summary.get('synced', 0)
         pd_active = pd_summary.get('active', 0)
 
+        # Human-readable labels displayed directly on mobile KPI cards.
         all_time_kpis = {
-            'total_pos_customers': at_total_pos,
-            'total_cnv_customers': at_total_cnv,
-            'pos_only': at_pos_only,
-            'cnv_only': at_cnv_only,
+            'Total POS Customers': _fmt(at_total_pos),
+            'Total CNV Customers': _fmt(at_total_cnv),
+            'POS Only': _fmt(at_pos_only),
+            'CNV Only': _fmt(at_cnv_only),
         }
         period_kpis = {
-            'new_pos_customers': pd_new_pos,
-            'new_cnv_customers': pd_new_cnv,
-            'synced_this_period': pd_synced,
-            'active_customers': pd_active,
+            'New POS Customers': _fmt(pd_new_pos),
+            'New CNV Customers': _fmt(pd_new_cnv),
+            'Synced This Period': _fmt(pd_synced),
+            'Active Customers': _fmt(pd_active),
         }
 
         # Registration breakdown tabs (using period data)
@@ -414,61 +441,77 @@ class CustomerAnalyticsView(APIView):
 
 
 def _cnv_shop_table(shop_data: list) -> dict:
-    headers = ['Shop', 'POS Customers', 'CNV Customers', 'Synced']
+    # Rows from compute_cnv_breakdown 'shop' dim: label=store_name, new_pos, new_cnv, new_pos_only, new_cnv_only, zalo_app
+    headers = ['Shop', 'New POS', 'New CNV', 'POS Only', 'CNV Only', 'Zalo']
     rows = [[
-        str(s.get('store', s.get('shop_name', ''))),
-        _fmt(s.get('pos_customers', s.get('total_pos', 0))),
-        _fmt(s.get('cnv_customers', s.get('total_cnv', 0))),
-        _fmt(s.get('synced', s.get('both', 0))),
+        str(s.get('label', s.get('store', s.get('shop_name', '')))),
+        _fmt(s.get('new_pos', 0)),
+        _fmt(s.get('new_cnv', 0)),
+        _fmt(s.get('new_pos_only', 0)),
+        _fmt(s.get('new_cnv_only', 0)),
+        _fmt(s.get('zalo_app', 0)),
     ] for s in (shop_data or [])]
     return {'headers': headers, 'rows': rows}
 
 
 def _cnv_month_table(month_data: list) -> dict:
-    headers = ['Month', 'POS Customers', 'CNV Customers', 'Synced']
+    # Rows from compute_cnv_breakdown 'month' dim: label=month_key, new_pos, new_cnv, ...
+    headers = ['Month', 'New POS', 'New CNV', 'POS Only', 'CNV Only', 'Zalo']
     rows = [[
-        str(m.get('month', '')),
-        _fmt(m.get('pos_customers', m.get('total_pos', 0))),
-        _fmt(m.get('cnv_customers', m.get('total_cnv', 0))),
-        _fmt(m.get('synced', m.get('both', 0))),
+        str(m.get('label', m.get('month', ''))),
+        _fmt(m.get('new_pos', 0)),
+        _fmt(m.get('new_cnv', 0)),
+        _fmt(m.get('new_pos_only', 0)),
+        _fmt(m.get('new_cnv_only', 0)),
+        _fmt(m.get('zalo_app', 0)),
     ] for m in (month_data or [])]
     return {'headers': headers, 'rows': rows}
 
 
 def _cnv_grade_table(grade_data: list) -> dict:
-    headers = ['Grade', 'POS Customers', 'CNV Customers', 'Synced']
+    # Rows from compute_cnv_breakdown 'grade' dim: label=grade, new_pos, new_cnv, ...
+    headers = ['Grade', 'New POS', 'New CNV', 'POS Only', 'CNV Only', 'Zalo']
     rows = [[
-        str(g.get('grade', '')),
-        _fmt(g.get('pos_customers', g.get('total_pos', 0))),
-        _fmt(g.get('cnv_customers', g.get('total_cnv', 0))),
-        _fmt(g.get('synced', g.get('both', 0))),
+        str(g.get('label', g.get('grade', ''))),
+        _fmt(g.get('new_pos', 0)),
+        _fmt(g.get('new_cnv', 0)),
+        _fmt(g.get('new_pos_only', 0)),
+        _fmt(g.get('new_cnv_only', 0)),
+        _fmt(g.get('zalo_app', 0)),
     ] for g in (grade_data or [])]
     return {'headers': headers, 'rows': rows}
 
 
 def _cnv_pos_only_table(bd: dict) -> dict:
-    headers = ['Grade', 'Customers']
-    rows = [[str(g.get('grade', '')), _fmt(g.get('pos_only', 0))]
+    headers = ['Grade', 'POS Only']
+    rows = [[str(g.get('label', g.get('grade', ''))), _fmt(g.get('new_pos_only', 0))]
             for g in bd.get('grade', [])]
     return {'headers': headers, 'rows': rows}
 
 
 def _cnv_cnv_only_table(bd: dict) -> dict:
-    headers = ['Grade', 'Customers']
-    rows = [[str(g.get('grade', '')), _fmt(g.get('cnv_only', 0))]
+    headers = ['Grade', 'CNV Only']
+    rows = [[str(g.get('label', g.get('grade', ''))), _fmt(g.get('new_cnv_only', 0))]
             for g in bd.get('grade', [])]
     return {'headers': headers, 'rows': rows}
 
 
 def _cnv_both_table(bd: dict) -> dict:
-    headers = ['Grade', 'Customers']
-    rows = [[str(g.get('grade', '')), _fmt(g.get('both', 0))]
-            for g in bd.get('grade', [])]
+    headers = ['Grade', 'New POS', 'New CNV']
+    rows = [[
+        str(g.get('label', g.get('grade', ''))),
+        _fmt(g.get('new_pos', 0)),
+        _fmt(g.get('new_cnv', 0)),
+    ] for g in bd.get('grade', [])]
     return {'headers': headers, 'rows': rows}
 
 
 class CouponAnalyticsView(APIView):
-    """GET /api/v1/analytics/coupon/"""
+    """
+    GET /api/v1/analytics/coupon/
+    Optional: ?tab=by_shop|detail|duplicates  — lazy load one tab at a time.
+    Omit tab to load KPIs + by_shop (initial page load).
+    """
     permission_classes = [IsAuthenticated, make_perm_class('coupons.view')]
 
     def get(self, request):
@@ -478,50 +521,68 @@ class CouponAnalyticsView(APIView):
         date_to = _parse_date(request.GET.get('date_to'), 'date_to')
         shop_group = request.GET.get('shop_group') or None
         prefix = request.GET.get('prefix') or None
+        tab = request.GET.get('tab', '').strip()
 
+        # shop tab always loads — it carries KPIs (all_time + period)
         shop_data = get_coupon_tab('shop', date_from=date_from, date_to=date_to,
                                    coupon_id_prefix=prefix, shop_group=shop_group)
-        detail_data = get_coupon_tab('detail', date_from=date_from, date_to=date_to,
-                                     coupon_id_prefix=prefix, shop_group=shop_group)
-        dup_data = get_coupon_tab('duplicates', date_from=date_from, date_to=date_to,
-                                  coupon_id_prefix=prefix, shop_group=shop_group)
 
-        # KPIs come from the shop tab which computes both all-time and period
+        # get_coupon_tab('shop') returns {'all_time': {...}, 'period': {...}, 'by_shop': [...]}
         ov = shop_data or {}
-        at_used = ov.get('all_time_used', 0)
-        at_unused = ov.get('all_time_unused', 0)
-        at_amount = ov.get('all_time_amount', 0)
+        at = ov.get('all_time', {})
+        pd = ov.get('period', {})
 
-        pd_used = ov.get('period_used', 0)
-        pd_unused = ov.get('period_unused', 0)
-        pd_amount = ov.get('period_amount', 0)
+        # KPI keys are human-readable labels — displayed directly on mobile KPI cards.
+        # 6 cards matching web's All-Time Summary layout.
+        all_time_kpis = {
+            'Total Coupons': _fmt(at.get('total', 0)),
+            'Used': _fmt(at.get('used', 0)),
+            'Unused': _fmt(at.get('unused', 0)),
+            'Total Amount (VND)': _fmt(at.get('total_amount', 0)),
+            'Coupon Amount (VND)': _fmt(at.get('total_coupon_amount', 0)),
+            'Unique Invoice Amt (VND)': _fmt(at.get('unique_invoice_amount', 0)),
+        }
+        period_kpis = {
+            'Total Coupons': _fmt(pd.get('total', 0)),
+            'Used': _fmt(pd.get('used', 0)),
+            'Unused': _fmt(pd.get('unused', 0)),
+            'Total Amount (VND)': _fmt(pd.get('total_amount', 0)),
+            'Coupon Amount (VND)': _fmt(pd.get('total_coupon_amount', 0)),
+            'Unique Invoice Amt (VND)': _fmt(pd.get('unique_invoice_amount', 0)),
+        }
+
+        _tab_map = {
+            'by_shop':    lambda: _coupon_shop_table(ov.get('by_shop', [])),
+            'detail':     lambda: _coupon_detail_table(
+                get_coupon_tab('detail', date_from=date_from, date_to=date_to,
+                               coupon_id_prefix=prefix, shop_group=shop_group) or {}),
+            'duplicates': lambda: _coupon_dup_table(
+                get_coupon_tab('duplicates', date_from=date_from, date_to=date_to,
+                               coupon_id_prefix=prefix, shop_group=shop_group) or {}),
+        }
+
+        if tab and tab in _tab_map:
+            tabs = {tab: _tab_map[tab]()}
+        else:
+            tabs = {'by_shop': _coupon_shop_table(ov.get('by_shop', []))}
 
         return Response({
-            'all_time_kpis': {
-                'used': at_used,
-                'unused': at_unused,
-                'amount_vnd': _fmt(at_amount),
-            },
-            'period_kpis': {
-                'used': pd_used,
-                'unused': pd_unused,
-                'amount_vnd': _fmt(pd_amount),
-            },
-            'tabs': {
-                'by_shop': _coupon_shop_table(ov.get('by_shop', [])),
-                'detail': _coupon_detail_table(detail_data or {}),
-                'duplicates': _coupon_dup_table(dup_data or {}),
-            },
+            'all_time_kpis': all_time_kpis,
+            'period_kpis': period_kpis,
+            'tabs': tabs,
+            'available_tabs': list(_tab_map.keys()),
         })
 
 
 def _coupon_shop_table(shop_data: list) -> dict:
-    headers = ['Shop', 'Used', 'Unused', 'Amount (VND)', 'Usage Rate']
+    # by_shop rows: shop_name, total, used, unused, used_pct_of_used, usage_rate, total_amount, coupon_amount
+    headers = ['Shop', 'Used', '% of Used', 'Coupon Amount (VND)', 'Total Amount (VND)', 'Usage Rate']
     rows = [[
         str(s.get('shop_name', s.get('using_shop', ''))),
         _fmt(s.get('used', 0)),
-        _fmt(s.get('unused', 0)),
-        _fmt(s.get('amount', 0)),
+        _pct_cell(s.get('used_pct_of_used', 0)),
+        _fmt(s.get('coupon_amount', 0)),
+        _fmt(s.get('total_amount', 0)),
         _pct_cell(s.get('usage_rate', 0)),
     ] for s in (shop_data or [])]
     return {'headers': headers, 'rows': rows}
@@ -573,7 +634,11 @@ class ShopsListView(APIView):
 
 
 class ShopDetailView(APIView):
-    """GET /api/v1/analytics/shop-detail/?shop=<name>"""
+    """
+    GET /api/v1/analytics/shop-detail/?shop=<name>
+    Optional: ?section=sales|customer|coupon  — lazy load one section at a time.
+    Omit section to load all three (initial page load returns sales KPIs only for speed).
+    """
     permission_classes = [IsAuthenticated, make_perm_class('shops.view')]
 
     def get(self, request):
@@ -589,45 +654,66 @@ class ShopDetailView(APIView):
 
         date_from = _parse_date(request.GET.get('date_from'), 'date_from')
         date_to = _parse_date(request.GET.get('date_to'), 'date_to')
+        section = request.GET.get('section', '').strip()
 
+        # Sales data always loads (fastest, also validates the shop exists)
         sales_data = get_shop_detail_sales_data(shop, date_from, date_to)
         if sales_data is None:
             return Response({'detail': 'Shop not found or no data.'}, status=404)
 
-        customer_data = get_shop_detail_customer_data(
-            shop,
-            start_date=str(date_from) if date_from else '',
-            end_date=str(date_to) if date_to else '',
-        )
+        _date_str_from = str(date_from) if date_from else ''
+        _date_str_to = str(date_to) if date_to else ''
 
-        coupon_data = get_shop_detail_coupon_data(shop, date_from, date_to)
+        if section == 'customer':
+            customer_data = get_shop_detail_customer_data(
+                shop, start_date=_date_str_from, end_date=_date_str_to
+            )
+            return Response({
+                'shop_name': shop,
+                'customer': _build_shop_customer(customer_data or {}),
+            })
 
+        if section == 'coupon':
+            coupon_data = get_shop_detail_coupon_data(shop, date_from, date_to)
+            return Response({
+                'shop_name': shop,
+                'coupon': _build_shop_coupon(coupon_data or {}),
+            })
+
+        if section == 'sales':
+            return Response({
+                'shop_name': shop,
+                'sales': _build_shop_sales(sales_data),
+            })
+
+        # No section param: initial load — return sales only (customer/coupon lazy-loaded)
         return Response({
             'shop_name': shop,
             'sales': _build_shop_sales(sales_data),
-            'customer': _build_shop_customer(customer_data or {}),
-            'coupon': _build_shop_coupon(coupon_data or {}),
+            'available_sections': ['sales', 'customer', 'coupon'],
         })
 
 
 def _kpi_dict(kpis: dict) -> dict:
+    # Human-readable labels matching shop detail web KPI cards:
+    # Active | Returning | Return Rate | INV(RET) | AMT(RET) | Total INV | Total Amt
     total_inv = kpis.get('total_invoices_with_vip0', kpis.get('total_invoices', 0))
     total_amt = kpis.get('total_amount_with_vip0', kpis.get('total_amount', 0))
-    customers = kpis.get('total_customers', 0)
-    avg_inv = round(total_amt / total_inv, 0) if total_inv else 0
     return {
-        'total_invoices': total_inv,
-        'total_revenue': _fmt(total_amt),
-        'avg_invoice': _fmt(avg_inv),
-        'total_customers': customers,
-        'returning_customers': kpis.get('returning_customers', 0),
-        'return_rate': _pct(kpis.get('return_rate', 0)),
+        'Active': _fmt(kpis.get('total_customers', 0)),
+        'Returning': _fmt(kpis.get('returning_customers', 0)),
+        'Return Rate': _pct(kpis.get('return_rate', 0)) + '%',
+        'INV(RET)': _fmt(kpis.get('returning_invoices', 0)),
+        'AMT(RET)': _fmt(kpis.get('returning_amount', 0)),
+        'Total INV': _fmt(total_inv),
+        'Total Amt (VND)': _fmt(total_amt),
     }
 
 
 def _build_shop_sales(data: dict) -> dict:
-    at = _kpi_dict(data.get('all_time_kpis', data.get('at_kpis', {})))
-    pd = _kpi_dict(data.get('period_kpis', data.get('pd_kpis', {})))
+    # get_shop_detail_sales_data() returns {'all_time': kpis, 'period': kpis, 'by_session', 'by_month', 'by_week'}
+    at = _kpi_dict(data.get('all_time', {}))
+    pd = _kpi_dict(data.get('period', {}))
     return {
         'all_time_kpis': at,
         'period_kpis': pd,
@@ -638,33 +724,78 @@ def _build_shop_sales(data: dict) -> dict:
 
 
 def _build_shop_customer(data: dict) -> dict:
-    summary = data.get('summary', {})
+    # Human-readable labels matching web's 7 KPI cards exactly:
+    # New POS | POS (w/ INV) | New CNV | POS Only | CNV Only | Zalo App | Zalo OA
+    at = data.get('all_time') or {}
+    pd = data.get('period') or {}
     return {
         'all_time_kpis': {
-            'total_pos_customers': summary.get('total_pos', 0),
-            'total_cnv_customers': summary.get('total_cnv', 0),
+            'New POS': _fmt(at.get('new_pos', 0)),
+            'POS (w/ INV)': _fmt(at.get('new_pos_inv', 0)),
+            'New CNV': _fmt(at.get('new_cnv', 0)),
+            'POS Only': _fmt(at.get('new_pos_only', 0)),
+            'CNV Only': _fmt(at.get('new_cnv_only', 0)),
+            'Zalo App': _fmt(at.get('zalo_app', 0)),
+            'Zalo OA': _fmt(at.get('zalo_oa', 0)),
         },
         'period_kpis': {
-            'new_pos': summary.get('new_pos', 0),
-            'new_cnv': summary.get('new_cnv', 0),
+            'New POS': _fmt(pd.get('new_pos', 0)),
+            'POS (w/ INV)': _fmt(pd.get('new_pos_inv', 0)),
+            'New CNV': _fmt(pd.get('new_cnv', 0)),
+            'POS Only': _fmt(pd.get('new_pos_only', 0)),
+            'CNV Only': _fmt(pd.get('new_cnv_only', 0)),
+            'Zalo App': _fmt(pd.get('zalo_app', 0)),
+            'Zalo OA': _fmt(pd.get('zalo_oa', 0)),
         },
-        'breakdown': _cnv_shop_table(data.get('shop', [])),
+        'by_season': _cnv_period_table(data.get('by_season', [])),
+        'by_month': _cnv_period_table(data.get('by_month', [])),
+        'by_week': _cnv_period_table(data.get('by_week', [])),
     }
 
 
+def _cnv_period_table(rows: list) -> dict:
+    # 11 columns matching web's shop detail customer breakdown tables exactly:
+    # Season/Month/Week | POS(INV) | POS(NO INV) | POS Total | POS Only | New CNV | CNV Only | Zalo App | %App | Zalo OA | %OA
+    headers = ['Period', 'POS(INV)', 'POS(NO INV)', 'POS Total', 'POS Only',
+               'New CNV', 'CNV Only', 'Zalo App', '%App', 'Zalo OA', '%OA']
+    data_rows = [[
+        str(r.get('label', '')),
+        _fmt(r.get('new_pos_inv', 0)),
+        _fmt(r.get('new_pos_no_inv', 0)),
+        _fmt(r.get('new_pos', 0)),
+        _fmt(r.get('new_pos_only', 0)),
+        _fmt(r.get('new_cnv', 0)),
+        _fmt(r.get('new_cnv_only', 0)),
+        _fmt(r.get('zalo_app', 0)),
+        _pct_cell(r.get('zalo_app_pct', 0)),
+        _fmt(r.get('zalo_oa', 0)),
+        _pct_cell(r.get('zalo_oa_pct', 0)),
+    ] for r in (rows or [])]
+    return {'headers': headers, 'rows': data_rows}
+
+
 def _build_shop_coupon(data: dict) -> dict:
+    # Human-readable labels matching web coupon KPI cards.
+    at = data.get('all_time', {})
+    pd = data.get('period', {})
     return {
         'all_time_kpis': {
-            'used': data.get('all_time_used', 0),
-            'unused': data.get('all_time_unused', 0),
-            'amount_vnd': _fmt(data.get('all_time_amount', 0)),
+            'Total Coupons': _fmt(at.get('total', 0)),
+            'Used': _fmt(at.get('used', 0)),
+            'Unused': _fmt(at.get('unused', 0)),
+            'Total Amount (VND)': _fmt(at.get('total_amount', 0)),
+            'Coupon Amount (VND)': _fmt(at.get('total_coupon_amount', 0)),
+            'Unique Invoice Amt (VND)': _fmt(at.get('unique_invoice_amount', 0)),
         },
         'period_kpis': {
-            'used': data.get('period_used', 0),
-            'unused': data.get('period_unused', 0),
-            'amount_vnd': _fmt(data.get('period_amount', 0)),
+            'Total Coupons': _fmt(pd.get('total', 0)),
+            'Used': _fmt(pd.get('used', 0)),
+            'Unused': _fmt(pd.get('unused', 0)),
+            'Total Amount (VND)': _fmt(pd.get('total_amount', 0)),
+            'Coupon Amount (VND)': _fmt(pd.get('total_coupon_amount', 0)),
+            'Unique Invoice Amt (VND)': _fmt(pd.get('unique_invoice_amount', 0)),
         },
-        'by_shop_table': _coupon_shop_table(data.get('by_shop', [])),
+        'detail_table': _coupon_detail_table(data),
     }
 
 

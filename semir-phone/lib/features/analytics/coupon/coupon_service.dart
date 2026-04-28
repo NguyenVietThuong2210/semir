@@ -56,4 +56,29 @@ class CouponService {
           statusCode: e.response?.statusCode);
     }
   }
+
+  /// Fetch a single coupon tab lazily (detail or duplicates — by_shop is in initial load).
+  Future<TableTab?> getCouponTab({
+    required String tab,
+    String? dateFrom,
+    String? dateTo,
+    String? shopGroup,
+    String? prefix,
+  }) async {
+    try {
+      final params = <String, String>{'tab': tab};
+      if (dateFrom != null) params['date_from'] = dateFrom;
+      if (dateTo != null) params['date_to'] = dateTo;
+      if (shopGroup != null && shopGroup != 'All') params['shop_group'] = shopGroup;
+      if (prefix != null && prefix.isNotEmpty) params['prefix'] = prefix;
+
+      final response = await _dio.get(Endpoints.coupon, queryParameters: params);
+      final json = response.data as Map<String, dynamic>;
+      final tabs = TableTab.parseMap(json['tabs'] as Map<String, dynamic>?);
+      return tabs.isNotEmpty ? tabs.first : null;
+    } on DioException catch (e) {
+      throw ApiException(e.message ?? 'Network error',
+          statusCode: e.response?.statusCode);
+    }
+  }
 }
