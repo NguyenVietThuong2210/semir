@@ -58,9 +58,9 @@ class ShopCustomerPayload {
       zaloActive = TableTab(
         tabKey: 'zalo_active',
         label: 'Zalo Active',
-        headers: (rawZalo['headers'] as List?)?.cast<String>() ?? [],
+        headers: (rawZalo['headers'] as List?)?.whereType<String>().toList() ?? [],
         rows: (rawZalo['rows'] as List?)
-                ?.map((r) => (r as List).cast<String>())
+                ?.map((r) => r is List ? r.whereType<String>().toList() : <String>[])
                 .toList() ??
             [],
       );

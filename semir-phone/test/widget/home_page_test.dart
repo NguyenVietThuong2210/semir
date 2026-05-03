@@ -45,7 +45,7 @@ void main() {
     );
   }
 
-  testWidgets('full permissions → all 5 cards rendered', (tester) async {
+  testWidgets('full permissions → all 8 cards rendered', (tester) async {
     await tester.pumpWidget(buildSubject([
       'sales.view',
       'customers.view',
@@ -55,19 +55,20 @@ void main() {
     ]));
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavCard), findsNWidgets(5));
+    // 5 primary cards + 3 chart cards (Sales Charts, Customer Charts, Coupon Charts)
+    expect(find.byType(NavCard), findsNWidgets(8));
   });
 
-  testWidgets('sales.view only → 1 accessible card, others show no-access', (tester) async {
+  testWidgets('sales.view only → 2 accessible cards, others show no-access', (tester) async {
     await tester.pumpWidget(buildSubject(['sales.view']));
     await tester.pumpAndSettle();
 
-    // All 5 cards still rendered but 4 show no-access
-    expect(find.byType(NavCard), findsNWidgets(5));
-    expect(find.text('No access'), findsNWidgets(4));
+    // All 8 cards rendered — Sales + Sales Charts accessible, 6 no-access
+    expect(find.byType(NavCard), findsNWidgets(8));
+    expect(find.text('No access'), findsNWidgets(6));
   });
 
-  testWidgets('coupons.view absent → Coupon card shows no-access', (tester) async {
+  testWidgets('coupons.view absent → Coupon + Coupon Charts cards show no-access', (tester) async {
     await tester.pumpWidget(buildSubject([
       'sales.view',
       'customers.view',
@@ -76,9 +77,9 @@ void main() {
     ]));
     await tester.pumpAndSettle();
 
-    // Coupon card title still shows but with no-access message
+    // Coupon and Coupon Charts both show no-access (2 no-access cards)
     expect(find.text('Coupon'), findsOneWidget);
-    expect(find.text('No access'), findsNWidgets(1));
+    expect(find.text('No access'), findsNWidgets(2));
   });
 
   testWidgets('375pt width → single column (no Row widgets for grid)', (tester) async {
@@ -88,7 +89,7 @@ void main() {
     // At 375pt, no 2-col Row should exist (only AppBar rows etc)
     // All NavCards are in a Column, not side-by-side
     final navCards = tester.widgetList<NavCard>(find.byType(NavCard)).toList();
-    expect(navCards.length, 5);
+    expect(navCards.length, 8);
   });
 
   testWidgets('768pt width → uses 2-column grid (Row widgets present)', (tester) async {
@@ -99,9 +100,8 @@ void main() {
     ], screenWidth: 768));
     await tester.pumpAndSettle();
 
-    // At 768pt, _CardGrid renders Row widgets
-    // At least one Row should wrap adjacent NavCards
-    expect(find.byType(NavCard), findsNWidgets(5));
+    // At 768pt, _CardGrid renders Row widgets for all 8 cards
+    expect(find.byType(NavCard), findsNWidgets(8));
   });
 
   testWidgets('username shown in greeting', (tester) async {

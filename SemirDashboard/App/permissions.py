@@ -42,7 +42,7 @@ def user_has_perm(user, codename):
         profile = user.profile
         if profile.role:
             return codename in (profile.role.permissions or [])
-    except Exception:
+    except AttributeError:
         pass
     return False
 

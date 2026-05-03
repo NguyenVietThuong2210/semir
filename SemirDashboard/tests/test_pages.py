@@ -103,14 +103,15 @@ class PageRenderTest(SnapshotTestCase):
     # ── Analytics pages (period-filter) ──────────────────────────────────────
 
     def test_analytics_dashboard_200(self):
+        # With no fixture data, the view redirects to upload_sales — follow it.
         t = self.timer("analytics_dashboard_alltime")
-        r = self.client.get(reverse("analytics_dashboard"))
-        t.checkpoint("GET /analytics/")
+        r = self.client.get(reverse("analytics_dashboard"), follow=True)
+        t.checkpoint("GET /analytics/ (follow)")
         t.report()
         self.assertEqual(r.status_code, 200)
 
     def test_analytics_dashboard_2025_200(self):
-        r = self.client.get(reverse("analytics_dashboard") + PERIOD_2025_PARAMS)
+        r = self.client.get(reverse("analytics_dashboard") + PERIOD_2025_PARAMS, follow=True)
         self.assertEqual(r.status_code, 200)
 
     def test_analytics_chart_200(self):

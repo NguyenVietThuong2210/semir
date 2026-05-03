@@ -42,7 +42,8 @@ class CustomerDetailPayload {
     ];
 
     // invoice_history: [{date, shop, invoice_id, amount, coupon_used}]
-    final history = (json['invoice_history'] as List?) ?? [];
+    final rawHistory = json['invoice_history'];
+    final history = rawHistory is List ? rawHistory : <dynamic>[];
     const headers = ['Date', 'Shop', 'Invoice', 'Amount'];
     final rows = history
         .map<List<String>>((h) => [

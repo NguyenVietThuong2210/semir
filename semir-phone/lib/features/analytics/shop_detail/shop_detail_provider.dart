@@ -9,7 +9,7 @@ final shopDetailServiceProvider = Provider<ShopDetailService>((ref) {
   return ShopDetailService(dio: ref.watch(dioProvider));
 });
 
-final shopsListProvider = FutureProvider<List<String>>((ref) async {
+final shopsListProvider = FutureProvider.autoDispose<List<String>>((ref) async {
   return ref.watch(shopDetailServiceProvider).getShops();
 });
 
@@ -60,7 +60,7 @@ class ShopDetailSalesNotifier extends AsyncNotifier<ShopSalesPayload?> {
 typedef _ShopSectionKey = ({String shop, String dateFrom, String dateTo});
 
 final shopCustomerProvider =
-    FutureProvider.family<ShopCustomerPayload, _ShopSectionKey>((ref, key) async {
+    FutureProvider.autoDispose.family<ShopCustomerPayload, _ShopSectionKey>((ref, key) async {
   return ref.read(shopDetailServiceProvider).getShopCustomer(
         shop: key.shop,
         dateFrom: key.dateFrom.isEmpty ? null : key.dateFrom,
@@ -70,7 +70,7 @@ final shopCustomerProvider =
 
 // Lazy-loaded coupon section — triggered when user selects Coupon tab.
 final shopCouponProvider =
-    FutureProvider.family<ShopCouponPayload, _ShopSectionKey>((ref, key) async {
+    FutureProvider.autoDispose.family<ShopCouponPayload, _ShopSectionKey>((ref, key) async {
   return ref.read(shopDetailServiceProvider).getShopCoupon(
         shop: key.shop,
         dateFrom: key.dateFrom.isEmpty ? null : key.dateFrom,

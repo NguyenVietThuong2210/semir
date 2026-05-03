@@ -65,7 +65,7 @@ typedef _CouponTabKey = ({
 });
 
 final couponTabProvider =
-    FutureProvider.family<TableTab?, _CouponTabKey>((ref, key) async {
+    FutureProvider.autoDispose.family<TableTab?, _CouponTabKey>((ref, key) async {
   final service = ref.read(couponServiceProvider);
   return service.getCouponTab(
     tab: key.tab,

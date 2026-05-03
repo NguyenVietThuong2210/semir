@@ -62,7 +62,7 @@ class SalesAnalyticsNotifier extends AsyncNotifier<SalesAnalyticsPayload?> {
 typedef _SalesTabKey = ({String tab, String dateFrom, String dateTo, String shopGroup});
 
 final salesTabProvider =
-    FutureProvider.family<TableTab?, _SalesTabKey>((ref, key) async {
+    FutureProvider.autoDispose.family<TableTab?, _SalesTabKey>((ref, key) async {
   final service = ref.read(salesServiceProvider);
   return service.getSalesTab(
     tab: key.tab,

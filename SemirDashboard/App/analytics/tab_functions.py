@@ -251,7 +251,7 @@ def _sales_grade_with_overview(customer_purchases, get_ci, date_stats, date_from
     member_active_all_time = (
         SalesTransaction.objects
         .exclude(Q(vip_id='') | Q(vip_id='0') | Q(vip_id__isnull=True))
-        .values('vip_id').distinct().count()
+        .values('vip_id').order_by().distinct().count()
     )
     member_inactive_all_time = max(0, total_customers_in_db - member_active_all_time)
 

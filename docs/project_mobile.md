@@ -6,7 +6,7 @@ type: project
 
 # SemirPhone — Mobile App
 
-**Last Updated:** 2026-04-27
+**Last Updated:** 2026-05-03
 
 Flutter iOS/Android companion to SemirDashboard. Connects to the same Django backend via a versioned REST API (`/api/v1/`).
 
@@ -166,6 +166,7 @@ login
 
 logout
   └─ POST /auth/logout/ (best-effort)
+  └─ ref.invalidate() clears ALL 10 analytics providers (prevents cross-user data leakage on shared devices)
   └─ deleteAll() clears secure storage
   └─ GoRouter redirects to /login
 
@@ -198,6 +199,21 @@ GoRouter with `refreshListenable: _AuthListenable(ref)`:
 
 Permission redirect: `_requirePerm(perm)` returns `'/'` (home) when the session lacks the permission, or `null` to allow navigation.
 
+### Home Page Cards (8 total)
+
+| Card | Route | Permission |
+|------|-------|-----------|
+| Sales | `/sales` | `sales.view` |
+| Sales Charts | `/sales/charts` | `sales.view` |
+| Customer | `/customer` | `customers.view` |
+| Customer Charts | `/customer/charts` | `customers.view` |
+| Coupon | `/coupon` | `coupons.view` |
+| Coupon Charts | `/coupon/charts` | `coupons.view` |
+| Shop Detail | `/shop-detail` | `shop_detail.view` |
+| Customer Detail | `/customer-detail` | `customer_detail.view` |
+
+Chart pages are also accessible via the AppBar icon on their respective analytics page (dual entry point).
+
 ---
 
 ## API Client (`core/api/`)
@@ -210,6 +226,15 @@ Permission redirect: `_requirePerm(perm)` returns `'/'` (home) when the session 
 - Empty string in debug → pinning disabled
 
 All API base paths are in `endpoints.dart` — do not hardcode URLs in service files.
+
+---
+
+## Provider Rules
+
+- **Always use `.autoDispose`** on `FutureProvider.family` — without it, every unique key (tab name, shop name, date range) creates a persistent provider instance that is never freed (memory leak).
+- **Never use `.cast<String>()`** on API response lists — use `.whereType<String>().toList()` for safe runtime casting.
+- **Logout must invalidate all analytics providers** — `auth_provider.dart` calls `ref.invalidate()` on all 10 analytics providers. If you add a new analytics provider, add it to the logout invalidation list.
+- **Null API fields**: always guard with `is List` / `is Map` checks before casting response fields.
 
 ---
 
@@ -288,7 +313,7 @@ test/
     goldens/                      # Reference PNG images
 ```
 
-Golden images must be regenerated with `--update-goldens` whenever any visual component changes (theme, widget layout, colors). All 198 tests must pass before release.
+Golden images must be regenerated with `--update-goldens` whenever any visual component changes (theme, widget layout, colors). All 226 tests must pass before release.
 
 ---
 
@@ -307,7 +332,7 @@ Golden images must be regenerated with `--update-goldens` whenever any visual co
 
 ## Release Checklist
 
-- [ ] All 198 tests pass (`flutter test`)
+- [ ] All 226 tests pass (`flutter test`)
 - [ ] Golden images up to date (no pixel diffs without `--update-goldens`)
 - [ ] `--dart-define=API_BASE_URL`, `TLS_PIN`, `TLS_BACKUP_PIN`, `SENTRY_DSN`, `ENVIRONMENT=production` set in build
 - [ ] TLS pin fingerprints match current server certificate

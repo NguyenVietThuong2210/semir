@@ -52,11 +52,11 @@ def get_inv_lookups_for_period(date_from, date_to):
     pks_with_inv = set(
         qs.filter(customer__isnull=False)
         .values_list('customer_id', flat=True)
-        .distinct()
+        .order_by().distinct()
     )
     vids_with_inv = {
         _norm_vid(v)
-        for v in qs.values_list('vip_id', flat=True).distinct()
+        for v in qs.values_list('vip_id', flat=True).order_by().distinct()
         if v
     } - {'', '0'}
     return pks_with_inv, vids_with_inv

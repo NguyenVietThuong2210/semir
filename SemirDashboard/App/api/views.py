@@ -438,7 +438,7 @@ class CustomerAnalyticsView(APIView):
 
         # Grade rows — computed directly from POSCustomer (compute_cnv_breakdown has no grade dim)
         at_grade_rows = _compute_grade_rows(cnv_phones_all)
-        pd_grade_rows = _compute_grade_rows(cnv_phones_all, period_filter if period_filter else None)
+        pd_grade_rows = _compute_grade_rows(cnv_phones_all, period_filter if period_filter else {})
         at_bd['grade'] = at_grade_rows  # inject so _cnv_pos_only_table / _cnv_both_table can use it
 
         # Registration breakdown tabs (using period data) — 5 tabs matching web bd_* tabs

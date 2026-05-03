@@ -1,6 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/bare_dio_provider.dart';
+import '../../features/analytics/sales/sales_provider.dart';
+import '../../features/analytics/customer/customer_provider.dart';
+import '../../features/analytics/coupon/coupon_provider.dart';
+import '../../features/analytics/shop_detail/shop_detail_provider.dart';
+import '../../features/analytics/customer_detail/customer_detail_provider.dart';
 import 'auth_service.dart';
 import 'token_storage.dart';
 
@@ -63,6 +68,17 @@ class AuthNotifier extends AsyncNotifier<UserSession?> {
       final authService = ref.read(authServiceProvider);
       await authService.logout(session.refreshToken);
     }
+    // Invalidate all cached analytics data so the next user starts clean.
+    ref.invalidate(salesAnalyticsProvider);
+    ref.invalidate(salesTabProvider);
+    ref.invalidate(customerAnalyticsProvider);
+    ref.invalidate(couponAnalyticsProvider);
+    ref.invalidate(couponTabProvider);
+    ref.invalidate(shopsListProvider);
+    ref.invalidate(shopDetailSalesProvider);
+    ref.invalidate(shopCustomerProvider);
+    ref.invalidate(shopCouponProvider);
+    ref.invalidate(customerDetailProvider);
     state = const AsyncData(null);
   }
 

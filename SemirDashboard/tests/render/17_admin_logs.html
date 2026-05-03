@@ -470,7 +470,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="7LowQpjpZlbia2Khy6QI3qlzan5y5xhIRCYOZb9iCwPzdUBITWUJYa7Rqa04Xp8W">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="yOUpO4saaI3Dq2enUWmiQv8zmpWt8gBJfwpaxHCpgAjh20pMxAlaNrUrMQhWLmsy">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -506,7 +506,7 @@
     <div class="card-header bg-danger text-white d-flex align-items-center">
       <i class="bi bi-x-octagon me-2"></i>
       <strong>ERROR</strong>
-      <span class="badge bg-light text-danger ms-2">23</span>
+      <span class="badge bg-light text-danger ms-2">50</span>
     </div>
     <div class="card-body p-0">
       
@@ -524,513 +524,551 @@
           <tbody>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:29:53,959</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.scheduler">App.cnv.scheduler</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Full traceback:
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 105, in _execute
-    return self.cursor.execute(sql, params)
-           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\sqlite3\base.py&quot;, line 359, in execute
-    return super().execute(query, params)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-sqlite3.OperationalError: database is locked
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\scheduler.py&quot;, line 76, in sync_cnv_customers_only
-    created, updated, failed = service.initial_sync_customers_from_ids()
-                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\sync_service.py&quot;, line 851, in initial_sync_customers_from_ids
-    created, updated, failed = self._process_customer_batch(batch)
-                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\sync_service.py&quot;, line 281, in _process_customer_batch
-    existing_cnv_ids = set(
-        CNVCustomer.objects.filter(cnv_id__in=cnv_ids)
-        .values_list(&#x27;cnv_id&#x27;, flat=True)
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 390, in __iter__
-    self._fetch_all()
-    ~~~~~~~~~~~~~~~^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 2000, in _fetch_all
-    self._result_cache = list(self._iterable_class(self))
-                         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 277, in __iter__
-    for row in compiler.results_iter(
-               ~~~~~~~~~~~~~~~~~~~~~^
-        chunked_fetch=self.chunked_fetch, chunk_size=self.chunk_size
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ):
-    ^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\compiler.py&quot;, line 1573, in results_iter
-    results = self.execute_sql(
-        MULTI, chunked_fetch=chunked_fetch, chunk_size=chunk_size
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\compiler.py&quot;, line 1624, in execute_sql
-    cursor.execute(sql, params)
-    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 122, in execute
-    return super().execute(sql, params)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 79, in execute
-    return self._execute_with_wrappers(
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        sql, params, many=False, executor=self._execute
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 92, in _execute_with_wrappers
-    return executor(sql, params, many, context)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 100, in _execute
-    with self.db.wrap_database_errors:
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\utils.py&quot;, line 94, in __exit__
-    raise dj_exc_value.with_traceback(traceback) from exc_value
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 105, in _execute
-    return self.cursor.execute(sql, params)
-           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\sqlite3\base.py&quot;, line 359, in execute
-    return super().execute(query, params)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-django.db.utils.OperationalError: database is locked</pre>
-                </details>
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:29:53,958</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.scheduler">App.cnv.scheduler</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                ============================================================
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:29:53,958</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.scheduler">App.cnv.scheduler</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                CUSTOMERS SYNC FAILED: database is locked
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:29:49,823</td>
+              <td class="text-nowrap small text-muted">2026-05-03 13:10:25,859</td>
               <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                initial_sync_customers: failed: database is locked
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 105, in _execute
-    return self.cursor.execute(sql, params)
-           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\sqlite3\base.py&quot;, line 359, in execute
-    return super().execute(query, params)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-sqlite3.OperationalError: database is locked
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\sync_service.py&quot;, line 851, in initial_sync_customers_from_ids
-    created, updated, failed = self._process_customer_batch(batch)
-                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\sync_service.py&quot;, line 281, in _process_customer_batch
-    existing_cnv_ids = set(
-        CNVCustomer.objects.filter(cnv_id__in=cnv_ids)
-        .values_list(&#x27;cnv_id&#x27;, flat=True)
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 390, in __iter__
-    self._fetch_all()
-    ~~~~~~~~~~~~~~~^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 2000, in _fetch_all
-    self._result_cache = list(self._iterable_class(self))
-                         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 277, in __iter__
-    for row in compiler.results_iter(
-               ~~~~~~~~~~~~~~~~~~~~~^
-        chunked_fetch=self.chunked_fetch, chunk_size=self.chunk_size
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ):
-    ^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\compiler.py&quot;, line 1573, in results_iter
-    results = self.execute_sql(
-        MULTI, chunked_fetch=chunked_fetch, chunk_size=chunk_size
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\compiler.py&quot;, line 1624, in execute_sql
-    cursor.execute(sql, params)
-    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 122, in execute
-    return super().execute(sql, params)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 79, in execute
-    return self._execute_with_wrappers(
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        sql, params, many=False, executor=self._execute
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 92, in _execute_with_wrappers
-    return executor(sql, params, many, context)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 100, in _execute
-    with self.db.wrap_database_errors:
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\utils.py&quot;, line 94, in __exit__
-    raise dj_exc_value.with_traceback(traceback) from exc_value
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\utils.py&quot;, line 105, in _execute
-    return self.cursor.execute(sql, params)
-           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\backends\sqlite3\base.py&quot;, line 359, in execute
-    return super().execute(query, params)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-django.db.utils.OperationalError: database is locked</pre>
-                </details>
+                Update failed for order #107603: database is locked
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:26:58,609</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-30 12:05:01,882</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35578749: database is locked
+                Failed to fetch page 1: All customer endpoints failed
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:26:45,407</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-30 12:05:01,879</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35578389: database is locked
+                API error 404: 
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:23:37,995</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-30 12:05:01,329</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35578257: database is locked
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:23:30,653</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:53,049</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35578256: database is locked
+                Failed to fetch membership for customer 35583383: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/35583383/membership.json
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:23:07,882</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:53,048</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577832: database is locked
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:20:44,343</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:51,155</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577816: database is locked
+                Failed to fetch membership for customer 35586052: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/35586052/membership.json
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:20:32,478</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:51,155</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577449: database is locked
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:20:23,934</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:13,086</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577726: database is locked
+                Failed to fetch membership for customer 40280270: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/40280270/membership.json
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:20:10,896</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:13,085</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577382: database is locked
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:19:57,730</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:11,041</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577333: database is locked
+                Failed to fetch membership for customer 40283935: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/40283935/membership.json
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:19:50,345</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:11,040</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577332: database is locked
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:17:24,204</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:10,102</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577176: database is locked
+                Failed to fetch membership for customer 40286322: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/40286322/membership.json
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:16:46,725</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:10,102</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35577158: database is locked
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:16:25,667</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:08,114</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Update failed for CNV#35576941: database is locked
+                Failed to fetch membership for customer 41400733: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/41400733/membership.json
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 06:47:31,924</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:08,113</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">ebbf020…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Internal Server Error: /shop-detail/partial/customer/
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
-    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
-    bd_at = compute_cnv_breakdown(
-        None, pos_phones_all, cnv_phones_all,
-        dims=frozenset({&#x27;shop&#x27;}),
-        store_filter=registration_store,
-    )
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
-    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
-                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
-    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
-                     ^^^^^^^^^^^^^^^^^
-AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
-                </details>
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 06:40:28,679</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:00,106</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">0b21162…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Internal Server Error: /shop-detail/partial/customer/
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
-    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
-    bd_at = compute_cnv_breakdown(
-        None, pos_phones_all, cnv_phones_all,
-        dims=frozenset({&#x27;shop&#x27;}),
-        store_filter=registration_store,
-    )
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
-    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
-                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
-    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
-                     ^^^^^^^^^^^^^^^^^
-AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
-                </details>
+                Failed to fetch membership for customer 43184078: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/43184078/membership.json
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 01:36:07,884</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:09:00,106</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">1b1136e…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Internal Server Error: /shop-detail/partial/customer/
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
-    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
-    bd_at = compute_cnv_breakdown(
-        None, pos_phones_all, cnv_phones_all,
-        dims=frozenset({&#x27;shop&#x27;}),
-        store_filter=registration_store,
-    )
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
-    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
-                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
-    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
-                     ^^^^^^^^^^^^^^^^^
-AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
-                </details>
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 01:35:57,789</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:54,099</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">770a036…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Internal Server Error: /shop-detail/partial/customer/
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
-    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
-    bd_at = compute_cnv_breakdown(
-        None, pos_phones_all, cnv_phones_all,
-        dims=frozenset({&#x27;shop&#x27;}),
-        store_filter=registration_store,
-    )
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
-    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
-                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
-    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
-                     ^^^^^^^^^^^^^^^^^
-AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
-                </details>
+                Failed to fetch membership for customer 44893504: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44893504/membership.json
                 
               </td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 01:35:54,847</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:54,098</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">adb4d93…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
               <td class="small">
-                Internal Server Error: /shop-detail/partial/customer/
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 153, in shop_detail_customer_partial
-    data = get_shop_detail_customer_data(store_name, start_date=start_date, end_date=end_date)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\tab_functions.py&quot;, line 1343, in get_shop_detail_customer_data
-    bd_at = compute_cnv_breakdown(
-        None, pos_phones_all, cnv_phones_all,
-        dims=frozenset({&#x27;shop&#x27;}),
-        store_filter=registration_store,
-    )
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 215, in compute_cnv_breakdown
-    _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
-                                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\cnv\service.py&quot;, line 85, in _fetch_bd_raw
-    _period_key = f&quot;{period_filter.get(&#x27;start&#x27;, &#x27;&#x27;)}:{period_filter.get(&#x27;end&#x27;, &#x27;&#x27;)}&quot;
-                     ^^^^^^^^^^^^^^^^^
-AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pre>
-                </details>
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:46,153</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44894995: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44894995/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:46,149</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:43,108</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44896198: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44896198/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:43,107</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:43,101</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44896141: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44896141/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:43,100</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:41,092</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44896723: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44896723/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:41,091</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:20,160</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44899811: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44899811/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:20,160</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:19,134</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44901872: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44901872/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:19,133</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:13,111</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44903351: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44903351/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:13,111</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:09,164</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44903657: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44903657/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:09,163</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:07,152</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44904166: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44904166/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:08:07,151</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:36,166</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44906699: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44906699/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:36,166</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:35,114</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44906724: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44906724/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:35,109</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:31,116</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44906923: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44906923/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:31,116</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:25,002</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44907336: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44907336/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:25,001</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:15,097</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44908069: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44908069/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:15,097</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:10,051</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 44908321: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44908321/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-25 20:07:10,051</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
                 
               </td>
             </tr>
@@ -1065,367 +1103,87 @@ AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pr
           <tbody>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:40:14,636</td>
+              <td class="text-nowrap small text-muted">2026-05-03 14:05:02,931</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 13:10:00,168</td>
+              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 13:05:48,939</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">50a50f0…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">a2e4154…</td>
               <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:18:40,447</td>
+              <td class="text-nowrap small text-muted">2026-05-03 12:47:16,719</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">ac38108…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">8975c0f…</td>
               <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 23:07:38,543</td>
+              <td class="text-nowrap small text-muted">2026-05-03 12:35:37,543</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">fd11f85…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">ed4f94f…</td>
               <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 12:10:00,019</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 11:05:00,019</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 09:10:00,008</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 09:05:00,007</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 07:48:24,174</td>
+              <td class="text-nowrap small text-muted">2026-05-03 12:08:15,701</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">d1dcbff…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">4b835fb…</td>
               <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 07:37:14,697</td>
+              <td class="text-nowrap small text-muted">2026-05-03 11:37:39,437</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">35a26c2…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">e6721d2…</td>
               <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 07:23:50,781</td>
+              <td class="text-nowrap small text-muted">2026-05-03 11:30:53,911</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">df6709d…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">b2fee55…</td>
               <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 05:05:00,007</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 04:05:00,015</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 02:10:00,020</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 01:05:00,014</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 00:10:00,014</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 00:05:00,019</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 20:10:00,019</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 18:10:00,013</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 15:12:31,510</td>
+              <td class="text-nowrap small text-muted">2026-05-03 11:05:06,023</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">7f3c488…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">6187a6c…</td>
               <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 15:05:00,011</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 14:05:00,008</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 13:10:00,017</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 12:10:00,007</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 11:12:14,237</td>
+              <td class="text-nowrap small text-muted">2026-05-03 02:53:05,254</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">f1bf4ce…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">ac09492…</td>
               <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 10:05:00,016</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 09:47:37,618</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">f94457e…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 09:10:00,006</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 07:12:41,301</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">327ed2b…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 06:10:00,020</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 05:05:00,016</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 03:10:00,014</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 01:10:00,013</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-22 00:10:00,012</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 23:04:59,050</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">efdec02…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 22:10:00,017</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 22:05:00,024</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 21:15:34,494</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">b9ca90e…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 20:26:28,668</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">af6e0f5…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 19:05:00,008</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 17:10:00,006</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 16:10:00,020</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 15:10:00,010</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 14:10:00,008</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:29:54,212</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;atomic_update_or_create&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-21 10:05:00,018</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 12:10:01,154</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:10:01,667</td>
               <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
@@ -1433,7 +1191,7 @@ AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pr
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 11:10:01,211</td>
+              <td class="text-nowrap small text-muted">2026-05-03 15:10:01,631</td>
               <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
@@ -1441,7 +1199,7 @@ AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pr
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 10:10:01,210</td>
+              <td class="text-nowrap small text-muted">2026-05-03 14:10:01,315</td>
               <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
@@ -1449,7 +1207,23 @@ AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pr
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 09:10:01,108</td>
+              <td class="text-nowrap small text-muted">2026-05-03 14:05:03,253</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.scheduler">App.cnv.scheduler</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">Customers sync already running - skipping</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 13:11:08,764</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: batch had 1 failures � checkpoint not advanced</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 13:10:06,249</td>
               <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
@@ -1457,7 +1231,271 @@ AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pr
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-23 08:10:01,223</td>
+              <td class="text-nowrap small text-muted">2026-05-03 13:10:04,621</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-01 01:10:01,617</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-01 00:10:01,625</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 23:10:01,549</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 22:10:01,356</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 21:10:01,313</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 20:10:01,444</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 19:10:01,300</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 18:10:01,547</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 17:10:01,362</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 16:10:01,359</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 15:10:01,390</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 14:10:01,513</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 13:10:01,444</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 12:10:01,352</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 12:05:01,880</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">/api/customers failed: 404 Client Error: Not Found for url: https://apis.cnvloyalty.com/api/customers?page=1&amp;per_page=100&amp;limit=100&amp;updated_at_from=2026-04-30T04%3A03%3A12.715001Z</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 12:05:01,354</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">/customers.json failed: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/customers.json?page=1&amp;per_page=100&amp;limit=100&amp;updated_at_from=2026-04-30T04%3A03%3A12.715001Z</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 11:10:01,349</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 10:10:01,338</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 09:10:01,395</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 08:10:01,434</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 07:10:01,365</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 06:10:01,271</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 05:10:01,619</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 04:10:01,551</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 03:10:01,407</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 02:10:01,323</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 01:10:01,329</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-30 00:10:01,587</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-29 23:10:01,286</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-29 22:10:01,401</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-29 21:10:01,550</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-29 20:10:01,346</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-04-29 19:10:01,461</td>
               <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
@@ -1494,403 +1532,403 @@ AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;get&#x27;</pr
           <tbody>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:11:28,562</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:35,400</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 3] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:34,962</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 3] rows 10001-15000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:34,961</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 2] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:32,747</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 2] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:32,640</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">customer_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">=== START OPTIMIZED Customer Import: customer.xlsx ===</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:32,276</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 2] rows 5001-10000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:32,276</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 1] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:29,967</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 1] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:29,546</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 1] rows 1-5000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:29,545</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">customer_map loaded: 74630 customers</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:28,873</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
               <td class="small">analytics_chart</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">15c0b47…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">b49887d…</td>
               <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:11:28,416</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:28,279</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">61d2eff…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">b2d0553…</td>
               <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:11:28,305</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:27,827</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">Pre-loading customer map...</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:27,827</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">Total rows to process: 25297</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:27,412</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">4ac445c…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">f5ad2c1…</td>
               <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:11:16,792</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:19,900</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">sales_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">=== START OPTIMIZED Sales Import: Sale 2024.xlsx ===</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:19,872</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">customer_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">=== DONE Customer Import: created=74630 updated=0 errors=0 ===</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:19,871</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 15] created=4630</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:17,672</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 15] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:16,869</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 15] rows 70001-74630 (4630 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:16,868</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 14] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:14,260</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 14] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:13,430</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 14] rows 65001-70000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:13,429</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 13] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:11,160</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 13] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:10,427</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 13] rows 60001-65000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:10,426</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 12] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:08,414</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 12] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:07,733</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 12] rows 55001-60000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:07,732</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 11] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:05,645</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 11] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:04,964</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 11] rows 50001-55000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:04,962</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 10] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:02,576</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 10] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:01,770</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 10] rows 45001-50000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:47:01,769</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 9] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:59,128</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">2eab65b…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">3330ff0…</td>
               <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:11:13,763</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">7abb147…</td>
-              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:03:21,433</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">analytics_chart</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">e924692…</td>
-              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:03:21,281</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">d2b25ec…</td>
-              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:03:21,189</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">732f373…</td>
-              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:03:11,294</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">fd79915…</td>
-              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:03:08,188</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">d3dc727…</td>
-              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:00:34,697</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">analytics_chart</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">dce4dee…</td>
-              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:00:34,516</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">4fc1789…</td>
-              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:00:34,408</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">0c2a887…</td>
-              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:00:24,205</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">d954b7d…</td>
-              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 09:00:21,081</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">6cb9121…</td>
-              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:54:13,943</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">analytics_chart</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">b59e4d4…</td>
-              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:54:13,801</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">94707b7…</td>
-              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:54:13,710</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">8fac09f…</td>
-              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:54:03,268</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">5ef4bc0…</td>
-              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:53:59,896</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">979126a…</td>
-              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:49:57,580</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">analytics_chart</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">858c441…</td>
-              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:49:57,375</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">abf51b8…</td>
-              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:49:57,283</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">c69fd2e…</td>
-              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:49:46,658</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">edcf77f…</td>
-              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:49:43,464</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">da11ad1…</td>
-              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:48:37,518</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">analytics_chart</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">5ec7372…</td>
-              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:48:36,925</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">abbd185…</td>
-              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:48:35,652</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">51d7c9d…</td>
-              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:48:15,571</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">2952cee…</td>
-              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 08:47:55,831</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">d228ba9…</td>
-              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:45,141</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">2666d2f…</td>
-              <td class="small">partial sales: shop=Bala VN Haiphong AEON MALL- Direct from=None to=None user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:43,402</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">7f37ebb…</td>
-              <td class="small">partial customer: store=BL VN North Warehouse from= to= user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:42,119</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">1715aa1…</td>
-              <td class="small">partial coupon: shop=Bala VN Haiphong AEON MALL- Direct prefix= from=None to=None user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:37,941</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">c482ed5…</td>
-              <td class="small">partial sales: shop=Bala VN Haiphong AEON MALL- Direct from=2025-01-01 to=2025-12-31 user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:36,439</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">4a62a45…</td>
-              <td class="small">partial sales: shop=Bala VN Haiphong AEON MALL- Direct from=None to=None user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:33,729</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">484c2bf…</td>
-              <td class="small">partial sales: shop=Bala VN Haiphong AEON MALL- Direct from=None to=None user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:23,775</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">a4b2ceb…</td>
-              <td class="small">partial customer: store=BL VN North Warehouse from= to= user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:20,744</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">fa627c4…</td>
-              <td class="small">partial customer: store=BL VN North Warehouse from= to= user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:12,148</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">50d7e94…</td>
-              <td class="small">partial coupon: shop=Bala VN Haiphong AEON MALL- Direct prefix= from=None to=None user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:09,644</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.shop_detail">App.views.shop_detail</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">ef7f6c0…</td>
-              <td class="small">partial coupon: shop=Bala VN Haiphong AEON MALL- Direct prefix= from=None to=None user=_test_ajax_</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:07,893</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">coupon_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">=== DONE Coupon Import: created=239514 updated=0 errors=0 ===</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:07,893</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:59,100</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 48] created=4514</td>
+              <td class="small">[Batch 9] existing=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:06,515</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:58,341</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 48] rows 235001-239514</td>
+              <td class="small">[Batch 9] rows 40001-45000 (5000 rows)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:06,514</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:58,340</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 47] created=5000</td>
+              <td class="small">[Batch 8] created=5000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:04,944</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:56,053</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 47] rows 230001-235000</td>
+              <td class="small">[Batch 8] existing=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:04,943</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:55,349</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 46] created=5000</td>
+              <td class="small">[Batch 8] rows 35001-40000 (5000 rows)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:03,389</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:55,349</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 46] rows 225001-230000</td>
+              <td class="small">[Batch 7] created=5000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:03,388</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:53,055</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 45] created=5000</td>
+              <td class="small">[Batch 7] existing=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:01,863</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:52,297</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 45] rows 220001-225000</td>
+              <td class="small">[Batch 7] rows 30001-35000 (5000 rows)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-24 07:49:01,863</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:52,296</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 44] created=5000</td>
+              <td class="small">[Batch 6] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:49,903</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 6] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:49,230</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 6] rows 25001-30000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:49,230</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 5] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 16:46:47,165</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 5] existing=0</td>
             </tr>
             
           </tbody>
