@@ -199,12 +199,7 @@ class _SectionContent extends ConsumerWidget {
             child: Text('Failed to load customers: $e',
                 style: const TextStyle(color: Colors.red)),
           ),
-          data: (c) => _KpiSection(
-            title: 'Customers',
-            allTimeKpis: c.allTimeKpis,
-            periodKpis: c.periodKpis,
-            tabs: c.tabs,
-          ),
+          data: (c) => _CustomerSection(customer: c),
         );
 
       case 2:
@@ -312,8 +307,7 @@ class _KpiSectionState extends State<_KpiSection> {
     );
   }
 
-  Widget _kpiGrid(
-      BuildContext context, List<KpiItem> kpis, KpiVariant variant) {
+  Widget _kpiGrid(BuildContext context, List<KpiItem> kpis, KpiVariant variant) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Wrap(
@@ -327,6 +321,99 @@ class _KpiSectionState extends State<_KpiSection> {
                     value: k.value,
                     variant: variant,
                   ),
+                ))
+            .toList(),
+      ),
+    );
+  }
+}
+
+/// Customer section: KPI + period tabs + Zalo Active list
+class _CustomerSection extends StatefulWidget {
+  const _CustomerSection({required this.customer});
+  final ShopCustomerPayload customer;
+
+  @override
+  State<_CustomerSection> createState() => _CustomerSectionState();
+}
+
+class _CustomerSectionState extends State<_CustomerSection> {
+  int _tab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.customer;
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.primary, width: 4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SectionHeader(title: 'Customers'),
+          if (c.allTimeKpis.isNotEmpty)
+            _kpiGrid(context, c.allTimeKpis, KpiVariant.allTime),
+          if (c.periodKpis.isNotEmpty)
+            _kpiGrid(context, c.periodKpis, KpiVariant.period),
+          if (c.tabs.isNotEmpty) ...[
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(
+                  c.tabs.length,
+                  (i) => TextButton(
+                    onPressed: () => setState(() => _tab = i),
+                    child: Text(
+                      c.tabs[i].label,
+                      style: TextStyle(
+                        color: _tab == i ? AppColors.primary : AppColors.textMuted,
+                        fontWeight: _tab == i ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: SizedBox(
+                height: 300,
+                child: DataTableWidget(
+                  headers: c.tabs[_tab].headers,
+                  rows: c.tabs[_tab].rows,
+                ),
+              ),
+            ),
+          ],
+          // Zalo Active list
+          if (c.zaloActiveTable != null && c.zaloActiveTable!.rows.isNotEmpty) ...[
+            const SectionHeader(title: 'Zalo Active Customers'),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: SizedBox(
+                height: 300,
+                child: DataTableWidget(
+                  headers: c.zaloActiveTable!.headers,
+                  rows: c.zaloActiveTable!.rows,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _kpiGrid(BuildContext context, List<KpiItem> kpis, KpiVariant variant) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: kpis
+            .map((k) => SizedBox(
+                  width: (MediaQuery.of(context).size.width - 40) / 2,
+                  child: KpiCard(label: k.label, value: k.value, variant: variant),
                 ))
             .toList(),
       ),

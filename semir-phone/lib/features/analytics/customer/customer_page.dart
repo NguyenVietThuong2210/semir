@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/dark_tabs.dart';
 import '../../../shared/widgets/data_table_widget.dart';
@@ -23,8 +24,9 @@ class _CustomerPageState extends ConsumerState<CustomerPage> {
   int _breakdownTab = 0;
   int _comparisonTab = 0;
 
-  static const _breakdownLabels = ['By Store', 'By Month', 'By Grade'];
-  static const _comparisonLabels = ['POS Only', 'CNV Only', 'Both'];
+  // Order matches API registration_breakdown keys: by_shop, by_season, by_month, by_week, by_grade
+  static const _breakdownLabels = ['By Store', 'By Season', 'By Month', 'By Week', 'By Grade'];
+  static const _comparisonLabels = ['POS Only', 'CNV Only', 'Both', 'Zalo'];
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +34,16 @@ class _CustomerPageState extends ConsumerState<CustomerPage> {
     final filter = ref.watch(customerFilterProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Customers')),
+      appBar: AppBar(
+        title: const Text('Customers'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Charts',
+            onPressed: () => context.go('/customer/charts'),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           PullToRefresh(

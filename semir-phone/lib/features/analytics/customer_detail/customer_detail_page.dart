@@ -196,6 +196,63 @@ class _CustomerProfile extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (payload.registrationStore.isNotEmpty ||
+                    payload.registrationDate.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    [
+                      if (payload.registrationStore.isNotEmpty)
+                        'Store: ${payload.registrationStore}',
+                      if (payload.registrationDate.isNotEmpty)
+                        'Reg: ${payload.registrationDate}',
+                    ].join('  ·  '),
+                    style:
+                        const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                ],
+                if (payload.email.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.email_outlined,
+                          size: 14, color: AppColors.textMuted),
+                      const SizedBox(width: 4),
+                      Text(
+                        payload.email,
+                        style: const TextStyle(
+                            color: AppColors.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
+                if (payload.cnvSyncStatus != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        payload.cnvSyncStatus == 'synced'
+                            ? Icons.link
+                            : Icons.link_off,
+                        size: 14,
+                        color: payload.cnvSyncStatus == 'synced'
+                            ? AppColors.primary
+                            : AppColors.textMuted,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        payload.cnvSyncStatus == 'synced'
+                            ? 'CNV Synced'
+                            : 'Not in CNV',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: payload.cnvSyncStatus == 'synced'
+                              ? AppColors.primary
+                              : AppColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

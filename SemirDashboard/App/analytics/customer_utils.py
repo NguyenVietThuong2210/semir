@@ -393,3 +393,88 @@ def count_new_members_with_invoice(customer_purchases, get_ci, period_lo, period
         if reg_date and period_lo <= reg_date <= period_hi:
             count += 1
     return count
+
+
+# ---------------------------------------------------------------------------
+# Customer detail — shared by web view and mobile API
+# ---------------------------------------------------------------------------
+
+def get_customer_detail_data(customer, max_invoices=None, include_coupons=True):
+    """Fetch full customer detail data.
+
+    Shared by App/views/customer.py (web) and App/api/views.py (API).
+    The web view calls with defaults (all invoices + coupons).
+    The API calls with max_invoices=50, include_coupons=False.
+
+    Returns:
+        {
+            'cnv_customer': CNVCustomer | None,
+            'is_synced_to_cnv': bool,
+            'invoices': [{ invoice_no, sales_day, shop_name, amount, season,
+                           coupon_id, face_value_display, coupon_amount }],
+            'total_invoice_count': int,  # always the DB count, not len(invoices)
+            'stats': { total_purchases, total_amount, last_purchase_date },
+        }
+    """
+    from decimal import Decimal
+    from App.models import SalesTransaction, Coupon
+    from App.cnv.models import CNVCustomer
+
+    # CNV sync check — exact phone match (follows web view standard)
+    cnv_customer = None
+    is_synced = False
+    if customer.phone:
+        cnv_customer = CNVCustomer.objects.filter(phone=customer.phone).first()
+        is_synced = cnv_customer is not None
+
+    # Invoice queryset — count separately from list to avoid cap-at-N bug
+    qs = SalesTransaction.objects.filter(vip_id=str(customer.vip_id)).order_by('-sales_date')
+    total_invoice_count = qs.count()
+    invoice_qs = qs[:max_invoices] if max_invoices else qs
+    invoices_raw = list(invoice_qs)
+
+    invoice_numbers = [inv.invoice_number for inv in invoices_raw]
+
+    # Coupon pre-fetch (one query, avoids N+1)
+    coupon_map = {}
+    if include_coupons and invoice_numbers:
+        coupon_map = {
+            c.docket_number: c
+            for c in Coupon.objects.filter(
+                docket_number__in=invoice_numbers, using_date__isnull=False
+            )
+        }
+
+    invoices = []
+    for inv in invoices_raw:
+        entry = {
+            'invoice_no':        inv.invoice_number,
+            'sales_day':         inv.sales_date,
+            'shop_name':         inv.shop_name,
+            'amount':            inv.settlement_amount,
+            'season':            inv.bu,
+            'coupon_id':         None,
+            'face_value_display': None,
+            'coupon_amount':     None,
+        }
+        coupon = coupon_map.get(inv.invoice_number)
+        if coupon:
+            from App.analytics.coupon_analytics import format_face_value, calc_coupon_amount
+            entry['coupon_id'] = coupon.coupon_id
+            entry['face_value_display'] = format_face_value(coupon.face_value)
+            entry['coupon_amount'] = calc_coupon_amount(coupon.face_value, inv.settlement_amount)
+        invoices.append(entry)
+
+    stats = {
+        'total_purchases':   total_invoice_count,
+        'total_amount':      sum((inv['amount'] or Decimal(0)) for inv in invoices),
+        'last_purchase_date': max((inv['sales_day'] for inv in invoices if inv['sales_day']), default=None),
+    }
+
+    return {
+        'cnv_customer':       cnv_customer,
+        'is_synced_to_cnv':   is_synced,
+        'invoices':           invoices,
+        'total_invoice_count': total_invoice_count,
+        'stats':              stats,
+    }

@@ -23,7 +23,7 @@ class CustomerAnalyticsPayload {
         periodKpis: KpiItem.parseMap(json['period_kpis'] as Map<String, dynamic>?),
         registrationBreakdownTabs:
             TableTab.parseMap(json['registration_breakdown'] as Map<String, dynamic>?),
-        comparisonTabs: TableTab.parseMap(json['comparison'] as Map<String, dynamic>?),
+        comparisonTabs: TableTab.parseMap(json['customer_comparison'] as Map<String, dynamic>?),
       );
     } catch (e) {
       throw ParseException('Failed to parse CustomerAnalyticsPayload: $e');

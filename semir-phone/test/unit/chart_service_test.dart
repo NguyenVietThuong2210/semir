@@ -18,41 +18,43 @@ void main() {
     service = ChartService(dio: mockDio);
   });
 
-  Map<String, dynamic> _successPayload({bool includeTrend = true}) => {
-        'donuts': {
-          'by_season': {
+  // API returns donuts as a LIST (not a map).
+  // Each slice has value as pre-formatted string + percentage as double.
+  Map<String, dynamic> successPayload({bool includeTrend = true}) => {
+        'donuts': [
+          {
             'title': 'Theo Mùa',
             'slices': [
               {
                 'label': 'M2-4 2025',
                 'value': '500,000,000',
                 'color': '#0D6EFD',
-                'percentage': 40.0,
+                'percentage': 62.5,
               },
               {
                 'label': 'M5-7 2025',
                 'value': '300,000,000',
-                'color': '#FF6B6B',
-                'percentage': 24.0,
+                'color': '#6610F2',
+                'percentage': 37.5,
               },
             ],
           },
-          'by_grade': {
+          {
             'title': 'Theo Hạng',
             'slices': [
               {
                 'label': 'Diamond',
                 'value': '200,000,000',
                 'color': '#20C997',
-                'percentage': 16.0,
+                'percentage': 100.0,
               },
             ],
           },
-        },
+        ],
         if (includeTrend)
           'trend': [
-            {'label': 'T1/2025', 'value': 100000000.0},
-            {'label': 'T2/2025', 'value': 120000000.0},
+            {'label': 'T1/2025', 'value': 85.5},
+            {'label': 'T2/2025', 'value': 88.2},
           ],
       };
 
@@ -61,7 +63,7 @@ void main() {
         .thenAnswer((_) async => Response(
               requestOptions: RequestOptions(path: '/api/v1/charts/sales/'),
               statusCode: 200,
-              data: _successPayload(),
+              data: successPayload(),
             ));
 
     final payload = await service.getSalesChartData();
@@ -72,12 +74,25 @@ void main() {
     expect(payload.donuts.first.slices.first.label, 'M2-4 2025');
   });
 
+  test('donut slice values are pre-formatted strings', () async {
+    when(mockDio.get(any, queryParameters: anyNamed('queryParameters')))
+        .thenAnswer((_) async => Response(
+              requestOptions: RequestOptions(path: '/api/v1/charts/sales/'),
+              statusCode: 200,
+              data: successPayload(),
+            ));
+
+    final payload = await service.getSalesChartData();
+
+    expect(payload.donuts.first.slices.first.value, '500,000,000');
+  });
+
   test('donut slice colors preserved as hex strings', () async {
     when(mockDio.get(any, queryParameters: anyNamed('queryParameters')))
         .thenAnswer((_) async => Response(
               requestOptions: RequestOptions(path: '/api/v1/charts/sales/'),
               statusCode: 200,
-              data: _successPayload(),
+              data: successPayload(),
             ));
 
     final payload = await service.getSalesChartData();
@@ -87,12 +102,31 @@ void main() {
     expect(slice.color.startsWith('#'), isTrue);
   });
 
+  test('donut slice percentage is numeric and non-negative', () async {
+    when(mockDio.get(any, queryParameters: anyNamed('queryParameters')))
+        .thenAnswer((_) async => Response(
+              requestOptions: RequestOptions(path: '/api/v1/charts/sales/'),
+              statusCode: 200,
+              data: successPayload(),
+            ));
+
+    final payload = await service.getSalesChartData();
+
+    for (final donut in payload.donuts) {
+      for (final slice in donut.slices) {
+        expect(slice.percentage, isNonNegative);
+        expect(slice.percentage, lessThanOrEqualTo(100.0));
+      }
+    }
+    expect(payload.donuts.first.slices.first.percentage, 62.5);
+  });
+
   test('null trend in response → ChartPayload.trend is null', () async {
     when(mockDio.get(any, queryParameters: anyNamed('queryParameters')))
         .thenAnswer((_) async => Response(
               requestOptions: RequestOptions(path: '/api/v1/charts/sales/'),
               statusCode: 200,
-              data: _successPayload(includeTrend: false),
+              data: successPayload(includeTrend: false),
             ));
 
     final payload = await service.getSalesChartData();
@@ -105,7 +139,7 @@ void main() {
         .thenAnswer((_) async => Response(
               requestOptions: RequestOptions(path: '/api/v1/charts/sales/'),
               statusCode: 200,
-              data: _successPayload(includeTrend: true),
+              data: successPayload(includeTrend: true),
             ));
 
     final payload = await service.getSalesChartData();
@@ -113,6 +147,21 @@ void main() {
     expect(payload.trend, isNotNull);
     expect(payload.trend!.length, 2);
     expect(payload.trend!.first.label, 'T1/2025');
+    expect(payload.trend!.first.value, 85.5);
+  });
+
+  test('empty donuts list → payload.donuts is empty', () async {
+    when(mockDio.get(any, queryParameters: anyNamed('queryParameters')))
+        .thenAnswer((_) async => Response(
+              requestOptions: RequestOptions(path: '/api/v1/charts/sales/'),
+              statusCode: 200,
+              data: {'donuts': [], 'trend': null},
+            ));
+
+    final payload = await service.getSalesChartData();
+
+    expect(payload.donuts, isEmpty);
+    expect(payload.trend, isNull);
   });
 
   test('getCustomerChartData → calls customer chart endpoint', () async {
@@ -120,7 +169,7 @@ void main() {
         .thenAnswer((_) async => Response(
               requestOptions: RequestOptions(path: '/api/v1/charts/customer/'),
               statusCode: 200,
-              data: _successPayload(),
+              data: successPayload(),
             ));
 
     final payload = await service.getCustomerChartData();
@@ -133,7 +182,7 @@ void main() {
         .thenAnswer((_) async => Response(
               requestOptions: RequestOptions(path: '/api/v1/charts/coupon/'),
               statusCode: 200,
-              data: _successPayload(),
+              data: successPayload(),
             ));
 
     final payload = await service.getCouponChartData();

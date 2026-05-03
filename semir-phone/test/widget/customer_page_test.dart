@@ -27,14 +27,24 @@ CustomerAnalyticsPayload _fixturePayload() {
         tabKey: 'by_shop',
         label: 'Theo Cửa hàng',
         headers: ['Cửa hàng', 'Số KH'],
-        rows: [
-          ['HN01', '500'],
-        ],
+        rows: [['HN01', '500']],
+      ),
+      const TableTab(
+        tabKey: 'by_season',
+        label: 'Theo Mùa',
+        headers: ['Mùa', 'Số KH'],
+        rows: [],
       ),
       const TableTab(
         tabKey: 'by_month',
         label: 'Theo Tháng',
         headers: ['Tháng', 'Số KH'],
+        rows: [],
+      ),
+      const TableTab(
+        tabKey: 'by_week',
+        label: 'Theo Tuần',
+        headers: ['Tuần', 'Số KH'],
         rows: [],
       ),
       const TableTab(

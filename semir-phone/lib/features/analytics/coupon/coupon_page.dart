@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/dark_tabs.dart';
 import '../../../shared/widgets/data_table_widget.dart';
@@ -43,7 +44,16 @@ class _CouponPageState extends ConsumerState<CouponPage> {
     final prefix = ref.watch(couponPrefixProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Coupon')),
+      appBar: AppBar(
+        title: const Text('Coupon'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Charts',
+            onPressed: () => context.go('/coupon/charts'),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           PullToRefresh(
@@ -95,6 +105,11 @@ class _CouponPageState extends ConsumerState<CouponPage> {
                         ],
                       ),
                     ),
+                    if (payload == null)
+                      const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Center(child: Text('No data')),
+                      ),
                     if (payload != null) ...[
                       const SectionHeader(title: 'All-Time Overview'),
                       _KpiRow(
@@ -150,10 +165,10 @@ class _LazyTabContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Tab 0 is always present in the initial payload
+    // Tab 0 (by_shop) is always in the initial payload — look up by key, not index
     if (tabIndex == 0) {
-      final tab = payload.tabs.isNotEmpty ? payload.tabs.first : null;
-      return _tabContent(tab);
+      final matches = payload.tabs.where((t) => t.tabKey == 'by_shop');
+      return _tabContent(matches.isNotEmpty ? matches.first : null);
     }
 
     if (tabIndex >= _kTabKeys.length) return const SizedBox.shrink();

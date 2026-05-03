@@ -98,30 +98,38 @@ void main() {
 
   testWidgets('data loaded → section tab bar visible', (tester) async {
     await tester.pumpWidget(
-      buildSubject(
-        salesState: AsyncValue.data(_fixtureSalesPayload()),
-        selectedShop: 'HN01',
-      ),
+      buildSubject(salesState: AsyncValue.data(_fixtureSalesPayload())),
     );
     await tester.pumpAndSettle();
 
+    // Select a shop via the provider container (avoids HTTP call from notifier).
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ShopDetailPage)),
+    );
+    container.read(selectedShopProvider.notifier).state = 'HN01';
+    await tester.pumpAndSettle();
+
     // Section tab buttons should be visible
-    expect(find.text('Sales'), findsOneWidget);
+    expect(find.text('Sales'), findsWidgets);
     expect(find.text('Customers'), findsOneWidget);
     expect(find.text('Coupon'), findsOneWidget);
   });
 
   testWidgets('data loaded → KPI cards visible for sales section', (tester) async {
     await tester.pumpWidget(
-      buildSubject(
-        salesState: AsyncValue.data(_fixtureSalesPayload()),
-        selectedShop: 'HN01',
-      ),
+      buildSubject(salesState: AsyncValue.data(_fixtureSalesPayload())),
     );
     await tester.pumpAndSettle();
 
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ShopDetailPage)),
+    );
+    container.read(selectedShopProvider.notifier).state = 'HN01';
+    await tester.pumpAndSettle();
+
     expect(find.byType(KpiCard), findsWidgets);
-    expect(find.text('Active'), findsWidgets);
+    // KpiCard uppercases its label — fixture label 'Active' renders as 'ACTIVE'.
+    expect(find.text('ACTIVE'), findsWidgets);
   });
 
   testWidgets('loading state → LoadingOverlay visible', (tester) async {

@@ -16,32 +16,55 @@ class CustomerDetailPayload {
     required this.kpis,
     required this.invoiceHeaders,
     required this.invoiceRows,
+    this.registrationStore = '',
+    this.registrationDate = '',
+    this.email = '',
+    this.cnvSyncStatus,
   });
 
   final String username;
   final String phone; // already masked by API: 09x-xxx-x567
   final String vipId;
   final String grade;
+  final String registrationStore;
+  final String registrationDate;
+  final String email;
+  final String? cnvSyncStatus; // 'synced' | 'not_synced' | null
   final List<KpiItem> kpis;
   final List<String> invoiceHeaders;
   final List<List<String>> invoiceRows;
 
   factory CustomerDetailPayload.fromJson(Map<String, dynamic> json) {
-    final customer = json['customer'] as Map<String, dynamic>? ?? json;
-    final invoices = json['invoices'] as Map<String, dynamic>? ?? {};
+    // API returns flat structure — build KPIs from individual numeric fields
+    final kpis = <KpiItem>[
+      KpiItem(label: 'Total Invoices', value: '${json['total_invoices'] ?? 0}'),
+      KpiItem(label: 'Total Revenue (VND)', value: '${json['total_revenue'] ?? '0'}'),
+    ];
+
+    // invoice_history: [{date, shop, invoice_id, amount, coupon_used}]
+    final history = (json['invoice_history'] as List?) ?? [];
+    const headers = ['Date', 'Shop', 'Invoice', 'Amount'];
+    final rows = history
+        .map<List<String>>((h) => [
+              h['date'] as String? ?? '',
+              h['shop'] as String? ?? '',
+              h['invoice_id'] as String? ?? '',
+              h['amount'] as String? ?? '',
+            ])
+        .toList();
 
     return CustomerDetailPayload(
-      username: customer['username'] as String? ?? '',
-      phone: customer['phone'] as String? ?? '',
-      vipId: customer['vip_id'] as String? ?? '',
-      grade: customer['grade'] as String? ?? '',
-      kpis: KpiItem.parseMap(json['kpis'] as Map<String, dynamic>?),
-      invoiceHeaders:
-          (invoices['headers'] as List?)?.cast<String>() ?? [],
-      invoiceRows: (invoices['rows'] as List?)
-              ?.map((r) => (r as List).cast<String>())
-              .toList() ??
-          [],
+      username: json['name'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+      vipId: json['vip_id'] as String? ?? '',
+      grade: json['grade'] as String? ?? '',
+      registrationStore: json['registration_store'] as String? ?? '',
+      registrationDate: json['registration_date'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+      cnvSyncStatus: json['cnv_sync_status'] as String?,
+      kpis: kpis,
+      invoiceHeaders: headers,
+      invoiceRows: rows,
     );
   }
 }

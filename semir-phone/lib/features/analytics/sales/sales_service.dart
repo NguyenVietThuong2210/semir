@@ -9,12 +9,14 @@ class SalesAnalyticsPayload {
     required this.periodKpis,
     required this.tabs,
     this.availableTabs = const [],
+    this.allshopsTabs = const [],
   });
 
   final List<KpiItem> allTimeKpis;
   final List<KpiItem> periodKpis;
   final List<TableTab> tabs;
   final List<String> availableTabs;
+  final List<TableTab> allshopsTabs; // non-empty only when shop_group filter is active
 
   factory SalesAnalyticsPayload.fromJson(Map<String, dynamic> json) {
     final rawTabs = (json['available_tabs'] as List<dynamic>?)
@@ -25,6 +27,7 @@ class SalesAnalyticsPayload {
       periodKpis: KpiItem.parseMap(json['period_kpis'] as Map<String, dynamic>?),
       tabs: TableTab.parseMap(json['tabs'] as Map<String, dynamic>?),
       availableTabs: rawTabs,
+      allshopsTabs: TableTab.parseMap(json['allshops_tabs'] as Map<String, dynamic>?),
     );
   }
 }

@@ -38,11 +38,13 @@ class ShopCustomerPayload {
     required this.allTimeKpis,
     required this.periodKpis,
     required this.tabs,
+    this.zaloActiveTable,
   });
 
   final List<KpiItem> allTimeKpis;
   final List<KpiItem> periodKpis;
   final List<TableTab> tabs; // by_season, by_month, by_week
+  final TableTab? zaloActiveTable;
 
   factory ShopCustomerPayload.fromJson(Map<String, dynamic> json) {
     final customer = json['customer'] as Map<String, dynamic>? ?? {};
@@ -50,10 +52,24 @@ class ShopCustomerPayload {
     for (final key in ['by_season', 'by_month', 'by_week']) {
       if (customer.containsKey(key)) tabData[key] = customer[key];
     }
+    TableTab? zaloActive;
+    final rawZalo = customer['zalo_active'] as Map<String, dynamic>?;
+    if (rawZalo != null) {
+      zaloActive = TableTab(
+        tabKey: 'zalo_active',
+        label: 'Zalo Active',
+        headers: (rawZalo['headers'] as List?)?.cast<String>() ?? [],
+        rows: (rawZalo['rows'] as List?)
+                ?.map((r) => (r as List).cast<String>())
+                .toList() ??
+            [],
+      );
+    }
     return ShopCustomerPayload(
       allTimeKpis: KpiItem.parseMap(customer['all_time_kpis'] as Map<String, dynamic>?),
       periodKpis: KpiItem.parseMap(customer['period_kpis'] as Map<String, dynamic>?),
       tabs: TableTab.parseMap(tabData.isNotEmpty ? tabData : null),
+      zaloActiveTable: zaloActive,
     );
   }
 }

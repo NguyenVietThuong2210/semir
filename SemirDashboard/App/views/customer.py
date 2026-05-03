@@ -1,13 +1,12 @@
 """App/views/customer.py — Customer detail view."""
 import logging
-from decimal import Decimal
 
 from django.shortcuts import render
 from django.contrib import messages
 
 from App.permissions import requires_perm
-from App.models import Customer, SalesTransaction, Coupon
-from App.cnv.models import CNVCustomer
+from App.models import Customer
+from App.analytics.customer_utils import get_customer_detail_data
 
 logger = logging.getLogger(__name__)
 
@@ -49,82 +48,23 @@ def customer_detail(request):
             except Customer.DoesNotExist:
                 logger.warning("Customer not found: phone=%s", search_phone)
             except Customer.MultipleObjectsReturned:
-                # If multiple customers with same phone, get first one
                 customer = Customer.objects.filter(phone=search_phone).first()
                 logger.warning(
                     "Multiple customers found with phone=%s, using first", search_phone
                 )
 
         if customer:
-            # Check CNV sync status (use 'phone' field not 'phone_no')
-            if customer.phone:
-                cnv_customer = CNVCustomer.objects.filter(phone=customer.phone).first()
-                is_synced_to_cnv = cnv_customer is not None
-                if cnv_customer:
-                    logger.debug(
-                        "cnv_match: phone=%s total_points=%s used_points=%s points=%s",
-                        customer.phone, cnv_customer.total_points, cnv_customer.used_points, cnv_customer.points,
-                    )
-
-            # Get all invoices for this customer (no select_related — Customer FK not needed)
-            invoices = list(
-                SalesTransaction.objects.filter(vip_id=customer.vip_id)
-                .order_by("-sales_date")
-            )
-
-            # Pre-fetch coupons for all invoices in one query (avoids N+1)
-            invoice_numbers = [inv.invoice_number for inv in invoices]
-            coupon_map = {
-                c.docket_number: c
-                for c in Coupon.objects.filter(
-                    docket_number__in=invoice_numbers, using_date__isnull=False
+            detail = get_customer_detail_data(customer)
+            cnv_customer    = detail['cnv_customer']
+            is_synced_to_cnv = detail['is_synced_to_cnv']
+            invoices        = detail['invoices']
+            stats           = detail['stats']
+            if cnv_customer:
+                logger.debug(
+                    "cnv_match: phone=%s total_points=%s used_points=%s points=%s",
+                    customer.phone, cnv_customer.total_points,
+                    cnv_customer.used_points, cnv_customer.points,
                 )
-            }
-
-            # Add coupon info to each invoice
-            invoices_with_coupons = []
-            for inv in invoices:
-                invoice_data = {
-                    "invoice_no": inv.invoice_number,
-                    "sales_day": inv.sales_date,
-                    "shop_name": inv.shop_name,
-                    "amount": inv.settlement_amount,
-                    "season": inv.bu,
-                    "coupon_id": None,
-                    "face_value_display": None,
-                    "coupon_amount": None,
-                }
-
-                coupon = coupon_map.get(inv.invoice_number)
-
-                if coupon:
-                    invoice_data["coupon_id"] = coupon.coupon_id
-                    # Display face value
-                    from App.analytics.coupon_analytics import (
-                        format_face_value,
-                        calc_coupon_amount,
-                    )
-
-                    invoice_data["face_value_display"] = format_face_value(
-                        coupon.face_value
-                    )
-                    invoice_data["coupon_amount"] = calc_coupon_amount(
-                        coupon.face_value, inv.settlement_amount
-                    )
-
-                invoices_with_coupons.append(invoice_data)
-
-            invoices = invoices_with_coupons
-
-            # Compute stats from already-fetched invoices — no extra DB round-trip
-            stats = {
-                "total_purchases": len(invoices),
-                "total_amount": sum((inv["amount"] or Decimal(0)) for inv in invoices),
-                "last_purchase_date": max(
-                    (inv["sales_day"] for inv in invoices if inv["sales_day"]),
-                    default=None,
-                ),
-            }
 
     return render(
         request,

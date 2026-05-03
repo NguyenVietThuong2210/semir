@@ -89,7 +89,7 @@ class _DonutCardState extends State<DonutCard> {
                       }
                       final idx = response?.touchedSection?.touchedSectionIndex;
                       setState(() => _touchedIndex = idx);
-                      if (idx != null && idx < slices.length) {
+                      if (idx != null && idx >= 0 && idx < slices.length) {
                         widget.onSliceTapped?.call(slices[idx].label);
                       }
                     },

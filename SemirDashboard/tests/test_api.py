@@ -23,18 +23,22 @@ import json
 import time
 
 from django.contrib.auth.models import User
+from django.db.models import Count
 
 from tests.base import SnapshotTestCase, INPUT_DIR, get_run_log
 
 # ── URL constants ──────────────────────────────────────────────────────────────
 
-SALES_URL       = '/api/v1/analytics/sales/'
-CUSTOMER_URL    = '/api/v1/analytics/customer/'
-COUPON_URL      = '/api/v1/analytics/coupon/'
-SHOPS_URL       = '/api/v1/analytics/shops/'
-SHOP_DETAIL_URL = '/api/v1/analytics/shop-detail/'
-CUST_DETAIL_URL = '/api/v1/analytics/customer-detail/'
-LOGIN_URL       = '/api/v1/auth/token/'
+SALES_URL           = '/api/v1/analytics/sales/'
+CUSTOMER_URL        = '/api/v1/analytics/customer/'
+COUPON_URL          = '/api/v1/analytics/coupon/'
+SHOPS_URL           = '/api/v1/analytics/shops/'
+SHOP_DETAIL_URL     = '/api/v1/analytics/shop-detail/'
+CUST_DETAIL_URL     = '/api/v1/analytics/customer-detail/'
+LOGIN_URL           = '/api/v1/auth/token/'
+SALES_CHART_URL     = '/api/v1/charts/sales/'
+CUSTOMER_CHART_URL  = '/api/v1/charts/customer/'
+COUPON_CHART_URL    = '/api/v1/charts/coupon/'
 
 # Performance thresholds (wall-clock, single-worker dev server via test client)
 PERF_LIMIT_FAST  = 15   # seconds — initial page loads (have caches)
@@ -99,6 +103,9 @@ class ApiAuthGuardTest(SnapshotTestCase):
         SHOPS_URL,
         SHOP_DETAIL_URL,
         CUST_DETAIL_URL,
+        SALES_CHART_URL,
+        CUSTOMER_CHART_URL,
+        COUPON_CHART_URL,
     ]
 
     def test_all_analytics_require_auth(self):
@@ -305,7 +312,7 @@ class ApiStructureTest(SnapshotTestCase):
     def test_customer_comparison_tables_present(self):
         data, _ = self._json(CUSTOMER_URL)
         cc = data['customer_comparison']
-        for tbl_key in ('pos_only', 'cnv_only', 'both'):
+        for tbl_key in ('pos_only', 'cnv_only', 'both', 'zalo'):
             self.assertIn(tbl_key, cc, f"customer_comparison missing: {tbl_key}")
 
     def test_customer_pos_only_positive(self):
@@ -615,8 +622,52 @@ class ApiStructureTest(SnapshotTestCase):
         if customer is None:
             self.skipTest("No customer data")
         data, _ = self._json(CUST_DETAIL_URL, {'vip_id': customer.vip_id})
-        for key in ('vip_id', 'phone', 'grade', 'total_invoices', 'total_revenue'):
+        for key in (
+            'name', 'vip_id', 'phone', 'grade',
+            'registration_store', 'registration_date', 'cnv_sync_status',
+            'email', 'total_invoices', 'total_revenue', 'invoice_history',
+        ):
             self.assertIn(key, data, f"customer-detail missing: {key}")
+
+    def test_customer_detail_phone_is_masked(self):
+        from App.models import Customer
+        customer = Customer.objects.exclude(vip_id='0').exclude(phone='').first()
+        if customer is None:
+            self.skipTest("No customer with phone")
+        data, _ = self._json(CUST_DETAIL_URL, {'vip_id': customer.vip_id})
+        phone = data.get('phone', '')
+        # Masked format contains 'x' — raw digits must not all be present
+        self.assertIn('x', phone.lower(), f"Phone not masked: {phone!r}")
+        # Raw phone digits must not be returned verbatim
+        raw_digits = ''.join(c for c in (customer.phone or '') if c.isdigit())
+        if len(raw_digits) >= 7:
+            self.assertNotEqual(
+                ''.join(c for c in phone if c.isdigit()),
+                raw_digits,
+                f"Raw phone digits returned unmasked: {phone!r}",
+            )
+
+    def test_customer_detail_total_invoices_accurate(self):
+        """total_invoices must reflect ALL transactions, not just the 50-record display cap."""
+        from App.models import Customer, SalesTransaction
+        # Find a customer with more than 50 invoices to make the test meaningful
+        vip_id = (
+            SalesTransaction.objects
+            .exclude(vip_id='0')
+            .values('vip_id')
+            .annotate(cnt=Count('vip_id'))
+            .order_by('-cnt')
+            .values_list('vip_id', flat=True)
+            .first()
+        )
+        if vip_id is None:
+            self.skipTest("No sales data")
+        actual_count = SalesTransaction.objects.filter(vip_id=vip_id).count()
+        data, _ = self._json(CUST_DETAIL_URL, {'vip_id': vip_id})
+        self.assertEqual(
+            data['total_invoices'], actual_count,
+            f"total_invoices {data['total_invoices']} ≠ actual {actual_count} for vip_id={vip_id}",
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # SNAPSHOT — lock response shapes so regressions are caught
@@ -671,3 +722,753 @@ class ApiStructureTest(SnapshotTestCase):
             'period_kpi_keys': sorted(sales.get('period_kpis', {}).keys()),
         }
         self.assert_snapshot('api_shop_detail_sales_shape', snapshot)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CHART ENDPOINT TESTS  /api/v1/charts/*
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ApiChartTest(ApiStructureTest):
+    """
+    Structure + data tests for all 3 chart endpoints.
+    Inherits setUpTestData + auth helpers from ApiStructureTest.
+    Verifies: auth guard, response shape, donut slices, trend data.
+    """
+
+    # ── Sales Chart ───────────────────────────────────────────────────────────
+
+    def test_sales_chart_status_200(self):
+        resp, _ = self._get(SALES_CHART_URL)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_sales_chart_has_donuts_key(self):
+        data, _ = self._json(SALES_CHART_URL)
+        self.assertIn('donuts', data, "Sales chart missing 'donuts' key")
+
+    def test_sales_chart_donuts_is_list(self):
+        data, _ = self._json(SALES_CHART_URL)
+        self.assertIsInstance(data['donuts'], list)
+
+    def test_sales_chart_donut_slice_shape(self):
+        data, _ = self._json(SALES_CHART_URL)
+        donuts = data.get('donuts', [])
+        if not donuts:
+            self.skipTest("No sales data for chart")
+        for donut in donuts:
+            self.assertIn('title', donut)
+            self.assertIn('slices', donut)
+            for s in donut['slices']:
+                self.assertIn('label', s)
+                self.assertIn('value', s)
+                self.assertIn('color', s)
+                self.assertIn('percentage', s)
+                self.assertGreaterEqual(s['percentage'], 0)
+                self.assertLessEqual(s['percentage'], 100)
+
+    def test_sales_chart_donut_percentages_sum_to_100(self):
+        data, _ = self._json(SALES_CHART_URL)
+        for donut in data.get('donuts', []):
+            total = sum(s['percentage'] for s in donut['slices'])
+            self.assertAlmostEqual(total, 100.0, delta=1.5,
+                msg=f"Donut '{donut['title']}' percentages sum to {total:.1f}%, expected ~100%")
+
+    def test_sales_chart_trend_is_list_or_null(self):
+        data, _ = self._json(SALES_CHART_URL)
+        trend = data.get('trend')
+        if trend is not None:
+            self.assertIsInstance(trend, list)
+            if trend:
+                point = trend[0]
+                self.assertIn('label', point)
+                self.assertIn('value', point)
+
+    def test_sales_chart_with_date_filter(self):
+        data, _ = self._json(SALES_CHART_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self.assertIn('donuts', data)
+
+    # ── Customer Chart ────────────────────────────────────────────────────────
+
+    def test_customer_chart_status_200(self):
+        resp, _ = self._get(CUSTOMER_CHART_URL)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_customer_chart_has_donuts_key(self):
+        data, _ = self._json(CUSTOMER_CHART_URL)
+        self.assertIn('donuts', data)
+
+    def test_customer_chart_donut_slice_shape(self):
+        data, _ = self._json(CUSTOMER_CHART_URL)
+        donuts = data.get('donuts', [])
+        if not donuts:
+            self.skipTest("No CNV data for customer chart")
+        for donut in donuts:
+            self.assertIn('title', donut)
+            self.assertIn('slices', donut)
+            for s in donut['slices']:
+                self.assertIn('label', s)
+                self.assertIn('percentage', s)
+
+    def test_customer_chart_with_date_filter(self):
+        data, _ = self._json(CUSTOMER_CHART_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self.assertIn('donuts', data)
+
+    # ── Coupon Chart ──────────────────────────────────────────────────────────
+
+    def test_coupon_chart_status_200(self):
+        resp, _ = self._get(COUPON_CHART_URL)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_coupon_chart_has_donuts_key(self):
+        data, _ = self._json(COUPON_CHART_URL)
+        self.assertIn('donuts', data)
+
+    def test_coupon_chart_donut_slice_shape(self):
+        data, _ = self._json(COUPON_CHART_URL)
+        donuts = data.get('donuts', [])
+        if not donuts:
+            self.skipTest("No coupon data for chart")
+        for donut in donuts:
+            self.assertIn('title', donut)
+            self.assertIn('slices', donut)
+            for s in donut['slices']:
+                self.assertIn('label', s)
+                self.assertIn('value', s)
+                self.assertIn('percentage', s)
+
+    def test_coupon_chart_with_date_filter(self):
+        data, _ = self._json(COUPON_CHART_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self.assertIn('donuts', data)
+
+    # ── Chart auth guard ─────────────────────────────────────────────────────
+
+    def test_chart_endpoints_require_auth(self):
+        for url in (SALES_CHART_URL, CUSTOMER_CHART_URL, COUPON_CHART_URL):
+            resp = self.client.get(url)  # no Authorization header → 401
+            self.assertIn(resp.status_code, (401, 403),
+                f"Expected 401/403 for unauthenticated {url}, got {resp.status_code}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PARITY TESTS — API output must match shared service function output exactly
+# Both web views and API call the same underlying functions.
+# These tests call the function directly then call the API and compare values.
+# This guarantees web ↔ mobile data parity without reading HTML.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ApiParityTest(ApiStructureTest):
+    """Verify API output matches shared service functions (web view standard)."""
+
+    PERF_LIMIT = 5.0  # seconds — flag API calls slower than this
+
+    def _log_perf(self, label, elapsed):
+        get_run_log().log(f"  [parity-perf] {label}: {elapsed:.2f}s (limit={self.PERF_LIMIT}s)")
+        self.assertLess(elapsed, self.PERF_LIMIT, f"{label} too slow: {elapsed:.2f}s")
+
+    # ── Sales Analytics ───────────────────────────────────────────────────────
+
+    def test_sales_alltime_kpis_match_underlying_function(self):
+        """API all-time KPIs must equal get_sales_tab('grade') overview exactly."""
+        from App.analytics.tab_functions import get_sales_tab
+        raw = get_sales_tab('grade', date_from=None, date_to=None)
+        if not raw:
+            self.skipTest("No sales data")
+        ov = raw['overview']
+        data, elapsed = self._json(SALES_URL)
+        self._log_perf("sales alltime", elapsed)
+        at = data['all_time_kpis']
+        self.assertEqual(ov.get('total_customers_in_db', 0), _parse_int(at['Total Customers']))
+        self.assertEqual(ov.get('member_active_all_time', 0), _parse_int(at['Member Active']))
+        self.assertEqual(ov.get('member_inactive_all_time', 0), _parse_int(at['Member Inactive']))
+        # Return rate is a percentage string: "12.34%"
+        expected_rr = f"{float(ov.get('return_rate_all_time', 0)):.2f}%"
+        self.assertEqual(expected_rr, at.get('Return Rate (All Time)', ''))
+
+    def test_sales_period_2025_kpis_match_underlying_function(self):
+        """API period 2025 KPIs must equal get_sales_tab('grade') period output — all 10 fields."""
+        from App.analytics.tab_functions import get_sales_tab
+        from datetime import date as _d
+        raw = get_sales_tab('grade', date_from=_d(2025, 1, 1), date_to=_d(2025, 12, 31))
+        if not raw:
+            self.skipTest("No 2025 sales data")
+        ov = raw['overview']
+        data, elapsed = self._json(SALES_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self._log_perf("sales period 2025", elapsed)
+        pd = data['period_kpis']
+        self.assertEqual(ov.get('new_members_in_period', 0), _parse_int(pd['New Members']))
+        self.assertEqual(ov.get('returning_customers', 0), _parse_int(pd['Returning Customers']))
+        self.assertEqual(ov.get('active_customers', 0), _parse_int(pd['Active Customers']))
+        self.assertEqual(ov.get('returning_invoices', 0), _parse_int(pd['INV(RET)']))
+        amt_ret = int(round(ov.get('returning_amount', 0)))
+        self.assertEqual(amt_ret, _parse_int(pd['AMT(RET)']))
+        self.assertEqual(ov.get('total_invoices_without_vip0', 0), _parse_int(pd['INV(CUS)']))
+        amt_cus = int(round(ov.get('total_amount_without_vip0', 0)))
+        self.assertEqual(amt_cus, _parse_int(pd['AMT(CUS)']))
+        total_inv = ov.get('total_invoices_with_vip0', ov.get('total_invoices', 0))
+        self.assertEqual(total_inv, _parse_int(pd['Total Invoices']))
+        total_amt = int(round(ov.get('total_amount_with_vip0', ov.get('total_amount', 0))))
+        self.assertEqual(total_amt, _parse_int(pd['Total Amount']))
+
+    # ── Shop Detail – Sales ───────────────────────────────────────────────────
+
+    def test_shop_sales_alltime_kpis_match_underlying_function(self):
+        """API shop sales all-time KPIs must equal get_shop_detail_sales_data — all 7 fields."""
+        from App.analytics.tab_functions import get_shop_detail_sales_data
+        from App.models import SalesTransaction
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        shop = self._pick_shop()
+        raw = get_shop_detail_sales_data(shop, date_from=None, date_to=None)
+        if not raw:
+            self.skipTest("No data for shop")
+        at_raw = raw.get('all_time', {})
+        data, elapsed = self._json(SHOP_DETAIL_URL, {'shop': shop, 'section': 'sales'})
+        self._log_perf("shop sales alltime", elapsed)
+        at = data['sales']['all_time_kpis']
+        total_inv = at_raw.get('total_invoices_with_vip0', at_raw.get('total_invoices', 0))
+        self.assertEqual(total_inv, _parse_int(at.get('Total INV', 0)))
+        total_amt = int(round(at_raw.get('total_amount_with_vip0', at_raw.get('total_amount', 0))))
+        self.assertEqual(total_amt, _parse_int(at.get('Total Amt (VND)', 0)))
+        self.assertEqual(at_raw.get('total_customers', 0), _parse_int(at.get('Active', 0)))
+        self.assertEqual(at_raw.get('returning_customers', 0), _parse_int(at.get('Returning', 0)))
+        self.assertEqual(at_raw.get('returning_invoices', 0), _parse_int(at.get('INV(RET)', 0)))
+        amt_ret = int(round(at_raw.get('returning_amount', 0)))
+        self.assertEqual(amt_ret, _parse_int(at.get('AMT(RET)', 0)))
+        # return_rate is formatted "12.34%"
+        expected_rr = f"{float(at_raw.get('return_rate', 0)):.2f}%"
+        self.assertEqual(expected_rr, at.get('Return Rate', ''))
+
+    def test_shop_sales_period_2025_kpis_match_underlying_function(self):
+        """API shop sales period KPIs must equal get_shop_detail_sales_data period — all 7 fields."""
+        from App.analytics.tab_functions import get_shop_detail_sales_data
+        from App.models import SalesTransaction
+        from datetime import date as _d
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        shop = self._pick_shop()
+        raw = get_shop_detail_sales_data(shop, date_from=_d(2025, 1, 1), date_to=_d(2025, 12, 31))
+        if not raw:
+            self.skipTest("No 2025 data for shop")
+        pd_raw = raw.get('period', {})
+        data, elapsed = self._json(SHOP_DETAIL_URL, {
+            'shop': shop, 'section': 'sales',
+            'date_from': PERIOD_FROM, 'date_to': PERIOD_TO,
+        })
+        self._log_perf("shop sales period 2025", elapsed)
+        pd = data['sales']['period_kpis']
+        total_inv = pd_raw.get('total_invoices_with_vip0', pd_raw.get('total_invoices', 0))
+        self.assertEqual(total_inv, _parse_int(pd.get('Total INV', 0)))
+        total_amt = int(round(pd_raw.get('total_amount_with_vip0', pd_raw.get('total_amount', 0))))
+        self.assertEqual(total_amt, _parse_int(pd.get('Total Amt (VND)', 0)))
+        self.assertEqual(pd_raw.get('total_customers', 0), _parse_int(pd.get('Active', 0)))
+        self.assertEqual(pd_raw.get('returning_customers', 0), _parse_int(pd.get('Returning', 0)))
+        self.assertEqual(pd_raw.get('returning_invoices', 0), _parse_int(pd.get('INV(RET)', 0)))
+        amt_ret = int(round(pd_raw.get('returning_amount', 0)))
+        self.assertEqual(amt_ret, _parse_int(pd.get('AMT(RET)', 0)))
+
+    # ── Shop Detail – Customer ────────────────────────────────────────────────
+
+    def test_shop_customer_alltime_kpis_match_underlying_function(self):
+        """API shop customer all-time KPIs must equal get_shop_detail_customer_data — all 7 fields."""
+        from App.analytics.tab_functions import get_shop_detail_customer_data
+        from App.models import SalesTransaction
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        shop = self._pick_shop()
+        raw = get_shop_detail_customer_data(shop, start_date='', end_date='')
+        if not raw:
+            self.skipTest("No customer data for shop")
+        at_raw = raw.get('all_time', {})
+        data, elapsed = self._json(SHOP_DETAIL_URL, {'shop': shop, 'section': 'customer'})
+        self._log_perf("shop customer alltime", elapsed)
+        at = data['customer']['all_time_kpis']
+        self.assertEqual(at_raw.get('new_pos', 0), _parse_int(at.get('New POS', 0)))
+        self.assertEqual(at_raw.get('new_pos_inv', 0), _parse_int(at.get('POS (w/ INV)', 0)))
+        self.assertEqual(at_raw.get('new_cnv', 0), _parse_int(at.get('New CNV', 0)))
+        self.assertEqual(at_raw.get('new_pos_only', 0), _parse_int(at.get('POS Only', 0)))
+        self.assertEqual(at_raw.get('new_cnv_only', 0), _parse_int(at.get('CNV Only', 0)))
+        self.assertEqual(at_raw.get('zalo_app', 0), _parse_int(at.get('Zalo App', 0)))
+        self.assertEqual(at_raw.get('zalo_oa', 0), _parse_int(at.get('Zalo OA', 0)))
+
+    def test_shop_customer_period_2025_kpis_match_underlying_function(self):
+        """API shop customer period KPIs must equal get_shop_detail_customer_data — all 7 fields."""
+        from App.analytics.tab_functions import get_shop_detail_customer_data
+        from App.models import SalesTransaction
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        shop = self._pick_shop()
+        raw = get_shop_detail_customer_data(shop, start_date=PERIOD_FROM, end_date=PERIOD_TO)
+        if not raw:
+            self.skipTest("No customer data for shop")
+        pd_raw = raw.get('period', {})
+        data, elapsed = self._json(SHOP_DETAIL_URL, {
+            'shop': shop, 'section': 'customer',
+            'date_from': PERIOD_FROM, 'date_to': PERIOD_TO,
+        })
+        self._log_perf("shop customer period 2025", elapsed)
+        pd = data['customer']['period_kpis']
+        self.assertEqual(pd_raw.get('new_pos', 0), _parse_int(pd.get('New POS', 0)))
+        self.assertEqual(pd_raw.get('new_pos_inv', 0), _parse_int(pd.get('POS (w/ INV)', 0)))
+        self.assertEqual(pd_raw.get('new_cnv', 0), _parse_int(pd.get('New CNV', 0)))
+        self.assertEqual(pd_raw.get('new_pos_only', 0), _parse_int(pd.get('POS Only', 0)))
+        self.assertEqual(pd_raw.get('new_cnv_only', 0), _parse_int(pd.get('CNV Only', 0)))
+        self.assertEqual(pd_raw.get('zalo_app', 0), _parse_int(pd.get('Zalo App', 0)))
+        self.assertEqual(pd_raw.get('zalo_oa', 0), _parse_int(pd.get('Zalo OA', 0)))
+
+    # ── Shop Detail – Coupon ──────────────────────────────────────────────────
+
+    def test_shop_coupon_alltime_kpis_match_underlying_function(self):
+        """API shop coupon all-time KPIs must equal get_shop_detail_coupon_data — all 6 fields."""
+        from App.analytics.tab_functions import get_shop_detail_coupon_data
+        from App.models import Coupon
+        if not Coupon.objects.exists():
+            self.skipTest("No coupon data")
+        shop = self._pick_shop()
+        raw = get_shop_detail_coupon_data(shop, date_from=None, date_to=None)
+        if not raw or not raw.get('all_time', {}).get('total'):
+            self.skipTest("No coupon data for shop")
+        at_raw = raw.get('all_time', {})
+        data, elapsed = self._json(SHOP_DETAIL_URL, {'shop': shop, 'section': 'coupon'})
+        self._log_perf("shop coupon alltime", elapsed)
+        at = data['coupon']['all_time_kpis']
+        self.assertEqual(at_raw.get('total', 0), _parse_int(at.get('Total Coupons', 0)))
+        self.assertEqual(at_raw.get('used', 0), _parse_int(at.get('Used', 0)))
+        self.assertEqual(at_raw.get('unused', 0), _parse_int(at.get('Unused', 0)))
+        amt = int(round(float(at_raw.get('total_amount', 0))))
+        self.assertEqual(amt, _parse_int(at.get('Total Amount (VND)', 0)))
+        coupon_amt = int(round(float(at_raw.get('total_coupon_amount', 0))))
+        self.assertEqual(coupon_amt, _parse_int(at.get('Coupon Amount (VND)', 0)))
+
+    def test_shop_coupon_period_2025_kpis_match_underlying_function(self):
+        """API shop coupon period 2025 KPIs must equal get_shop_detail_coupon_data period."""
+        from App.analytics.tab_functions import get_shop_detail_coupon_data
+        from App.models import Coupon
+        from datetime import date as _d
+        if not Coupon.objects.exists():
+            self.skipTest("No coupon data")
+        shop = self._pick_shop()
+        raw = get_shop_detail_coupon_data(shop, date_from=_d(2025, 1, 1), date_to=_d(2025, 12, 31))
+        if not raw or not raw.get('period', {}).get('total'):
+            self.skipTest("No 2025 coupon data for shop")
+        pd_raw = raw.get('period', {})
+        data, elapsed = self._json(SHOP_DETAIL_URL, {
+            'shop': shop, 'section': 'coupon',
+            'date_from': PERIOD_FROM, 'date_to': PERIOD_TO,
+        })
+        self._log_perf("shop coupon period 2025", elapsed)
+        pd = data['coupon']['period_kpis']
+        self.assertEqual(pd_raw.get('total', 0), _parse_int(pd.get('Total Coupons', 0)))
+        self.assertEqual(pd_raw.get('used', 0), _parse_int(pd.get('Used', 0)))
+        self.assertEqual(pd_raw.get('unused', 0), _parse_int(pd.get('Unused', 0)))
+
+    # ── CNV Customer Analytics ────────────────────────────────────────────────
+
+    def test_cnv_customer_alltime_kpis_match_underlying_function(self):
+        """API CNV customer all-time KPIs must equal get_cnv_customer_kpis — all 4 fields."""
+        from App.cnv.service import get_cnv_phone_sets, get_cnv_customer_kpis
+        pos_phones, cnv_phones = get_cnv_phone_sets()
+        kpis = get_cnv_customer_kpis({}, False, pos_phones, cnv_phones)
+        data, elapsed = self._json(CUSTOMER_URL)
+        self._log_perf("cnv customer alltime", elapsed)
+        at = data['all_time_kpis']
+        self.assertEqual(kpis['total_pos'], _parse_int(at.get('Total POS Customers', 0)))
+        self.assertEqual(kpis['total_cnv'], _parse_int(at.get('Total CNV Customers', 0)))
+        self.assertEqual(kpis['pos_only_all'], _parse_int(at.get('POS Only', 0)))
+        self.assertEqual(kpis['cnv_only_all'], _parse_int(at.get('CNV Only', 0)))
+        # Verify all-time consistency: total = pos_only + cnv_only + both
+        self.assertEqual(kpis['total_pos'], kpis['pos_only_all'] + kpis['both'])
+        self.assertEqual(kpis['total_cnv'], kpis['cnv_only_all'] + kpis['both'])
+
+    def test_cnv_customer_period_2025_kpis_match_underlying_function(self):
+        """API CNV customer period KPIs must equal get_cnv_customer_kpis — all 4 period fields."""
+        from App.cnv.service import get_cnv_phone_sets, get_cnv_customer_kpis, parse_cnv_period_filter
+        pos_phones, cnv_phones = get_cnv_phone_sets()
+        period_filter, has_filter = parse_cnv_period_filter(PERIOD_FROM, PERIOD_TO)
+        kpis = get_cnv_customer_kpis(period_filter, has_filter, pos_phones, cnv_phones)
+        data, elapsed = self._json(CUSTOMER_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self._log_perf("cnv customer period 2025", elapsed)
+        pd = data['period_kpis']
+        self.assertEqual(kpis['new_pos'], _parse_int(pd.get('New POS Customers', 0)))
+        self.assertEqual(kpis['new_cnv'], _parse_int(pd.get('New CNV Customers', 0)))
+        self.assertEqual(kpis['synced_period'], _parse_int(pd.get('Synced This Period', 0)))
+        self.assertEqual(kpis['active_period'], _parse_int(pd.get('Active Customers', 0)))
+        # Period consistency: synced = new_pos - pos_only_period
+        self.assertEqual(kpis['synced_period'], kpis['new_pos'] - kpis['pos_only_period'])
+
+    # ── Sales Analytics – table rows ─────────────────────────────────────────
+
+    def _assert_table(self, table, raw_rows, col_fn, label):
+        """Helper: check row count + every numeric cell in every row."""
+        api_rows = table.get('rows', [])
+        self.assertEqual(len(raw_rows), len(api_rows), f"{label}: row count mismatch")
+        for i, (raw, api) in enumerate(zip(raw_rows, api_rows)):
+            for col_idx, field, cast in col_fn(raw):
+                self.assertEqual(cast(raw.get(field, 0)), _parse_int(api[col_idx]),
+                    f"{label} row[{i}] col[{col_idx}]({field}): {raw.get(field)} != {api[col_idx]}")
+
+    def test_sales_grade_table_rows_match_underlying_function(self):
+        """API by_grade table must have same row count + values as get_sales_tab('grade')."""
+        from App.analytics.tab_functions import get_sales_tab
+        raw = get_sales_tab('grade', date_from=None, date_to=None)
+        if not raw:
+            self.skipTest("No sales data")
+        raw_rows = raw.get('by_grade', [])
+        data, _ = self._json(SALES_URL)
+        table = data['tabs']['by_grade']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_grade row count")
+        for i, (r, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(r.get('grade', '')), api_row[0], f"row[{i}] grade label")
+            self.assertEqual(r.get('total_customers', 0), _parse_int(api_row[1]), f"row[{i}] active")
+            self.assertEqual(r.get('returning_customers', 0), _parse_int(api_row[2]), f"row[{i}] returning")
+            self.assertEqual(r.get('total_in_db', 0), _parse_int(api_row[4]), f"row[{i}] total_in_db")
+            self.assertEqual(r.get('returning_invoices', 0), _parse_int(api_row[6]), f"row[{i}] inv_ret")
+            self.assertEqual(int(round(r.get('returning_amount', 0))), _parse_int(api_row[7]), f"row[{i}] amt_ret")
+            self.assertEqual(r.get('total_invoices', 0), _parse_int(api_row[8]), f"row[{i}] total_inv")
+            self.assertEqual(int(round(r.get('total_amount', 0))), _parse_int(api_row[9]), f"row[{i}] total_amt")
+
+    def test_sales_grade_table_period_2025_rows_match(self):
+        """API by_grade period 2025 table must equal get_sales_tab('grade') period by_grade rows."""
+        from App.analytics.tab_functions import get_sales_tab
+        from datetime import date as _d
+        raw = get_sales_tab('grade', date_from=_d(2025, 1, 1), date_to=_d(2025, 12, 31))
+        if not raw:
+            self.skipTest("No 2025 sales data")
+        raw_rows = raw.get('by_grade', [])
+        data, _ = self._json(SALES_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        table = data['tabs']['by_grade']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_grade period row count")
+        for i, (r, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(r.get('grade', '')), api_row[0], f"row[{i}] grade")
+            self.assertEqual(r.get('total_customers', 0), _parse_int(api_row[1]), f"row[{i}] active")
+            self.assertEqual(r.get('returning_customers', 0), _parse_int(api_row[2]), f"row[{i}] returning")
+            self.assertEqual(r.get('returning_invoices', 0), _parse_int(api_row[6]), f"row[{i}] inv_ret")
+            self.assertEqual(int(round(r.get('total_amount', 0))), _parse_int(api_row[9]), f"row[{i}] total_amt")
+
+    def test_sales_season_table_rows_match_underlying_function(self):
+        """API by_season lazy tab must equal get_sales_tab('season') by_session rows — all rows."""
+        from App.analytics.tab_functions import get_sales_tab
+        raw = get_sales_tab('season', date_from=None, date_to=None)
+        if not raw:
+            self.skipTest("No season data")
+        raw_rows = raw.get('by_session', [])
+        data, elapsed = self._json(SALES_URL, {'tab': 'by_season'})
+        self._log_perf("sales by_season tab", elapsed)
+        table = data['tabs']['by_season']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_season row count")
+        for i, (s, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(s.get('session', '')), api_row[0], f"row[{i}] season label")
+            self.assertEqual(s.get('total_customers', 0), _parse_int(api_row[1]), f"row[{i}] active")
+            self.assertEqual(s.get('returning_customers', 0), _parse_int(api_row[2]), f"row[{i}] returning")
+            self.assertEqual(s.get('returning_invoices', 0), _parse_int(api_row[4]), f"row[{i}] inv_ret")
+            total_inv = s.get('total_invoices_with_vip0', s.get('total_invoices', 0))
+            self.assertEqual(total_inv, _parse_int(api_row[6]), f"row[{i}] total_inv")
+            total_amt = int(round(s.get('total_amount_with_vip0', s.get('total_amount', 0))))
+            self.assertEqual(total_amt, _parse_int(api_row[7]), f"row[{i}] total_amt")
+
+    def test_sales_month_table_rows_match_underlying_function(self):
+        """API by_month lazy tab must equal get_sales_tab('month') by_month rows — all rows."""
+        from App.analytics.tab_functions import get_sales_tab
+        from datetime import date as _d
+        raw = get_sales_tab('month', date_from=_d(2025, 1, 1), date_to=_d(2025, 12, 31))
+        if not raw:
+            self.skipTest("No 2025 month data")
+        raw_rows = raw.get('by_month', [])
+        data, elapsed = self._json(SALES_URL, {'tab': 'by_month', 'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self._log_perf("sales by_month tab period", elapsed)
+        table = data['tabs']['by_month']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_month row count")
+        for i, (m, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(m.get('month', '')), api_row[0], f"row[{i}] month label")
+            self.assertEqual(m.get('total_customers', 0), _parse_int(api_row[1]), f"row[{i}] active")
+            self.assertEqual(m.get('returning_customers', 0), _parse_int(api_row[2]), f"row[{i}] returning")
+            self.assertEqual(m.get('returning_invoices', 0), _parse_int(api_row[4]), f"row[{i}] inv_ret")
+            total_inv = m.get('total_invoices_with_vip0', m.get('total_invoices', 0))
+            self.assertEqual(total_inv, _parse_int(api_row[6]), f"row[{i}] total_inv")
+            total_amt = int(round(m.get('total_amount_with_vip0', m.get('total_amount', 0))))
+            self.assertEqual(total_amt, _parse_int(api_row[7]), f"row[{i}] total_amt")
+
+    def test_sales_shop_table_rows_match_underlying_function(self):
+        """API by_shop lazy tab must equal get_sales_tab('shop') by_shop rows — all rows."""
+        from App.analytics.tab_functions import get_sales_tab
+        raw = get_sales_tab('shop', date_from=None, date_to=None)
+        if not raw:
+            self.skipTest("No shop data")
+        raw_rows = raw.get('by_shop', [])
+        data, elapsed = self._json(SALES_URL, {'tab': 'by_shop'})
+        self._log_perf("sales by_shop tab", elapsed)
+        table = data['tabs']['by_shop']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_shop row count")
+        for i, (s, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(s.get('shop_name', '')), api_row[0], f"row[{i}] shop label")
+            self.assertEqual(s.get('total_customers', 0), _parse_int(api_row[1]), f"row[{i}] active")
+            self.assertEqual(s.get('returning_customers', 0), _parse_int(api_row[2]), f"row[{i}] returning")
+            self.assertEqual(s.get('returning_invoices', 0), _parse_int(api_row[4]), f"row[{i}] inv_ret")
+            total_inv = s.get('total_invoices_with_vip0', s.get('total_invoices', 0))
+            self.assertEqual(total_inv, _parse_int(api_row[6]), f"row[{i}] total_inv")
+            total_amt = int(round(s.get('total_amount_with_vip0', s.get('total_amount', 0))))
+            self.assertEqual(total_amt, _parse_int(api_row[7]), f"row[{i}] total_amt")
+
+    # ── Shop Detail Sales – table rows ────────────────────────────────────────
+
+    def test_shop_sales_by_session_rows_match_underlying_function(self):
+        """API shop sales by_session table must equal get_shop_detail_sales_data by_session — all rows."""
+        from App.analytics.tab_functions import get_shop_detail_sales_data
+        shop = self._pick_shop()
+        raw = get_shop_detail_sales_data(shop, date_from=None, date_to=None)
+        if not raw:
+            self.skipTest("No data for shop")
+        raw_rows = raw.get('by_session', [])
+        data, _ = self._json(SHOP_DETAIL_URL, {'shop': shop, 'section': 'sales'})
+        table = data['sales']['by_session']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_session row count")
+        for i, (s, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(s.get('session', '')), api_row[0], f"row[{i}] session")
+            self.assertEqual(s.get('total_customers', 0), _parse_int(api_row[1]), f"row[{i}] active")
+            self.assertEqual(s.get('returning_customers', 0), _parse_int(api_row[2]), f"row[{i}] returning")
+            self.assertEqual(s.get('returning_invoices', 0), _parse_int(api_row[4]), f"row[{i}] inv_ret")
+            total_inv = s.get('total_invoices_with_vip0', s.get('total_invoices', 0))
+            self.assertEqual(total_inv, _parse_int(api_row[6]), f"row[{i}] total_inv")
+
+    def test_shop_sales_by_month_rows_match_underlying_function(self):
+        """API shop sales by_month table must equal get_shop_detail_sales_data by_month — all rows."""
+        from App.analytics.tab_functions import get_shop_detail_sales_data
+        from datetime import date as _d
+        shop = self._pick_shop()
+        raw = get_shop_detail_sales_data(shop, date_from=_d(2025, 1, 1), date_to=_d(2025, 12, 31))
+        if not raw:
+            self.skipTest("No 2025 data for shop")
+        raw_rows = raw.get('by_month', [])
+        data, _ = self._json(SHOP_DETAIL_URL, {
+            'shop': shop, 'section': 'sales',
+            'date_from': PERIOD_FROM, 'date_to': PERIOD_TO,
+        })
+        table = data['sales']['by_month']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_month row count")
+        for i, (m, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(m.get('month', '')), api_row[0], f"row[{i}] month")
+            self.assertEqual(m.get('total_customers', 0), _parse_int(api_row[1]), f"row[{i}] active")
+            self.assertEqual(m.get('returning_customers', 0), _parse_int(api_row[2]), f"row[{i}] returning")
+            self.assertEqual(m.get('returning_invoices', 0), _parse_int(api_row[4]), f"row[{i}] inv_ret")
+            total_inv = m.get('total_invoices_with_vip0', m.get('total_invoices', 0))
+            self.assertEqual(total_inv, _parse_int(api_row[6]), f"row[{i}] total_inv")
+            total_amt = int(round(m.get('total_amount_with_vip0', m.get('total_amount', 0))))
+            self.assertEqual(total_amt, _parse_int(api_row[7]), f"row[{i}] total_amt")
+
+    def test_shop_sales_by_week_rows_match_underlying_function(self):
+        """API shop sales by_week table must equal get_shop_detail_sales_data by_week — all rows."""
+        from App.analytics.tab_functions import get_shop_detail_sales_data
+        from datetime import date as _d
+        shop = self._pick_shop()
+        raw = get_shop_detail_sales_data(shop, date_from=_d(2025, 1, 1), date_to=_d(2025, 12, 31))
+        if not raw:
+            self.skipTest("No 2025 data for shop")
+        raw_rows = raw.get('by_week', [])
+        data, _ = self._json(SHOP_DETAIL_URL, {
+            'shop': shop, 'section': 'sales',
+            'date_from': PERIOD_FROM, 'date_to': PERIOD_TO,
+        })
+        table = data['sales']['by_week']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_week row count")
+        for i, (w, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            label = str(w.get('week_label', w.get('week', '')))
+            self.assertEqual(label, api_row[0], f"row[{i}] week label")
+            self.assertEqual(w.get('total_customers', 0), _parse_int(api_row[1]), f"row[{i}] active")
+            self.assertEqual(w.get('returning_invoices', 0), _parse_int(api_row[4]), f"row[{i}] inv_ret")
+
+    # ── Shop Detail Customer – table rows ─────────────────────────────────────
+
+    def test_shop_customer_by_season_rows_match_underlying_function(self):
+        """API shop customer by_season table must equal get_shop_detail_customer_data by_season — all rows."""
+        from App.analytics.tab_functions import get_shop_detail_customer_data
+        shop = self._pick_shop()
+        raw = get_shop_detail_customer_data(shop, start_date='', end_date='')
+        if not raw:
+            self.skipTest("No customer data for shop")
+        raw_rows = raw.get('by_season', [])
+        if not raw_rows:
+            self.skipTest("No by_season breakdown")
+        data, elapsed = self._json(SHOP_DETAIL_URL, {'shop': shop, 'section': 'customer'})
+        self._log_perf("shop customer by_season", elapsed)
+        table = data['customer']['by_season']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_season row count")
+        for i, (r, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(r.get('label', '')), api_row[0], f"row[{i}] label")
+            self.assertEqual(r.get('new_pos_inv', 0), _parse_int(api_row[1]), f"row[{i}] pos_inv")
+            self.assertEqual(r.get('new_pos_no_inv', 0), _parse_int(api_row[2]), f"row[{i}] pos_no_inv")
+            self.assertEqual(r.get('new_pos', 0), _parse_int(api_row[3]), f"row[{i}] pos_total")
+            self.assertEqual(r.get('new_pos_only', 0), _parse_int(api_row[4]), f"row[{i}] pos_only")
+            self.assertEqual(r.get('new_cnv', 0), _parse_int(api_row[5]), f"row[{i}] new_cnv")
+            self.assertEqual(r.get('new_cnv_only', 0), _parse_int(api_row[6]), f"row[{i}] cnv_only")
+            self.assertEqual(r.get('zalo_app', 0), _parse_int(api_row[7]), f"row[{i}] zalo_app")
+            self.assertEqual(r.get('zalo_oa', 0), _parse_int(api_row[9]), f"row[{i}] zalo_oa")
+
+    def test_shop_customer_by_month_rows_match_underlying_function(self):
+        """API shop customer by_month table must equal get_shop_detail_customer_data by_month — all rows."""
+        from App.analytics.tab_functions import get_shop_detail_customer_data
+        from datetime import date as _d
+        shop = self._pick_shop()
+        raw = get_shop_detail_customer_data(shop, start_date=PERIOD_FROM, end_date=PERIOD_TO)
+        if not raw:
+            self.skipTest("No customer data for shop")
+        raw_rows = raw.get('by_month', [])
+        if not raw_rows:
+            self.skipTest("No by_month breakdown for period")
+        data, _ = self._json(SHOP_DETAIL_URL, {
+            'shop': shop, 'section': 'customer',
+            'date_from': PERIOD_FROM, 'date_to': PERIOD_TO,
+        })
+        table = data['customer']['by_month']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_month row count")
+        for i, (r, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(r.get('label', '')), api_row[0], f"row[{i}] label")
+            self.assertEqual(r.get('new_pos_inv', 0), _parse_int(api_row[1]), f"row[{i}] pos_inv")
+            self.assertEqual(r.get('new_pos', 0), _parse_int(api_row[3]), f"row[{i}] pos_total")
+            self.assertEqual(r.get('new_cnv', 0), _parse_int(api_row[5]), f"row[{i}] new_cnv")
+
+    def test_shop_customer_by_week_rows_match_underlying_function(self):
+        """API shop customer by_week table must equal get_shop_detail_customer_data by_week — all rows."""
+        from App.analytics.tab_functions import get_shop_detail_customer_data
+        shop = self._pick_shop()
+        raw = get_shop_detail_customer_data(shop, start_date=PERIOD_FROM, end_date=PERIOD_TO)
+        if not raw:
+            self.skipTest("No customer data for shop")
+        raw_rows = raw.get('by_week', [])
+        if not raw_rows:
+            self.skipTest("No by_week breakdown for period")
+        data, _ = self._json(SHOP_DETAIL_URL, {
+            'shop': shop, 'section': 'customer',
+            'date_from': PERIOD_FROM, 'date_to': PERIOD_TO,
+        })
+        table = data['customer']['by_week']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_week row count")
+        for i, (r, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(r.get('label', '')), api_row[0], f"row[{i}] label")
+            self.assertEqual(r.get('new_pos', 0), _parse_int(api_row[3]), f"row[{i}] pos_total")
+            self.assertEqual(r.get('new_cnv', 0), _parse_int(api_row[5]), f"row[{i}] new_cnv")
+
+    # ── CNV Customer – registration breakdown tables ───────────────────────────
+
+    def test_cnv_registration_breakdown_by_shop_rows_match(self):
+        """API registration_breakdown.by_shop rows must equal compute_cnv_breakdown shop dim."""
+        from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets
+        pos_phones, cnv_phones = get_cnv_phone_sets()
+        bd = compute_cnv_breakdown({}, pos_phones, cnv_phones)
+        raw_rows = bd.get('shop', [])
+        data, elapsed = self._json(CUSTOMER_URL)
+        self._log_perf("cnv breakdown by_shop", elapsed)
+        table = data['registration_breakdown']['by_shop']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_shop row count")
+        for i, (s, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            label = str(s.get('label', s.get('store', s.get('shop_name', ''))))
+            self.assertEqual(label, api_row[0], f"row[{i}] shop label")
+            self.assertEqual(s.get('new_pos', 0), _parse_int(api_row[1]), f"row[{i}] new_pos")
+            self.assertEqual(s.get('new_cnv', 0), _parse_int(api_row[2]), f"row[{i}] new_cnv")
+            self.assertEqual(s.get('new_pos_only', 0), _parse_int(api_row[3]), f"row[{i}] pos_only")
+            self.assertEqual(s.get('new_cnv_only', 0), _parse_int(api_row[4]), f"row[{i}] cnv_only")
+
+    def test_cnv_registration_breakdown_by_season_rows_match(self):
+        """API registration_breakdown.by_season rows must equal compute_cnv_breakdown season dim."""
+        from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets
+        pos_phones, cnv_phones = get_cnv_phone_sets()
+        bd = compute_cnv_breakdown({}, pos_phones, cnv_phones)
+        raw_rows = bd.get('season', [])
+        data, _ = self._json(CUSTOMER_URL)
+        table = data['registration_breakdown']['by_season']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_season row count")
+        for i, (s, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(s.get('label', s.get('season', ''))), api_row[0], f"row[{i}] label")
+            self.assertEqual(s.get('new_pos', 0), _parse_int(api_row[1]), f"row[{i}] new_pos")
+            self.assertEqual(s.get('new_cnv', 0), _parse_int(api_row[2]), f"row[{i}] new_cnv")
+
+    def test_cnv_registration_breakdown_by_month_rows_match_period(self):
+        """API registration_breakdown.by_month period rows must equal compute_cnv_breakdown month dim."""
+        from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets, parse_cnv_period_filter
+        pos_phones, cnv_phones = get_cnv_phone_sets()
+        period_filter, _ = parse_cnv_period_filter(PERIOD_FROM, PERIOD_TO)
+        bd = compute_cnv_breakdown(period_filter, pos_phones, cnv_phones)
+        raw_rows = bd.get('month', [])
+        if not raw_rows:
+            self.skipTest("No 2025 CNV month data")
+        data, elapsed = self._json(CUSTOMER_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self._log_perf("cnv breakdown by_month period", elapsed)
+        table = data['registration_breakdown']['by_month']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_month row count")
+        for i, (m, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(m.get('label', m.get('month', ''))), api_row[0], f"row[{i}] label")
+            self.assertEqual(m.get('new_pos', 0), _parse_int(api_row[1]), f"row[{i}] new_pos")
+            self.assertEqual(m.get('new_cnv', 0), _parse_int(api_row[2]), f"row[{i}] new_cnv")
+            self.assertEqual(m.get('new_pos_only', 0), _parse_int(api_row[3]), f"row[{i}] pos_only")
+            self.assertEqual(m.get('new_cnv_only', 0), _parse_int(api_row[4]), f"row[{i}] cnv_only")
+
+    def test_cnv_registration_breakdown_by_week_rows_match_period(self):
+        """API registration_breakdown.by_week period rows must equal compute_cnv_breakdown week dim."""
+        from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets, parse_cnv_period_filter
+        pos_phones, cnv_phones = get_cnv_phone_sets()
+        period_filter, _ = parse_cnv_period_filter(PERIOD_FROM, PERIOD_TO)
+        bd = compute_cnv_breakdown(period_filter, pos_phones, cnv_phones)
+        raw_rows = bd.get('week', [])
+        if not raw_rows:
+            self.skipTest("No 2025 CNV week data")
+        data, _ = self._json(CUSTOMER_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        table = data['registration_breakdown']['by_week']
+        self.assertEqual(len(raw_rows), len(table['rows']), "by_week row count")
+        for i, (w, api_row) in enumerate(zip(raw_rows, table['rows'])):
+            self.assertEqual(str(w.get('label', w.get('week', ''))), api_row[0], f"row[{i}] label")
+            self.assertEqual(w.get('new_pos', 0), _parse_int(api_row[1]), f"row[{i}] new_pos")
+            self.assertEqual(w.get('new_cnv', 0), _parse_int(api_row[2]), f"row[{i}] new_cnv")
+
+    def test_cnv_grade_breakdown_rows_match(self):
+        """API by_grade registration breakdown rows must equal _compute_grade_rows output."""
+        from App.api.views import _compute_grade_rows
+        from App.cnv.service import get_cnv_phone_sets
+        _, cnv_phones = get_cnv_phone_sets()
+        grade_rows = _compute_grade_rows(cnv_phones)
+        data, _ = self._json(CUSTOMER_URL)
+        table = data['registration_breakdown']['by_grade']
+        self.assertEqual(len(grade_rows), len(table['rows']), "by_grade row count")
+        for i, (r, api_row) in enumerate(zip(grade_rows, table['rows'])):
+            self.assertEqual(str(r.get('label', r.get('grade', ''))), api_row[0], f"row[{i}] grade")
+            self.assertEqual(r.get('new_pos', 0), _parse_int(api_row[1]), f"row[{i}] new_pos")
+            self.assertEqual(r.get('new_pos_only', 0), _parse_int(api_row[3]), f"row[{i}] pos_only")
+
+    # ── Customer Detail ───────────────────────────────────────────────────────
+
+    def test_customer_detail_full_data_matches_underlying_function(self):
+        """API customer detail must match get_customer_detail_data on all non-PII fields."""
+        from App.models import Customer
+        from App.analytics.customer_utils import get_customer_detail_data, normalize_grade
+        customer = (
+            Customer.objects.filter(vip_id__isnull=False)
+            .exclude(vip_id=0).order_by('vip_id').first()
+        )
+        if not customer:
+            self.skipTest("No customers in DB")
+        raw = get_customer_detail_data(customer)
+        data, elapsed = self._json(CUST_DETAIL_URL, {'vip_id': str(customer.vip_id)})
+        self._log_perf("customer detail", elapsed)
+
+        # Invoice count is always the full DB count (no cap)
+        self.assertEqual(raw['total_invoice_count'], _parse_int(data.get('total_invoices', 0)))
+        # Invoice history list length must match (no cap in API — full parity with web)
+        self.assertEqual(len(raw['invoices']), len(data.get('invoice_history', [])))
+        # Revenue: API and function agree (function sums all, API sums all)
+        self.assertEqual(
+            int(round(float(raw['stats']['total_amount'] or 0))),
+            _parse_int(data.get('total_revenue', 0)),
+        )
+        # Static customer fields
+        self.assertEqual(str(customer.vip_id or ''), data.get('vip_id', ''))
+        self.assertEqual(customer.name or '', data.get('name', ''))
+        self.assertEqual(normalize_grade(customer.vip_grade), data.get('grade', ''))
+        self.assertEqual(customer.registration_store or '', data.get('registration_store', ''))
+        self.assertEqual(customer.email or '', data.get('email', ''))
+        # CNV sync status
+        expected_cnv = 'synced' if raw['is_synced_to_cnv'] else 'not_synced'
+        self.assertEqual(expected_cnv, data.get('cnv_sync_status'))
+        # Invoice history shape: each entry must have date, shop, invoice_id, amount
+        for i, (fn_inv, api_inv) in enumerate(zip(raw['invoices'], data.get('invoice_history', []))):
+            self.assertEqual(str(fn_inv['sales_day'] or ''), api_inv.get('date', ''),
+                f"invoice {i} date mismatch")
+            self.assertEqual(fn_inv['shop_name'] or '', api_inv.get('shop', ''),
+                f"invoice {i} shop mismatch")
+            self.assertEqual(fn_inv['invoice_no'] or '', api_inv.get('invoice_id', ''),
+                f"invoice {i} invoice_id mismatch")

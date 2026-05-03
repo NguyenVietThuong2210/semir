@@ -57,8 +57,9 @@ def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
     if response is not None:
         return response
+    logger.exception("Unhandled API error: %s", exc)
     return Response(
-        {'detail': str(exc)},
+        {'detail': 'An internal error occurred.'},
         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
@@ -256,12 +257,34 @@ class SalesAnalyticsView(APIView):
             # Initial load: grade tab only (fastest — already loaded above)
             tabs = {'by_grade': _sales_grade_table(period_data.get('by_grade', []))}
 
-        return Response({
+        # Allshops tabs: only computed when a shop_group filter is active.
+        # They show global (unfiltered) period data for comparison.
+        allshops_tabs = None
+        if shop_group:
+            _allshops_map = {
+                'by_grade':  lambda: _sales_grade_table(
+                    (get_sales_tab('grade', date_from=date_from, date_to=date_to) or {}).get('by_grade', [])),
+                'by_season': lambda: _sales_season_table(
+                    get_sales_tab('season', date_from=date_from, date_to=date_to)),
+                'by_month':  lambda: _sales_month_table(
+                    get_sales_tab('month', date_from=date_from, date_to=date_to)),
+                'by_week':   lambda: _sales_week_table(
+                    get_sales_tab('week', date_from=date_from, date_to=date_to)),
+            }
+            if tab and tab in _allshops_map:
+                allshops_tabs = {tab: _allshops_map[tab]()}
+            else:
+                allshops_tabs = {'by_grade': _allshops_map['by_grade']()}
+
+        response_data = {
             'all_time_kpis': all_time_kpis,
             'period_kpis': period_kpis,
             'tabs': tabs,
             'available_tabs': list(_tab_map.keys()),
-        })
+        }
+        if allshops_tabs is not None:
+            response_data['allshops_tabs'] = allshops_tabs
+        return Response(response_data)
 
 
 def _sales_grade_table(by_grade: list) -> dict:
@@ -365,8 +388,8 @@ class CustomerAnalyticsView(APIView):
     permission_classes = [IsAuthenticated, make_perm_class('cnv.view')]
 
     def get(self, request):
-        from App.analytics.tab_functions import get_customer_tab, _parse_cnv_period_filter
-        from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets
+        from App.analytics.tab_functions import _parse_cnv_period_filter
+        from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets, get_cnv_customer_kpis
 
         date_from_str = request.GET.get('date_from', '')
         date_to_str = request.GET.get('date_to', '')
@@ -375,39 +398,34 @@ class CustomerAnalyticsView(APIView):
         _parse_date(date_from_str or None, 'date_from')
         _parse_date(date_to_str or None, 'date_to')
 
-        period_filter, _ = _parse_cnv_period_filter(date_from_str, date_to_str)
+        period_filter, has_filter = _parse_cnv_period_filter(date_from_str, date_to_str)
         all_time_filter = {}
 
         pos_phones_all, cnv_phones_all = get_cnv_phone_sets()
 
-        # All-time breakdown
-        at_bd = compute_cnv_breakdown(all_time_filter, pos_phones_all, cnv_phones_all,
-                                      dims=frozenset({'shop', 'month', 'grade'}))
-        # Period breakdown
+        # Shared KPI computation (same function used by web view)
+        kpis = get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_all)
+
+        # All-time breakdown (for comparison tabs)
+        at_bd = compute_cnv_breakdown(all_time_filter, pos_phones_all, cnv_phones_all)
+        # Period breakdown (for registration breakdown tabs)
         if period_filter:
-            pd_bd = compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all,
-                                          dims=frozenset({'shop', 'month', 'grade'}))
+            pd_bd = compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all)
         else:
             pd_bd = at_bd
 
-        # KPIs
-        at_total_pos = len(pos_phones_all)
-        at_total_cnv = len(cnv_phones_all)
-        at_both = len(pos_phones_all & cnv_phones_all)
-        at_pos_only = at_total_pos - at_both
-        at_cnv_only = at_total_cnv - at_both
-
-        # Period counts from breakdown summary
-        pd_summary = pd_bd.get('summary', {})
-        pd_new_pos = pd_summary.get('new_pos', 0)
-        pd_new_cnv = pd_summary.get('new_cnv', 0)
-        pd_synced = pd_summary.get('synced', 0)
-        pd_active = pd_summary.get('active', 0)
+        # Map shared kpis to mobile KPI card labels
+        at_pos_only  = kpis['pos_only_all']
+        at_cnv_only  = kpis['cnv_only_all']
+        pd_new_pos   = kpis['new_pos']
+        pd_new_cnv   = kpis['new_cnv']
+        pd_synced    = kpis['synced_period']
+        pd_active    = kpis['active_period']
 
         # Human-readable labels displayed directly on mobile KPI cards.
         all_time_kpis = {
-            'Total POS Customers': _fmt(at_total_pos),
-            'Total CNV Customers': _fmt(at_total_cnv),
+            'Total POS Customers': _fmt(kpis['total_pos']),
+            'Total CNV Customers': _fmt(kpis['total_cnv']),
             'POS Only': _fmt(at_pos_only),
             'CNV Only': _fmt(at_cnv_only),
         }
@@ -418,11 +436,18 @@ class CustomerAnalyticsView(APIView):
             'Active Customers': _fmt(pd_active),
         }
 
-        # Registration breakdown tabs (using period data)
+        # Grade rows — computed directly from POSCustomer (compute_cnv_breakdown has no grade dim)
+        at_grade_rows = _compute_grade_rows(cnv_phones_all)
+        pd_grade_rows = _compute_grade_rows(cnv_phones_all, period_filter if period_filter else None)
+        at_bd['grade'] = at_grade_rows  # inject so _cnv_pos_only_table / _cnv_both_table can use it
+
+        # Registration breakdown tabs (using period data) — 5 tabs matching web bd_* tabs
         reg_breakdown = {
-            'by_shop': _cnv_shop_table(pd_bd.get('shop', [])),
-            'by_month': _cnv_month_table(pd_bd.get('month', [])),
-            'by_grade': _cnv_grade_table(pd_bd.get('grade', [])),
+            'by_shop':   _cnv_shop_table(pd_bd.get('shop', [])),
+            'by_season': _cnv_season_table(pd_bd.get('season', [])),
+            'by_month':  _cnv_month_table(pd_bd.get('month', [])),
+            'by_week':   _cnv_week_table(pd_bd.get('week', [])),
+            'by_grade':  _cnv_grade_table(pd_grade_rows),
         }
 
         # Customer comparison tabs (all-time)
@@ -430,6 +455,7 @@ class CustomerAnalyticsView(APIView):
             'pos_only': _cnv_pos_only_table(at_bd),
             'cnv_only': _cnv_cnv_only_table(at_bd),
             'both': _cnv_both_table(at_bd),
+            'zalo': _cnv_zalo_stats_table(at_bd),
         }
 
         return Response({
@@ -438,6 +464,34 @@ class CustomerAnalyticsView(APIView):
             'registration_breakdown': reg_breakdown,
             'customer_comparison': customer_comparison,
         })
+
+
+def _compute_grade_rows(cnv_phones_all: set, period_filter=None) -> list:
+    """POS customer grade breakdown. CNV has no grade concept, so CNV-only columns are always 0."""
+    from collections import defaultdict
+    from App.models import Customer as _POS
+    from App.analytics.customer_utils import normalize_grade
+    _GRADE_ORDER = ['No Grade', 'Member', 'Silver', 'Gold', 'Diamond']
+    qs = _POS.objects.filter(vip_id__isnull=False).exclude(vip_id=0).exclude(phone='').exclude(phone__isnull=True)
+    if period_filter and period_filter.get('start') and period_filter.get('end'):
+        qs = qs.filter(registration_date__gte=period_filter['start'], registration_date__lte=period_filter['end'])
+    grade_phones: dict[str, set] = defaultdict(set)
+    for phone, raw_grade in qs.values_list('phone', 'vip_grade'):
+        grade_phones[normalize_grade(raw_grade)].add(phone)
+    rows = []
+    for grade in _GRADE_ORDER:
+        phones = grade_phones.get(grade, set())
+        if not phones:
+            continue
+        rows.append({
+            'label': grade,
+            'new_pos': len(phones),
+            'new_cnv': 0,
+            'new_pos_only': len(phones - cnv_phones_all),
+            'new_cnv_only': 0,
+            'zalo_app': 0,
+        })
+    return rows
 
 
 def _cnv_shop_table(shop_data: list) -> dict:
@@ -465,6 +519,34 @@ def _cnv_month_table(month_data: list) -> dict:
         _fmt(m.get('new_cnv_only', 0)),
         _fmt(m.get('zalo_app', 0)),
     ] for m in (month_data or [])]
+    return {'headers': headers, 'rows': rows}
+
+
+def _cnv_season_table(season_data: list) -> dict:
+    # Rows from compute_cnv_breakdown 'season' dim
+    headers = ['Season', 'New POS', 'New CNV', 'POS Only', 'CNV Only', 'Zalo']
+    rows = [[
+        str(s.get('label', s.get('season', ''))),
+        _fmt(s.get('new_pos', 0)),
+        _fmt(s.get('new_cnv', 0)),
+        _fmt(s.get('new_pos_only', 0)),
+        _fmt(s.get('new_cnv_only', 0)),
+        _fmt(s.get('zalo_app', 0)),
+    ] for s in (season_data or [])]
+    return {'headers': headers, 'rows': rows}
+
+
+def _cnv_week_table(week_data: list) -> dict:
+    # Rows from compute_cnv_breakdown 'week' dim
+    headers = ['Week', 'New POS', 'New CNV', 'POS Only', 'CNV Only', 'Zalo']
+    rows = [[
+        str(w.get('label', w.get('week', ''))),
+        _fmt(w.get('new_pos', 0)),
+        _fmt(w.get('new_cnv', 0)),
+        _fmt(w.get('new_pos_only', 0)),
+        _fmt(w.get('new_cnv_only', 0)),
+        _fmt(w.get('zalo_app', 0)),
+    ] for w in (week_data or [])]
     return {'headers': headers, 'rows': rows}
 
 
@@ -503,6 +585,27 @@ def _cnv_both_table(bd: dict) -> dict:
         _fmt(g.get('new_pos', 0)),
         _fmt(g.get('new_cnv', 0)),
     ] for g in bd.get('grade', [])]
+    return {'headers': headers, 'rows': rows}
+
+
+def _cnv_zalo_stats_table(bd: dict) -> dict:
+    # Zalo Stats: shop-level breakdown of Zalo App and OA connections
+    headers = ['Shop', 'New CNV', 'Zalo App', '% App', 'Zalo OA', '% OA']
+    rows = []
+    for s in (bd.get('shop', [])):
+        new_cnv = s.get('new_cnv', 0)
+        zalo_app = s.get('zalo_app', 0)
+        zalo_oa = s.get('zalo_oa', 0)
+        pct_app = _pct_cell(zalo_app / new_cnv * 100) if new_cnv else '–'
+        pct_oa = _pct_cell(zalo_oa / new_cnv * 100) if new_cnv else '–'
+        rows.append([
+            str(s.get('label', s.get('store', s.get('shop_name', '')))),
+            _fmt(new_cnv),
+            _fmt(zalo_app),
+            pct_app,
+            _fmt(zalo_oa),
+            pct_oa,
+        ])
     return {'headers': headers, 'rows': rows}
 
 
@@ -750,7 +853,27 @@ def _build_shop_customer(data: dict) -> dict:
         'by_season': _cnv_period_table(data.get('by_season', [])),
         'by_month': _cnv_period_table(data.get('by_month', [])),
         'by_week': _cnv_period_table(data.get('by_week', [])),
+        'zalo_active': _zalo_active_table(data.get('zalo_active_list', [])),
     }
+
+
+def _zalo_active_table(zalo_list: list) -> dict:
+    # Matches web Excel sheet: CNV ID | Phone | Name | Level | Zalo App ID | Zalo OA ID | Zalo Active date
+    headers = ['CNV ID', 'Phone', 'Name', 'Level', 'Zalo App ID', 'Zalo OA ID', 'Active Date']
+    rows = []
+    for z in (zalo_list or []):
+        name = f"{z.get('last_name') or ''} {z.get('first_name') or ''}".strip()
+        active_date = z.get('zalo_app_created_at')
+        rows.append([
+            str(z.get('cnv_id', '')),
+            str(z.get('phone', '')),
+            name,
+            str(z.get('level_name', '') or ''),
+            str(z.get('zalo_app_id', '') or ''),
+            str(z.get('zalo_oa_id', '') or ''),
+            str(active_date.date() if hasattr(active_date, 'date') else active_date or ''),
+        ])
+    return {'headers': headers, 'rows': rows}
 
 
 def _cnv_period_table(rows: list) -> dict:
@@ -804,8 +927,8 @@ class CustomerDetailView(APIView):
     permission_classes = [IsAuthenticated, make_perm_class('customers.detail')]
 
     def get(self, request):
-        from App.models import Customer, SalesTransaction
-        from App.analytics.customer_utils import normalize_grade
+        from App.models import Customer
+        from App.analytics.customer_utils import normalize_grade, get_customer_detail_data
 
         vip_id = request.GET.get('vip_id', '').strip()
         phone = request.GET.get('phone', '').strip()
@@ -826,45 +949,34 @@ class CustomerDetailView(APIView):
             return Response({'detail': 'Customer not found'}, status=404)
 
         # Mask phone (middle digits) — FR-006, PII protection
-        raw_phone = customer.phone or ''
-        masked_phone = _mask_phone(raw_phone)
+        masked_phone = _mask_phone(customer.phone or '')
 
-        # Invoice history (most recent first, cap at 50)
-        invoices = list(
-            SalesTransaction.objects
-            .filter(vip_id=str(customer.vip_id))
-            .order_by('-sales_date')
-            .values('sales_date', 'shop_name', 'invoice_number', 'sales_amount')[:50]
-        )
-
-        total_invoices = len(invoices)
-        total_revenue = sum(float(i.get('sales_amount') or 0) for i in invoices)
-
-        # CNV sync status
-        try:
-            from App.cnv.models import CNVCustomer
-            cnv = CNVCustomer.objects.filter(phone__endswith=raw_phone[-9:] if raw_phone else '').first()
-            cnv_sync = 'synced' if cnv else 'not_synced'
-        except Exception:
-            cnv_sync = None
+        # Shared data fetch (same function used by web view — no cap, full parity)
+        detail = get_customer_detail_data(customer, include_coupons=False)
+        cnv_sync = 'synced' if detail['is_synced_to_cnv'] else 'not_synced'
+        total_invoices = detail['total_invoice_count']
+        invoices = detail['invoices']
+        total_revenue = sum(float(inv.get('amount') or 0) for inv in invoices)
 
         invoice_history = [
             {
-                'date': str(i['sales_date']),
-                'shop': i['shop_name'] or '',
-                'invoice_id': i['invoice_number'] or '',
-                'amount': _fmt(i.get('sales_amount') or 0),
-                'coupon_used': '',  # coupon lookup is expensive — omit in v1
+                'date': str(inv['sales_day'] or ''),
+                'shop': inv['shop_name'] or '',
+                'invoice_id': inv['invoice_no'] or '',
+                'amount': _fmt(inv.get('amount') or 0),
+                'coupon_used': '',
             }
-            for i in invoices
+            for inv in invoices
         ]
 
         return Response({
+            'name': customer.name or '',
             'vip_id': str(customer.vip_id or ''),
             'phone': masked_phone,
             'grade': normalize_grade(customer.vip_grade),
             'registration_store': customer.registration_store or '',
             'registration_date': str(customer.registration_date or ''),
+            'email': customer.email or '',
             'total_invoices': total_invoices,
             'total_revenue': _fmt(total_revenue),
             'cnv_sync_status': cnv_sync,
@@ -924,27 +1036,29 @@ DONUT_PALETTE = [
 
 
 def _sales_donut(title: str, items: list, label_key: str) -> dict:
+    counts = [item.get('total_invoices_with_vip0', item.get('total_invoices', 0)) for item in items]
+    total = sum(counts) or 1
     slices = []
-    for i, item in enumerate(items):
+    for i, (item, count) in enumerate(zip(items, counts)):
         slices.append({
             'label': str(item.get(label_key, '')),
-            'value': item.get('total_invoices_with_vip0', item.get('total_invoices', 0)),
+            'value': _fmt(count),
             'color': DONUT_PALETTE[i % len(DONUT_PALETTE)],
+            'percentage': round(count / total * 100, 1),
         })
     return {'title': title, 'slices': slices}
 
 
-def _sales_trend(month_data: dict | None) -> dict | None:
+def _sales_trend(month_data: dict | None) -> list | None:
     if not month_data:
         return None
-    data_points = [
-        {'date': str(m.get('month', '')), 'value': m.get('return_rate', 0)}
-        for m in month_data.get('by_month', [])
+    points = month_data.get('by_month', [])
+    if not points:
+        return None
+    return [
+        {'label': str(m.get('month', '')), 'value': float(m.get('return_rate', 0))}
+        for m in points
     ]
-    return {
-        'metric': 'return_rate',
-        'series': [{'shop': 'All Shops', 'data_points': data_points}],
-    }
 
 
 class CustomerChartView(APIView):
@@ -964,15 +1078,18 @@ class CustomerChartView(APIView):
                                    dims=frozenset({'grade'}))
 
         grades = bd.get('grade', [])
+        _grade_counts = [g.get('pos_customers', g.get('total_pos', 0)) for g in grades]
+        _grade_total = sum(_grade_counts) or 1
         donuts = [{
             'title': 'By Grade',
             'slices': [
                 {
                     'label': str(g.get('grade', '')),
-                    'value': g.get('pos_customers', g.get('total_pos', 0)),
+                    'value': _fmt(count),
                     'color': DONUT_PALETTE[i % len(DONUT_PALETTE)],
+                    'percentage': round(count / _grade_total * 100, 1),
                 }
-                for i, g in enumerate(grades)
+                for i, (g, count) in enumerate(zip(grades, _grade_counts))
             ],
         }]
         return Response({'donuts': donuts, 'trend': None})
@@ -993,15 +1110,19 @@ class CouponChartView(APIView):
                                    coupon_id_prefix=prefix)
         by_shop = (shop_data or {}).get('by_shop', [])
 
+        top_shops = by_shop[:9]  # cap at 9 for readability
+        _shop_counts = [s.get('used', 0) for s in top_shops]
+        _shop_total = sum(_shop_counts) or 1
         donuts = [{
             'title': 'By Shop',
             'slices': [
                 {
                     'label': str(s.get('shop_name', s.get('using_shop', ''))),
-                    'value': s.get('used', 0),
+                    'value': _fmt(count),
                     'color': DONUT_PALETTE[i % len(DONUT_PALETTE)],
+                    'percentage': round(count / _shop_total * 100, 1),
                 }
-                for i, s in enumerate(by_shop[:9])  # cap at 9 for readability
+                for i, (s, count) in enumerate(zip(top_shops, _shop_counts))
             ],
         }]
         return Response({'donuts': donuts, 'trend': None})

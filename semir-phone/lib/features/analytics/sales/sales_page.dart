@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/dark_tabs.dart';
 import '../../../shared/widgets/data_table_widget.dart';
@@ -35,7 +36,16 @@ class _SalesPageState extends ConsumerState<SalesPage> {
     final currentShop = ref.watch(salesShopGroupProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sales Analytics')),
+      appBar: AppBar(
+        title: const Text('Sales Analytics'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Charts',
+            onPressed: () => context.go('/sales/charts'),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           PullToRefresh(
@@ -130,7 +140,7 @@ class _DataView extends ConsumerWidget {
           child: _KpiGrid(kpis: payload.periodKpis, variant: KpiVariant.period),
         ),
 
-        // Lazy-loaded tab tables
+        // Lazy-loaded tab tables (filtered by shop_group)
         const SectionHeader(title: 'Detailed Analysis'),
         DarkTabs(
           tabs: _kTabLabels,
@@ -143,6 +153,23 @@ class _DataView extends ConsumerWidget {
           filter: filter,
           shopGroup: shopGroup,
         ),
+
+        // All Shops comparison section (only shown when a shop group is active)
+        if (shopGroup != 'All') ...[
+          const SectionHeader(title: 'All Shops (Comparison)'),
+          DarkTabs(
+            tabs: _kTabLabels.take(4).toList(), // grade/season/month/week
+            selectedIndex: selectedTab.clamp(0, 3),
+            onTabSelected: onTabSelected,
+          ),
+          _LazyTabContent(
+            tabIndex: selectedTab.clamp(0, 3),
+            payload: payload,
+            filter: filter,
+            shopGroup: 'All', // no shop filter → global data
+            useAllshopsFromPayload: true,
+          ),
+        ],
 
         const SizedBox(height: 32),
       ],
@@ -158,19 +185,23 @@ class _LazyTabContent extends ConsumerWidget {
     required this.payload,
     required this.filter,
     required this.shopGroup,
+    this.useAllshopsFromPayload = false,
   });
 
   final int tabIndex;
   final SalesAnalyticsPayload payload;
   final DateRangeFilter filter;
   final String shopGroup;
+  // When true, tab 0 reads from payload.allshopsTabs instead of payload.tabs
+  final bool useAllshopsFromPayload;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Tab 0 is always present in the initial payload
+    // Tab 0 (by_grade) is in the initial payload — look up by key, not index
     if (tabIndex == 0) {
-      final gradeTab = payload.tabs.isNotEmpty ? payload.tabs.first : null;
-      return _tabContent(gradeTab);
+      final source = useAllshopsFromPayload ? payload.allshopsTabs : payload.tabs;
+      final matches = source.where((t) => t.tabKey == 'by_grade');
+      return _tabContent(matches.isNotEmpty ? matches.first : null);
     }
 
     if (tabIndex >= _kTabKeys.length) return const SizedBox.shrink();

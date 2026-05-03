@@ -14,7 +14,7 @@ from App.analytics.tab_functions import (
     get_shop_detail_coupon_data,
 )
 from App.models import SalesTransaction, Customer, Coupon, CouponCampaign
-from App.views.view_utils import parse_date
+from App.views.view_utils import parse_date, parse_date_silent
 
 logger = logging.getLogger(__name__)
 
@@ -108,15 +108,6 @@ def shop_detail(request):
     })
 
 
-def _safe_date(val):
-    """Parse date string silently (no messages framework)."""
-    if not val:
-        return None
-    try:
-        return datetime.strptime(val.strip(), "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
 
 def shop_detail_sales_partial(request):
     """AJAX: render sales section data for one shop."""
@@ -128,8 +119,8 @@ def shop_detail_sales_partial(request):
     end_date   = request.GET.get("end_date", "")
     if not shop_name:
         return HttpResponse('<div class="no-data-msg text-muted py-3">Select a shop to view sales analytics.</div>')
-    date_from = _safe_date(start_date)
-    date_to   = _safe_date(end_date)
+    date_from = parse_date_silent(start_date)
+    date_to   = parse_date_silent(end_date)
     logger.info("partial sales: shop=%s from=%s to=%s user=%s", shop_name, date_from, date_to, request.user)
     data = get_shop_detail_sales_data(shop_name, date_from=date_from, date_to=date_to)
     return render(request, "shop_detail/_sales_partial.html", {
@@ -170,8 +161,8 @@ def shop_detail_coupon_partial(request):
     coupon_campaign_id = request.GET.get("coupon_campaign", "").strip()
     if not shop_name:
         return HttpResponse('<div class="no-data-msg text-muted py-3">Select a shop to view coupon analytics.</div>')
-    date_from = _safe_date(start_date)
-    date_to   = _safe_date(end_date)
+    date_from = parse_date_silent(start_date)
+    date_to   = parse_date_silent(end_date)
     # Resolve campaign → prefix
     effective_prefix = coupon_prefix
     if coupon_campaign_id:

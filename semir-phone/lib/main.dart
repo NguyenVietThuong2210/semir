@@ -34,42 +34,59 @@ SentryEvent? scrubPiiForTest(SentryEvent event, Hint hint) => _scrubPii(event, h
 SentryEvent? _scrubPii(SentryEvent event, Hint hint) {
   const sensitiveKeys = ['phone', 'vip_id', 'invoice', 'token', 'password'];
 
-  // Scrub sensitive keys from event tags (string map, safe to filter).
-  final tags = event.tags;
-  if (tags != null) {
-    final scrubbedTags = Map<String, String>.fromEntries(
-      tags.entries.map((e) {
-        final isSensitive = sensitiveKeys.any((k) => e.key.toLowerCase().contains(k));
-        return MapEntry(e.key, isSensitive ? '[REDACTED]' : e.value);
-      }),
-    );
-    return SentryEvent(
-      eventId: event.eventId,
-      timestamp: event.timestamp,
-      platform: event.platform,
-      logger: event.logger,
-      serverName: event.serverName,
-      release: event.release,
-      dist: event.dist,
-      environment: event.environment,
-      message: event.message,
-      transaction: event.transaction,
-      throwable: event.throwable,
-      level: event.level,
-      culprit: event.culprit,
-      tags: scrubbedTags,
-      modules: event.modules,
-      breadcrumbs: event.breadcrumbs,
-      sdk: event.sdk,
-      request: event.request,
-      contexts: event.contexts,
-      user: event.user,
-      fingerprint: event.fingerprint,
-      exceptions: event.exceptions,
-      threads: event.threads,
-      debugMeta: event.debugMeta,
-      type: event.type,
-    );
+  bool isSensitive(String key) =>
+      sensitiveKeys.any((k) => key.toLowerCase().contains(k));
+
+  // Recursively scrub a map, replacing sensitive values with '[REDACTED]'.
+  Map<String, dynamic> scrubMap(Map<String, dynamic> map) {
+    return Map<String, dynamic>.fromEntries(map.entries.map((e) {
+      if (isSensitive(e.key)) return MapEntry(e.key, '[REDACTED]');
+      if (e.value is Map<String, dynamic>) {
+        return MapEntry(e.key, scrubMap(e.value as Map<String, dynamic>));
+      }
+      return e;
+    }));
   }
-  return event;
+
+  final tags = event.tags;
+  // ignore: deprecated_member_use
+  final extra = event.extra;
+  final needsScrub = (tags != null) || (extra != null);
+  if (!needsScrub) return event;
+
+  final scrubbedTags = tags == null
+      ? null
+      : Map<String, String>.fromEntries(tags.entries.map((e) =>
+          MapEntry(e.key, isSensitive(e.key) ? '[REDACTED]' : e.value)));
+
+  final scrubbedExtra = extra == null ? null : scrubMap(extra);
+
+  return SentryEvent(
+    eventId: event.eventId,
+    timestamp: event.timestamp,
+    platform: event.platform,
+    logger: event.logger,
+    serverName: event.serverName,
+    release: event.release,
+    dist: event.dist,
+    environment: event.environment,
+    message: event.message,
+    transaction: event.transaction,
+    throwable: event.throwable,
+    level: event.level,
+    culprit: event.culprit,
+    tags: scrubbedTags,
+    extra: scrubbedExtra,
+    modules: event.modules,
+    breadcrumbs: event.breadcrumbs,
+    sdk: event.sdk,
+    request: event.request,
+    contexts: event.contexts,
+    user: event.user,
+    fingerprint: event.fingerprint,
+    exceptions: event.exceptions,
+    threads: event.threads,
+    debugMeta: event.debugMeta,
+    type: event.type,
+  );
 }

@@ -79,6 +79,14 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
   });
 
+  testWidgets('null payload → "No data" shown', (tester) async {
+    await tester.pumpWidget(buildSubject(const AsyncValue.data(null)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No data'), findsOneWidget);
+    expect(find.byType(KpiCard), findsNothing);
+  });
+
   testWidgets('tab switch: DataTableWidget updates', (tester) async {
     // Single tab fixture
     await tester.pumpWidget(

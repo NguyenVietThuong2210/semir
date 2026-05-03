@@ -131,7 +131,25 @@ void main() {
   });
 
   testWidgets('tab switch: switching to Detail tab works', (tester) async {
-    await tester.pumpWidget(buildSubject(AsyncValue.data(_fixturePayload())));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          couponAnalyticsProvider
+              .overrideWith(() => _FakeNotifier(AsyncValue.data(_fixturePayload()))),
+          // Override the lazy tab provider so it resolves without HTTP calls.
+          couponTabProvider.overrideWith((ref, key) async => const TableTab(
+                tabKey: 'detail',
+                label: 'Detail',
+                headers: ['Coupon', 'Status'],
+                rows: [],
+              )),
+        ],
+        child: MaterialApp(
+          theme: buildAppTheme(),
+          home: const CouponPage(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Detail'), findsWidgets);

@@ -7,7 +7,7 @@ import logging
 import threading
 
 from django.conf import settings
-from django.db.models import Count, Q as _Q
+from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from App.permissions import requires_perm
@@ -19,6 +19,8 @@ from App.models import Customer as POSCustomer
 from App.cnv.models import CNVCustomer, CNVOrder, CNVSyncLog
 from App.cnv.service import (
     parse_cnv_period_filter,
+    get_cnv_customer_kpis,
+    get_cnv_phone_sets,
     get_cnv_comparison_data,
 )
 
@@ -104,58 +106,8 @@ def customer_analytics(request):
     period_filter, has_filter = parse_cnv_period_filter(start_date, end_date)
     period_label = f"{start_date} to {end_date}" if has_filter else "All Time"
 
-    # Summary counts (cheap aggregate queries — no list materialisation)
-    pos_all = (
-        POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
-        .exclude(vip_id=0).exclude(phone='')
-    )
-    cnv_all = CNVCustomer.objects.filter(phone__isnull=False).exclude(phone='')
-    _cnv_phone_qs = cnv_all.values('phone')
-    _pos_phone_qs = pos_all.values('phone')
-
-    total_pos_all = POSCustomer.objects.filter(vip_id__isnull=False).exclude(vip_id=0).count()
-    total_cnv_all = CNVCustomer.objects.count()
-    pos_only_all_count = pos_all.exclude(phone__in=_cnv_phone_qs).count()
-    cnv_only_all_count = cnv_all.exclude(phone__in=_pos_phone_qs).count()
-
-    new_pos_count = new_cnv_count = 0
-    pos_only_period_count = cnv_only_period_count = 0
-    new_pos_inv_count = new_pos_no_inv_count = 0
-
-    if has_filter:
-        pos_period = pos_all.filter(
-            registration_date__gte=period_filter['start'],
-            registration_date__lte=period_filter['end'],
-        )
-        new_pos_count = pos_period.count()
-        cnv_period = cnv_all.filter(
-            cnv_created_at__gte=period_filter['start'],
-            cnv_created_at__lte=period_filter['end'],
-        )
-        new_cnv_count = cnv_period.count()
-        pos_only_period_count = pos_period.exclude(phone__in=_cnv_phone_qs).count()
-        cnv_only_period_count = cnv_period.exclude(phone__in=_pos_phone_qs).count()
-
-        from App.models import SalesTransaction as _ST
-        _inv_qs = (
-            _ST.objects
-            .filter(
-                sales_date__gte=period_filter['start'].date(),
-                sales_date__lte=period_filter['end'].date(),
-            )
-            .exclude(vip_id__isnull=True).exclude(vip_id='').exclude(vip_id='0')
-        )
-        _pks_wi_qs  = _inv_qs.filter(customer__isnull=False).values('customer_id')
-        _vids_wi_qs = _inv_qs.values('vip_id')
-        _inv_phones = set(
-            POSCustomer.objects
-            .filter(_Q(id__in=_pks_wi_qs) | _Q(vip_id__in=_vids_wi_qs))
-            .exclude(phone__isnull=True).exclude(phone='')
-            .values_list('phone', flat=True)
-        )
-        _pos_period_phones = set(pos_period.values_list('phone', flat=True))
-        new_pos_inv_count    = len(_pos_period_phones & _inv_phones)
-        new_pos_no_inv_count = new_pos_count - new_pos_inv_count
+    pos_phones_all, cnv_phones_all = get_cnv_phone_sets()
+    kpis = get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_all)
 
     # First BD tab (bd_season) — server-rendered; other tabs load lazily
     bd_season_data = get_customer_tab('bd_season', start_date, end_date)
@@ -164,16 +116,16 @@ def customer_analytics(request):
     context = {
         "has_filter":             has_filter,
         "period_label":           period_label,
-        "total_pos":              total_pos_all,
-        "total_cnv":              total_cnv_all,
-        "pos_only_all_count":     pos_only_all_count,
-        "cnv_only_all_count":     cnv_only_all_count,
-        "new_pos_count":          new_pos_count,
-        "new_pos_inv_count":      new_pos_inv_count,
-        "new_pos_no_inv_count":   new_pos_no_inv_count,
-        "new_cnv_count":          new_cnv_count,
-        "pos_only_period_count":  pos_only_period_count,
-        "cnv_only_period_count":  cnv_only_period_count,
+        "total_pos":              kpis['total_pos'],
+        "total_cnv":              kpis['total_cnv'],
+        "pos_only_all_count":     kpis['pos_only_all'],
+        "cnv_only_all_count":     kpis['cnv_only_all'],
+        "new_pos_count":          kpis['new_pos'],
+        "new_pos_inv_count":      kpis['new_pos_inv'],
+        "new_pos_no_inv_count":   kpis['new_pos_no_inv'],
+        "new_cnv_count":          kpis['new_cnv'],
+        "pos_only_period_count":  kpis['pos_only_period'],
+        "cnv_only_period_count":  kpis['cnv_only_period'],
         "breakdown": {"season": bd_season_data["by_season"]},
         "lazy_params":  lazy_params,
         "start_date":   start_date,

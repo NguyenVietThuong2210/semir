@@ -68,6 +68,93 @@ def get_cnv_phone_sets():
     return result
 
 
+def get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_all):
+    """Compute CNV customer analytics KPI counts.
+
+    Used by both the web customer_analytics view and the mobile CustomerAnalyticsView API.
+    Returns a dict; callers map keys to their own response format.
+
+    All-time keys: total_pos, total_cnv, both, pos_only_all, cnv_only_all
+    Period keys (zeroed when has_filter=False): new_pos, new_cnv, pos_only_period,
+        cnv_only_period, new_pos_inv, new_pos_no_inv, synced_period, active_period
+    """
+    from App.models import SalesTransaction as _ST
+    from django.db.models import Q as _DQ
+
+    total_pos = len(pos_phones_all)
+    total_cnv = len(cnv_phones_all)
+    both = len(pos_phones_all & cnv_phones_all)
+    pos_only_all = total_pos - both
+    cnv_only_all = total_cnv - both
+
+    new_pos = new_cnv = 0
+    pos_only_period = cnv_only_period = 0
+    new_pos_inv = new_pos_no_inv = 0
+
+    if has_filter:
+        pos_all = (
+            POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
+            .exclude(vip_id=0).exclude(phone='')
+        )
+        cnv_all = CNVCustomer.objects.filter(phone__isnull=False).exclude(phone='')
+        _cnv_phone_qs = cnv_all.values('phone')
+        _pos_phone_qs = pos_all.values('phone')
+
+        pos_period = pos_all.filter(
+            registration_date__gte=period_filter['start'],
+            registration_date__lte=period_filter['end'],
+        )
+        new_pos = pos_period.count()
+        cnv_period = cnv_all.filter(
+            cnv_created_at__gte=period_filter['start'],
+            cnv_created_at__lte=period_filter['end'],
+        )
+        new_cnv = cnv_period.count()
+        pos_only_period = pos_period.exclude(phone__in=_cnv_phone_qs).count()
+        cnv_only_period = cnv_period.exclude(phone__in=_pos_phone_qs).count()
+
+        _inv_qs = (
+            _ST.objects
+            .filter(
+                sales_date__gte=period_filter['start'].date(),
+                sales_date__lte=period_filter['end'].date(),
+            )
+            .exclude(vip_id__isnull=True).exclude(vip_id='').exclude(vip_id='0')
+        )
+        _pks_wi_qs = _inv_qs.filter(customer__isnull=False).values('customer_id')
+        _vids_wi_qs = _inv_qs.values('vip_id')
+        _inv_phones = set(
+            POSCustomer.objects
+            .filter(_DQ(id__in=_pks_wi_qs) | _DQ(vip_id__in=_vids_wi_qs))
+            .exclude(phone__isnull=True).exclude(phone='')
+            .values_list('phone', flat=True)
+        )
+        _pos_period_phones = set(pos_period.values_list('phone', flat=True))
+        new_pos_inv = len(_pos_period_phones & _inv_phones)
+        new_pos_no_inv = new_pos - new_pos_inv
+
+    # synced_period = new POS customers also in CNV (from POS side)
+    synced_period = new_pos - pos_only_period
+    # active_period = all unique new customers across both systems
+    active_period = pos_only_period + cnv_only_period + synced_period
+
+    return {
+        'total_pos':        total_pos,
+        'total_cnv':        total_cnv,
+        'both':             both,
+        'pos_only_all':     pos_only_all,
+        'cnv_only_all':     cnv_only_all,
+        'new_pos':          new_pos,
+        'new_cnv':          new_cnv,
+        'pos_only_period':  pos_only_period,
+        'cnv_only_period':  cnv_only_period,
+        'new_pos_inv':      new_pos_inv,
+        'new_pos_no_inv':   new_pos_no_inv,
+        'synced_period':    synced_period,
+        'active_period':    active_period,
+    }
+
+
 # ── Registration breakdown (BD tabs) ──────────────────────────────────────────
 
 def _fetch_bd_raw(period_filter):

@@ -92,6 +92,30 @@ class HomePage extends ConsumerWidget {
         hasAccess: can('customer_detail.view'),
         accent: AppColors.accentTeal,
       ),
+      _CardSpec(
+        title: 'Sales Charts',
+        description: 'Visual charts for sales trends and breakdowns',
+        icon: Icons.show_chart_rounded,
+        route: '/sales/charts',
+        hasAccess: can('sales.view'),
+        accent: AppColors.accentBlue,
+      ),
+      _CardSpec(
+        title: 'Customer Charts',
+        description: 'Visual charts for customer registration and grades',
+        icon: Icons.pie_chart_outline_rounded,
+        route: '/customer/charts',
+        hasAccess: can('customers.view'),
+        accent: AppColors.accentGreen,
+      ),
+      _CardSpec(
+        title: 'Coupon Charts',
+        description: 'Visual charts for coupon usage and campaigns',
+        icon: Icons.donut_small_outlined,
+        route: '/coupon/charts',
+        hasAccess: can('coupons.view'),
+        accent: AppColors.accentOrange,
+      ),
     ];
   }
 }

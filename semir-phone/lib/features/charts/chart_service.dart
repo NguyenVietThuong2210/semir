@@ -43,12 +43,12 @@ class DonutChart {
   final String title;
   final List<DonutSlice> slices;
 
-  factory DonutChart.fromJson(String key, Map<String, dynamic> json) {
+  factory DonutChart.fromJson(Map<String, dynamic> json) {
     final slices = (json['slices'] as List?)
             ?.map((s) => DonutSlice.fromJson(s as Map<String, dynamic>))
             .toList() ??
         [];
-    return DonutChart(title: json['title'] as String? ?? key, slices: slices);
+    return DonutChart(title: json['title'] as String? ?? '', slices: slices);
   }
 }
 
@@ -58,9 +58,9 @@ class ChartPayload {
   final List<TrendPoint>? trend;
 
   factory ChartPayload.fromJson(Map<String, dynamic> json) {
-    final donutsMap = json['donuts'] as Map<String, dynamic>? ?? {};
-    final donuts = donutsMap.entries
-        .map((e) => DonutChart.fromJson(e.key, e.value as Map<String, dynamic>))
+    final donutsList = json['donuts'] as List? ?? [];
+    final donuts = donutsList
+        .map((e) => DonutChart.fromJson(e as Map<String, dynamic>))
         .toList();
     final trendList = json['trend'] as List?;
     final trend = trendList

@@ -37,7 +37,7 @@ void main() {
             ],
           },
         },
-        'comparison': {
+        'customer_comparison': {
           'pos_only': {
             'label': 'POS Only',
             'headers': ['Tháng', 'Số KH'],

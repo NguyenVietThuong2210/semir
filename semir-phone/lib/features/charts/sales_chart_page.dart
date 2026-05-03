@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/widgets/date_filter_bar.dart';
 import '../../shared/widgets/error_banner.dart';
 import '../../shared/widgets/loading_overlay.dart';
 import '../../shared/widgets/section_header.dart';
 import 'chart_provider.dart';
 import 'chart_service.dart';
 import 'donut_card.dart';
+import 'trend_line_chart.dart';
 
 class SalesChartPage extends ConsumerWidget {
   const SalesChartPage({super.key});
@@ -14,6 +16,7 @@ class SalesChartPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chartAsync = ref.watch(salesChartProvider);
+    final filter = ref.watch(chartFilterProvider);
     final selectedSlice = ref.watch(selectedSliceLabelProvider);
 
     return Scaffold(
@@ -31,10 +34,12 @@ class SalesChartPage extends ConsumerWidget {
               }
               return _ChartContent(
                 payload: payload,
+                filter: filter,
                 selectedSlice: selectedSlice,
-                onSliceTapped: (label) => ref
-                    .read(selectedSliceLabelProvider.notifier)
-                    .state = label,
+                onSliceTapped: (label) =>
+                    ref.read(selectedSliceLabelProvider.notifier).state = label,
+                onFilterChanged: (f) =>
+                    ref.read(chartFilterProvider.notifier).state = f,
               );
             },
           ),
@@ -48,19 +53,25 @@ class SalesChartPage extends ConsumerWidget {
 class _ChartContent extends StatelessWidget {
   const _ChartContent({
     required this.payload,
+    required this.filter,
     required this.selectedSlice,
     required this.onSliceTapped,
+    required this.onFilterChanged,
   });
 
   final ChartPayload payload;
+  final DateRangeFilter filter;
   final String? selectedSlice;
   final ValueChanged<String> onSliceTapped;
+  final ValueChanged<DateRangeFilter> onFilterChanged;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        DateFilterBar(initialFilter: filter, onFilterChanged: onFilterChanged),
+        const SizedBox(height: 8),
         const SectionHeader(title: 'Analytics Charts'),
         const SizedBox(height: 8),
         ...payload.donuts.map((chart) => Padding(
@@ -71,24 +82,12 @@ class _ChartContent extends StatelessWidget {
                 onSliceTapped: onSliceTapped,
               ),
             )),
-        if (payload.trend != null) ...[
+        if (payload.trend != null && payload.trend!.isNotEmpty) ...[
           const SectionHeader(title: 'Trend'),
-          const SizedBox(height: 120, child: _TrendPlaceholder()),
+          TrendLineChart(points: payload.trend!),
         ],
         const SizedBox(height: 32),
       ],
-    );
-  }
-}
-
-// Placeholder for trend chart — replaced with fl_chart LineChart when data available
-class _TrendPlaceholder extends StatelessWidget {
-  const _TrendPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Trend chart', style: TextStyle(color: Colors.grey)),
     );
   }
 }

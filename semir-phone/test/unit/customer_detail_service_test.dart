@@ -18,23 +18,26 @@ void main() {
     service = CustomerDetailService(dio: mockDio);
   });
 
+  // Flat structure matching actual API response from CustomerDetailView
   Map<String, dynamic> _customerPayload({String phone = '09x-xxx-x567'}) => {
-        'customer': {
-          'username': 'Nguyen Van A',
-          'phone': phone,
-          'vip_id': 'VIP001234',
-          'grade': 'Gold',
-        },
-        'kpis': {
-          'Tổng đơn': '25',
-          'Tổng chi tiêu': '12,500,000',
-        },
-        'invoices': {
-          'headers': ['Ngày', 'Cửa hàng', 'Giá trị'],
-          'rows': [
-            ['2025-03-01', 'HN01', '500,000'],
-          ],
-        },
+        'name': 'Nguyen Van A',
+        'phone': phone,
+        'vip_id': 'VIP001234',
+        'grade': 'Gold',
+        'registration_store': 'HN01',
+        'registration_date': '2022-05-01',
+        'total_invoices': 25,
+        'total_revenue': '12,500,000',
+        'cnv_sync_status': 'synced',
+        'invoice_history': [
+          {
+            'date': '2025-03-01',
+            'shop': 'HN01',
+            'invoice_id': 'INV001',
+            'amount': '500,000',
+            'coupon_used': '',
+          },
+        ],
       };
 
   test('VIP ID search → vip_id query param sent', () async {
@@ -137,8 +140,11 @@ void main() {
     expect(payload.username, 'Nguyen Van A');
     expect(payload.grade, 'Gold');
     expect(payload.vipId, 'VIP001234');
-    expect(payload.kpis.length, 2);
-    expect(payload.invoiceHeaders, ['Ngày', 'Cửa hàng', 'Giá trị']);
+    expect(payload.registrationStore, 'HN01');
+    expect(payload.registrationDate, '2022-05-01');
+    expect(payload.cnvSyncStatus, 'synced');
+    expect(payload.kpis.length, 2); // total_invoices + total_revenue
+    expect(payload.invoiceHeaders, ['Date', 'Shop', 'Invoice', 'Amount']);
     expect(payload.invoiceRows.length, 1);
   });
 }
