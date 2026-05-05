@@ -68,11 +68,14 @@ Always check with `if not period_filter:` — NOT `if period_filter is None:`.
 - Cached 10 min
 - Returns `(pos_phones_all, cnv_phones_all)` as Python sets
 - Used for POS↔CNV phone matching
+- **Implementation (2026-05-04):** cold path calls `_fetch_bd_raw({})` and derives sets in-memory — eliminates the 2 separate POSCustomer+CNVCustomer phone-only queries that used to duplicate the BD raw fetch. Calling `get_cnv_phone_sets()` now also primes the `_fetch_bd_raw({})` cache for the subsequent `compute_cnv_breakdown({})` call.
 
 ### `_fetch_bd_raw(period_filter)`
 - Cached 5 min per period_filter
 - **Must receive a dict** (either `{'start': ..., 'end': ...}` or `{}`), never `None`
 - Crashes with `AttributeError` if passed `None` (calls `.get()` on it)
+- **Query count:** 4 queries cold (was 7 before 2026-05-03, then 6 before 2026-05-04): single broad POSCustomer scan + CNVCustomer + CNV Zalo + `build_inv_bucket_map_from_db`. Date bounds computed in Python from fetched data (no aggregate queries).
+- **Returns 10-tuple** (added `_all_pos_rows` as 10th element 2026-05-04): `(pos_list, cnv_list, zalo_list, phone_to_store, _phone_to_inv, _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi, _all_pos_rows)`
 
 ### `compute_cnv_breakdown(period_filter, store=None, ...)`
 - `period_filter` must be `{}` for no-filter (all-time), or `{'start': date, 'end': date}` for period

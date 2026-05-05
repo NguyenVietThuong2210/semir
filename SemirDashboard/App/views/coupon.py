@@ -24,6 +24,13 @@ from App.views.view_utils import parse_date, filter_params_str
 logger = logging.getLogger(__name__)
 
 
+def _get_campaigns_with_prefix_list(extra_fields=()):
+    """Return all CouponCampaign rows with a computed prefix_list field."""
+    fields = ("id", "name", "prefix") + tuple(extra_fields)
+    campaigns = list(CouponCampaign.objects.values(*fields))
+    for c in campaigns:
+        c["prefix_list"] = [p.strip() for p in (c["prefix"] or "").split(",") if p.strip()]
+    return campaigns
 
 
 @requires_perm("coupons.view")
@@ -54,9 +61,7 @@ def coupon_dashboard(request):
                           coupon_id_prefix=coupon_id_prefix or None,
                           shop_group=shop_group or None)
 
-    _campaigns = list(CouponCampaign.objects.values("id", "name", "prefix"))
-    for _c in _campaigns:
-        _c["prefix_list"] = [p.strip() for p in (_c["prefix"] or "").split(",") if p.strip()]
+    _campaigns = _get_campaigns_with_prefix_list()
 
     # Build lazy params for tab AJAX URLs
     _lazy_parts = []
@@ -197,7 +202,7 @@ def coupon_chart(request):
     # Trend data (shop×time, campaign×time)
     trend_data = calculate_coupon_trend_data(date_from, date_to, shop_group, coupon_id_prefix)
 
-    campaigns = list(CouponCampaign.objects.values("id", "name", "prefix"))
+    campaigns = _get_campaigns_with_prefix_list()
 
     return render(
         request,
@@ -231,16 +236,10 @@ def manage_campaigns(request):
     from App.models import CouponCampaign
 
     if request.method == "GET":
-        campaigns = list(
-            CouponCampaign.objects.values(
-                "id", "name", "prefix", "detail", "created_at"
-            )
-        )
+        campaigns = _get_campaigns_with_prefix_list(extra_fields=("detail", "created_at"))
         for c in campaigns:
             if c["created_at"]:
                 c["created_at"] = c["created_at"].strftime("%Y-%m-%d")
-            # Expose individual prefixes as a list for frontend display
-            c["prefix_list"] = [p.strip() for p in (c["prefix"] or "").split(",") if p.strip()]
         return JsonResponse({"campaigns": campaigns})
 
     if request.method == "POST":

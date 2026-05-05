@@ -178,6 +178,39 @@ This step is not optional — a task is not complete until docs are consistent w
 
 ---
 
+### Step 7 — Self-improve this skill
+
+After writing/updating `FINAL_REPORT.md`, read this SKILL.md and update it based on what happened this run.
+
+**What to look for:**
+
+| Situation | Update to make |
+|-----------|---------------|
+| A new project-specific bug pattern found during Step 1 code scan | Add it to the bug table in Step 1 with its `Why it's a bug` explanation |
+| A known false-fail test appeared again | Add it to Step 3 `Failure isolation rule` with the specific test name |
+| Docs inconsistency found that isn't covered by Step 6's update table | Add the missing doc↔code pair to the Step 6 table |
+| A step's command failed due to wrong directory or path | Fix the command in place |
+| A new shared-cache isolation issue appeared | Add the pattern to the `Failure isolation rule` block |
+| Code pattern checked in Step 1 no longer exists (refactored away) | Remove or update the pattern from the bug table |
+
+**How to update:**
+
+1. Read the current SKILL.md (`D:\New-jouney\semir\.claude\skills\final-check\SKILL.md`)
+2. Make targeted edits to the specific steps that had issues — do not rewrite working steps
+3. Append a one-line entry to the changelog below
+
+**Changelog** (append — do not delete prior entries):
+
+| Date | Change |
+|------|--------|
+| 2026-04-27 | Initial version created — Steps 1-6 based on first full QA run |
+| 2026-05-03 | Step 3: added failure isolation rule for cache-state false-fails; named specific tests |
+| 2026-05-03 | Step 1: added `.cast<String>()` and chart-provider-not-invalidated patterns to mobile bug table |
+| 2026-05-03 | Step 6: added `performance_report.md` baseline-changed entry to update table |
+| 2026-05-03 | Added this Step 7 self-improve section |
+
+---
+
 ## Pass Criteria (all must be true for Go)
 
 | Check | Requirement |

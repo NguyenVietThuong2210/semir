@@ -93,9 +93,9 @@ class ShopCouponPayload {
       detail = TableTab(
         tabKey: 'detail_table',
         label: 'Coupon Details',
-        headers: (rawDetail['headers'] as List?)?.cast<String>() ?? [],
+        headers: (rawDetail['headers'] as List?)?.whereType<String>().toList() ?? [],
         rows: (rawDetail['rows'] as List?)
-                ?.map((r) => (r as List).cast<String>())
+                ?.map((r) => r is List ? r.whereType<String>().toList() : <String>[])
                 .toList() ??
             [],
       );
@@ -118,7 +118,7 @@ class ShopDetailService {
     try {
       final response = await _dio.get(Endpoints.shops);
       final data = response.data as Map<String, dynamic>;
-      return (data['shops'] as List?)?.cast<String>() ?? [];
+      return (data['shops'] as List?)?.whereType<String>().toList() ?? [];
     } on DioException catch (e) {
       if (e.response?.statusCode == 403) throw const PermissionException();
       throw ApiException(e.message ?? 'Network error',

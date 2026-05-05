@@ -6,6 +6,7 @@ import '../../features/analytics/customer/customer_provider.dart';
 import '../../features/analytics/coupon/coupon_provider.dart';
 import '../../features/analytics/shop_detail/shop_detail_provider.dart';
 import '../../features/analytics/customer_detail/customer_detail_provider.dart';
+import '../../features/charts/chart_provider.dart';
 import 'auth_service.dart';
 import 'token_storage.dart';
 
@@ -79,6 +80,9 @@ class AuthNotifier extends AsyncNotifier<UserSession?> {
     ref.invalidate(shopCustomerProvider);
     ref.invalidate(shopCouponProvider);
     ref.invalidate(customerDetailProvider);
+    ref.invalidate(salesChartProvider);
+    ref.invalidate(customerChartProvider);
+    ref.invalidate(couponChartProvider);
     state = const AsyncData(null);
   }
 

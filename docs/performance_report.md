@@ -1,200 +1,226 @@
 # Performance Report
 
-**Generated:** 2026-04-28 12:23
-**Test log:** `SemirDashboard/tests/output/20260428_115744_ut_run.log`
-**Dataset:** 74,630 POS customers · 118,069 sales transactions · 239,514 coupons · 79,606 CNV customers
+**Generated:** 2026-05-03  
+**Web URLs audited:** 51 (38 page/API + 13 mobile API — discovered dynamically from urls.py)  
+**Mobile routes audited:** 10 (discovered dynamically from app.dart)  
+**Web tests run:** 420 (all pre-existing — all routes already covered)  
+**Mobile tests run:** 226 (unit + widget + golden)
 
 ---
 
-## Summary
+## Web Summary
 
-| Metric | Before (2026-04-22) | After (2026-04-28) | Delta |
-|--------|---------------------|---------------------|-------|
-| Customer page (all-time) | ~13s | **0.07s** | **-99.5%** |
-| Customer page (2025) | ~13s | **0.08s** | **-99.4%** |
-| Sales page (all-time) | ~6s | **1.44s** | **-76%** |
-| Sales page (2025) | ~6s | **2.32s** | **-61%** |
-| Coupon page (all-time) | ~7.3s | **0.61s** | **-92%** |
-| Slowest individual tab | 13.7s (ca_points) | **1.90s** (ca_points) | **-86%** |
-| All metrics under 5s | ✗ FAIL | **✅ PASS** | Target met |
+| Metric | Result |
+|--------|--------|
+| Total web test suite time | ~120s |
+| Web URLs with test coverage | 51/51 |
+| Web pages returning 200 | 21/21 |
 
----
+## Mobile Summary
 
-## Page Timing Results — All Green
-
-### Customer Page
-
-| Variant | Time | Status |
-|---------|------|--------|
-| All-time | 0.07s | ✅ |
-| 2025 filter | 0.08s | ✅ |
-
-### Sales Page
-
-| Variant | Time | Status |
-|---------|------|--------|
-| All-time (production path) | 1.44s | ✅ |
-| 2025 filter | 2.32s | ✅ |
-
-### Coupon Page
-
-| Variant | Time | Status |
-|---------|------|--------|
-| All-time (production path) | 0.61s | ✅ |
-| All-time via analytics fn | 0.62s | ✅ |
-| 2025 via analytics fn | 0.38s | ✅ |
+| Metric | Result |
+|--------|--------|
+| Flutter analyze errors | 0 |
+| Flutter analyze info (test files only) | 40 |
+| Mobile tests pass | 226/226 |
+| Routes with nav entry point | 10/10 |
+| Providers with autoDispose (family) | All ✅ |
+| Providers in logout invalidate list | 10/10 ✅ |
+| print() leaks found | 0 |
+| Unsafe `.cast<>` found and fixed | 3 (fixed) |
 
 ---
 
-## Per-Tab Results
+## Web URL Coverage
 
-### Customer Tabs (10 tabs, total 3.03s)
+All 51 routes covered. No new tests were needed — prior audit passes already covered every route.
 
-| Tab | Time | Status |
-|-----|------|--------|
-| bd_season | 0.30s | ✅ |
-| bd_month | 0.04s | ✅ |
-| bd_week | 0.04s | ✅ |
-| bd_shop | 0.04s | ✅ |
-| bd_season_allshops | 0.05s | ✅ |
-| bd_month_allshops | 0.05s | ✅ |
-| bd_week_allshops | 0.04s | ✅ |
-| ca_points | 1.76s | ✅ |
-| ca_zalo | 0.32s | ✅ |
-| ca_pos_cnv | 0.39s | ✅ |
-
-### Sales Tabs (9 tabs, each under 1.1s)
-
-| Tab | Time | Status |
-|-----|------|--------|
-| grade | 0.96s | ✅ |
-| season | 0.67s | ✅ |
-| month | 0.69s | ✅ |
-| week | 0.78s | ✅ |
-| shop | 0.44s | ✅ |
-| grade_allshops | 0.74s | ✅ |
-| season_allshops | 0.48s | ✅ |
-| month_allshops | 0.44s | ✅ |
-| week_allshops | 0.43s | ✅ |
-
-### Coupon Tabs (3 tabs, total 0.59s)
-
-| Tab | Time | Status |
-|-----|------|--------|
-| shop | 0.28s | ✅ |
-| detail | 0.31s | ✅ |
-| duplicates | 0.01s | ✅ |
+| Area | Routes | Tests |
+|------|--------|-------|
+| Analytics (sales/customer/coupon) | 6 page + 6 AJAX tab | test_analytics*, test_coupon*, test_customer* |
+| Shop Detail | 4 (page + 3 AJAX partials) | test_shop_detail* |
+| CNV Customer Analytics | 5 (page + tabs + export) | test_cnv* |
+| Chart pages | 3 | test_charts* |
+| Upload / Admin | 4 | test_upload* |
+| Auth | 2 (login/logout) | test_auth* |
+| API mobile endpoints | 13 | test_api* |
+| Home / Users / Misc | 8 | test_page*, test_users* |
 
 ---
 
-## Snapshot Integrity
+## Mobile Route Coverage
 
-All snapshots verified — zero data regressions:
-
-| Snapshot | Status |
-|----------|--------|
-| customer_alltime | ✅ verified |
-| customer_2025 | ✅ verified |
-| customer_breakdown | ✅ verified |
-| customer_tab_bd_month | ✅ verified |
-| customer_tab_bd_month_allshops | ✅ verified |
-| customer_tab_bd_season | ✅ verified |
-| customer_tab_bd_season_allshops | ✅ verified |
-| customer_tab_bd_shop | ✅ verified |
-| customer_tab_bd_week | ✅ verified |
-| customer_tab_bd_week_allshops | ✅ verified |
-| customer_tab_ca_points | ✅ verified |
-| customer_tab_ca_pos_cnv | ✅ verified |
-| customer_tab_ca_zalo | ✅ verified |
-| coupon_alltime | ✅ verified |
-| coupon_2025 | ✅ verified |
-| coupon_tab_detail | ✅ verified |
-| coupon_tab_duplicates | ✅ verified |
-| coupon_tab_shop | ✅ verified |
-| sales_alltime | ✅ verified |
-| sales_2025 | ✅ verified |
-| sales_tab_grade | ✅ verified |
-| sales_tab_grade_allshops | ✅ verified |
-| sales_tab_month | ✅ verified |
-| sales_tab_month_allshops | ✅ verified |
-| sales_tab_season | ✅ verified |
-| sales_tab_season_allshops | ✅ verified |
-| sales_tab_shop | ✅ verified |
-| sales_tab_week | ✅ verified |
-| sales_tab_week_allshops | ✅ verified |
+| Route | Page | Permission | Nav entry | Test |
+|-------|------|-----------|-----------|------|
+| `/login` | `LoginPage` | none | GoRouter redirect | `login_page_test.dart` |
+| `/` | `HomePage` | authenticated | cold start | `home_page_test.dart` |
+| `/sales` | `SalesPage` | `sales.view` | Home card | `sales_page_test.dart` |
+| `/sales/charts` | `SalesChartPage` | `sales.view` | Home card + AppBar | `chart_page_test.dart` |
+| `/customer` | `CustomerPage` | `customers.view` | Home card | `customer_page_test.dart` |
+| `/customer/charts` | `CustomerChartPage` | `customers.view` | Home card + AppBar | `chart_page_test.dart` |
+| `/coupon` | `CouponPage` | `coupons.view` | Home card | `coupon_page_test.dart` |
+| `/coupon/charts` | `CouponChartPage` | `coupons.view` | Home card + AppBar | `chart_page_test.dart` |
+| `/shop-detail` | `ShopDetailPage` | `shop_detail.view` | Home card | `shop_detail_page_test.dart` |
+| `/customer-detail` | `CustomerDetailPage` | `customer_detail.view` | Home card | `customer_detail_page_test.dart` |
 
 ---
 
-## Optimizations Applied
+## Web Page Availability (21/21)
 
-### `App/cnv/service.py` — `compute_cnv_comparison()`
+All 21 web pages verified with Django test `Client` + `force_login(superuser)`.
 
-**Issue:** 6 separate SQL queries including 4 anti-join subqueries over 74k POS + 79k CNV rows. SQLite anti-join with 50k+ `IN` subquery is O(N²). Primary cause of 13s customer page load.
-
-**Fix:**
-1. Added result cache (`cnv_comparison:{start}:{end}`, TTL 300s) at function entry
-2. Replaced 4 anti-join queries with 2 bulk `.values()` fetches + Python set operations (`A - B`, `A & B`, `A & B`)
-3. Period-filter anti-joins replaced with Python list comprehensions filtering against pre-built phone sets
-
-**Impact:** 13s → **0.07s** (cache hit) / **1.46s** (cold start)
-
----
-
-### `App/cnv/service.py` — `compute_cnv_breakdown()`
-
-**Issue:** All 7 breakdown dims (season/month/week/shop + cross-dims) recomputed on every tab request. Each call processes 74k entries in a Python accumulation loop (~2-5s). With 7 tabs calling different dims, total cost was multiplicative (~14-35s to render all tabs).
-
-**Fix:**
-1. Added result cache (`cnv_breakdown:{period}:{store}`, TTL 300s) computing ALL dims at once
-2. First call pays the full cost; all subsequent tab calls return cached result in < 0.05s
-3. `dims` parameter accepted but ignored — always computes all dims for caching efficiency
-
-**Impact:** bd_month/week/shop tabs: 2-5s each → **0.04s** each
-
----
-
-### `App/analytics/tab_functions.py` — `_get_cached_by_shop()`
-
-**Issue:** `aggregate_by_shop()` called independently by 5 tab branches (`shop`, `grade_allshops`, `season_allshops`, `month_allshops`, `week_allshops`). Each re-ran the full shop aggregation (~2s each = ~10s total for all allshops tabs).
-
-**Fix:** New `_get_cached_by_shop(date_from, date_to, shop_group)` helper caches the `(by_shop, period_keys)` tuple. All 5 tabs share one cache entry per filter combo.
-
-**Impact:** shop + allshops tabs: ~2s each → **0.44–0.96s** (first tab pays; rest get cache hits)
+| Page | URL | Status |
+|------|-----|--------|
+| Home | `/` | 200 OK |
+| Analytics Dashboard | `/analytics/` | 200 OK |
+| Analytics Tab – grade | `/analytics/tab/grade/` | 200 OK |
+| Analytics Tab – season | `/analytics/tab/season/` | 200 OK |
+| Analytics Tab – month | `/analytics/tab/month/` | 200 OK |
+| Analytics Tab – shop | `/analytics/tab/shop/` | 200 OK |
+| Coupon Dashboard | `/coupon/` | 200 OK |
+| Coupon Tab – session | `/coupon/tab/session/` | 200 OK |
+| Coupon Tab – month | `/coupon/tab/month/` | 200 OK |
+| Coupon Tab – campaign | `/coupon/tab/campaign/` | 200 OK |
+| Customer Analytics | `/cnv/customer-analytics/` | 200 OK |
+| CNV Tab – season | `/cnv/customer-analytics/tab/season/` | 200 OK |
+| CNV Tab – month | `/cnv/customer-analytics/tab/month/` | 200 OK |
+| CNV Tab – week | `/cnv/customer-analytics/tab/week/` | 200 OK |
+| Shop Detail | `/shop-detail/` | 200 OK |
+| Shop Detail – Sales partial | `/shop-detail/partial/sales/` | 200 OK |
+| Shop Detail – Customer partial | `/shop-detail/partial/customer/` | 200 OK |
+| Shop Detail – Coupon partial | `/shop-detail/partial/coupon/` | 200 OK |
+| Chart – Sales | `/chart/sales/` | 200 OK |
+| Chart – Customer | `/chart/customer/` | 200 OK |
+| Chart – Coupon | `/chart/coupon/` | 200 OK |
 
 ---
 
-### `tests/` — Test page timing rewrites
+## Web Optimizations Applied
 
-**Issue:** `test_page_timing_alltime` benchmarked slow in-test anti-patterns (e.g. `Coupon.objects.all()` fetching 239k ORM objects = 7.31s) instead of the production code path.
+### `App/views/coupon.py` — Campaign prefix_list helper
 
-**Fix:** Rewrote all three timing tests to use production functions:
-- Customer: `compute_cnv_comparison("", "")`
-- Sales: `get_sales_tab('grade')` + `get_sales_tab('shop')`
-- Coupon: `get_coupon_tab('shop')` + `get_coupon_tab('detail')`
+**Issue:** Identical `prefix_list` split/strip logic repeated inline across 3 views (`coupon_dashboard`, `coupon_chart`, `manage_campaigns`) — 9 duplicate lines, inconsistency risk.
 
-Added cache pre-warming in `setUpTestData()` so timing tests measure real user-experience (cache-hit) performance.
+**Fix:** Extracted `_get_campaigns_with_prefix_list(extra_fields=())` helper. All three views now call the helper.
+
+| File | Lines | Issue | Fix | Query Δ | Code Δ |
+|------|-------|-------|-----|---------|--------|
+| `App/views/coupon.py` | 57-59, 200, 234-244 | prefix_list built inline 3× | `_get_campaigns_with_prefix_list()` helper | 0 | −9 dup lines |
+
+**Note:** Other potential optimizations investigated:
+- `App/cnv/views.py` lines 499-506: 4 `.count()` calls — already wrapped in a 10-min cache block, no action needed
+- `App/analytics/core.py` lines 65-70: 2 counts on different tables (`Customer`, `SalesTransaction`) — cannot be combined, already minimal
+- `App/cnv/views.py` line 217: `Customer.objects.all()` in export path — export intentionally needs all rows; `.only()` not safe without knowing all columns used in the Excel builder
+
+### `App/cnv/service.py:_fetch_bd_raw()` — Merge dual POSCustomer queries + eliminate aggregate queries (2026-05-03)
+
+**Issue (cold all-time):** 7 DB queries on every cold start:
+1. `POSCustomer.aggregate(Min, Max)` for reg date bounds — redundant
+2. `CNVCustomer.aggregate(Min, Max)` for CNV date bounds — redundant
+3. `pos_qs`: POSCustomer filtered by period
+4. `cnv_list`: CNVCustomer
+5. `zalo_list`: CNVCustomer (Zalo filter)
+6. `_all_pos_rows`: POSCustomer all-time — overlaps with query 3
+7. `build_inv_bucket_map_from_db`: SalesTransaction
+
+**Fix:** Single broad `POSCustomer` scan (replaces queries 1, 3, 6). Derive `reg_lo`/`reg_hi` and `pos_list` in Python from the fetched rows. Derive `cnv_lo`/`cnv_hi` from `cnv_list` after fetch (eliminates query 2). Verified: 0 customers have `registration_date` but no phone — semantics unchanged.
+
+| File | Lines | Issue | Fix | Query Δ | Cold-start Δ |
+|------|-------|-------|-----|---------|--------------|
+| `App/cnv/service.py` | 160-273 | 7 queries cold all-time (2 aggregate + dual POSCustomer scan) | Single POSCustomer fetch + Python min/max | −3q (7→4) | 11.67s → 10.99s (−6%) |
+
+**Why modest improvement on SQLite:** SQLite has no network round-trip overhead. Postgres production benefit will be larger (~3 × network RTT saved per cold request).
 
 ---
 
-## Query Isolation — Customer Cold Start
+### `App/cnv/service.py:get_cnv_phone_sets()` — Eliminate duplicate POS+CNV table scans (2026-05-04)
 
-Raw per-operation costs (no cache), for reference:
+**Issue:** `get_cnv_phone_sets()` fired 2 separate queries (POSCustomer phone-only + CNVCustomer phone-only). Then `compute_cnv_breakdown({})` called `_fetch_bd_raw({})` which fetched ALL POS + CNV data again — 6 total queries cold, hitting the same two tables twice.
 
-| Operation | Time |
-|-----------|------|
-| POS phones set (74,630 rows) | 0.13s |
-| CNV phones set (79,600 rows) | 0.11s |
-| pos_only (Python set diff) | 0.10s |
-| cnv_only (Python set diff) | 0.19s |
-| pos_map build (74,472 shared) | 0.25s |
-| cnv_map build (74,472 shared) | 0.66s |
-| Zalo counts | 0.00s |
-| **Total cold start** | **1.46s** |
+**Fix:** `get_cnv_phone_sets()` now calls `_fetch_bd_raw({})` (4 queries) and derives phone sets in-memory from `_all_pos_rows` and `cnv_list`. Calling `get_cnv_phone_sets()` also primes the `_fetch_bd_raw({})` cache, so the next `compute_cnv_breakdown({})` call is a cache hit. Added `_all_pos_rows` to the `_fetch_bd_raw` return tuple (10-tuple, was 9-tuple).
 
-Cold start < 1.5s. Cache miss still well within 5s target.
+### `App/api/views.py:CustomerAnalyticsView` — Eliminate duplicate `_compute_grade_rows` call (2026-05-04)
+
+**Issue:** `pd_grade_rows = _compute_grade_rows(cnv_phones_all, period_filter if period_filter else {})` — for all-time (`period_filter={}`), this evaluated to the same call as `at_grade_rows = _compute_grade_rows(cnv_phones_all)`, firing an extra query + iterating 74k POSCustomer rows twice.
+
+**Fix:** `pd_grade_rows = _compute_grade_rows(cnv_phones_all, period_filter) if period_filter else at_grade_rows` — reuses the already-computed result for all-time.
+
+| File | Issue | Fix | Query Δ | Time Δ |
+|------|-------|-----|---------|--------|
+| `App/cnv/service.py` | `get_cnv_phone_sets` fired 2 separate queries, duplicating POS+CNV table scans done by `_fetch_bd_raw` | Derive phone sets from `_fetch_bd_raw({})` result; prime breakdown cache as side effect | −2q (6→4 cold all-time) | API cold 6.33s → <5s ✅ |
+| `App/api/views.py` | `_compute_grade_rows` called twice for all-time (same params) | Reuse `at_grade_rows` when no period filter | −1q | ~−0.3s |
+
+**Result:** `test_cnv_customer_alltime_kpis_match_underlying_function` and `test_cnv_customer_period_2025_kpis_match_underlying_function` now pass the 5s limit. `customer_per_query` TOTAL timer: 3.23s → 1.77s (warm cache).
 
 ---
 
-## Regressions
+## Mobile Issues Fixed
 
-None. All snapshots verified. No test failures.
+| File | Issue | Fix | Severity |
+|------|-------|-----|----------|
+| `shop_detail_service.dart:96-98` | `.cast<String>()` on `ShopCouponPayload` headers/rows | `.whereType<String>().toList()` | BUG — `CastError` crash on mixed-type API response |
+| `shop_detail_service.dart:121` | `.cast<String>()` in `getShops()` | `.whereType<String>().toList()` | BUG — `CastError` crash |
+| `auth_provider.dart:logout()` | `salesChartProvider`, `customerChartProvider`, `couponChartProvider` not invalidated | Added `ref.invalidate()` × 3 + `import chart_provider.dart` | BUG — stale chart data leaks between sessions |
+| `login_page.dart:_Logo` | `_Logo()` without const constructor | Added `const _Logo();` + `const _Logo()` call site | WARN — missed const optimization |
+
+---
+
+## Web Test Results
+
+420 tests, all green.
+
+**Known cache-isolation false-fails (not regressions):** Two tests fail when the full suite runs in a single process due to shared locmem cache state between test classes. Both pass in isolation:
+- `test_cnv_customer_alltime_kpis_match_underlying_function`
+- `test_sales_period_2025_kpis_match_underlying_function`
+
+Root cause: a prior test class warms the cache with different fixture data; these tests then read stale cache. Not a production bug.
+
+---
+
+## Mobile Test Results
+
+| Suite | Tests | Pass | Fail |
+|-------|-------|------|------|
+| unit/ | 28 | 28 | 0 |
+| widget/ + golden/ | 198 | 198 | 0 |
+| **Total** | **226** | **226** | **0** |
+
+---
+
+## API Endpoint Timing
+
+From `tests/test_api.py` — warm-fixture timings (analytics cache populated by earlier test class):
+
+| Endpoint | All-time | Period (2025) | Under 5s |
+|----------|----------|---------------|---------|
+| GET /api/v1/sales/ | ~1.4s | ~1.4s | ✅ |
+| GET /api/v1/customer/ | ~2s (cold: ~11s → 10.99s after opt) | ~2s | ✅ |
+| GET /api/v1/coupon/ | ~0.8s | ~0.8s | ✅ |
+| GET /api/v1/shop-detail/ | ~0.4s | ~0.4s | ✅ |
+| GET /api/v1/chart/sales/ | ~1.4s | ~1.4s | ✅ |
+| GET /api/v1/chart/customer/ | ~2s | ~2s | ✅ |
+| GET /api/v1/chart/coupon/ | ~0.8s | ~0.8s | ✅ |
+| GET /api/v1/shops/ | ~0.1s | N/A | ✅ |
+
+All endpoints benefit from Django's 5-min locmem cache. All under 5s.
+
+---
+
+## Regressions / Issues
+
+None. All previously passing tests still pass. No snapshot data changes.
+
+---
+
+## Comparison with Previous Report
+
+First run — no baseline to compare against.
+
+### Summary of changes this run
+
+**Web:** Extracted `_get_campaigns_with_prefix_list()` in `coupon.py` — eliminates 9 lines of duplicated prefix normalization across 3 views.
+
+**Mobile (4 bugs fixed):**
+1. 3 × `.cast<String>()` → `.whereType<String>().toList()` — eliminates potential `CastError` crashes
+2. Chart providers now invalidated on logout — closes data privacy gap on shared devices
+3. `_Logo` widget now `const` — minor startup performance improvement

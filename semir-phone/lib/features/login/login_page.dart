@@ -65,7 +65,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _Logo(),
+                    const _Logo(),
                     const SizedBox(height: 36),
                     // White elevated card containing the form
                     Container(
@@ -135,6 +135,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 }
 
 class _Logo extends StatelessWidget {
+  const _Logo();
+
   @override
   Widget build(BuildContext context) {
     return Column(

@@ -47,22 +47,25 @@ def get_cnv_phone_sets():
 
     These are all-time, unfiltered sets — used by _compute_cnv_breakdown.
     Cached for 10 minutes; customer data changes rarely during a session.
+
+    Implementation: derives sets from _fetch_bd_raw({}) rather than two separate
+    queries, so calling this also primes the breakdown cache for the next
+    compute_cnv_breakdown({}) call (eliminates duplicate POS+CNV table scans).
     """
     from django.core.cache import cache as _djc
     _key = "cnv_phone_sets"
     hit = _djc.get(_key)
     if hit is not None:
         return hit
-    pos_phones_all = set(
-        POSCustomer.objects
-        .filter(vip_id__isnull=False, phone__isnull=False)
-        .exclude(vip_id=0).exclude(phone="")
-        .values_list("phone", flat=True)
-    )
-    cnv_phones_all = set(
-        CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
-        .values_list("phone", flat=True)
-    )
+    # _fetch_bd_raw({}) fetches all POS + all CNV data and caches it for 5 min.
+    # Derive phone sets in-memory from already-loaded rows — no extra DB queries.
+    (_, cnv_list, _, _, _, _, _, _, _, _all_pos_rows) = _fetch_bd_raw({})
+    pos_phones_all = {
+        r["phone"] for r in _all_pos_rows
+        if r.get("vip_id") is not None
+        and _norm_vid(str(r.get("vip_id") or "")) not in ("", "0")
+    }
+    cnv_phones_all = {r["phone"] for r in cnv_list}
     result = (pos_phones_all, cnv_phones_all)
     _djc.set(_key, result, timeout=600)
     return result
@@ -165,9 +168,13 @@ def _fetch_bd_raw(period_filter):
 
     Returns (pos_list, cnv_list, zalo_list, phone_to_store, _phone_to_inv,
              _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi)
+
+    Query count: 4 (was 7 for all-time, 5 for period).
+    Optimization: single broad POSCustomer scan replaces the old pos_qs +
+    _all_pos_rows dual-query pattern; date bounds derived in Python, not via
+    two extra aggregate queries.
     """
     from django.core.cache import cache as _djc
-    from django.db.models import Min, Max
 
     _period_key = f"{period_filter.get('start', '')}:{period_filter.get('end', '')}"
     _key = f"bd_raw:{_period_key}"
@@ -175,49 +182,50 @@ def _fetch_bd_raw(period_filter):
     if hit is not None:
         return hit
 
-    # Effective date range
+    # ── Single POS scan (replaces pos_qs + _all_pos_rows + aggregate queries) ──
+    # Fetch all customers that have a phone; include registration_date so we can
+    # derive both pos_list and reg_lo/reg_hi from the same dataset.
+    _all_pos_rows = list(
+        POSCustomer.objects
+        .filter(phone__isnull=False).exclude(phone="")
+        .values("id", "vip_id", "phone", "registration_date", "registration_store")
+    )
+
+    # phone_to_store: only VIP customers (same semantics as before)
+    phone_to_store = {
+        r["phone"]: r["registration_store"]
+        for r in _all_pos_rows
+        if r["registration_store"] and r["vip_id"] and str(r["vip_id"]) != "0"
+    }
+
+    # Effective date range — from period_filter or derived from fetched data
     if period_filter:
         reg_lo = period_filter["start"].date()
         reg_hi = period_filter["end"].date()
         cnv_lo = period_filter["start"]
         cnv_hi = period_filter["end"]
     else:
-        _bounds = (
-            POSCustomer.objects
-            .filter(vip_id__isnull=False, phone__isnull=False,
-                    registration_date__isnull=False)
-            .exclude(vip_id=0).exclude(phone="")
-            .aggregate(lo=Min("registration_date"), hi=Max("registration_date"))
-        )
-        reg_lo = _bounds["lo"]
-        reg_hi = _bounds["hi"]
-        _cnv_bounds = (
-            CNVCustomer.objects
-            .filter(phone__isnull=False, cnv_created_at__isnull=False)
-            .exclude(phone="")
-            .aggregate(lo=Min("cnv_created_at"), hi=Max("cnv_created_at"))
-        )
-        cnv_lo = _cnv_bounds["lo"]
-        cnv_hi = _cnv_bounds["hi"]
+        # Derive bounds in Python — avoids two separate aggregate queries
+        _reg_dates = [r["registration_date"] for r in _all_pos_rows if r["registration_date"]]
+        reg_lo = min(_reg_dates) if _reg_dates else None
+        reg_hi = max(_reg_dates) if _reg_dates else None
+        cnv_lo = cnv_hi = None  # filled below after cnv_list is fetched
 
-    # POS customers in period (deduplicated by vip_id)
-    pos_qs = (
-        POSCustomer.objects
-        .filter(registration_date__isnull=False)
-        .values("id", "vip_id", "phone", "registration_date", "registration_store")
-    )
-    if reg_lo and reg_hi:
-        pos_qs = pos_qs.filter(registration_date__gte=reg_lo, registration_date__lte=reg_hi)
+    # pos_list: filter + deduplicate in Python (no extra DB query)
     _seen_keys = set()
     pos_list = []
-    for _c in pos_qs:
+    for _c in _all_pos_rows:
+        if not _c["registration_date"]:
+            continue
+        if reg_lo and reg_hi and not (reg_lo <= _c["registration_date"] <= reg_hi):
+            continue
         _vid = _norm_vid(str(_c["vip_id"] or ""))
         _k = _vid if (_vid and _vid != "0") else f"__pk{_c['id']}"
         if _k not in _seen_keys:
             _seen_keys.add(_k)
             pos_list.append(_c)
 
-    # CNV customers in period
+    # ── CNV customers in period ───────────────────────────────────────────────
     cnv_qs = (
         CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
         .values("phone", "cnv_created_at", "zalo_app_id", "zalo_oa_id")
@@ -226,7 +234,13 @@ def _fetch_bd_raw(period_filter):
         cnv_qs = cnv_qs.filter(cnv_created_at__gte=cnv_lo, cnv_created_at__lte=cnv_hi)
     cnv_list = list(cnv_qs)
 
-    # Zalo registrations in period (pre-fetched so accumulation loop is pure Python)
+    # For all-time: derive CNV bounds from fetched data (avoids extra aggregate query)
+    if not period_filter:
+        _cnv_dates = [r["cnv_created_at"] for r in cnv_list if r["cnv_created_at"]]
+        cnv_lo = min(_cnv_dates) if _cnv_dates else None
+        cnv_hi = max(_cnv_dates) if _cnv_dates else None
+
+    # ── Zalo registrations in period ──────────────────────────────────────────
     zalo_qs = (
         CNVCustomer.objects.filter(phone__isnull=False).exclude(phone="")
         .filter(zalo_app_id__isnull=False).exclude(zalo_app_id="")
@@ -236,28 +250,18 @@ def _fetch_bd_raw(period_filter):
         zalo_qs = zalo_qs.filter(zalo_app_created_at__gte=cnv_lo, zalo_app_created_at__lte=cnv_hi)
     zalo_list = list(zalo_qs.values("phone", "zalo_app_created_at", "zalo_oa_id"))
 
-    # All-time POS customers — phone_to_store + inv lookup maps
-    _all_pos_rows = list(
-        POSCustomer.objects.filter(vip_id__isnull=False, phone__isnull=False)
-        .exclude(vip_id=0).exclude(phone="")
-        .values("id", "vip_id", "phone", "registration_store")
-    )
-    phone_to_store = {
-        r["phone"]: r["registration_store"]
-        for r in _all_pos_rows
-        if r["registration_store"]
-    }
+    # ── Invoice lookup maps ───────────────────────────────────────────────────
     _inv_vid_map = {}
     _inv_pk_map = {}
     _phone_to_inv = {}
     if reg_lo and reg_hi:
         _inv_vid_map, _inv_pk_map = build_inv_bucket_map_from_db(reg_lo, reg_hi)
         for _row in _all_pos_rows:
-            _ii = _inv_vid_map.get(_norm_vid(str(_row['vip_id']))) or _inv_pk_map.get(_row['id'])
+            _ii = _inv_vid_map.get(_norm_vid(str(_row['vip_id'] or ""))) or _inv_pk_map.get(_row['id'])
             if _ii:
                 _phone_to_inv[_row['phone']] = _ii
 
-    # Week date bounds (union of POS + CNV date ranges)
+    # ── Week date bounds (union of POS + CNV date ranges) ────────────────────
     _pop_lo = reg_lo if isinstance(reg_lo, _date) else (reg_lo.date() if reg_lo else None)
     _pop_hi = reg_hi if isinstance(reg_hi, _date) else (reg_hi.date() if reg_hi else None)
     _cnv_lo_d = cnv_lo.date() if cnv_lo and hasattr(cnv_lo, 'date') else cnv_lo
@@ -268,7 +272,7 @@ def _fetch_bd_raw(period_filter):
         _pop_hi = max(_pop_hi, _cnv_hi_d) if _pop_hi else _cnv_hi_d
 
     result = (pos_list, cnv_list, zalo_list, phone_to_store, _phone_to_inv,
-              _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi)
+              _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi, _all_pos_rows)
     _djc.set(_key, result, timeout=300)
     return result
 
@@ -305,7 +309,7 @@ def compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all, dims=No
 
     # DB fetch — fast on cache hit (same period_filter across all BD tabs)
     (pos_list, cnv_list, zalo_list, phone_to_store, _phone_to_inv,
-     _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi) = _fetch_bd_raw(period_filter)
+     _inv_vid_map, _inv_pk_map, _pop_lo, _pop_hi, _) = _fetch_bd_raw(period_filter)
 
     def _empty():
         return {"new_pos": 0, "new_pos_only": 0, "new_pos_inv": 0, "new_pos_no_inv": 0,
