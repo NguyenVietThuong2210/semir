@@ -56,7 +56,7 @@ class TokenStorage {
   Future<List<String>> readPermissions() async {
     final raw = await _storage.read(key: _kPermissions);
     if (raw == null || raw.isEmpty) return [];
-    return (jsonDecode(raw) as List).cast<String>();
+    return (jsonDecode(raw) as List).whereType<String>().toList();
   }
 
   Future<void> saveBiometricEnabled(bool enabled) =>

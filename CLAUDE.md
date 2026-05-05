@@ -72,14 +72,15 @@ Review diff: only `_last_run` lines should differ. Any other field change = regr
 ### Step 4 — Verify all web pages render (200 smoke test)
 ```bash
 cd SemirDashboard && python manage.py shell -c "
-import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'SemirDashboard.settings')
-from django.test import Client; from django.contrib.auth.models import User
-c = Client()
-c.force_login(User.objects.filter(is_superuser=True).first())
-pages = ['/', '/analytics/', '/coupon/', '/customer/', '/shop-detail/']
-for p in pages:
-    r = c.get(p, follow=True)
-    print(f'[{r.status_code}] {p}')
+from django.test import Client, override_settings
+from django.contrib.auth.models import User
+with override_settings(ALLOWED_HOSTS=['*']):
+    c = Client()
+    c.force_login(User.objects.filter(is_superuser=True).first())
+    pages = ['/', '/analytics/', '/analytics/chart/', '/coupons/', '/coupons/chart/', '/shop-detail/', '/cnv/customer-analytics/', '/cnv/sync-status/']
+    for p in pages:
+        r = c.get(p, follow=True, SERVER_NAME='localhost')
+        print(f'[{r.status_code}] {p}')
 "
 ```
 All pages must return 200.

@@ -51,9 +51,9 @@ class TableTab {
       return TableTab(
         tabKey: e.key,
         label: d['label'] as String? ?? e.key,
-        headers: (d['headers'] as List?)?.cast<String>() ?? [],
+        headers: (d['headers'] as List?)?.whereType<String>().toList() ?? [],
         rows: (d['rows'] as List?)
-                ?.map((r) => (r as List).cast<String>())
+                ?.map((r) => (r as List).whereType<String>().toList())
                 .toList() ??
             [],
       );

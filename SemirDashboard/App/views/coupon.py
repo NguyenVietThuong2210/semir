@@ -245,7 +245,7 @@ def manage_campaigns(request):
     if request.method == "POST":
         try:
             body = json.loads(request.body)
-        except Exception:
+        except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         action = body.get("action")

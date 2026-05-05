@@ -101,7 +101,7 @@ def _parse_zalo_fields(data: dict):
                 zalo_app_created_at = datetime.fromisoformat(
                     raw_created.replace("Z", "+00:00")
                 )
-            except Exception:
+            except ValueError:
                 pass
 
     return zalo_app_id, zalo_oa_id, zalo_app_created_at

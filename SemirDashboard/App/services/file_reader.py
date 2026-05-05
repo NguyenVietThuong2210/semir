@@ -35,12 +35,12 @@ def parse_date(value):
     if hasattr(value, 'date') and callable(value.date):
         try:
             return value.date()
-        except Exception:
+        except (ValueError, TypeError, OverflowError):
             pass
     if hasattr(value, 'to_pydatetime'):
         try:
             return value.to_pydatetime().date()
-        except Exception:
+        except (ValueError, TypeError, OverflowError):
             pass
     raw = str(value).strip()
     if not raw or raw in ('nan', 'None', 'NaT', ''):
@@ -53,7 +53,7 @@ def parse_date(value):
             continue
     try:
         return pd.to_datetime(raw).date()
-    except Exception:
+    except (ValueError, OverflowError):
         pass
     return None
 

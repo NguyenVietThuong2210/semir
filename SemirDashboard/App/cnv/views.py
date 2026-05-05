@@ -252,7 +252,7 @@ def sync_cnv_points(request):
     try:
         body = json.loads(request.body)
         cnv_ids = body.get("cnv_ids", [])
-    except Exception:
+    except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     if not cnv_ids:
@@ -317,7 +317,7 @@ def trigger_sync(request):
     try:
         body = json.loads(request.body)
         sync_type = body.get("sync_type")  # 'customers' or 'orders'
-    except Exception:
+    except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     if sync_type not in ("customers", "orders"):
@@ -391,7 +391,7 @@ def trigger_zalo_sync(request):
     try:
         body = json.loads(request.body)
         cookie = body.get("cookie", "").strip()
-    except Exception:
+    except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     if not cookie:

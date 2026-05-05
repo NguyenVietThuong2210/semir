@@ -69,7 +69,7 @@ class CNVSyncService:
             if dt and timezone.is_naive(dt):
                 dt = timezone.make_aware(dt)
             return dt
-        except Exception:
+        except (ValueError, OverflowError, TypeError):
             return None
     
     def _transform_customer(self, data: Dict) -> Dict:

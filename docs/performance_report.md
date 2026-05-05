@@ -160,8 +160,22 @@ All 21 web pages verified with Django test `Client` + `force_login(superuser)`.
 |------|-------|-----|----------|
 | `shop_detail_service.dart:96-98` | `.cast<String>()` on `ShopCouponPayload` headers/rows | `.whereType<String>().toList()` | BUG — `CastError` crash on mixed-type API response |
 | `shop_detail_service.dart:121` | `.cast<String>()` in `getShops()` | `.whereType<String>().toList()` | BUG — `CastError` crash |
+| `shared/models/analytics_models.dart:54,56` | `.cast<String>()` in `TableTab.parseMap()` headers/rows | `.whereType<String>().toList()` | BUG — `CastError` crash on mixed-type API response (affects ALL analytics table tabs) |
+| `core/auth/token_storage.dart:59` | `.cast<String>()` in `readPermissions()` | `.whereType<String>().toList()` | BUG — `CastError` crash if permissions list contains non-string |
 | `auth_provider.dart:logout()` | `salesChartProvider`, `customerChartProvider`, `couponChartProvider` not invalidated | Added `ref.invalidate()` × 3 + `import chart_provider.dart` | BUG — stale chart data leaks between sessions |
 | `login_page.dart:_Logo` | `_Logo()` without const constructor | Added `const _Logo();` + `const _Logo()` call site | WARN — missed const optimization |
+
+## Backend Exception Hardening
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `App/cnv/zalo_sync.py:104` | `except Exception: pass` wrapping `datetime.fromisoformat()` | `except ValueError: pass` |
+| `App/services/file_reader.py:38,43` | `except Exception: pass` wrapping pandas `.date()` / `.to_pydatetime()` | `except (ValueError, TypeError, OverflowError): pass` |
+| `App/services/file_reader.py:56` | `except Exception: pass` wrapping `pd.to_datetime()` | `except (ValueError, OverflowError): pass` |
+| `App/cnv/views.py:255,320,394` | `except Exception` on JSON body parse | `except json.JSONDecodeError` |
+| `App/views/coupon.py:248` | `except Exception` on JSON body parse | `except json.JSONDecodeError` |
+| `App/cnv/sync_service.py:72` | `except Exception` on `parse_datetime` | `except (ValueError, OverflowError, TypeError)` |
+| `App/api/views.py:172` | `except Exception` on JWT blacklist check | `except (TokenError, InvalidToken)` |
 
 ---
 
@@ -216,11 +230,19 @@ None. All previously passing tests still pass. No snapshot data changes.
 
 First run — no baseline to compare against.
 
-### Summary of changes this run
+### Summary of changes this session (2026-05-03 → 2026-05-05)
 
-**Web:** Extracted `_get_campaigns_with_prefix_list()` in `coupon.py` — eliminates 9 lines of duplicated prefix normalization across 3 views.
+**Web performance:**
+1. `get_cnv_phone_sets()` — eliminated 2 duplicate table scans; now derives from `_fetch_bd_raw({})` (−2q cold, API passes 5s limit)
+2. `CustomerAnalyticsView` — eliminated duplicate `_compute_grade_rows` call for all-time (−1 redundant heavy iteration)
+3. `_fetch_bd_raw()` — merged 7→4 queries (−3q cold, prior session)
+4. `_get_campaigns_with_prefix_list()` helper extracted from `coupon.py` (−9 dup lines)
 
-**Mobile (4 bugs fixed):**
-1. 3 × `.cast<String>()` → `.whereType<String>().toList()` — eliminates potential `CastError` crashes
-2. Chart providers now invalidated on logout — closes data privacy gap on shared devices
-3. `_Logo` widget now `const` — minor startup performance improvement
+**Web hardening (7 exception catches narrowed):**
+- `zalo_sync.py`, `file_reader.py`, `cnv/views.py`, `views/coupon.py`, `sync_service.py`, `api/views.py`
+
+**Mobile (6 bugs fixed):**
+1. 4 × `.cast<String>()` → `.whereType<String>().toList()` in `analytics_models.dart`, `shop_detail_service.dart`, `token_storage.dart`
+2. Chart providers invalidated on logout — closes data privacy gap
+3. `_Logo` widget `const` — startup perf
+4. CLAUDE.md smoke-test URLs corrected (`/coupon/` → `/coupons/`)

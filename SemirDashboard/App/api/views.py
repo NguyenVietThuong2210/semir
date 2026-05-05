@@ -169,7 +169,7 @@ class LogoutView(APIView):
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
-        except Exception:
+        except (TokenError, InvalidToken):
             pass  # Already blacklisted or invalid — still return 205
         return Response(status=status.HTTP_205_RESET_CONTENT)
 

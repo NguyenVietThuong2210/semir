@@ -32,7 +32,7 @@ Look for these project-specific bugs (in priority order):
 |---------|---------------|
 | `.distinct()` without `.order_by()` on `SalesTransaction` or `Customer` | Both models have `Meta.ordering` — Django includes ordering columns in SELECT DISTINCT, producing wrong counts |
 | `period_filter=None` passed to `_fetch_bd_raw()` or `_compute_grade_rows()` | These functions call `.get()` on period_filter; `None.get()` crashes. Must pass `{}` |
-| `except Exception: pass` (broad catch) | Silences DB errors and real bugs. Narrow to the specific exception type |
+| `except Exception: pass` (broad catch, silent) | Silences DB errors and real bugs. Narrow to the specific exception type. Check: `zalo_sync.py`, `file_reader.py`, `views/`, `cnv/views.py`, `sync_service.py`, `api/views.py` |
 | Season labels `SS` / `AW` | Obsolete — correct labels are M2-4, M5-7, M8-10, M11-1 |
 | Grade names `VIP0` / `VIP1` / `VIP2` / `VIP3` | Obsolete — correct: No Grade < Member < Silver < Gold < Diamond |
 | Return-visit formula changed | Locked formula — alert user, do not auto-fix |
@@ -176,6 +176,8 @@ This step is not optional — a task is not complete until docs are consistent w
 
 **Verify CLAUDE.md is still accurate** — commands, paths, test class names, snapshot regen commands.
 
+**Note on smoke-test command:** The Step 4 Django shell smoke test must use `override_settings(ALLOWED_HOSTS=['*'])` and `SERVER_NAME='localhost'` to bypass `DisallowedHost` when ALLOWED_HOSTS is locked to production domains. Correct URL list must match `App/urls.py` (e.g., `/coupons/` not `/coupon/`).
+
 ---
 
 ### Step 7 — Self-improve this skill
@@ -208,6 +210,9 @@ After writing/updating `FINAL_REPORT.md`, read this SKILL.md and update it based
 | 2026-05-03 | Step 1: added `.cast<String>()` and chart-provider-not-invalidated patterns to mobile bug table |
 | 2026-05-03 | Step 6: added `performance_report.md` baseline-changed entry to update table |
 | 2026-05-03 | Added this Step 7 self-improve section |
+| 2026-05-05 | Step 1: added `.cast<String>()` in `token_storage.dart` and `analytics_models.dart` to mobile scan scope (shared model files, not just service files) |
+| 2026-05-05 | Step 1: added `except Exception: pass` in `App/services/file_reader.py` (silent swallow in pandas date parse helpers) to backend bug table |
+| 2026-05-05 | Step 4: CLAUDE.md smoke-test URLs were wrong (`/coupon/` vs `/coupons/`); Step 4 now uses `override_settings(ALLOWED_HOSTS=['*'])` + `SERVER_NAME='localhost'` to bypass DisallowedHost in shell context |
 
 ---
 
