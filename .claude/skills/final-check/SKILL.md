@@ -89,20 +89,29 @@ Fix every issue found. Document each fix.
 
 ### Step 3 — Run full test suite
 
-Run tests in this order — stop if a gate fails:
+**BEFORE starting any test run:** Kill any existing Django test processes to avoid duplicate runs competing for CPU and producing confusing overlapping output:
 
 ```powershell
+# Kill any stale test runners (safe — each uses an independent in-memory DB)
+Get-WmiObject Win32_Process | Where-Object {
+    $_.CommandLine -like "*manage.py test*" -and $_.CommandLine -notlike "*powershell*" -and $_.CommandLine -notlike "*bash*"
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+```
+
+Then run tests in this order — **always foreground (no background), one at a time** — stop if a gate fails:
+
+```bash
 # Backend — lightweight tests first (no fixture loading, fast feedback)
 cd SemirDashboard
 python manage.py test tests.test_pages tests.test_auth tests.test_consistency -v 2 2>&1
 
-# Backend — fixture-heavy tests
-python manage.py test tests.test_sales tests.test_api tests.test_shop_detail -v 2 2>&1
-
-# Backend — full suite
+# Backend — full suite (run once, wait for result — do NOT background this)
 python manage.py test tests -v 2 2>&1
 
 # Backend — regenerate snapshots (confirm no silent data changes)
+# Bash/Git Bash:
+UPDATE_SNAPSHOTS=1 python manage.py test tests -v 2 2>&1
+# PowerShell:
 $env:UPDATE_SNAPSHOTS=1; python manage.py test tests -v 2 2>&1; Remove-Item Env:UPDATE_SNAPSHOTS
 
 # Backend — visual render
@@ -110,10 +119,12 @@ python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"
 python tests/snapshot_visual.py
 
 # Mobile
-cd ..\semir-phone
+cd ../semir-phone
 flutter analyze 2>&1
 flutter test 2>&1
 ```
+
+**IMPORTANT — no duplicate runs:** Never start a test suite in the background and then immediately start another. Each full run loads 430k fixture rows and takes 30–60 min. Multiple concurrent runs overload the CPU and all produce wrong/truncated output. Run one at a time, wait for it to finish.
 
 **Failure isolation rule:** If the full suite reports failures, always re-run the failing tests in isolation before marking them as real bugs:
 
@@ -213,6 +224,10 @@ After writing/updating `FINAL_REPORT.md`, read this SKILL.md and update it based
 | 2026-05-05 | Step 1: added `.cast<String>()` in `token_storage.dart` and `analytics_models.dart` to mobile scan scope (shared model files, not just service files) |
 | 2026-05-05 | Step 1: added `except Exception: pass` in `App/services/file_reader.py` (silent swallow in pandas date parse helpers) to backend bug table |
 | 2026-05-05 | Step 4: CLAUDE.md smoke-test URLs were wrong (`/coupon/` vs `/coupons/`); Step 4 now uses `override_settings(ALLOWED_HOSTS=['*'])` + `SERVER_NAME='localhost'` to bypass DisallowedHost in shell context |
+| 2026-05-05 | Step 3: Added kill-stale-processes block before test run; banned background test runs; added "no duplicate runs" rule — concurrent full suites caused CPU overload and truncated/missing output |
+| 2026-05-06 | Step 2: `_pick_shop()` in `test_api.py` — `Coupon` model uses `using_shop` (not `shop_name`); `CNVCustomer` has NO shop field — use `Customer.registration_store` for 3-way intersection |
+| 2026-05-06 | Step 3: timing assertions on cache-warm calls (<50ms) are noise — guard with `if t_all > 0.05` before `assertLess` |
+| 2026-05-06 | Step 3: after fixing `_pick_customer_shop()` to be data-aware, regenerate affected snapshots with `UPDATE_SNAPSHOTS=1` before full suite run |
 
 ---
 

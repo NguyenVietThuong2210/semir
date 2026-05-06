@@ -449,15 +449,31 @@ class ApiStructureTest(SnapshotTestCase):
     # ─────────────────────────────────────────────────────────────────────────
 
     def _pick_shop(self):
-        from App.models import SalesTransaction
-        shop = (
+        """Pick a shop present in sales, coupons, AND customer registrations so shop-detail tests don't skip."""
+        from App.models import SalesTransaction, Coupon, Customer
+        sales_shops = set(
             SalesTransaction.objects
             .exclude(shop_name='').exclude(shop_name__isnull=True)
-            .values_list('shop_name', flat=True)
-            .order_by('shop_name')
-            .first()
+            .values_list('shop_name', flat=True).distinct()
         )
-        return shop
+        # Coupon uses using_shop (not shop_name)
+        coupon_shops = set(
+            Coupon.objects
+            .exclude(using_shop='').exclude(using_shop__isnull=True)
+            .values_list('using_shop', flat=True).distinct()
+        )
+        # Customer registration_store maps to the same shop names as SalesTransaction.shop_name
+        customer_stores = set(
+            Customer.objects
+            .exclude(registration_store='').exclude(registration_store__isnull=True)
+            .values_list('registration_store', flat=True).distinct()
+        )
+        # Prefer a shop present in all three data sets; fall back to sales ∩ coupon, then sales-only
+        full_match = sorted(sales_shops & coupon_shops & customer_stores)
+        if full_match:
+            return full_match[0]
+        partial = sorted(sales_shops & coupon_shops)
+        return partial[0] if partial else (sorted(sales_shops)[0] if sales_shops else None)
 
     def test_shop_detail_no_shop_param_returns_400(self):
         resp, _ = self._get(SHOP_DETAIL_URL)
