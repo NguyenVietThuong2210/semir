@@ -153,7 +153,7 @@ class _Logo extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         const Text(
-          'S&B Dashboard',
+          'SB Dashboard',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w800,

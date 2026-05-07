@@ -26,7 +26,7 @@ class BiometricService {
   Future<bool> authenticate() async {
     try {
       return await _auth.authenticate(
-        localizedReason: 'Authenticate to open S&B Dashboard',
+        localizedReason: 'Authenticate to open SB Dashboard',
         options: const AuthenticationOptions(
           biometricOnly: false, // allow PIN fallback
           stickyAuth: true,

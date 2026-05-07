@@ -126,7 +126,7 @@ class _SemirPhoneAppState extends ConsumerState<SemirPhoneApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'S&B Dashboard',
+      title: 'SB Dashboard',
       theme: buildAppTheme(),
       routerConfig: _router,
       debugShowCheckedModeBanner: false,

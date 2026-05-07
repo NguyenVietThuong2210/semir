@@ -47,7 +47,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sign In'), findsOneWidget);
-    expect(find.text('S&B Dashboard'), findsOneWidget);
+    expect(find.text('SB Dashboard'), findsOneWidget);
   });
 
   testWidgets('authenticated → renders home page', (tester) async {
@@ -62,7 +62,7 @@ void main() {
     await tester.pumpWidget(buildApp(session: session));
     await tester.pumpAndSettle();
 
-    expect(find.text('S&B Dashboard'), findsOneWidget);
+    expect(find.text('SB Dashboard'), findsOneWidget);
     expect(find.text('Hello, admin'), findsOneWidget);
   });
 
@@ -80,7 +80,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // We're on home — Sales card should show "no access"
-    expect(find.text('S&B Dashboard'), findsOneWidget);
+    expect(find.text('SB Dashboard'), findsOneWidget);
     // The sales card should show no-access message
     final noAccessFinder = find.text('No access');
     expect(noAccessFinder, findsWidgets);

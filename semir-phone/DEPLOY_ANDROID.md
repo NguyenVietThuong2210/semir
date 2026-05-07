@@ -1,4 +1,4 @@
-# Android — Google Play
+﻿# Android — Google Play
 
 ---
 
@@ -64,7 +64,7 @@ Lệnh này tạo ra `android/` với toàn bộ file Gradle. Code trong `lib/` 
 **Tên hiển thị** — Mở `android/app/src/main/AndroidManifest.xml`, sửa dòng:
 ```xml
 <application
-    android:label="S&amp;B Dashboard"
+    android:label="SB Dashboard"
     ...>
 ```
 
@@ -174,7 +174,7 @@ flutter test test/widget/login_page_test.dart
 ### 2.2 Tạo Google Play Console app (làm 1 lần)
 
 1. Truy cập https://play.google.com/console → **Create app**
-2. App name: **S&B Dashboard**
+2. App name: **SB Dashboard**
 3. Package: `com.semir.semirphone`
 4. Hoàn thành store listing, content rating, pricing
 
@@ -302,7 +302,7 @@ Script tự động:
 
 ### 2.9 Sau khi upload — promote lên Production
 
-1. Play Console → S&B Dashboard → Testing → Internal testing
+1. Play Console → SB Dashboard → Testing → Internal testing
 2. Chọn build vừa upload → **Promote to Production**
 3. Đặt rollout **10%** trước, theo dõi 1–2 ngày
 4. Tăng lên 50% → 100% nếu không có crash

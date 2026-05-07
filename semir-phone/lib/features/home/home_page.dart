@@ -23,7 +23,7 @@ class HomePage extends ConsumerWidget {
         final cards = _buildCards(session);
         return Scaffold(
           appBar: AppBar(
-            title: const Text('S&B Dashboard'),
+            title: const Text('SB Dashboard'),
             actions: [
               IconButton(
                 icon: const Icon(Icons.logout_outlined),

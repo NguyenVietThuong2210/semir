@@ -51,7 +51,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Login page
-    expect(find.text('S&B Dashboard'), findsOneWidget);
+    expect(find.text('SB Dashboard'), findsOneWidget);
 
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Username'), 'manager');
@@ -61,7 +61,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Home page
-    expect(find.text('S&B Dashboard'), findsOneWidget);
+    expect(find.text('SB Dashboard'), findsOneWidget);
     expect(find.text('Hello, manager'), findsOneWidget);
   });
 
@@ -76,7 +76,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('S&B Dashboard'), findsOneWidget);
+    expect(find.text('SB Dashboard'), findsOneWidget);
     expect(find.text('Hello, manager'), findsOneWidget);
   });
 
@@ -97,7 +97,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Back on login page
-    expect(find.text('S&B Dashboard'), findsOneWidget);
+    expect(find.text('SB Dashboard'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
   });
 
