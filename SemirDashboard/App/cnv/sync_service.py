@@ -10,6 +10,8 @@ UPDATED: 2026-02-27
 - Updated field mappings to match API format
 """
 import logging
+import time
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
@@ -21,6 +23,25 @@ from App.cnv.models import CNVCustomer, CNVOrder, CNVSyncLog
 from .api_client import CNVAPIClient
 
 logger = logging.getLogger(__name__)
+
+MEMBERSHIP_RATE_LIMIT = 50  # max API calls per second (CNV limit: 100/s, use 50 for safety)
+
+
+class _RateLimiter:
+    """Thread-safe token bucket — enforces minimum interval between calls."""
+
+    def __init__(self, rate: float):
+        self._min_interval = 1.0 / rate
+        self._lock = threading.Lock()
+        self._last_call = 0.0
+
+    def acquire(self):
+        with self._lock:
+            now = time.monotonic()
+            wait = self._min_interval - (now - self._last_call)
+            if wait > 0:
+                time.sleep(wait)
+            self._last_call = time.monotonic()
 
 
 class CNVSyncService:
@@ -51,6 +72,7 @@ class CNVSyncService:
             password: CNV account password
         """
         self.client = CNVAPIClient(username, password)
+        self._rate_limiter = _RateLimiter(MEMBERSHIP_RATE_LIMIT)
     
     def _parse_datetime(self, dt_str: Optional[str]) -> Optional[datetime]:
         """
@@ -131,19 +153,13 @@ class CNVSyncService:
     
     def _fetch_membership(self, customer_id: int) -> Dict:
         """
-        Fetch membership data for a customer from membership endpoint.
-        
-        Uses CNVAPIClient.get_customer_membership() method.
-        
-        Args:
-            customer_id: Customer ID
-            
-        Returns:
-            Dict with membership fields or empty dict on error
+        Fetch membership data for a customer.
+        Rate-limited to MEMBERSHIP_RATE_LIMIT req/s. Retries once on 429.
         """
+        self._rate_limiter.acquire()
         try:
             response = self.client.get_customer_membership(customer_id)
-            
+
             if response and 'membership' in response:
                 membership = response['membership']
                 return {
@@ -152,12 +168,29 @@ class CNVSyncService:
                     'points': Decimal(str(membership.get('points', 0))),
                     'total_points': Decimal(str(membership.get('total_points', 0))),
                 }
-            else:
-                logger.warning("No membership data for customer %d", customer_id)
-                
+            logger.warning("No membership data for customer %d", customer_id)
+
         except Exception as e:
-            logger.error("Error fetching membership for customer %d: %s", customer_id, e)
-        
+            msg = str(e)
+            if '429' in msg:
+                # Server told us to back off — wait 1s then retry once
+                logger.warning("Rate limit hit for customer %d, retrying in 1s", customer_id)
+                time.sleep(1)
+                try:
+                    response = self.client.get_customer_membership(customer_id)
+                    if response and 'membership' in response:
+                        membership = response['membership']
+                        return {
+                            'level_name': membership.get('level_name'),
+                            'used_points': Decimal(str(membership.get('used_points', 0))),
+                            'points': Decimal(str(membership.get('points', 0))),
+                            'total_points': Decimal(str(membership.get('total_points', 0))),
+                        }
+                except Exception as retry_e:
+                    logger.error("Membership retry failed for customer %d: %s", customer_id, retry_e)
+            else:
+                logger.error("Error fetching membership for customer %d: %s", customer_id, e)
+
         return {}
     
     def _transform_order(self, data: Dict) -> Dict:
