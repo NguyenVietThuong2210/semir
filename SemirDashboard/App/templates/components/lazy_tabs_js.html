@@ -30,6 +30,13 @@
             .then(function (html) {
                 placeholder.outerHTML = html;
                 btn.dataset.loaded = "true";
+                // Re-execute any <script> tags injected via outerHTML (browser skips them by default)
+                pane.querySelectorAll("script").forEach(function (old) {
+                    var s = document.createElement("script");
+                    s.textContent = old.textContent;
+                    document.head.appendChild(s);
+                    document.head.removeChild(s);
+                });
                 // Trigger custom event so page JS can post-process (e.g. init DataTables)
                 pane.dispatchEvent(new CustomEvent("lazyTabLoaded", {bubbles: true}));
             })
