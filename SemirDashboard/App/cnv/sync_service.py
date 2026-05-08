@@ -139,15 +139,14 @@ class CNVSyncService:
             'birthday_year': data.get('birthday_year'),
             'tags': data.get('tags'),
             'physical_card_code': data.get('physical_card_code'),
-            'points': Decimal(str(data.get('points', 0))),
             'exp_points': Decimal(str(data.get('exp_points', 0))),
             'total_spending': Decimal(str(data.get('total_spending', 0))),
-            'total_points': Decimal(str(data.get('total_points', 0))),
             'cnv_created_at': self._parse_datetime(data.get('created_at')),
             'cnv_updated_at': self._parse_datetime(data.get('updated_at')),
-            # Membership fields - will be fetched separately
-            'level_name': None,
-            'used_points': Decimal(0),
+            # points, total_points, used_points, level_name intentionally omitted:
+            # authoritative values come from membership API (_fetch_membership).
+            # Omitting them here means existing DB values are never overwritten
+            # with 0/None when membership fetch fails or API returns bad data.
             'last_synced_at': timezone.now(),
         }
     

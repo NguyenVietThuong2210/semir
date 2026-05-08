@@ -1,5 +1,6 @@
 {% load perm_tags %}
 {% check_perm 'cnv.export' as can_dl_cnv %}
+{% check_perm 'cnv.sync' as can_sync_cnv %}
 <div class="d-flex justify-content-between align-items-center mb-2">
     <p class="text-muted small mb-0">CNV customers who have used points. Total: <strong>{{ cnv_used_points_count }}</strong></p>
     {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=points{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
@@ -43,9 +44,13 @@
 </div>
 
 <!-- Points Mismatch — POS Net vs CNV Points -->
-<p class="text-muted small fw-semibold text-uppercase mb-1 mt-4"><i class="bi bi-exclamation-triangle"></i> Points Mismatch — POS Net vs CNV Points ({{ points_mismatch_count }})</p>
+{# Table ID: pts-mismatch — cols: Phone(0) POS VIP(1) POS Name(2) Grade(3) POS Pts(4) POS Used(5) POS Net(6) CNV ID(7) CNV Name(8) Level(9) Points(10) Used Points(11) Total Points(12) Diff(13) #}
+<div class="d-flex justify-content-between align-items-center mt-4 mb-1">
+    <p class="text-muted small fw-semibold text-uppercase mb-0"><i class="bi bi-exclamation-triangle"></i> Points Mismatch — POS Net vs CNV Points ({{ points_mismatch_count }})</p>
+    {% if can_sync_cnv %}<button class="btn btn-outline-primary btn-sm" id="load-pts-btn" data-table="pts-mismatch"><i class="bi bi-arrow-repeat"></i> Load Membership</button>{% endif %}
+</div>
 <div class="table-responsive tab-tbl-wrap mb-4">
-    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
+    <table class="table table-sm table-hover align-middle mb-0" id="pts-mismatch" style="font-size:.85rem">
         <thead style="background-color:var(--orange-dark);color:white;">
             <tr>
                 <th>Phone</th><th>POS VIP</th><th>POS Name</th><th>Grade</th>
@@ -57,7 +62,7 @@
         </thead>
         <tbody>
         {% for r in points_mismatch %}
-        <tr class="{% if r.diff > 0 %}table-warning{% else %}table-danger{% endif %}">
+        <tr class="{% if r.diff > 0 %}table-warning{% else %}table-danger{% endif %}" data-cnv-id="{{ r.cnv_id }}">
             <td>{{ r.phone }}</td><td>{{ r.pos_vip_id }}</td><td>{{ r.pos_name|default:"-" }}</td><td>{{ r.pos_grade|default:"-" }}</td>
             <td class="text-end">{{ r.pos_points }}</td><td class="text-end">{{ r.pos_used_points }}</td><td class="text-end">{{ r.pos_net_points }}</td>
             <td>{{ r.cnv_id }}</td><td>{{ r.cnv_name|default:"-" }}</td><td>{{ r.cnv_level|default:"-" }}</td>
@@ -70,9 +75,13 @@
 </div>
 
 <!-- Total Points Mismatch — POS Net vs CNV Total -->
-<p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-exclamation-triangle"></i> Total Points Mismatch — POS Net vs CNV Total ({{ total_points_mismatch_count }})</p>
+{# Table ID: tot-mismatch — cols: Phone(0) POS VIP(1) POS Name(2) Grade(3) POS Net(4) CNV ID(5) CNV Name(6) Level(7) Points(8) Used Points(9) Total Points(10) Diff(11) #}
+<div class="d-flex justify-content-between align-items-center mb-1">
+    <p class="text-muted small fw-semibold text-uppercase mb-0"><i class="bi bi-exclamation-triangle"></i> Total Points Mismatch — POS Net vs CNV Total ({{ total_points_mismatch_count }})</p>
+    {% if can_sync_cnv %}<button class="btn btn-outline-primary btn-sm" id="load-tot-btn" data-table="tot-mismatch"><i class="bi bi-arrow-repeat"></i> Load Membership</button>{% endif %}
+</div>
 <div class="table-responsive tab-tbl-wrap">
-    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
+    <table class="table table-sm table-hover align-middle mb-0" id="tot-mismatch" style="font-size:.85rem">
         <thead style="background-color:var(--coupon);color:white;">
             <tr>
                 <th>Phone</th><th>POS VIP</th><th>POS Name</th><th>Grade</th>
@@ -84,7 +93,7 @@
         </thead>
         <tbody>
         {% for r in total_points_mismatch %}
-        <tr class="{% if r.diff > 0 %}table-warning{% else %}table-danger{% endif %}">
+        <tr class="{% if r.diff > 0 %}table-warning{% else %}table-danger{% endif %}" data-cnv-id="{{ r.cnv_id }}">
             <td>{{ r.phone }}</td><td>{{ r.pos_vip_id }}</td><td>{{ r.pos_name|default:"-" }}</td><td>{{ r.pos_grade|default:"-" }}</td>
             <td class="text-end">{{ r.pos_net_points }}</td>
             <td>{{ r.cnv_id }}</td><td>{{ r.cnv_name|default:"-" }}</td><td>{{ r.cnv_level|default:"-" }}</td>
@@ -95,3 +104,86 @@
         </tbody>
     </table>
 </div>
+
+{% if can_sync_cnv %}
+<script>
+// Load Membership buttons — one per mismatch table, syncs all rows at once
+// pts-mismatch cols: Phone(0) POS VIP(1) POS Name(2) Grade(3) POS Pts(4) POS Used(5) POS Net(6) CNV ID(7) CNV Name(8) Level(9) Points(10) UsedPts(11) TotalPts(12) Diff(13)
+// tot-mismatch cols: Phone(0) POS VIP(1) POS Name(2) Grade(3) POS Net(4) CNV ID(5) CNV Name(6) Level(7) Points(8) UsedPts(9) TotalPts(10) Diff(11)
+(function () {
+    const SYNC_URL = '{% url "cnv:sync_cnv_points" %}';
+    const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+              || document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='))?.split('=')[1]
+              || '';
+
+    const COL = {
+        'pts-mismatch': { level: 9, points: 10, usedPts: 11, totalPts: 12, diff: 13, posNet: 6, diffField: 'points' },
+        'tot-mismatch': { level: 7, points: 8,  usedPts: 9,  totalPts: 10, diff: 11, posNet: 4, diffField: 'total_points' },
+    };
+
+    function levelBadge(lvl) {
+        if (!lvl) return '-';
+        const cls = { Diamond: 'badge-level-diamond', Gold: 'badge-level-gold', Silver: 'badge-level-silver', Member: 'badge-level-member' }[lvl] || 'badge-level-default';
+        return `<span class="badge ${cls}">${lvl}</span>`;
+    }
+
+    async function loadTable(btn) {
+        const tableId = btn.dataset.table;
+        const map = COL[tableId];
+        const tbl = document.getElementById(tableId);
+        if (!map || !tbl) return;
+
+        const rows = [...tbl.querySelectorAll('tbody tr[data-cnv-id]')];
+        if (!rows.length) return;
+
+        const cnvIds = rows.map(r => parseInt(r.dataset.cnvId));
+        const origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading...';
+
+        try {
+            const resp = await fetch(SYNC_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                body: JSON.stringify({ cnv_ids: cnvIds }),
+            });
+            const data = await resp.json();
+            const resultMap = {};
+            (data.results || []).forEach(r => { resultMap[r.cnv_id] = r; });
+
+            let ok = 0;
+            rows.forEach(row => {
+                const cnvId = parseInt(row.dataset.cnvId);
+                const result = resultMap[cnvId];
+                if (!result || result.status !== 'ok') return;
+
+                const cells = row.querySelectorAll('td');
+                cells[map.level].innerHTML     = levelBadge(result.level_name);
+                cells[map.points].textContent  = result.points;
+                cells[map.usedPts].textContent = result.used_points;
+                cells[map.totalPts].textContent = result.total_points;
+
+                const posNet  = parseFloat(cells[map.posNet].textContent) || 0;
+                const diffVal = parseFloat(result[map.diffField]) - posNet;
+                const sign    = diffVal > 0 ? '+' : '';
+                cells[map.diff].innerHTML = `<span class="${diffVal > 0 ? 'diff-positive' : 'diff-negative'}">${sign}${Math.round(diffVal)}</span>`;
+
+                row.classList.remove('table-warning', 'table-danger');
+                row.style.background = 'var(--highlight-ok)';
+                ok++;
+            });
+
+            btn.innerHTML = `<i class="bi bi-check-circle text-success"></i> Done (${ok}/${rows.length})`;
+            setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; }, 4000);
+
+        } catch (e) {
+            btn.innerHTML = '<i class="bi bi-exclamation-circle text-danger"></i> Error';
+            setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; }, 3000);
+        }
+    }
+
+    document.getElementById('load-pts-btn')?.addEventListener('click', function () { loadTable(this); });
+    document.getElementById('load-tot-btn')?.addEventListener('click', function () { loadTable(this); });
+})();
+</script>
+{% endif %}
