@@ -51,6 +51,7 @@ Read every Dart file in `lib/features/`, `lib/core/`, `lib/shared/`
 | `.cast<String>()` on API list fields | Throws `CastError` at runtime on mixed-type API responses. Use `.whereType<String>().toList()` |
 | Routes in GoRouter with no navigation entry point | Orphaned routes = unreachable UI. Check every route has ≥1 way to reach it |
 | New analytics provider not in logout `ref.invalidate()` list | Data from previous user session leaks to next user |
+| New UI StateProvider (filter/selection) not in logout `ref.invalidate()` list | Previous user's filter state leaks to next user — they see stale date ranges, shop selections, etc. Both analytics FutureProviders AND UI StateProviders must be invalidated |
 | Hardcoded API URL string (not via `ApiConfig` / `endpoints.dart`) | Breaks env switching |
 | `print()` in production code | Leaks PII to device logs |
 | `is List` / `is Map` check missing before casting API response fields | `CastError` crash on unexpected server response |
@@ -179,6 +180,7 @@ This step is not optional — a task is not complete until docs are consistent w
 | Mobile route added/removed | `docs/project_mobile.md` navigation table |
 | Mobile home card count changed | `docs/project_mobile.md` home card table + release checklist test count |
 | New analytics provider added | `docs/project_mobile.md` provider rules section + logout invalidation list |
+| New UI StateProvider added (filter/selection) | `docs/project_mobile.md` provider rules section + logout invalidation list |
 | Performance baseline changed | `docs/performance_report.md` |
 | New mobile test file added | `docs/project_mobile.md` test structure section |
 | Any structural change | `docs/project_structure.md` |
@@ -228,6 +230,11 @@ After writing/updating `FINAL_REPORT.md`, read this SKILL.md and update it based
 | 2026-05-06 | Step 2: `_pick_shop()` in `test_api.py` — `Coupon` model uses `using_shop` (not `shop_name`); `CNVCustomer` has NO shop field — use `Customer.registration_store` for 3-way intersection |
 | 2026-05-06 | Step 3: timing assertions on cache-warm calls (<50ms) are noise — guard with `if t_all > 0.05` before `assertLess` |
 | 2026-05-06 | Step 3: after fixing `_pick_customer_shop()` to be data-aware, regenerate affected snapshots with `UPDATE_SNAPSHOTS=1` before full suite run |
+| 2026-05-10 | Step 1: `<script>` tags in AJAX-injected HTML (via `outerHTML`) are silently skipped by browser — not a Python bug but a JS architecture issue. Add to template scan: any partial template with inline `<script>` that is lazy-loaded must ensure `lazy_tabs_js.html` re-executes scripts |
+| 2026-05-10 | Step 3: lightweight tests (test_pages includes ExportSmokeTest) load full fixtures AND run heavy export operations — can take 10+ min despite being "lightweight". Do not mistake slow export tests for a stall |
+| 2026-05-10 | Step 6: CNV sync changes → update `docs/project_cnv.md` with rate limiter constants and zero-overwrite behavior |
+| 2026-05-22 | Step 1: expanded mobile logout scan — must check BOTH analytics FutureProviders AND UI StateProviders (date filters, shop selections, etc.); added UI StateProvider row to mobile bug table |
+| 2026-05-22 | Step 6: added `docs/project_mobile.md` logout flow + provider rules to update table when any StateProvider is added or invalidation list changes |
 
 ---
 

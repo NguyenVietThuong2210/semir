@@ -166,7 +166,8 @@ login
 
 logout
   └─ POST /auth/logout/ (best-effort)
-  └─ ref.invalidate() clears ALL 10 analytics providers (prevents cross-user data leakage on shared devices)
+  └─ ref.invalidate() clears ALL 13 analytics FutureProviders (prevents cross-user data leakage on shared devices)
+  └─ ref.invalidate() clears ALL 11 UI StateProviders (date filters, shop selections, etc.) — next user starts with defaults
   └─ deleteAll() clears secure storage
   └─ GoRouter redirects to /login
 
@@ -233,7 +234,7 @@ All API base paths are in `endpoints.dart` — do not hardcode URLs in service f
 
 - **Always use `.autoDispose`** on `FutureProvider.family` — without it, every unique key (tab name, shop name, date range) creates a persistent provider instance that is never freed (memory leak).
 - **Never use `.cast<String>()`** on API response lists — use `.whereType<String>().toList()` for safe runtime casting.
-- **Logout must invalidate all analytics providers** — `auth_provider.dart` calls `ref.invalidate()` on all 10 analytics providers. If you add a new analytics provider, add it to the logout invalidation list.
+- **Logout must invalidate all analytics AND UI state providers** — `auth_provider.dart` calls `ref.invalidate()` on all 13 analytics FutureProviders (data) AND all 11 UI StateProviders (filters, selections). If you add a new analytics provider or UI filter provider, add it to the logout invalidation list in `auth_provider.dart`.
 - **Null API fields**: always guard with `is List` / `is Map` checks before casting response fields.
 
 ---

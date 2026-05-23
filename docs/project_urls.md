@@ -45,7 +45,7 @@ type: project
 | `/analytics/tab/<str:tab>/` | `analytics_tab` | AJAX, requires `page_analytics` |
 | `/analytics/export/` | `export_analytics` | requires `download_analytics` |
 | `/analytics/chart/` | `analytics_chart` | requires `page_chart` |
-| `/analytics/chart/export/` | `export_analytics_chart` | requires `download_chart_excel` |
+| `/analytics/chart/export/` | `export_sales_chart_excel` | requires `download_chart_excel` |
 
 ### Coupons
 | URL | View | Notes |
@@ -54,7 +54,7 @@ type: project
 | `/coupons/tab/<str:tab>/` | `coupon_tab` | AJAX, requires `page_coupons` |
 | `/coupons/export/` | `export_coupons` | requires `download_coupons` |
 | `/coupons/chart/` | `coupon_chart` | requires `page_coupon_chart` |
-| `/coupons/chart/export/` | `export_coupon_chart` | requires `download_coupon_chart_excel` |
+| `/coupons/chart/export/` | `export_coupon_chart_excel` | requires `download_coupon_chart_excel` |
 | `/coupons/campaigns/` | `manage_campaigns` | requires `manage_campaigns` |
 
 ### Customer
@@ -65,8 +65,11 @@ type: project
 ### Shop Detail
 | URL | View | Notes |
 |-----|------|-------|
-| `/shop-detail/` | `shop_detail` (or inline) | requires `page_shop_detail`; AJAX sections via `?section=sales/customer/coupon` |
-| `/shop-detail/export/` | `export_shop_detail` | requires `download_shop_detail` |
+| `/shop-detail/` | `shop_detail` | requires `page_shop_detail` |
+| `/shop-detail/export/` | `export_shop_detail_excel` | requires `download_shop_detail` |
+| `/shop-detail/partial/sales/` | `shop_detail_sales_partial` | AJAX partial, requires `page_shop_detail` |
+| `/shop-detail/partial/customer/` | `shop_detail_customer_partial` | AJAX partial, requires `page_shop_detail` |
+| `/shop-detail/partial/coupon/` | `shop_detail_coupon_partial` | AJAX partial, requires `page_shop_detail` |
 
 ### Admin
 | URL | View | Notes |
@@ -83,8 +86,10 @@ type: project
 | `/cnv/sync-status/` | `sync_status` | requires `page_cnv_sync` |
 | `/cnv/customer-analytics/` | `customer_analytics` | requires `page_cnv_comparison` |
 | `/cnv/customer-analytics/tab/<str:tab>/` | `customer_tab` | AJAX, requires `page_cnv_comparison` |
+| `/cnv/export-customer-analytics/` | `export_customer_analytics` | requires `download_cnv` |
+| `/cnv/sync-cnv-points/` | `sync_cnv_points` | POST, requires `page_cnv_sync` |
 | `/cnv/customer-chart/` | `customer_chart` | requires `page_customer_chart` |
-| `/cnv/customer-chart/export/` | `export_customer_chart` | requires `download_cnv` |
+| `/cnv/customer-chart/export/` | `export_customer_chart_excel` | requires `download_cnv` |
 | `/cnv/trigger-sync/` | `trigger_sync` | POST, requires `page_cnv_sync` |
 | `/cnv/trigger-zalo-sync/` | `trigger_zalo_sync` | POST, requires `page_cnv_sync` |
 

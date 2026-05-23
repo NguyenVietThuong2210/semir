@@ -83,6 +83,18 @@ class AuthNotifier extends AsyncNotifier<UserSession?> {
     ref.invalidate(salesChartProvider);
     ref.invalidate(customerChartProvider);
     ref.invalidate(couponChartProvider);
+    // Reset UI filter state so the next user starts with default filters.
+    ref.invalidate(salesFilterProvider);
+    ref.invalidate(salesShopGroupProvider);
+    ref.invalidate(customerFilterProvider);
+    ref.invalidate(couponFilterProvider);
+    ref.invalidate(couponShopGroupProvider);
+    ref.invalidate(couponPrefixProvider);
+    ref.invalidate(selectedShopProvider);
+    ref.invalidate(shopDetailFilterProvider);
+    ref.invalidate(chartFilterProvider);
+    ref.invalidate(selectedSliceLabelProvider);
+    ref.invalidate(customerSearchQueryProvider);
     state = const AsyncData(null);
   }
 

@@ -34,20 +34,26 @@ OAuth2 HTTP client with token lifecycle management.
 
 Checkpoint-based incremental sync. Batch size: 500.
 
+**Rate limiter (2026-05-10):** `MEMBERSHIP_RATE_LIMIT = 50` req/s (CNV limit is 100/s; 50 used for safety). `_RateLimiter` class — thread-safe, uses `threading.Lock`. `acquire()` called before every `get_customer_membership()` call.
+
 | Method | Purpose |
 |--------|---------|
 | `sync_customers(incremental=True)` | Main customer sync |
 | `sync_orders()` | Order sync |
 | `_process_customer_batch(batch)` | Bulk create/update customers |
-| `_transform_customer(data)` | Map API response → CNVCustomer fields |
+| `_transform_customer(data)` | Map API response → CNVCustomer fields — **does NOT include** `points`, `total_points`, `used_points`, `level_name` (those come only from `_fetch_membership`) |
+| `_fetch_membership(customer_id)` | Fetch membership data — rate-limited, retries once on 429 |
 | `_transform_order(data)` | Map API response → CNVOrder fields |
+
+**Zero-overwrite rule (2026-05-10):** `_transform_customer` intentionally omits `points`, `total_points`, `used_points`, `level_name`. Only `_fetch_membership` sets these. If membership fetch fails → these columns are NOT in the update dict → DB keeps existing values (never reset to 0).
 
 **Flow:**
 1. Check for orphaned running sync (>2h → mark failed)
 2. Create `CNVSyncLog(status='running')`
 3. Fetch pages from API using checkpoint `cnv_updated_at`
-4. Bulk create/update in batches of 500
-5. Update `checkpoint_updated_at` + mark `status='completed'`
+4. Bulk create/update in batches of 500 (profile data only)
+5. For each customer: `_fetch_membership` (rate-limited) → merge into update dict if successful
+6. Update `checkpoint_updated_at` + mark `status='completed'`
 
 ---
 
