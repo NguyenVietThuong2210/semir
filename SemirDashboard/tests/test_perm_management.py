@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 
 from App.models import Role
 from App.management.commands.perm import Command
-from App.permissions import ADMIN_PERMISSIONS, VIEWER_PERMISSIONS, PERMISSION_DEFS
+from App.permissions import ADMIN_PERMISSIONS, VIEWER_PERMISSIONS, PERMISSION_DEFS, ALL_PERMISSIONS
 
 
 class PermSyncMigrationTest(TestCase):
@@ -39,18 +39,18 @@ class PermSyncMigrationTest(TestCase):
         self.assertNotIn('page_analytics', role.permissions)
         self.assertNotIn('download_coupons', role.permissions)
 
-    def test_admin_role_gets_all_20_new_codenames(self):
-        """Admin role is overwritten with exactly all 20 new codenames."""
+    def test_admin_role_gets_all_new_codenames(self):
+        """Admin role is overwritten with exactly all current codenames."""
         self._sync()
         admin = Role.objects.get(name='admin')
         self.assertEqual(sorted(admin.permissions), sorted(ADMIN_PERMISSIONS))
-        self.assertEqual(len(admin.permissions), 20)
+        self.assertEqual(len(admin.permissions), len(ALL_PERMISSIONS))
 
-    def test_viewer_role_gets_sales_view(self):
-        """Viewer role is overwritten with exactly ['sales.view']."""
+    def test_viewer_role_gets_viewer_permissions(self):
+        """Viewer role is overwritten with exactly VIEWER_PERMISSIONS."""
         self._sync()
         viewer = Role.objects.get(name='viewer')
-        self.assertEqual(viewer.permissions, ['sales.view'])
+        self.assertEqual(sorted(viewer.permissions), sorted(VIEWER_PERMISSIONS))
 
     def test_perm_sync_is_idempotent(self):
         """Running perm sync twice produces the same result as running it once."""
@@ -69,8 +69,8 @@ class PermSyncMigrationTest(TestCase):
 
         self.assertEqual(sorted(after_first), sorted(after_second))
 
-    def test_all_20_renames_are_complete(self):
-        """All 20 old codenames are correctly renamed via a single custom role."""
+    def test_all_renames_are_complete(self):
+        """All old codenames are correctly renamed; new perms without old mappings are not added."""
         old_codenames = [
             'page_analytics', 'page_chart', 'download_analytics', 'download_chart_excel',
             'page_coupons', 'page_coupon_chart', 'download_coupons', 'download_coupon_chart_excel',
@@ -79,7 +79,14 @@ class PermSyncMigrationTest(TestCase):
             'page_shop_detail', 'download_shop_detail', 'page_upload', 'page_formulas',
             'manage_users',
         ]
-        new_codenames = [p[0] for p in PERMISSION_DEFS]
+        # Only check FINAL codes reachable via renames. PERM_RENAMES has intermediate
+        # values (e.g. page_cnv_comparison) — filter to only those in ALL_PERMISSIONS.
+        # New perms without any old code (products.view etc.) won't be added by sync.
+        mapped_new_codes: set = set()
+        for new_codes in Command.PERM_RENAMES.values():
+            for nc in new_codes:
+                if nc in ALL_PERMISSIONS:
+                    mapped_new_codes.add(nc)
 
         role = Role.objects.create(
             name='test_all_renames',
@@ -89,9 +96,9 @@ class PermSyncMigrationTest(TestCase):
         self._sync()
         role.refresh_from_db()
 
-        for new_code in new_codenames:
+        for new_code in mapped_new_codes:
             self.assertIn(new_code, role.permissions,
-                          f"Expected new codename '{new_code}' after sync")
+                          f"Expected renamed codename '{new_code}' after sync")
         for old_code in old_codenames:
             self.assertNotIn(old_code, role.permissions,
                              f"Old codename '{old_code}' should be gone after sync")
