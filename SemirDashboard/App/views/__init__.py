@@ -14,6 +14,7 @@ from .shop_detail import (
     shop_detail_inventory_partial,
 )
 from .product import product_dashboard, product_tab
+from .inventory import inventory_dashboard
 from . import auth, users
 
 __all__ = [
@@ -48,4 +49,5 @@ __all__ = [
     "shop_detail_inventory_partial",
     "product_dashboard",
     "product_tab",
+    "inventory_dashboard",
 ]

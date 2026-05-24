@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% load custom_filters perm_tags %}
-{% block title %}Product Analytics{% endblock %}
+{% block title %}Sales &amp; Product Analytics{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -27,7 +27,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-boxes me-2"></i>Product Analytics</h2>
+    <h2><i class="bi bi-graph-up-arrow me-2"></i>Sales &amp; Product Analytics</h2>
 </div>
 
 {# ── Filter bar ── #}
@@ -120,10 +120,12 @@
     <div class="card-header py-2" style="background:var(--nav-bg);">
         <ul class="nav dark-tabs" id="prodTabs">
             <li class="nav-item"><a class="nav-link active" href="#" data-tab="season">By Season</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-tab="month"  data-lazy-url="{% url 'product_tab' 'month'  %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Month</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-tab="week"   data-lazy-url="{% url 'product_tab' 'week'   %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Week</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="brand"    data-lazy-url="{% url 'product_tab' 'brand'    %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Brand</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="month"    data-lazy-url="{% url 'product_tab' 'month'    %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Month</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="week"     data-lazy-url="{% url 'product_tab' 'week'     %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Week</a></li>
             <li class="nav-item"><a class="nav-link" href="#" data-tab="category" data-lazy-url="{% url 'product_tab' 'category' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Category</a></li>
             <li class="nav-item"><a class="nav-link" href="#" data-tab="shop"     data-lazy-url="{% url 'product_tab' 'shop'     %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Shop</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="product"  data-lazy-url="{% url 'product_tab' 'product'  %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">Top Products</a></li>
         </ul>
     </div>
     <div class="card-body tab-content-wrap">

@@ -1,0 +1,416 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Inventory Analytics{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2><i class="bi bi-boxes"></i> Inventory Analytics</h2>
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label class="form-label mb-0 fw-semibold text-muted small">Shop Group</label>
+        <select name="shop_group" class="form-select form-select-sm" style="width:160px;" onchange="this.form.submit()">
+            {% for val, label in shop_groups %}
+            <option value="{{ val }}" {% if shop_group == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   SECTION 1 — FOR SALE ITEMS (tag_amount > 0)
+   ═══════════════════════════════════════════════════════════════════════════ #}
+{% with fs=for_sale %}
+<div class="section-header d-flex align-items-center gap-2 mb-3 mt-2">
+    <span class="badge bg-success fs-6 px-3 py-2"><i class="bi bi-tag-fill me-1"></i> For Sale</span>
+    <span class="text-muted small">Commercial inventory — items with a tag price</span>
+</div>
+
+{% if fs.totals.sku_lines %}
+{# KPI Cards #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-2">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ fs.totals.sku_lines|default:0 }}</div>
+                <div class="small text-muted">SKU Lines</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ fs.totals.on_hand_qty|default:0 }}</div>
+                <div class="small text-muted">On-Hand Qty</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ fs.totals.in_transit_qty|default:0 }}</div>
+                <div class="small text-muted">In Transit</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ fs.totals.total_qty|default:0 }}</div>
+                <div class="small text-muted">Total Qty</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ fs.totals.inv_value|vnd }}</div>
+                <div class="small text-muted">Inventory Value</div>
+            </div>
+        </div>
+    </div>
+    {% if fs.dead.summary.sku_lines %}
+    <div class="col-6 col-md-2">
+        <div class="card h-100 text-center" style="border-top:4px solid #dc3545;">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold text-danger">{{ fs.dead.summary.sku_lines }}</div>
+                <div class="small text-muted">Dead Stock SKUs<br><span class="text-danger">&le; {{ dead_year }}</span></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# Dead Stock Alert #}
+{% if fs.dead.summary.dead_qty %}
+<div class="alert alert-danger d-flex align-items-start gap-2 mb-4">
+    <i class="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
+    <div>
+        <strong>Dead Stock Alert</strong> — {{ fs.dead.summary.sku_lines }} SKUs ({{ fs.dead.summary.dead_qty }} units,
+        {{ fs.dead.summary.dead_value|vnd }}) with year &le; {{ dead_year }} still on hand.
+        {% if fs.dead.top %}
+        <button class="btn btn-sm btn-outline-danger ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#deadStockTable">
+            View Top {{ fs.dead.top|length }}
+        </button>
+        {% endif %}
+    </div>
+</div>
+{% if fs.dead.top %}
+<div class="collapse mb-4" id="deadStockTable">
+    <div class="card">
+        <div class="card-header" style="background:var(--primary);color:#fff;">
+            <i class="bi bi-archive"></i> Dead Stock — Top {{ fs.dead.top|length }} by Qty
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="tbl-hdr-primary">
+                        <tr>
+                            <th>Shop</th><th>Product Code</th><th>Product Name</th>
+                            <th>Brand</th><th>Year</th><th>Season</th>
+                            <th class="text-end">Qty</th><th class="text-end">Value (VND)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in fs.dead.top %}
+                        <tr>
+                            <td>{{ row.shop_name }}</td>
+                            <td>{{ row.product_code }}</td>
+                            <td>{{ row.product_name }}</td>
+                            <td>{{ row.brand }}</td>
+                            <td>{{ row.year }}</td>
+                            <td>{{ row.season }}</td>
+                            <td class="text-end">{{ row.qty }}</td>
+                            <td class="text-end">{{ row.value|vnd }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+{# By Shop #}
+{% if fs.by_shop %}
+<div class="card mb-4">
+    <div class="card-header" style="background:var(--primary);color:#fff;">
+        <i class="bi bi-shop"></i> For Sale — By Shop
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="tbl-hdr-primary">
+                    <tr>
+                        <th>Shop Name</th>
+                        <th class="text-end">SKU Lines</th>
+                        <th class="text-end">On-Hand Qty</th>
+                        <th class="text-end">In Transit</th>
+                        <th class="text-end">Total Qty</th>
+                        <th class="text-end">Value (VND)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in fs.by_shop %}
+                    <tr>
+                        <td>{{ row.shop_name }}</td>
+                        <td class="text-end">{{ row.lines }}</td>
+                        <td class="text-end">{{ row.qty }}</td>
+                        <td class="text-end">{{ row.in_transit }}</td>
+                        <td class="text-end">{{ row.total }}</td>
+                        <td class="text-end">{{ row.value|vnd }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# By Brand + By Season side-by-side #}
+<div class="row g-4 mb-4">
+    {% if fs.by_brand %}
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header" style="background:var(--primary);color:#fff;">
+                <i class="bi bi-tag"></i> For Sale — By Brand
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="tbl-hdr-primary">
+                            <tr>
+                                <th>Brand</th>
+                                <th class="text-end">SKU Lines</th>
+                                <th class="text-end">On-Hand Qty</th>
+                                <th class="text-end">In Transit</th>
+                                <th class="text-end">Total Qty</th>
+                                <th class="text-end">Value (VND)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in fs.by_brand %}
+                            <tr>
+                                <td>{{ row.brand|default:"—" }}</td>
+                                <td class="text-end">{{ row.lines }}</td>
+                                <td class="text-end">{{ row.qty }}</td>
+                                <td class="text-end">{{ row.in_transit }}</td>
+                                <td class="text-end">{{ row.total }}</td>
+                                <td class="text-end">{{ row.value|vnd }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if fs.by_season %}
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header" style="background:var(--primary);color:#fff;">
+                <i class="bi bi-calendar3"></i> For Sale — By Season
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="tbl-hdr-primary">
+                            <tr>
+                                <th>Year</th>
+                                <th>Season</th>
+                                <th class="text-end">SKU Lines</th>
+                                <th class="text-end">On-Hand Qty</th>
+                                <th class="text-end">Total Qty</th>
+                                <th class="text-end">Value (VND)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in fs.by_season %}
+                            <tr>
+                                <td>{{ row.year|default:"—" }}</td>
+                                <td>{{ row.season|default:"—" }}</td>
+                                <td class="text-end">{{ row.lines }}</td>
+                                <td class="text-end">{{ row.qty }}</td>
+                                <td class="text-end">{{ row.total }}</td>
+                                <td class="text-end">{{ row.value|vnd }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="alert alert-secondary mb-4">No commercial inventory data available.</div>
+{% endif %}
+{% endwith %}
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   SECTION 2 — GIFTS / NON-COMMERCIAL ITEMS (tag_amount = 0)
+   ═══════════════════════════════════════════════════════════════════════════ #}
+{% with gi=gifts %}
+<hr class="my-4">
+<div class="section-header d-flex align-items-center gap-2 mb-3">
+    <span class="badge fs-6 px-3 py-2" style="background:var(--primary);"><i class="bi bi-gift-fill me-1"></i> Gifts / Non-Commercial</span>
+    <span class="text-muted small">Free items, promo packaging — tag price = 0</span>
+</div>
+
+{% if gi.totals.sku_lines %}
+{# KPI Cards #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ gi.totals.sku_lines|default:0 }}</div>
+                <div class="small text-muted">SKU Lines</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ gi.totals.on_hand_qty|default:0 }}</div>
+                <div class="small text-muted">On-Hand Qty</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ gi.totals.in_transit_qty|default:0 }}</div>
+                <div class="small text-muted">In Transit</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100 text-center" style="border-top:4px solid var(--primary);">
+            <div class="card-body py-3">
+                <div class="fs-5 fw-bold" style="color:var(--text);">{{ gi.totals.total_qty|default:0 }}</div>
+                <div class="small text-muted">Total Qty</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# By Shop + By Brand side-by-side #}
+<div class="row g-4 mb-4">
+    {% if gi.by_shop %}
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header" style="background:var(--primary);color:#fff;">
+                <i class="bi bi-shop"></i> Gifts — By Shop
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="tbl-hdr-primary">
+                            <tr>
+                                <th>Shop Name</th>
+                                <th class="text-end">SKU Lines</th>
+                                <th class="text-end">On-Hand Qty</th>
+                                <th class="text-end">In Transit</th>
+                                <th class="text-end">Total Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in gi.by_shop %}
+                            <tr>
+                                <td>{{ row.shop_name }}</td>
+                                <td class="text-end">{{ row.lines }}</td>
+                                <td class="text-end">{{ row.qty }}</td>
+                                <td class="text-end">{{ row.in_transit }}</td>
+                                <td class="text-end">{{ row.total }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if gi.by_brand %}
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header" style="background:var(--primary);color:#fff;">
+                <i class="bi bi-tag"></i> Gifts — By Brand
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="tbl-hdr-primary">
+                            <tr>
+                                <th>Brand</th>
+                                <th class="text-end">SKU Lines</th>
+                                <th class="text-end">On-Hand Qty</th>
+                                <th class="text-end">In Transit</th>
+                                <th class="text-end">Total Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in gi.by_brand %}
+                            <tr>
+                                <td>{{ row.brand|default:"—" }}</td>
+                                <td class="text-end">{{ row.lines }}</td>
+                                <td class="text-end">{{ row.qty }}</td>
+                                <td class="text-end">{{ row.in_transit }}</td>
+                                <td class="text-end">{{ row.total }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% if gi.by_season %}
+<div class="card mb-4">
+    <div class="card-header" style="background:var(--primary);color:#fff;">
+        <i class="bi bi-calendar3"></i> Gifts — By Season
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="tbl-hdr-primary">
+                    <tr>
+                        <th>Year</th>
+                        <th>Season</th>
+                        <th class="text-end">SKU Lines</th>
+                        <th class="text-end">On-Hand Qty</th>
+                        <th class="text-end">Total Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in gi.by_season %}
+                    <tr>
+                        <td>{{ row.year|default:"—" }}</td>
+                        <td>{{ row.season|default:"—" }}</td>
+                        <td class="text-end">{{ row.lines }}</td>
+                        <td class="text-end">{{ row.qty }}</td>
+                        <td class="text-end">{{ row.total }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="alert alert-secondary mb-4">No gift/non-commercial inventory items found.</div>
+{% endif %}
+{% endwith %}
+
+{% endblock %}

@@ -325,9 +325,8 @@
                             <i class="bi bi-bar-chart-line"></i> Analytics
                         </a>
                         <ul class="dropdown-menu">
-                            <li>
-                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
-                            </li>
+                            {# ── Sales & Products ── #}
+                            <li><h6 class="dropdown-header">Sales &amp; Products</h6></li>
                             {% check_perm 'sales.view' as can_analytics %}
                             {% if can_analytics %}
                             <li>
@@ -344,7 +343,22 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% check_perm 'products.view' as can_products %}
+                            {% if can_products %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'product_dashboard' %}">
+                                    <i class="bi bi-bag-check"></i> Sales &amp; Product Analytics
+                                </a>
+                            </li>
+                            {% endif %}
+
+                            {# ── Customers ── #}
                             {% check_perm 'cnv.view' as can_cnv_comparison %}
+                            {% check_perm 'cnv.chart' as can_customer_chart_nav %}
+                            {% check_perm 'customers.detail' as can_cust %}
+                            {% if can_cnv_comparison or can_customer_chart_nav or can_cust %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Customers</h6></li>
                             {% if can_cnv_comparison %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'cnv:customer_analytics' %}">
@@ -352,7 +366,6 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'cnv.chart' as can_customer_chart_nav %}
                             {% if can_customer_chart_nav %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'cnv:customer_chart' %}">
@@ -360,7 +373,21 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% if can_cust %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'customer_detail' %}">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% endif %}
+
+                            {# ── Coupons ── #}
                             {% check_perm 'coupons.view' as can_coupons %}
+                            {% check_perm 'coupons.chart' as can_coupon_chart %}
+                            {% if can_coupons or can_coupon_chart %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Coupons</h6></li>
                             {% if can_coupons %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'coupon_dashboard' %}">
@@ -368,7 +395,6 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'coupons.chart' as can_coupon_chart %}
                             {% if can_coupon_chart %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'coupon_chart' %}">
@@ -376,18 +402,14 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'customers.detail' as can_cust %}
-                            {% if can_cust %}
-                            <li>
-                                <hr class="dropdown-divider">
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{% url 'customer_detail' %}">
-                                    <i class="bi bi-person-circle"></i> Customer Detail
-                                </a>
-                            </li>
                             {% endif %}
+
+                            {# ── Stores & Inventory ── #}
                             {% check_perm 'shops.view' as can_shop_detail %}
+                            {% check_perm 'inventory.view' as can_inventory %}
+                            {% if can_shop_detail or can_inventory %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Stores &amp; Inventory</h6></li>
                             {% if can_shop_detail %}
                             <li>
                                 <a class="dropdown-item" href="{% url 'shop_detail' %}">
@@ -395,13 +417,13 @@
                                 </a>
                             </li>
                             {% endif %}
-                            {% check_perm 'products.view' as can_products %}
-                            {% if can_products %}
+                            {% if can_inventory %}
                             <li>
-                                <a class="dropdown-item" href="{% url 'product_dashboard' %}">
-                                    <i class="bi bi-boxes"></i> Product Analytics
+                                <a class="dropdown-item" href="{% url 'inventory_dashboard' %}">
+                                    <i class="bi bi-boxes"></i> Inventory Analytics
                                 </a>
                             </li>
+                            {% endif %}
                             {% endif %}
                         </ul>
                     </li>

@@ -1,0 +1,47 @@
+{% load custom_filters %}
+{% with rows=data.by_product overview=data.overview %}
+{% if not rows %}
+<div class="text-muted text-center py-4">No data available.</div>
+{% else %}
+<div class="table-responsive tab-tbl-wrap">
+<table class="table table-sm table-hover align-middle mb-0" style="font-size:.84rem;">
+    <thead class="sticky-thead">
+        <tr style="background:var(--primary);color:white;">
+            <th>#</th>
+            <th>Product Code</th>
+            <th>Product Name</th>
+            <th>Brand</th>
+            <th>Category</th>
+            <th>Year</th>
+            <th>Season</th>
+            <th class="text-end">Qty (pcs)</th>
+            <th class="text-end">Tag Amt ({{ currency }})</th>
+            <th class="text-end">Sales Amt ({{ currency }})</th>
+            <th class="text-end">Settlement ({{ currency }})</th>
+            <th class="text-end">Disc %</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+    <tr>
+        <td class="text-muted">{{ forloop.counter }}</td>
+        <td>{{ r.product_code|default:"—" }}</td>
+        <td>{{ r.product_name|default:"—" }}</td>
+        <td>{{ r.brand|default:"—" }}</td>
+        <td>{{ r.category_l1|default:"—" }}</td>
+        <td>{{ r.year|default:"—" }}</td>
+        <td>{{ r.season|default:"—" }}</td>
+        <td class="text-end fw-semibold">{{ r.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted">{{ r.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ r.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ r.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if r.disc_pct and r.disc_pct > 20 %} text-danger{% endif %}">
+            {% if r.disc_pct is not None %}{{ r.disc_pct }}%{% else %}—{% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+{% endwith %}

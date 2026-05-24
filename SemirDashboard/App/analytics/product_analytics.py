@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 _TTL = 300
 _VERSION_KEY = 'prod_tab_version'
 
-PRODUCT_TABS = ['season', 'month', 'week', 'category', 'shop']
+PRODUCT_TABS = ['season', 'month', 'week', 'brand', 'category', 'shop', 'product']
 
 
 def bump_product_version():
@@ -157,6 +157,41 @@ def _by_category(qs):
     return rows
 
 
+def _by_brand(qs):
+    rows = list(
+        qs.values('brand')
+        .annotate(
+            qty=Sum('quantity'),
+            amount=Sum('sales_amount'),
+            settlement=Sum('settlement_amount'),
+            tag_amount=Sum('tag_amount'),
+            lines=Count('id'),
+        )
+        .order_by('-qty')
+    )
+    for r in rows:
+        r['disc_pct'] = _disc_pct(r.get('tag_amount'), r.get('settlement'))
+    return rows
+
+
+def _by_product(qs, limit=50):
+    """Top `limit` products ranked by qty sold."""
+    rows = list(
+        qs.values('product_code', 'product_name', 'brand', 'category_l1', 'year', 'season')
+        .annotate(
+            qty=Sum('quantity'),
+            amount=Sum('sales_amount'),
+            settlement=Sum('settlement_amount'),
+            tag_amount=Sum('tag_amount'),
+            lines=Count('id'),
+        )
+        .order_by('-qty')[:limit]
+    )
+    for r in rows:
+        r['disc_pct'] = _disc_pct(r.get('tag_amount'), r.get('settlement'))
+    return rows
+
+
 def _by_shop(qs):
     rows = list(
         qs.values('shop_name')
@@ -193,10 +228,14 @@ def get_product_tab(tab: str, date_from=None, date_to=None, shop_group=None) -> 
         tab_data['by_month'] = _by_month(qs)
     elif tab == 'week':
         tab_data['by_week'] = _by_week(qs)
+    elif tab == 'brand':
+        tab_data['by_brand'] = _by_brand(qs)
     elif tab == 'category':
         tab_data['by_category'] = _by_category(qs)
     elif tab == 'shop':
         tab_data['by_shop'] = _by_shop(qs)
+    elif tab == 'product':
+        tab_data['by_product'] = _by_product(qs)
 
     result = {'overview': overview, **tab_data}
     cache.set(key, result, _TTL)

@@ -44,6 +44,9 @@ urlpatterns = [
     path("products/",               views.product_dashboard, name="product_dashboard"),
     path("products/tab/<str:tab>/", views.product_tab,       name="product_tab"),
 
+    # ── Inventory Analytics ───────────────────────────────────────────────────
+    path("inventory/", views.inventory_dashboard, name="inventory_dashboard"),
+
     # ── Customer ──────────────────────────────────────────────────────────────
     path("customer-detail/", views.customer_detail, name="customer_detail"),
 
