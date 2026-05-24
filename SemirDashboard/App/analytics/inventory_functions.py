@@ -1,5 +1,6 @@
 """App/analytics/inventory_functions.py — Inventory analytics for Shop Detail and global overview."""
 import logging
+from collections import defaultdict
 from datetime import date
 
 from django.db.models import Sum, Count, Q
@@ -132,22 +133,71 @@ def get_inventory_overview(shop_group: str = None) -> dict:
         )
         return {'summary': agg, 'top': top}
 
+    def _by_shop_full(qs, by_shop_rows):
+        """Per-shop brand + season breakdown in 3 DB queries (not N)."""
+        dead_qs = qs.filter(year__lte=dead_year, inventory_qty__gt=0)
+
+        shop_brand_rows = list(
+            qs.values('shop_name', 'brand')
+            .annotate(qty=Sum('inventory_qty'), in_transit=Sum('in_transit_qty'),
+                      total=Sum('total_qty'), value=Sum('tag_amount'), lines=Count('id'))
+            .order_by('shop_name', '-qty')
+        )
+        shop_season_rows = list(
+            qs.values('shop_name', 'year', 'season')
+            .annotate(qty=Sum('inventory_qty'), total=Sum('total_qty'),
+                      value=Sum('tag_amount'), lines=Count('id'))
+            .order_by('shop_name', '-year', 'season')
+        )
+        dead_shop_rows = list(
+            dead_qs.values('shop_name')
+            .annotate(dead_qty=Sum('inventory_qty'), dead_value=Sum('tag_amount'),
+                      dead_lines=Count('id'))
+        )
+
+        brand_map   = defaultdict(list)
+        for r in shop_brand_rows:
+            brand_map[r['shop_name']].append(r)
+
+        season_map  = defaultdict(list)
+        for r in shop_season_rows:
+            season_map[r['shop_name']].append(r)
+
+        dead_map = {r['shop_name']: r for r in dead_shop_rows}
+
+        result = []
+        for s in by_shop_rows:
+            sn   = s['shop_name']
+            dead = dead_map.get(sn, {})
+            result.append({
+                **s,
+                'brands':     brand_map[sn],
+                'seasons':    season_map[sn],
+                'dead_qty':   dead.get('dead_qty') or 0,
+                'dead_value': dead.get('dead_value') or 0,
+                'dead_lines': dead.get('dead_lines') or 0,
+            })
+        return result
+
     sale_totals = _totals(sale_qs)
     if not (sale_totals.get('sku_lines') or _totals(gift_qs).get('sku_lines')):
         return {}
 
+    sale_by_shop = _by_shop(sale_qs)
+
     result = {
         'for_sale': {
-            'totals': sale_totals,
-            'by_shop': _by_shop(sale_qs),
-            'by_brand': _by_brand(sale_qs),
-            'by_season': _by_season(sale_qs),
-            'dead': _dead(sale_qs),
+            'totals':      sale_totals,
+            'by_shop':     sale_by_shop,
+            'by_shop_full': _by_shop_full(sale_qs, sale_by_shop),
+            'by_brand':    _by_brand(sale_qs),
+            'by_season':   _by_season(sale_qs),
+            'dead':        _dead(sale_qs),
         },
         'gifts': {
-            'totals': _totals(gift_qs),
-            'by_shop': _by_shop(gift_qs),
-            'by_brand': _by_brand(gift_qs),
+            'totals':    _totals(gift_qs),
+            'by_shop':   _by_shop(gift_qs),
+            'by_brand':  _by_brand(gift_qs),
             'by_season': _by_season(gift_qs),
         },
         'dead_year_threshold': dead_year,

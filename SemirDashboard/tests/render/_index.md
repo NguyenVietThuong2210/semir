@@ -1,6 +1,6 @@
 # Render Snapshot Index
 
-Generated: 2026-05-24 16:01:20
+Generated: 2026-05-24 16:21:06
 
 | Label | URL | Status | Size | Tables | Token issues |
 |-------|-----|--------|------|--------|--------------|
@@ -20,7 +20,8 @@ Generated: 2026-05-24 16:01:20
 | 14_cnv_sync_status | `/cnv/sync-status/` | 200 | 36.0KB | 1 | 0 |
 | 15_upload_customers | `/upload/customers/` | 200 | 37.2KB | 2 | 0 |
 | 16_user_management | `/users/` | 200 | 94.9KB | 1 | 0 |
-| 17_admin_logs | `/admin-logs/` | 200 | 299.6KB | 3 | 0 |
-| 18_product_analytics | `/products/` | 200 | 75.8KB | 3 | 0 |
-| 19_upload_inventory | `/upload/inventory/` | 200 | 31.5KB | 0 | 0 |
-| 20_upload_sale_detail | `/upload/sales/` | 200 | 35.3KB | 0 | 0 |
+| 17_admin_logs | `/admin-logs/` | 200 | 300.0KB | 3 | 0 |
+| 18_product_analytics | `/products/` | 200 | 76.1KB | 3 | 0 |
+| 19_inventory_analytics | `/inventory/` | 200 | 282.8KB | 44 | 0 |
+| 20_upload_inventory | `/upload/inventory/` | 200 | 31.5KB | 0 | 0 |
+| 21_upload_sale_detail | `/upload/sales/` | 200 | 35.3KB | 0 | 0 |

@@ -87,7 +87,7 @@ def _overview(qs):
 # ── Core helpers ───────────────────────────────────────────────────────────────
 
 def _build_cat_groups(cat_rows):
-    """Group [{category_l1, category_l2, qty, amount, ...}] → [{l1, rows, subtotal}]."""
+    """Group [{category_l1, category_l2, qty, amount, ...}] → [{l1, rows, subtotal}] sorted by amount desc."""
     l1_map = OrderedDict()
     for r in cat_rows:
         l1 = r.get('category_l1') or '—'
@@ -96,6 +96,8 @@ def _build_cat_groups(cat_rows):
         l1_map[l1].append(r)
     result = []
     for l1, rows in l1_map.items():
+        # Sort L2 rows within each L1 by amount desc
+        rows = sorted(rows, key=lambda r: -(float(r.get('amount') or 0)))
         st_qty = sum(r.get('qty') or 0 for r in rows)
         st_amt = sum(float(r.get('amount') or 0) for r in rows)
         st_sett = sum(float(r.get('settlement') or 0) for r in rows)
@@ -112,7 +114,8 @@ def _build_cat_groups(cat_rows):
                 'disc_pct': _disc_pct(st_tag, st_sett),
             },
         })
-    return result
+    # Sort L1 groups by amount desc
+    return sorted(result, key=lambda x: -(x['subtotal']['amount'] or 0))
 
 
 def _build_top_products(prod_rows, top_n=10):
@@ -528,7 +531,7 @@ def _by_brand(qs, top_n=10):
 
 
 def _by_category(qs):
-    """Flat L1→L2 category breakdown."""
+    """L1→L2 category breakdown grouped and sorted by amount desc."""
     rows = list(
         qs.values('category_l1', 'category_l2')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
@@ -537,11 +540,73 @@ def _by_category(qs):
         .order_by('category_l1', '-amount')
     )
     for r in rows:
-        r['disc_pct'] = _disc_pct(r.get('tag_amount'), r.get('settlement'))
         r['amount'] = float(r.get('amount') or 0)
         r['settlement'] = float(r.get('settlement') or 0)
         r['tag_amount'] = float(r.get('tag_amount') or 0)
-    return rows
+    return _build_cat_groups(rows)
+
+
+def _top_products_by_period_shop(qs, trunc_fn, period_key, top_n=10):
+    """Returns {shop_name: {period_val: [top_products]}} for each shop × period."""
+    rows = list(
+        qs.annotate(**{period_key: trunc_fn('sales_date')})
+        .values('shop_name', period_key, 'product_code', 'product_name', 'brand')
+        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
+                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'))
+        .order_by('shop_name', f'-{period_key}', '-amount')
+    )
+    result: dict = {}
+    for r in rows:
+        sn = r.get('shop_name') or '—'
+        pk = r.get(period_key)
+        if sn not in result:
+            result[sn] = {}
+        if pk not in result[sn]:
+            result[sn][pk] = []
+        if len(result[sn][pk]) < top_n:
+            entry = {
+                'product_code': r.get('product_code') or '',
+                'product_name': r.get('product_name') or '',
+                'brand': r.get('brand') or '—',
+                'qty': r.get('qty') or 0,
+                'amount': float(r.get('amount') or 0),
+                'settlement': float(r.get('settlement') or 0),
+                'tag_amount': float(r.get('tag_amount') or 0),
+            }
+            entry['disc_pct'] = _disc_pct(entry['tag_amount'], entry['settlement'])
+            result[sn][pk].append(entry)
+    return result
+
+
+def _top_products_by_group_shop(qs, group_field, top_n=10):
+    """Returns {shop_name: {group_val: [top_products]}} for each shop × group."""
+    rows = list(
+        qs.values('shop_name', group_field, 'product_code', 'product_name', 'brand')
+        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
+                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'))
+        .order_by('shop_name', group_field, '-amount')
+    )
+    result: dict = {}
+    for r in rows:
+        sn = r.get('shop_name') or '—'
+        gv = r.get(group_field) or '—'
+        if sn not in result:
+            result[sn] = {}
+        if gv not in result[sn]:
+            result[sn][gv] = []
+        if len(result[sn][gv]) < top_n:
+            entry = {
+                'product_code': r.get('product_code') or '',
+                'product_name': r.get('product_name') or '',
+                'brand': r.get('brand') or '—',
+                'qty': r.get('qty') or 0,
+                'amount': float(r.get('amount') or 0),
+                'settlement': float(r.get('settlement') or 0),
+                'tag_amount': float(r.get('tag_amount') or 0),
+            }
+            entry['disc_pct'] = _disc_pct(entry['tag_amount'], entry['settlement'])
+            result[sn][gv].append(entry)
+    return result
 
 
 def _by_product(qs, limit=50):
@@ -563,8 +628,10 @@ def _by_product(qs, limit=50):
 
 # ── Shop Full (Section 2) ──────────────────────────────────────────────────────
 
-def _group_trunc_by_shop(flat_rows, period_field, label_fn):
-    """Build {shop_name: [period_dicts_with_cat_groups]} from annotated DB rows."""
+def _group_trunc_by_shop(flat_rows, period_field, label_fn, top_by_shop=None):
+    """Build {shop_name: [period_dicts_with_cat_groups + top_products]} from annotated DB rows.
+    top_by_shop: {shop_name: {period_key_val: [top_products]}} — optional.
+    """
     shop_map: dict = {}
     for r in flat_rows:
         sn = r.get('shop_name') or '—'
@@ -573,6 +640,7 @@ def _group_trunc_by_shop(flat_rows, period_field, label_fn):
             shop_map[sn] = OrderedDict()
         if pk not in shop_map[sn]:
             shop_map[sn][pk] = {
+                '_pk': pk,
                 'label': label_fn(pk),
                 'qty': 0, 'amount': 0.0, 'settlement': 0.0,
                 'tag_amount': 0.0, 'lines': 0, '_cat_rows': [],
@@ -595,9 +663,12 @@ def _group_trunc_by_shop(flat_rows, period_field, label_fn):
     result = {}
     for sn, periods in shop_map.items():
         lst = []
-        for p in periods.values():
+        shop_top = (top_by_shop or {}).get(sn, {})
+        for pk_val, p in periods.items():
+            raw_pk = p.pop('_pk')
             p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
             p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
+            p['top_products'] = shop_top.get(raw_pk, [])
             lst.append(p)
         result[sn] = lst
     return result
@@ -626,7 +697,7 @@ def _by_shop_full(qs):
     if not shop_rows:
         return shop_rows
 
-    # 2. Year × cat × shop
+    # 2. Year × cat × shop  +  top products per year per shop
     year_flat = list(
         qs.annotate(year_trunc=TruncYear('sales_date'))
         .values('shop_name', 'year_trunc', 'category_l1', 'category_l2')
@@ -635,11 +706,13 @@ def _by_shop_full(qs):
                   lines=Count('id'))
         .order_by('shop_name', '-year_trunc', 'category_l1', 'category_l2')
     )
+    tp_year_by_shop = _top_products_by_period_shop(qs, TruncYear, 'year_trunc')
     year_by_shop = _group_trunc_by_shop(
-        year_flat, 'year_trunc', lambda d: str(d.year) if d else '—'
+        year_flat, 'year_trunc', lambda d: str(d.year) if d else '—',
+        top_by_shop=tp_year_by_shop,
     )
 
-    # 3. Month × cat × shop (also used for sales_season)
+    # 3. Month × cat × shop  +  top products per month per shop
     month_flat = list(
         qs.annotate(month_trunc=TruncMonth('sales_date'))
         .values('shop_name', 'month_trunc', 'category_l1', 'category_l2')
@@ -648,11 +721,14 @@ def _by_shop_full(qs):
                   lines=Count('id'))
         .order_by('shop_name', '-month_trunc', 'category_l1', 'category_l2')
     )
+    tp_month_by_shop = _top_products_by_period_shop(qs, TruncMonth, 'month_trunc')
     month_by_shop = _group_trunc_by_shop(
-        month_flat, 'month_trunc', lambda d: d.strftime('%Y-%m') if d else '—'
+        month_flat, 'month_trunc', lambda d: d.strftime('%Y-%m') if d else '—',
+        top_by_shop=tp_month_by_shop,
     )
 
     # Compute sales_season from month_flat (no extra DB query)
+    # Also derive top products for each sales_season from tp_month_by_shop
     ss_shop_map: dict = {}
     for r in month_flat:
         sn = r.get('shop_name') or '—'
@@ -665,7 +741,8 @@ def _by_shop_full(qs):
         if sk not in ss_shop_map[sn]:
             ss_shop_map[sn][sk] = {
                 'label': label, 'qty': 0, 'amount': 0.0,
-                'settlement': 0.0, 'tag_amount': 0.0, 'lines': 0, '_cat_rows': [],
+                'settlement': 0.0, 'tag_amount': 0.0, 'lines': 0,
+                '_cat_rows': [], '_month_keys': [],
             }
         p = ss_shop_map[sn][sk]
         p['qty'] += r.get('qty') or 0
@@ -682,18 +759,39 @@ def _by_shop_full(qs):
             'tag_amount': float(r.get('tag_amount') or 0),
             'lines': r.get('lines') or 0,
         })
+        mk = r.get('month_trunc')
+        if mk and mk not in p['_month_keys']:
+            p['_month_keys'].append(mk)
+
     _so = ['M2-4', 'M5-7', 'M8-10', 'M11-1']
     sales_season_by_shop: dict = {}
     for sn, seasons in ss_shop_map.items():
         lst = sorted(seasons.items(), key=lambda x: (-x[0][0], _so.index(x[0][1])))
         result_lst = []
+        shop_month_top = tp_month_by_shop.get(sn, {})
         for sk, p in lst:
             p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
             p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
+            # Merge top products from contributing months, re-sort, take top 10
+            prod_agg: dict = {}
+            for mk in p.pop('_month_keys'):
+                for pr in shop_month_top.get(mk, []):
+                    key = pr['product_code']
+                    if key not in prod_agg:
+                        prod_agg[key] = dict(pr)
+                    else:
+                        prod_agg[key]['qty'] += pr['qty']
+                        prod_agg[key]['amount'] += pr['amount']
+                        prod_agg[key]['settlement'] += pr['settlement']
+                        prod_agg[key]['tag_amount'] += pr['tag_amount']
+            sorted_prods = sorted(prod_agg.values(), key=lambda x: -(x.get('amount') or 0))
+            for pr in sorted_prods:
+                pr['disc_pct'] = _disc_pct(pr.get('tag_amount'), pr.get('settlement'))
+            p['top_products'] = sorted_prods[:10]
             result_lst.append(p)
         sales_season_by_shop[sn] = result_lst
 
-    # 4. Week × cat × shop
+    # 4. Week × cat × shop  +  top products per week per shop
     week_flat = list(
         qs.annotate(week_trunc=TruncWeek('sales_date'))
         .values('shop_name', 'week_trunc', 'category_l1', 'category_l2')
@@ -702,12 +800,14 @@ def _by_shop_full(qs):
                   lines=Count('id'))
         .order_by('shop_name', '-week_trunc', 'category_l1', 'category_l2')
     )
+    tp_week_by_shop = _top_products_by_period_shop(qs, TruncWeek, 'week_trunc')
     week_by_shop = _group_trunc_by_shop(
         week_flat, 'week_trunc',
-        lambda d: f"W{d.strftime('%V')} {d.strftime('%Y')}" if d else '—'
+        lambda d: f"W{d.strftime('%V')} {d.strftime('%Y')}" if d else '—',
+        top_by_shop=tp_week_by_shop,
     )
 
-    # 5. Product season × cat × shop
+    # 5. Product season × cat × shop  +  top products per product_season per shop
     ps_flat = list(
         qs.values('shop_name', 'year', 'season', 'category_l1', 'category_l2')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
@@ -715,6 +815,33 @@ def _by_shop_full(qs):
                   lines=Count('id'))
         .order_by('shop_name', '-year', 'season', 'category_l1', 'category_l2')
     )
+    ps_top_flat = list(
+        qs.values('shop_name', 'year', 'season', 'product_code', 'product_name', 'brand')
+        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
+                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'))
+        .order_by('shop_name', '-year', 'season', '-amount')
+    )
+    ps_top_by_shop: dict = {}
+    for r in ps_top_flat:
+        sn = r.get('shop_name') or '—'
+        key = (r.get('year'), r.get('season') or '—')
+        if sn not in ps_top_by_shop:
+            ps_top_by_shop[sn] = {}
+        if key not in ps_top_by_shop[sn]:
+            ps_top_by_shop[sn][key] = []
+        if len(ps_top_by_shop[sn][key]) < 10:
+            entry = {
+                'product_code': r.get('product_code') or '',
+                'product_name': r.get('product_name') or '',
+                'brand': r.get('brand') or '—',
+                'qty': r.get('qty') or 0,
+                'amount': float(r.get('amount') or 0),
+                'settlement': float(r.get('settlement') or 0),
+                'tag_amount': float(r.get('tag_amount') or 0),
+            }
+            entry['disc_pct'] = _disc_pct(entry['tag_amount'], entry['settlement'])
+            ps_top_by_shop[sn][key].append(entry)
+
     ps_shop_map: dict = {}
     for r in ps_flat:
         sn = r.get('shop_name') or '—'
@@ -747,13 +874,16 @@ def _by_shop_full(qs):
     ps_by_shop: dict = {}
     for sn, seasons in ps_shop_map.items():
         lst = []
-        for p in seasons.values():
+        shop_ps_top = ps_top_by_shop.get(sn, {})
+        for key, p in seasons.items():
             p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
             p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
+            p['top_products'] = shop_ps_top.get(key, [])
             lst.append(p)
         ps_by_shop[sn] = lst
 
-    # 6. VIP Grade × cat × shop
+    # 6. VIP Grade × cat × shop  +  top products per grade per shop
+    tp_vip_by_shop = _top_products_by_group_shop(qs, 'transaction__customer__vip_grade')
     vip_flat = list(
         qs.values('shop_name', 'transaction__customer__vip_grade', 'category_l1', 'category_l2')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
@@ -787,13 +917,20 @@ def _by_shop_full(qs):
         })
     vip_by_shop: dict = {}
     for sn, grades in vip_shop_map.items():
+        shop_vip_top = tp_vip_by_shop.get(sn, {})
         lst = sorted(grades.values(), key=lambda x: GRADE_ORDER.get(x['grade'], 99))
         for p in lst:
             p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
             p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
+            raw_grade = p['grade']
+            p['top_products'] = (
+                shop_vip_top.get(raw_grade if raw_grade != 'No Grade' else None, []) or
+                shop_vip_top.get(raw_grade, [])
+            )
         vip_by_shop[sn] = lst
 
-    # 7. Brand × cat × shop
+    # 7. Brand × cat × shop  +  top products per brand per shop
+    tp_brand_by_shop = _top_products_by_group_shop(qs, 'brand')
     brand_flat = list(
         qs.values('shop_name', 'brand', 'category_l1', 'category_l2')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
@@ -827,10 +964,12 @@ def _by_shop_full(qs):
         })
     brand_by_shop: dict = {}
     for sn, brands in brand_shop_map.items():
+        shop_brand_top = tp_brand_by_shop.get(sn, {})
         lst = sorted(brands.values(), key=lambda x: -(x.get('amount') or 0))
         for p in lst:
             p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
             p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
+            p['top_products'] = shop_brand_top.get(p['brand'], [])
         brand_by_shop[sn] = lst
 
     # 8. Top products × shop
@@ -933,6 +1072,7 @@ def get_product_tab(tab: str, date_from=None, date_to=None,
         tab_data['by_brand'] = _by_brand(qs)
     elif tab == 'category':
         tab_data['by_category'] = _by_category(qs)
+        tab_data['top_products'] = _by_product(qs, limit=20)
     elif tab == 'shop':
         tab_data['by_shop'] = _by_shop_full(qs)
     elif tab == 'product':

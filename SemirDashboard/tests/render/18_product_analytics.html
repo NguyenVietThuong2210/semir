@@ -526,7 +526,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="kT5WqduZKgr6KeFmsfggR5Ho4iioUBehY1WOv9rNBIo24Ww1QWiVgtCd52euUiAG">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="qrDkKzoY4hEg59piE0loRjXg7TgG5xC1z7htMtOiassMi8ZpeE1hbaYZwopwRVX7">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -1966,7 +1966,8 @@
 <script>
 (function(){
     /* ── Section 1 tabs ── */
-    const loaded = {'month': true};
+    const tabCache = {'month': document.getElementById('tabContent').innerHTML};
+    const loaded   = {'month': true};
     document.querySelectorAll('#prodTabs .nav-link').forEach(function(link){
         link.addEventListener('click', function(e){
             e.preventDefault();
@@ -1974,7 +1975,14 @@
             this.classList.add('active');
             const tab = this.dataset.tab;
             const url = this.dataset.lazyUrl;
-            if (!url || loaded[tab]) return;
+
+            if (loaded[tab]) {
+                /* Restore from cache — instant, no spinner */
+                document.getElementById('tabContent').innerHTML = tabCache[tab] || '';
+                return;
+            }
+
+            /* First load — show spinner, fetch, cache */
             document.getElementById('tabContent').innerHTML = '';
             document.getElementById('tabSpinner').style.display = 'block';
             fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
@@ -1982,6 +1990,7 @@
                 .then(html => {
                     document.getElementById('tabSpinner').style.display = 'none';
                     document.getElementById('tabContent').innerHTML = html;
+                    tabCache[tab] = html;
                     loaded[tab] = true;
                 })
                 .catch(err => {

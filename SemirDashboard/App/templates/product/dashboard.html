@@ -224,7 +224,8 @@
 <script>
 (function(){
     /* ── Section 1 tabs ── */
-    const loaded = {'{{ initial_tab }}': true};
+    const tabCache = {'{{ initial_tab }}': document.getElementById('tabContent').innerHTML};
+    const loaded   = {'{{ initial_tab }}': true};
     document.querySelectorAll('#prodTabs .nav-link').forEach(function(link){
         link.addEventListener('click', function(e){
             e.preventDefault();
@@ -232,7 +233,14 @@
             this.classList.add('active');
             const tab = this.dataset.tab;
             const url = this.dataset.lazyUrl;
-            if (!url || loaded[tab]) return;
+
+            if (loaded[tab]) {
+                /* Restore from cache — instant, no spinner */
+                document.getElementById('tabContent').innerHTML = tabCache[tab] || '';
+                return;
+            }
+
+            /* First load — show spinner, fetch, cache */
             document.getElementById('tabContent').innerHTML = '';
             document.getElementById('tabSpinner').style.display = 'block';
             fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
@@ -240,6 +248,7 @@
                 .then(html => {
                     document.getElementById('tabSpinner').style.display = 'none';
                     document.getElementById('tabContent').innerHTML = html;
+                    tabCache[tab] = html;
                     loaded[tab] = true;
                 })
                 .catch(err => {
