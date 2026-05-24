@@ -237,9 +237,19 @@ class InventoryImportTest(SnapshotTestCase):
             self.skipTest("No dead stock in test data")
         row = dead_top[0]
         for field in ('product_code', 'product_name', 'product_name_vn',
-                      'color', 'size', 'brand', 'category_l1', 'category_l3',
+                      'color', 'size', 'brand', 'category_l1', 'category_l2', 'category_l3',
                       'gender', 'year', 'season', 'qty', 'value'):
             self.assertIn(field, row, f"Missing dead stock field '{field}'")
+
+    def test_overview_dead_top_sorted_by_value_desc(self):
+        """Dead stock top list must be sorted by value descending."""
+        data = get_inventory_overview()
+        top = data.get('for_sale', {}).get('dead', {}).get('top', [])
+        if len(top) < 2:
+            self.skipTest("Not enough dead stock rows to test sort order")
+        values = [row['value'] for row in top]
+        self.assertEqual(values, sorted(values, reverse=True),
+                         "Dead stock top list not sorted by value desc")
 
     def test_overview_per_shop_dead_skus_limit_50(self):
         """Per-shop dead_skus should return at most 50 items."""
@@ -260,7 +270,7 @@ class InventoryImportTest(SnapshotTestCase):
             if skus:
                 row = skus[0]
                 for field in ('product_code', 'product_name', 'product_name_vn',
-                              'color', 'size', 'category_l1', 'category_l3',
+                              'color', 'size', 'category_l1', 'category_l2', 'category_l3',
                               'gender', 'year', 'season', 'qty', 'value'):
                     self.assertIn(field, row,
                                   f"Shop '{shop['shop_name']}' dead_skus missing field '{field}'")
@@ -364,8 +374,8 @@ class InventoryImportTest(SnapshotTestCase):
         self.assertIn("text/csv", r["Content-Type"])
         # CSV must include the new column headers
         content = r.content.decode("utf-8-sig")
-        for col in ("Product Code", "Product Name", "商品名称", "Color", "Size",
-                    "Large Class", "Small Class", "Gender"):
+        for col in ("Product Code", "Product Name", "Product Name VN", "Color", "Size",
+                    "Category L1", "Category L2", "Category L3", "Gender"):
             self.assertIn(col, content, f"CSV missing column '{col}'")
 
     # ── Page renders ──────────────────────────────────────────────────────────

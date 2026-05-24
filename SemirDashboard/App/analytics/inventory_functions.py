@@ -133,10 +133,10 @@ def get_inventory_overview(shop_group: str = None, year: int = None, season: str
         )
         top = list(
             dq.values('shop_name', 'product_code', 'product_name', 'product_name_vn',
-                      'color', 'size', 'brand', 'category_l1', 'category_l3',
+                      'color', 'size', 'brand', 'category_l1', 'category_l2', 'category_l3',
                       'gender', 'tag_price', 'year', 'season')
             .annotate(qty=Sum('inventory_qty'), value=Sum('tag_amount'))
-            .order_by('-qty')[:50]
+            .order_by('-value')[:50]
         )
         return {'summary': agg, 'top': top}
 
@@ -164,10 +164,10 @@ def get_inventory_overview(shop_group: str = None, year: int = None, season: str
         # Dead stock SKUs per shop — single query, top 50 per shop by qty
         dead_sku_rows = list(
             dead_qs.values('shop_name', 'product_code', 'product_name', 'product_name_vn',
-                           'color', 'size', 'brand', 'category_l1', 'category_l3',
+                           'color', 'size', 'brand', 'category_l1', 'category_l2', 'category_l3',
                            'gender', 'tag_price', 'year', 'season')
             .annotate(qty=Sum('inventory_qty'), value=Sum('tag_amount'))
-            .order_by('shop_name', '-qty')
+            .order_by('shop_name', '-value')
         )
         dead_skus_map: dict = defaultdict(list)
         for r in dead_sku_rows:

@@ -78,12 +78,12 @@ SalesTransaction.objects.filter(...).order_by().distinct()
 | sales_date | DateField | db_index |
 | sales_time | TimeField | null, blank |
 | brand | CharField(100) | blank |
-| product_code | CharField(100) | blank |
+| product_code | CharField(100) | blank, part of unique_together |
 | product_name | CharField(200) | blank |
-| barcode | CharField(100) | blank, part of unique_together |
+| barcode | CharField(100) | blank |
 | sku | CharField(100) | blank |
 | color | CharField(100) | blank |
-| size | CharField(50) | blank, part of unique_together |
+| size | CharField(50) | blank |
 | year | SmallIntegerField | null, blank |
 | season | CharField(50) | blank |
 | gender | CharField(50) | blank |
@@ -104,7 +104,7 @@ SalesTransaction.objects.filter(...).order_by().distinct()
 
 ```python
 class Meta:
-    unique_together = [['invoice_number', 'barcode', 'size']]
+    unique_together = [['invoice_number', 'product_code']]
 ```
 Indexes: `(sales_date, brand)`, `(sales_date, shop_id)`, `(year, season, brand)`, `(sku, brand)`, `(salesmen, sales_date)`
 

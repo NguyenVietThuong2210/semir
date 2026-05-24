@@ -88,8 +88,8 @@ def export_inventory_dead_stock(request):
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
-        "Shop", "Product Code", "Product Name", "商品名称",
-        "Color", "Size", "Large Class", "Small Class", "Gender",
+        "Shop", "Product Code", "Product Name", "Product Name VN",
+        "Color", "Size", "Category L1", "Category L2", "Category L3", "Gender",
         "Brand", "Year", "Season", "Tag Price", "Qty", "Value (VND)",
     ])
     for row in dead_top:
@@ -101,6 +101,7 @@ def export_inventory_dead_stock(request):
             row.get("color", ""),
             row.get("size", ""),
             row.get("category_l1", ""),
+            row.get("category_l2", ""),
             row.get("category_l3", ""),
             row.get("gender", ""),
             row.get("brand", ""),

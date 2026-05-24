@@ -72,7 +72,7 @@ App/
 │   ├── customer_utils.py             # Customer cache + purchase map builder
 │   ├── coupon_analytics.py           # calc_coupon_amount, calculate_coupon_analytics, calculate_coupon_trend_data, export_*
 │   ├── tab_functions.py              # KEY: get_sales_tab, get_customer_tab, get_coupon_tab, get_shop_detail_*, _load_sales
-│   ├── inventory_functions.py        # get_shop_inventory_data(shop_name) — shop-level inventory KPIs, dead stock, top SKUs
+│   ├── inventory_functions.py        # get_inventory_overview(shop_group, year, season) — inventory KPIs, dead stock top 50, per-shop breakdown
 │   ├── product_analytics.py          # get_product_tab(tab, date_from, date_to, shop_group) — season/month/week/brand/category
 │   └── __init__.py
 │
@@ -88,7 +88,9 @@ App/
 │   ├── analytics.py                  # analytics_dashboard, analytics_tab, analytics_chart, export_analytics
 │   ├── coupon.py                     # coupon_dashboard, coupon_tab, coupon_chart, export_coupons
 │   ├── upload.py                     # upload_customers/sales/coupons/used_points/inventory/sale_detail, upload_job_status, upload_jobs_list
-│   ├── product.py                    # product_dashboard, product_tab (SaleDetail-based, 5 tabs)
+│   ├── product.py                    # product_dashboard, product_tab, export_product_analytics (SaleDetail-based, 5 tabs)
+│   ├── inventory.py                  # inventory_dashboard, export_inventory_dead_stock (InventorySnapshot-based)
+│   ├── shop_detail.py                # shop_detail, export_shop_detail_excel, shop_detail_*_partial (4 AJAX partials)
 │   ├── customer.py                   # customer_detail
 │   ├── admin_logs.py                 # admin_logs (superuser only, reads JSON log files)
 │   └── view_utils.py                 # parse_date, filter_params_str
@@ -124,6 +126,8 @@ App/
 │   ├── product/
 │   │   ├── dashboard.html            # Product analytics page (filter bar + 5 tabs)
 │   │   └── tabs/                     # season, month, week, brand, category
+│   ├── inventory/
+│   │   └── dashboard.html            # Inventory dashboard (filter bar, KPI cards, dead stock top 50, per-shop)
 │   ├── shop_detail/
 │   │   ├── _sales_partial.html       # AJAX partial for sales section
 │   │   ├── _customer_partial.html    # AJAX partial for customer section
@@ -140,7 +144,7 @@ App/
 │       └── lazy_tab_session.html
 │
 ├── urls.py                           # App-level URL patterns (see project_urls.md)
-├── permissions.py                    # PERMISSION_DEFS (20 permissions), Role helpers, @requires_perm
+├── permissions.py                    # PERMISSION_DEFS (23 permissions), Role helpers, @requires_perm
 ├── forms.py                          # CustomerUploadForm, UsedPointsUploadForm, SalesUploadForm
 ├── upload_jobs.py                    # Job store backed by Django cache (create_job, update_job, get_job)
 ├── logging_utils.py                  # RequestIDFilter, JsonFormatter, thread-local request_id helpers
@@ -149,6 +153,7 @@ App/
 │   ├── custom_filters.py
 │   └── perm_tags.py                  # Permission checking template tags
 ├── management/commands/
+│   ├── perm.py                       # perm sync: renames old codenames, upserts admin/viewer roles
 │   ├── sync_cnv_customers.py
 │   └── sync_cnv_orders.py
 ├── migrations/
@@ -162,7 +167,7 @@ App/
 | Return visit formula | `analytics/calculations.py` |
 | Season labels / grade order | `analytics/season_utils.py` |
 | Shop detail data (sales/customer/coupon) | `analytics/tab_functions.py` → `get_shop_detail_*` |
-| Shop detail inventory data | `analytics/inventory_functions.py` → `get_shop_inventory_data` |
+| Inventory dashboard data (KPIs, dead stock, per-shop) | `analytics/inventory_functions.py` → `get_inventory_overview` |
 | Lazy tab data for analytics/coupon/cnv pages | `analytics/tab_functions.py` → `get_sales_tab`, `get_customer_tab`, `get_coupon_tab` |
 | Product analytics (season/month/week/brand/category) | `analytics/product_analytics.py` → `get_product_tab` |
 | Aggregation (grade/season/month) | `analytics/aggregators.py` |
@@ -171,7 +176,7 @@ App/
 | CNV API HTTP calls | `cnv/api_client.py` |
 | CNV hourly background jobs | `cnv/scheduler.py` |
 | Zalo sync (threaded) | `cnv/zalo_sync.py` |
-| All 20 permissions | `permissions.py` |
+| All 23 permissions | `permissions.py` |
 | Data import (bulk CSV/Excel) | `services/customer_import.py`, `sales_import.py`, `coupon_import.py`, `inventory_import.py`, `sale_detail_import.py` |
 | Upload job tracking (cache-backed) | `upload_jobs.py` |
 | Admin log viewer | `views/admin_logs.py` |

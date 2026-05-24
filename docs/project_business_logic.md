@@ -51,7 +51,7 @@ Old definition (OBSOLETE): SS = Jan-Jun, AW = Jul-Dec.
 ## Permissions System
 **File:** `App/permissions.py`
 
-20 permissions in `PERMISSION_DEFS`, named `{domain}.{action}` and grouped into 7 domains:
+23 permissions in `PERMISSION_DEFS`, named `{domain}.{action}` and grouped into 9 domains:
 
 | Codename | Display label | Domain group |
 |---|---|---|
@@ -72,11 +72,14 @@ Old definition (OBSOLETE): SS = Jan-Jun, AW = Jul-Dec.
 | `customers.detail` | View Customer Detail | Customers |
 | `shops.view` | View Shop Detail | Shop Detail |
 | `shops.export` | Export Shop Detail (Excel) | Shop Detail |
+| `products.view` | View Product Analytics | Product Analytics |
+| `products.export` | Export Product Analytics (Excel) | Product Analytics |
+| `inventory.view` | View Inventory Analytics | Inventory Analytics |
 | `data.upload` | Upload Data | Data Management |
 | `data.formulas` | View Formulas | Data Management |
 | `admin.users` | Manage Users | Admin |
 
-**Built-in:** `VIEWER_PERMISSIONS = ["sales.view"]` — minimal viewer role.
+**Built-in:** `VIEWER_PERMISSIONS = ["sales.view", "products.view", "inventory.view"]` — minimal viewer role.
 
 **Check flow:**
 1. `user.is_superuser` → all permissions granted

@@ -182,7 +182,7 @@ def process_sale_detail_file(file, progress_fn=None):
                 inv = data['invoice_number']
                 pc  = data['product_code']
 
-                if not inv or not data['sales_date']:
+                if not inv or not pc or not data['sales_date']:
                     skipped += 1
                     continue
 
