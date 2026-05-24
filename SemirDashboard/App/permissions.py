@@ -22,6 +22,7 @@ PERMISSION_DEFS = [
     ("shops.view",          "View Shop Detail",                 "Shop Detail"),
     ("shops.export",        "Export Shop Detail (Excel)",       "Shop Detail"),
     ("products.view",       "View Product Analytics",           "Product Analytics"),
+    ("products.export",     "Export Product Analytics (Excel)", "Product Analytics"),
     ("inventory.view",      "View Inventory Analytics",         "Inventory Analytics"),
     ("data.upload",         "Upload Data",                      "Data Management"),
     ("data.formulas",       "View Formulas",                    "Data Management"),

@@ -2950,3 +2950,144 @@ def export_coupon_chart_to_excel(
     )
 
     return wb
+
+
+# ── Product Analytics Excel Export ───────────────────────────────────────────
+
+def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=None, shop_group=None):
+    """Export Sales & Product Analytics tabs to Excel workbook."""
+    from App.analytics.category_translations import translate_category
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Overview"
+
+    # Overview sheet
+    overview = (tabs_data.get('month') or tabs_data.get('brand') or {}).get('overview', {})
+    ws.append(["Sales & Product Analytics Export"])
+    ws['A1'].font = XL_TITLE_FONT
+    ws.append([f"Period: {date_from} — {date_to}" if date_from else "Period: All Time"])
+    ws.append([f"Shop Group: {shop_group or 'All'}"])
+    ws.append([])
+    if overview:
+        ws.append(["KPI", "Value"])
+        xl_write_header(ws, ["KPI", "Value"], row=ws.max_row)
+        for k, v in [
+            ("Total Lines", overview.get('total_lines', 0)),
+            ("Total Qty (pcs)", overview.get('total_qty', 0)),
+            ("Tag Amount (VND)", overview.get('total_tag_amount', 0)),
+            ("Sales Amount (VND)", overview.get('total_amount', 0)),
+            ("Settlement (VND)", overview.get('total_settlement', 0)),
+            ("Avg Disc %", f"{overview.get('disc_pct', '—')}%"),
+        ]:
+            ws.append([k, v])
+    ws.column_dimensions['A'].width = 25
+    ws.column_dimensions['B'].width = 20
+
+    _HEADERS = ["Period/Group", "Qty (pcs)", "Tag Amt (VND)", "Sales Amt (VND)",
+                "Settlement (VND)", "Disc %", "Lines"]
+    _CAT_HEADERS = ["", "Category L1", "Category L2", "Qty (pcs)",
+                    "Tag Amt (VND)", "Sales Amt (VND)", "Settlement (VND)", "Disc %", "Lines"]
+
+    def _write_period_tab(ws_t, rows, period_key, label_key='label'):
+        xl_write_header(ws_t, _HEADERS, row=1)
+        for r in rows:
+            ws_t.append([
+                r.get(label_key) or r.get(period_key, '—'),
+                r.get('qty', 0),
+                round(float(r.get('tag_amount') or 0)),
+                round(float(r.get('amount') or 0)),
+                round(float(r.get('settlement') or 0)),
+                f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
+                r.get('lines', 0),
+            ])
+            for grp in r.get('cat_groups', []):
+                for cat in grp.get('rows', []):
+                    ws_t.append([
+                        '',
+                        translate_category(cat.get('category_l1', ''), 'VI'),
+                        translate_category(cat.get('category_l2', ''), 'VI'),
+                        cat.get('qty', 0),
+                        round(float(cat.get('tag_amount') or 0)),
+                        round(float(cat.get('amount') or 0)),
+                        round(float(cat.get('settlement') or 0)),
+                        f"{cat.get('disc_pct', '—')}%" if cat.get('disc_pct') is not None else '—',
+                        cat.get('lines', 0),
+                    ])
+        for col in range(1, 8):
+            ws_t.column_dimensions[get_column_letter(col)].width = 18
+
+    # By Month sheet
+    if 'month' in tabs_data:
+        ws_m = wb.create_sheet("By Month")
+        _write_period_tab(ws_m, tabs_data['month'].get('by_month', []), 'month_trunc')
+
+    # By Brand sheet
+    if 'brand' in tabs_data:
+        ws_b = wb.create_sheet("By Brand")
+        _write_period_tab(ws_b, tabs_data['brand'].get('by_brand', []), 'brand', label_key='brand')
+
+    # By Category sheet (flat)
+    if 'category' in tabs_data:
+        ws_c = wb.create_sheet("By Category")
+        headers_c = ["Category L1", "Category L2", "Qty (pcs)", "Tag Amt (VND)",
+                     "Sales Amt (VND)", "Settlement (VND)", "Disc %", "Lines"]
+        xl_write_header(ws_c, headers_c, row=1)
+        for r in tabs_data['category'].get('by_category', []):
+            ws_c.append([
+                translate_category(r.get('category_l1', ''), 'VI'),
+                translate_category(r.get('category_l2', ''), 'VI'),
+                r.get('qty', 0),
+                round(float(r.get('tag_amount') or 0)),
+                round(float(r.get('amount') or 0)),
+                round(float(r.get('settlement') or 0)),
+                f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
+                r.get('lines', 0),
+            ])
+        for col in range(1, 9):
+            ws_c.column_dimensions[get_column_letter(col)].width = 20
+
+    # By Shop sheet
+    if 'shop' in tabs_data:
+        ws_s = wb.create_sheet("By Shop")
+        sh_headers = ["Shop", "Qty (pcs)", "Tag Amt (VND)", "Sales Amt (VND)",
+                      "Settlement (VND)", "Disc %", "Lines"]
+        xl_write_header(ws_s, sh_headers, row=1)
+        for r in tabs_data['shop'].get('by_shop', []):
+            ws_s.append([
+                r.get('shop_name', '—'),
+                r.get('qty', 0),
+                round(float(r.get('tag_amount') or 0)),
+                round(float(r.get('amount') or 0)),
+                round(float(r.get('settlement') or 0)),
+                f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
+                r.get('lines', 0),
+            ])
+        for col in range(1, 8):
+            ws_s.column_dimensions[get_column_letter(col)].width = 22
+
+    # Top Products sheet
+    if 'product' in tabs_data:
+        ws_p = wb.create_sheet("Top Products")
+        p_headers = ["#", "Product Code", "Product Name", "Brand", "Category",
+                     "Year", "Season", "Qty (pcs)", "Tag Amt (VND)",
+                     "Sales Amt (VND)", "Settlement (VND)", "Disc %"]
+        xl_write_header(ws_p, p_headers, row=1)
+        for i, r in enumerate(tabs_data['product'].get('by_product', []), 1):
+            ws_p.append([
+                i,
+                r.get('product_code', ''),
+                r.get('product_name', ''),
+                r.get('brand', ''),
+                translate_category(r.get('category_l1', ''), 'VI'),
+                r.get('year', ''),
+                r.get('season', ''),
+                r.get('qty', 0),
+                round(float(r.get('tag_amount') or 0)),
+                round(float(r.get('amount') or 0)),
+                round(float(r.get('settlement') or 0)),
+                f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
+            ])
+        for col in range(1, 13):
+            ws_p.column_dimensions[get_column_letter(col)].width = 18
+
+    return wb

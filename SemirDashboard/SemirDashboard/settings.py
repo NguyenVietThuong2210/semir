@@ -151,6 +151,9 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Category label language: 'VI' = show "中文 (Tiếng Việt)", 'ZH' = Chinese only
+CATEGORY_LANG = os.environ.get("CATEGORY_LANG", "VI")
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/

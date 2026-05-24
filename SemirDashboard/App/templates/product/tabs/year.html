@@ -1,0 +1,91 @@
+{% load custom_filters perm_tags %}
+{% with rows=data.by_year overview=data.overview %}
+{% if not rows %}
+<div class="text-muted text-center py-4">No data available.</div>
+{% else %}
+
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-calendar3 text-primary me-1"></i><strong>Yearly Summary</strong></span>
+        <button class="btn btn-sm btn-outline-secondary" type="button"
+                data-bs-toggle="collapse" data-bs-target="#yearlySummary">
+            <i class="bi bi-arrows-expand"></i> Show/Hide
+        </button>
+    </div>
+    <div class="collapse show" id="yearlySummary">
+        <div class="table-responsive tab-tbl-wrap">
+            <table class="table table-sm table-striped table-hover align-middle mb-0" style="font-size:.84rem;">
+                <thead class="sticky-thead" style="background:var(--primary);color:#fff;">
+                    <tr>
+                        <th>Year</th>
+                        <th class="text-end">Qty (pcs)</th>
+                        <th class="text-end">Tag Amt ({{ currency }})</th>
+                        <th class="text-end">Sales Amt ({{ currency }})</th>
+                        <th class="text-end">Settlement ({{ currency }})</th>
+                        <th class="text-end">Disc %</th>
+                        <th class="text-end">Lines</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td><strong>{{ r.label|default:"—" }}</strong></td>
+                    <td class="text-end fw-semibold">{{ r.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd text-muted">{{ r.tag_amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ r.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ r.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if r.disc_pct and r.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if r.disc_pct is not None %}{{ r.disc_pct }}%{% else %}—{% endif %}
+                    </td>
+                    <td class="text-end text-muted">{{ r.lines|default:0 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+                {% if overview %}
+                <tfoot>
+                <tr style="background:rgba(var(--primary-rgb),.06);font-weight:600;border-top:2px solid var(--primary);">
+                    <td>Total</td>
+                    <td class="text-end">{{ overview.total_qty|default:0 }}</td>
+                    <td class="text-end amount-vnd text-muted">{{ overview.total_tag_amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ overview.total_amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ overview.total_settlement|default:0|vnd }}</td>
+                    <td class="text-end">{% if overview.disc_pct is not None %}{{ overview.disc_pct }}%{% else %}—{% endif %}</td>
+                    <td class="text-end">{{ overview.total_lines|default:0 }}</td>
+                </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+
+<p class="text-muted small fw-semibold text-uppercase mb-1 mt-3">
+    <i class="bi bi-diagram-3"></i> By Year — Category Breakdown
+</p>
+{% for r in rows %}
+<div class="card mb-2 border">
+    <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+         style="background:var(--primary);cursor:pointer;"
+         data-bs-toggle="collapse"
+         data-bs-target="#yearCard-{{ forloop.counter }}"
+         aria-expanded="false">
+        <strong class="text-white"><i class="bi bi-calendar3-range me-1"></i>{{ r.label|default:"—" }}</strong>
+        <small class="text-white-50">
+            Qty: {{ r.qty|default:0 }} &nbsp;|&nbsp;
+            Sales: {{ r.amount|default:0|vnd }} &nbsp;|&nbsp;
+            Disc: {% if r.disc_pct is not None %}{{ r.disc_pct }}%{% else %}—{% endif %}
+            &nbsp;<i class="bi bi-chevron-down"></i>
+        </small>
+    </div>
+    <div class="collapse" id="yearCard-{{ forloop.counter }}">
+        <div class="card-body p-2">
+            {% with cat_groups=r.cat_groups %}
+            {% include "product/tabs/_cat_drilldown.html" %}
+            {% endwith %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endif %}
+{% endwith %}

@@ -13,7 +13,7 @@ from .shop_detail import (
     shop_detail_sales_partial, shop_detail_customer_partial, shop_detail_coupon_partial,
     shop_detail_inventory_partial,
 )
-from .product import product_dashboard, product_tab
+from .product import product_dashboard, product_tab, export_product_analytics
 from .inventory import inventory_dashboard
 from . import auth, users
 
@@ -49,5 +49,6 @@ __all__ = [
     "shop_detail_inventory_partial",
     "product_dashboard",
     "product_tab",
+    "export_product_analytics",
     "inventory_dashboard",
 ]

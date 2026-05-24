@@ -8,6 +8,8 @@ Description: Custom Django template filters for VND currency formatting
 """
 
 from django import template
+from django.conf import settings
+from App.analytics.category_translations import translate_category
 
 register = template.Library()
 
@@ -32,6 +34,17 @@ def vnd_format(value):
         return f"{num:,}"
     except (ValueError, TypeError):
         return value
+
+
+@register.filter(name='cat_name')
+def cat_name(value):
+    """
+    Translate a Chinese category string using CATEGORY_LANG setting.
+    CATEGORY_LANG='VI' → '商品 (Hàng hóa)'
+    CATEGORY_LANG='ZH' → '商品'
+    """
+    lang = getattr(settings, 'CATEGORY_LANG', 'VI')
+    return translate_category(str(value) if value else '', lang)
 
 
 @register.filter(name='vnd_full')

@@ -9,7 +9,7 @@
 .stat-value { font-size:1.55rem; font-weight:700; margin:5px 0; color:var(--text); }
 .stat-label { font-size:.74rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text); }
 .overview-metrics .stat-card { background:rgba(var(--orange-rgb),.08); border:none; }
-.period-metrics   .stat-card { background:rgba(var(--primary-rgb),.09); border:none; }
+
 .dark-tabs .nav-link {
     background:rgba(255,255,255,.08); color:rgba(255,255,255,.85);
     border:1px solid rgba(255,255,255,.15); border-radius:6px 6px 0 0;
@@ -20,14 +20,21 @@
 .dark-tabs { border-bottom:none; }
 .tab-content-wrap { background:#fff; border:1px solid var(--border); border-radius:0 6px 6px 6px; padding:1rem; }
 [data-theme="dark"] .tab-content-wrap { background:var(--bg-light); }
-.tab-tbl-wrap { max-height:450px; overflow-y:auto; }
+.tab-tbl-wrap { max-height:480px; overflow-y:auto; }
 .sticky-thead th { position:sticky; top:0; z-index:2; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h2><i class="bi bi-graph-up-arrow me-2"></i>Sales &amp; Product Analytics</h2>
+    {% check_perm 'products.export' as can_dl %}
+    {% if can_dl %}
+    <a href="{% url 'export_product_analytics' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}"
+       class="btn btn-outline-success btn-sm">
+        <i class="bi bi-file-earmark-excel"></i> Download
+    </a>
+    {% endif %}
 </div>
 
 {# ── Filter bar ── #}
@@ -89,13 +96,13 @@
     <div class="col-6 col-md-2">
         <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
             <div class="stat-value amount-vnd" style="font-size:1.05rem">{{ overview.total_tag_amount|default:0|vnd }}</div>
-            <div class="stat-label">Tag Amount ({{ currency }})</div>
+            <div class="stat-label">Tag Amt ({{ currency }})</div>
         </div></div>
     </div>
     <div class="col-6 col-md-2">
         <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
             <div class="stat-value amount-vnd" style="font-size:1.05rem">{{ overview.total_amount|default:0|vnd }}</div>
-            <div class="stat-label">Sales Amount ({{ currency }})</div>
+            <div class="stat-label">Sales Amt ({{ currency }})</div>
         </div></div>
     </div>
     <div class="col-6 col-md-2">
@@ -115,23 +122,69 @@
 </div>
 {% endif %}
 
-{# ── Dark-tab panel ── #}
-<div class="card shadow-sm">
+{# ══════════════════════════════════════════════════════════════════
+   SECTION 1 — Period & Category Analysis (tabs)
+   ══════════════════════════════════════════════════════════════════ #}
+<div class="card shadow-sm mb-4">
     <div class="card-header py-2" style="background:var(--nav-bg);">
         <ul class="nav dark-tabs" id="prodTabs">
-            <li class="nav-item"><a class="nav-link active" href="#" data-tab="season">By Season</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-tab="brand"    data-lazy-url="{% url 'product_tab' 'brand'    %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Brand</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-tab="month"    data-lazy-url="{% url 'product_tab' 'month'    %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Month</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-tab="week"     data-lazy-url="{% url 'product_tab' 'week'     %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Week</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-tab="category" data-lazy-url="{% url 'product_tab' 'category' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Category</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-tab="shop"     data-lazy-url="{% url 'product_tab' 'shop'     %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Shop</a></li>
-            <li class="nav-item"><a class="nav-link" href="#" data-tab="product"  data-lazy-url="{% url 'product_tab' 'product'  %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">Top Products</a></li>
+            <li class="nav-item">
+                <a class="nav-link{% if initial_tab == 'month' %} active{% endif %}" href="#" data-tab="month"
+                   {% if initial_tab != 'month' %}data-lazy-url="{% url 'product_tab' 'month' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}"{% endif %}>
+                   By Month
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="year"
+                   data-lazy-url="{% url 'product_tab' 'year' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   By Year
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="week"
+                   data-lazy-url="{% url 'product_tab' 'week' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   By Week
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="product_season"
+                   data-lazy-url="{% url 'product_tab' 'product_season' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   Product Season
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="vip_grade"
+                   data-lazy-url="{% url 'product_tab' 'vip_grade' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   By VIP Grade
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="brand"
+                   data-lazy-url="{% url 'product_tab' 'brand' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   By Brand
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="category"
+                   data-lazy-url="{% url 'product_tab' 'category' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   By Category
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="product"
+                   data-lazy-url="{% url 'product_tab' 'product' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   Top Products
+                </a>
+            </li>
         </ul>
     </div>
     <div class="card-body tab-content-wrap">
         <div id="tabContent">
-            {# Season tab rendered server-side on initial load #}
-            {% include "product/tabs/season.html" %}
+            {% if initial_tab == 'month' %}
+            {% with data=initial_data %}
+            {% include "product/tabs/month.html" %}
+            {% endwith %}
+            {% endif %}
         </div>
         <div id="tabSpinner" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);">
             <span class="spinner-border spinner-border-sm me-2"></span>Loading…
@@ -139,9 +192,37 @@
     </div>
 </div>
 
+{# ══════════════════════════════════════════════════════════════════
+   SECTION 2 — By Shop (lazy-loaded when tab clicked)
+   ══════════════════════════════════════════════════════════════════ #}
+<div class="card shadow-sm">
+    <div class="card-header py-2" style="background:var(--nav-bg);">
+        <ul class="nav dark-tabs" id="shopTabNav">
+            <li class="nav-item">
+                <a class="nav-link active" href="#" data-stab="shop"
+                   data-lazy-url="{% url 'product_tab' 'shop' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   <i class="bi bi-shop me-1"></i>By Shop
+                </a>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body tab-content-wrap">
+        <div id="shopTabContent">
+            <div class="text-muted text-center py-4" id="shopLazyHint">
+                <i class="bi bi-shop fs-2 d-block mb-2 text-muted"></i>
+                Click "By Shop" above to load shop breakdown.
+            </div>
+        </div>
+        <div id="shopTabSpinner" style="display:none;text-align:center;padding:2rem;">
+            <span class="spinner-border spinner-border-sm me-2"></span>Loading shop data…
+        </div>
+    </div>
+</div>
+
 <script>
 (function(){
-    const loaded = {season: true};
+    /* ── Section 1 tabs ── */
+    const loaded = {'{{ initial_tab }}': true};
     document.querySelectorAll('#prodTabs .nav-link').forEach(function(link){
         link.addEventListener('click', function(e){
             e.preventDefault();
@@ -167,6 +248,34 @@
         });
     });
 
+    /* ── Section 2: By Shop (single lazy load) ── */
+    const shopLoaded = {};
+    document.querySelectorAll('#shopTabNav .nav-link').forEach(function(link){
+        link.addEventListener('click', function(e){
+            e.preventDefault();
+            const tab = this.dataset.stab;
+            const url = this.dataset.lazyUrl;
+            if (!url || shopLoaded[tab]) return;
+            const hint = document.getElementById('shopLazyHint');
+            if (hint) hint.style.display = 'none';
+            document.getElementById('shopTabContent').innerHTML = '';
+            document.getElementById('shopTabSpinner').style.display = 'block';
+            fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(r => r.text())
+                .then(html => {
+                    document.getElementById('shopTabSpinner').style.display = 'none';
+                    document.getElementById('shopTabContent').innerHTML = html;
+                    shopLoaded[tab] = true;
+                })
+                .catch(err => {
+                    document.getElementById('shopTabSpinner').style.display = 'none';
+                    document.getElementById('shopTabContent').innerHTML =
+                        '<div class="alert alert-danger">Load error: ' + err.message + '</div>';
+                });
+        });
+    });
+
+    /* ── Date helpers ── */
     window.setDaysBack = function(days){
         const end = new Date(), start = new Date();
         start.setDate(end.getDate() - days + 1);

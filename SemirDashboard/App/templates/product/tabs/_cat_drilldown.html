@@ -1,0 +1,59 @@
+{% comment %}
+Reusable category drill-down block for a single period/brand row.
+Context vars required: cat_groups (list of {l1, rows, subtotal}), currency, collapse_id.
+L1 groups get alternating tinted backgrounds. Each L1 sub-header shows subtotals.
+{% endcomment %}
+{% load custom_filters %}
+{% if cat_groups %}
+<div class="table-responsive" style="font-size:.80rem;">
+<table class="table table-sm align-middle mb-0" style="border-collapse:collapse;">
+    <thead>
+        <tr style="background:var(--secondary);color:#fff;font-size:.78rem;">
+            <th style="width:32%;">Category</th>
+            <th class="text-end" style="width:10%;">Qty</th>
+            <th class="text-end" style="width:14%;">Tag Amt</th>
+            <th class="text-end" style="width:14%;">Sales Amt</th>
+            <th class="text-end" style="width:14%;">Settlement</th>
+            <th class="text-end" style="width:8%;">Disc %</th>
+            <th class="text-end" style="width:8%;">Lines</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for grp in cat_groups %}
+    {% cycle 'rgba(var(--primary-rgb),.04)' 'rgba(var(--orange-rgb),.04)' as l1_bg %}
+    {# L1 group header row #}
+    <tr style="background:{{ l1_bg }};font-weight:600;font-size:.80rem;">
+        <td colspan="1" style="padding-left:.5rem;">
+            <span class="text-primary" style="font-size:.75rem;margin-right:.25rem;">▸</span>
+            {{ grp.l1|cat_name }}
+        </td>
+        <td class="text-end">{{ grp.subtotal.qty|default:0 }}</td>
+        <td class="text-end text-muted">{{ grp.subtotal.tag_amount|default:0|vnd }}</td>
+        <td class="text-end">{{ grp.subtotal.amount|default:0|vnd }}</td>
+        <td class="text-end">{{ grp.subtotal.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if grp.subtotal.disc_pct and grp.subtotal.disc_pct > 20 %} text-danger{% endif %}">
+            {% if grp.subtotal.disc_pct is not None %}{{ grp.subtotal.disc_pct }}%{% else %}—{% endif %}
+        </td>
+        <td class="text-end text-muted">{{ grp.subtotal.lines|default:0 }}</td>
+    </tr>
+    {# L2 detail rows #}
+    {% for r in grp.rows %}
+    <tr style="background:{{ l1_bg }};">
+        <td style="padding-left:1.5rem;color:var(--text-muted);">
+            └ {{ r.category_l2|cat_name }}
+        </td>
+        <td class="text-end fw-semibold">{{ r.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted">{{ r.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ r.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ r.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if r.disc_pct and r.disc_pct > 20 %} text-danger{% endif %}">
+            {% if r.disc_pct is not None %}{{ r.disc_pct }}%{% else %}—{% endif %}
+        </td>
+        <td class="text-end text-muted">{{ r.lines|default:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
