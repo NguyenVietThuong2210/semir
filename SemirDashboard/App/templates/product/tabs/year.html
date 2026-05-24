@@ -60,7 +60,7 @@
 </div>
 
 <p class="text-muted small fw-semibold text-uppercase mb-1 mt-3">
-    <i class="bi bi-diagram-3"></i> By Year — Category Breakdown
+    <i class="bi bi-diagram-3"></i> By Year — Category & Top Products
 </p>
 {% for r in rows %}
 <div class="card mb-2 border">
@@ -79,8 +79,8 @@
     </div>
     <div class="collapse" id="yearCard-{{ forloop.counter }}">
         <div class="card-body p-2">
-            {% with cat_groups=r.cat_groups %}
-            {% include "product/tabs/_cat_drilldown.html" %}
+            {% with cat_groups=r.cat_groups top_products=r.top_products %}
+            {% include "product/tabs/_period_drilldown.html" %}
             {% endwith %}
         </div>
     </div>

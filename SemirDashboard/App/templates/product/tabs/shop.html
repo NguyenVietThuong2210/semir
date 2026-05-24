@@ -75,7 +75,7 @@
     </div>
 </div>
 
-{# Per-shop detail cards with mini Section 1 #}
+{# Per-shop detail cards — full Section 1 per shop #}
 <p class="text-muted small fw-semibold text-uppercase mb-1 mt-3">
     <i class="bi bi-shop"></i> By Shop — Detailed Breakdown
 </p>
@@ -97,51 +97,76 @@
     <div class="collapse" id="shopDetail-{{ si }}">
         <div class="card-body p-2">
 
-            {# Mini Section 1: inner tabs for period breakdowns #}
-            <ul class="nav nav-tabs mb-0" id="shopMiniTabs-{{ si }}" role="tablist" style="font-size:.82rem;">
+            {# Mini Section 1: all 9 tabs #}
+            <ul class="nav nav-tabs mb-0" id="shopMiniTabs-{{ si }}" role="tablist" style="font-size:.80rem;flex-wrap:wrap;">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active py-1 px-2" data-bs-toggle="tab"
-                            data-bs-target="#shopMonth-{{ si }}" type="button">
+                            data-bs-target="#shMonth-{{ si }}" type="button">
                         <i class="bi bi-calendar-month"></i> By Month
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link py-1 px-2" data-bs-toggle="tab"
-                            data-bs-target="#shopYear-{{ si }}" type="button">
+                            data-bs-target="#shYear-{{ si }}" type="button">
                         <i class="bi bi-calendar"></i> By Year
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link py-1 px-2" data-bs-toggle="tab"
-                            data-bs-target="#shopWeek-{{ si }}" type="button">
+                            data-bs-target="#shWeek-{{ si }}" type="button">
                         <i class="bi bi-calendar-week"></i> By Week
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link py-1 px-2" data-bs-toggle="tab"
-                            data-bs-target="#shopSeason-{{ si }}" type="button">
-                        <i class="bi bi-tags"></i> Product Season
+                            data-bs-target="#shSalesSeason-{{ si }}" type="button">
+                        <i class="bi bi-calendar-range"></i> By Season
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-2" data-bs-toggle="tab"
+                            data-bs-target="#shProdSeason-{{ si }}" type="button">
+                        <i class="bi bi-tags"></i> By Product Season
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-2" data-bs-toggle="tab"
+                            data-bs-target="#shVipGrade-{{ si }}" type="button">
+                        <i class="bi bi-award"></i> By VIP Grade
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-2" data-bs-toggle="tab"
+                            data-bs-target="#shBrand-{{ si }}" type="button">
+                        <i class="bi bi-tag"></i> By Brand
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-2" data-bs-toggle="tab"
+                            data-bs-target="#shCategory-{{ si }}" type="button">
+                        <i class="bi bi-grid-3x3-gap"></i> By Category
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-2" data-bs-toggle="tab"
+                            data-bs-target="#shTopProd-{{ si }}" type="button">
+                        <i class="bi bi-list-ol"></i> Top Products
                     </button>
                 </li>
             </ul>
 
-            <div class="tab-content border border-top-0 rounded-bottom p-2 bg-white" style="max-height:600px;overflow-y:auto;">
+            <div class="tab-content border border-top-0 rounded-bottom p-2" style="max-height:620px;overflow-y:auto;">
 
                 {# ── By Month ── #}
-                <div class="tab-pane fade show active" id="shopMonth-{{ si }}" role="tabpanel">
+                <div class="tab-pane fade show active" id="shMonth-{{ si }}" role="tabpanel">
                     {% if r.by_month %}
-                    {# Month summary mini table #}
-                    <div class="table-responsive mb-2" style="max-height:220px;overflow-y:auto;">
+                    <div class="table-responsive mb-2" style="max-height:200px;overflow-y:auto;">
                         <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
                             <thead style="background:var(--secondary);color:#fff;position:sticky;top:0;z-index:2;">
                                 <tr>
-                                    <th>Month</th>
-                                    <th class="text-end">Qty</th>
-                                    <th class="text-end">Tag Amt</th>
-                                    <th class="text-end">Sales Amt</th>
-                                    <th class="text-end">Settlement</th>
-                                    <th class="text-end">Disc %</th>
-                                    <th class="text-end">Lines</th>
+                                    <th>Month</th><th class="text-end">Qty</th>
+                                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                                    <th class="text-end">Disc %</th><th class="text-end">Lines</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -149,7 +174,6 @@
                             <tr>
                                 <td>{{ m.label }}</td>
                                 <td class="text-end fw-semibold">{{ m.qty|default:0 }}</td>
-                                <td class="text-end amount-vnd text-muted">{{ m.tag_amount|default:0|vnd }}</td>
                                 <td class="text-end amount-vnd">{{ m.amount|default:0|vnd }}</td>
                                 <td class="text-end amount-vnd">{{ m.settlement|default:0|vnd }}</td>
                                 <td class="text-end{% if m.disc_pct and m.disc_pct > 20 %} text-danger{% endif %}">
@@ -161,48 +185,32 @@
                             </tbody>
                         </table>
                     </div>
-                    {# Per-month category drill-down #}
                     {% for m in r.by_month %}
                     <div class="card mb-1 border" style="font-size:.78rem;">
                         <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
                              style="background:rgba(var(--primary-rgb),.08);cursor:pointer;"
-                             data-bs-toggle="collapse"
-                             data-bs-target="#sm-{{ si }}-m-{{ forloop.counter }}"
-                             aria-expanded="false">
+                             data-bs-toggle="collapse" data-bs-target="#sm-{{ si }}-m{{ forloop.counter }}" aria-expanded="false">
                             <span class="fw-semibold">{{ m.label }}</span>
-                            <small class="text-muted">
-                                Qty:{{ m.qty|default:0 }} | Sales:{{ m.amount|default:0|vnd }} | Disc:{% if m.disc_pct is not None %}{{ m.disc_pct }}%{% else %}—{% endif %}
-                                <i class="bi bi-chevron-down ms-1"></i>
-                            </small>
+                            <small class="text-muted">Qty:{{ m.qty|default:0 }} | {{ m.amount|default:0|vnd }} | {% if m.disc_pct is not None %}{{ m.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
-                        <div class="collapse" id="sm-{{ si }}-m-{{ forloop.counter }}">
-                            <div class="p-1">
-                                {% with cat_groups=m.cat_groups %}
-                                {% include "product/tabs/_cat_drilldown.html" %}
-                                {% endwith %}
-                            </div>
+                        <div class="collapse" id="sm-{{ si }}-m{{ forloop.counter }}">
+                            <div class="p-1">{% with cat_groups=m.cat_groups %}{% include "product/tabs/_cat_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
-                    {% else %}
-                    <div class="text-muted text-center py-3 small">No monthly data.</div>
-                    {% endif %}
+                    {% else %}<div class="text-muted text-center py-3 small">No monthly data.</div>{% endif %}
                 </div>
 
                 {# ── By Year ── #}
-                <div class="tab-pane fade" id="shopYear-{{ si }}" role="tabpanel">
+                <div class="tab-pane fade" id="shYear-{{ si }}" role="tabpanel">
                     {% if r.by_year %}
                     <div class="table-responsive mb-2">
                         <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
                             <thead style="background:var(--secondary);color:#fff;">
                                 <tr>
-                                    <th>Year</th>
-                                    <th class="text-end">Qty</th>
-                                    <th class="text-end">Tag Amt</th>
-                                    <th class="text-end">Sales Amt</th>
-                                    <th class="text-end">Settlement</th>
-                                    <th class="text-end">Disc %</th>
-                                    <th class="text-end">Lines</th>
+                                    <th>Year</th><th class="text-end">Qty</th>
+                                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                                    <th class="text-end">Disc %</th><th class="text-end">Lines</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -210,7 +218,6 @@
                             <tr>
                                 <td>{{ y.label }}</td>
                                 <td class="text-end fw-semibold">{{ y.qty|default:0 }}</td>
-                                <td class="text-end amount-vnd text-muted">{{ y.tag_amount|default:0|vnd }}</td>
                                 <td class="text-end amount-vnd">{{ y.amount|default:0|vnd }}</td>
                                 <td class="text-end amount-vnd">{{ y.settlement|default:0|vnd }}</td>
                                 <td class="text-end{% if y.disc_pct and y.disc_pct > 20 %} text-danger{% endif %}">
@@ -226,43 +233,28 @@
                     <div class="card mb-1 border" style="font-size:.78rem;">
                         <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
                              style="background:rgba(var(--primary-rgb),.08);cursor:pointer;"
-                             data-bs-toggle="collapse"
-                             data-bs-target="#sy-{{ si }}-y-{{ forloop.counter }}"
-                             aria-expanded="false">
+                             data-bs-toggle="collapse" data-bs-target="#sy-{{ si }}-y{{ forloop.counter }}" aria-expanded="false">
                             <span class="fw-semibold">{{ y.label }}</span>
-                            <small class="text-muted">
-                                Qty:{{ y.qty|default:0 }} | Sales:{{ y.amount|default:0|vnd }} | Disc:{% if y.disc_pct is not None %}{{ y.disc_pct }}%{% else %}—{% endif %}
-                                <i class="bi bi-chevron-down ms-1"></i>
-                            </small>
+                            <small class="text-muted">Qty:{{ y.qty|default:0 }} | {{ y.amount|default:0|vnd }} | {% if y.disc_pct is not None %}{{ y.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
-                        <div class="collapse" id="sy-{{ si }}-y-{{ forloop.counter }}">
-                            <div class="p-1">
-                                {% with cat_groups=y.cat_groups %}
-                                {% include "product/tabs/_cat_drilldown.html" %}
-                                {% endwith %}
-                            </div>
+                        <div class="collapse" id="sy-{{ si }}-y{{ forloop.counter }}">
+                            <div class="p-1">{% with cat_groups=y.cat_groups %}{% include "product/tabs/_cat_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
-                    {% else %}
-                    <div class="text-muted text-center py-3 small">No yearly data.</div>
-                    {% endif %}
+                    {% else %}<div class="text-muted text-center py-3 small">No yearly data.</div>{% endif %}
                 </div>
 
                 {# ── By Week ── #}
-                <div class="tab-pane fade" id="shopWeek-{{ si }}" role="tabpanel">
+                <div class="tab-pane fade" id="shWeek-{{ si }}" role="tabpanel">
                     {% if r.by_week %}
-                    <div class="table-responsive mb-2" style="max-height:220px;overflow-y:auto;">
+                    <div class="table-responsive mb-2" style="max-height:200px;overflow-y:auto;">
                         <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
                             <thead style="background:var(--secondary);color:#fff;position:sticky;top:0;z-index:2;">
                                 <tr>
-                                    <th>Week</th>
-                                    <th class="text-end">Qty</th>
-                                    <th class="text-end">Tag Amt</th>
-                                    <th class="text-end">Sales Amt</th>
-                                    <th class="text-end">Settlement</th>
-                                    <th class="text-end">Disc %</th>
-                                    <th class="text-end">Lines</th>
+                                    <th>Week</th><th class="text-end">Qty</th>
+                                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                                    <th class="text-end">Disc %</th><th class="text-end">Lines</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -270,7 +262,6 @@
                             <tr>
                                 <td>{{ w.label }}</td>
                                 <td class="text-end fw-semibold">{{ w.qty|default:0 }}</td>
-                                <td class="text-end amount-vnd text-muted">{{ w.tag_amount|default:0|vnd }}</td>
                                 <td class="text-end amount-vnd">{{ w.amount|default:0|vnd }}</td>
                                 <td class="text-end amount-vnd">{{ w.settlement|default:0|vnd }}</td>
                                 <td class="text-end{% if w.disc_pct and w.disc_pct > 20 %} text-danger{% endif %}">
@@ -286,51 +277,35 @@
                     <div class="card mb-1 border" style="font-size:.78rem;">
                         <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
                              style="background:rgba(var(--orange-rgb),.06);cursor:pointer;"
-                             data-bs-toggle="collapse"
-                             data-bs-target="#sw-{{ si }}-w-{{ forloop.counter }}"
-                             aria-expanded="false">
+                             data-bs-toggle="collapse" data-bs-target="#sw-{{ si }}-w{{ forloop.counter }}" aria-expanded="false">
                             <span class="fw-semibold">{{ w.label }}</span>
-                            <small class="text-muted">
-                                Qty:{{ w.qty|default:0 }} | Sales:{{ w.amount|default:0|vnd }} | Disc:{% if w.disc_pct is not None %}{{ w.disc_pct }}%{% else %}—{% endif %}
-                                <i class="bi bi-chevron-down ms-1"></i>
-                            </small>
+                            <small class="text-muted">Qty:{{ w.qty|default:0 }} | {{ w.amount|default:0|vnd }} | {% if w.disc_pct is not None %}{{ w.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
-                        <div class="collapse" id="sw-{{ si }}-w-{{ forloop.counter }}">
-                            <div class="p-1">
-                                {% with cat_groups=w.cat_groups %}
-                                {% include "product/tabs/_cat_drilldown.html" %}
-                                {% endwith %}
-                            </div>
+                        <div class="collapse" id="sw-{{ si }}-w{{ forloop.counter }}">
+                            <div class="p-1">{% with cat_groups=w.cat_groups %}{% include "product/tabs/_cat_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
-                    {% else %}
-                    <div class="text-muted text-center py-3 small">No weekly data.</div>
-                    {% endif %}
+                    {% else %}<div class="text-muted text-center py-3 small">No weekly data.</div>{% endif %}
                 </div>
 
-                {# ── By Product Season ── #}
-                <div class="tab-pane fade" id="shopSeason-{{ si }}" role="tabpanel">
-                    {% if r.by_season %}
+                {# ── By Sales Season ── #}
+                <div class="tab-pane fade" id="shSalesSeason-{{ si }}" role="tabpanel">
+                    {% if r.by_sales_season %}
                     <div class="table-responsive mb-2">
                         <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
                             <thead style="background:var(--secondary);color:#fff;">
                                 <tr>
-                                    <th>Product Season</th>
-                                    <th class="text-end">Qty</th>
-                                    <th class="text-end">Tag Amt</th>
-                                    <th class="text-end">Sales Amt</th>
-                                    <th class="text-end">Settlement</th>
-                                    <th class="text-end">Disc %</th>
-                                    <th class="text-end">Lines</th>
+                                    <th>Sales Season</th><th class="text-end">Qty</th>
+                                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                                    <th class="text-end">Disc %</th><th class="text-end">Lines</th>
                                 </tr>
                             </thead>
                             <tbody>
-                            {% for s in r.by_season %}
+                            {% for s in r.by_sales_season %}
                             <tr>
                                 <td>{{ s.label }}</td>
                                 <td class="text-end fw-semibold">{{ s.qty|default:0 }}</td>
-                                <td class="text-end amount-vnd text-muted">{{ s.tag_amount|default:0|vnd }}</td>
                                 <td class="text-end amount-vnd">{{ s.amount|default:0|vnd }}</td>
                                 <td class="text-end amount-vnd">{{ s.settlement|default:0|vnd }}</td>
                                 <td class="text-end{% if s.disc_pct and s.disc_pct > 20 %} text-danger{% endif %}">
@@ -342,31 +317,204 @@
                             </tbody>
                         </table>
                     </div>
-                    {% for s in r.by_season %}
+                    {% for s in r.by_sales_season %}
                     <div class="card mb-1 border" style="font-size:.78rem;">
                         <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
-                             style="background:rgba(var(--orange-rgb),.06);cursor:pointer;"
-                             data-bs-toggle="collapse"
-                             data-bs-target="#ss-{{ si }}-s-{{ forloop.counter }}"
-                             aria-expanded="false">
+                             style="background:rgba(var(--primary-rgb),.06);cursor:pointer;"
+                             data-bs-toggle="collapse" data-bs-target="#sss-{{ si }}-s{{ forloop.counter }}" aria-expanded="false">
                             <span class="fw-semibold">{{ s.label }}</span>
-                            <small class="text-muted">
-                                Qty:{{ s.qty|default:0 }} | Sales:{{ s.amount|default:0|vnd }} | Disc:{% if s.disc_pct is not None %}{{ s.disc_pct }}%{% else %}—{% endif %}
-                                <i class="bi bi-chevron-down ms-1"></i>
-                            </small>
+                            <small class="text-muted">Qty:{{ s.qty|default:0 }} | {{ s.amount|default:0|vnd }} | {% if s.disc_pct is not None %}{{ s.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
-                        <div class="collapse" id="ss-{{ si }}-s-{{ forloop.counter }}">
-                            <div class="p-1">
-                                {% with cat_groups=s.cat_groups %}
-                                {% include "product/tabs/_cat_drilldown.html" %}
-                                {% endwith %}
-                            </div>
+                        <div class="collapse" id="sss-{{ si }}-s{{ forloop.counter }}">
+                            <div class="p-1">{% with cat_groups=s.cat_groups %}{% include "product/tabs/_cat_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
-                    {% else %}
-                    <div class="text-muted text-center py-3 small">No product season data.</div>
-                    {% endif %}
+                    {% else %}<div class="text-muted text-center py-3 small">No sales season data.</div>{% endif %}
+                </div>
+
+                {# ── By Product Season ── #}
+                <div class="tab-pane fade" id="shProdSeason-{{ si }}" role="tabpanel">
+                    {% if r.by_product_season %}
+                    <div class="table-responsive mb-2">
+                        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                            <thead style="background:var(--secondary);color:#fff;">
+                                <tr>
+                                    <th>Product Season</th><th class="text-end">Qty</th>
+                                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                                    <th class="text-end">Disc %</th><th class="text-end">Lines</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for p in r.by_product_season %}
+                            <tr>
+                                <td>{{ p.label }}</td>
+                                <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
+                                <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
+                                <td class="text-end amount-vnd">{{ p.settlement|default:0|vnd }}</td>
+                                <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">
+                                    {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %}
+                                </td>
+                                <td class="text-end text-muted">{{ p.lines|default:0 }}</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% for p in r.by_product_season %}
+                    <div class="card mb-1 border" style="font-size:.78rem;">
+                        <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                             style="background:rgba(var(--orange-rgb),.06);cursor:pointer;"
+                             data-bs-toggle="collapse" data-bs-target="#sps-{{ si }}-p{{ forloop.counter }}" aria-expanded="false">
+                            <span class="fw-semibold">{{ p.label }}</span>
+                            <small class="text-muted">Qty:{{ p.qty|default:0 }} | {{ p.amount|default:0|vnd }} | {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+                        </div>
+                        <div class="collapse" id="sps-{{ si }}-p{{ forloop.counter }}">
+                            <div class="p-1">{% with cat_groups=p.cat_groups %}{% include "product/tabs/_cat_drilldown.html" %}{% endwith %}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}<div class="text-muted text-center py-3 small">No product season data.</div>{% endif %}
+                </div>
+
+                {# ── By VIP Grade ── #}
+                <div class="tab-pane fade" id="shVipGrade-{{ si }}" role="tabpanel">
+                    {% if r.by_vip_grade %}
+                    <div class="table-responsive mb-2">
+                        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                            <thead style="background:var(--secondary);color:#fff;">
+                                <tr>
+                                    <th>VIP Grade</th><th class="text-end">Qty</th>
+                                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                                    <th class="text-end">Disc %</th><th class="text-end">Lines</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for g in r.by_vip_grade %}
+                            <tr>
+                                <td><strong>{{ g.grade }}</strong></td>
+                                <td class="text-end fw-semibold">{{ g.qty|default:0 }}</td>
+                                <td class="text-end amount-vnd">{{ g.amount|default:0|vnd }}</td>
+                                <td class="text-end amount-vnd">{{ g.settlement|default:0|vnd }}</td>
+                                <td class="text-end{% if g.disc_pct and g.disc_pct > 20 %} text-danger{% endif %}">
+                                    {% if g.disc_pct is not None %}{{ g.disc_pct }}%{% else %}—{% endif %}
+                                </td>
+                                <td class="text-end text-muted">{{ g.lines|default:0 }}</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% for g in r.by_vip_grade %}
+                    <div class="card mb-1 border" style="font-size:.78rem;">
+                        <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                             style="background:rgba(var(--primary-rgb),.06);cursor:pointer;"
+                             data-bs-toggle="collapse" data-bs-target="#svg-{{ si }}-g{{ forloop.counter }}" aria-expanded="false">
+                            <span class="fw-semibold"><i class="bi bi-award me-1"></i>{{ g.grade }}</span>
+                            <small class="text-muted">Qty:{{ g.qty|default:0 }} | {{ g.amount|default:0|vnd }} | {% if g.disc_pct is not None %}{{ g.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+                        </div>
+                        <div class="collapse" id="svg-{{ si }}-g{{ forloop.counter }}">
+                            <div class="p-1">{% with cat_groups=g.cat_groups %}{% include "product/tabs/_cat_drilldown.html" %}{% endwith %}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}<div class="text-muted text-center py-3 small">No VIP grade data. (Requires sale detail linked to customer records.)</div>{% endif %}
+                </div>
+
+                {# ── By Brand ── #}
+                <div class="tab-pane fade" id="shBrand-{{ si }}" role="tabpanel">
+                    {% if r.by_brand %}
+                    <div class="table-responsive mb-2">
+                        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                            <thead style="background:var(--secondary);color:#fff;">
+                                <tr>
+                                    <th>Brand</th><th class="text-end">Qty</th>
+                                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                                    <th class="text-end">Disc %</th><th class="text-end">Lines</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for b in r.by_brand %}
+                            <tr>
+                                <td><strong>{{ b.brand|default:"—" }}</strong></td>
+                                <td class="text-end fw-semibold">{{ b.qty|default:0 }}</td>
+                                <td class="text-end amount-vnd">{{ b.amount|default:0|vnd }}</td>
+                                <td class="text-end amount-vnd">{{ b.settlement|default:0|vnd }}</td>
+                                <td class="text-end{% if b.disc_pct and b.disc_pct > 20 %} text-danger{% endif %}">
+                                    {% if b.disc_pct is not None %}{{ b.disc_pct }}%{% else %}—{% endif %}
+                                </td>
+                                <td class="text-end text-muted">{{ b.lines|default:0 }}</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% for b in r.by_brand %}
+                    <div class="card mb-1 border" style="font-size:.78rem;">
+                        <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                             style="background:rgba(var(--orange-rgb),.06);cursor:pointer;"
+                             data-bs-toggle="collapse" data-bs-target="#sbr-{{ si }}-b{{ forloop.counter }}" aria-expanded="false">
+                            <span class="fw-semibold"><i class="bi bi-tag me-1"></i>{{ b.brand|default:"—" }}</span>
+                            <small class="text-muted">Qty:{{ b.qty|default:0 }} | {{ b.amount|default:0|vnd }} | {% if b.disc_pct is not None %}{{ b.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+                        </div>
+                        <div class="collapse" id="sbr-{{ si }}-b{{ forloop.counter }}">
+                            <div class="p-1">{% with cat_groups=b.cat_groups %}{% include "product/tabs/_cat_drilldown.html" %}{% endwith %}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}<div class="text-muted text-center py-3 small">No brand data.</div>{% endif %}
+                </div>
+
+                {# ── By Category ── #}
+                <div class="tab-pane fade" id="shCategory-{{ si }}" role="tabpanel">
+                    {% if r.by_category %}
+                    <div style="font-size:.78rem;">
+                        {% with cat_groups=r.by_category %}
+                        {% include "product/tabs/_cat_drilldown.html" %}
+                        {% endwith %}
+                    </div>
+                    {% else %}<div class="text-muted text-center py-3 small">No category data.</div>{% endif %}
+                </div>
+
+                {# ── Top Products ── #}
+                <div class="tab-pane fade" id="shTopProd-{{ si }}" role="tabpanel">
+                    {% if r.top_products %}
+                    <div class="table-responsive" style="font-size:.78rem;">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead style="background:var(--secondary);color:#fff;font-size:.75rem;">
+                                <tr>
+                                    <th style="width:3%;">#</th>
+                                    <th>Product</th>
+                                    <th>Brand</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Sales Amt</th>
+                                    <th class="text-end">Disc %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for p in r.top_products %}
+                            <tr>
+                                <td class="text-muted">{{ forloop.counter }}</td>
+                                <td>
+                                    <span title="{{ p.product_code }}">
+                                        {{ p.product_name|default:p.product_code|truncatechars:35 }}
+                                    </span>
+                                    {% if p.product_name and p.product_code %}
+                                    <small class="text-muted d-block" style="font-size:.72rem;">{{ p.product_code }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted" style="white-space:nowrap;">{{ p.brand }}</td>
+                                <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
+                                <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
+                                <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">
+                                    {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}<div class="text-muted text-center py-3 small">No top product data.</div>{% endif %}
                 </div>
 
             </div>{# /tab-content #}

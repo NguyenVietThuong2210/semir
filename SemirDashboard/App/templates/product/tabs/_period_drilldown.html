@@ -1,0 +1,54 @@
+{% comment %}
+Reusable drill-down block showing category breakdown + top products for one period/grade/brand.
+Context required: cat_groups, top_products, currency.
+{% endcomment %}
+{% load custom_filters %}
+
+{# ── Category Breakdown ── #}
+{% with cat_groups=cat_groups %}
+{% include "product/tabs/_cat_drilldown.html" %}
+{% endwith %}
+
+{# ── Top Products ── #}
+{% if top_products %}
+<div class="mt-2 pt-1" style="border-top:1px dashed var(--border);">
+    <p class="small text-muted fw-semibold mb-1 text-uppercase" style="font-size:.72rem;">
+        <i class="bi bi-list-ol me-1"></i>Top Products
+    </p>
+    <div class="table-responsive" style="font-size:.78rem;">
+    <table class="table table-sm table-hover align-middle mb-0">
+        <thead style="background:var(--secondary);color:#fff;font-size:.75rem;">
+            <tr>
+                <th style="width:3%;">#</th>
+                <th>Product</th>
+                <th>Brand</th>
+                <th class="text-end">Qty</th>
+                <th class="text-end">Sales Amt</th>
+                <th class="text-end">Disc %</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for p in top_products %}
+        <tr>
+            <td class="text-muted">{{ forloop.counter }}</td>
+            <td>
+                <span title="{{ p.product_code }}">
+                    {{ p.product_name|default:p.product_code|truncatechars:40 }}
+                </span>
+                {% if p.product_name and p.product_code %}
+                <small class="text-muted d-block" style="font-size:.72rem;">{{ p.product_code }}</small>
+                {% endif %}
+            </td>
+            <td class="text-muted" style="white-space:nowrap;">{{ p.brand }}</td>
+            <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
+            <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
+            <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">
+                {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}

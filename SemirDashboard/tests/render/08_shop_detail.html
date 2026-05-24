@@ -538,7 +538,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="n5DaMzfW2jPccOe68CmBu7C2rzD6fKCKo8dF0qIDSEANRnpUErUB1xR3IvF6OByi">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="hXAIGk7Ulapqo04KXGMLjrpbj1ZIPIvfV5rALg4IcCmmIIVplnOqIPk0kLVOPpRE">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -872,6 +872,65 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     SECTION 5 — Sales & Product Analytics
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="section-card shadow-sm">
+    <div class="section-header">
+        <span class="section-title"><i class="bi bi-graph-up-arrow me-2"></i>Sales &amp; Product Analytics by Shop</span>
+    </div>
+    <div class="section-body">
+        <div class="shop-select-row mb-3">
+            <div>
+                <label>Shop (Sale Detail)</label>
+                <select id="productShopSel" class="form-select form-select-sm">
+                    <option value="">— Select shop —</option>
+                    
+                    <option value="Bala VN Haiphong AEON MALL- Direct">Bala VN Haiphong AEON MALL- Direct</option>
+                    
+                    <option value="Bala VN Hanoi AEON MALL HA DONG - Direct">Bala VN Hanoi AEON MALL HA DONG - Direct</option>
+                    
+                    <option value="Bala VN Hanoi AEON MALL LONG BIEN- Direct">Bala VN Hanoi AEON MALL LONG BIEN- Direct</option>
+                    
+                    <option value="Bala VN Hanoi Lotte Westlake Mall - Direct">Bala VN Hanoi Lotte Westlake Mall - Direct</option>
+                    
+                    <option value="Bala VN Hanoi Vincom Royal City- Direct">Bala VN Hanoi Vincom Royal City- Direct</option>
+                    
+                    <option value="Bala VN Hanoi Vincom Times City- Direct">Bala VN Hanoi Vincom Times City- Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct">Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh Crescent Mall - Direct">Bala VN Ho Chi Minh Crescent Mall - Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh HMC Takashimaya Dept.- Direct">Bala VN Ho Chi Minh HMC Takashimaya Dept.- Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh Thiso Mall Sala - Direct">Bala VN Ho Chi Minh Thiso Mall Sala - Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh VAN HANH MALL- Direct">Bala VN Ho Chi Minh VAN HANH MALL- Direct</option>
+                    
+                    <option value="Balabala VN Can Tho Street Shop-Franchise">Balabala VN Can Tho Street Shop-Franchise</option>
+                    
+                    <option value="Semir VN HUE AEON Mall- Direct">Semir VN HUE AEON Mall- Direct</option>
+                    
+                    <option value="Semir VN Hanoi VINCOM TIMES CITY- Direct">Semir VN Hanoi VINCOM TIMES CITY- Direct</option>
+                    
+                    <option value="森马越南胡志明Thiso 临时特卖店">森马越南胡志明Thiso 临时特卖店</option>
+                    
+                    <option value="森马越南胡志明VHM 临时特卖店">森马越南胡志明VHM 临时特卖店</option>
+                    
+                </select>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm align-self-end" onclick="loadSection('product')">
+                <i class="bi bi-search"></i> Load
+            </button>
+        </div>
+        <div class="loading-spinner" id="productSpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
+        <div class="section-result" id="productResult">
+            <p class="no-data-msg text-muted">Select a shop to view product analytics.</p>
+        </div>
+    </div>
+</div>
+
 <script id="campaigns-raw" type="application/json">[]</script>
 
 <style>
@@ -887,10 +946,11 @@
         customer:  "/shop-detail/partial/customer/",
         coupon:    "/shop-detail/partial/coupon/",
         inventory: "/shop-detail/partial/inventory/",
+        product:   "/shop-detail/partial/product/",
     };
 
     // ── Warn if any dropdown has no shops ─────────────────────────────
-    ['salesShopSel','customerShopSel','couponShopSel','inventoryShopSel'].forEach(function(id) {
+    ['salesShopSel','customerShopSel','couponShopSel','inventoryShopSel','productShopSel'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el && el.options.length <= 1) {
             console.warn('[ShopDetail] ' + id + ' has no options — check server-side data.');
@@ -943,6 +1003,8 @@
             shop = document.getElementById('customerShopSel').value;
         } else if (section === 'inventory') {
             shop = document.getElementById('inventoryShopSel').value;
+        } else if (section === 'product') {
+            shop = document.getElementById('productShopSel').value;
         } else {
             shop = document.getElementById('couponShopSel').value;
             const prefix = document.getElementById('couponPrefixInp').value;

@@ -122,9 +122,7 @@
 </div>
 {% endif %}
 
-{# ══════════════════════════════════════════════════════════════════
-   SECTION 1 — Period & Category Analysis (tabs)
-   ══════════════════════════════════════════════════════════════════ #}
+<!-- SECTION 1 — Period & Category Analysis (tabs) -->
 <div class="card shadow-sm mb-4">
     <div class="card-header py-2" style="background:var(--nav-bg);">
         <ul class="nav dark-tabs" id="prodTabs">
@@ -147,9 +145,15 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="sales_season"
+                   data-lazy-url="{% url 'product_tab' 'sales_season' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
+                   By Season
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" href="#" data-tab="product_season"
                    data-lazy-url="{% url 'product_tab' 'product_season' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
-                   Product Season
+                   By Product Season
                 </a>
             </li>
             <li class="nav-item">
@@ -192,9 +196,7 @@
     </div>
 </div>
 
-{# ══════════════════════════════════════════════════════════════════
-   SECTION 2 — By Shop (lazy-loaded when tab clicked)
-   ══════════════════════════════════════════════════════════════════ #}
+<!-- SECTION 2 — By Shop (lazy-loaded when tab clicked) -->
 <div class="card shadow-sm">
     <div class="card-header py-2" style="background:var(--nav-bg);">
         <ul class="nav dark-tabs" id="shopTabNav">

@@ -72,13 +72,16 @@ def product_tab(request, tab):
     date_from = parse_date_silent(start_date)
     date_to   = parse_date_silent(end_date)
 
-    data = get_product_tab(tab, date_from=date_from, date_to=date_to, shop_group=shop_group or None)
+    shop_name = request.GET.get("shop_name", "").strip() or None
+    data = get_product_tab(tab, date_from=date_from, date_to=date_to,
+                           shop_group=shop_group or None, shop_name=shop_name)
     ctx = {
         "data": data,
         "overview": data.get("overview", {}) if data else {},
         "start_date": start_date,
         "end_date": end_date,
         "shop_group": shop_group,
+        "shop_name": shop_name,
         "currency": "VND",
     }
     return render(request, f"product/tabs/{tab}.html", ctx)

@@ -58,6 +58,7 @@ urlpatterns = [
     path("shop-detail/partial/customer/", views.shop_detail_customer_partial,  name="shop_detail_customer_partial"),
     path("shop-detail/partial/coupon/",     views.shop_detail_coupon_partial,     name="shop_detail_coupon_partial"),
     path("shop-detail/partial/inventory/", views.shop_detail_inventory_partial,  name="shop_detail_inventory_partial"),
+    path("shop-detail/partial/product/",   views.shop_detail_product_partial,    name="shop_detail_product_partial"),
 
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/",       users.user_management, name="user_management"),

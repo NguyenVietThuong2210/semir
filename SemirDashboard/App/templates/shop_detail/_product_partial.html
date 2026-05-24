@@ -1,0 +1,139 @@
+{% load custom_filters %}
+
+{# Overview KPIs #}
+{% with ov=overview %}
+{% if ov %}
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-2">
+        <div class="kpi-card blue">
+            <div class="kpi-val">{{ ov.total_lines|default:0 }}</div>
+            <div class="kpi-lbl">Line Items</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="kpi-card blue">
+            <div class="kpi-val">{{ ov.total_qty|default:0 }}</div>
+            <div class="kpi-lbl">Total Qty</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="kpi-card orange">
+            <div class="kpi-val amount-vnd" style="font-size:1rem;">{{ ov.total_amount|default:0|vnd }}</div>
+            <div class="kpi-lbl">Sales Amt</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="kpi-card orange">
+            <div class="kpi-val amount-vnd" style="font-size:1rem;">{{ ov.total_settlement|default:0|vnd }}</div>
+            <div class="kpi-lbl">Settlement</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="kpi-card orange">
+            <div class="kpi-val amount-vnd" style="font-size:1rem;">{{ ov.total_tag_amount|default:0|vnd }}</div>
+            <div class="kpi-lbl">Tag Amt</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="kpi-card{% if ov.disc_pct and ov.disc_pct > 20 %} orange{% else %} blue{% endif %}">
+            <div class="kpi-val">{% if ov.disc_pct is not None %}{{ ov.disc_pct }}%{% else %}—{% endif %}</div>
+            <div class="kpi-lbl">Avg Disc %</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endwith %}
+
+{# Tab nav — mirrors Section 1 of product dashboard #}
+<div style="background:var(--nav-bg);border-radius:6px 6px 0 0;padding:.5rem .75rem .0rem .75rem;">
+    <ul class="nav dark-tabs" id="prodShopTabs" style="font-size:.82rem;flex-wrap:wrap;">
+        <li class="nav-item">
+            <a class="nav-link active" href="#" data-stab="month">By Month</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-stab="year"
+               data-lazy-url="{% url 'product_tab' 'year' %}?{{ lazy_params }}">By Year</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-stab="week"
+               data-lazy-url="{% url 'product_tab' 'week' %}?{{ lazy_params }}">By Week</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-stab="sales_season"
+               data-lazy-url="{% url 'product_tab' 'sales_season' %}?{{ lazy_params }}">By Season</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-stab="product_season"
+               data-lazy-url="{% url 'product_tab' 'product_season' %}?{{ lazy_params }}">By Product Season</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-stab="vip_grade"
+               data-lazy-url="{% url 'product_tab' 'vip_grade' %}?{{ lazy_params }}">By VIP Grade</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-stab="brand"
+               data-lazy-url="{% url 'product_tab' 'brand' %}?{{ lazy_params }}">By Brand</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-stab="category"
+               data-lazy-url="{% url 'product_tab' 'category' %}?{{ lazy_params }}">By Category</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-stab="product"
+               data-lazy-url="{% url 'product_tab' 'product' %}?{{ lazy_params }}">Top Products</a>
+        </li>
+    </ul>
+</div>
+<div style="background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;padding:.75rem;min-height:120px;"
+     id="prodShopTabContent">
+    {# Initial month tab rendered server-side #}
+    {% with data=data %}
+    {% include "product/tabs/month.html" %}
+    {% endwith %}
+</div>
+<div id="prodShopTabSpinner" style="display:none;text-align:center;padding:1.5rem;color:var(--text-muted);">
+    <span class="spinner-border spinner-border-sm me-2"></span>Loading…
+</div>
+
+<style>
+.dark-tabs .nav-link {
+    background:rgba(255,255,255,.08); color:rgba(255,255,255,.85);
+    border:1px solid rgba(255,255,255,.15); border-radius:6px 6px 0 0;
+    margin-right:3px; font-weight:500; font-size:.82rem;
+}
+.dark-tabs .nav-link:hover  { background:rgba(255,255,255,.18); color:#fff; }
+.dark-tabs .nav-link.active { background:#fff; color:var(--nav-bg); border-color:#fff; font-weight:600; }
+.dark-tabs { border-bottom:none; }
+.tab-tbl-wrap { max-height:420px; overflow-y:auto; }
+.sticky-thead th { position:sticky; top:0; z-index:2; }
+</style>
+
+<script>
+(function(){
+    const loaded = {'month': true};
+    document.querySelectorAll('#prodShopTabs .nav-link').forEach(function(link){
+        link.addEventListener('click', function(e){
+            e.preventDefault();
+            document.querySelectorAll('#prodShopTabs .nav-link').forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+            const tab = this.dataset.stab;
+            const url = this.dataset.lazyUrl;
+            if (!url || loaded[tab]) return;
+            document.getElementById('prodShopTabContent').innerHTML = '';
+            document.getElementById('prodShopTabSpinner').style.display = 'block';
+            fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(r => r.text())
+                .then(html => {
+                    document.getElementById('prodShopTabSpinner').style.display = 'none';
+                    document.getElementById('prodShopTabContent').innerHTML = html;
+                    loaded[tab] = true;
+                })
+                .catch(err => {
+                    document.getElementById('prodShopTabSpinner').style.display = 'none';
+                    document.getElementById('prodShopTabContent').innerHTML =
+                        '<div class="alert alert-danger">Load error: ' + err.message + '</div>';
+                });
+        });
+    });
+})();
+</script>

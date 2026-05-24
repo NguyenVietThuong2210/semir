@@ -14,7 +14,7 @@ from App.analytics.tab_functions import (
     get_shop_detail_coupon_data,
 )
 from App.analytics.inventory_functions import get_shop_inventory_data
-from App.models import SalesTransaction, Customer, Coupon, CouponCampaign, InventorySnapshot
+from App.models import SalesTransaction, Customer, Coupon, CouponCampaign, InventorySnapshot, SaleDetail
 from App.views.view_utils import parse_date, parse_date_silent
 
 logger = logging.getLogger(__name__)
@@ -75,8 +75,14 @@ def _get_dropdown_options():
         .values_list('shop_name', flat=True)
         .order_by().distinct()
     )
+    product_shops = sorted(
+        SaleDetail.objects
+        .exclude(shop_name__isnull=True).exclude(shop_name='')
+        .values_list('shop_name', flat=True)
+        .order_by().distinct()
+    )
 
-    result = (sales_shops, customer_shops, coupon_shops, campaigns, inventory_shops)
+    result = (sales_shops, customer_shops, coupon_shops, campaigns, inventory_shops, product_shops)
     cache.set(key, result, _DROPDOWN_TTL)
     return result
 
@@ -101,7 +107,7 @@ def shop_detail(request):
     end_date   = request.GET.get("end_date", "")
 
     # ── Dropdown options (cached 5 min) ───────────────────────────────────────
-    sales_shops, customer_shops, coupon_shops, campaigns, inventory_shops = _get_dropdown_options()
+    sales_shops, customer_shops, coupon_shops, campaigns, inventory_shops, product_shops = _get_dropdown_options()
 
     return render(request, "shop_detail.html", {
         "start_date":        start_date,
@@ -113,6 +119,7 @@ def shop_detail(request):
         "coupon_shops":      coupon_shops,
         "campaigns":         campaigns,
         "inventory_shops":   inventory_shops,
+        "product_shops":     product_shops,
         "currency":          "VND",
     })
 
@@ -207,6 +214,38 @@ def shop_detail_inventory_partial(request):
     data = get_shop_inventory_data(shop_name)
     return render(request, "shop_detail/_inventory_partial.html", {
         "data": data, "shop_name": shop_name, "currency": "VND",
+    })
+
+
+def shop_detail_product_partial(request):
+    """AJAX: render Sales & Product analytics section for one shop (SaleDetail-based)."""
+    err = _ajax_perm_check(request, "shops.view")
+    if err:
+        return err
+    shop_name  = request.GET.get("shop", "").strip()
+    start_date = request.GET.get("start_date", "")
+    end_date   = request.GET.get("end_date", "")
+    if not shop_name:
+        return HttpResponse('<div class="no-data-msg text-muted py-3">Select a shop to view product analytics.</div>')
+    logger.info("partial product: shop=%s from=%s to=%s user=%s", shop_name, start_date, end_date, request.user)
+
+    from App.analytics.product_analytics import get_product_tab
+    from App.views.view_utils import parse_date_silent, filter_params_str
+
+    date_from = parse_date_silent(start_date)
+    date_to   = parse_date_silent(end_date)
+
+    data = get_product_tab('month', date_from=date_from, date_to=date_to, shop_name=shop_name)
+    lazy_params = filter_params_str(start_date=start_date, end_date=end_date, shop_name=shop_name)
+
+    return render(request, "shop_detail/_product_partial.html", {
+        "data": data,
+        "overview": data.get("overview", {}) if data else {},
+        "shop_name": shop_name,
+        "start_date": start_date,
+        "end_date": end_date,
+        "lazy_params": lazy_params,
+        "currency": "VND",
     })
 
 
