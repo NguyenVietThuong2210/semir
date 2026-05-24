@@ -505,7 +505,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="WGxPzRuVx7QriRZmfelwrmnkEGX6aOMqqWyECMGypGmwyK0fVnQpJJv12kHdt3tV">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="VMFsGEhCO7mDuNJbJqgUZnBRPZ2bSQw1WPfXUvKjEs7e9mUZffOUwNQS6V4brHsz">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -557,6 +557,246 @@
             </tr>
           </thead>
           <tbody>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:14:34,954</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">61c6569…</td>
+              <td class="small">
+                Internal Server Error: /products/tab/month/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\contrib\auth\decorators.py&quot;, line 59, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\permissions.py&quot;, line 64, in wrapper
+    return redirect(&quot;home&quot;)
+       ^^^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\product.py&quot;, line 77, in product_tab
+    &quot;data&quot;: data,
+       ^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\shortcuts.py&quot;, line 25, in render
+    content = loader.render_to_string(template_name, context, request, using=using)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader.py&quot;, line 62, in render_to_string
+    return template.render(context, request)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\backends\django.py&quot;, line 107, in render
+    return self.template.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 174, in render
+    return self._render(context)
+           ~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\test\utils.py&quot;, line 114, in instrumented_test_render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 581, in render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 333, in render
+    return nodelist.render(context)
+           ~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 249, in render
+    nodelist.append(node.render_annotated(context))
+                    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 581, in render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 200, in render
+    template = context.template.engine.select_template(template_name)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 228, in select_template
+    return self.get_template(template_name)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 186, in get_template
+    template, origin = self.find_template(template_name)
+                       ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 159, in find_template
+    template = loader.get_template(name, skip=skip)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loaders\cached.py&quot;, line 57, in get_template
+    template = super().get_template(template_name, skip)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loaders\base.py&quot;, line 28, in get_template
+    return Template(
+        contents,
+    ...&lt;2 lines&gt;...
+        self.engine,
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 157, in __init__
+    self.nodelist = self.compile_nodelist()
+                    ~~~~~~~~~~~~~~~~~~~~~^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 199, in compile_nodelist
+    nodelist = parser.parse()
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 585, in parse
+    raise self.error(token, e)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 583, in parse
+    compiled_result = compile_func(self, token)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 994, in do_if
+    nodelist = parser.parse((&quot;elif&quot;, &quot;else&quot;, &quot;endif&quot;))
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 585, in parse
+    raise self.error(token, e)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 583, in parse
+    compiled_result = compile_func(self, token)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 894, in do_for
+    nodelist_loop = parser.parse(
+        (
+    ...&lt;2 lines&gt;...
+        )
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 556, in parse
+    raise self.error(token, e)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 554, in parse
+    filter_expression = self.compile_filter(token.contents)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 676, in compile_filter
+    return FilterExpression(token, self)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 771, in __init__
+    filter_func = parser.find_filter(filter_name)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 682, in find_filter
+    raise TemplateSyntaxError(&quot;Invalid filter: &#x27;%s&#x27;&quot; % filter_name)
+django.template.exceptions.TemplateSyntaxError: Template: D:\New-jouney\semir\SemirDashboard\App\templates\product\tabs\_cat_drilldown.html, Invalid filter: &#x27;cat_name&#x27;</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:14:34,538</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">79b78f4…</td>
+              <td class="small">
+                Internal Server Error: /products/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\contrib\auth\decorators.py&quot;, line 59, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\permissions.py&quot;, line 64, in wrapper
+    return redirect(&quot;home&quot;)
+       ^^^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\product.py&quot;, line 43, in product_dashboard
+        messages.info(request, &quot;No sale detail data found. Please upload sale detail data first.&quot;)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...&lt;9 lines&gt;...
+        &quot;end_date&quot;:    end_date,
+    
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\shortcuts.py&quot;, line 25, in render
+    content = loader.render_to_string(template_name, context, request, using=using)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader.py&quot;, line 62, in render_to_string
+    return template.render(context, request)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\backends\django.py&quot;, line 107, in render
+    return self.template.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 174, in render
+    return self._render(context)
+           ~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\test\utils.py&quot;, line 114, in instrumented_test_render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 160, in render
+    return compiled_parent._render(context)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\test\utils.py&quot;, line 114, in instrumented_test_render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 66, in render
+    result = block.nodelist.render(context)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 333, in render
+    return nodelist.render(context)
+           ~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 511, in render
+    url = reverse(view_name, args=args, kwargs=kwargs, current_app=current_app)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\urls\base.py&quot;, line 98, in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\urls\resolvers.py&quot;, line 842, in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+django.urls.exceptions.NoReverseMatch: Reverse for &#x27;export_product_analytics&#x27; not found. &#x27;export_product_analytics&#x27; is not a valid view function or pattern name.</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:06:14,811</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:06:14,791</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
             
             <tr>
               <td class="text-nowrap small text-muted">2026-05-24 11:53:22,530</td>
@@ -3754,166 +3994,6 @@ django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#
               </td>
             </tr>
             
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-23 23:45:54,278</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">b1f8bf4…</td>
-              <td class="small">
-                Internal Server Error: /shop-detail/partial/inventory/
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
-    data = get_shop_inventory_data(shop_name)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
-    totals = qs.aggregate(
-        sku_lines=Count(&#x27;id&#x27;),
-    ...&lt;4 lines&gt;...
-        total_tag_amount=Sum(&#x27;total_tag_amount&#x27;),
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
-    return self.query.chain().get_aggregation(self.db, kwargs)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
-    aggregate = aggregate_expr.resolve_expression(
-        self, allow_joins=True, reuse=None, summarize=True
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
-    raise FieldError(
-        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
-    )
-django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
-                </details>
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-23 23:16:47,184</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">7c0891f…</td>
-              <td class="small">
-                Internal Server Error: /shop-detail/partial/inventory/
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
-    data = get_shop_inventory_data(shop_name)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
-    totals = qs.aggregate(
-        sku_lines=Count(&#x27;id&#x27;),
-    ...&lt;4 lines&gt;...
-        total_tag_amount=Sum(&#x27;total_tag_amount&#x27;),
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
-    return self.query.chain().get_aggregation(self.db, kwargs)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
-    aggregate = aggregate_expr.resolve_expression(
-        self, allow_joins=True, reuse=None, summarize=True
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
-    raise FieldError(
-        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
-    )
-django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
-                </details>
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-23 23:13:14,420</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">8409091…</td>
-              <td class="small">
-                Internal Server Error: /shop-detail/partial/inventory/
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
-    data = get_shop_inventory_data(shop_name)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
-    totals = qs.aggregate(
-        sku_lines=Count(&#x27;id&#x27;),
-    ...&lt;4 lines&gt;...
-        total_tag_amount=Sum(&#x27;total_tag_amount&#x27;),
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
-    return self.query.chain().get_aggregation(self.db, kwargs)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
-    aggregate = aggregate_expr.resolve_expression(
-        self, allow_joins=True, reuse=None, summarize=True
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
-    raise FieldError(
-        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
-    )
-django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
-                </details>
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-23 23:10:28,881</td>
-              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">2a834c4…</td>
-              <td class="small">
-                Internal Server Error: /shop-detail/partial/inventory/
-                
-                <details class="mt-1">
-                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
-                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
-    response = get_response(request)
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
-    response = wrapped_callback(request, *callback_args, **callback_kwargs)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
-    data = get_shop_inventory_data(shop_name)
-  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
-    totals = qs.aggregate(
-        sku_lines=Count(&#x27;id&#x27;),
-    ...&lt;4 lines&gt;...
-        total_tag_amount=Sum(&#x27;total_tag_amount&#x27;),
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
-    return self.query.chain().get_aggregation(self.db, kwargs)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
-    aggregate = aggregate_expr.resolve_expression(
-        self, allow_joins=True, reuse=None, summarize=True
-    )
-  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
-    raise FieldError(
-        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
-    )
-django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
-                </details>
-                
-              </td>
-            </tr>
-            
           </tbody>
         </table>
       </div>
@@ -3944,403 +4024,403 @@ django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#
           <tbody>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,145</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,706</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300022 (row 15105)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090013 (row 5883)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,144</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,705</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300021 (row 15104)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090013 (row 5882)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,144</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,705</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300021 (row 15103)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090012 (row 5881)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,143</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,704</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300021 (row 15102)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090012 (row 5880)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,143</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,704</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300021 (row 15101)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090012 (row 5879)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,142</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,704</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300021 (row 15100)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090011 (row 5878)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,142</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,703</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300021 (row 15099)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090011 (row 5877)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,141</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,703</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300020 (row 15098)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090011 (row 5876)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,141</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,702</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300020 (row 15097)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090011 (row 5875)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,140</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,702</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300020 (row 15096)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090011 (row 5874)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,139</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,701</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300020 (row 15095)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090010 (row 5873)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,139</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,701</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300020 (row 15094)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090010 (row 5872)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,139</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,701</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300019 (row 15093)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090010 (row 5871)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,138</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,700</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300019 (row 15092)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090009 (row 5870)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,138</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,700</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300019 (row 15091)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090009 (row 5869)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,137</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,699</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300019 (row 15090)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090009 (row 5868)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,137</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,698</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300019 (row 15089)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090008 (row 5867)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,137</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,698</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300019 (row 15088)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090008 (row 5866)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,136</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,697</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300019 (row 15087)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090008 (row 5865)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,136</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,697</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300018 (row 15086)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090007 (row 5864)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,136</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,696</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300018 (row 15085)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090007 (row 5863)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,135</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,695</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300017 (row 15084)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090006 (row 5862)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,135</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,695</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300017 (row 15083)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090006 (row 5861)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,135</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,694</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300017 (row 15082)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090006 (row 5860)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,134</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,694</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300017 (row 15081)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090005 (row 5859)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,134</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,693</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300017 (row 15080)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090005 (row 5858)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,134</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,693</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300017 (row 15079)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090005 (row 5857)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,133</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,692</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300017 (row 15078)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090005 (row 5856)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,133</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,691</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300017 (row 15077)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090004 (row 5855)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,133</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,691</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300016 (row 15076)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090004 (row 5854)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,132</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,690</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300016 (row 15075)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090004 (row 5853)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,132</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,690</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300016 (row 15074)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090003 (row 5852)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,132</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,689</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300016 (row 15073)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090003 (row 5851)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,131</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,689</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300016 (row 15072)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090003 (row 5850)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,131</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,688</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300016 (row 15071)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090003 (row 5849)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,131</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,687</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300016 (row 15070)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090003 (row 5848)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,130</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,687</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300015 (row 15069)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090003 (row 5847)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,130</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,686</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300015 (row 15068)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090003 (row 5846)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,130</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,686</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300015 (row 15067)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090003 (row 5845)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,129</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,685</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300015 (row 15066)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090002 (row 5844)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,129</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,685</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300015 (row 15065)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090002 (row 5843)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,129</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,684</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300014 (row 15064)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090002 (row 5842)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,128</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,683</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300014 (row 15063)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090002 (row 5841)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,128</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,683</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300013 (row 15062)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090001 (row 5840)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,127</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,682</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300013 (row 15061)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090001 (row 5839)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,127</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,681</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300013 (row 15060)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090001 (row 5838)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,127</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,681</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300013 (row 15059)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090001 (row 5837)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,126</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,680</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300013 (row 15058)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090001 (row 5836)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,126</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,680</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300013 (row 15057)</td>
+              <td class="small">No SalesTransaction for invoice VXP00124SHAR02702605090001 (row 5835)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 11:35:34,126</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,679</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
               <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">No SalesTransaction for invoice VXP00924SHAR032826052300013 (row 15056)</td>
+              <td class="small">No SalesTransaction for invoice VXP114SHARM04726050900003 (row 5834)</td>
             </tr>
             
           </tbody>
@@ -4373,39 +4453,215 @@ django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#
           <tbody>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:31,070</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,471</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 29] rows 140001-145000</td>
+              <td class="small">[Batch 15] rows 5601-6000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:31,069</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:48,470</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 28] created=5000</td>
+              <td class="small">[Batch 14] created=0 updated=400</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:30,585</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:47,576</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">Pre-loading customer map...</td>
+              <td class="small">[Batch 13] existing=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:30,584</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:47,079</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">Total rows to process: 25297</td>
+              <td class="small">[Batch 13] rows 60001-65000 (5000 rows)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:28,535</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:47,078</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 12] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:44,846</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 12] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:44,434</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 12] rows 55001-60000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:44,433</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 11] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:44,375</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">analytics_chart</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">ff49e81…</td>
+              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:44,193</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 14] rows 5201-5600</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:44,192</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 13] created=0 updated=400</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:44,104</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">9b20c4c…</td>
+              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:43,948</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">ce6d141…</td>
+              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:41,640</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 11] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:41,246</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 11] rows 50001-55000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:41,245</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 10] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:39,773</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 13] rows 4801-5200</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:39,772</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 12] created=0 updated=400</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:38,961</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 10] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:38,535</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 10] rows 45001-50000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:38,535</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 9] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:36,185</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 9] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:35,758</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 9] rows 40001-45000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:35,757</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 8] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:35,561</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 12] rows 4401-4800</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:35,559</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 11] created=0 updated=400</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:33,949</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">customer_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
@@ -4413,363 +4669,187 @@ django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:27,246</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 28] rows 135001-140000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:27,244</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 27] created=5000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:25,425</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">=== DONE Inventory Import: created=0 updated=77507 skipped=0 errors=0 ===</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:25,425</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 194] created=0 updated=307</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:25,104</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">analytics_chart</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">64613f3…</td>
-              <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:24,747</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">9e4c28a…</td>
-              <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:24,460</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">437df25…</td>
-              <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:23,809</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 27] rows 130001-135000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:23,808</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 26] created=5000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:21,178</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 194] rows 77201-77507</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:21,177</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 193] created=0 updated=400</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:19,102</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 26] rows 125001-130000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:19,101</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 25] created=5000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:18,686</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:33,267</td>
               <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">sales_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">=== START OPTIMIZED Sales Import: Sale 2024.xlsx ===</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:18,645</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">customer_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">=== DONE Customer Import: created=74630 updated=0 errors=0 ===</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:18,645</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 15] created=4630</td>
+              <td class="small">[Batch 8] existing=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:16,153</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 193] rows 76801-77200</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:16,152</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 192] created=0 updated=400</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:15,185</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:32,687</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 15] existing=0</td>
+              <td class="small">[Batch 8] rows 35001-40000 (5000 rows)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:14,890</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:32,686</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 25] rows 120001-125000</td>
+              <td class="small">[Batch 7] created=5000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:14,889</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:31,129</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 11] rows 4001-4400</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:31,128</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 10] created=0 updated=400</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:30,216</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 24] created=5000</td>
+              <td class="small">[Batch 7] existing=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:14,256</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:29,774</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 15] rows 70001-74630 (4630 rows)</td>
+              <td class="small">[Batch 7] rows 30001-35000 (5000 rows)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:14,255</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:29,773</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 14] created=5000</td>
+              <td class="small">[Batch 6] created=5000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:12,457</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 192] rows 76401-76800</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:12,455</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 191] created=0 updated=400</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:11,036</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:27,237</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 24] rows 115001-120000</td>
+              <td class="small">[Batch 6] existing=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:11,034</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:26,768</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 23] created=5000</td>
+              <td class="small">[Batch 6] rows 25001-30000 (5000 rows)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:10,347</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:26,768</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
               <td class="small">-</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 14] existing=0</td>
+              <td class="small">[Batch 5] created=5000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:08,457</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:26,762</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 14] rows 65001-70000 (5000 rows)</td>
+              <td class="small">[Batch 10] rows 3601-4000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:08,454</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:26,762</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 13] created=5000</td>
+              <td class="small">[Batch 9] created=0 updated=400</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:06,782</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 191] rows 76001-76400</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:06,781</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 190] created=0 updated=400</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:06,281</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 23] rows 110001-115000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:06,280</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 22] created=5000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:04,962</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 13] existing=0</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:03,663</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 13] rows 60001-65000 (5000 rows)</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:03,661</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 12] created=5000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:02,421</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 190] rows 75601-76000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:02,419</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.inventory_import">App.services.inventory_import</td>
-              <td class="small">inventory_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 189] created=0 updated=400</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:01,826</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 22] rows 105001-110000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:01,825</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.coupon_import">App.services.coupon_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 21] created=5000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:03:00,482</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 12] existing=0</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:02:59,245</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 12] rows 55001-60000 (5000 rows)</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:02:59,244</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 11] created=5000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-24 12:02:59,216</td>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:26,628</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">9847ac1…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">5aaf6f0…</td>
               <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:24,451</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 5] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:24,058</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 5] rows 20001-25000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:24,056</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 4] created=5000</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:22,737</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 9] rows 3201-3600</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:22,737</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 8] created=0 updated=400</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:22,336</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">54abb73…</td>
+              <td class="small">analytics_dashboard: from=None to=None shop_group= user=alex</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:21,793</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 4] existing=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:21,383</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 4] rows 15001-20000 (5000 rows)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 12:15:21,382</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 3] created=5000</td>
             </tr>
             
           </tbody>

@@ -20,7 +20,7 @@
     <tbody>
     {% regroup rows by category_l1 as l1_groups %}
     {% for group in l1_groups %}
-    {% cycle 'rgba(var(--primary-rgb),.04)' 'rgba(var(--orange-rgb),.04)' as l1_bg %}
+    {% cycle 'rgba(var(--primary-rgb),.04)' 'rgba(var(--orange-rgb),.04)' as l1_bg silent %}
     <tr class="l1-header" style="background:{{ l1_bg }};font-weight:600;"
         data-l1="{{ group.grouper }}">
         <td>{{ group.grouper|cat_name }}</td>
