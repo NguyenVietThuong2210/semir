@@ -98,58 +98,50 @@
     {% endif %}
 </div>
 
-<!-- Dead Stock Alert -->
-{% if fs.dead.summary.dead_qty %}
-<div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
-    <i class="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
-    <div>
-        <strong>Dead Stock Alert</strong> — {{ fs.dead.summary.sku_lines }} SKUs
-        ({{ fs.dead.summary.dead_qty }} units, {{ fs.dead.summary.dead_value|vnd }})
-        with product year &le; {{ dead_year }} still on hand.
-        {% if fs.dead.top %}
-        <button class="btn btn-sm btn-outline-danger ms-2" type="button"
-                data-bs-toggle="collapse" data-bs-target="#deadStockTable">
-            View Top {{ fs.dead.top|length }}
-        </button>
-        {% endif %}
-    </div>
-</div>
+<!-- Dead Stock Table (always shown when data exists) -->
 {% if fs.dead.top %}
-<div class="collapse mb-3" id="deadStockTable">
-    <div class="card">
-        <div class="card-header" style="background:var(--primary);color:#fff;">
-            <i class="bi bi-archive"></i> Dead Stock — Top {{ fs.dead.top|length }} by Qty
-        </div>
-        <div class="card-body p-0">
-            <div class="table-responsive tab-tbl-wrap">
-                <table class="table table-sm table-hover mb-0">
-                    <thead class="sticky-thead" style="background:var(--primary);color:#fff;">
-                        <tr>
-                            <th>Shop</th><th>Code</th><th>Product</th>
-                            <th>Brand</th><th>Year</th><th>Season</th>
-                            <th class="text-end">Qty</th><th class="text-end">Value (VND)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for row in fs.dead.top %}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center py-2"
+         style="background:var(--danger);color:#fff;">
+        <span>
+            <i class="bi bi-archive-fill me-1"></i>
+            <strong>Dead Stock</strong> — {{ fs.dead.summary.sku_lines }} SKUs &nbsp;·&nbsp;
+            {{ fs.dead.summary.dead_qty }} units &nbsp;·&nbsp; {{ fs.dead.summary.dead_value|vnd }}
+            <small class="opacity-75 ms-1">(year &le; {{ dead_year }})</small>
+        </span>
+        <a href="{% url 'export_inventory_dead_stock' %}{% if shop_group %}?shop_group={{ shop_group }}{% endif %}"
+           class="btn btn-sm btn-light text-danger fw-semibold">
+            <i class="bi bi-file-earmark-excel me-1"></i>Download CSV
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive tab-tbl-wrap">
+            <table class="table table-sm table-hover mb-0" style="font-size:.84rem;">
+                <thead class="sticky-thead" style="background:var(--danger);color:#fff;">
                     <tr>
-                        <td>{{ row.shop_name }}</td>
-                        <td class="text-muted small">{{ row.product_code }}</td>
-                        <td>{{ row.product_name }}</td>
-                        <td>{{ row.brand }}</td>
-                        <td>{{ row.year }}</td>
-                        <td>{{ row.season }}</td>
-                        <td class="text-end fw-semibold text-danger">{{ row.qty }}</td>
-                        <td class="text-end">{{ row.value|vnd }}</td>
+                        <th>Shop</th><th style="width:10%;">Code</th><th>Product</th>
+                        <th>Brand</th><th class="text-end">Year</th><th>Season</th>
+                        <th class="text-end">Qty</th><th class="text-end">Value (VND)</th>
                     </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                </thead>
+                <tbody>
+                {% for row in fs.dead.top %}
+                <tr>
+                    <td>{{ row.shop_name }}</td>
+                    <td class="text-muted" style="font-size:.78rem;white-space:nowrap;">{{ row.product_code }}</td>
+                    <td>{{ row.product_name }}</td>
+                    <td class="text-muted">{{ row.brand }}</td>
+                    <td class="text-end text-danger fw-semibold">{{ row.year }}</td>
+                    <td>{{ row.season }}</td>
+                    <td class="text-end fw-bold text-danger">{{ row.qty }}</td>
+                    <td class="text-end amount-vnd">{{ row.value|vnd }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
-{% endif %}
 {% endif %}
 
 <!-- Global Summary: By Brand + By Season (side-by-side, collapsible) -->
@@ -380,6 +372,48 @@
                     </div>
                     {% endif %}
                 </div>
+
+                <!-- Dead Stock sub-table — only shown when shop has dead stock -->
+                {% if shop.dead_skus %}
+                <div class="mt-3 pt-2" style="border-top:2px dashed rgba(var(--danger-rgb),.3);">
+                    <p class="small fw-semibold mb-2" style="color:var(--danger);font-size:.78rem;text-transform:uppercase;">
+                        <i class="bi bi-archive-fill me-1"></i>
+                        Dead Stock — {{ shop.dead_lines }} SKU lines &nbsp;·&nbsp;
+                        {{ shop.dead_qty }} units &nbsp;·&nbsp; {{ shop.dead_value|vnd }}
+                        <span class="text-muted fw-normal">(year &le; {{ dead_year }})</span>
+                    </p>
+                    <div class="table-responsive" style="max-height:220px;overflow-y:auto;">
+                        <table class="table table-sm table-hover mb-0" style="font-size:.80rem;">
+                            <thead class="sticky-thead" style="background:var(--danger);color:#fff;">
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Product</th>
+                                    <th>Brand</th>
+                                    <th class="text-end">Year</th>
+                                    <th>Season</th>
+                                    <th class="text-end">Tag Price</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Value (VND)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for d in shop.dead_skus %}
+                            <tr>
+                                <td class="text-muted" style="font-size:.75rem;white-space:nowrap;">{{ d.product_code }}</td>
+                                <td>{{ d.product_name }}</td>
+                                <td class="text-muted">{{ d.brand|default:"—" }}</td>
+                                <td class="text-end text-danger fw-semibold">{{ d.year }}</td>
+                                <td>{{ d.season|default:"—" }}</td>
+                                <td class="text-end">{{ d.tag_price|vnd }}</td>
+                                <td class="text-end fw-bold text-danger">{{ d.qty }}</td>
+                                <td class="text-end amount-vnd text-danger">{{ d.value|vnd }}</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
 
             </div>
         </div>

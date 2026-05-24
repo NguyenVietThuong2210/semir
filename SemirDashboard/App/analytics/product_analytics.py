@@ -481,8 +481,12 @@ def _by_vip_grade(qs, top_n=10):
         p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
         p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
         raw_grade = p['grade']
-        p['top_products'] = top_by_grade.get(raw_grade if raw_grade != 'No Grade' else None, []) or \
-                            top_by_grade.get(raw_grade, [])
+        lookup_key = None if raw_grade == 'No Grade' else raw_grade
+        p['top_products'] = (
+            top_by_grade.get(lookup_key, []) or
+            top_by_grade.get(raw_grade, []) or
+            top_by_grade.get('—', [])
+        )
     return result
 
 
@@ -923,9 +927,12 @@ def _by_shop_full(qs):
             p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
             p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
             raw_grade = p['grade']
+            # _top_products_by_group_shop stores None vip_grade as '—'
+            lookup_key = None if raw_grade == 'No Grade' else raw_grade
             p['top_products'] = (
-                shop_vip_top.get(raw_grade if raw_grade != 'No Grade' else None, []) or
-                shop_vip_top.get(raw_grade, [])
+                shop_vip_top.get(lookup_key, []) or
+                shop_vip_top.get(raw_grade, []) or
+                shop_vip_top.get('—', [])
             )
         vip_by_shop[sn] = lst
 

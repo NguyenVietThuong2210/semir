@@ -15,7 +15,7 @@ from .shop_detail import (
     shop_detail_product_partial,
 )
 from .product import product_dashboard, product_tab, export_product_analytics
-from .inventory import inventory_dashboard
+from .inventory import inventory_dashboard, export_inventory_dead_stock
 from . import auth, users
 
 __all__ = [

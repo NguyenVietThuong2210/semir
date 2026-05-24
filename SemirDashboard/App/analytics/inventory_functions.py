@@ -134,7 +134,7 @@ def get_inventory_overview(shop_group: str = None) -> dict:
         return {'summary': agg, 'top': top}
 
     def _by_shop_full(qs, by_shop_rows):
-        """Per-shop brand + season breakdown in 3 DB queries (not N)."""
+        """Per-shop brand + season + dead-stock-SKU breakdown in 4 DB queries (not N)."""
         dead_qs = qs.filter(year__lte=dead_year, inventory_qty__gt=0)
 
         shop_brand_rows = list(
@@ -154,6 +154,18 @@ def get_inventory_overview(shop_group: str = None) -> dict:
             .annotate(dead_qty=Sum('inventory_qty'), dead_value=Sum('tag_amount'),
                       dead_lines=Count('id'))
         )
+        # Dead stock SKUs per shop — single query, top 15 per shop by qty
+        dead_sku_rows = list(
+            dead_qs.values('shop_name', 'product_code', 'product_name', 'brand',
+                           'tag_price', 'year', 'season')
+            .annotate(qty=Sum('inventory_qty'), value=Sum('tag_amount'))
+            .order_by('shop_name', '-qty')
+        )
+        dead_skus_map: dict = defaultdict(list)
+        for r in dead_sku_rows:
+            sn = r['shop_name']
+            if len(dead_skus_map[sn]) < 15:
+                dead_skus_map[sn].append(r)
 
         brand_map   = defaultdict(list)
         for r in shop_brand_rows:
@@ -176,6 +188,7 @@ def get_inventory_overview(shop_group: str = None) -> dict:
                 'dead_qty':   dead.get('dead_qty') or 0,
                 'dead_value': dead.get('dead_value') or 0,
                 'dead_lines': dead.get('dead_lines') or 0,
+                'dead_skus':  dead_skus_map[sn],
             })
         return result
 

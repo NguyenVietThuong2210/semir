@@ -2,7 +2,7 @@
 App/services/sale_detail_import.py
 
 SaleDetail (HQ invoice line-item) file import.
-Upserts on unique_together (invoice_number, barcode, size).
+Upserts on unique_together (invoice_number, product_code).
 FK to SalesTransaction is resolved softly — null if header not yet imported.
 """
 import logging
@@ -158,18 +158,17 @@ def process_sale_detail_file(file, progress_fn=None):
         batch_keys = []
         for _, row in batch_df.iterrows():
             inv = safe_str(row.get('invoice_number', ''))
-            bc  = safe_str(row.get('barcode', ''))
-            sz  = safe_str(row.get('size', ''))
-            batch_keys.append((inv, bc, sz))
+            pc  = safe_str(row.get('product_code', ''))
+            batch_keys.append((inv, pc))
 
         # Pre-fetch existing SaleDetail rows
-        inv_nums  = list({k[0] for k in batch_keys})
-        barcodes  = list({k[1] for k in batch_keys})
+        inv_nums      = list({k[0] for k in batch_keys})
+        product_codes = list({k[1] for k in batch_keys})
         existing = {
-            (obj.invoice_number, obj.barcode, obj.size): obj
+            (obj.invoice_number, obj.product_code): obj
             for obj in SaleDetail.objects.filter(
                 invoice_number__in=inv_nums,
-                barcode__in=barcodes,
+                product_code__in=product_codes,
             )
         }
 
@@ -180,9 +179,8 @@ def process_sale_detail_file(file, progress_fn=None):
             row_num = idx + 2
             try:
                 data = _map_row(row.to_dict())
-                inv  = data['invoice_number']
-                bc   = data['barcode']
-                sz   = data['size']
+                inv = data['invoice_number']
+                pc  = data['product_code']
 
                 if not inv or not data['sales_date']:
                     skipped += 1
@@ -194,7 +192,7 @@ def process_sale_detail_file(file, progress_fn=None):
                     logger.warning("No SalesTransaction for invoice %s (row %d)", inv, row_num,
                                    extra={"step": "sale_detail_import"})
 
-                key = (inv, bc, sz)
+                key = (inv, pc)
                 if key in existing:
                     obj = existing[key]
                     for field, value in data.items():
