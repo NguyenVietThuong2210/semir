@@ -1,0 +1,50 @@
+{% load custom_filters %}
+{% with rows=data.by_shop overview=data.overview %}
+{% if not rows %}
+<div class="text-muted text-center py-4">No data available.</div>
+{% else %}
+<div class="table-responsive tab-tbl-wrap">
+<table class="table table-sm table-hover align-middle mb-0" style="font-size:.84rem;">
+    <thead class="sticky-thead">
+        <tr style="background:var(--primary);color:white;">
+            <th>Shop</th>
+            <th class="text-end">Qty (pcs)</th>
+            <th class="text-end">Tag Amt ({{ currency }})</th>
+            <th class="text-end">Sales Amt ({{ currency }})</th>
+            <th class="text-end">Settlement ({{ currency }})</th>
+            <th class="text-end">Disc %</th>
+            <th class="text-end">Lines</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+    <tr>
+        <td>{{ r.shop_name|default:"—" }}</td>
+        <td class="text-end fw-semibold">{{ r.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted">{{ r.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ r.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ r.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if r.disc_pct and r.disc_pct > 20 %} text-danger{% endif %}">
+            {% if r.disc_pct is not None %}{{ r.disc_pct }}%{% else %}—{% endif %}
+        </td>
+        <td class="text-end text-muted">{{ r.lines|default:0 }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    {% if overview %}
+    <tfoot>
+    <tr style="background:rgba(var(--primary-rgb),.06);font-weight:600;border-top:2px solid var(--primary);">
+        <td>Total</td>
+        <td class="text-end">{{ overview.total_qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted">{{ overview.total_tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ overview.total_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ overview.total_settlement|default:0|vnd }}</td>
+        <td class="text-end">{% if overview.disc_pct is not None %}{{ overview.disc_pct }}%{% else %}—{% endif %}</td>
+        <td class="text-end">{{ overview.total_lines|default:0 }}</td>
+    </tr>
+    </tfoot>
+    {% endif %}
+</table>
+</div>
+{% endif %}
+{% endwith %}

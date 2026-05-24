@@ -13,7 +13,8 @@ from App.analytics.tab_functions import (
     get_shop_detail_customer_data,
     get_shop_detail_coupon_data,
 )
-from App.models import SalesTransaction, Customer, Coupon, CouponCampaign
+from App.analytics.inventory_functions import get_shop_inventory_data
+from App.models import SalesTransaction, Customer, Coupon, CouponCampaign, InventorySnapshot
 from App.views.view_utils import parse_date, parse_date_silent
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,14 @@ def _get_dropdown_options():
     for c in campaigns:
         c["prefix_list"] = [p.strip() for p in (c["prefix"] or "").split(",") if p.strip()]
 
-    result = (sales_shops, customer_shops, coupon_shops, campaigns)
+    inventory_shops = sorted(
+        InventorySnapshot.objects
+        .exclude(shop_name__isnull=True).exclude(shop_name='')
+        .values_list('shop_name', flat=True)
+        .order_by().distinct()
+    )
+
+    result = (sales_shops, customer_shops, coupon_shops, campaigns, inventory_shops)
     cache.set(key, result, _DROPDOWN_TTL)
     return result
 
@@ -93,7 +101,7 @@ def shop_detail(request):
     end_date   = request.GET.get("end_date", "")
 
     # ── Dropdown options (cached 5 min) ───────────────────────────────────────
-    sales_shops, customer_shops, coupon_shops, campaigns = _get_dropdown_options()
+    sales_shops, customer_shops, coupon_shops, campaigns, inventory_shops = _get_dropdown_options()
 
     return render(request, "shop_detail.html", {
         "start_date":        start_date,
@@ -104,6 +112,7 @@ def shop_detail(request):
         "customer_shops":    customer_shops,
         "coupon_shops":      coupon_shops,
         "campaigns":         campaigns,
+        "inventory_shops":   inventory_shops,
         "currency":          "VND",
     })
 
@@ -183,6 +192,21 @@ def shop_detail_coupon_partial(request):
         "coupon_prefix": coupon_prefix,
         "coupon_campaign_id": coupon_campaign_id,
         "currency": "VND",
+    })
+
+
+def shop_detail_inventory_partial(request):
+    """AJAX: render inventory section for one shop."""
+    err = _ajax_perm_check(request, "shops.view")
+    if err:
+        return err
+    shop_name = request.GET.get("shop", "").strip()
+    if not shop_name:
+        return HttpResponse('<div class="no-data-msg text-muted py-3">Select a shop to view inventory.</div>')
+    logger.info("partial inventory: shop=%s user=%s", shop_name, request.user)
+    data = get_shop_inventory_data(shop_name)
+    return render(request, "shop_detail/_inventory_partial.html", {
+        "data": data, "shop_name": shop_name, "currency": "VND",
     })
 
 

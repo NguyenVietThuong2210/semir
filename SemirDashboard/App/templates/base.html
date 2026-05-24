@@ -295,6 +295,11 @@
                                     <i class="bi bi-ticket"></i> Upload Coupons
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'upload_inventory' %}">
+                                    <i class="bi bi-boxes"></i> Upload Inventory
+                                </a>
+                            </li>
                             {% check_perm 'coupons.manage' as can_campaigns %}
                             {% if can_campaigns %}
                             <li>
@@ -387,6 +392,14 @@
                             <li>
                                 <a class="dropdown-item" href="{% url 'shop_detail' %}">
                                     <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% check_perm 'products.view' as can_products %}
+                            {% if can_products %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'product_dashboard' %}">
+                                    <i class="bi bi-boxes"></i> Product Analytics
                                 </a>
                             </li>
                             {% endif %}

@@ -189,6 +189,57 @@ Returns time-series for chart:
 
 ---
 
+---
+
+## Product Analytics (SaleDetail)
+**File:** `App/analytics/product_analytics.py`  
+**Model:** `App/models/pos.py` → `SaleDetail` (imported from POS system via upload)
+
+### `get_product_tab(tab, date_from='', date_to='', shop_group='')`
+
+| tab | returns |
+|-----|---------|
+| `season` | `{overview, by_season}` — rows grouped by `(year, season)` using raw POS season codes ("1","2","3","4","9") |
+| `month` | `{overview, by_month}` — `TruncMonth` aggregation, label=`'YYYY-MM'` |
+| `week` | `{overview, by_week}` — `TruncWeek` aggregation, label=`'Wnn YYYY'` |
+| `brand` | `{overview, by_brand}` |
+| `category` | `{overview, by_category}` — `category_l1` / `category_l2` hierarchy |
+
+**`overview` keys:** `total_lines`, `total_qty`, `total_amount`, `total_settlement`, `total_tag_amount`, `disc_pct`, `date_range`
+
+**Row keys (all tabs):** `qty`, `amount`, `settlement`, `tag_amount`, `disc_pct`, `lines` + tab-specific group keys
+
+**`disc_pct`:** `(1 - settlement/tag_amount) * 100` — effective discount percentage. `None` if tag_amount = 0.
+
+**Important:** `SaleDetail.season` stores raw POS codes ("1","2","3","4","9"), NOT the project's M2-4/M5-7 labels. Those labels only apply to `SalesTransaction` (computed by `season_utils.py`).
+
+### Shop Detail: Inventory Tab
+**File:** `App/analytics/inventory_functions.py`  
+**Model:** `App/models/inventory.py` → `InventorySnapshot`
+
+### `get_shop_inventory_data(shop_name)`
+Returns `{}` for unknown shop. Otherwise:
+```python
+{
+    'totals': {
+        'sku_lines': int,       # Count('id')
+        'on_hand_qty': int,     # Sum('inventory_qty')
+        'in_transit_qty': int,  # Sum('in_transit_qty')
+        'total_qty': int,       # Sum('total_qty')
+        'inv_value': float,     # Sum('tag_amount')
+        'total_tag_amt': float, # Sum('total_tag_amount')
+    },
+    'by_brand': [{'brand', 'qty', 'in_transit', 'total', 'value', 'lines'}],
+    'by_season': [{'year', 'season', 'qty', 'total', 'value'}],
+    'top_skus':  [{'product_code', 'product_name', 'brand', 'qty', 'total', 'value'}],  # top 20
+    'dead':      {'sku_lines', 'dead_qty', 'dead_value'},  # qty=0 rows
+}
+```
+
+**Django 4.2 aggregate alias rule:** Alias names in `aggregate()` must not collide with field names used as `Sum()` arguments in the same call. Use distinct aliases (`on_hand_qty` not `inventory_qty`, `inv_value` not `tag_amount`).
+
+---
+
 ## Analytics Module Summary
 
 | File | Purpose |
@@ -200,3 +251,5 @@ Returns time-series for chart:
 | `customer_utils.py` | Customer cache + purchase map |
 | `coupon_analytics.py` | Coupon analytics + Excel export |
 | `tab_functions.py` | Per-tab data + shop detail functions (KEY) |
+| `inventory_functions.py` | Shop inventory KPIs, by_brand, by_season, dead SKUs |
+| `product_analytics.py` | SaleDetail product analytics for all 5 product tabs |

@@ -1,6 +1,6 @@
 # Semir — Full Project Analysis
 
-**Last Updated:** 2026-05-03
+**Last Updated:** 2026-05-24
 **Status:** Current & accurate
 
 ---
@@ -74,11 +74,13 @@ SemirDashboard (Django)  ←── CSV/Excel uploads
 ```
 
 ### SemirDashboard Core Data Flow
-1. **Data in:** CSV/Excel uploads → `services/{customer|sales|coupon}_import.py` → DB (bulk insert)
+1. **Data in:** CSV/Excel uploads → `services/{customer|sales|coupon|inventory|sale_detail}_import.py` → DB (bulk upsert)
 2. **Analytics:** `analytics/tab_functions.py` → `_load_sales()` cache → `aggregators.py` → per-tab data
-3. **Frontend:** Lazy AJAX tab loading — initial page renders one tab, rest load on click
-4. **CNV sync:** APScheduler (hourly) → `cnv/sync_service.py` → `cnv/api_client.py` → `CNVCustomer`/`CNVOrder`
-5. **Mobile API:** `App/api/views.py` exposes `/api/v1/` DRF endpoints consumed by SemirPhone
+3. **Product analytics:** `analytics/product_analytics.py` → `get_product_tab(tab)` → `/products/` page (5 tabs)
+4. **Inventory analytics:** `analytics/inventory_functions.py` → `get_shop_inventory_data(shop)` → Shop Detail inventory partial
+5. **Frontend:** Lazy AJAX tab loading — initial page renders one tab, rest load on click
+6. **CNV sync:** APScheduler (hourly) → `cnv/sync_service.py` → `cnv/api_client.py` → `CNVCustomer`/`CNVOrder`
+7. **Mobile API:** `App/api/views.py` exposes `/api/v1/` DRF endpoints consumed by SemirPhone
 
 ### SemirPhone Core Data Flow
 1. GoRouter redirect checks `authProvider` on every navigation — unauthenticated → `/login`

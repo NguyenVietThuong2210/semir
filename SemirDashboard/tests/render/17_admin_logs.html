@@ -295,6 +295,11 @@
                                     <i class="bi bi-ticket"></i> Upload Coupons
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/inventory/">
+                                    <i class="bi bi-boxes"></i> Upload Inventory
+                                </a>
+                            </li>
                             
                             
                             <li>
@@ -390,6 +395,14 @@
                                 </a>
                             </li>
                             
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/products/">
+                                    <i class="bi bi-boxes"></i> Product Analytics
+                                </a>
+                            </li>
+                            
                         </ul>
                     </li>
 
@@ -470,7 +483,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="yOUpO4saaI3Dq2enUWmiQv8zmpWt8gBJfwpaxHCpgAjh20pMxAlaNrUrMQhWLmsy">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="8rhVIgfWLeuX3nTxd8XJB63BSh9K2x3YbAw47YVcqLM8dw7hJKwJknz6nSy3tvVz">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -522,6 +535,942 @@
             </tr>
           </thead>
           <tbody>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 02:19:07,258</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 02:19:07,247</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 00:40:26,680</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">57fa526…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/inventory/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
+    data = get_shop_inventory_data(shop_name)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
+    # Alias names must NOT match model field names used as Sum() args in the same call.
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...&lt;6 lines&gt;...
+        total_qty=Sum(&#x27;total_qty&#x27;),
+    
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
+    return self.query.chain().get_aggregation(self.db, kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
+    aggregate = aggregate_expr.resolve_expression(
+        self, allow_joins=True, reuse=None, summarize=True
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
+    raise FieldError(
+        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
+    )
+django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 00:18:48,398</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 00:18:48,394</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 00:05:04,381</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 00:05:04,376</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-23 23:45:54,278</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">b1f8bf4…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/inventory/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
+    data = get_shop_inventory_data(shop_name)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
+    totals = qs.aggregate(
+        sku_lines=Count(&#x27;id&#x27;),
+    ...&lt;4 lines&gt;...
+        total_tag_amount=Sum(&#x27;total_tag_amount&#x27;),
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
+    return self.query.chain().get_aggregation(self.db, kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
+    aggregate = aggregate_expr.resolve_expression(
+        self, allow_joins=True, reuse=None, summarize=True
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
+    raise FieldError(
+        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
+    )
+django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-23 23:16:47,184</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">7c0891f…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/inventory/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
+    data = get_shop_inventory_data(shop_name)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
+    totals = qs.aggregate(
+        sku_lines=Count(&#x27;id&#x27;),
+    ...&lt;4 lines&gt;...
+        total_tag_amount=Sum(&#x27;total_tag_amount&#x27;),
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
+    return self.query.chain().get_aggregation(self.db, kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
+    aggregate = aggregate_expr.resolve_expression(
+        self, allow_joins=True, reuse=None, summarize=True
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
+    raise FieldError(
+        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
+    )
+django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-23 23:13:14,420</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">8409091…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/inventory/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
+    data = get_shop_inventory_data(shop_name)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
+    totals = qs.aggregate(
+        sku_lines=Count(&#x27;id&#x27;),
+    ...&lt;4 lines&gt;...
+        total_tag_amount=Sum(&#x27;total_tag_amount&#x27;),
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
+    return self.query.chain().get_aggregation(self.db, kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
+    aggregate = aggregate_expr.resolve_expression(
+        self, allow_joins=True, reuse=None, summarize=True
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
+    raise FieldError(
+        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
+    )
+django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-23 23:10:28,881</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">2a834c4…</td>
+              <td class="small">
+                Internal Server Error: /shop-detail/partial/inventory/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\shop_detail.py&quot;, line 207, in shop_detail_inventory_partial
+    data = get_shop_inventory_data(shop_name)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\inventory_functions.py&quot;, line 29, in get_shop_inventory_data
+    totals = qs.aggregate(
+        sku_lines=Count(&#x27;id&#x27;),
+    ...&lt;4 lines&gt;...
+        total_tag_amount=Sum(&#x27;total_tag_amount&#x27;),
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 594, in aggregate
+    return self.query.chain().get_aggregation(self.db, kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\sql\query.py&quot;, line 472, in get_aggregation
+    aggregate = aggregate_expr.resolve_expression(
+        self, allow_joins=True, reuse=None, summarize=True
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\aggregates.py&quot;, line 127, in resolve_expression
+    raise FieldError(
+        f&quot;Cannot compute {c.name}(&#x27;{ref}&#x27;): &#x27;{ref}&#x27; is an aggregate&quot;
+    )
+django.core.exceptions.FieldError: Cannot compute Sum(&#x27;total_qty&#x27;): &#x27;total_qty&#x27; is an aggregate</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-23 23:06:40,001</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">0916105…</td>
+              <td class="small">
+                Internal Server Error: /products/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 577, in parse
+    compile_func = self.tags[command]
+                   ~~~~~~~~~^^^^^^^^^
+KeyError: &#x27;else&#x27;
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\contrib\auth\decorators.py&quot;, line 59, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\permissions.py&quot;, line 60, in wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\product.py&quot;, line 43, in product_dashboard
+    return render(request, &quot;product/dashboard.html&quot;, {
+        &quot;overview&quot;:    data.get(&quot;overview&quot;, {}),
+    ...&lt;7 lines&gt;...
+        &quot;currency&quot;:    &quot;VND&quot;,
+    })
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\shortcuts.py&quot;, line 25, in render
+    content = loader.render_to_string(template_name, context, request, using=using)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader.py&quot;, line 62, in render_to_string
+    return template.render(context, request)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\backends\django.py&quot;, line 107, in render
+    return self.template.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 174, in render
+    return self._render(context)
+           ~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 166, in _render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 160, in render
+    return compiled_parent._render(context)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 166, in _render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 66, in render
+    result = block.nodelist.render(context)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 200, in render
+    template = context.template.engine.select_template(template_name)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 228, in select_template
+    return self.get_template(template_name)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 186, in get_template
+    template, origin = self.find_template(template_name)
+                       ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 159, in find_template
+    template = loader.get_template(name, skip=skip)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loaders\cached.py&quot;, line 57, in get_template
+    template = super().get_template(template_name, skip)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loaders\base.py&quot;, line 28, in get_template
+    return Template(
+        contents,
+    ...&lt;2 lines&gt;...
+        self.engine,
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 157, in __init__
+    self.nodelist = self.compile_nodelist()
+                    ~~~~~~~~~~~~~~~~~~~~~^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 199, in compile_nodelist
+    nodelist = parser.parse()
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 585, in parse
+    raise self.error(token, e)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 583, in parse
+    compiled_result = compile_func(self, token)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 994, in do_if
+    nodelist = parser.parse((&quot;elif&quot;, &quot;else&quot;, &quot;endif&quot;))
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 585, in parse
+    raise self.error(token, e)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 583, in parse
+    compiled_result = compile_func(self, token)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 1685, in do_with
+    nodelist = parser.parse((&quot;endwith&quot;,))
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 579, in parse
+    self.invalid_block_tag(token, command, parse_until)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 634, in invalid_block_tag
+    raise self.error(
+    ...&lt;8 lines&gt;...
+    )
+django.template.exceptions.TemplateSyntaxError: Template: D:\New-jouney\semir\SemirDashboard\App\templates\product\tabs\season.html, Invalid block tag on line 2: &#x27;else&#x27;, expected &#x27;endwith&#x27;. Did you forget to register or load this tag?</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-23 23:06:31,421</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">d973b2d…</td>
+              <td class="small">
+                Internal Server Error: /products/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 577, in parse
+    compile_func = self.tags[command]
+                   ~~~~~~~~~^^^^^^^^^
+KeyError: &#x27;else&#x27;
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\contrib\auth\decorators.py&quot;, line 59, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\permissions.py&quot;, line 60, in wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\product.py&quot;, line 43, in product_dashboard
+    return render(request, &quot;product/dashboard.html&quot;, {
+        &quot;overview&quot;:    data.get(&quot;overview&quot;, {}),
+    ...&lt;7 lines&gt;...
+        &quot;currency&quot;:    &quot;VND&quot;,
+    })
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\shortcuts.py&quot;, line 25, in render
+    content = loader.render_to_string(template_name, context, request, using=using)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader.py&quot;, line 62, in render_to_string
+    return template.render(context, request)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\backends\django.py&quot;, line 107, in render
+    return self.template.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 174, in render
+    return self._render(context)
+           ~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 166, in _render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 160, in render
+    return compiled_parent._render(context)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 166, in _render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 66, in render
+    result = block.nodelist.render(context)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 200, in render
+    template = context.template.engine.select_template(template_name)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 228, in select_template
+    return self.get_template(template_name)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 186, in get_template
+    template, origin = self.find_template(template_name)
+                       ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\engine.py&quot;, line 159, in find_template
+    template = loader.get_template(name, skip=skip)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loaders\cached.py&quot;, line 57, in get_template
+    template = super().get_template(template_name, skip)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loaders\base.py&quot;, line 28, in get_template
+    return Template(
+        contents,
+    ...&lt;2 lines&gt;...
+        self.engine,
+    )
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 157, in __init__
+    self.nodelist = self.compile_nodelist()
+                    ~~~~~~~~~~~~~~~~~~~~~^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 199, in compile_nodelist
+    nodelist = parser.parse()
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 585, in parse
+    raise self.error(token, e)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 583, in parse
+    compiled_result = compile_func(self, token)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 994, in do_if
+    nodelist = parser.parse((&quot;elif&quot;, &quot;else&quot;, &quot;endif&quot;))
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 585, in parse
+    raise self.error(token, e)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 583, in parse
+    compiled_result = compile_func(self, token)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 1685, in do_with
+    nodelist = parser.parse((&quot;endwith&quot;,))
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 579, in parse
+    self.invalid_block_tag(token, command, parse_until)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 634, in invalid_block_tag
+    raise self.error(
+    ...&lt;8 lines&gt;...
+    )
+django.template.exceptions.TemplateSyntaxError: Template: D:\New-jouney\semir\SemirDashboard\App\templates\product\tabs\season.html, Invalid block tag on line 2: &#x27;else&#x27;, expected &#x27;endwith&#x27;. Did you forget to register or load this tag?</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-23 23:05:43,772</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">15d6cdc…</td>
+              <td class="small">
+                Internal Server Error: /products/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 964, in _resolve_lookup
+    raise TypeError
+TypeError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 976, in _resolve_lookup
+    current = getattr(current, bit)
+AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;by_season&#x27;
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 982, in _resolve_lookup
+    current = current[int(bit)]
+                      ~~~^^^^^
+ValueError: invalid literal for int() with base 10: &#x27;by_season&#x27;
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\contrib\auth\decorators.py&quot;, line 59, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\permissions.py&quot;, line 60, in wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\product.py&quot;, line 43, in product_dashboard
+    return render(request, &quot;product/dashboard.html&quot;, {
+        &quot;overview&quot;:    data.get(&quot;overview&quot;, {}),
+    ...&lt;7 lines&gt;...
+        &quot;currency&quot;:    &quot;VND&quot;,
+    })
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\shortcuts.py&quot;, line 25, in render
+    content = loader.render_to_string(template_name, context, request, using=using)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader.py&quot;, line 62, in render_to_string
+    return template.render(context, request)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\backends\django.py&quot;, line 107, in render
+    return self.template.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 174, in render
+    return self._render(context)
+           ~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 166, in _render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 160, in render
+    return compiled_parent._render(context)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 166, in _render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 66, in render
+    result = block.nodelist.render(context)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\loader_tags.py&quot;, line 211, in render
+    return template.render(context)
+           ~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 176, in render
+    return self._render(context)
+           ~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 166, in _render
+    return self.nodelist.render(context)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1091, in render
+    return SafeString(&quot;&quot;.join([node.render_annotated(context) for node in self]))
+                               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 1052, in render_annotated
+    return self.render(context)
+           ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\defaulttags.py&quot;, line 579, in render
+    values = {key: val.resolve(context) for key, val in self.extra_context.items()}
+                   ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 809, in resolve
+    arg_vals.append(arg.resolve(context))
+                    ~~~~~~~~~~~^^^^^^^^^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 928, in resolve
+    value = self._resolve_lookup(context)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\template\base.py&quot;, line 989, in _resolve_lookup
+    raise VariableDoesNotExist(
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...&lt;2 lines&gt;...
+    )  # missing attribute
+    ^
+django.template.base.VariableDoesNotExist: Failed lookup for key [by_season] in None</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-23 23:05:24,786</td>
+              <td class="small text-truncate" style="max-width:130px" title="django.request">django.request</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">51da339…</td>
+              <td class="small">
+                Internal Server Error: /products/
+                
+                <details class="mt-1">
+                  <summary class="text-danger" style="cursor:pointer;font-size:0.75rem">exception</summary>
+                  <pre class="mb-0 mt-1" style="font-size:0.7rem;white-space:pre-wrap">Traceback (most recent call last):
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\exception.py&quot;, line 55, in inner
+    response = get_response(request)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py&quot;, line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\contrib\auth\decorators.py&quot;, line 59, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\permissions.py&quot;, line 60, in wrapper
+    return view_func(request, *args, **kwargs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\views\product.py&quot;, line 36, in product_dashboard
+    data = get_product_tab(&#x27;season&#x27;, date_from=date_from, date_to=date_to, shop_group=shop_group or None)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\product_analytics.py&quot;, line 139, in get_product_tab
+    overview = _overview(qs)
+  File &quot;D:\New-jouney\semir\SemirDashboard\App\analytics\product_analytics.py&quot;, line 46, in _overview
+    dates = qs.aggregate(min_date=None, max_date=None)
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 581, in aggregate
+    self._validate_values_are_expressions(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        (*args, *kwargs.values()), method_name=&quot;aggregate&quot;
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File &quot;D:\New-jouney\semir\venv\Lib\site-packages\django\db\models\query.py&quot;, line 2065, in _validate_values_are_expressions
+    raise TypeError(
+    ...&lt;5 lines&gt;...
+    )
+TypeError: QuerySet.aggregate() received non-expression(s): None, None.</pre>
+                </details>
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-22 21:43:36,286</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-22 21:43:36,272</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-10 16:54:10,671</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-10 16:54:10,661</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-08 07:28:46,798</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-08 07:28:46,795</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-08 07:18:21,941</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-08 07:18:21,936</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-08 07:11:55,379</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Error fetching membership for customer 123: Network error
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-08 07:11:55,368</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Membership retry failed for customer 99: 429 Too Many Requests
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-05 10:05:02,434</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 45050332: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/45050332/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-05 10:05:02,434</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 45050514: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/45050514/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-05 10:05:02,430</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-05 10:05:02,429</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-05 10:05:02,428</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 45050511: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/45050511/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-05 10:05:02,428</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-04 19:05:02,283</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 45046811: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/45046811/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-04 19:05:02,283</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-04 19:05:02,269</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 45046942: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/45046942/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-04 19:05:02,268</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-04 19:05:02,265</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 45046979: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/45046979/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-04 19:05:02,264</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 20:05:04,610</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                Failed to fetch membership for customer 40279557: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/40279557/membership.json
+                
+              </td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-03 20:05:04,609</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
+              <td class="small">-</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">
+                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
+                
+              </td>
+            </tr>
             
             <tr>
               <td class="text-nowrap small text-muted">2026-05-03 13:10:25,859</td>
@@ -644,435 +1593,6 @@
               </td>
             </tr>
             
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:09:11,040</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:09:10,102</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 40286322: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/40286322/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:09:10,102</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:09:08,114</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 41400733: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/41400733/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:09:08,113</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:09:00,106</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 43184078: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/43184078/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:09:00,106</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:54,099</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44893504: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44893504/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:54,098</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:46,153</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44894995: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44894995/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:46,149</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:43,108</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44896198: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44896198/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:43,107</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:43,101</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44896141: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44896141/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:43,100</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:41,092</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44896723: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44896723/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:41,091</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:20,160</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44899811: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44899811/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:20,160</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:19,134</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44901872: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44901872/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:19,133</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:13,111</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44903351: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44903351/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:13,111</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:09,164</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44903657: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44903657/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:09,163</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:07,152</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44904166: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44904166/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:08:07,151</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:36,166</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44906699: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44906699/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:36,166</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:35,114</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44906724: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44906724/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:35,109</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:31,116</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44906923: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44906923/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:31,116</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:25,002</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44907336: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44907336/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:25,001</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:15,097</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44908069: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44908069/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:15,097</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:10,051</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                Failed to fetch membership for customer 44908321: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/loyalty/customers/44908321/membership.json
-                
-              </td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-04-25 20:07:10,051</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">
-                API error 429: {&quot;error&quot;:&quot;Rate limit exceeded&quot;,&quot;message&quot;:&quot;You have exceeded the rate limit. Capacity: 100 tokens, Refill rate: 100 tokens/second&quot;,&quot;retryAfter&quot;:1}
-                
-              </td>
-            </tr>
-            
           </tbody>
         </table>
       </div>
@@ -1103,403 +1623,403 @@
           <tbody>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 14:05:02,931</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,788</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+              <td class="small">No SalesTransaction for invoice VXP00524SHAR027326050200002 (row 1961)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 13:10:00,168</td>
-              <td class="small text-truncate" style="max-width:130px" title="django_apscheduler.util">django_apscheduler.util</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,788</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">DB error executing &#x27;update_job&#x27; (database is locked). Retrying with a new DB connection...</td>
+              <td class="small">No SalesTransaction for invoice VXP00524SHAR027326050200001 (row 1960)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 13:05:48,939</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">a2e4154…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 12:47:16,719</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">8975c0f…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 12:35:37,543</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">ed4f94f…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 12:08:15,701</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">4b835fb…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 11:37:39,437</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">e6721d2…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 11:30:53,911</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">b2fee55…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 11:05:06,023</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">6187a6c…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 02:53:05,254</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.customer">App.views.customer</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">ac09492…</td>
-              <td class="small">Customer not found: vip_id=XXXXNOTEXIST</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:10:01,667</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,788</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP00524SHAR027326050200001 (row 1959)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 15:10:01,631</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,787</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP00524SHAR027326050200001 (row 1958)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 14:10:01,315</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,787</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP00524SHAR027326050200001 (row 1957)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 14:05:03,253</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.scheduler">App.cnv.scheduler</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,787</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">Customers sync already running - skipping</td>
+              <td class="small">No SalesTransaction for invoice VXP00524SHAR027326050200001 (row 1956)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 13:11:08,764</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,786</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: batch had 1 failures � checkpoint not advanced</td>
+              <td class="small">No SalesTransaction for invoice VXP00524SHAR027326050200001 (row 1955)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 13:10:06,249</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,786</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200016 (row 1954)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 13:10:04,621</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,786</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200016 (row 1953)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-01 01:10:01,617</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,785</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200014 (row 1952)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-01 00:10:01,625</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,785</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200014 (row 1951)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 23:10:01,549</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,784</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200014 (row 1950)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 22:10:01,356</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,784</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200012 (row 1949)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 21:10:01,313</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,784</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200012 (row 1948)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 20:10:01,444</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,783</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200012 (row 1947)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 19:10:01,300</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,783</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200012 (row 1946)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 18:10:01,547</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,783</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200012 (row 1945)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 17:10:01,362</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,782</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200012 (row 1944)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 16:10:01,359</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,782</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200011 (row 1943)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 15:10:01,390</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,781</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200011 (row 1942)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 14:10:01,513</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,781</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200011 (row 1941)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 13:10:01,444</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,781</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200011 (row 1940)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 12:10:01,352</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,780</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200010 (row 1939)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 12:05:01,880</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,780</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">/api/customers failed: 404 Client Error: Not Found for url: https://apis.cnvloyalty.com/api/customers?page=1&amp;per_page=100&amp;limit=100&amp;updated_at_from=2026-04-30T04%3A03%3A12.715001Z</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200010 (row 1938)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 12:05:01,354</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.api_client">App.cnv.api_client</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,780</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">/customers.json failed: 429 Client Error: Too Many Requests for url: https://apis.cnvloyalty.com/customers.json?page=1&amp;per_page=100&amp;limit=100&amp;updated_at_from=2026-04-30T04%3A03%3A12.715001Z</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200010 (row 1937)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 11:10:01,349</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,779</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200010 (row 1936)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 10:10:01,338</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,779</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200009 (row 1935)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 09:10:01,395</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,778</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200009 (row 1934)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 08:10:01,434</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,778</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200008 (row 1933)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 07:10:01,365</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,777</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200008 (row 1932)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 06:10:01,271</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,777</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200006 (row 1931)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 05:10:01,619</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,776</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200004 (row 1930)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 04:10:01,551</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,775</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200004 (row 1929)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 03:10:01,407</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,775</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200004 (row 1928)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 02:10:01,323</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,774</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200004 (row 1927)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 01:10:01,329</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,774</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200004 (row 1926)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-30 00:10:01,587</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,773</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200003 (row 1925)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-29 23:10:01,286</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,773</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200003 (row 1924)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-29 22:10:01,401</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,772</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200003 (row 1923)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-29 21:10:01,550</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,772</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200002 (row 1922)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-29 20:10:01,346</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,771</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200002 (row 1921)</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-04-29 19:10:01,461</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.cnv.sync_service">App.cnv.sync_service</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,771</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">sync_orders: orders have no updated_at field � checkpoint will not advance</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200002 (row 1920)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,771</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200002 (row 1919)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,770</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200001 (row 1918)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,770</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200001 (row 1917)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,769</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200001 (row 1916)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,769</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">No SalesTransaction for invoice VXP30324SHAR027226050200001 (row 1915)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,768</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">No SalesTransaction for invoice VXP00324SHAR027226050200018 (row 1914)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,768</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">No SalesTransaction for invoice VXP00324SHAR027226050200017 (row 1913)</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,767</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">No SalesTransaction for invoice VXP00324SHAR027226050200016 (row 1912)</td>
             </tr>
             
           </tbody>
@@ -1532,403 +2052,403 @@
           <tbody>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:35,400</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,559</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 3] existing=0</td>
+              <td class="small">[Batch 5] rows 1601-2000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:34,962</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:54,558</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 3] rows 10001-15000 (5000 rows)</td>
+              <td class="small">[Batch 4] created=0 updated=399</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:34,961</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:50,695</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 2] created=5000</td>
+              <td class="small">=== START Sale Detail Import: sale detail.xlsx ===</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:32,747</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 2] existing=0</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:32,640</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">customer_import</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">=== START OPTIMIZED Customer Import: customer.xlsx ===</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:32,276</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 2] rows 5001-10000 (5000 rows)</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:32,276</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 1] created=5000</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:29,967</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 1] existing=0</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:29,546</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 1] rows 1-5000 (5000 rows)</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:29,545</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">customer_map loaded: 74630 customers</td>
-            </tr>
-            
-            <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:28,873</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:48,956</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
               <td class="small">analytics_chart</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">b49887d…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">5a0cef7…</td>
               <td class="small">analytics_chart: from=None to=None shop_group= user=alex</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:28,279</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:47,903</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 4] rows 1201-1600</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:47,902</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 3] created=0 updated=400</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:45,005</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">b2d0553…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">346ec34…</td>
               <td class="small">coupon_dashboard: from=2025-01-01 to=2025-12-31 prefix= shop_group= user=alex</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:27,827</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:43,960</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">Pre-loading customer map...</td>
+              <td class="small">[Batch 3] rows 801-1200</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:27,827</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:43,959</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">Total rows to process: 25297</td>
+              <td class="small">[Batch 2] created=0 updated=400</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:27,412</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:43,902</td>
               <td class="small text-truncate" style="max-width:130px" title="App.views.coupon">App.views.coupon</td>
               <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">f5ad2c1…</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">dd96630…</td>
               <td class="small">coupon_dashboard: from=None to=None prefix= shop_group= user=alex</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:19,900</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.sales_import">App.services.sales_import</td>
-              <td class="small">sales_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:40,229</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">=== START OPTIMIZED Sales Import: Sale 2024.xlsx ===</td>
+              <td class="small">[Batch 2] rows 401-800</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:19,872</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">customer_import</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:40,228</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">=== DONE Customer Import: created=74630 updated=0 errors=0 ===</td>
+              <td class="small">[Batch 1] created=0 updated=400</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:19,871</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:35,453</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 15] created=4630</td>
+              <td class="small">[Batch 1] rows 1-400</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:17,672</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:35,451</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 15] existing=0</td>
+              <td class="small">Invoice map loaded: 0 entries</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:16,869</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:35,450</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 15] rows 70001-74630 (4630 rows)</td>
+              <td class="small">Pre-loading SalesTransaction invoice map...</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:16,868</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:35,450</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 14] created=5000</td>
+              <td class="small">Total rows: 15104</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:14,260</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:25,270</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 14] existing=0</td>
+              <td class="small">=== START Sale Detail Import: sale detail.xlsx ===</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:13,430</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:25,147</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.analytics.product_analytics">App.analytics.product_analytics</td>
+              <td class="small">product_analytics</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 14] rows 65001-70000 (5000 rows)</td>
+              <td class="small">product_tab shop loaded: lines=2636</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:13,429</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:25,103</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.analytics.product_analytics">App.analytics.product_analytics</td>
+              <td class="small">product_analytics</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 13] created=5000</td>
+              <td class="small">product_tab week loaded: lines=15101</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:11,160</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:24,993</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.analytics.product_analytics">App.analytics.product_analytics</td>
+              <td class="small">product_analytics</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 13] existing=0</td>
+              <td class="small">product_tab shop loaded: lines=15101</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:10,427</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:24,961</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.analytics.product_analytics">App.analytics.product_analytics</td>
+              <td class="small">product_analytics</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 13] rows 60001-65000 (5000 rows)</td>
+              <td class="small">product_tab month loaded: lines=15101</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:10,426</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:24,869</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.analytics.product_analytics">App.analytics.product_analytics</td>
+              <td class="small">product_analytics</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 12] created=5000</td>
+              <td class="small">product_tab nonexistent_tab loaded: lines=15101</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:08,414</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:24,855</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.analytics.product_analytics">App.analytics.product_analytics</td>
+              <td class="small">product_analytics</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 12] existing=0</td>
+              <td class="small">product_tab category loaded: lines=15101</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:07,733</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 12] rows 55001-60000 (5000 rows)</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:24,675</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.analytics.product_analytics">App.analytics.product_analytics</td>
+              <td class="small">product_analytics</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">ae57110…</td>
+              <td class="small">product_tab season loaded: lines=15101</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:07,732</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:24,556</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 11] created=5000</td>
+              <td class="small">=== DONE Sale Detail Import: created=15101 updated=0 skipped=0 errors=0 ===</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:05,645</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:24,556</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 11] existing=0</td>
+              <td class="small">[Batch 38] created=304 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:04,964</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:23,879</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 11] rows 50001-55000 (5000 rows)</td>
+              <td class="small">[Batch 38] rows 14801-15104</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:04,962</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:23,877</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 10] created=5000</td>
+              <td class="small">[Batch 37] created=400 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:02,576</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:23,182</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 10] existing=0</td>
+              <td class="small">[Batch 37] rows 14401-14800</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:01,770</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:23,181</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 10] rows 45001-50000 (5000 rows)</td>
+              <td class="small">[Batch 36] created=399 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:47:01,769</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:22,882</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 9] created=5000</td>
+              <td class="small">[Batch 36] rows 14001-14400</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:59,128</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.views.analytics">App.views.analytics</td>
-              <td class="small">-</td>
-              <td class="small text-muted font-monospace" style="font-size:0.7rem">3330ff0…</td>
-              <td class="small">analytics_dashboard: from=2025-01-01 to=2025-12-31 shop_group= user=alex</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:22,882</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 35] created=400 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:59,100</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:22,558</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 9] existing=0</td>
+              <td class="small">[Batch 35] rows 13601-14000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:58,341</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:22,557</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 9] rows 40001-45000 (5000 rows)</td>
+              <td class="small">[Batch 34] created=400 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:58,340</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:22,247</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 8] created=5000</td>
+              <td class="small">[Batch 34] rows 13201-13600</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:56,053</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:22,246</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 8] existing=0</td>
+              <td class="small">[Batch 33] created=400 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:55,349</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:21,796</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 8] rows 35001-40000 (5000 rows)</td>
+              <td class="small">[Batch 33] rows 12801-13200</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:55,349</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:21,795</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 7] created=5000</td>
+              <td class="small">[Batch 32] created=400 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:53,055</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:21,462</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 7] existing=0</td>
+              <td class="small">[Batch 32] rows 12401-12800</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:52,297</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:21,462</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 7] rows 30001-35000 (5000 rows)</td>
+              <td class="small">[Batch 31] created=400 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:52,296</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:21,113</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 6] created=5000</td>
+              <td class="small">[Batch 31] rows 12001-12400</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:49,903</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:21,112</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 6] existing=0</td>
+              <td class="small">[Batch 30] created=400 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:49,230</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:20,779</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 6] rows 25001-30000 (5000 rows)</td>
+              <td class="small">[Batch 30] rows 11601-12000</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:49,230</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:20,779</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 5] created=5000</td>
+              <td class="small">[Batch 29] created=400 updated=0</td>
             </tr>
             
             <tr>
-              <td class="text-nowrap small text-muted">2026-05-03 16:46:47,165</td>
-              <td class="small text-truncate" style="max-width:130px" title="App.services.customer_import">App.services.customer_import</td>
-              <td class="small">-</td>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:20,453</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
               <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
-              <td class="small">[Batch 5] existing=0</td>
+              <td class="small">[Batch 29] rows 11201-11600</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:20,452</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 28] created=399 updated=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:20,156</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 28] rows 10801-11200</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:20,155</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 27] created=400 updated=0</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:19,798</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 27] rows 10401-10800</td>
+            </tr>
+            
+            <tr>
+              <td class="text-nowrap small text-muted">2026-05-24 09:33:19,797</td>
+              <td class="small text-truncate" style="max-width:130px" title="App.services.sale_detail_import">App.services.sale_detail_import</td>
+              <td class="small">sale_detail_import</td>
+              <td class="small text-muted font-monospace" style="font-size:0.7rem">-</td>
+              <td class="small">[Batch 26] created=400 updated=0</td>
             </tr>
             
           </tbody>

@@ -21,6 +21,7 @@ PERMISSION_DEFS = [
     ("customers.detail",    "View Customer Detail",             "Customers"),
     ("shops.view",          "View Shop Detail",                 "Shop Detail"),
     ("shops.export",        "Export Shop Detail (Excel)",       "Shop Detail"),
+    ("products.view",       "View Product Analytics",           "Product Analytics"),
     ("data.upload",         "Upload Data",                      "Data Management"),
     ("data.formulas",       "View Formulas",                    "Data Management"),
     ("admin.users",         "Manage Users",                     "Admin"),
@@ -30,6 +31,7 @@ ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]
 ADMIN_PERMISSIONS = ALL_PERMISSIONS
 VIEWER_PERMISSIONS = [
     "sales.view",
+    "products.view",
 ]
 
 

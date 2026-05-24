@@ -53,6 +53,9 @@ pages = [
     ("/upload/customers/",                                             "15_upload_customers"),
     ("/users/",                                                        "16_user_management"),
     ("/admin-logs/",                                                   "17_admin_logs"),
+    ("/products/",                                                     "18_product_analytics"),
+    ("/upload/inventory/",                                             "19_upload_inventory"),
+    ("/upload/sales/",                                                 "20_upload_sale_detail"),
 ]
 
 

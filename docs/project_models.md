@@ -68,6 +68,86 @@ SalesTransaction.objects.filter(...).distinct()
 SalesTransaction.objects.filter(...).order_by().distinct()
 ```
 
+### SaleDetail (line items)
+| Field | Type | Notes |
+|-------|------|-------|
+| invoice_number | CharField(100) | part of unique_together |
+| transaction | FK → SalesTransaction | to_field='invoice_number', db_constraint=False, null — soft FK |
+| shop_id | CharField(50) | blank |
+| shop_name | CharField(200) | blank |
+| sales_date | DateField | db_index |
+| sales_time | TimeField | null, blank |
+| brand | CharField(100) | blank |
+| product_code | CharField(100) | blank |
+| product_name | CharField(200) | blank |
+| barcode | CharField(100) | blank, part of unique_together |
+| sku | CharField(100) | blank |
+| color | CharField(100) | blank |
+| size | CharField(50) | blank, part of unique_together |
+| year | SmallIntegerField | null, blank |
+| season | CharField(50) | blank |
+| gender | CharField(50) | blank |
+| category_l1/l2/l3 | CharField(100) | blank |
+| quantity | IntegerField | default=0 |
+| fact_retail_price | DecimalField(15,2) | default=0 |
+| sales_amount | DecimalField(15,2) | default=0 |
+| settlement_amount | DecimalField(15,2) | default=0 |
+| tag_price | DecimalField(15,2) | default=0 |
+| tag_amount | DecimalField(15,2) | default=0 |
+| discount_pct | DecimalField(7,4) | null, blank — "100.00%" → Decimal("1.0000") |
+| vat_rate | CharField(20) | blank |
+| salesmen | CharField(100) | blank |
+| salesmen_code | CharField(50) | blank |
+| promotion | CharField(200) | blank |
+| currency | CharField(10) | default='VND' |
+| created_at | DateTimeField | auto_now_add |
+
+```python
+class Meta:
+    unique_together = [['invoice_number', 'barcode', 'size']]
+```
+Indexes: `(sales_date, brand)`, `(sales_date, shop_id)`, `(year, season, brand)`, `(sku, brand)`, `(salesmen, sales_date)`
+
+---
+
+## Inventory Models — `App/models/inventory.py`
+
+### InventorySnapshot
+Snapshot of current stock per shop. Re-upload overwrites; no date history.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| shop_id | CharField(50) | part of unique_together |
+| shop_name | CharField(200) | blank |
+| brand | CharField(100) | blank |
+| product_code | CharField(100) | part of unique_together — encodes color+size variant |
+| product_name | CharField(200) | blank |
+| product_name_vn | CharField(200) | blank (Chinese name column) |
+| barcode | CharField(100) | blank |
+| sku | CharField(100) | blank |
+| color | CharField(100) | blank |
+| size | CharField(50) | blank |
+| year | SmallIntegerField | null, blank |
+| season | CharField(50) | blank |
+| gender | CharField(50) | blank |
+| category_l1/l2/l3 | CharField(100) | blank |
+| tag_price | DecimalField(15,2) | default=0 |
+| inventory_qty | IntegerField | default=0 |
+| in_transit_qty | IntegerField | default=0 |
+| total_qty | IntegerField | default=0 |
+| tag_amount | DecimalField(15,2) | default=0 (on-hand value) |
+| total_tag_amount | DecimalField(15,2) | default=0 |
+| currency | CharField(10) | default='VND' |
+| uploaded_at | DateTimeField | auto_now=True — last upload timestamp |
+
+```python
+class Meta:
+    unique_together = [['shop_id', 'product_code']]
+```
+Indexes: `(shop_name, brand)`, `(year, season)`, `(sku, shop_id)`
+
+**Dead stock definition:** `year <= current_year - 1` and `inventory_qty > 0`
+
 ---
 
 ## Coupon Models — `App/models/coupon.py`

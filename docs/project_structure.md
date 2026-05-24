@@ -36,6 +36,8 @@ SemirDashboard/
 │   ├── test_customer.py              # Customer analytics unit tests
 │   ├── test_customer_chart.py        # CNV customer chart tests
 │   ├── test_consistency.py           # Cross-tab consistency assertions
+│   ├── test_inventory.py             # InventoryImportTest (import + analytics + AJAX partial)
+│   ├── test_sale_detail.py           # SaleDetailImportTest (import + product analytics + tabs, field-level assertions)
 │   ├── render_pages.py               # Standalone shell script: renders all GET pages, reports timing
 │   └── snapshots/                    # shop_detail_sales.json, shop_detail_customer.json, ...
 └── App/                              # Main Django application
@@ -45,8 +47,9 @@ SemirDashboard/
 ```
 App/
 ├── models/
-│   ├── __init__.py                   # Re-exports: Customer, SalesTransaction, Coupon, CouponCampaign, Role, UserProfile
-│   ├── pos.py                        # Customer, SalesTransaction
+│   ├── __init__.py                   # Re-exports: Customer, SalesTransaction, SaleDetail, Coupon, CouponCampaign, Role, UserProfile, InventorySnapshot
+│   ├── pos.py                        # Customer, SalesTransaction, SaleDetail
+│   ├── inventory.py                  # InventorySnapshot
 │   ├── coupon.py                     # Coupon, CouponCampaign
 │   └── user.py                       # Role, UserProfile
 │
@@ -69,18 +72,23 @@ App/
 │   ├── customer_utils.py             # Customer cache + purchase map builder
 │   ├── coupon_analytics.py           # calc_coupon_amount, calculate_coupon_analytics, calculate_coupon_trend_data, export_*
 │   ├── tab_functions.py              # KEY: get_sales_tab, get_customer_tab, get_coupon_tab, get_shop_detail_*, _load_sales
+│   ├── inventory_functions.py        # get_shop_inventory_data(shop_name) — shop-level inventory KPIs, dead stock, top SKUs
+│   ├── product_analytics.py          # get_product_tab(tab, date_from, date_to, shop_group) — season/month/week/brand/category
 │   └── __init__.py
 │
 ├── services/
 │   ├── customer_import.py            # process_customer_file, process_used_points_file
 │   ├── sales_import.py               # process_sales_file
 │   ├── coupon_import.py              # process_coupon_file
+│   ├── inventory_import.py           # process_inventory_file — upserts InventorySnapshot (77k rows, 21 shops)
+│   ├── sale_detail_import.py         # process_sale_detail_file — upserts SaleDetail with soft FK to SalesTransaction
 │   └── file_reader.py                # read_file, parse_date, safe_decimal, safe_int, safe_str
 │
 ├── views/
 │   ├── analytics.py                  # analytics_dashboard, analytics_tab, analytics_chart, export_analytics
 │   ├── coupon.py                     # coupon_dashboard, coupon_tab, coupon_chart, export_coupons
-│   ├── upload.py                     # upload_customers/sales/coupons/used_points, upload_job_status, upload_jobs_list
+│   ├── upload.py                     # upload_customers/sales/coupons/used_points/inventory/sale_detail, upload_job_status, upload_jobs_list
+│   ├── product.py                    # product_dashboard, product_tab (SaleDetail-based, 5 tabs)
 │   ├── customer.py                   # customer_detail
 │   ├── admin_logs.py                 # admin_logs (superuser only, reads JSON log files)
 │   └── view_utils.py                 # parse_date, filter_params_str
@@ -113,14 +121,19 @@ App/
 │   │   └── tabs/                     # detail, duplicates
 │   ├── customer/
 │   │   └── detail.html
+│   ├── product/
+│   │   ├── dashboard.html            # Product analytics page (filter bar + 5 tabs)
+│   │   └── tabs/                     # season, month, week, brand, category
 │   ├── shop_detail/
 │   │   ├── _sales_partial.html       # AJAX partial for sales section
 │   │   ├── _customer_partial.html    # AJAX partial for customer section
-│   │   └── _coupon_partial.html      # AJAX partial for coupon section
+│   │   ├── _coupon_partial.html      # AJAX partial for coupon section
+│   │   └── _inventory_partial.html   # AJAX partial for inventory section (Section 4)
 │   ├── upload/
 │   │   ├── customers.html
-│   │   ├── sales.html
+│   │   ├── sales.html                # Now includes Sale Detail upload card (Card 2)
 │   │   ├── coupons.html
+│   │   ├── inventory.html            # Upload InventorySnapshot xlsx
 │   │   └── _upload_status.html
 │   └── components/
 │       ├── lazy_tabs_js.html         # Lazy tab loading JS component
@@ -149,7 +162,9 @@ App/
 | Return visit formula | `analytics/calculations.py` |
 | Season labels / grade order | `analytics/season_utils.py` |
 | Shop detail data (sales/customer/coupon) | `analytics/tab_functions.py` → `get_shop_detail_*` |
+| Shop detail inventory data | `analytics/inventory_functions.py` → `get_shop_inventory_data` |
 | Lazy tab data for analytics/coupon/cnv pages | `analytics/tab_functions.py` → `get_sales_tab`, `get_customer_tab`, `get_coupon_tab` |
+| Product analytics (season/month/week/brand/category) | `analytics/product_analytics.py` → `get_product_tab` |
 | Aggregation (grade/season/month) | `analytics/aggregators.py` |
 | Coupon analytics + Excel export | `analytics/coupon_analytics.py` |
 | CNV comparison breakdown | `cnv/service.py` → `compute_cnv_breakdown` |
@@ -157,7 +172,7 @@ App/
 | CNV hourly background jobs | `cnv/scheduler.py` |
 | Zalo sync (threaded) | `cnv/zalo_sync.py` |
 | All 20 permissions | `permissions.py` |
-| Data import (bulk CSV/Excel) | `services/customer_import.py`, `sales_import.py`, `coupon_import.py` |
+| Data import (bulk CSV/Excel) | `services/customer_import.py`, `sales_import.py`, `coupon_import.py`, `inventory_import.py`, `sale_detail_import.py` |
 | Upload job tracking (cache-backed) | `upload_jobs.py` |
 | Admin log viewer | `views/admin_logs.py` |
 | Request ID correlation | `logging_utils.py` + `middleware.py` |

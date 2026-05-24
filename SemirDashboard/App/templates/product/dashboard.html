@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% load custom_filters perm_tags %}
+{% block title %}Product Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+.stat-card { min-height:110px; border-radius:10px; }
+.stat-card .card-body { display:flex; flex-direction:column; justify-content:space-between; }
+.stat-value { font-size:1.55rem; font-weight:700; margin:5px 0; color:var(--text); }
+.stat-label { font-size:.74rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text); }
+.overview-metrics .stat-card { background:rgba(var(--orange-rgb),.08); border:none; }
+.period-metrics   .stat-card { background:rgba(var(--primary-rgb),.09); border:none; }
+.dark-tabs .nav-link {
+    background:rgba(255,255,255,.08); color:rgba(255,255,255,.85);
+    border:1px solid rgba(255,255,255,.15); border-radius:6px 6px 0 0;
+    margin-right:3px; font-weight:500; font-size:.88rem;
+}
+.dark-tabs .nav-link:hover  { background:rgba(255,255,255,.18); color:#fff; }
+.dark-tabs .nav-link.active { background:#fff; color:var(--nav-bg); border-color:#fff; font-weight:600; }
+.dark-tabs { border-bottom:none; }
+.tab-content-wrap { background:#fff; border:1px solid var(--border); border-radius:0 6px 6px 6px; padding:1rem; }
+[data-theme="dark"] .tab-content-wrap { background:var(--bg-light); }
+.tab-tbl-wrap { max-height:450px; overflow-y:auto; }
+.sticky-thead th { position:sticky; top:0; z-index:2; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-boxes me-2"></i>Product Analytics</h2>
+</div>
+
+{# ── Filter bar ── #}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body py-2">
+        <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label small mb-1 fw-semibold">Start Date</label>
+                <input type="date" name="start_date" value="{{ start_date }}"
+                       class="form-control form-control-sm" style="width:150px">
+            </div>
+            <div>
+                <label class="form-label small mb-1 fw-semibold">End Date</label>
+                <input type="date" name="end_date" value="{{ end_date }}"
+                       class="form-control form-control-sm" style="width:150px">
+            </div>
+            <div>
+                <label class="form-label small mb-1 fw-semibold">Shop Group</label>
+                <select name="shop_group" class="form-select form-select-sm" style="width:180px">
+                    <option value="" {% if not shop_group %}selected{% endif %}>All Groups</option>
+                    <option value="Bala Group"   {% if shop_group == "Bala Group"   %}selected{% endif %}>Bala Group</option>
+                    <option value="Semir Group"  {% if shop_group == "Semir Group"  %}selected{% endif %}>Semir Group</option>
+                    <option value="Others Group" {% if shop_group == "Others Group" %}selected{% endif %}>Others Group</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-funnel me-1"></i>Apply
+            </button>
+            <a href="{% url 'product_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-x-circle me-1"></i>Clear
+            </a>
+            <div class="ms-2 d-flex gap-1 flex-wrap" id="quickBtns">
+                {% for label, days in quick_btns %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDaysBack({{ days }})">{{ label }}</button>
+                {% endfor %}
+                {% for yr in year_btns %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setYear({{ yr }})">{{ yr }}</button>
+                {% endfor %}
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Overview KPIs ── #}
+{% if overview %}
+<div class="row g-3 mb-4 overview-metrics">
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value">{{ overview.total_lines|default:0 }}</div>
+            <div class="stat-label">Line Items</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value">{{ overview.total_qty|default:0 }}</div>
+            <div class="stat-label">Total Qty (pcs)</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value amount-vnd" style="font-size:1.05rem">{{ overview.total_tag_amount|default:0|vnd }}</div>
+            <div class="stat-label">Tag Amount ({{ currency }})</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value amount-vnd" style="font-size:1.05rem">{{ overview.total_amount|default:0|vnd }}</div>
+            <div class="stat-label">Sales Amount ({{ currency }})</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value amount-vnd" style="font-size:1.05rem">{{ overview.total_settlement|default:0|vnd }}</div>
+            <div class="stat-label">Settlement ({{ currency }})</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value{% if overview.disc_pct and overview.disc_pct > 20 %} text-danger{% endif %}">
+                {% if overview.disc_pct is not None %}{{ overview.disc_pct }}%{% else %}—{% endif %}
+            </div>
+            <div class="stat-label">Avg Disc %</div>
+        </div></div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Dark-tab panel ── #}
+<div class="card shadow-sm">
+    <div class="card-header py-2" style="background:var(--nav-bg);">
+        <ul class="nav dark-tabs" id="prodTabs">
+            <li class="nav-item"><a class="nav-link active" href="#" data-tab="season">By Season</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="month"  data-lazy-url="{% url 'product_tab' 'month'  %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Month</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="week"   data-lazy-url="{% url 'product_tab' 'week'   %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Week</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="category" data-lazy-url="{% url 'product_tab' 'category' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Category</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="shop"     data-lazy-url="{% url 'product_tab' 'shop'     %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">By Shop</a></li>
+        </ul>
+    </div>
+    <div class="card-body tab-content-wrap">
+        <div id="tabContent">
+            {# Season tab rendered server-side on initial load #}
+            {% include "product/tabs/season.html" %}
+        </div>
+        <div id="tabSpinner" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);">
+            <span class="spinner-border spinner-border-sm me-2"></span>Loading…
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    const loaded = {season: true};
+    document.querySelectorAll('#prodTabs .nav-link').forEach(function(link){
+        link.addEventListener('click', function(e){
+            e.preventDefault();
+            document.querySelectorAll('#prodTabs .nav-link').forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+            const tab = this.dataset.tab;
+            const url = this.dataset.lazyUrl;
+            if (!url || loaded[tab]) return;
+            document.getElementById('tabContent').innerHTML = '';
+            document.getElementById('tabSpinner').style.display = 'block';
+            fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(r => r.text())
+                .then(html => {
+                    document.getElementById('tabSpinner').style.display = 'none';
+                    document.getElementById('tabContent').innerHTML = html;
+                    loaded[tab] = true;
+                })
+                .catch(err => {
+                    document.getElementById('tabSpinner').style.display = 'none';
+                    document.getElementById('tabContent').innerHTML =
+                        '<div class="alert alert-danger">Load error: ' + err.message + '</div>';
+                });
+        });
+    });
+
+    window.setDaysBack = function(days){
+        const end = new Date(), start = new Date();
+        start.setDate(end.getDate() - days + 1);
+        document.querySelector('[name=start_date]').value = start.toISOString().slice(0,10);
+        document.querySelector('[name=end_date]').value   = end.toISOString().slice(0,10);
+    };
+    window.setYear = function(yr){
+        document.querySelector('[name=start_date]').value = yr + '-01-01';
+        document.querySelector('[name=end_date]').value   = yr + '-12-31';
+    };
+})();
+</script>
+{% endblock %}

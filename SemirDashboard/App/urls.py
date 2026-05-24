@@ -19,6 +19,8 @@ urlpatterns = [
     path("upload/customers/",   views.upload_customers,   name="upload_customers"),
     path("upload/used-points/", views.upload_used_points, name="upload_used_points"),
     path("upload/sales/",       views.upload_sales,       name="upload_sales"),
+    path("upload/sale-detail/", views.upload_sale_detail, name="upload_sale_detail"),
+    path("upload/inventory/",   views.upload_inventory,   name="upload_inventory"),
     path("upload/coupons/",     views.upload_coupons,     name="upload_coupons"),
     path("upload/jobs/",                    views.upload_jobs_list,  name="upload_jobs_list"),
     path("upload/jobs/<str:job_id>/",       views.upload_job_status, name="upload_job_status"),
@@ -38,6 +40,10 @@ urlpatterns = [
     path("coupons/campaigns/",        views.manage_campaigns,          name="manage_campaigns"),
     path("coupons/tab/<str:tab>/",    views.coupon_tab,                name="coupon_tab"),
 
+    # ── Product Analytics ─────────────────────────────────────────────────────
+    path("products/",               views.product_dashboard, name="product_dashboard"),
+    path("products/tab/<str:tab>/", views.product_tab,       name="product_tab"),
+
     # ── Customer ──────────────────────────────────────────────────────────────
     path("customer-detail/", views.customer_detail, name="customer_detail"),
 
@@ -46,7 +52,8 @@ urlpatterns = [
     path("shop-detail/export/",           views.export_shop_detail_excel,      name="export_shop_detail_excel"),
     path("shop-detail/partial/sales/",    views.shop_detail_sales_partial,     name="shop_detail_sales_partial"),
     path("shop-detail/partial/customer/", views.shop_detail_customer_partial,  name="shop_detail_customer_partial"),
-    path("shop-detail/partial/coupon/",   views.shop_detail_coupon_partial,    name="shop_detail_coupon_partial"),
+    path("shop-detail/partial/coupon/",     views.shop_detail_coupon_partial,     name="shop_detail_coupon_partial"),
+    path("shop-detail/partial/inventory/", views.shop_detail_inventory_partial,  name="shop_detail_inventory_partial"),
 
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/",       users.user_management, name="user_management"),

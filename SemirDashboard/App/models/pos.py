@@ -78,3 +78,65 @@ class SalesTransaction(models.Model):
 
     def __str__(self):
         return f"{self.invoice_number} - {self.vip_name}"
+
+
+class SaleDetail(models.Model):
+    """
+    Invoice line-items from HQ detail report (one row per product per invoice).
+    FK to SalesTransaction is soft (db_constraint=False) — detail may be uploaded
+    before the header file, in which case transaction will be null until reconciled.
+    """
+    invoice_number    = models.CharField(max_length=200, db_index=True)
+    transaction       = models.ForeignKey(
+        'SalesTransaction',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='line_items',
+        to_field='invoice_number',
+        db_constraint=False,
+    )
+    shop_id           = models.CharField(max_length=100, db_index=True)
+    shop_name         = models.CharField(max_length=200, db_index=True)
+    sales_date        = models.DateField(db_index=True)
+    sales_time        = models.TimeField(null=True, blank=True)
+    brand             = models.CharField(max_length=100, db_index=True)
+    product_code      = models.CharField(max_length=200)
+    product_name      = models.CharField(max_length=500, blank=True)
+    barcode           = models.CharField(max_length=100, db_index=True)
+    sku               = models.CharField(max_length=100, db_index=True)
+    color             = models.CharField(max_length=100, blank=True)
+    size              = models.CharField(max_length=50, blank=True)
+    year              = models.IntegerField(null=True, blank=True, db_index=True)
+    season            = models.CharField(max_length=10, blank=True, db_index=True)
+    gender            = models.CharField(max_length=50, blank=True)
+    category_l1       = models.CharField(max_length=100, blank=True)
+    category_l2       = models.CharField(max_length=100, blank=True)
+    category_l3       = models.CharField(max_length=100, blank=True)
+    quantity          = models.IntegerField(default=0)
+    fact_retail_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sales_amount      = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    settlement_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tag_price         = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tag_amount        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_pct      = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    vat_rate          = models.CharField(max_length=20, blank=True)
+    salesmen          = models.CharField(max_length=200, blank=True, db_index=True)
+    salesmen_code     = models.CharField(max_length=100, blank=True)
+    promotion         = models.CharField(max_length=500, blank=True)
+    currency          = models.CharField(max_length=10, default='VND')
+    created_at        = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('invoice_number', 'barcode', 'size')
+        indexes = [
+            models.Index(fields=['sales_date', 'brand']),
+            models.Index(fields=['sales_date', 'shop_id']),
+            models.Index(fields=['sales_date', 'shop_name']),
+            models.Index(fields=['year', 'season', 'brand']),
+            models.Index(fields=['sku', 'brand']),
+            models.Index(fields=['salesmen', 'sales_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.invoice_number} | {self.product_name or self.product_code} | qty={self.quantity}"

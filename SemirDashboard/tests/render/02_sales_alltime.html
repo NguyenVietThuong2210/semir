@@ -417,6 +417,11 @@ td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!impo
                                     <i class="bi bi-ticket"></i> Upload Coupons
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/inventory/">
+                                    <i class="bi bi-boxes"></i> Upload Inventory
+                                </a>
+                            </li>
                             
                             
                             <li>
@@ -512,6 +517,14 @@ td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!impo
                                 </a>
                             </li>
                             
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/products/">
+                                    <i class="bi bi-boxes"></i> Product Analytics
+                                </a>
+                            </li>
+                            
                         </ul>
                     </li>
 
@@ -592,7 +605,7 @@ td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!impo
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="HctdF2w3MYtdD7FYzLGrqZFTImicL4w2oUYYoFGiSQJRf5QncpFjnVrL8NDFoanR">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="jBHXLodC8U8koO0HhL7EmBwIk3rEbUTCmKW6a6TSNrqvyXerNnGE5S2dPEQXCSLd">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -1113,6 +1126,13 @@ td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!impo
             .then(function (html) {
                 placeholder.outerHTML = html;
                 btn.dataset.loaded = "true";
+                // Re-execute any <script> tags injected via outerHTML (browser skips them by default)
+                pane.querySelectorAll("script").forEach(function (old) {
+                    var s = document.createElement("script");
+                    s.textContent = old.textContent;
+                    document.head.appendChild(s);
+                    document.head.removeChild(s);
+                });
                 // Trigger custom event so page JS can post-process (e.g. init DataTables)
                 pane.dispatchEvent(new CustomEvent("lazyTabLoaded", {bubbles: true}));
             })

@@ -167,6 +167,35 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     SECTION 4 — Inventory Analytics
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="section-card shadow-sm">
+    <div class="section-header">
+        <span class="section-title"><i class="bi bi-boxes me-2"></i>Inventory Analytics by Shop</span>
+    </div>
+    <div class="section-body">
+        <div class="shop-select-row mb-3">
+            <div>
+                <label>Shop</label>
+                <select id="inventoryShopSel" class="form-select form-select-sm"{% if not inventory_shops %} disabled{% endif %}>
+                    <option value="">{% if inventory_shops %}— Select shop —{% else %}No inventory data{% endif %}</option>
+                    {% for s in inventory_shops %}
+                    <option value="{{ s }}">{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm align-self-end" onclick="loadSection('inventory')">
+                <i class="bi bi-search"></i> Load
+            </button>
+        </div>
+        <div class="loading-spinner" id="inventorySpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
+        <div class="section-result" id="inventoryResult">
+            <p class="no-data-msg text-muted">Select a shop to view inventory analytics.</p>
+        </div>
+    </div>
+</div>
+
 {{ campaigns|json_script:"campaigns-raw" }}
 
 <style>
@@ -178,13 +207,14 @@
 (function() {
     // ── Endpoints ─────────────────────────────────────────────────────
     const URLS = {
-        sales:    "{% url 'shop_detail_sales_partial' %}",
-        customer: "{% url 'shop_detail_customer_partial' %}",
-        coupon:   "{% url 'shop_detail_coupon_partial' %}",
+        sales:     "{% url 'shop_detail_sales_partial' %}",
+        customer:  "{% url 'shop_detail_customer_partial' %}",
+        coupon:    "{% url 'shop_detail_coupon_partial' %}",
+        inventory: "{% url 'shop_detail_inventory_partial' %}",
     };
 
     // ── Warn if any dropdown has no shops ─────────────────────────────
-    ['salesShopSel','customerShopSel','couponShopSel'].forEach(function(id) {
+    ['salesShopSel','customerShopSel','couponShopSel','inventoryShopSel'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el && el.options.length <= 1) {
             console.warn('[ShopDetail] ' + id + ' has no options — check server-side data.');
@@ -235,6 +265,8 @@
             shop = document.getElementById('salesShopSel').value;
         } else if (section === 'customer') {
             shop = document.getElementById('customerShopSel').value;
+        } else if (section === 'inventory') {
+            shop = document.getElementById('inventoryShopSel').value;
         } else {
             shop = document.getElementById('couponShopSel').value;
             const prefix = document.getElementById('couponPrefixInp').value;

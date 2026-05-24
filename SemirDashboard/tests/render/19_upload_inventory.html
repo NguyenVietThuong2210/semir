@@ -1,0 +1,818 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Inventory Data</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            /* ── Brand blues ─────────────────────── */
+            --primary:        #0369a1;
+            --primary-rgb:    3, 105, 161;
+            --primary-hover:  #075985;
+            --bs-primary:     #0369a1;
+            --bs-primary-rgb: 3, 105, 161;
+            --nav-bg:         #064e77;
+            --secondary:      #4a6785;
+
+            /* ── Accents ─────────────────────────── */
+            --accent:         #06b6d4;
+            --accent-rgb:     6, 182, 212;
+            --coupon:         #7b4000;
+            --success:        #198754;
+            --success-rgb:    25, 135, 84;
+            --danger:         #dc3545;
+            --danger-rgb:     220, 53, 69;
+
+            /* ── Amber / Yellow ──────────────────── */
+            --orange:         #eab308;
+            --orange-rgb:     234, 179, 8;
+            --orange-dark:    #a16207;
+            --highlight:      #fef08a;
+
+            /* ── CNV section palette ────────────── */
+            --cnv-purple:     #7b3f9e;
+            --cnv-navy:       #1a5cb0;
+            --cnv-forest:     #156f3a;
+
+            /* ── Status gradients ────────────────── */
+            --gradient-synced:     linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-not-synced: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+
+            /* ── Grade badges ───────────────────── */
+            --silver:         #94a3b8;
+
+            /* ── Chart series & highlights ──────── */
+            --c-alltime:      #0d6efd;
+            --c-pos:          #e53935;
+            --c-cnv:          #0369a1;
+            --c-zalo:         #2e7d32;
+            --c-oa:           #f57c00;
+            --hl-row:         #93c5fd;
+            --hl-row-light:   #bfdbfe;
+            --hl-cell:        #ffe066;
+            --border-light:   #f0f0f0;
+
+            /* ── Row highlight tints ─────────────── */
+            --highlight-warn: #fff3cd;
+            --highlight-ok:   #f0fdf4;
+
+            /* ── Code syntax ────────────────────── */
+            --code-keyword:   #0066cc;
+            --code-comment:   #666666;
+            --example-bg:     #eef3fb;
+
+            /* ── Neutrals ────────────────────────── */
+            --text:           #374151;
+            --text-dark:      #212529;
+            --text-muted:     #6c757d;
+            --border:         #dee2e6;
+            --bg:             #f8fafc;
+            --bg-light:       #f8f9fa;
+            --gray-tint:      #f0f2f5;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .navbar {
+            background: var(--nav-bg) !important;
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.35);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.3rem;
+        }
+
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, .9) !important;
+            transition: color .2s;
+            font-size: .93rem;
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link.active {
+            color: #fff !important;
+            font-weight: 500;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            border-radius: 8px;
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            transition: all .2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .table th {
+            background: var(--bg-light);
+            font-weight: 600;
+            font-size: .9rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5 {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .badge {
+            padding: .35em .65em;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1.5px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 .2rem rgba(var(--accent-rgb), 0.15);
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+            border: none;
+        }
+
+        .dropdown-item {
+            padding: .65rem 1.25rem;
+            transition: background .15s;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(var(--accent-rgb), 0.08);
+        }
+
+        .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem 0.25rem;
+        }
+
+        .page-link {
+            position: relative;
+            padding: .4rem 0;
+            margin: 0 .75rem;
+        }
+
+        .page-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #fff;
+            transition: width .2s;
+        }
+
+        .page-link:hover::after,
+        .page-link.active::after {
+            width: 100%;
+        }
+
+        @media(max-width:991px) {
+            .navbar-nav {
+                margin-top: 1rem;
+            }
+
+            .nav-item {
+                margin: .25rem 0;
+            }
+
+            .page-link {
+                margin: .25rem 0;
+                padding: .5rem 0;
+            }
+        }
+
+        .kpi-card {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .kpi-card .text-muted {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-link:focus {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .badge.bg-warning,
+        .badge.text-bg-warning {
+            color: var(--text) !important;
+        }
+    </style>
+    
+</head>
+
+<body>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow"></i> Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link page-link" href="/">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+
+                    
+                    
+                    <!-- Upload Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Data Upload</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/customers/">
+                                    <i class="bi bi-people"></i> Upload Customers
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/sales/">
+                                    <i class="bi bi-cart"></i> Upload Sales
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/">
+                                    <i class="bi bi-ticket"></i> Upload Coupons
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/inventory/">
+                                    <i class="bi bi-boxes"></i> Upload Inventory
+                                </a>
+                            </li>
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/#campaigns">
+                                    <i class="bi bi-tags"></i> Manage Campaigns
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+                    
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-bar-chart-line"></i> Analytics
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/">
+                                    <i class="bi bi-graph-up"></i> Sales Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/chart/">
+                                    <i class="bi bi-pie-chart"></i> Sales Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-analytics/">
+                                    <i class="bi bi-people-fill"></i> Customer Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-chart/">
+                                    <i class="bi bi-people"></i> Customer Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/">
+                                    <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/chart/">
+                                    <i class="bi bi-pie-chart-fill"></i> Coupon Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/customer-detail/">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/shop-detail/">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/products/">
+                                    <i class="bi bi-boxes"></i> Product Analytics
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- Tools Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Tools
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Additional Tools</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/formulas/">
+                                    <i class="bi bi-calculator"></i> Formulas
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">CNV Loyalty</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/cnv/sync-status/">
+                                    <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/users/">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            
+
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin-logs/">
+                                    <i class="bi bi-journal-text"></i> Admin Logs
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> alex
+                            
+                            
+                            <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
+                            
+                            
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/logout/">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="Bu9TqpvSxPhvIO3TlvfY5x8DtOBG3mHxEDo2P7b8cmzGSXhDR7OYOOE8Yp0Zukz8">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+
+    <main class="">
+        <div class="container-fluid px-3">
+            
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-boxes"></i> Upload Inventory Data</h2>
+</div>
+
+
+<div id="uploadStatusPanel" class="mb-4" style="display:none;" data-persist-visible="1">
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+      <span>
+        <i class="bi bi-arrow-repeat text-primary me-1"></i>
+        <strong>Upload Jobs</strong>
+        <small class="text-muted ms-2">Auto-refreshes every 3 s while a job is running</small>
+      </span>
+      <button class="btn btn-sm btn-outline-secondary" id="btnClearDone">Clear finished</button>
+    </div>
+    <div class="card-body p-0">
+      <div id="jobsList"></div>
+    </div>
+  </div>
+</div>
+
+<template id="jobRowTpl">
+  <div class="job-row px-3 py-2 border-bottom d-flex align-items-center gap-3" data-job-id="">
+    <div class="flex-shrink-0" style="width:110px;">
+      <span class="badge job-type-badge"></span>
+    </div>
+    <div class="flex-grow-1" style="min-width:0;">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="job-filename small fw-semibold text-truncate" style="max-width:300px;"></span>
+        <span class="job-status-badge ms-2 badge"></span>
+      </div>
+      <div class="progress job-progress" style="height:6px; display:none;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div>
+      </div>
+      <div class="job-result small text-muted mt-1" style="display:none;"></div>
+      <div class="job-error small text-danger mt-1" style="display:none;"></div>
+    </div>
+    <div class="flex-shrink-0 text-muted small job-time" style="width:80px; text-align:right;"></div>
+  </div>
+</template>
+
+<style>
+.job-row:last-child { border-bottom:none !important; }
+</style>
+
+<script>
+(function () {
+  const TYPE_COLORS = {
+    customers:   'primary',
+    used_points: 'info',
+    sales:       'success',
+    coupons:     'warning',
+  };
+  const STATUS_COLORS = {
+    queued:  'secondary',
+    running: 'primary',
+    done:    'success',
+    error:   'danger',
+  };
+  const STATUS_LABELS = {
+    queued:  'Queued',
+    running: 'Running…',
+    done:    'Done',
+    error:   'Error',
+  };
+
+  let _pollTimer = null;
+  let _hiddenIds = new Set(JSON.parse(sessionStorage.getItem('uploadHiddenJobs') || '[]'));
+
+  // Restore panel visibility immediately (before first fetch) to avoid flicker
+  if (sessionStorage.getItem('uploadPanelVisible') === '1') {
+    document.getElementById('uploadStatusPanel').style.display = '';
+  }
+
+  function saveHidden() {
+    sessionStorage.setItem('uploadHiddenJobs', JSON.stringify([..._hiddenIds]));
+  }
+
+  function fmtResult(result, type) {
+    if (!result) return '';
+    const parts = [];
+    if (result.created   != null) parts.push(`Created: ${result.created.toLocaleString()}`);
+    if (result.updated   != null) parts.push(`Updated: ${result.updated.toLocaleString()}`);
+    if (result.total_processed != null) parts.push(`Total: ${result.total_processed.toLocaleString()}`);
+    if (result.skipped   != null && result.skipped > 0) parts.push(`Skipped: ${result.skipped.toLocaleString()}`);
+    if (result.errors    != null) {
+      const errCount = Array.isArray(result.errors) ? result.errors.length : result.errors;
+      if (errCount > 0) parts.push(`Errors: ${errCount}`);
+    }
+    return parts.join(' · ');
+  }
+
+  function timeAgo(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    const sec = Math.round((Date.now() - d) / 1000);
+    if (sec <= 0)   return 'just now';
+    if (sec < 60)   return `${sec}s ago`;
+    if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+    return `${Math.round(sec / 3600)}h ago`;
+  }
+
+  function renderJobs(jobs) {
+    const panel  = document.getElementById('uploadStatusPanel');
+    const list   = document.getElementById('jobsList');
+    const tpl    = document.getElementById('jobRowTpl');
+    const visible = jobs.filter(j => !_hiddenIds.has(j.id));
+
+    if (visible.length === 0) {
+      panel.style.display = 'none';
+      sessionStorage.setItem('uploadPanelVisible', '0');
+      return;
+    }
+    panel.style.display = '';
+    sessionStorage.setItem('uploadPanelVisible', '1');
+
+    // build index of existing rows
+    const existing = {};
+    list.querySelectorAll('.job-row').forEach(el => { existing[el.dataset.jobId] = el; });
+
+    // remove rows no longer in list
+    Object.keys(existing).forEach(id => {
+      if (!visible.find(j => j.id === id)) existing[id].remove();
+    });
+
+    visible.forEach((job, idx) => {
+      let row = existing[job.id];
+      if (!row) {
+        row = tpl.content.cloneNode(true).querySelector('.job-row');
+        row.dataset.jobId = job.id;
+        list.appendChild(row);
+      }
+
+      // type badge
+      const typeBadge = row.querySelector('.job-type-badge');
+      typeBadge.className = `badge bg-${TYPE_COLORS[job.type] || 'secondary'} job-type-badge`;
+      typeBadge.textContent = job.type_label || job.type;
+
+      // filename
+      row.querySelector('.job-filename').textContent = job.filename;
+
+      // status badge
+      const statusBadge = row.querySelector('.job-status-badge');
+      statusBadge.className = `badge bg-${STATUS_COLORS[job.status] || 'secondary'} job-status-badge`;
+      statusBadge.textContent = STATUS_LABELS[job.status] || job.status;
+
+      // progress bar
+      const progBar = row.querySelector('.job-progress');
+      if (job.status === 'running' && job.total > 0) {
+        const pct = Math.round(job.processed / job.total * 100);
+        progBar.style.display = '';
+        progBar.querySelector('.progress-bar').style.width = pct + '%';
+        progBar.querySelector('.progress-bar').textContent = pct + '%';
+      } else if (job.status === 'running') {
+        progBar.style.display = '';
+        progBar.querySelector('.progress-bar').style.width = '100%';
+        progBar.querySelector('.progress-bar').textContent = 'Processing…';
+      } else {
+        progBar.style.display = 'none';
+      }
+
+      // result
+      const resultEl = row.querySelector('.job-result');
+      if (job.status === 'done' && job.result) {
+        resultEl.style.display = '';
+        resultEl.textContent = fmtResult(job.result, job.type);
+      } else {
+        resultEl.style.display = 'none';
+      }
+
+      // error
+      const errorEl = row.querySelector('.job-error');
+      if (job.status === 'error' && job.error) {
+        errorEl.style.display = '';
+        errorEl.textContent = job.error;
+      } else {
+        errorEl.style.display = 'none';
+      }
+
+      // time
+      const timeRef = job.status === 'done' || job.status === 'error' ? job.finished_at : job.started_at;
+      row.querySelector('.job-time').textContent = timeAgo(timeRef);
+    });
+  }
+
+  async function fetchAndRender() {
+    try {
+      const r = await fetch('/upload/jobs/');
+      if (!r.ok) return;
+      const data = await r.json();
+      renderJobs(data.jobs || []);
+
+      const hasActive = (data.jobs || []).some(j => j.status === 'queued' || j.status === 'running');
+      if (hasActive) {
+        if (!_pollTimer) _pollTimer = setInterval(fetchAndRender, 3000);
+      } else {
+        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+      }
+    } catch (_) {}
+  }
+
+  // Clear finished button
+  document.getElementById('btnClearDone').addEventListener('click', () => {
+    document.querySelectorAll('.job-row').forEach(row => {
+      const id = row.dataset.jobId;
+      // find status from badge
+      const badge = row.querySelector('.job-status-badge');
+      if (badge && (badge.textContent === 'Done' || badge.textContent === 'Error')) {
+        _hiddenIds.add(id);
+        row.remove();
+      }
+    });
+    saveHidden();
+    if (document.querySelectorAll('.job-row').length === 0) {
+      document.getElementById('uploadStatusPanel').style.display = 'none';
+      sessionStorage.setItem('uploadPanelVisible', '0');
+    }
+  });
+
+  // Initial fetch + poll
+  fetchAndRender();
+  setInterval(fetchAndRender, 5000);   // baseline refresh every 5s
+})();
+</script>
+
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-info-circle"></i> File Requirements</h6>
+                    <p class="mb-2">Your file should contain the following columns:</p>
+                    <ul class="small mb-0">
+                        <li><strong>Warehouse/Shop ID</strong> — Shop identifier (required)</li>
+                        <li><strong>Warehouse/Shop</strong> — Shop name (required)</li>
+                        <li><strong>Product Code</strong> — Unique per color+size variant (required)</li>
+                        <li><strong>Brand</strong>, <strong>Barcode</strong>, <strong>SKU</strong></li>
+                        <li><strong>Year</strong>, <strong>Season</strong>, <strong>Gender</strong></li>
+                        <li><strong>Large/Middle/Small Class</strong> — Product categories</li>
+                        <li><strong>Inventory Quantity</strong>, <strong>In Transit Quantity</strong>, <strong>Total Inventory Quantity</strong></li>
+                        <li><strong>Tagprice</strong>, <strong>Tag Amount</strong>, <strong>Total Tag Amount</strong></li>
+                    </ul>
+                    <p class="mt-2 mb-0 small text-warning">
+                        <i class="bi bi-arrow-repeat"></i> <strong>Re-uploading the same shop+product overwrites existing data</strong> — no duplicate rows created.
+                    </p>
+                </div>
+
+                <form method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="Bu9TqpvSxPhvIO3TlvfY5x8DtOBG3mHxEDo2P7b8cmzGSXhDR7OYOOE8Yp0Zukz8">
+                    <div class="mb-3">
+                        <label for="id_file" class="form-label">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> Select File
+                        </label>
+                        <input type="file" name="file" accept=".csv,.xlsx,.xls" class="form-control" required aria-describedby="id_file_helptext" id="id_file">
+                        <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-upload"></i> Upload Inventory Data
+                        </button>
+                        <a href="/" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Home
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        
+        <div class="card mt-4">
+            <div class="card-header" style="background:var(--primary);color:#fff;">
+                <i class="bi bi-database"></i> Current Inventory Database
+            </div>
+            <div class="card-body">
+                
+                <p class="small text-muted mb-3">
+                    <i class="bi bi-clock"></i> Last uploaded:
+                    <strong>2026-05-23 15:54</strong>
+                </p>
+                
+                <div class="row text-center g-3">
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            <h4 class="mb-0" style="color:var(--text);">77507</h4>
+                            <small class="text-muted">SKU Lines</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            <h4 class="mb-0" style="color:var(--text);">228061</h4>
+                            <small class="text-muted">Total Qty (pcs)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            <h5 class="mb-0" style="color:var(--text);">104159281740</h5>
+                            <small class="text-muted">Total Value (VND)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+</body>
+
+</html>

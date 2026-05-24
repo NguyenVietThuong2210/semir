@@ -1,0 +1,911 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            /* ── Brand blues ─────────────────────── */
+            --primary:        #0369a1;
+            --primary-rgb:    3, 105, 161;
+            --primary-hover:  #075985;
+            --bs-primary:     #0369a1;
+            --bs-primary-rgb: 3, 105, 161;
+            --nav-bg:         #064e77;
+            --secondary:      #4a6785;
+
+            /* ── Accents ─────────────────────────── */
+            --accent:         #06b6d4;
+            --accent-rgb:     6, 182, 212;
+            --coupon:         #7b4000;
+            --success:        #198754;
+            --success-rgb:    25, 135, 84;
+            --danger:         #dc3545;
+            --danger-rgb:     220, 53, 69;
+
+            /* ── Amber / Yellow ──────────────────── */
+            --orange:         #eab308;
+            --orange-rgb:     234, 179, 8;
+            --orange-dark:    #a16207;
+            --highlight:      #fef08a;
+
+            /* ── CNV section palette ────────────── */
+            --cnv-purple:     #7b3f9e;
+            --cnv-navy:       #1a5cb0;
+            --cnv-forest:     #156f3a;
+
+            /* ── Status gradients ────────────────── */
+            --gradient-synced:     linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-not-synced: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+
+            /* ── Grade badges ───────────────────── */
+            --silver:         #94a3b8;
+
+            /* ── Chart series & highlights ──────── */
+            --c-alltime:      #0d6efd;
+            --c-pos:          #e53935;
+            --c-cnv:          #0369a1;
+            --c-zalo:         #2e7d32;
+            --c-oa:           #f57c00;
+            --hl-row:         #93c5fd;
+            --hl-row-light:   #bfdbfe;
+            --hl-cell:        #ffe066;
+            --border-light:   #f0f0f0;
+
+            /* ── Row highlight tints ─────────────── */
+            --highlight-warn: #fff3cd;
+            --highlight-ok:   #f0fdf4;
+
+            /* ── Code syntax ────────────────────── */
+            --code-keyword:   #0066cc;
+            --code-comment:   #666666;
+            --example-bg:     #eef3fb;
+
+            /* ── Neutrals ────────────────────────── */
+            --text:           #374151;
+            --text-dark:      #212529;
+            --text-muted:     #6c757d;
+            --border:         #dee2e6;
+            --bg:             #f8fafc;
+            --bg-light:       #f8f9fa;
+            --gray-tint:      #f0f2f5;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .navbar {
+            background: var(--nav-bg) !important;
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.35);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.3rem;
+        }
+
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, .9) !important;
+            transition: color .2s;
+            font-size: .93rem;
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link.active {
+            color: #fff !important;
+            font-weight: 500;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            border-radius: 8px;
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            transition: all .2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .table th {
+            background: var(--bg-light);
+            font-weight: 600;
+            font-size: .9rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5 {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .badge {
+            padding: .35em .65em;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1.5px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 .2rem rgba(var(--accent-rgb), 0.15);
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+            border: none;
+        }
+
+        .dropdown-item {
+            padding: .65rem 1.25rem;
+            transition: background .15s;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(var(--accent-rgb), 0.08);
+        }
+
+        .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .dropdown-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem 0.25rem;
+        }
+
+        .page-link {
+            position: relative;
+            padding: .4rem 0;
+            margin: 0 .75rem;
+        }
+
+        .page-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #fff;
+            transition: width .2s;
+        }
+
+        .page-link:hover::after,
+        .page-link.active::after {
+            width: 100%;
+        }
+
+        @media(max-width:991px) {
+            .navbar-nav {
+                margin-top: 1rem;
+            }
+
+            .nav-item {
+                margin: .25rem 0;
+            }
+
+            .page-link {
+                margin: .25rem 0;
+                padding: .5rem 0;
+            }
+        }
+
+        .kpi-card {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .kpi-card .text-muted {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-link:focus {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .badge.bg-warning,
+        .badge.text-bg-warning {
+            color: var(--text) !important;
+        }
+    </style>
+    
+<style>
+.stat-card { min-height:110px; border-radius:10px; }
+.stat-card .card-body { display:flex; flex-direction:column; justify-content:space-between; }
+.stat-value { font-size:1.55rem; font-weight:700; margin:5px 0; color:var(--text); }
+.stat-label { font-size:.74rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text); }
+.overview-metrics .stat-card { background:rgba(var(--orange-rgb),.08); border:none; }
+.period-metrics   .stat-card { background:rgba(var(--primary-rgb),.09); border:none; }
+.dark-tabs .nav-link {
+    background:rgba(255,255,255,.08); color:rgba(255,255,255,.85);
+    border:1px solid rgba(255,255,255,.15); border-radius:6px 6px 0 0;
+    margin-right:3px; font-weight:500; font-size:.88rem;
+}
+.dark-tabs .nav-link:hover  { background:rgba(255,255,255,.18); color:#fff; }
+.dark-tabs .nav-link.active { background:#fff; color:var(--nav-bg); border-color:#fff; font-weight:600; }
+.dark-tabs { border-bottom:none; }
+.tab-content-wrap { background:#fff; border:1px solid var(--border); border-radius:0 6px 6px 6px; padding:1rem; }
+[data-theme="dark"] .tab-content-wrap { background:var(--bg-light); }
+.tab-tbl-wrap { max-height:450px; overflow-y:auto; }
+.sticky-thead th { position:sticky; top:0; z-index:2; }
+</style>
+
+</head>
+
+<body>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow"></i> Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link page-link" href="/">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+
+                    
+                    
+                    <!-- Upload Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="uploadDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-cloud-upload"></i> Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Data Upload</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/customers/">
+                                    <i class="bi bi-people"></i> Upload Customers
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/sales/">
+                                    <i class="bi bi-cart"></i> Upload Sales
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/">
+                                    <i class="bi bi-ticket"></i> Upload Coupons
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/inventory/">
+                                    <i class="bi bi-boxes"></i> Upload Inventory
+                                </a>
+                            </li>
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/coupons/#campaigns">
+                                    <i class="bi bi-tags"></i> Manage Campaigns
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+                    
+
+                    <!-- Analytics Dropdown (always shown to authenticated users) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-bar-chart-line"></i> Analytics
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Analytics &amp; Reports</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/">
+                                    <i class="bi bi-graph-up"></i> Sales Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/analytics/chart/">
+                                    <i class="bi bi-pie-chart"></i> Sales Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-analytics/">
+                                    <i class="bi bi-people-fill"></i> Customer Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/cnv/customer-chart/">
+                                    <i class="bi bi-people"></i> Customer Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/">
+                                    <i class="bi bi-ticket-perforated"></i> Coupon Analytics
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/coupons/chart/">
+                                    <i class="bi bi-pie-chart-fill"></i> Coupon Analytics Charts
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/customer-detail/">
+                                    <i class="bi bi-person-circle"></i> Customer Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/shop-detail/">
+                                    <i class="bi bi-shop"></i> Shop Detail
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/products/">
+                                    <i class="bi bi-boxes"></i> Product Analytics
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- Tools Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Tools
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">Additional Tools</h6>
+                            </li>
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/formulas/">
+                                    <i class="bi bi-calculator"></i> Formulas
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">CNV Loyalty</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/cnv/sync-status/">
+                                    <i class="bi bi-arrow-repeat"></i> Sync Status
+                                </a>
+                            </li>
+                            
+                            
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Admin</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/users/">
+                                    <i class="bi bi-people-fill"></i> User Management
+                                </a>
+                            </li>
+                            
+
+                            
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">Monitoring</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin-logs/">
+                                    <i class="bi bi-journal-text"></i> Admin Logs
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </li>
+
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> alex
+                            
+                            
+                            <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
+                            
+                            
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/logout/">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="TWTttwSxV5HoZ2eDHj7p2ZlrbgIOxyLQW58CSeyNACZz9bsndVGpLgRWGR77YwDr">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+
+    <main class="">
+        <div class="container-fluid px-3">
+            
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-boxes me-2"></i>Product Analytics</h2>
+</div>
+
+
+<div class="card mb-4 shadow-sm">
+    <div class="card-body py-2">
+        <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label small mb-1 fw-semibold">Start Date</label>
+                <input type="date" name="start_date" value=""
+                       class="form-control form-control-sm" style="width:150px">
+            </div>
+            <div>
+                <label class="form-label small mb-1 fw-semibold">End Date</label>
+                <input type="date" name="end_date" value=""
+                       class="form-control form-control-sm" style="width:150px">
+            </div>
+            <div>
+                <label class="form-label small mb-1 fw-semibold">Shop Group</label>
+                <select name="shop_group" class="form-select form-select-sm" style="width:180px">
+                    <option value="" selected>All Groups</option>
+                    <option value="Bala Group"   >Bala Group</option>
+                    <option value="Semir Group"  >Semir Group</option>
+                    <option value="Others Group" >Others Group</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-funnel me-1"></i>Apply
+            </button>
+            <a href="/products/" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-x-circle me-1"></i>Clear
+            </a>
+            <div class="ms-2 d-flex gap-1 flex-wrap" id="quickBtns">
+                
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDaysBack(7)">Last 7 Days</button>
+                
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDaysBack(30)">Last 30 Days</button>
+                
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDaysBack(90)">Last 90 Days</button>
+                
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDaysBack(365)">Last Year</button>
+                
+                
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setYear(2024)">2024</button>
+                
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setYear(2025)">2025</button>
+                
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setYear(2026)">2026</button>
+                
+            </div>
+        </form>
+    </div>
+</div>
+
+
+
+<div class="row g-3 mb-4 overview-metrics">
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value">15101</div>
+            <div class="stat-label">Line Items</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value">19445</div>
+            <div class="stat-label">Total Qty (pcs)</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value amount-vnd" style="font-size:1.05rem">8,313,213,000</div>
+            <div class="stat-label">Tag Amount (VND)</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value amount-vnd" style="font-size:1.05rem">6,818,649,284</div>
+            <div class="stat-label">Sales Amount (VND)</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value amount-vnd" style="font-size:1.05rem">6,818,649,284</div>
+            <div class="stat-label">Settlement (VND)</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card shadow-sm"><div class="card-body py-2 text-center">
+            <div class="stat-value">
+                18.0%
+            </div>
+            <div class="stat-label">Avg Disc %</div>
+        </div></div>
+    </div>
+</div>
+
+
+
+<div class="card shadow-sm">
+    <div class="card-header py-2" style="background:var(--nav-bg);">
+        <ul class="nav dark-tabs" id="prodTabs">
+            <li class="nav-item"><a class="nav-link active" href="#" data-tab="season">By Season</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="month"  data-lazy-url="/products/tab/month/">By Month</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="week"   data-lazy-url="/products/tab/week/">By Week</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="category" data-lazy-url="/products/tab/category/">By Category</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="shop"     data-lazy-url="/products/tab/shop/">By Shop</a></li>
+        </ul>
+    </div>
+    <div class="card-body tab-content-wrap">
+        <div id="tabContent">
+            
+            
+
+<div class="table-responsive tab-tbl-wrap">
+<table class="table table-sm table-hover align-middle mb-0" style="font-size:.84rem;">
+    <thead class="sticky-thead">
+        <tr style="background:var(--primary);color:white;">
+            <th>Year</th>
+            <th>Season</th>
+            <th class="text-end">Qty (pcs)</th>
+            <th class="text-end">Tag Amt (VND)</th>
+            <th class="text-end">Sales Amt (VND)</th>
+            <th class="text-end">Settlement (VND)</th>
+            <th class="text-end">Disc %</th>
+            <th class="text-end">Lines</th>
+        </tr>
+    </thead>
+    <tbody>
+    
+    <tr>
+        <td>2026</td>
+        <td>1</td>
+        <td class="text-end fw-semibold">522</td>
+        <td class="text-end amount-vnd text-muted">337,538,000</td>
+        <td class="text-end amount-vnd">288,560,090</td>
+        <td class="text-end amount-vnd">288,560,090</td>
+        <td class="text-end">
+            14.5%
+        </td>
+        <td class="text-end text-muted">529</td>
+    </tr>
+    
+    <tr>
+        <td>2026</td>
+        <td>2</td>
+        <td class="text-end fw-semibold">8754</td>
+        <td class="text-end amount-vnd text-muted">5,892,376,000</td>
+        <td class="text-end amount-vnd">5,396,551,430</td>
+        <td class="text-end amount-vnd">5,396,551,430</td>
+        <td class="text-end">
+            8.4%
+        </td>
+        <td class="text-end text-muted">8900</td>
+    </tr>
+    
+    <tr>
+        <td>2026</td>
+        <td>9</td>
+        <td class="text-end fw-semibold">93</td>
+        <td class="text-end amount-vnd text-muted">22,177,000</td>
+        <td class="text-end amount-vnd">20,061,695</td>
+        <td class="text-end amount-vnd">20,061,695</td>
+        <td class="text-end">
+            9.5%
+        </td>
+        <td class="text-end text-muted">88</td>
+    </tr>
+    
+    <tr>
+        <td>2025</td>
+        <td>1</td>
+        <td class="text-end fw-semibold">77</td>
+        <td class="text-end amount-vnd text-muted">44,293,000</td>
+        <td class="text-end amount-vnd">23,089,236</td>
+        <td class="text-end amount-vnd">23,089,236</td>
+        <td class="text-end text-danger">
+            47.9%
+        </td>
+        <td class="text-end text-muted">75</td>
+    </tr>
+    
+    <tr>
+        <td>2025</td>
+        <td>2</td>
+        <td class="text-end fw-semibold">2870</td>
+        <td class="text-end amount-vnd text-muted">1,579,780,000</td>
+        <td class="text-end amount-vnd">854,716,055</td>
+        <td class="text-end amount-vnd">854,716,055</td>
+        <td class="text-end text-danger">
+            45.9%
+        </td>
+        <td class="text-end text-muted">2875</td>
+    </tr>
+    
+    <tr>
+        <td>2025</td>
+        <td>3</td>
+        <td class="text-end fw-semibold">414</td>
+        <td class="text-end amount-vnd text-muted">252,736,000</td>
+        <td class="text-end amount-vnd">160,405,733</td>
+        <td class="text-end amount-vnd">160,405,733</td>
+        <td class="text-end text-danger">
+            36.5%
+        </td>
+        <td class="text-end text-muted">415</td>
+    </tr>
+    
+    <tr>
+        <td>2025</td>
+        <td>4</td>
+        <td class="text-end fw-semibold">31</td>
+        <td class="text-end amount-vnd text-muted">17,489,000</td>
+        <td class="text-end amount-vnd">8,219,185</td>
+        <td class="text-end amount-vnd">8,219,185</td>
+        <td class="text-end text-danger">
+            53.0%
+        </td>
+        <td class="text-end text-muted">31</td>
+    </tr>
+    
+    <tr>
+        <td>2025</td>
+        <td>9</td>
+        <td class="text-end fw-semibold">224</td>
+        <td class="text-end amount-vnd text-muted">17,360,000</td>
+        <td class="text-end amount-vnd">12,600,024</td>
+        <td class="text-end amount-vnd">12,600,024</td>
+        <td class="text-end text-danger">
+            27.4%
+        </td>
+        <td class="text-end text-muted">92</td>
+    </tr>
+    
+    <tr>
+        <td>2024</td>
+        <td>1</td>
+        <td class="text-end fw-semibold">9</td>
+        <td class="text-end amount-vnd text-muted">8,761,000</td>
+        <td class="text-end amount-vnd">2,512,200</td>
+        <td class="text-end amount-vnd">2,512,200</td>
+        <td class="text-end text-danger">
+            71.3%
+        </td>
+        <td class="text-end text-muted">9</td>
+    </tr>
+    
+    <tr>
+        <td>2024</td>
+        <td>2</td>
+        <td class="text-end fw-semibold">86</td>
+        <td class="text-end amount-vnd text-muted">56,224,000</td>
+        <td class="text-end amount-vnd">25,398,764</td>
+        <td class="text-end amount-vnd">25,398,764</td>
+        <td class="text-end text-danger">
+            54.8%
+        </td>
+        <td class="text-end text-muted">86</td>
+    </tr>
+    
+    <tr>
+        <td>2024</td>
+        <td>3</td>
+        <td class="text-end fw-semibold">278</td>
+        <td class="text-end amount-vnd text-muted">78,108,000</td>
+        <td class="text-end amount-vnd">24,290,572</td>
+        <td class="text-end amount-vnd">24,290,572</td>
+        <td class="text-end text-danger">
+            68.9%
+        </td>
+        <td class="text-end text-muted">102</td>
+    </tr>
+    
+    <tr>
+        <td>2024</td>
+        <td>4</td>
+        <td class="text-end fw-semibold">8</td>
+        <td class="text-end amount-vnd text-muted">6,072,000</td>
+        <td class="text-end amount-vnd">2,065,200</td>
+        <td class="text-end amount-vnd">2,065,200</td>
+        <td class="text-end text-danger">
+            66.0%
+        </td>
+        <td class="text-end text-muted">8</td>
+    </tr>
+    
+    <tr>
+        <td>2024</td>
+        <td>9</td>
+        <td class="text-end fw-semibold">2821</td>
+        <td class="text-end amount-vnd text-muted">299,000</td>
+        <td class="text-end amount-vnd">179,100</td>
+        <td class="text-end amount-vnd">179,100</td>
+        <td class="text-end text-danger">
+            40.1%
+        </td>
+        <td class="text-end text-muted">637</td>
+    </tr>
+    
+    <tr>
+        <td>2012</td>
+        <td>9</td>
+        <td class="text-end fw-semibold">3258</td>
+        <td class="text-end amount-vnd text-muted">0</td>
+        <td class="text-end amount-vnd">0</td>
+        <td class="text-end amount-vnd">0</td>
+        <td class="text-end">
+            —
+        </td>
+        <td class="text-end text-muted">1254</td>
+    </tr>
+    
+    </tbody>
+    
+    <tfoot>
+    <tr style="background:rgba(var(--primary-rgb),.06);font-weight:600;border-top:2px solid var(--primary);">
+        <td colspan="2">Total</td>
+        <td class="text-end">19445</td>
+        <td class="text-end amount-vnd text-muted">8,313,213,000</td>
+        <td class="text-end amount-vnd">6,818,649,284</td>
+        <td class="text-end amount-vnd">6,818,649,284</td>
+        <td class="text-end">18.0%</td>
+        <td class="text-end">15101</td>
+    </tr>
+    </tfoot>
+    
+</table>
+</div>
+
+
+        </div>
+        <div id="tabSpinner" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);">
+            <span class="spinner-border spinner-border-sm me-2"></span>Loading…
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    const loaded = {season: true};
+    document.querySelectorAll('#prodTabs .nav-link').forEach(function(link){
+        link.addEventListener('click', function(e){
+            e.preventDefault();
+            document.querySelectorAll('#prodTabs .nav-link').forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+            const tab = this.dataset.tab;
+            const url = this.dataset.lazyUrl;
+            if (!url || loaded[tab]) return;
+            document.getElementById('tabContent').innerHTML = '';
+            document.getElementById('tabSpinner').style.display = 'block';
+            fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(r => r.text())
+                .then(html => {
+                    document.getElementById('tabSpinner').style.display = 'none';
+                    document.getElementById('tabContent').innerHTML = html;
+                    loaded[tab] = true;
+                })
+                .catch(err => {
+                    document.getElementById('tabSpinner').style.display = 'none';
+                    document.getElementById('tabContent').innerHTML =
+                        '<div class="alert alert-danger">Load error: ' + err.message + '</div>';
+                });
+        });
+    });
+
+    window.setDaysBack = function(days){
+        const end = new Date(), start = new Date();
+        start.setDate(end.getDate() - days + 1);
+        document.querySelector('[name=start_date]').value = start.toISOString().slice(0,10);
+        document.querySelector('[name=end_date]').value   = end.toISOString().slice(0,10);
+    };
+    window.setYear = function(yr){
+        document.querySelector('[name=start_date]').value = yr + '-01-01';
+        document.querySelector('[name=end_date]').value   = yr + '-12-31';
+    };
+})();
+</script>
+
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+</body>
+
+</html>

@@ -7,12 +7,14 @@ from django.db.models import Count, Max, Min
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
-from App.forms import CustomerUploadForm, SalesUploadForm, UsedPointsUploadForm
-from App.models import Customer, SalesTransaction
+from App.forms import CustomerUploadForm, InventoryUploadForm, SaleDetailUploadForm, SalesUploadForm, UsedPointsUploadForm
+from App.models import Customer, InventorySnapshot, SaleDetail, SalesTransaction
 from App.permissions import requires_perm
 from App.services import (
     process_coupon_file,
     process_customer_file,
+    process_inventory_file,
+    process_sale_detail_file,
     process_sales_file,
     process_used_points_file,
 )
@@ -136,7 +138,15 @@ def upload_sales(request):
     date_stats = SalesTransaction.objects.aggregate(
         min_date=Min("sales_date"), max_date=Max("sales_date"), total_count=Count("id")
     )
-    return render(request, "upload/sales.html", {"form": SalesUploadForm(), "date_stats": date_stats})
+    detail_stats = SaleDetail.objects.aggregate(
+        min_date=Min("sales_date"), max_date=Max("sales_date"), total_count=Count("id"),
+    )
+    return render(request, "upload/sales.html", {
+        "form": SalesUploadForm(),
+        "date_stats": date_stats,
+        "detail_form": SaleDetailUploadForm(),
+        "detail_stats": detail_stats,
+    })
 
 
 @requires_perm("data.upload")
@@ -153,6 +163,67 @@ def upload_coupons(request):
         messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
         return redirect("upload_coupons")
     return render(request, "upload/coupons.html")
+
+
+@requires_perm("data.upload")
+def upload_inventory(request):
+    if request.method == "POST":
+        form = InventoryUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            if is_type_running("inventory"):
+                messages.warning(request, "An inventory upload is already in progress. Please wait.")
+                return redirect("upload_inventory")
+            f = request.FILES["file"]
+            file_bytes = f.read()
+            job_id = create_job("inventory", f.name)
+            logger.info("upload_inventory queued job=%s file=%s user=%s", job_id, f.name, request.user,
+                        extra={"step": "upload_inventory"})
+            def _inv_done():
+                from django.core.cache import cache
+                from App.analytics.inventory_functions import bump_inventory_version
+                cache.delete("shop_detail_dropdowns")
+                bump_inventory_version()
+            _start_thread(job_id, process_inventory_file, file_bytes, f.name, _inv_done)
+            messages.info(request, f"Inventory upload started — tracking job {job_id[:8]}…")
+            return redirect("upload_inventory")
+        else:
+            messages.error(request, "Invalid form submission.")
+
+    from django.db.models import Sum
+    stats = InventorySnapshot.objects.aggregate(
+        total_rows=Count('id'),
+        total_qty=Sum('inventory_qty'),
+        total_value=Sum('tag_amount'),
+    )
+    latest = InventorySnapshot.objects.order_by('-uploaded_at').values('uploaded_at', 'shop_name').first()
+    return render(request, "upload/inventory.html", {
+        "form": InventoryUploadForm(),
+        "stats": stats,
+        "latest": latest,
+    })
+
+
+@requires_perm("data.upload")
+def upload_sale_detail(request):
+    if request.method == "POST":
+        form = SaleDetailUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            if is_type_running("sale_detail"):
+                messages.warning(request, "A sale detail upload is already in progress. Please wait.")
+                return redirect("upload_sales")
+            f = request.FILES["file"]
+            file_bytes = f.read()
+            job_id = create_job("sale_detail", f.name)
+            logger.info("upload_sale_detail queued job=%s file=%s user=%s", job_id, f.name, request.user,
+                        extra={"step": "upload_sale_detail"})
+            def _sd_done():
+                from App.analytics.product_analytics import bump_product_version
+                bump_product_version()
+            _start_thread(job_id, process_sale_detail_file, file_bytes, f.name, _sd_done)
+            messages.info(request, f"Sale detail upload started — tracking job {job_id[:8]}…")
+        else:
+            messages.error(request, "Invalid form submission.")
+    return redirect("upload_sales")
 
 
 # ── Status API endpoints ──────────────────────────────────────────────────────

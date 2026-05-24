@@ -32,3 +32,25 @@ class SalesUploadForm(forms.Form):
             'class': 'form-control'
         })
     )
+
+
+class SaleDetailUploadForm(forms.Form):
+    file = forms.FileField(
+        label='Upload Sale Detail Data',
+        help_text='Supported formats: CSV, Excel (.xlsx, .xls)',
+        widget=forms.FileInput(attrs={
+            'accept': '.csv,.xlsx,.xls',
+            'class': 'form-control'
+        })
+    )
+
+
+class InventoryUploadForm(forms.Form):
+    file = forms.FileField(
+        label='Upload Inventory Data',
+        help_text='Supported formats: CSV, Excel (.xlsx, .xls)',
+        widget=forms.FileInput(attrs={
+            'accept': '.csv,.xlsx,.xls',
+            'class': 'form-control'
+        })
+    )

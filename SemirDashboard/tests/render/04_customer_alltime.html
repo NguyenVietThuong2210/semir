@@ -445,6 +445,11 @@
                                     <i class="bi bi-ticket"></i> Upload Coupons
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/inventory/">
+                                    <i class="bi bi-boxes"></i> Upload Inventory
+                                </a>
+                            </li>
                             
                             
                             <li>
@@ -540,6 +545,14 @@
                                 </a>
                             </li>
                             
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/products/">
+                                    <i class="bi bi-boxes"></i> Product Analytics
+                                </a>
+                            </li>
+                            
                         </ul>
                     </li>
 
@@ -620,7 +633,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="3FClqX0tnZvtg4GmRYqnIZ6hb9K6kjlTKn769AaItRL7S2RLuCpfFVS9BA5zXpcI">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="oSNMZMHyKUCT7CSrrWc29yflAEfN0sp7r12VounOprU4hL6bXyL2SPLQ5fE6rqhI">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -638,7 +651,7 @@
     <main class="">
         <div class="container-fluid px-3">
             
-<input type="hidden" name="csrfmiddlewaretoken" value="3FClqX0tnZvtg4GmRYqnIZ6hb9K6kjlTKn769AaItRL7S2RLuCpfFVS9BA5zXpcI">
+<input type="hidden" name="csrfmiddlewaretoken" value="oSNMZMHyKUCT7CSrrWc29yflAEfN0sp7r12VounOprU4hL6bXyL2SPLQ5fE6rqhI">
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="bi bi-people"></i> Customer Analytics</h2>
@@ -696,17 +709,17 @@
     </div></div></div>
     <div class="col"><div class="stat-card card border-0 shadow-sm" style="background:rgba(var(--orange-rgb),.08)"><div class="card-body">
         <div class="stat-label" style="color:var(--text)">Total CNV Customers</div>
-        <div class="stat-value" style="color:var(--text)">81967</div>
+        <div class="stat-value" style="color:var(--text)">82501</div>
         <small class="text-muted">In CNV Loyalty</small>
     </div></div></div>
     <div class="col"><div class="stat-card card border-0 shadow-sm" style="background:rgba(var(--orange-rgb),.08)"><div class="card-body">
         <div class="stat-label" style="color:var(--text)">POS Only (Not in CNV)</div>
-        <div class="stat-value" style="color:var(--text)">2106</div>
+        <div class="stat-value" style="color:var(--text)">2103</div>
         <small class="text-muted">By phone number</small>
     </div></div></div>
     <div class="col"><div class="stat-card card border-0 shadow-sm" style="background:rgba(var(--orange-rgb),.08)"><div class="card-body">
         <div class="stat-label" style="color:var(--text)">CNV Only (Not in POS)</div>
-        <div class="stat-value" style="color:var(--text)">9442</div>
+        <div class="stat-value" style="color:var(--text)">9973</div>
         <small class="text-muted">By phone number</small>
     </div></div></div>
 </div>
@@ -819,8 +832,8 @@
             
             <tr>
                 <td>M2-4 2026</td>
-                <td>4034</td><td>522</td><td>4556</td><td>1948</td>
-                <td>8264</td><td>4715</td>
+                <td>4034</td><td>522</td><td>4556</td><td>1945</td>
+                <td>8270</td><td>4718</td>
                 <td>0</td><td>0.0%</td>
                 <td>0</td><td>0.0%</td>
             </tr>
@@ -828,7 +841,7 @@
             <tr>
                 <td>M5-7 2026</td>
                 <td>0</td><td>0</td><td>0</td><td>0</td>
-                <td>716</td><td>716</td>
+                <td>1244</td><td>1244</td>
                 <td>0</td><td>0.0%</td>
                 <td>0</td><td>0.0%</td>
             </tr>
@@ -1091,6 +1104,13 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
             .then(function (html) {
                 placeholder.outerHTML = html;
                 btn.dataset.loaded = "true";
+                // Re-execute any <script> tags injected via outerHTML (browser skips them by default)
+                pane.querySelectorAll("script").forEach(function (old) {
+                    var s = document.createElement("script");
+                    s.textContent = old.textContent;
+                    document.head.appendChild(s);
+                    document.head.removeChild(s);
+                });
                 // Trigger custom event so page JS can post-process (e.g. init DataTables)
                 pane.dispatchEvent(new CustomEvent("lazyTabLoaded", {bubbles: true}));
             })

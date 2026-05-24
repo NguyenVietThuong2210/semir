@@ -66,6 +66,29 @@ class PageRenderTest(SnapshotTestCase):
         r = self.client.get(reverse("upload_coupons"))
         self.assertEqual(r.status_code, 200)
 
+    def test_upload_inventory_200(self):
+        r = self.client.get(reverse("upload_inventory"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_product_dashboard_empty_200(self):
+        # With no sale detail data, redirects to upload_sales — follow it.
+        r = self.client.get(reverse("product_dashboard"), follow=True)
+        self.assertEqual(r.status_code, 200)
+
+    def test_product_tab_smoke(self):
+        r = self.client.get(
+            reverse("product_tab", kwargs={"tab": "brand"}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertIn(r.status_code, [200, 302])
+
+    def test_shop_detail_inventory_partial_smoke(self):
+        r = self.client.get(
+            reverse("shop_detail_inventory_partial"),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(r.status_code, 200)
+
     def test_upload_used_points_redirect(self):
         # upload_used_points is POST-only; GET redirects to upload_customers
         r = self.client.get(reverse("upload_used_points"), follow=True)

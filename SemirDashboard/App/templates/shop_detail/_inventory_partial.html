@@ -1,0 +1,196 @@
+{% load custom_filters %}
+
+{% if not data %}
+<div class="no-data-msg py-3 text-muted">
+    <i class="bi bi-info-circle me-1"></i>No inventory data found for "{{ shop_name }}".
+</div>
+{% else %}
+
+{% with t=data.totals d=data.dead %}
+
+{# ── KPI row ── #}
+<div class="kpi-row mb-3">
+    <div class="kpi-card blue">
+        <div class="kpi-val">{{ t.sku_lines|default:0 }}</div>
+        <div class="kpi-lbl">SKU Lines</div>
+    </div>
+    <div class="kpi-card green">
+        <div class="kpi-val">{{ t.on_hand_qty|default:0 }}</div>
+        <div class="kpi-lbl">On-Hand Qty</div>
+    </div>
+    <div class="kpi-card orange">
+        <div class="kpi-val">{{ t.in_transit_qty|default:0 }}</div>
+        <div class="kpi-lbl">In-Transit Qty</div>
+    </div>
+    <div class="kpi-card purple">
+        <div class="kpi-val">{{ t.total_qty|default:0 }}</div>
+        <div class="kpi-lbl">Total Qty</div>
+    </div>
+    <div class="kpi-card blue">
+        <div class="kpi-val amount-vnd" style="font-size:1rem">{{ t.inv_value|default:0|vnd }}</div>
+        <div class="kpi-lbl">Inv. Value {{ currency }}</div>
+    </div>
+    <div class="kpi-card orange">
+        <div class="kpi-val amount-vnd" style="font-size:1rem">{{ t.total_tag_amt|default:0|vnd }}</div>
+        <div class="kpi-lbl">Total Tag Amt {{ currency }}</div>
+    </div>
+</div>
+
+{# ── Dead stock alert ── #}
+{% if d.sku_lines %}
+<div class="alert alert-warning py-2 px-3 mb-3" style="font-size:.85rem;">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    <strong>Dead Stock (year ≤ {{ data.dead_year_threshold }}):</strong>
+    {{ d.sku_lines }} SKU lines · {{ d.dead_qty|default:0 }} pcs · {{ d.dead_value|default:0|vnd }} {{ currency }}
+</div>
+{% endif %}
+
+<div class="row g-3">
+
+    {# ── By Brand ── #}
+    <div class="col-md-6">
+        <p class="sub-section-title"><i class="bi bi-tag me-1"></i>By Brand</p>
+        <div class="table-responsive tab-tbl-wrap">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.83rem;">
+            <thead class="sticky-thead">
+                <tr style="background:var(--primary);color:white;">
+                    <th>Brand</th>
+                    <th class="text-end">On-Hand</th>
+                    <th class="text-end">In-Transit</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-end">Value ({{ currency }})</th>
+                    <th class="text-end">Lines</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in data.by_brand %}
+            <tr>
+                <td>{{ r.brand|default:"—" }}</td>
+                <td class="text-end fw-semibold">{{ r.qty|default:0 }}</td>
+                <td class="text-end text-muted">{{ r.in_transit|default:0 }}</td>
+                <td class="text-end">{{ r.total|default:0 }}</td>
+                <td class="text-end amount-vnd">{{ r.value|default:0|vnd }}</td>
+                <td class="text-end text-muted">{{ r.lines|default:0 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-muted text-center">No data</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    {# ── By Season/Year ── #}
+    <div class="col-md-6">
+        <p class="sub-section-title"><i class="bi bi-calendar-range me-1"></i>By Season / Year</p>
+        <div class="table-responsive tab-tbl-wrap">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.83rem;">
+            <thead class="sticky-thead">
+                <tr style="background:var(--primary);color:white;">
+                    <th>Year</th>
+                    <th>Season</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Value ({{ currency }})</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in data.by_season %}
+            <tr {% if r.year <= data.dead_year_threshold %}style="color:var(--orange);"{% endif %}>
+                <td>{{ r.year|default:"—" }}</td>
+                <td>{{ r.season|default:"—" }}</td>
+                <td class="text-end">{{ r.qty }}</td>
+                <td class="text-end amount-vnd">{{ r.value|vnd }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-muted text-center">No data</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    {# ── Top SKUs ── #}
+    <div class="col-12">
+        <p class="sub-section-title"><i class="bi bi-list-ol me-1"></i>Top 20 SKUs by Qty (on-hand > 0)</p>
+        <div class="table-responsive tab-tbl-wrap">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;">
+            <thead class="sticky-thead">
+                <tr style="background:var(--primary);color:white;">
+                    <th>Product Code</th>
+                    <th>Name</th>
+                    <th>Brand</th>
+                    <th>Color</th>
+                    <th>Size</th>
+                    <th>Year</th>
+                    <th>Season</th>
+                    <th class="text-end">Tag Price</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Value ({{ currency }})</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in data.top_skus %}
+            <tr>
+                <td style="font-family:monospace;font-size:.8rem;">{{ r.product_code }}</td>
+                <td>{{ r.product_name|default:"—" }}</td>
+                <td>{{ r.brand|default:"—" }}</td>
+                <td>{{ r.color|default:"—" }}</td>
+                <td>{{ r.size|default:"—" }}</td>
+                <td>{{ r.year|default:"—" }}</td>
+                <td>{{ r.season|default:"—" }}</td>
+                <td class="text-end amount-vnd">{{ r.tag_price|vnd }}</td>
+                <td class="text-end fw-semibold">{{ r.qty }}</td>
+                <td class="text-end amount-vnd">{{ r.value|vnd }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="10" class="text-muted text-center">No data</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    {# ── Dead stock detail ── #}
+    {% if data.dead_skus %}
+    <div class="col-12">
+        <p class="sub-section-title" style="color:var(--orange);"><i class="bi bi-hourglass-split me-1"></i>Dead Stock Detail (year ≤ {{ data.dead_year_threshold }}, top 20)</p>
+        <div class="table-responsive tab-tbl-wrap">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;">
+            <thead class="sticky-thead">
+                <tr style="background:var(--primary);color:white;">
+                    <th>Product Code</th>
+                    <th>Name</th>
+                    <th>Brand</th>
+                    <th>Color</th>
+                    <th>Size</th>
+                    <th>Year</th>
+                    <th>Season</th>
+                    <th class="text-end">Tag Price</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Value ({{ currency }})</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in data.dead_skus %}
+            <tr style="color:var(--orange);">
+                <td style="font-family:monospace;font-size:.8rem;">{{ r.product_code }}</td>
+                <td>{{ r.product_name|default:"—" }}</td>
+                <td>{{ r.brand|default:"—" }}</td>
+                <td>{{ r.color|default:"—" }}</td>
+                <td>{{ r.size|default:"—" }}</td>
+                <td>{{ r.year|default:"—" }}</td>
+                <td>{{ r.season|default:"—" }}</td>
+                <td class="text-end amount-vnd">{{ r.tag_price|vnd }}</td>
+                <td class="text-end fw-semibold">{{ r.qty }}</td>
+                <td class="text-end amount-vnd">{{ r.value|vnd }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>{# /row #}
+{% endwith %}
+{% endif %}

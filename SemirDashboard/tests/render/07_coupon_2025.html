@@ -391,6 +391,11 @@
                                     <i class="bi bi-ticket"></i> Upload Coupons
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item" href="/upload/inventory/">
+                                    <i class="bi bi-boxes"></i> Upload Inventory
+                                </a>
+                            </li>
                             
                             
                             <li>
@@ -486,6 +491,14 @@
                                 </a>
                             </li>
                             
+                            
+                            
+                            <li>
+                                <a class="dropdown-item" href="/products/">
+                                    <i class="bi bi-boxes"></i> Product Analytics
+                                </a>
+                            </li>
+                            
                         </ul>
                     </li>
 
@@ -566,7 +579,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="Be6XOsGVjsuyitnaEowwWiGSYuWR1S0ciWBIx5QapkKcUryzh2voTesKoVhkEYR1">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="i5UuUKfLJYaJLuwCXO8IFJETD85jv6Ycle9DjsV1ovsUVDKmtqHIo0ao8JuCW4QN">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -1032,6 +1045,13 @@
             .then(function (html) {
                 placeholder.outerHTML = html;
                 btn.dataset.loaded = "true";
+                // Re-execute any <script> tags injected via outerHTML (browser skips them by default)
+                pane.querySelectorAll("script").forEach(function (old) {
+                    var s = document.createElement("script");
+                    s.textContent = old.textContent;
+                    document.head.appendChild(s);
+                    document.head.removeChild(s);
+                });
                 // Trigger custom event so page JS can post-process (e.g. init DataTables)
                 pane.dispatchEvent(new CustomEvent("lazyTabLoaded", {bubbles: true}));
             })

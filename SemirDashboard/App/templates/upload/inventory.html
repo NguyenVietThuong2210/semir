@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Upload Inventory Data{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-boxes"></i> Upload Inventory Data</h2>
+</div>
+
+{% include "upload/_upload_status.html" %}
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-info-circle"></i> File Requirements</h6>
+                    <p class="mb-2">Your file should contain the following columns:</p>
+                    <ul class="small mb-0">
+                        <li><strong>Warehouse/Shop ID</strong> — Shop identifier (required)</li>
+                        <li><strong>Warehouse/Shop</strong> — Shop name (required)</li>
+                        <li><strong>Product Code</strong> — Unique per color+size variant (required)</li>
+                        <li><strong>Brand</strong>, <strong>Barcode</strong>, <strong>SKU</strong></li>
+                        <li><strong>Year</strong>, <strong>Season</strong>, <strong>Gender</strong></li>
+                        <li><strong>Large/Middle/Small Class</strong> — Product categories</li>
+                        <li><strong>Inventory Quantity</strong>, <strong>In Transit Quantity</strong>, <strong>Total Inventory Quantity</strong></li>
+                        <li><strong>Tagprice</strong>, <strong>Tag Amount</strong>, <strong>Total Tag Amount</strong></li>
+                    </ul>
+                    <p class="mt-2 mb-0 small text-warning">
+                        <i class="bi bi-arrow-repeat"></i> <strong>Re-uploading the same shop+product overwrites existing data</strong> — no duplicate rows created.
+                    </p>
+                </div>
+
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="{{ form.file.id_for_label }}" class="form-label">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> Select File
+                        </label>
+                        {{ form.file }}
+                        <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-upload"></i> Upload Inventory Data
+                        </button>
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Home
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if stats.total_rows %}
+        <div class="card mt-4">
+            <div class="card-header" style="background:var(--primary);color:#fff;">
+                <i class="bi bi-database"></i> Current Inventory Database
+            </div>
+            <div class="card-body">
+                {% if latest %}
+                <p class="small text-muted mb-3">
+                    <i class="bi bi-clock"></i> Last uploaded:
+                    <strong>{{ latest.uploaded_at|date:"Y-m-d H:i" }}</strong>
+                </p>
+                {% endif %}
+                <div class="row text-center g-3">
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            <h4 class="mb-0" style="color:var(--text);">{{ stats.total_rows|default:0 }}</h4>
+                            <small class="text-muted">SKU Lines</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            <h4 class="mb-0" style="color:var(--text);">{{ stats.total_qty|default:0 }}</h4>
+                            <small class="text-muted">Total Qty (pcs)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3">
+                            <h5 class="mb-0" style="color:var(--text);">{{ stats.total_value|default:0|floatformat:0 }}</h5>
+                            <small class="text-muted">Total Value (VND)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

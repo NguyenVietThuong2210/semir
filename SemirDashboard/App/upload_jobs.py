@@ -14,10 +14,12 @@ _JOB_TTL  = 86400          # 24 h
 _IDX_LOCK_KEY = "upload_jobs_index:lock"  # distributed lock key
 
 JOB_TYPE_LABELS = {
-    "customers":   "Customer Data",
-    "used_points": "Used Points",
-    "sales":       "Sales Transactions",
-    "coupons":     "Coupon Data",
+    "customers":    "Customer Data",
+    "used_points":  "Used Points",
+    "sales":        "Sales Transactions",
+    "coupons":      "Coupon Data",
+    "inventory":    "Inventory Snapshot",
+    "sale_detail":  "Sale Detail (Line Items)",
 }
 
 _INDEX_KEY    = "upload_jobs_index"     # list of {"id": ..., "started_at": ...}

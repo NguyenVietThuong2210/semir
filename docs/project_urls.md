@@ -32,9 +32,11 @@ type: project
 | URL | View | Notes |
 |-----|------|-------|
 | `/upload/customers/` | `upload_customers` | GET+POST |
-| `/upload/sales/` | `upload_sales` | GET+POST |
+| `/upload/sales/` | `upload_sales` | GET+POST — also shows Sale Detail upload section |
+| `/upload/sale-detail/` | `upload_sale_detail` | POST only, redirects to upload_sales |
 | `/upload/coupons/` | `upload_coupons` | GET+POST |
 | `/upload/used-points/` | `upload_used_points` | GET+POST |
+| `/upload/inventory/` | `upload_inventory` | GET+POST — InventorySnapshot |
 | `/upload/jobs/` | `upload_jobs_list` | JSON |
 | `/upload/jobs/<job_id>/` | `upload_job_status` | JSON |
 
@@ -70,6 +72,13 @@ type: project
 | `/shop-detail/partial/sales/` | `shop_detail_sales_partial` | AJAX partial, requires `page_shop_detail` |
 | `/shop-detail/partial/customer/` | `shop_detail_customer_partial` | AJAX partial, requires `page_shop_detail` |
 | `/shop-detail/partial/coupon/` | `shop_detail_coupon_partial` | AJAX partial, requires `page_shop_detail` |
+| `/shop-detail/partial/inventory/` | `shop_detail_inventory_partial` | AJAX partial, requires `page_shop_detail` |
+
+### Product Analytics
+| URL | View | Notes |
+|-----|------|-------|
+| `/products/` | `product_dashboard` | requires `sales.view` — SaleDetail-based |
+| `/products/tab/<str:tab>/` | `product_tab` | AJAX lazy tab (season/month/week/brand/category) |
 
 ### Admin
 | URL | View | Notes |
