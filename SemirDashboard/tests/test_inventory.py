@@ -5,7 +5,10 @@ Tests:
   1. Inventory file import: row count, upsert behaviour
   2. InventorySnapshot DB state after import
   3. get_shop_inventory_data() returns correct structure
-  4. /shop-detail/partial/inventory/ AJAX partial renders 200
+  4. get_inventory_overview() — dead stock fields, top 50, year/season filter
+  5. gender_name template filter
+  6. /inventory/ dashboard renders 200 (with/without filters)
+  7. /shop-detail/partial/inventory/ AJAX partial renders 200
 
 Run:
   cd SemirDashboard && python manage.py test tests.test_inventory -v 2
@@ -14,10 +17,11 @@ import io
 from django.contrib.auth.models import User
 from django.db.models import Count, Sum
 from django.urls import reverse
+from django.template import Context, Template
 
 from App.models import InventorySnapshot
 from App.services import process_inventory_file
-from App.analytics.inventory_functions import get_shop_inventory_data
+from App.analytics.inventory_functions import get_shop_inventory_data, get_inventory_overview
 
 from tests.base import SnapshotTestCase, INPUT_DIR, Timer
 
@@ -217,6 +221,153 @@ class InventoryImportTest(SnapshotTestCase):
         data = get_shop_inventory_data("__nonexistent_shop_xyz__")
         self.assertEqual(data, {})
 
+    # ── get_inventory_overview — dead stock fields & top 50 ──────────────────
+
+    def test_overview_dead_top_limit_50(self):
+        """Global dead stock should return at most 50 items."""
+        data = get_inventory_overview()
+        dead_top = data.get('for_sale', {}).get('dead', {}).get('top', [])
+        self.assertLessEqual(len(dead_top), 50)
+
+    def test_overview_dead_top_has_new_fields(self):
+        """Each dead stock row must contain the new detail fields."""
+        data = get_inventory_overview()
+        dead_top = data.get('for_sale', {}).get('dead', {}).get('top', [])
+        if not dead_top:
+            self.skipTest("No dead stock in test data")
+        row = dead_top[0]
+        for field in ('product_code', 'product_name', 'product_name_vn',
+                      'color', 'size', 'brand', 'category_l1', 'category_l3',
+                      'gender', 'year', 'season', 'qty', 'value'):
+            self.assertIn(field, row, f"Missing dead stock field '{field}'")
+
+    def test_overview_per_shop_dead_skus_limit_50(self):
+        """Per-shop dead_skus should return at most 50 items."""
+        data = get_inventory_overview()
+        shops = data.get('for_sale', {}).get('by_shop_full', [])
+        for shop in shops:
+            self.assertLessEqual(
+                len(shop.get('dead_skus', [])), 50,
+                f"dead_skus for {shop['shop_name']} exceeds 50"
+            )
+
+    def test_overview_per_shop_dead_skus_has_new_fields(self):
+        """Per-shop dead_skus rows must contain the new detail fields."""
+        data = get_inventory_overview()
+        shops = data.get('for_sale', {}).get('by_shop_full', [])
+        for shop in shops:
+            skus = shop.get('dead_skus', [])
+            if skus:
+                row = skus[0]
+                for field in ('product_code', 'product_name', 'product_name_vn',
+                              'color', 'size', 'category_l1', 'category_l3',
+                              'gender', 'year', 'season', 'qty', 'value'):
+                    self.assertIn(field, row,
+                                  f"Shop '{shop['shop_name']}' dead_skus missing field '{field}'")
+                break
+
+    def test_overview_year_filter(self):
+        """year filter should reduce or equal total vs unfiltered."""
+        year = InventorySnapshot.objects.exclude(year__isnull=True).values_list('year', flat=True).first()
+        if not year:
+            self.skipTest("No rows with year in inventory")
+        full = get_inventory_overview()
+        filtered = get_inventory_overview(year=year)
+        full_lines = (full.get('for_sale') or {}).get('totals', {}).get('sku_lines') or 0
+        filt_lines = (filtered.get('for_sale') or {}).get('totals', {}).get('sku_lines') or 0
+        self.assertLessEqual(filt_lines, full_lines)
+        # All dead stock rows in filtered result must match the year
+        dead_top = (filtered.get('for_sale') or {}).get('dead', {}).get('top', [])
+        for row in dead_top:
+            self.assertLessEqual(row['year'], year,
+                                 f"Dead stock row year {row['year']} > filter year {year}")
+
+    def test_overview_season_filter(self):
+        """season filter must return only rows for that season."""
+        season = InventorySnapshot.objects.exclude(season='').values_list('season', flat=True).first()
+        if not season:
+            self.skipTest("No rows with season in inventory")
+        filtered = get_inventory_overview(season=season)
+        # by_season breakdown should only contain the filtered season
+        by_season = (filtered.get('for_sale') or {}).get('by_season', [])
+        for row in by_season:
+            self.assertEqual(row['season'], season,
+                             f"by_season row season '{row['season']}' != filter '{season}'")
+
+    def test_snapshot_dead_stock_shape(self):
+        """Snapshot dead stock summary + first-row field presence."""
+        data = get_inventory_overview()
+        dead = (data.get('for_sale') or {}).get('dead', {})
+        summary = dead.get('summary', {})
+        top = dead.get('top', [])
+        self.assert_snapshot("inventory_dead_stock", {
+            "sku_lines":       summary.get('sku_lines', 0),
+            "dead_qty":        int(summary.get('dead_qty') or 0),
+            "top_count":       len(top),
+            "top_limit":       50,
+            "first_row_fields": sorted(top[0].keys()) if top else [],
+        })
+
+    # ── gender_name template filter ───────────────────────────────────────────
+
+    def test_gender_name_filter_known_chinese(self):
+        t = Template("{% load custom_filters %}{{ val|gender_name }}")
+        self.assertEqual(t.render(Context({'val': '男装'})), '男装 (Nam)')
+        self.assertEqual(t.render(Context({'val': '女装'})), '女装 (Nữ)')
+        self.assertEqual(t.render(Context({'val': '童装'})), '童装 (Trẻ em)')
+
+    def test_gender_name_filter_unknown_passthrough(self):
+        t = Template("{% load custom_filters %}{{ val|gender_name }}")
+        result = t.render(Context({'val': 'XYZ_UNKNOWN'}))
+        self.assertEqual(result, 'XYZ_UNKNOWN')
+
+    def test_gender_name_filter_empty(self):
+        t = Template("{% load custom_filters %}{{ val|gender_name }}")
+        self.assertEqual(t.render(Context({'val': ''})), '—')
+
+    # ── Inventory dashboard page renders ──────────────────────────────────────
+
+    def test_inventory_dashboard_200(self):
+        r = self.client.get(reverse("inventory_dashboard"), follow=True)
+        self.assertEqual(r.status_code, 200)
+
+    def test_inventory_dashboard_with_year_filter_200(self):
+        year = InventorySnapshot.objects.exclude(year__isnull=True).values_list('year', flat=True).first()
+        if not year:
+            self.skipTest("No year data in inventory")
+        r = self.client.get(
+            reverse("inventory_dashboard") + f"?year={year}",
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_inventory_dashboard_with_season_filter_200(self):
+        season = InventorySnapshot.objects.exclude(season='').values_list('season', flat=True).first()
+        if not season:
+            self.skipTest("No season data in inventory")
+        r = self.client.get(
+            reverse("inventory_dashboard") + f"?season={season}",
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_inventory_dashboard_with_shop_group_200(self):
+        r = self.client.get(
+            reverse("inventory_dashboard") + "?shop_group=semir",
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_export_dead_stock_csv_200(self):
+        r = self.client.get(reverse("export_inventory_dead_stock"))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r["Content-Type"])
+        # CSV must include the new column headers
+        content = r.content.decode("utf-8-sig")
+        for col in ("Product Code", "Product Name", "商品名称", "Color", "Size",
+                    "Large Class", "Small Class", "Gender"):
+            self.assertIn(col, content, f"CSV missing column '{col}'")
+
     # ── Page renders ──────────────────────────────────────────────────────────
 
     def test_upload_inventory_page_200(self):
@@ -240,6 +391,5 @@ class InventoryImportTest(SnapshotTestCase):
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
         self.assertEqual(r.status_code, 200)
-        # Should render actual inventory numbers, not the empty-state prompt
         self.assertNotIn(b"Select a shop", r.content)
 

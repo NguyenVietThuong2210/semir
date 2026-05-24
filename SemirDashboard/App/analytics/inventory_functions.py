@@ -44,14 +44,15 @@ def _shop_group_filter(qs, shop_group: str):
     return qs
 
 
-def _overview_cache_key(shop_group: str) -> str:
+def _overview_cache_key(shop_group: str, year=None, season: str = None) -> str:
     import hashlib
     v = cache.get(_VERSION_KEY, 0)
-    slug = hashlib.md5((shop_group or '').encode()).hexdigest()[:8]
+    key_str = f"{shop_group or ''}|{year or ''}|{season or ''}"
+    slug = hashlib.md5(key_str.encode()).hexdigest()[:8]
     return f"inv_overview_v{v}_{slug}"
 
 
-def get_inventory_overview(shop_group: str = None) -> dict:
+def get_inventory_overview(shop_group: str = None, year: int = None, season: str = None) -> dict:
     """
     Aggregate InventorySnapshot across ALL shops (optionally filtered by shop_group).
     Returns two sections:
@@ -60,12 +61,16 @@ def get_inventory_overview(shop_group: str = None) -> dict:
     Each section contains totals + by_shop + by_brand + by_season breakdowns.
     Dead-stock threshold: year <= current_year - 1.
     """
-    ck = _overview_cache_key(shop_group or '')
+    ck = _overview_cache_key(shop_group or '', year, season)
     cached = cache.get(ck)
     if cached is not None:
         return cached
 
     base_qs = _shop_group_filter(InventorySnapshot.objects.all(), shop_group or '')
+    if year:
+        base_qs = base_qs.filter(year=year)
+    if season:
+        base_qs = base_qs.filter(season=season)
 
     sale_qs = base_qs.filter(tag_amount__gt=0)
     gift_qs = base_qs.filter(tag_amount=0)
@@ -127,9 +132,11 @@ def get_inventory_overview(shop_group: str = None) -> dict:
             dead_value=Sum('tag_amount'),
         )
         top = list(
-            dq.values('shop_name', 'product_code', 'product_name', 'brand', 'tag_price', 'year', 'season')
+            dq.values('shop_name', 'product_code', 'product_name', 'product_name_vn',
+                      'color', 'size', 'brand', 'category_l1', 'category_l3',
+                      'gender', 'tag_price', 'year', 'season')
             .annotate(qty=Sum('inventory_qty'), value=Sum('tag_amount'))
-            .order_by('-qty')[:20]
+            .order_by('-qty')[:50]
         )
         return {'summary': agg, 'top': top}
 
@@ -154,17 +161,18 @@ def get_inventory_overview(shop_group: str = None) -> dict:
             .annotate(dead_qty=Sum('inventory_qty'), dead_value=Sum('tag_amount'),
                       dead_lines=Count('id'))
         )
-        # Dead stock SKUs per shop — single query, top 15 per shop by qty
+        # Dead stock SKUs per shop — single query, top 50 per shop by qty
         dead_sku_rows = list(
-            dead_qs.values('shop_name', 'product_code', 'product_name', 'brand',
-                           'tag_price', 'year', 'season')
+            dead_qs.values('shop_name', 'product_code', 'product_name', 'product_name_vn',
+                           'color', 'size', 'brand', 'category_l1', 'category_l3',
+                           'gender', 'tag_price', 'year', 'season')
             .annotate(qty=Sum('inventory_qty'), value=Sum('tag_amount'))
             .order_by('shop_name', '-qty')
         )
         dead_skus_map: dict = defaultdict(list)
         for r in dead_sku_rows:
             sn = r['shop_name']
-            if len(dead_skus_map[sn]) < 15:
+            if len(dead_skus_map[sn]) < 50:
                 dead_skus_map[sn].append(r)
 
         brand_map   = defaultdict(list)
@@ -217,8 +225,9 @@ def get_inventory_overview(shop_group: str = None) -> dict:
     }
     cache.set(ck, result, _TTL)
     logger.info(
-        "inventory overview loaded: shop_group=%s sale_lines=%d gift_lines=%d",
-        shop_group, sale_totals.get('sku_lines', 0), _totals(gift_qs).get('sku_lines', 0),
+        "inventory overview loaded: shop_group=%s year=%s season=%s sale_lines=%d gift_lines=%d",
+        shop_group, year, season,
+        sale_totals.get('sku_lines', 0), _totals(gift_qs).get('sku_lines', 0),
         extra={"step": "inventory_overview"},
     )
     return result

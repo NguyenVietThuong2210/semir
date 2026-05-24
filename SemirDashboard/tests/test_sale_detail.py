@@ -209,9 +209,13 @@ class SaleDetailImportTest(SnapshotTestCase):
         rows = data['by_category']
         self.assertIsInstance(rows, list)
         if rows:
-            row = rows[0]
-            for field in ('category_l1', 'category_l2', 'qty', 'amount', 'lines'):
-                self.assertIn(field, row, f"Missing by_category field '{field}'")
+            grp = rows[0]
+            for field in ('l1', 'rows', 'subtotal'):
+                self.assertIn(field, grp, f"Missing by_category cat_groups field '{field}'")
+            if grp['rows']:
+                row = grp['rows'][0]
+                for field in ('category_l1', 'category_l2', 'qty', 'amount', 'lines'):
+                    self.assertIn(field, row, f"Missing by_category L2 row field '{field}'")
 
     def test_product_tab_shop(self):
         data = get_product_tab('shop')
@@ -329,19 +333,20 @@ class SaleDetailImportTest(SnapshotTestCase):
 
     def test_snapshot_product_category(self):
         data = get_product_tab('category')
-        rows = data.get('by_category', [])
+        cat_groups = data.get('by_category', [])
+        all_l2 = [r for grp in cat_groups for r in grp.get('rows', [])]
         self.assert_snapshot("product_category", {
-            "row_count": len(rows),
-            "l1_categories": sorted(set(r.get('category_l1', '') for r in rows)),
+            "l1_count": len(cat_groups),
+            "l2_count": len(all_l2),
+            "l1_categories": sorted(grp.get('l1', '') for grp in cat_groups),
             "by_category": [
                 {
-                    "category_l1": r.get('category_l1'),
-                    "category_l2": r.get('category_l2'),
-                    "qty": int(r.get('qty') or 0),
-                    "disc_pct": r.get('disc_pct'),
-                    "lines": r.get('lines'),
+                    "l1": grp.get('l1'),
+                    "l2_count": len(grp.get('rows', [])),
+                    "subtotal_qty": int((grp.get('subtotal') or {}).get('qty') or 0),
+                    "subtotal_amount": float((grp.get('subtotal') or {}).get('amount') or 0),
                 }
-                for r in rows[:20]
+                for grp in cat_groups
             ],
         })
 
