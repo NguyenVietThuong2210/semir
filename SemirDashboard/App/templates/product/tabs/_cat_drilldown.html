@@ -1,7 +1,7 @@
 {% comment %}
 Reusable category drill-down block for a single period/brand row.
 Context vars required: cat_groups (list of {l1, l2_groups, subtotal}), currency.
-Hierarchy: L1 header → L2 sub-header → L3 rows.
+Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab style.
 {% endcomment %}
 {% load custom_filters %}
 {% if cat_groups %}
@@ -9,47 +9,45 @@ Hierarchy: L1 header → L2 sub-header → L3 rows.
 <table class="table table-sm align-middle mb-0" style="border-collapse:collapse;">
     <thead>
         <tr style="background:var(--secondary);color:#fff;font-size:.78rem;">
-            <th style="width:20%;">Category L2</th>
-            <th style="width:16%;">Category L3</th>
-            <th class="text-end" style="width:10%;">Qty</th>
-            <th class="text-end" style="width:14%;">Tag Amt</th>
-            <th class="text-end" style="width:14%;">Sales Amt</th>
-            <th class="text-end" style="width:14%;">Settlement</th>
-            <th class="text-end" style="width:8%;">Disc %</th>
+            <th style="width:18%;">Category L1</th>
+            <th style="width:18%;">Category L2</th>
+            <th style="width:14%;">Category L3</th>
+            <th class="text-end" style="width:9%;">Qty</th>
+            <th class="text-end" style="width:13%;">Tag Amt</th>
+            <th class="text-end" style="width:13%;">Sales Amt</th>
+            <th class="text-end" style="width:7%;">Disc %</th>
             <th class="text-end" style="width:8%;">Lines</th>
         </tr>
     </thead>
     <tbody>
     {% for grp in cat_groups %}
     {% cycle 'rgba(var(--primary-rgb),.04)' 'rgba(var(--orange-rgb),.04)' as l1_bg silent %}
-    {# L1 group header row #}
+    {# ── L1 header row ── #}
     <tr style="background:{{ l1_bg }};font-weight:600;font-size:.80rem;">
-        <td colspan="2" style="padding-left:.5rem;">
-            <span class="text-primary" style="font-size:.75rem;margin-right:.25rem;">▸</span>
-            {{ grp.l1|cat_name }}
+        <td>{{ grp.l1|cat_name }}</td>
+        <td class="text-muted" style="font-size:.76rem;font-weight:400;">
+            {{ grp.l2_groups|length }} sub-categor{% if grp.l2_groups|length == 1 %}y{% else %}ies{% endif %}
         </td>
+        <td></td>
         <td class="text-end">{{ grp.subtotal.qty|default:0 }}</td>
         <td class="text-end text-muted">{{ grp.subtotal.tag_amount|default:0|vnd }}</td>
         <td class="text-end">{{ grp.subtotal.amount|default:0|vnd }}</td>
-        <td class="text-end">{{ grp.subtotal.settlement|default:0|vnd }}</td>
         <td class="text-end{% if grp.subtotal.disc_pct and grp.subtotal.disc_pct > 20 %} text-danger{% endif %}">
             {% if grp.subtotal.disc_pct is not None %}{{ grp.subtotal.disc_pct }}%{% else %}—{% endif %}
         </td>
         <td class="text-end text-muted">{{ grp.subtotal.lines|default:0 }}</td>
     </tr>
-    {# L2 sub-header + L3 rows #}
+    {# ── L2 sub-header + L3 rows ── #}
     {% for l2g in grp.l2_groups %}
     <tr style="background:{{ l1_bg }};">
-        <td style="padding-left:1.5rem;color:var(--text-muted);font-weight:500;">
-            └ {{ l2g.l2|cat_name }}
-        </td>
+        <td class="text-muted ps-3" style="font-size:.78rem;">└</td>
+        <td style="font-weight:500;">{{ l2g.l2|cat_name }}</td>
         <td class="text-muted" style="font-size:.76rem;">
             {% if l2g.rows|length > 1 %}{{ l2g.rows|length }} items{% endif %}
         </td>
         <td class="text-end fw-semibold">{{ l2g.subtotal.qty|default:0 }}</td>
         <td class="text-end amount-vnd text-muted">{{ l2g.subtotal.tag_amount|default:0|vnd }}</td>
         <td class="text-end amount-vnd">{{ l2g.subtotal.amount|default:0|vnd }}</td>
-        <td class="text-end amount-vnd">{{ l2g.subtotal.settlement|default:0|vnd }}</td>
         <td class="text-end{% if l2g.subtotal.disc_pct and l2g.subtotal.disc_pct > 20 %} text-danger{% endif %}">
             {% if l2g.subtotal.disc_pct is not None %}{{ l2g.subtotal.disc_pct }}%{% else %}—{% endif %}
         </td>
@@ -57,12 +55,12 @@ Hierarchy: L1 header → L2 sub-header → L3 rows.
     </tr>
     {% for r in l2g.rows %}{% if r.category_l3 %}
     <tr style="background:{{ l1_bg }};">
-        <td style="padding-left:2.5rem;color:var(--text-muted);font-size:.76rem;">└ {{ r.category_l3|cat_name }}</td>
         <td></td>
+        <td class="text-muted ps-3" style="font-size:.76rem;">└</td>
+        <td style="font-size:.78rem;">{{ r.category_l3|cat_name }}</td>
         <td class="text-end" style="font-size:.76rem;">{{ r.qty|default:0 }}</td>
         <td class="text-end amount-vnd text-muted" style="font-size:.76rem;">{{ r.tag_amount|default:0|vnd }}</td>
         <td class="text-end amount-vnd" style="font-size:.76rem;">{{ r.amount|default:0|vnd }}</td>
-        <td class="text-end amount-vnd" style="font-size:.76rem;">{{ r.settlement|default:0|vnd }}</td>
         <td class="text-end{% if r.disc_pct and r.disc_pct > 20 %} text-danger{% endif %}" style="font-size:.76rem;">
             {% if r.disc_pct is not None %}{{ r.disc_pct }}%{% else %}—{% endif %}
         </td>

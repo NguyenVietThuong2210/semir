@@ -33,9 +33,8 @@
     </thead>
     <tbody>
     {% for br_grp in cat_groups %}
-    {% cycle 'rgba(var(--primary-rgb),.04)' 'rgba(var(--orange-rgb),.04)' as br_bg silent %}
-    {# ── Brand header row ── #}
-    <tr style="background:{{ br_bg }};font-weight:700;border-top:1px solid rgba(0,0,0,.08);">
+    {# ── Brand header row — blue tint ── #}
+    <tr style="background:rgba(var(--primary-rgb),.10);font-weight:700;border-top:2px solid rgba(var(--primary-rgb),.20);">
         <td>{{ br_grp.brand }}</td>
         <td class="text-muted" style="font-size:.8rem;font-weight:400;">
             {{ br_grp.l1_groups|length }} categor{% if br_grp.l1_groups|length == 1 %}y{% else %}ies{% endif %}
@@ -51,8 +50,8 @@
         <td class="text-end text-muted">{{ br_grp.subtotal.lines|default:0 }}</td>
     </tr>
     {% for grp in br_grp.l1_groups %}
-    {# ── L1 sub-header ── #}
-    <tr style="background:{{ br_bg }};font-weight:600;">
+    {# ── L1 sub-header — lighter blue tint ── #}
+    <tr style="background:rgba(var(--primary-rgb),.05);font-weight:600;">
         <td class="text-muted ps-3" style="font-size:.8rem;">└</td>
         <td>{{ grp.l1|cat_name }}</td>
         <td class="text-muted" style="font-size:.78rem;font-weight:400;">
@@ -69,8 +68,8 @@
         <td class="text-end text-muted">{{ grp.subtotal.lines|default:0 }}</td>
     </tr>
     {% for l2g in grp.l2_groups %}
-    {# ── L2 sub-header ── #}
-    <tr style="background:{{ br_bg }};">
+    {# ── L2 sub-header — orange tint ── #}
+    <tr style="background:rgba(var(--orange-rgb),.07);">
         <td></td>
         <td class="text-muted ps-3" style="font-size:.8rem;">└</td>
         <td style="font-weight:500;">{{ l2g.l2|cat_name }}</td>
@@ -87,8 +86,8 @@
         <td class="text-end text-muted">{{ l2g.subtotal.lines|default:0 }}</td>
     </tr>
     {% for r in l2g.rows %}{% if r.category_l3 %}
-    {# ── L3 detail row ── #}
-    <tr style="background:{{ br_bg }};">
+    {# ── L3 detail row — white ── #}
+    <tr>
         <td></td><td></td>
         <td class="text-muted ps-3" style="font-size:.78rem;">└</td>
         <td style="font-size:.8rem;">{{ r.category_l3|cat_name }}</td>
