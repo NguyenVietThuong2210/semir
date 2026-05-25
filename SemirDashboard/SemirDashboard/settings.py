@@ -178,8 +178,8 @@ LOGOUT_REDIRECT_URL = "/login/"  # After logout go to login
 
 # CNV API Credentials
 # IMPORTANT: Update these with your actual credentials
-CNV_USERNAME = "danthanhtran@semir.com"  # Replace with actual username
-CNV_PASSWORD = "***REMOVED***"  # Replace with actual password
+CNV_USERNAME = "0334353610"
+CNV_PASSWORD = "***REMOVED***"
 
 # CNV API URLs
 CNV_API_BASE_URL = "https://apis.cnvloyalty.com"
