@@ -14,9 +14,16 @@
 </div>
 {% endif %}
 
+<style>
+.cat-tbl .cat-brand > td { background:rgba(var(--orange-rgb),.22) !important; font-weight:700; border-top:2px solid rgba(var(--orange-rgb),.35) !important; }
+.cat-tbl .cat-l1    > td { background:rgba(var(--orange-rgb),.13) !important; font-weight:600; }
+.cat-tbl .cat-l2    > td { background:rgba(var(--orange-rgb),.07) !important; }
+.cat-tbl .cat-l3    > td { background:rgba(var(--orange-rgb),.03) !important; }
+</style>
+
 <!-- Category breakdown table: Brand → L1 → L2 → L3 -->
 <div class="table-responsive tab-tbl-wrap">
-<table class="table table-sm table-hover align-middle mb-0" style="font-size:.84rem;">
+<table class="table table-sm table-hover align-middle mb-0 cat-tbl" style="font-size:.84rem;">
     <thead class="sticky-thead">
         <tr style="background:var(--primary);color:white;">
             <th>Brand</th>
@@ -33,10 +40,10 @@
     </thead>
     <tbody>
     {% for br_grp in cat_groups %}
-    {# ── Brand header row — blue tint ── #}
-    <tr style="background:rgba(var(--primary-rgb),.10);font-weight:700;border-top:2px solid rgba(var(--primary-rgb),.20);">
+    {# ── Brand header row ── #}
+    <tr class="cat-brand">
         <td>{{ br_grp.brand }}</td>
-        <td class="text-muted" style="font-size:.8rem;font-weight:400;">
+        <td style="font-size:.8rem;font-weight:400;">
             {{ br_grp.l1_groups|length }} categor{% if br_grp.l1_groups|length == 1 %}y{% else %}ies{% endif %}
         </td>
         <td></td><td></td>
@@ -50,11 +57,11 @@
         <td class="text-end text-muted">{{ br_grp.subtotal.lines|default:0 }}</td>
     </tr>
     {% for grp in br_grp.l1_groups %}
-    {# ── L1 sub-header — lighter blue tint ── #}
-    <tr style="background:rgba(var(--primary-rgb),.05);font-weight:600;">
+    {# ── L1 sub-header ── #}
+    <tr class="cat-l1">
         <td class="text-muted ps-3" style="font-size:.8rem;">└</td>
         <td>{{ grp.l1|cat_name }}</td>
-        <td class="text-muted" style="font-size:.78rem;font-weight:400;">
+        <td style="font-size:.78rem;font-weight:400;">
             {{ grp.l2_groups|length }} sub-categor{% if grp.l2_groups|length == 1 %}y{% else %}ies{% endif %}
         </td>
         <td></td>
@@ -68,12 +75,12 @@
         <td class="text-end text-muted">{{ grp.subtotal.lines|default:0 }}</td>
     </tr>
     {% for l2g in grp.l2_groups %}
-    {# ── L2 sub-header — orange tint ── #}
-    <tr style="background:rgba(var(--orange-rgb),.07);">
+    {# ── L2 sub-header ── #}
+    <tr class="cat-l2">
         <td></td>
         <td class="text-muted ps-3" style="font-size:.8rem;">└</td>
         <td style="font-weight:500;">{{ l2g.l2|cat_name }}</td>
-        <td class="text-muted" style="font-size:.78rem;">
+        <td style="font-size:.78rem;">
             {% if l2g.rows|length > 1 %}{{ l2g.rows|length }} items{% endif %}
         </td>
         <td class="text-end">{{ l2g.subtotal.qty|default:0 }}</td>
@@ -86,8 +93,8 @@
         <td class="text-end text-muted">{{ l2g.subtotal.lines|default:0 }}</td>
     </tr>
     {% for r in l2g.rows %}{% if r.category_l3 %}
-    {# ── L3 detail row — white ── #}
-    <tr>
+    {# ── L3 detail row ── #}
+    <tr class="cat-l3">
         <td></td><td></td>
         <td class="text-muted ps-3" style="font-size:.78rem;">└</td>
         <td style="font-size:.8rem;">{{ r.category_l3|cat_name }}</td>
