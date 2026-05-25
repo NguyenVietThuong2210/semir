@@ -94,8 +94,8 @@ def _build_cat_groups(cat_rows):
     """
     l1_map = OrderedDict()
     for r in cat_rows:
-        l1 = r.get('category_l1') or '—'
-        l2 = r.get('category_l2') or '—'
+        l1 = r.get('category_l1') or ''
+        l2 = r.get('category_l2') or ''
         if l1 not in l1_map:
             l1_map[l1] = OrderedDict()
         if l2 not in l1_map[l1]:
@@ -248,8 +248,8 @@ def _period_with_cat(qs, trunc_fn, label_fn, period_key, top_n=10):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
@@ -341,8 +341,8 @@ def _by_sales_season(qs, top_n=10):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
@@ -436,8 +436,8 @@ def _by_product_season(qs, top_n=10):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
@@ -504,8 +504,8 @@ def _by_vip_grade(qs, top_n=10):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
@@ -555,8 +555,8 @@ def _by_brand(qs, top_n=10):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
@@ -581,8 +581,8 @@ def _build_brand_cat_groups(rows):
     brand_map = OrderedDict()
     for r in rows:
         br = r.get('brand') or '—'
-        l1 = r.get('category_l1') or '—'
-        l2 = r.get('category_l2') or '—'
+        l1 = r.get('category_l1') or ''
+        l2 = r.get('category_l2') or ''
         brand_map.setdefault(br, OrderedDict()).setdefault(l1, OrderedDict()).setdefault(l2, []).append(r)
 
     result = []
@@ -762,8 +762,8 @@ def _group_trunc_by_shop(flat_rows, period_field, label_fn, top_by_shop=None):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
@@ -861,8 +861,8 @@ def _by_shop_full(qs):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
@@ -973,8 +973,8 @@ def _by_shop_full(qs):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
@@ -1019,8 +1019,8 @@ def _by_shop_full(qs):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'qty': r.get('qty') or 0, 'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
             'tag_amount': float(r.get('tag_amount') or 0), 'lines': r.get('lines') or 0,
@@ -1069,8 +1069,8 @@ def _by_shop_full(qs):
         p['tag_amount'] += float(r.get('tag_amount') or 0)
         p['lines'] += r.get('lines') or 0
         p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '—',
-            'category_l2': r.get('category_l2') or '—',
+            'category_l1': r.get('category_l1') or '',
+            'category_l2': r.get('category_l2') or '',
             'qty': r.get('qty') or 0, 'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
             'tag_amount': float(r.get('tag_amount') or 0), 'lines': r.get('lines') or 0,

@@ -27,7 +27,7 @@ Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab styl
     {% for grp in cat_groups %}
     {# ── L1 header row ── #}
     <tr class="cdd-l1">
-        <td>{{ grp.l1|cat_name }}</td>
+        <td>{% if grp.l1 %}{{ grp.l1|cat_name }}{% else %}—{% endif %}</td>
         <td style="font-size:.76rem;font-weight:400;">
             {{ grp.l2_groups|length }} sub-categor{% if grp.l2_groups|length == 1 %}y{% else %}ies{% endif %}
         </td>
@@ -44,7 +44,7 @@ Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab styl
     {% for l2g in grp.l2_groups %}
     <tr class="cdd-l2">
         <td class="text-muted ps-3" style="font-size:.78rem;">└</td>
-        <td style="font-weight:500;">{{ l2g.l2|cat_name }}</td>
+        <td style="font-weight:500;">{% if l2g.l2 %}{{ l2g.l2|cat_name }}{% else %}—{% endif %}</td>
         <td style="font-size:.76rem;">
             {% if l2g.rows|length > 1 %}{{ l2g.rows|length }} items{% endif %}
         </td>
@@ -56,11 +56,11 @@ Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab styl
         </td>
         <td class="text-end text-muted">{{ l2g.subtotal.lines|default:0 }}</td>
     </tr>
-    {% for r in l2g.rows %}{% if r.category_l3 %}
+    {% for r in l2g.rows %}
     <tr class="cdd-l3">
         <td></td>
         <td class="text-muted ps-3" style="font-size:.76rem;">└</td>
-        <td style="font-size:.78rem;">{{ r.category_l3|cat_name }}</td>
+        <td style="font-size:.78rem;">{% if r.category_l3 %}{{ r.category_l3|cat_name }}{% else %}—{% endif %}</td>
         <td class="text-end" style="font-size:.76rem;">{{ r.qty|default:0 }}</td>
         <td class="text-end amount-vnd text-muted" style="font-size:.76rem;">{{ r.tag_amount|default:0|vnd }}</td>
         <td class="text-end amount-vnd" style="font-size:.76rem;">{{ r.amount|default:0|vnd }}</td>
@@ -69,7 +69,7 @@ Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab styl
         </td>
         <td class="text-end text-muted" style="font-size:.76rem;">{{ r.lines|default:0 }}</td>
     </tr>
-    {% endif %}{% endfor %}
+    {% endfor %}
     {% endfor %}
     {% endfor %}
     </tbody>
