@@ -20,9 +20,12 @@ Context required: cat_groups, top_products, currency.
         <thead style="background:var(--secondary);color:#fff;font-size:.75rem;">
             <tr>
                 <th style="width:3%;">#</th>
-                <th style="width:12%;">Code</th>
+                <th style="width:11%;">Code</th>
                 <th>Product Name</th>
                 <th>Brand</th>
+                <th>Cat L1</th>
+                <th>Cat L2</th>
+                <th>Cat L3</th>
                 <th class="text-end">Qty</th>
                 <th class="text-end">Sales Amt</th>
                 <th class="text-end">Disc %</th>
@@ -33,8 +36,11 @@ Context required: cat_groups, top_products, currency.
         <tr>
             <td class="text-muted">{{ forloop.counter }}</td>
             <td class="text-muted" style="font-size:.72rem;white-space:nowrap;">{{ p.product_code|default:"—" }}</td>
-            <td>{{ p.product_name|default:"—"|truncatechars:40 }}</td>
+            <td>{{ p.product_name|default:"—"|truncatechars:35 }}</td>
             <td class="text-muted" style="white-space:nowrap;">{{ p.brand }}</td>
+            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l1|cat_name }}</td>
+            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l2|cat_name }}</td>
+            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l3|cat_name }}</td>
             <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
             <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
             <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">

@@ -1552,22 +1552,18 @@ def export_customer_analytics_to_excel(
         cell.fill = zalo_blue_fill
         cell.font = header_font
         cell.alignment = header_align
-    row = 2
     for c in (zalo_mini_app_list or []):
-        full_name = f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip()
-        reg_date = c.get('cnv_created_at')
-        reg_date_str = str(reg_date.date()) if hasattr(reg_date, 'date') else (str(reg_date)[:10] if reg_date else '-')
-        ws_zalo_app.cell(row, 1, c.get('cnv_id', ''))
-        ws_zalo_app.cell(row, 2, c.get('phone', ''))
-        ws_zalo_app.cell(row, 3, full_name or '-')
-        ws_zalo_app.cell(row, 4, c.get('level_name') or '-')
-        ws_zalo_app.cell(row, 5, c.get('email') or '-')
-        ws_zalo_app.cell(row, 6, reg_date_str)
-        ws_zalo_app.cell(row, 7, float(c.get('points') or 0))
-        ws_zalo_app.cell(row, 8, 'Yes' if c.get('zalo_app_id') else 'No')
-        ws_zalo_app.cell(row, 9, 'Yes' if c.get('zalo_oa_id') else 'No')
-        ws_zalo_app.cell(row, 10, 'Yes' if c.get('in_pos') else 'No')
-        row += 1
+        rd = c.get('cnv_created_at')
+        ws_zalo_app.append([
+            c.get('cnv_id', ''), c.get('phone', ''),
+            f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip() or '-',
+            c.get('level_name') or '-', c.get('email') or '-',
+            str(rd.date()) if hasattr(rd, 'date') else (str(rd)[:10] if rd else '-'),
+            float(c.get('points') or 0),
+            'Yes' if c.get('zalo_app_id') else 'No',
+            'Yes' if c.get('zalo_oa_id') else 'No',
+            'Yes' if c.get('in_pos') else 'No',
+        ])
     for col, w in zip('ABCDEFGHIJ', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8]):
         ws_zalo_app.column_dimensions[col].width = w
 
@@ -1581,27 +1577,23 @@ def export_customer_analytics_to_excel(
         cell.fill = zalo_cyan_fill
         cell.font = header_font
         cell.alignment = header_align
-    row = 2
     for c in (zalo_oa_list or []):
-        full_name = f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip()
-        reg_date = c.get('cnv_created_at')
-        reg_date_str = str(reg_date.date()) if hasattr(reg_date, 'date') else (str(reg_date)[:10] if reg_date else '-')
-        ws_zalo_oa.cell(row, 1, c.get('cnv_id', ''))
-        ws_zalo_oa.cell(row, 2, c.get('phone', ''))
-        ws_zalo_oa.cell(row, 3, full_name or '-')
-        ws_zalo_oa.cell(row, 4, c.get('level_name') or '-')
-        ws_zalo_oa.cell(row, 5, c.get('email') or '-')
-        ws_zalo_oa.cell(row, 6, reg_date_str)
-        ws_zalo_oa.cell(row, 7, float(c.get('points') or 0))
-        ws_zalo_oa.cell(row, 8, 'Yes' if c.get('zalo_app_id') else 'No')
-        ws_zalo_oa.cell(row, 9, 'Yes' if c.get('zalo_oa_id') else 'No')
-        ws_zalo_oa.cell(row, 10, 'Yes' if c.get('in_pos') else 'No')
-        row += 1
+        rd = c.get('cnv_created_at')
+        ws_zalo_oa.append([
+            c.get('cnv_id', ''), c.get('phone', ''),
+            f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip() or '-',
+            c.get('level_name') or '-', c.get('email') or '-',
+            str(rd.date()) if hasattr(rd, 'date') else (str(rd)[:10] if rd else '-'),
+            float(c.get('points') or 0),
+            'Yes' if c.get('zalo_app_id') else 'No',
+            'Yes' if c.get('zalo_oa_id') else 'No',
+            'Yes' if c.get('in_pos') else 'No',
+        ])
     for col, w in zip('ABCDEFGHIJ', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8]):
         ws_zalo_oa.column_dimensions[col].width = w
 
     # ========================================================================
-    # ZALO MINI APP NOT ACTIVE SHEET
+    # ZALO MINI APP NOT ACTIVE SHEET (download only, not shown on UI)
     # ========================================================================
     zalo_inactive_fill = PatternFill(start_color="888888", end_color="888888", fill_type="solid")
     ws_zalo_inactive = wb.create_sheet("Zalo Not Active")
@@ -1610,22 +1602,18 @@ def export_customer_analytics_to_excel(
         cell.fill = zalo_inactive_fill
         cell.font = header_font
         cell.alignment = header_align
-    row = 2
     for c in (zalo_mini_app_inactive_list or []):
-        full_name = f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip()
-        reg_date = c.get('cnv_created_at')
-        reg_date_str = str(reg_date.date()) if hasattr(reg_date, 'date') else (str(reg_date)[:10] if reg_date else '-')
-        ws_zalo_inactive.cell(row, 1, c.get('cnv_id', ''))
-        ws_zalo_inactive.cell(row, 2, c.get('phone', ''))
-        ws_zalo_inactive.cell(row, 3, full_name or '-')
-        ws_zalo_inactive.cell(row, 4, c.get('level_name') or '-')
-        ws_zalo_inactive.cell(row, 5, c.get('email') or '-')
-        ws_zalo_inactive.cell(row, 6, reg_date_str)
-        ws_zalo_inactive.cell(row, 7, float(c.get('points') or 0))
-        ws_zalo_inactive.cell(row, 8, 'No')
-        ws_zalo_inactive.cell(row, 9, 'Yes' if c.get('zalo_oa_id') else 'No')
-        ws_zalo_inactive.cell(row, 10, 'Yes' if c.get('in_pos') else 'No')
-        row += 1
+        rd = c.get('cnv_created_at')
+        ws_zalo_inactive.append([
+            c.get('cnv_id', ''), c.get('phone', ''),
+            f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip() or '-',
+            c.get('level_name') or '-', c.get('email') or '-',
+            str(rd.date()) if hasattr(rd, 'date') else (str(rd)[:10] if rd else '-'),
+            float(c.get('points') or 0),
+            'No',
+            'Yes' if c.get('zalo_oa_id') else 'No',
+            'Yes' if c.get('in_pos') else 'No',
+        ])
     for col, w in zip('ABCDEFGHIJ', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8]):
         ws_zalo_inactive.column_dimensions[col].width = w
 
@@ -1790,17 +1778,20 @@ def _build_zalo_ws(wb, data, key, title, hf, font, align):
     ws = wb.create_sheet(title)
     _cnv_hdr(ws, ["CNV ID", "Phone", "Full Name", "Level", "Email",
                   "Reg Date", "Points", "Zalo App ID", "Zalo OA ID", "In POS"], hf, font, align)
-    for r, c in enumerate(data.get(key) or [], 2):
-        ws.cell(r, 1, c.get("cnv_id", ""))
-        ws.cell(r, 2, c.get("phone", ""))
-        ws.cell(r, 3, f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip())
-        ws.cell(r, 4, c.get("level_name", ""))
-        ws.cell(r, 5, c.get("email", "") or "")
-        ws.cell(r, 6, str(c["cnv_created_at"].date()) if c.get("cnv_created_at") else "")
-        ws.cell(r, 7, c.get("points") or 0)
-        ws.cell(r, 8, c.get("zalo_app_id", "") or "")
-        ws.cell(r, 9, c.get("zalo_oa_id", "") or "")
-        ws.cell(r, 10, "Yes" if c.get("in_pos") else "No")
+    for c in (data.get(key) or []):
+        rd = c.get("cnv_created_at")
+        ws.append([
+            c.get("cnv_id", ""),
+            c.get("phone", ""),
+            f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip(),
+            c.get("level_name", ""),
+            c.get("email", "") or "",
+            str(rd.date()) if rd else "",
+            c.get("points") or 0,
+            c.get("zalo_app_id", "") or "",
+            c.get("zalo_oa_id", "") or "",
+            "Yes" if c.get("in_pos") else "No",
+        ])
     for col, w in zip("ABCDEFGHIJ", [14, 14, 22, 10, 28, 12, 10, 20, 20, 8]):
         ws.column_dimensions[col].width = w
 
@@ -2063,7 +2054,7 @@ def _build_cnv_shop_detail_ws(wb, breakdown, hf, font, align):
 
 _CNV_TAB_SHEETS = {
     "points":       ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
-    "zalo":         ["zalo_mini_app", "zalo_oa"],  # "zalo_mini_app_inactive" disabled
+    "zalo":         ["zalo_mini_app", "zalo_mini_app_inactive", "zalo_oa"],
     "pos_cnv":      ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
     "breakdown":    ["bd_season", "bd_month", "bd_week", "bd_shop", "bd_shop_detail",
                      "bd_season_shop", "bd_month_shop", "bd_week_shop"],
@@ -3016,7 +3007,7 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
 
     _HEADERS = ["Period/Group", "Qty (pcs)", "Tag Amt (VND)", "Sales Amt (VND)",
                 "Settlement (VND)", "Disc %", "Lines"]
-    _CAT_HEADERS = ["", "Category L1", "Category L2", "Qty (pcs)",
+    _CAT_HEADERS = ["", "Category L1", "Category L2", "Category L3", "Qty (pcs)",
                     "Tag Amt (VND)", "Sales Amt (VND)", "Settlement (VND)", "Disc %", "Lines"]
 
     def _write_period_tab(ws_t, rows, period_key, label_key='label'):
@@ -3037,6 +3028,7 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
                         '',
                         translate_category(cat.get('category_l1', ''), 'VI'),
                         translate_category(cat.get('category_l2', ''), 'VI'),
+                        translate_category(cat.get('category_l3', ''), 'VI'),
                         cat.get('qty', 0),
                         round(float(cat.get('tag_amount') or 0)),
                         round(float(cat.get('amount') or 0)),
@@ -3044,7 +3036,7 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
                         f"{cat.get('disc_pct', '—')}%" if cat.get('disc_pct') is not None else '—',
                         cat.get('lines', 0),
                     ])
-        for col in range(1, 8):
+        for col in range(1, 9):
             ws_t.column_dimensions[get_column_letter(col)].width = 18
 
     # By Month sheet
@@ -3057,25 +3049,28 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
         ws_b = wb.create_sheet("By Brand")
         _write_period_tab(ws_b, tabs_data['brand'].get('by_brand', []), 'brand', label_key='brand')
 
-    # By Category sheet (flat)
+    # By Category sheet — iterate grouped structure (L1 groups → L2+L3 rows)
     if 'category' in tabs_data:
         ws_c = wb.create_sheet("By Category")
-        headers_c = ["Category L1", "Category L2", "Qty (pcs)", "Tag Amt (VND)",
+        headers_c = ["Category L1", "Category L2", "Category L3", "Qty (pcs)", "Tag Amt (VND)",
                      "Sales Amt (VND)", "Settlement (VND)", "Disc %", "Lines"]
         xl_write_header(ws_c, headers_c, row=1)
-        for r in tabs_data['category'].get('by_category', []):
-            ws_c.append([
-                translate_category(r.get('category_l1', ''), 'VI'),
-                translate_category(r.get('category_l2', ''), 'VI'),
-                r.get('qty', 0),
-                round(float(r.get('tag_amount') or 0)),
-                round(float(r.get('amount') or 0)),
-                round(float(r.get('settlement') or 0)),
-                f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
-                r.get('lines', 0),
-            ])
-        for col in range(1, 9):
-            ws_c.column_dimensions[get_column_letter(col)].width = 20
+        for grp in tabs_data['category'].get('by_category', []):
+            l1 = translate_category(grp.get('l1', ''), 'VI')
+            for r in grp.get('rows', []):
+                ws_c.append([
+                    l1,
+                    translate_category(r.get('category_l2', ''), 'VI'),
+                    translate_category(r.get('category_l3', ''), 'VI'),
+                    r.get('qty', 0),
+                    round(float(r.get('tag_amount') or 0)),
+                    round(float(r.get('amount') or 0)),
+                    round(float(r.get('settlement') or 0)),
+                    f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
+                    r.get('lines', 0),
+                ])
+        for col, w in zip(range(1, 10), [22, 28, 22, 10, 16, 16, 16, 8, 8]):
+            ws_c.column_dimensions[get_column_letter(col)].width = w
 
     # By Shop sheet
     if 'shop' in tabs_data:
@@ -3124,7 +3119,8 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
     # Top Products sheet
     if 'product' in tabs_data:
         ws_p = wb.create_sheet("Top Products")
-        p_headers = ["#", "Product Code", "Product Name", "Brand", "Category",
+        p_headers = ["#", "Product Code", "Product Name", "Brand",
+                     "Cat L1", "Cat L2", "Cat L3",
                      "Year", "Season", "Qty (pcs)", "Tag Amt (VND)",
                      "Sales Amt (VND)", "Settlement (VND)", "Disc %"]
         xl_write_header(ws_p, p_headers, row=1)
@@ -3135,6 +3131,8 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
                 r.get('product_name', ''),
                 r.get('brand', ''),
                 translate_category(r.get('category_l1', ''), 'VI'),
+                translate_category(r.get('category_l2', ''), 'VI'),
+                translate_category(r.get('category_l3', ''), 'VI'),
                 r.get('year', ''),
                 r.get('season', ''),
                 r.get('qty', 0),
@@ -3143,7 +3141,7 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
                 round(float(r.get('settlement') or 0)),
                 f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
             ])
-        for col in range(1, 13):
-            ws_p.column_dimensions[get_column_letter(col)].width = 18
+        for col, w in zip(range(1, 15), [4, 16, 32, 14, 20, 24, 20, 8, 8, 10, 14, 14, 14, 8]):
+            ws_p.column_dimensions[get_column_letter(col)].width = w
 
     return wb

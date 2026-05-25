@@ -21,6 +21,7 @@
         <tr style="background:var(--primary);color:white;">
             <th>Category L1</th>
             <th>Category L2</th>
+            <th>Category L3</th>
             <th class="text-end">Qty (pcs)</th>
             <th class="text-end">Tag Amt ({{ currency }})</th>
             <th class="text-end">Sales Amt ({{ currency }})</th>
@@ -37,6 +38,7 @@
         <td class="text-muted" style="font-size:.8rem;font-weight:400;">
             {{ grp.rows|length }} sub-categor{% if grp.rows|length == 1 %}y{% else %}ies{% endif %}
         </td>
+        <td></td>
         <td class="text-end">{{ grp.subtotal.qty|default:0 }}</td>
         <td class="text-end amount-vnd text-muted">{{ grp.subtotal.tag_amount|default:0|vnd }}</td>
         <td class="text-end amount-vnd">{{ grp.subtotal.amount|default:0|vnd }}</td>
@@ -50,6 +52,7 @@
     <tr style="background:{{ l1_bg }};">
         <td class="text-muted ps-3" style="font-size:.8rem;">└</td>
         <td>{{ r.category_l2|cat_name }}</td>
+        <td class="text-muted" style="font-size:.8rem;">{{ r.category_l3|cat_name }}</td>
         <td class="text-end">{{ r.qty|default:0 }}</td>
         <td class="text-end amount-vnd text-muted">{{ r.tag_amount|default:0|vnd }}</td>
         <td class="text-end amount-vnd">{{ r.amount|default:0|vnd }}</td>
@@ -65,7 +68,7 @@
     {% if overview %}
     <tfoot>
     <tr style="background:rgba(var(--primary-rgb),.06);font-weight:600;border-top:2px solid var(--primary);">
-        <td colspan="2">Grand Total</td>
+        <td colspan="3">Grand Total</td>
         <td class="text-end">{{ overview.total_qty|default:0 }}</td>
         <td class="text-end amount-vnd text-muted">{{ overview.total_tag_amount|default:0|vnd }}</td>
         <td class="text-end amount-vnd">{{ overview.total_amount|default:0|vnd }}</td>
@@ -89,10 +92,12 @@
         <thead style="background:var(--primary);color:#fff;">
             <tr>
                 <th style="width:3%;">#</th>
-                <th style="width:12%;">Code</th>
+                <th style="width:11%;">Code</th>
                 <th>Product Name</th>
                 <th>Brand</th>
-                <th>Category</th>
+                <th>Cat L1</th>
+                <th>Cat L2</th>
+                <th>Cat L3</th>
                 <th class="text-end">Qty</th>
                 <th class="text-end">Sales Amt ({{ currency }})</th>
                 <th class="text-end">Disc %</th>
@@ -103,9 +108,11 @@
         <tr>
             <td class="text-muted">{{ forloop.counter }}</td>
             <td class="text-muted" style="font-size:.80rem;white-space:nowrap;">{{ p.product_code|default:"—" }}</td>
-            <td>{{ p.product_name|default:"—"|truncatechars:45 }}</td>
+            <td>{{ p.product_name|default:"—"|truncatechars:40 }}</td>
             <td class="text-muted" style="white-space:nowrap;">{{ p.brand|default:"—" }}</td>
             <td class="text-muted" style="font-size:.80rem;">{{ p.category_l1|cat_name }}</td>
+            <td class="text-muted" style="font-size:.80rem;">{{ p.category_l2|cat_name }}</td>
+            <td class="text-muted" style="font-size:.80rem;">{{ p.category_l3|cat_name }}</td>
             <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
             <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
             <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">

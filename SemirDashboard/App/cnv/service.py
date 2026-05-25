@@ -856,20 +856,20 @@ def compute_cnv_comparison(start_date, end_date):
            "email", "cnv_created_at", "points", "zalo_app_id", "zalo_oa_id", "zalo_app_created_at")
     zalo_app_qs          = CNVCustomer.objects.filter(zalo_app_id__isnull=False).exclude(zalo_app_id="")
     zalo_oa_qs           = CNVCustomer.objects.filter(zalo_oa_id__isnull=False).exclude(zalo_oa_id="")
-    # zalo_app_inactive_qs = CNVCustomer.objects.filter(
-    #     _Q(zalo_app_id__isnull=True) | _Q(zalo_app_id="")
-    # )
+    zalo_app_inactive_qs = CNVCustomer.objects.filter(
+        _Q(zalo_app_id__isnull=True) | _Q(zalo_app_id="")
+    )
     zalo_app_list          = list(zalo_app_qs.order_by("-zalo_app_created_at").values(*_zf))
     zalo_oa_list           = list(zalo_oa_qs.order_by("-zalo_app_created_at").values(*_zf))
-    # zalo_app_inactive_list = list(zalo_app_inactive_qs.order_by("-cnv_created_at").values(*_zf))
+    zalo_app_inactive_list = list(zalo_app_inactive_qs.order_by("-cnv_created_at").values(*_zf))
     _all_z_phones = {r["phone"] for r in zalo_app_list + zalo_oa_list if r["phone"]}
     _pos_z_phones = _all_z_phones & pos_phones_all
     for r in zalo_app_list:
         r["in_pos"] = r["phone"] in _pos_z_phones
     for r in zalo_oa_list:
         r["in_pos"] = r["phone"] in _pos_z_phones
-    # for r in zalo_app_inactive_list:
-    #     r["in_pos"] = r["phone"] in pos_phones_all if r["phone"] else False
+    for r in zalo_app_inactive_list:
+        r["in_pos"] = r["phone"] in pos_phones_all if r["phone"] else False
 
     result = {
         "has_filter":                has_filter,
@@ -903,7 +903,7 @@ def compute_cnv_comparison(start_date, end_date):
         "zalo_app_period_pct":       zalo_app_period_pct,
         "zalo_oa_period_pct":        zalo_oa_period_pct,
         "zalo_mini_app_list":          zalo_app_list,
-        # "zalo_mini_app_inactive_list": zalo_app_inactive_list,
+        "zalo_mini_app_inactive_list": zalo_app_inactive_list,
         "zalo_oa_list":                zalo_oa_list,
         "breakdown": compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all),
     }

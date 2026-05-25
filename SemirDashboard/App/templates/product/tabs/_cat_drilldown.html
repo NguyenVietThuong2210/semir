@@ -9,7 +9,8 @@ L1 groups get alternating tinted backgrounds. Each L1 sub-header shows subtotals
 <table class="table table-sm align-middle mb-0" style="border-collapse:collapse;">
     <thead>
         <tr style="background:var(--secondary);color:#fff;font-size:.78rem;">
-            <th style="width:32%;">Category</th>
+            <th style="width:20%;">Cat L2</th>
+            <th style="width:16%;">Cat L3</th>
             <th class="text-end" style="width:10%;">Qty</th>
             <th class="text-end" style="width:14%;">Tag Amt</th>
             <th class="text-end" style="width:14%;">Sales Amt</th>
@@ -23,7 +24,7 @@ L1 groups get alternating tinted backgrounds. Each L1 sub-header shows subtotals
     {% cycle 'rgba(var(--primary-rgb),.04)' 'rgba(var(--orange-rgb),.04)' as l1_bg silent %}
     {# L1 group header row #}
     <tr style="background:{{ l1_bg }};font-weight:600;font-size:.80rem;">
-        <td colspan="1" style="padding-left:.5rem;">
+        <td colspan="2" style="padding-left:.5rem;">
             <span class="text-primary" style="font-size:.75rem;margin-right:.25rem;">▸</span>
             {{ grp.l1|cat_name }}
         </td>
@@ -42,6 +43,7 @@ L1 groups get alternating tinted backgrounds. Each L1 sub-header shows subtotals
         <td style="padding-left:1.5rem;color:var(--text-muted);">
             └ {{ r.category_l2|cat_name }}
         </td>
+        <td class="text-muted" style="font-size:.78rem;">{{ r.category_l3|cat_name }}</td>
         <td class="text-end fw-semibold">{{ r.qty|default:0 }}</td>
         <td class="text-end amount-vnd text-muted">{{ r.tag_amount|default:0|vnd }}</td>
         <td class="text-end amount-vnd">{{ r.amount|default:0|vnd }}</td>

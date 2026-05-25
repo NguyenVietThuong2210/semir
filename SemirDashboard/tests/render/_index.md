@@ -1,6 +1,6 @@
 # Render Snapshot Index
 
-Generated: 2026-05-24 17:45:28
+Generated: 2026-05-25 20:21:07
 
 | Label | URL | Status | Size | Tables | Token issues |
 |-------|-----|--------|------|--------|--------------|
@@ -16,12 +16,12 @@ Generated: 2026-05-24 17:45:28
 | 10_formulas | `/formulas/` | 200 | 37.5KB | 1 | 0 |
 | 11_sales_chart | `/analytics/chart/` | 200 | 1167.6KB | 0 | 0 |
 | 12_coupon_chart | `/coupons/chart/` | 200 | 112.0KB | 0 | 0 |
-| 13_customer_chart | `/cnv/customer-chart/` | 200 | 712.0KB | 0 | 0 |
+| 13_customer_chart | `/cnv/customer-chart/` | 200 | 727.9KB | 0 | 0 |
 | 14_cnv_sync_status | `/cnv/sync-status/` | 200 | 36.0KB | 1 | 0 |
 | 15_upload_customers | `/upload/customers/` | 200 | 37.2KB | 2 | 0 |
-| 16_user_management | `/users/` | 200 | 94.9KB | 1 | 0 |
-| 17_admin_logs | `/admin-logs/` | 200 | 297.7KB | 3 | 0 |
-| 18_product_analytics | `/products/` | 200 | 74.8KB | 3 | 0 |
-| 19_inventory_analytics | `/inventory/` | 200 | 1161.5KB | 63 | 0 |
+| 16_user_management | `/users/` | 200 | 96.6KB | 1 | 0 |
+| 17_admin_logs | `/admin-logs/` | 200 | 251.5KB | 3 | 0 |
+| 18_product_analytics | `/products/` | 200 | 140.3KB | 3 | 0 |
+| 19_inventory_analytics | `/inventory/` | 200 | 1235.7KB | 63 | 0 |
 | 20_upload_inventory | `/upload/inventory/` | 200 | 31.5KB | 0 | 0 |
 | 21_upload_sale_detail | `/upload/sales/` | 200 | 35.3KB | 0 | 0 |

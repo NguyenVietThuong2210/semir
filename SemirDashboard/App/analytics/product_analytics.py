@@ -140,7 +140,8 @@ def _top_products_by_period(qs, trunc_fn, period_key, top_n=10):
     """Query top N products per period. Returns {period_val: [top_products]}."""
     rows = list(
         qs.annotate(**{period_key: trunc_fn('sales_date')})
-        .values(period_key, 'product_code', 'product_name', 'brand')
+        .values(period_key, 'product_code', 'product_name', 'brand',
+                'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
@@ -165,7 +166,8 @@ def _top_products_by_period(qs, trunc_fn, period_key, top_n=10):
 def _top_products_by_group(qs, group_field, top_n=10):
     """Query top N products per group value. Returns {group_val: [top_products]}."""
     rows = list(
-        qs.values(group_field, 'product_code', 'product_name', 'brand')
+        qs.values(group_field, 'product_code', 'product_name', 'brand',
+                  'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
@@ -194,11 +196,11 @@ def _period_with_cat(qs, trunc_fn, label_fn, period_key, top_n=10):
     # Query 1: period × cat
     rows = list(
         qs.annotate(**{period_key: trunc_fn('sales_date')})
-        .values(period_key, 'category_l1', 'category_l2')
+        .values(period_key, 'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
-        .order_by(f'-{period_key}', 'category_l1', 'category_l2')
+        .order_by(f'-{period_key}', 'category_l1', 'category_l2', 'category_l3')
     )
 
     # Query 2: period × product (for top_n products per period)
@@ -224,6 +226,7 @@ def _period_with_cat(qs, trunc_fn, label_fn, period_key, top_n=10):
         p['_cat_rows'].append({
             'category_l1': r.get('category_l1') or '—',
             'category_l2': r.get('category_l2') or '—',
+            'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
@@ -276,17 +279,18 @@ def _by_sales_season(qs, top_n=10):
     # Query 1: month × cat (re-group to season in Python)
     rows = list(
         qs.annotate(month_trunc=TruncMonth('sales_date'))
-        .values('month_trunc', 'category_l1', 'category_l2')
+        .values('month_trunc', 'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
-        .order_by('month_trunc', 'category_l1', 'category_l2')
+        .order_by('month_trunc', 'category_l1', 'category_l2', 'category_l3')
     )
 
     # Query 2: month × product (re-group to season)
     prod_rows = list(
         qs.annotate(month_trunc=TruncMonth('sales_date'))
-        .values('month_trunc', 'product_code', 'product_name', 'brand')
+        .values('month_trunc', 'product_code', 'product_name', 'brand',
+                'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
@@ -315,6 +319,7 @@ def _by_sales_season(qs, top_n=10):
         p['_cat_rows'].append({
             'category_l1': r.get('category_l1') or '—',
             'category_l2': r.get('category_l2') or '—',
+            'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
@@ -332,6 +337,9 @@ def _by_sales_season(qs, top_n=10):
                 'product_code': r.get('product_code') or '',
                 'product_name': r.get('product_name') or '',
                 'brand': r.get('brand') or '—',
+                'category_l1': r.get('category_l1') or '',
+                'category_l2': r.get('category_l2') or '',
+                'category_l3': r.get('category_l3') or '',
                 'qty': r.get('qty') or 0,
                 'amount': float(r.get('amount') or 0),
                 'settlement': float(r.get('settlement') or 0),
@@ -368,15 +376,16 @@ def _by_sales_season(qs, top_n=10):
 def _by_product_season(qs, top_n=10):
     """Group by product design year+season (SaleDetail.year / season fields)."""
     rows = list(
-        qs.values('year', 'season', 'category_l1', 'category_l2')
+        qs.values('year', 'season', 'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
-        .order_by('-year', 'season', 'category_l1', 'category_l2')
+        .order_by('-year', 'season', 'category_l1', 'category_l2', 'category_l3')
     )
 
     prod_rows = list(
-        qs.values('year', 'season', 'product_code', 'product_name', 'brand')
+        qs.values('year', 'season', 'product_code', 'product_name', 'brand',
+                  'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
@@ -405,6 +414,7 @@ def _by_product_season(qs, top_n=10):
         p['_cat_rows'].append({
             'category_l1': r.get('category_l1') or '—',
             'category_l2': r.get('category_l2') or '—',
+            'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
@@ -422,6 +432,9 @@ def _by_product_season(qs, top_n=10):
                 'product_code': r.get('product_code') or '',
                 'product_name': r.get('product_name') or '',
                 'brand': r.get('brand') or '—',
+                'category_l1': r.get('category_l1') or '',
+                'category_l2': r.get('category_l2') or '',
+                'category_l3': r.get('category_l3') or '',
                 'qty': r.get('qty') or 0,
                 'amount': float(r.get('amount') or 0),
                 'settlement': float(r.get('settlement') or 0),
@@ -443,11 +456,11 @@ def _by_product_season(qs, top_n=10):
 def _by_vip_grade(qs, top_n=10):
     """Group by VIP grade via SaleDetail → SalesTransaction → Customer."""
     rows = list(
-        qs.values('transaction__customer__vip_grade', 'category_l1', 'category_l2')
+        qs.values('transaction__customer__vip_grade', 'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
-        .order_by('transaction__customer__vip_grade', 'category_l1', 'category_l2')
+        .order_by('transaction__customer__vip_grade', 'category_l1', 'category_l2', 'category_l3')
     )
     top_by_grade = _top_products_by_group(qs, 'transaction__customer__vip_grade', top_n=top_n)
 
@@ -469,6 +482,7 @@ def _by_vip_grade(qs, top_n=10):
         p['_cat_rows'].append({
             'category_l1': r.get('category_l1') or '—',
             'category_l2': r.get('category_l2') or '—',
+            'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
@@ -493,11 +507,11 @@ def _by_vip_grade(qs, top_n=10):
 def _by_brand(qs, top_n=10):
     """Group by brand with category drill-down and top products."""
     rows = list(
-        qs.values('brand', 'category_l1', 'category_l2')
+        qs.values('brand', 'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
-        .order_by('brand', 'category_l1', 'category_l2')
+        .order_by('brand', 'category_l1', 'category_l2', 'category_l3')
     )
     top_by_brand = _top_products_by_group(qs, 'brand', top_n=top_n)
 
@@ -519,6 +533,7 @@ def _by_brand(qs, top_n=10):
         p['_cat_rows'].append({
             'category_l1': r.get('category_l1') or '—',
             'category_l2': r.get('category_l2') or '—',
+            'category_l3': r.get('category_l3') or '',
             'qty': r.get('qty') or 0,
             'amount': float(r.get('amount') or 0),
             'settlement': float(r.get('settlement') or 0),
@@ -535,13 +550,13 @@ def _by_brand(qs, top_n=10):
 
 
 def _by_category(qs):
-    """L1→L2 category breakdown grouped and sorted by amount desc."""
+    """L1→L2→L3 category breakdown grouped and sorted by amount desc."""
     rows = list(
-        qs.values('category_l1', 'category_l2')
+        qs.values('category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
-        .order_by('category_l1', '-amount')
+        .order_by('category_l1', 'category_l2', '-amount')
     )
     for r in rows:
         r['amount'] = float(r.get('amount') or 0)
@@ -554,7 +569,8 @@ def _top_products_by_period_shop(qs, trunc_fn, period_key, top_n=10):
     """Returns {shop_name: {period_val: [top_products]}} for each shop × period."""
     rows = list(
         qs.annotate(**{period_key: trunc_fn('sales_date')})
-        .values('shop_name', period_key, 'product_code', 'product_name', 'brand')
+        .values('shop_name', period_key, 'product_code', 'product_name', 'brand',
+                'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'))
         .order_by('shop_name', f'-{period_key}', '-amount')
@@ -572,6 +588,9 @@ def _top_products_by_period_shop(qs, trunc_fn, period_key, top_n=10):
                 'product_code': r.get('product_code') or '',
                 'product_name': r.get('product_name') or '',
                 'brand': r.get('brand') or '—',
+                'category_l1': r.get('category_l1') or '',
+                'category_l2': r.get('category_l2') or '',
+                'category_l3': r.get('category_l3') or '',
                 'qty': r.get('qty') or 0,
                 'amount': float(r.get('amount') or 0),
                 'settlement': float(r.get('settlement') or 0),
@@ -585,7 +604,8 @@ def _top_products_by_period_shop(qs, trunc_fn, period_key, top_n=10):
 def _top_products_by_group_shop(qs, group_field, top_n=10):
     """Returns {shop_name: {group_val: [top_products]}} for each shop × group."""
     rows = list(
-        qs.values('shop_name', group_field, 'product_code', 'product_name', 'brand')
+        qs.values('shop_name', group_field, 'product_code', 'product_name', 'brand',
+                  'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'))
         .order_by('shop_name', group_field, '-amount')
@@ -603,6 +623,9 @@ def _top_products_by_group_shop(qs, group_field, top_n=10):
                 'product_code': r.get('product_code') or '',
                 'product_name': r.get('product_name') or '',
                 'brand': r.get('brand') or '—',
+                'category_l1': r.get('category_l1') or '',
+                'category_l2': r.get('category_l2') or '',
+                'category_l3': r.get('category_l3') or '',
                 'qty': r.get('qty') or 0,
                 'amount': float(r.get('amount') or 0),
                 'settlement': float(r.get('settlement') or 0),
@@ -614,9 +637,10 @@ def _top_products_by_group_shop(qs, group_field, top_n=10):
 
 
 def _by_product(qs, limit=50):
-    """Top `limit` products ranked by qty sold."""
+    """Top `limit` products ranked by sales amount."""
     rows = list(
-        qs.values('product_code', 'product_name', 'brand', 'category_l1', 'year', 'season')
+        qs.values('product_code', 'product_name', 'brand',
+                  'category_l1', 'category_l2', 'category_l3', 'year', 'season')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
