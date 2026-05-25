@@ -5,8 +5,12 @@ Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab styl
 {% endcomment %}
 {% load custom_filters %}
 {% if cat_groups %}
+<style>
+.cdd-tbl .cdd-l1 > td { background:rgba(var(--orange-rgb),.20) !important; font-weight:600; }
+.cdd-tbl .cdd-l2 > td { background:rgba(var(--orange-rgb),.12) !important; }
+</style>
 <div class="table-responsive" style="font-size:.80rem;">
-<table class="table table-sm align-middle mb-0" style="border-collapse:collapse;">
+<table class="table table-sm align-middle mb-0 cdd-tbl" style="border-collapse:collapse;">
     <thead>
         <tr style="background:var(--secondary);color:#fff;font-size:.78rem;">
             <th style="width:18%;">Category L1</th>
@@ -21,11 +25,10 @@ Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab styl
     </thead>
     <tbody>
     {% for grp in cat_groups %}
-    {% cycle 'rgba(var(--primary-rgb),.04)' 'rgba(var(--orange-rgb),.04)' as l1_bg silent %}
     {# ── L1 header row ── #}
-    <tr style="background:{{ l1_bg }};font-weight:600;font-size:.80rem;">
+    <tr class="cdd-l1">
         <td>{{ grp.l1|cat_name }}</td>
-        <td class="text-muted" style="font-size:.76rem;font-weight:400;">
+        <td style="font-size:.76rem;font-weight:400;">
             {{ grp.l2_groups|length }} sub-categor{% if grp.l2_groups|length == 1 %}y{% else %}ies{% endif %}
         </td>
         <td></td>
@@ -39,10 +42,10 @@ Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab styl
     </tr>
     {# ── L2 sub-header + L3 rows ── #}
     {% for l2g in grp.l2_groups %}
-    <tr style="background:{{ l1_bg }};">
+    <tr class="cdd-l2">
         <td class="text-muted ps-3" style="font-size:.78rem;">└</td>
         <td style="font-weight:500;">{{ l2g.l2|cat_name }}</td>
-        <td class="text-muted" style="font-size:.76rem;">
+        <td style="font-size:.76rem;">
             {% if l2g.rows|length > 1 %}{{ l2g.rows|length }} items{% endif %}
         </td>
         <td class="text-end fw-semibold">{{ l2g.subtotal.qty|default:0 }}</td>
@@ -54,7 +57,7 @@ Hierarchy: L1 header → L2 sub-header → L3 rows. Matches By Category tab styl
         <td class="text-end text-muted">{{ l2g.subtotal.lines|default:0 }}</td>
     </tr>
     {% for r in l2g.rows %}{% if r.category_l3 %}
-    <tr style="background:{{ l1_bg }};">
+    <tr class="cdd-l3">
         <td></td>
         <td class="text-muted ps-3" style="font-size:.76rem;">└</td>
         <td style="font-size:.78rem;">{{ r.category_l3|cat_name }}</td>
