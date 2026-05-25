@@ -2063,7 +2063,7 @@ def _build_cnv_shop_detail_ws(wb, breakdown, hf, font, align):
 
 _CNV_TAB_SHEETS = {
     "points":       ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
-    "zalo":         ["zalo_mini_app", "zalo_mini_app_inactive", "zalo_oa"],
+    "zalo":         ["zalo_mini_app", "zalo_oa"],  # "zalo_mini_app_inactive" disabled
     "pos_cnv":      ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
     "breakdown":    ["bd_season", "bd_month", "bd_week", "bd_shop", "bd_shop_detail",
                      "bd_season_shop", "bd_month_shop", "bd_week_shop"],
