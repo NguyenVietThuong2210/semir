@@ -87,34 +87,58 @@ def _overview(qs):
 # ── Core helpers ───────────────────────────────────────────────────────────────
 
 def _build_cat_groups(cat_rows):
-    """Group [{category_l1, category_l2, qty, amount, ...}] → [{l1, rows, subtotal}] sorted by amount desc."""
+    """
+    Group [{category_l1, category_l2, category_l3, qty, amount, ...}]
+    → [{l1, l2_groups:[{l2, rows:[L3 rows], subtotal}], subtotal}] sorted by amount desc.
+    3-level hierarchy: L1 → L2 groups → L3 detail rows.
+    """
     l1_map = OrderedDict()
     for r in cat_rows:
         l1 = r.get('category_l1') or '—'
+        l2 = r.get('category_l2') or '—'
         if l1 not in l1_map:
-            l1_map[l1] = []
-        l1_map[l1].append(r)
+            l1_map[l1] = OrderedDict()
+        if l2 not in l1_map[l1]:
+            l1_map[l1][l2] = []
+        l1_map[l1][l2].append(r)
+
     result = []
-    for l1, rows in l1_map.items():
-        # Sort L2 rows within each L1 by amount desc
-        rows = sorted(rows, key=lambda r: -(float(r.get('amount') or 0)))
-        st_qty = sum(r.get('qty') or 0 for r in rows)
-        st_amt = sum(float(r.get('amount') or 0) for r in rows)
-        st_sett = sum(float(r.get('settlement') or 0) for r in rows)
-        st_tag = sum(float(r.get('tag_amount') or 0) for r in rows)
-        st_lines = sum(r.get('lines') or 0 for r in rows)
-        for r in rows:
-            r['disc_pct'] = _disc_pct(r.get('tag_amount'), r.get('settlement'))
+    for l1, l2_map in l1_map.items():
+        l1_qty = l1_amt = l1_sett = l1_tag = l1_lines = 0
+        l2_groups = []
+        for l2, rows in l2_map.items():
+            rows = sorted(rows, key=lambda r: -(float(r.get('amount') or 0)))
+            for r in rows:
+                r['disc_pct'] = _disc_pct(r.get('tag_amount'), r.get('settlement'))
+            l2_qty   = sum(r.get('qty') or 0 for r in rows)
+            l2_amt   = sum(float(r.get('amount') or 0) for r in rows)
+            l2_sett  = sum(float(r.get('settlement') or 0) for r in rows)
+            l2_tag   = sum(float(r.get('tag_amount') or 0) for r in rows)
+            l2_lines = sum(r.get('lines') or 0 for r in rows)
+            l2_groups.append({
+                'l2': l2,
+                'rows': rows,
+                'subtotal': {
+                    'qty': l2_qty, 'amount': l2_amt, 'settlement': l2_sett,
+                    'tag_amount': l2_tag, 'lines': l2_lines,
+                    'disc_pct': _disc_pct(l2_tag, l2_sett),
+                },
+            })
+            l1_qty   += l2_qty
+            l1_amt   += l2_amt
+            l1_sett  += l2_sett
+            l1_tag   += l2_tag
+            l1_lines += l2_lines
+        l2_groups = sorted(l2_groups, key=lambda x: -(x['subtotal']['amount'] or 0))
         result.append({
             'l1': l1,
-            'rows': rows,
+            'l2_groups': l2_groups,
             'subtotal': {
-                'qty': st_qty, 'amount': st_amt, 'settlement': st_sett,
-                'tag_amount': st_tag, 'lines': st_lines,
-                'disc_pct': _disc_pct(st_tag, st_sett),
+                'qty': l1_qty, 'amount': l1_amt, 'settlement': l1_sett,
+                'tag_amount': l1_tag, 'lines': l1_lines,
+                'disc_pct': _disc_pct(l1_tag, l1_sett),
             },
         })
-    # Sort L1 groups by amount desc
     return sorted(result, key=lambda x: -(x['subtotal']['amount'] or 0))
 
 
@@ -549,20 +573,78 @@ def _by_brand(qs, top_n=10):
     return result
 
 
+def _build_brand_cat_groups(rows):
+    """
+    Build 4-level hierarchy: Brand → L1 groups → L2 groups → L3 rows.
+    Input rows must include: brand, category_l1, category_l2, category_l3, qty, amount, settlement, tag_amount, lines.
+    """
+    brand_map = OrderedDict()
+    for r in rows:
+        br = r.get('brand') or '—'
+        l1 = r.get('category_l1') or '—'
+        l2 = r.get('category_l2') or '—'
+        brand_map.setdefault(br, OrderedDict()).setdefault(l1, OrderedDict()).setdefault(l2, []).append(r)
+
+    result = []
+    for br, l1_map in brand_map.items():
+        br_qty = br_amt = br_sett = br_tag = br_lines = 0
+        l1_groups = []
+        for l1, l2_map in l1_map.items():
+            l1_qty = l1_amt = l1_sett = l1_tag = l1_lines = 0
+            l2_groups = []
+            for l2, l3_rows in l2_map.items():
+                l3_rows = sorted(l3_rows, key=lambda r: -(float(r.get('amount') or 0)))
+                for r in l3_rows:
+                    r['disc_pct'] = _disc_pct(r.get('tag_amount'), r.get('settlement'))
+                l2_qty   = sum(r.get('qty') or 0 for r in l3_rows)
+                l2_amt   = sum(float(r.get('amount') or 0) for r in l3_rows)
+                l2_sett  = sum(float(r.get('settlement') or 0) for r in l3_rows)
+                l2_tag   = sum(float(r.get('tag_amount') or 0) for r in l3_rows)
+                l2_lines = sum(r.get('lines') or 0 for r in l3_rows)
+                l2_groups.append({
+                    'l2': l2,
+                    'rows': l3_rows,
+                    'subtotal': {'qty': l2_qty, 'amount': l2_amt, 'settlement': l2_sett,
+                                 'tag_amount': l2_tag, 'lines': l2_lines,
+                                 'disc_pct': _disc_pct(l2_tag, l2_sett)},
+                })
+                l1_qty += l2_qty; l1_amt += l2_amt; l1_sett += l2_sett
+                l1_tag += l2_tag; l1_lines += l2_lines
+            l2_groups = sorted(l2_groups, key=lambda x: -(x['subtotal']['amount'] or 0))
+            l1_groups.append({
+                'l1': l1,
+                'l2_groups': l2_groups,
+                'subtotal': {'qty': l1_qty, 'amount': l1_amt, 'settlement': l1_sett,
+                             'tag_amount': l1_tag, 'lines': l1_lines,
+                             'disc_pct': _disc_pct(l1_tag, l1_sett)},
+            })
+            br_qty += l1_qty; br_amt += l1_amt; br_sett += l1_sett
+            br_tag += l1_tag; br_lines += l1_lines
+        l1_groups = sorted(l1_groups, key=lambda x: -(x['subtotal']['amount'] or 0))
+        result.append({
+            'brand': br,
+            'l1_groups': l1_groups,
+            'subtotal': {'qty': br_qty, 'amount': br_amt, 'settlement': br_sett,
+                         'tag_amount': br_tag, 'lines': br_lines,
+                         'disc_pct': _disc_pct(br_tag, br_sett)},
+        })
+    return sorted(result, key=lambda x: -(x['subtotal']['amount'] or 0))
+
+
 def _by_category(qs):
-    """L1→L2→L3 category breakdown grouped and sorted by amount desc."""
+    """Brand → L1 → L2 → L3 breakdown sorted by amount desc."""
     rows = list(
-        qs.values('category_l1', 'category_l2', 'category_l3')
+        qs.values('brand', 'category_l1', 'category_l2', 'category_l3')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
-        .order_by('category_l1', 'category_l2', '-amount')
+        .order_by('brand', 'category_l1', 'category_l2', '-amount')
     )
     for r in rows:
         r['amount'] = float(r.get('amount') or 0)
         r['settlement'] = float(r.get('settlement') or 0)
         r['tag_amount'] = float(r.get('tag_amount') or 0)
-    return _build_cat_groups(rows)
+    return _build_brand_cat_groups(rows)
 
 
 def _top_products_by_period_shop(qs, trunc_fn, period_key, top_n=10):

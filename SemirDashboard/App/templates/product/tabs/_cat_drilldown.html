@@ -1,7 +1,7 @@
 {% comment %}
 Reusable category drill-down block for a single period/brand row.
-Context vars required: cat_groups (list of {l1, rows, subtotal}), currency, collapse_id.
-L1 groups get alternating tinted backgrounds. Each L1 sub-header shows subtotals.
+Context vars required: cat_groups (list of {l1, l2_groups, subtotal}), currency.
+Hierarchy: L1 header → L2 sub-header → L3 rows.
 {% endcomment %}
 {% load custom_filters %}
 {% if cat_groups %}
@@ -9,8 +9,8 @@ L1 groups get alternating tinted backgrounds. Each L1 sub-header shows subtotals
 <table class="table table-sm align-middle mb-0" style="border-collapse:collapse;">
     <thead>
         <tr style="background:var(--secondary);color:#fff;font-size:.78rem;">
-            <th style="width:20%;">Cat L2</th>
-            <th style="width:16%;">Cat L3</th>
+            <th style="width:20%;">Category L2</th>
+            <th style="width:16%;">Category L3</th>
             <th class="text-end" style="width:10%;">Qty</th>
             <th class="text-end" style="width:14%;">Tag Amt</th>
             <th class="text-end" style="width:14%;">Sales Amt</th>
@@ -37,22 +37,38 @@ L1 groups get alternating tinted backgrounds. Each L1 sub-header shows subtotals
         </td>
         <td class="text-end text-muted">{{ grp.subtotal.lines|default:0 }}</td>
     </tr>
-    {# L2 detail rows #}
-    {% for r in grp.rows %}
+    {# L2 sub-header + L3 rows #}
+    {% for l2g in grp.l2_groups %}
     <tr style="background:{{ l1_bg }};">
-        <td style="padding-left:1.5rem;color:var(--text-muted);">
-            └ {{ r.category_l2|cat_name }}
+        <td style="padding-left:1.5rem;color:var(--text-muted);font-weight:500;">
+            └ {{ l2g.l2|cat_name }}
         </td>
-        <td class="text-muted" style="font-size:.78rem;">{{ r.category_l3|cat_name }}</td>
-        <td class="text-end fw-semibold">{{ r.qty|default:0 }}</td>
-        <td class="text-end amount-vnd text-muted">{{ r.tag_amount|default:0|vnd }}</td>
-        <td class="text-end amount-vnd">{{ r.amount|default:0|vnd }}</td>
-        <td class="text-end amount-vnd">{{ r.settlement|default:0|vnd }}</td>
-        <td class="text-end{% if r.disc_pct and r.disc_pct > 20 %} text-danger{% endif %}">
+        <td class="text-muted" style="font-size:.76rem;">
+            {% if l2g.rows|length > 1 %}{{ l2g.rows|length }} items{% endif %}
+        </td>
+        <td class="text-end fw-semibold">{{ l2g.subtotal.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted">{{ l2g.subtotal.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ l2g.subtotal.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ l2g.subtotal.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if l2g.subtotal.disc_pct and l2g.subtotal.disc_pct > 20 %} text-danger{% endif %}">
+            {% if l2g.subtotal.disc_pct is not None %}{{ l2g.subtotal.disc_pct }}%{% else %}—{% endif %}
+        </td>
+        <td class="text-end text-muted">{{ l2g.subtotal.lines|default:0 }}</td>
+    </tr>
+    {% for r in l2g.rows %}{% if r.category_l3 %}
+    <tr style="background:{{ l1_bg }};">
+        <td style="padding-left:2.5rem;color:var(--text-muted);font-size:.76rem;">└ {{ r.category_l3|cat_name }}</td>
+        <td></td>
+        <td class="text-end" style="font-size:.76rem;">{{ r.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted" style="font-size:.76rem;">{{ r.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd" style="font-size:.76rem;">{{ r.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd" style="font-size:.76rem;">{{ r.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if r.disc_pct and r.disc_pct > 20 %} text-danger{% endif %}" style="font-size:.76rem;">
             {% if r.disc_pct is not None %}{{ r.disc_pct }}%{% else %}—{% endif %}
         </td>
-        <td class="text-end text-muted">{{ r.lines|default:0 }}</td>
+        <td class="text-end text-muted" style="font-size:.76rem;">{{ r.lines|default:0 }}</td>
     </tr>
+    {% endif %}{% endfor %}
     {% endfor %}
     {% endfor %}
     </tbody>

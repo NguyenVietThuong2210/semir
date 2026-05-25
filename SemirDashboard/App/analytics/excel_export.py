@@ -3022,20 +3022,22 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
                 f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
                 r.get('lines', 0),
             ])
+            # cat_groups: L1 → l2_groups → L3 rows
             for grp in r.get('cat_groups', []):
-                for cat in grp.get('rows', []):
-                    ws_t.append([
-                        '',
-                        translate_category(cat.get('category_l1', ''), 'VI'),
-                        translate_category(cat.get('category_l2', ''), 'VI'),
-                        translate_category(cat.get('category_l3', ''), 'VI'),
-                        cat.get('qty', 0),
-                        round(float(cat.get('tag_amount') or 0)),
-                        round(float(cat.get('amount') or 0)),
-                        round(float(cat.get('settlement') or 0)),
-                        f"{cat.get('disc_pct', '—')}%" if cat.get('disc_pct') is not None else '—',
-                        cat.get('lines', 0),
-                    ])
+                for l2g in grp.get('l2_groups', []):
+                    for cat in l2g.get('rows', []):
+                        ws_t.append([
+                            '',
+                            translate_category(cat.get('category_l1', ''), 'VI'),
+                            translate_category(cat.get('category_l2', ''), 'VI'),
+                            translate_category(cat.get('category_l3', ''), 'VI'),
+                            cat.get('qty', 0),
+                            round(float(cat.get('tag_amount') or 0)),
+                            round(float(cat.get('amount') or 0)),
+                            round(float(cat.get('settlement') or 0)),
+                            f"{cat.get('disc_pct', '—')}%" if cat.get('disc_pct') is not None else '—',
+                            cat.get('lines', 0),
+                        ])
         for col in range(1, 9):
             ws_t.column_dimensions[get_column_letter(col)].width = 18
 
@@ -3049,27 +3051,32 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
         ws_b = wb.create_sheet("By Brand")
         _write_period_tab(ws_b, tabs_data['brand'].get('by_brand', []), 'brand', label_key='brand')
 
-    # By Category sheet — iterate grouped structure (L1 groups → L2+L3 rows)
+    # By Category sheet — Brand → L1 → L2 → L3
     if 'category' in tabs_data:
         ws_c = wb.create_sheet("By Category")
-        headers_c = ["Category L1", "Category L2", "Category L3", "Qty (pcs)", "Tag Amt (VND)",
-                     "Sales Amt (VND)", "Settlement (VND)", "Disc %", "Lines"]
+        headers_c = ["Brand", "Category L1", "Category L2", "Category L3", "Qty (pcs)",
+                     "Tag Amt (VND)", "Sales Amt (VND)", "Settlement (VND)", "Disc %", "Lines"]
         xl_write_header(ws_c, headers_c, row=1)
-        for grp in tabs_data['category'].get('by_category', []):
-            l1 = translate_category(grp.get('l1', ''), 'VI')
-            for r in grp.get('rows', []):
-                ws_c.append([
-                    l1,
-                    translate_category(r.get('category_l2', ''), 'VI'),
-                    translate_category(r.get('category_l3', ''), 'VI'),
-                    r.get('qty', 0),
-                    round(float(r.get('tag_amount') or 0)),
-                    round(float(r.get('amount') or 0)),
-                    round(float(r.get('settlement') or 0)),
-                    f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
-                    r.get('lines', 0),
-                ])
-        for col, w in zip(range(1, 10), [22, 28, 22, 10, 16, 16, 16, 8, 8]):
+        for br_grp in tabs_data['category'].get('by_category', []):
+            brand = br_grp.get('brand', '')
+            for grp in br_grp.get('l1_groups', []):
+                l1 = translate_category(grp.get('l1', ''), 'VI')
+                for l2g in grp.get('l2_groups', []):
+                    l2 = translate_category(l2g.get('l2', ''), 'VI')
+                    for r in l2g.get('rows', []):
+                        ws_c.append([
+                            brand,
+                            l1,
+                            l2,
+                            translate_category(r.get('category_l3', ''), 'VI'),
+                            r.get('qty', 0),
+                            round(float(r.get('tag_amount') or 0)),
+                            round(float(r.get('amount') or 0)),
+                            round(float(r.get('settlement') or 0)),
+                            f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
+                            r.get('lines', 0),
+                        ])
+        for col, w in zip(range(1, 11), [16, 22, 26, 22, 10, 16, 16, 16, 8, 8]):
             ws_c.column_dimensions[get_column_letter(col)].width = w
 
     # By Shop sheet

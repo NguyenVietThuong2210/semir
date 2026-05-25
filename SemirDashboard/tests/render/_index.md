@@ -1,6 +1,6 @@
 # Render Snapshot Index
 
-Generated: 2026-05-25 20:21:07
+Generated: 2026-05-25 20:39:50
 
 | Label | URL | Status | Size | Tables | Token issues |
 |-------|-----|--------|------|--------|--------------|
@@ -21,7 +21,7 @@ Generated: 2026-05-25 20:21:07
 | 15_upload_customers | `/upload/customers/` | 200 | 37.2KB | 2 | 0 |
 | 16_user_management | `/users/` | 200 | 96.6KB | 1 | 0 |
 | 17_admin_logs | `/admin-logs/` | 200 | 251.5KB | 3 | 0 |
-| 18_product_analytics | `/products/` | 200 | 140.3KB | 3 | 0 |
+| 18_product_analytics | `/products/` | 200 | 170.2KB | 3 | 0 |
 | 19_inventory_analytics | `/inventory/` | 200 | 1235.7KB | 63 | 0 |
 | 20_upload_inventory | `/upload/inventory/` | 200 | 31.5KB | 0 | 0 |
 | 21_upload_sale_detail | `/upload/sales/` | 200 | 35.3KB | 0 | 0 |
