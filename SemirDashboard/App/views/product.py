@@ -87,21 +87,30 @@ def product_tab(request, tab):
     return render(request, f"product/tabs/{tab}.html", ctx)
 
 
+_EXPORT_TABS = ('month', 'year', 'week', 'sales_season', 'product_season', 'vip_grade', 'brand', 'category', 'shop', 'product')
+
+
 @requires_perm("products.export")
 def export_product_analytics(request):
-    """Export product analytics data to Excel."""
+    """Export product analytics data to Excel.
+
+    ?tab=<name> exports a single tab sheet.
+    No ?tab exports all tabs in one workbook.
+    """
     from App.analytics.excel_export import export_product_analytics_to_excel
 
     start_date = request.GET.get("start_date", "")
     end_date   = request.GET.get("end_date", "")
     shop_group = request.GET.get("shop_group", "")
+    tab_param  = request.GET.get("tab", "").strip()
 
     date_from = parse_date_silent(start_date)
     date_to   = parse_date_silent(end_date)
 
-    # Gather all tabs into one workbook
+    export_tabs = [tab_param] if tab_param in _EXPORT_TABS else list(_EXPORT_TABS)
+
     tabs_data = {}
-    for tab in ('month', 'brand', 'category', 'shop', 'product'):
+    for tab in export_tabs:
         d = get_product_tab(tab, date_from=date_from, date_to=date_to,
                             shop_group=shop_group or None)
         if d:
@@ -116,7 +125,8 @@ def export_product_analytics(request):
     )
     ts = datetime.now().strftime('%H%M%S')
     period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
-    fn = f"product_analytics_{period}_{ts}.xlsx"
+    tab_suffix = f"_{tab_param}" if tab_param in _EXPORT_TABS else ""
+    fn = f"product_analytics{tab_suffix}_{period}_{ts}.xlsx"
 
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

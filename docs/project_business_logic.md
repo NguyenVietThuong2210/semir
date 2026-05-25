@@ -51,7 +51,7 @@ Old definition (OBSOLETE): SS = Jan-Jun, AW = Jul-Dec.
 ## Permissions System
 **File:** `App/permissions.py`
 
-23 permissions in `PERMISSION_DEFS`, named `{domain}.{action}` and grouped into 9 domains:
+24 permissions in `PERMISSION_DEFS`, named `{domain}.{action}` and grouped into 9 domains:
 
 | Codename | Display label | Domain group |
 |---|---|---|
@@ -75,6 +75,7 @@ Old definition (OBSOLETE): SS = Jan-Jun, AW = Jul-Dec.
 | `products.view` | View Product Analytics | Product Analytics |
 | `products.export` | Export Product Analytics (Excel) | Product Analytics |
 | `inventory.view` | View Inventory Analytics | Inventory Analytics |
+| `inventory.export` | Export Inventory Dead Stock (CSV) | Inventory Analytics |
 | `data.upload` | Upload Data | Data Management |
 | `data.formulas` | View Formulas | Data Management |
 | `admin.users` | Manage Users | Admin |

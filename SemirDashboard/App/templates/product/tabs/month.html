@@ -4,6 +4,16 @@
 <div class="text-muted text-center py-4">No data available.</div>
 {% else %}
 
+{% check_perm 'products.export' as can_dl_month %}
+{% if can_dl_month %}
+<div class="d-flex justify-content-end mb-2">
+    <a href="{% url 'export_product_analytics' %}?tab=month{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}"
+       class="btn btn-sm btn-outline-success">
+        <i class="bi bi-file-earmark-excel"></i> Download
+    </a>
+</div>
+{% endif %}
+
 {# Summary table #}
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">

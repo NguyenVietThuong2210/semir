@@ -1130,6 +1130,7 @@ def export_customer_analytics_to_excel(
     total_points_mismatch=None,
     cnv_used_points=None,
     zalo_mini_app_list=None,
+    zalo_mini_app_inactive_list=None,
     zalo_oa_list=None,
     zalo_stats=None,
 ):
@@ -1600,6 +1601,35 @@ def export_customer_analytics_to_excel(
         ws_zalo_oa.column_dimensions[col].width = w
 
     # ========================================================================
+    # ZALO MINI APP NOT ACTIVE SHEET
+    # ========================================================================
+    zalo_inactive_fill = PatternFill(start_color="888888", end_color="888888", fill_type="solid")
+    ws_zalo_inactive = wb.create_sheet("Zalo Not Active")
+    for col_idx, header in enumerate(zalo_headers, 1):
+        cell = ws_zalo_inactive.cell(1, col_idx, header)
+        cell.fill = zalo_inactive_fill
+        cell.font = header_font
+        cell.alignment = header_align
+    row = 2
+    for c in (zalo_mini_app_inactive_list or []):
+        full_name = f"{c.get('last_name') or ''} {c.get('first_name') or ''}".strip()
+        reg_date = c.get('cnv_created_at')
+        reg_date_str = str(reg_date.date()) if hasattr(reg_date, 'date') else (str(reg_date)[:10] if reg_date else '-')
+        ws_zalo_inactive.cell(row, 1, c.get('cnv_id', ''))
+        ws_zalo_inactive.cell(row, 2, c.get('phone', ''))
+        ws_zalo_inactive.cell(row, 3, full_name or '-')
+        ws_zalo_inactive.cell(row, 4, c.get('level_name') or '-')
+        ws_zalo_inactive.cell(row, 5, c.get('email') or '-')
+        ws_zalo_inactive.cell(row, 6, reg_date_str)
+        ws_zalo_inactive.cell(row, 7, float(c.get('points') or 0))
+        ws_zalo_inactive.cell(row, 8, 'No')
+        ws_zalo_inactive.cell(row, 9, 'Yes' if c.get('zalo_oa_id') else 'No')
+        ws_zalo_inactive.cell(row, 10, 'Yes' if c.get('in_pos') else 'No')
+        row += 1
+    for col, w in zip('ABCDEFGHIJ', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8]):
+        ws_zalo_inactive.column_dimensions[col].width = w
+
+    # ========================================================================
     # ALL CNV CUSTOMERS SHEET (filtered by period if dates provided)
     # ========================================================================
     cnv_all_fill = PatternFill(start_color="1D3557", end_color="1D3557", fill_type="solid")
@@ -2033,7 +2063,7 @@ def _build_cnv_shop_detail_ws(wb, breakdown, hf, font, align):
 
 _CNV_TAB_SHEETS = {
     "points":       ["cnv_used_points", "points_mismatch", "total_points_mismatch"],
-    "zalo":         ["zalo_mini_app",   "zalo_oa"],
+    "zalo":         ["zalo_mini_app", "zalo_mini_app_inactive", "zalo_oa"],
     "pos_cnv":      ["pos_only_all",    "cnv_only_all", "pos_only_period", "cnv_only_period"],
     "breakdown":    ["bd_season", "bd_month", "bd_week", "bd_shop", "bd_shop_detail",
                      "bd_season_shop", "bd_month_shop", "bd_week_shop"],
@@ -2069,8 +2099,9 @@ def export_cnv_tab_to_excel(tab, data, date_from=None, date_to=None):
         "cnv_used_points":     lambda: _build_cnv_used_points_ws(wb, data, hf, fnt, aln),
         "points_mismatch":     lambda: _build_mismatch_ws(wb, data, "points_mismatch",       "Points Mismatch",       hf, fnt, aln),
         "total_points_mismatch": lambda: _build_mismatch_ws(wb, data, "total_points_mismatch", "Total Points Mismatch", hf, fnt, aln),
-        "zalo_mini_app":       lambda: _build_zalo_ws(wb, data, "zalo_mini_app_list", "Zalo Mini App", hf, fnt, aln),
-        "zalo_oa":             lambda: _build_zalo_ws(wb, data, "zalo_oa_list",       "Zalo Follow OA",  hf, fnt, aln),
+        "zalo_mini_app":          lambda: _build_zalo_ws(wb, data, "zalo_mini_app_list",          "Zalo Mini App",    hf, fnt, aln),
+        "zalo_mini_app_inactive": lambda: _build_zalo_ws(wb, data, "zalo_mini_app_inactive_list", "Zalo Not Active",  hf, fnt, aln),
+        "zalo_oa":                lambda: _build_zalo_ws(wb, data, "zalo_oa_list",                "Zalo Follow OA",   hf, fnt, aln),
         "pos_only_all":        lambda: _build_pos_only_ws(wb, data, "pos_only_all",    "POS Only - All Time",    hf, fnt, aln),
         "cnv_only_all":        lambda: _build_cnv_only_ws(wb, data, "cnv_only_all",    "CNV Only - All Time",    hf, fnt, aln),
         "pos_only_period":     lambda: _build_pos_only_ws(wb, data, "pos_only_period", "POS Only - Period",      hf, fnt, aln),
@@ -3064,6 +3095,31 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
             ])
         for col in range(1, 8):
             ws_s.column_dimensions[get_column_letter(col)].width = 22
+
+    # By Year sheet
+    if 'year' in tabs_data:
+        ws_y = wb.create_sheet("By Year")
+        _write_period_tab(ws_y, tabs_data['year'].get('by_year', []), 'year_trunc')
+
+    # By Week sheet
+    if 'week' in tabs_data:
+        ws_w = wb.create_sheet("By Week")
+        _write_period_tab(ws_w, tabs_data['week'].get('by_week', []), 'week_label')
+
+    # By Sales Season sheet
+    if 'sales_season' in tabs_data:
+        ws_ss = wb.create_sheet("By Sales Season")
+        _write_period_tab(ws_ss, tabs_data['sales_season'].get('by_sales_season', []), 'label')
+
+    # By Product Season sheet
+    if 'product_season' in tabs_data:
+        ws_ps = wb.create_sheet("By Product Season")
+        _write_period_tab(ws_ps, tabs_data['product_season'].get('by_product_season', []), 'label')
+
+    # By VIP Grade sheet
+    if 'vip_grade' in tabs_data:
+        ws_vg = wb.create_sheet("By VIP Grade")
+        _write_period_tab(ws_vg, tabs_data['vip_grade'].get('by_vip_grade', []), 'vip_grade', label_key='grade')
 
     # Top Products sheet
     if 'product' in tabs_data:

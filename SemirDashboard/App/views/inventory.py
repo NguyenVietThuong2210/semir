@@ -70,7 +70,7 @@ def inventory_dashboard(request):
     })
 
 
-@requires_perm("inventory.view")
+@requires_perm("inventory.export")
 def export_inventory_dead_stock(request):
     """Download dead stock SKUs as CSV."""
     shop_group = request.GET.get("shop_group", "")

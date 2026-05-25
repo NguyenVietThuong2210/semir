@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load custom_filters %}
+{% load custom_filters perm_tags %}
 
 {% block title %}Inventory Analytics{% endblock %}
 
@@ -152,10 +152,13 @@
             {{ fs.dead.summary.dead_qty }} units &nbsp;·&nbsp; {{ fs.dead.summary.dead_value|vnd }}
             <small class="opacity-75 ms-1">(year &le; {{ dead_year }})</small>
         </span>
+        {% check_perm 'inventory.export' as can_export_inv %}
+        {% if can_export_inv %}
         <a href="{% url 'export_inventory_dead_stock' %}?shop_group={{ shop_group }}{% if year_filter %}&year={{ year_filter }}{% endif %}{% if season_filter %}&season={{ season_filter }}{% endif %}"
            class="btn btn-sm btn-light text-danger fw-semibold">
             <i class="bi bi-file-earmark-excel me-1"></i>Download CSV
         </a>
+        {% endif %}
     </div>
     <div class="card-body p-0">
         <div class="table-responsive tab-tbl-wrap">

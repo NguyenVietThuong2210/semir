@@ -24,6 +24,7 @@ PERMISSION_DEFS = [
     ("products.view",       "View Product Analytics",           "Product Analytics"),
     ("products.export",     "Export Product Analytics (Excel)", "Product Analytics"),
     ("inventory.view",      "View Inventory Analytics",         "Inventory Analytics"),
+    ("inventory.export",    "Export Inventory Dead Stock (CSV)", "Inventory Analytics"),
     ("data.upload",         "Upload Data",                      "Data Management"),
     ("data.formulas",       "View Formulas",                    "Data Management"),
     ("admin.users",         "Manage Users",                     "Admin"),

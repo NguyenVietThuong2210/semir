@@ -1,8 +1,18 @@
-{% load custom_filters %}
+{% load custom_filters perm_tags %}
 {% with rows=data.by_vip_grade overview=data.overview %}
 {% if not rows %}
 <div class="text-muted text-center py-4">No data available. (Requires sale detail linked to customer records.)</div>
 {% else %}
+
+{% check_perm 'products.export' as can_dl_vg %}
+{% if can_dl_vg %}
+<div class="d-flex justify-content-end mb-2">
+    <a href="{% url 'export_product_analytics' %}?tab=vip_grade{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}"
+       class="btn btn-sm btn-outline-success">
+        <i class="bi bi-file-earmark-excel"></i> Download
+    </a>
+</div>
+{% endif %}
 
 {# Summary table #}
 <div class="card mb-3 border-0 shadow-sm">

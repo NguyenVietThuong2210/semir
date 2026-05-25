@@ -219,6 +219,7 @@ def export_customer_analytics(request):
             total_points_mismatch=d["total_points_mismatch"],
             cnv_used_points=cnv_used_points_export,
             zalo_mini_app_list=d["zalo_mini_app_list"],
+            zalo_mini_app_inactive_list=d["zalo_mini_app_inactive_list"],
             zalo_oa_list=d["zalo_oa_list"],
             zalo_stats=zalo_stats_export,
         )

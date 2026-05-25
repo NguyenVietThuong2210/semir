@@ -86,7 +86,7 @@ type: project
 | URL | View | Notes |
 |-----|------|-------|
 | `/inventory/` | `inventory_dashboard` | requires `inventory.view` — InventorySnapshot-based |
-| `/inventory/export/` | `export_inventory_dead_stock` | requires `inventory.view` — dead stock CSV |
+| `/inventory/export/` | `export_inventory_dead_stock` | requires `inventory.export` — dead stock CSV |
 
 ### Admin
 | URL | View | Notes |

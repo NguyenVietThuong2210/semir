@@ -1,8 +1,18 @@
-{% load custom_filters %}
+{% load custom_filters perm_tags %}
 {% with cat_groups=data.by_category overview=data.overview top_products=data.top_products %}
 {% if not cat_groups %}
 <div class="text-muted text-center py-4">No data available.</div>
 {% else %}
+
+{% check_perm 'products.export' as can_dl_cat %}
+{% if can_dl_cat %}
+<div class="d-flex justify-content-end mb-2">
+    <a href="{% url 'export_product_analytics' %}?tab=category{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}"
+       class="btn btn-sm btn-outline-success">
+        <i class="bi bi-file-earmark-excel"></i> Download
+    </a>
+</div>
+{% endif %}
 
 <!-- Category breakdown table using cat_groups format (L1 → L2, sorted by amount desc) -->
 <div class="table-responsive tab-tbl-wrap">

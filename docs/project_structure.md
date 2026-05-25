@@ -144,7 +144,7 @@ App/
 │       └── lazy_tab_session.html
 │
 ├── urls.py                           # App-level URL patterns (see project_urls.md)
-├── permissions.py                    # PERMISSION_DEFS (23 permissions), Role helpers, @requires_perm
+├── permissions.py                    # PERMISSION_DEFS (24 permissions), Role helpers, @requires_perm
 ├── forms.py                          # CustomerUploadForm, UsedPointsUploadForm, SalesUploadForm
 ├── upload_jobs.py                    # Job store backed by Django cache (create_job, update_job, get_job)
 ├── logging_utils.py                  # RequestIDFilter, JsonFormatter, thread-local request_id helpers
@@ -176,7 +176,7 @@ App/
 | CNV API HTTP calls | `cnv/api_client.py` |
 | CNV hourly background jobs | `cnv/scheduler.py` |
 | Zalo sync (threaded) | `cnv/zalo_sync.py` |
-| All 23 permissions | `permissions.py` |
+| All 24 permissions | `permissions.py` |
 | Data import (bulk CSV/Excel) | `services/customer_import.py`, `sales_import.py`, `coupon_import.py`, `inventory_import.py`, `sale_detail_import.py` |
 | Upload job tracking (cache-backed) | `upload_jobs.py` |
 | Admin log viewer | `views/admin_logs.py` |

@@ -284,7 +284,10 @@ class ExportSmokeTest(SnapshotTestCase):
     @classmethod
     def setUpTestData(cls):
         import io
-        from App.services import process_customer_file, process_sales_file, process_coupon_file
+        from App.services import (
+            process_customer_file, process_sales_file, process_coupon_file,
+            process_inventory_file, process_sale_detail_file,
+        )
         from tests.base import INPUT_DIR
 
         cls.superuser = User.objects.create_superuser(
@@ -300,9 +303,11 @@ class ExportSmokeTest(SnapshotTestCase):
             obj.name = path.name
             return obj
 
-        customer_file = INPUT_DIR / "customer.xlsx"
-        sale_files = [INPUT_DIR / "Sale 2024.xlsx", INPUT_DIR / "Sale 2025.xlsx", INPUT_DIR / "Sale 2026.xlsx"]
-        coupon_file = INPUT_DIR / "coupon_1 (1).xlsx"
+        customer_file  = INPUT_DIR / "customer.xlsx"
+        sale_files     = [INPUT_DIR / "Sale 2024.xlsx", INPUT_DIR / "Sale 2025.xlsx", INPUT_DIR / "Sale 2026.xlsx"]
+        coupon_file    = INPUT_DIR / "coupon_1 (1).xlsx"
+        inventory_file = INPUT_DIR / "inventory.xlsx"
+        sd_file        = INPUT_DIR / "sale detail.xlsx"
 
         if customer_file.exists():
             process_customer_file(_named(customer_file))
@@ -311,6 +316,10 @@ class ExportSmokeTest(SnapshotTestCase):
                 process_sales_file(_named(path))
         if coupon_file.exists():
             process_coupon_file(_named(coupon_file))
+        if inventory_file.exists():
+            process_inventory_file(_named(inventory_file))
+        if sd_file.exists():
+            process_sale_detail_file(_named(sd_file))
 
     def setUp(self):
         self.client.force_login(self.superuser)
@@ -439,3 +448,297 @@ class ExportSmokeTest(SnapshotTestCase):
         t.checkpoint("GET /cnv/export-customer-analytics/ all-time")
         t.report()
         self._assert_excel(r)
+
+    def test_export_customer_analytics_zalo_tab(self):
+        """?tab=zalo should return Excel with Zalo Mini App, Zalo Not Active, Zalo Follow OA sheets."""
+        t = self.timer("export_cnv_zalo_tab")
+        r = self.client.get(reverse("cnv:export_customer_analytics") + "?tab=zalo")
+        t.checkpoint("GET /cnv/export-customer-analytics/ tab=zalo")
+        t.report()
+        self._assert_excel(r)
+        import openpyxl, io
+        wb = openpyxl.load_workbook(io.BytesIO(r.content))
+        sheet_names = wb.sheetnames
+        self.assertIn("Zalo Mini App",   sheet_names, "Missing 'Zalo Mini App' sheet")
+        self.assertIn("Zalo Not Active", sheet_names, "Missing 'Zalo Not Active' sheet")
+        self.assertIn("Zalo Follow OA",  sheet_names, "Missing 'Zalo Follow OA' sheet")
+        self.assert_snapshot("cnv_export_zalo_tab_sheets", {"sheets": sheet_names})
+
+    def test_export_customer_analytics_zalo_sheet_structure(self):
+        """Full workbook export must include 'Zalo Not Active' sheet alongside 'Zalo Mini App'."""
+        r = self.client.get(reverse("cnv:export_customer_analytics"))
+        self._assert_excel(r)
+        import openpyxl, io
+        wb = openpyxl.load_workbook(io.BytesIO(r.content))
+        self.assertIn("Zalo Mini App",   wb.sheetnames)
+        self.assertIn("Zalo Not Active", wb.sheetnames)
+        self.assertIn("Zalo Follow OA",  wb.sheetnames)
+
+    # ── Product analytics export ──────────────────────────────────────────────
+
+    def test_export_product_analytics_alltime(self):
+        t = self.timer("export_product_alltime")
+        r = self.client.get(reverse("export_product_analytics"))
+        t.checkpoint("GET /products/export/ all-time")
+        t.report()
+        self._assert_excel(r)
+
+    def test_export_product_analytics_period_filter(self):
+        """Export with a date filter scoped to the actual sale detail date range."""
+        from App.models import SaleDetail
+        from django.db.models import Min, Max
+        bounds = SaleDetail.objects.filter(sales_date__isnull=False).aggregate(
+            mn=Min('sales_date'), mx=Max('sales_date')
+        )
+        if not bounds['mn']:
+            self.skipTest("No dated sale detail data")
+        params = f"?start_date={bounds['mn']}&end_date={bounds['mx']}"
+        t = self.timer("export_product_period")
+        r = self.client.get(reverse("export_product_analytics") + params)
+        t.checkpoint(f"GET /products/export/ {bounds['mn']} → {bounds['mx']}")
+        t.report()
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_brand(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=brand")
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_category(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=category")
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_year(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=year")
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_week(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=week")
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_sales_season(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=sales_season")
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_product_season(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=product_season")
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_vip_grade(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=vip_grade")
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_shop(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=shop")
+        self._assert_excel(r)
+
+    def test_export_product_analytics_tab_product(self):
+        r = self.client.get(reverse("export_product_analytics") + "?tab=product")
+        self._assert_excel(r)
+
+    # ── Inventory dead stock export ───────────────────────────────────────────
+
+    def test_export_inventory_dead_stock_200(self):
+        from App.models import InventorySnapshot
+        if not InventorySnapshot.objects.exists():
+            self.skipTest("No inventory data")
+        t = self.timer("export_inventory_dead_stock")
+        r = self.client.get(reverse("export_inventory_dead_stock"))
+        t.checkpoint("GET /inventory/export/")
+        t.report()
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r.get("Content-Type", ""))
+
+    def test_export_inventory_dead_stock_with_filters(self):
+        from App.models import InventorySnapshot
+        if not InventorySnapshot.objects.exists():
+            self.skipTest("No inventory data")
+        year = InventorySnapshot.objects.exclude(year__isnull=True).values_list('year', flat=True).first()
+        params = f"?year={year}" if year else ""
+        r = self.client.get(reverse("export_inventory_dead_stock") + params)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r.get("Content-Type", ""))
+
+
+class ExportPermissionTest(SnapshotTestCase):
+    """Verify export endpoints enforce permissions — unauthorized users get 302."""
+
+    EXPORT_URLS = [
+        ("export_analytics",           None),
+        ("export_product_analytics",   None),
+        ("export_inventory_dead_stock", None),
+        ("export_shop_detail_excel",   None),
+        ("export_sales_chart_excel",   None),
+        ("export_coupon_chart_excel",  None),
+        ("export_coupons",             None),
+    ]
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.no_perm_user = User.objects.create_user(
+            username="noperm_export", password="testpass"
+        )
+
+    def setUp(self):
+        self.client.force_login(self.no_perm_user)
+
+    def test_export_endpoints_require_permission(self):
+        """All export endpoints redirect a user with no role/permissions."""
+        for url_name, kwargs in self.EXPORT_URLS:
+            with self.subTest(url=url_name):
+                r = self.client.get(reverse(url_name), follow=False)
+                self.assertIn(
+                    r.status_code, [302, 403],
+                    f"{url_name} returned {r.status_code}, expected 302/403 for user without perm",
+                )
+
+    def test_cnv_export_requires_permission(self):
+        r = self.client.get(reverse("cnv:export_customer_analytics"), follow=False)
+        self.assertIn(r.status_code, [302, 403])
+
+
+class ExportDataParityTest(SnapshotTestCase):
+    """Verify exported file content matches what the UI analytics functions return."""
+
+    @classmethod
+    def setUpTestData(cls):
+        import io
+        from App.services import process_inventory_file, process_sale_detail_file
+        from tests.base import INPUT_DIR
+
+        cls.superuser = User.objects.create_superuser(
+            username="parity_admin", password="testpass", email="parity@test.com"
+        )
+
+        def _named(path):
+            with open(path, "rb") as f:
+                data = f.read()
+            class _N(io.BytesIO):
+                pass
+            obj = _N(data)
+            obj.name = path.name
+            return obj
+
+        inv_file  = INPUT_DIR / "inventory.xlsx"
+        sd_file   = INPUT_DIR / "sale detail.xlsx"
+
+        if inv_file.exists():
+            process_inventory_file(_named(inv_file))
+        if sd_file.exists():
+            process_sale_detail_file(_named(sd_file))
+
+    def setUp(self):
+        self.client.force_login(self.superuser)
+
+    # ── Inventory dead stock parity ───────────────────────────────────────────
+
+    def test_inventory_csv_structure(self):
+        """CSV structure snapshot: columns, row count, sort order, first-row key fields."""
+        from App.models import InventorySnapshot
+        if not InventorySnapshot.objects.exists():
+            self.skipTest("No inventory data")
+        import csv, io
+        from App.analytics.inventory_functions import get_inventory_overview
+
+        r = self.client.get(reverse("export_inventory_dead_stock"))
+        self.assertEqual(r.status_code, 200)
+        content = r.content.decode("utf-8-sig")
+        reader = list(csv.reader(io.StringIO(content)))
+        header = reader[0]
+        data_rows = reader[1:]
+
+        # Always verify column headers (structural contract)
+        for col in ("Shop", "Product Code", "Product Name", "Product Name VN",
+                    "Color", "Size", "Category L1", "Category L2", "Category L3",
+                    "Gender", "Brand", "Year", "Season", "Qty", "Value (VND)"):
+            self.assertIn(col, header, f"CSV missing column '{col}'")
+
+        # Always verify sort order
+        val_idx = header.index("Value (VND)")
+        values = [float(r[val_idx]) for r in data_rows if r[val_idx]]
+        self.assertEqual(values, sorted(values, reverse=True), "CSV not sorted by Value descending")
+
+        # Always verify CSV row count matches UI data
+        data = get_inventory_overview()
+        ui_top = data.get('for_sale', {}).get('dead', {}).get('top', [])
+        self.assertEqual(len(data_rows), len(ui_top),
+                         f"CSV has {len(data_rows)} rows but UI has {len(ui_top)}")
+
+        # Snapshot: locks in exact row count and first-row identifiers
+        if ui_top:
+            csv_first = dict(zip(header, data_rows[0]))
+            self.assert_snapshot("inventory_csv_structure", {
+                "row_count": len(data_rows),
+                "columns": header,
+                "first_product_code": csv_first.get("Product Code", ""),
+                "first_shop": csv_first.get("Shop", ""),
+            })
+
+    # ── Product analytics export parity ──────────────────────────────────────
+
+    def _get_excel_data_rows(self, tab_param, sheet_name_fragment, summary_only=False):
+        """Download export for a tab and return data rows (skip header row).
+
+        summary_only=True: only period-level rows (first column not empty/blank),
+        excludes category sub-rows which have '' in the first column.
+        """
+        import openpyxl, io
+        r = self.client.get(reverse("export_product_analytics") + f"?tab={tab_param}")
+        self.assertEqual(r.status_code, 200)
+        wb = openpyxl.load_workbook(io.BytesIO(r.content))
+        ws = next(
+            (wb[n] for n in wb.sheetnames if sheet_name_fragment.lower() in n.lower()),
+            wb.active,
+        )
+        rows = [row for row in ws.iter_rows(min_row=2, values_only=True)
+                if any(c is not None for c in row)]
+        if summary_only:
+            rows = [row for row in rows if row[0] not in (None, '')]
+        return rows
+
+    def _assert_product_tab_parity(self, tab, ui_key, sheet_fragment):
+        """Shared logic: verify Excel summary rows match UI + snapshot the counts."""
+        from App.models import SaleDetail
+        if not SaleDetail.objects.exists():
+            self.skipTest("No sale detail data")
+        from App.analytics.product_analytics import get_product_tab
+
+        ui_data = get_product_tab(tab)
+        ui_rows = ui_data.get(ui_key, []) if ui_data else []
+        if not ui_rows:
+            self.skipTest(f"No {tab} data in fixture")
+
+        xl_rows = self._get_excel_data_rows(tab, sheet_fragment, summary_only=True)
+        self.assertEqual(
+            len(xl_rows), len(ui_rows),
+            f"Excel has {len(xl_rows)} {tab} rows but UI has {len(ui_rows)}",
+        )
+
+        # Snapshot locks in the row count and first label so future regressions are visible
+        overview = ui_data.get('overview', {}) if ui_data else {}
+        self.assert_snapshot(f"product_export_parity_{tab}", {
+            "row_count": len(ui_rows),
+            "first_label": str(xl_rows[0][0]) if xl_rows else None,
+            "total_qty": overview.get('total_qty'),
+            "total_amount": overview.get('total_amount'),
+        })
+
+    def test_product_export_brand_tab_row_count(self):
+        self._assert_product_tab_parity('brand', 'by_brand', 'brand')
+
+    def test_product_export_month_tab_row_count(self):
+        self._assert_product_tab_parity('month', 'by_month', 'month')
+
+    def test_product_export_week_tab_row_count(self):
+        self._assert_product_tab_parity('week', 'by_week', 'week')
+
+    def test_product_export_sales_season_tab_row_count(self):
+        self._assert_product_tab_parity('sales_season', 'by_sales_season', 'season')
+
+    def test_product_export_vip_grade_tab_row_count(self):
+        self._assert_product_tab_parity('vip_grade', 'by_vip_grade', 'grade')
+
+    def test_product_export_year_tab_row_count(self):
+        self._assert_product_tab_parity('year', 'by_year', 'year')
+
+    def test_product_export_product_season_tab_row_count(self):
+        self._assert_product_tab_parity('product_season', 'by_product_season', 'season')
