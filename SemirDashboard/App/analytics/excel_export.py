@@ -3123,6 +3123,34 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
         ws_vg = wb.create_sheet("By VIP Grade")
         _write_period_tab(ws_vg, tabs_data['vip_grade'].get('by_vip_grade', []), 'vip_grade', label_key='grade')
 
+    # By Campaign sheet — Campaign → L1 → L2 → L3
+    if 'campaign' in tabs_data:
+        ws_camp = wb.create_sheet("By Campaign")
+        headers_camp = ["Campaign", "Category L1", "Category L2", "Category L3", "Qty (pcs)",
+                        "Tag Amt (VND)", "Sales Amt (VND)", "Settlement (VND)", "Disc %", "Lines"]
+        xl_write_header(ws_camp, headers_camp, row=1)
+        for cg in tabs_data['campaign'].get('campaign_groups', []):
+            camp_name = cg.get('campaign') or 'Not Assigned'
+            for grp in cg.get('l1_groups', []):
+                l1 = translate_category(grp.get('l1', ''), 'VI')
+                for l2g in grp.get('l2_groups', []):
+                    l2 = translate_category(l2g.get('l2', ''), 'VI')
+                    for r in l2g.get('rows', []):
+                        ws_camp.append([
+                            camp_name,
+                            l1,
+                            l2,
+                            translate_category(r.get('category_l3', ''), 'VI'),
+                            r.get('qty', 0),
+                            round(float(r.get('tag_amount') or 0)),
+                            round(float(r.get('amount') or 0)),
+                            round(float(r.get('settlement') or 0)),
+                            f"{r.get('disc_pct', '—')}%" if r.get('disc_pct') is not None else '—',
+                            r.get('lines', 0),
+                        ])
+        for col, w in zip(range(1, 11), [20, 22, 26, 22, 10, 16, 16, 16, 8, 8]):
+            ws_camp.column_dimensions[get_column_letter(col)].width = w
+
     # Top Products sheet
     if 'product' in tabs_data:
         ws_p = wb.create_sheet("Top Products")

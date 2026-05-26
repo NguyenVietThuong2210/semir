@@ -14,7 +14,7 @@ from .shop_detail import (
     shop_detail_inventory_partial,
     shop_detail_product_partial,
 )
-from .product import product_dashboard, product_tab, export_product_analytics
+from .product import product_dashboard, product_tab, export_product_analytics, manage_product_campaigns
 from .inventory import inventory_dashboard, export_inventory_dead_stock
 from . import auth, users
 
@@ -52,5 +52,6 @@ __all__ = [
     "product_dashboard",
     "product_tab",
     "export_product_analytics",
+    "manage_product_campaigns",
     "inventory_dashboard",
 ]

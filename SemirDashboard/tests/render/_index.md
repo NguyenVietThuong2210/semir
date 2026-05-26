@@ -1,6 +1,6 @@
 # Render Snapshot Index
 
-Generated: 2026-05-25 21:20:43
+Generated: 2026-05-26 06:46:29
 
 | Label | URL | Status | Size | Tables | Token issues |
 |-------|-----|--------|------|--------|--------------|
@@ -19,9 +19,9 @@ Generated: 2026-05-25 21:20:43
 | 13_customer_chart | `/cnv/customer-chart/` | 200 | 727.9KB | 0 | 0 |
 | 14_cnv_sync_status | `/cnv/sync-status/` | 200 | 36.0KB | 1 | 0 |
 | 15_upload_customers | `/upload/customers/` | 200 | 37.2KB | 2 | 0 |
-| 16_user_management | `/users/` | 200 | 96.6KB | 1 | 0 |
-| 17_admin_logs | `/admin-logs/` | 200 | 251.5KB | 3 | 0 |
-| 18_product_analytics | `/products/` | 200 | 159.8KB | 3 | 0 |
+| 16_user_management | `/users/` | 200 | 98.4KB | 1 | 0 |
+| 17_admin_logs | `/admin-logs/` | 200 | 239.7KB | 3 | 0 |
+| 18_product_analytics | `/products/` | 200 | 292.6KB | 4 | 0 |
 | 19_inventory_analytics | `/inventory/` | 200 | 1235.7KB | 63 | 0 |
 | 20_upload_inventory | `/upload/inventory/` | 200 | 31.5KB | 0 | 0 |
-| 21_upload_sale_detail | `/upload/sales/` | 200 | 35.3KB | 0 | 0 |
+| 21_upload_sale_detail | `/upload/sales/` | 200 | 38.4KB | 1 | 0 |

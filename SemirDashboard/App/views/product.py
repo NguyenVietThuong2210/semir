@@ -1,13 +1,15 @@
 """App/views/product.py — Sales & Product Analytics page (SaleDetail-based)."""
+import json
 import logging
 from datetime import datetime
 
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.http import HttpResponse
 
+from App.models import ProductCampaign
 from App.permissions import requires_perm
-from App.analytics.product_analytics import get_product_tab, PRODUCT_TABS
+from App.analytics.product_analytics import get_product_tab, PRODUCT_TABS, bump_product_version
 from App.views.view_utils import parse_date, parse_date_silent, filter_params_str
 
 logger = logging.getLogger(__name__)
@@ -87,7 +89,82 @@ def product_tab(request, tab):
     return render(request, f"product/tabs/{tab}.html", ctx)
 
 
-_EXPORT_TABS = ('month', 'year', 'week', 'sales_season', 'product_season', 'vip_grade', 'brand', 'category', 'shop', 'product')
+_EXPORT_TABS = ('month', 'year', 'week', 'sales_season', 'product_season', 'vip_grade', 'brand', 'category', 'campaign', 'shop', 'product')
+
+
+@requires_perm("products.manage")
+def manage_product_campaigns(request):
+    """AJAX + page endpoint for ProductCampaign CRUD.
+    GET  → JSON list of all campaigns.
+    POST → action=create|update|delete.
+    """
+    def _clean_prefix(raw):
+        parts = [p.strip().upper() for p in (raw or "").split(",") if p.strip()]
+        return ",".join(dict.fromkeys(parts))
+
+    if request.method == "GET":
+        campaigns = list(
+            ProductCampaign.objects.values("id", "name", "prefix", "detail", "created_at")
+        )
+        for c in campaigns:
+            c["prefix_list"] = [p.strip() for p in c["prefix"].split(",") if p.strip()]
+            if c["created_at"]:
+                c["created_at"] = c["created_at"].strftime("%Y-%m-%d")
+        return JsonResponse({"campaigns": campaigns})
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        action = body.get("action")
+
+        if action == "create":
+            name = (body.get("name") or "").strip()
+            prefix = _clean_prefix(body.get("prefix"))
+            detail = (body.get("detail") or "").strip()
+            if not name or not prefix:
+                return JsonResponse({"error": "Name and at least one prefix are required"}, status=400)
+            if ProductCampaign.objects.filter(name=name).exists():
+                return JsonResponse({"error": f"Campaign '{name}' already exists"}, status=400)
+            c = ProductCampaign.objects.create(name=name, prefix=prefix, detail=detail or None)
+            bump_product_version()
+            return JsonResponse({"ok": True, "id": c.pk, "name": c.name, "prefix": c.prefix})
+
+        if action == "update":
+            pk = body.get("id")
+            name = (body.get("name") or "").strip()
+            prefix = _clean_prefix(body.get("prefix"))
+            detail = (body.get("detail") or "").strip()
+            if not pk or not name or not prefix:
+                return JsonResponse({"error": "id, name and prefix are required"}, status=400)
+            try:
+                c = ProductCampaign.objects.get(pk=pk)
+            except ProductCampaign.DoesNotExist:
+                return JsonResponse({"error": "Campaign not found"}, status=404)
+            if ProductCampaign.objects.filter(name=name).exclude(pk=pk).exists():
+                return JsonResponse({"error": f"Name '{name}' already in use"}, status=400)
+            c.name = name
+            c.prefix = prefix
+            c.detail = detail or None
+            c.save()
+            bump_product_version()
+            return JsonResponse({"ok": True})
+
+        if action == "delete":
+            pk = body.get("id")
+            if not pk:
+                return JsonResponse({"error": "id required"}, status=400)
+            deleted, _ = ProductCampaign.objects.filter(pk=pk).delete()
+            if not deleted:
+                return JsonResponse({"error": "Campaign not found"}, status=404)
+            bump_product_version()
+            return JsonResponse({"ok": True})
+
+        return JsonResponse({"error": "Unknown action"}, status=400)
+
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
 @requires_perm("products.export")

@@ -1,6 +1,6 @@
 {% comment %}
-Reusable drill-down block showing category breakdown + top products for one period/grade/brand.
-Context required: cat_groups, top_products, currency.
+Reusable drill-down block showing category breakdown + campaign breakdown + top products for one period/grade/brand.
+Context required: cat_groups, campaign_groups, top_products, currency.
 {% endcomment %}
 {% load custom_filters %}
 
@@ -8,6 +8,18 @@ Context required: cat_groups, top_products, currency.
 {% with cat_groups=cat_groups %}
 {% include "product/tabs/_cat_drilldown.html" %}
 {% endwith %}
+
+{# ── Campaign Breakdown ── #}
+{% if campaign_groups %}
+<div class="mt-2 pt-1" style="border-top:1px dashed var(--border);">
+    <p class="small text-muted fw-semibold mb-1 text-uppercase" style="font-size:.72rem;">
+        <i class="bi bi-flag me-1"></i>By Product Campaign
+    </p>
+    {% with campaign_groups=campaign_groups %}
+    {% include "product/tabs/_campaign_drilldown.html" %}
+    {% endwith %}
+</div>
+{% endif %}
 
 {# ── Top Products ── #}
 {% if top_products %}
@@ -20,9 +32,10 @@ Context required: cat_groups, top_products, currency.
         <thead style="background:var(--secondary);color:#fff;font-size:.75rem;">
             <tr>
                 <th style="width:3%;">#</th>
-                <th style="width:11%;">Code</th>
+                <th style="width:10%;">Code</th>
                 <th>Product Name</th>
                 <th>Brand</th>
+                <th>Campaign</th>
                 <th>Category L1</th>
                 <th>Category L2</th>
                 <th>Category L3</th>
@@ -36,8 +49,9 @@ Context required: cat_groups, top_products, currency.
         <tr>
             <td class="text-muted">{{ forloop.counter }}</td>
             <td class="text-muted" style="font-size:.72rem;white-space:nowrap;">{{ p.product_code|default:"—" }}</td>
-            <td>{{ p.product_name|default:"—"|truncatechars:35 }}</td>
+            <td>{{ p.product_name|default:"—"|truncatechars:30 }}</td>
             <td class="text-muted" style="white-space:nowrap;">{{ p.brand }}</td>
+            <td class="text-muted" style="font-size:.72rem;">{% if p.campaign %}{{ p.campaign }}{% else %}<em>—</em>{% endif %}</td>
             <td class="text-muted" style="font-size:.72rem;">{{ p.category_l1|cat_name }}</td>
             <td class="text-muted" style="font-size:.72rem;">{{ p.category_l2|cat_name }}</td>
             <td class="text-muted" style="font-size:.72rem;">{{ p.category_l3|cat_name }}</td>

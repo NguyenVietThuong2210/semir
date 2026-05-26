@@ -41,9 +41,10 @@ urlpatterns = [
     path("coupons/tab/<str:tab>/",    views.coupon_tab,                name="coupon_tab"),
 
     # ── Product Analytics ─────────────────────────────────────────────────────
-    path("products/",               views.product_dashboard,        name="product_dashboard"),
-    path("products/export/",        views.export_product_analytics, name="export_product_analytics"),
-    path("products/tab/<str:tab>/", views.product_tab,              name="product_tab"),
+    path("products/",                  views.product_dashboard,           name="product_dashboard"),
+    path("products/export/",           views.export_product_analytics,    name="export_product_analytics"),
+    path("products/tab/<str:tab>/",    views.product_tab,                 name="product_tab"),
+    path("products/campaigns/",        views.manage_product_campaigns,    name="manage_product_campaigns"),
 
     # ── Inventory Analytics ───────────────────────────────────────────────────
     path("inventory/",         views.inventory_dashboard,         name="inventory_dashboard"),

@@ -1,6 +1,15 @@
 {% extends 'base.html' %}
+{% load perm_tags %}
 
 {% block title %}Upload Sales Transactions{% endblock %}
+
+{% block extra_css %}
+<style>
+  #prdCampaignTable td,
+  #prdCampaignTable th { vertical-align: middle; }
+  .prd-campaign-row td { font-size: .9rem; }
+</style>
+{% endblock %}
 
 {% block content %}
 
@@ -11,162 +20,421 @@
 
 {% include "upload/_upload_status.html" %}
 
-<div class="row">
-    <div class="col-md-8 mx-auto">
-        <div class="card">
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <h6><i class="bi bi-info-circle"></i> File Requirements</h6>
-                    <p class="mb-2">Your file should contain the following columns:</p>
-                    <ul class="small mb-0">
-                        <li><strong>Invoice Number</strong> - Unique transaction identifier (required)</li>
-                        <li><strong>VIP ID</strong> - Customer identifier</li>
-                        <li><strong>Sales Date</strong> - Transaction date</li>
-                        <li><strong>Shop Name</strong> - Store location</li>
-                        <li><strong>Sales Amount</strong> - Transaction amount</li>
-                        <li>Other fields: Shop ID, Country, BU, VIP Name, Quantity, Settlement Amount, Tag Amount, Per Customer Transaction, Discount, Rounding</li>
-                    </ul>
-                    <p class="mt-2 mb-0 small">
-                        <i class="bi bi-exclamation-triangle"></i> Duplicate Invoice Numbers will be updated with new data.
-                    </p>
-                    <p class="mt-2 mb-0 small text-success">
-                        <i class="bi bi-lightning-charge"></i> <strong>Optimized for large files!</strong> Can handle 100,000+ records efficiently.
-                    </p>
-                </div>
+<div class="row g-3">
 
-                <form method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.file.id_for_label }}" class="form-label">
-                            <i class="bi bi-file-earmark-spreadsheet"></i> Select File
-                        </label>
-                        {{ form.file }}
-                        <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
-                    </div>
+  <!-- ── Left: Upload cards ── -->
+  <div class="col-md-5">
 
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-success btn-lg">
-                            <i class="bi bi-upload"></i> Upload Sales Data
-                        </button>
-                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-arrow-left"></i> Back to Home
-                        </a>
-                    </div>
-                </form>
-            </div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="alert alert-info mb-3">
+          <h6><i class="bi bi-info-circle"></i> File Requirements</h6>
+          <p class="mb-2">Your file should contain the following columns:</p>
+          <ul class="small mb-0">
+            <li><strong>Invoice Number</strong> - Unique transaction identifier (required)</li>
+            <li><strong>VIP ID</strong> - Customer identifier</li>
+            <li><strong>Sales Date</strong> - Transaction date</li>
+            <li><strong>Shop Name</strong> - Store location</li>
+            <li><strong>Sales Amount</strong> - Transaction amount</li>
+            <li>Other fields: Shop ID, Country, BU, VIP Name, Quantity, Settlement Amount, Tag Amount, Per Customer Transaction, Discount, Rounding</li>
+          </ul>
+          <p class="mt-2 mb-0 small">
+            <i class="bi bi-exclamation-triangle"></i> Duplicate Invoice Numbers will be updated with new data.
+          </p>
+          <p class="mt-2 mb-0 small text-success">
+            <i class="bi bi-lightning-charge"></i> <strong>Optimized for large files!</strong> Can handle 100,000+ records efficiently.
+          </p>
         </div>
 
-        <!-- Database Statistics -->
-        {% if date_stats.total_count > 0 %}
-        <div class="card mt-4">
-            <div class="card-header bg-light">
-                <i class="bi bi-database"></i> Current Database Statistics
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="{{ form.file.id_for_label }}" class="form-label">
+              <i class="bi bi-file-earmark-spreadsheet"></i> Select File
+            </label>
+            {{ form.file }}
+            <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
+          </div>
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-success btn-lg">
+              <i class="bi bi-upload"></i> Upload Sales Data
+            </button>
+            <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left"></i> Back to Home
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Database Statistics -->
+    {% if date_stats.total_count > 0 %}
+    <div class="card mt-3 shadow-sm">
+      <div class="card-header" style="background:var(--primary);color:#fff;">
+        <i class="bi bi-database"></i> Current Database Statistics
+      </div>
+      <div class="card-body">
+        <div class="row text-center">
+          <div class="col-md-4">
+            <div class="border rounded p-3">
+              <h3 class="text-success mb-0">{{ date_stats.total_count|default:0 }}</h3>
+              <small class="text-muted">Total Transactions</small>
             </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-4">
-                        <div class="border rounded p-3">
-                            <h3 class="text-success mb-0">{{ date_stats.total_count|default:0 }}</h3>
-                            <small class="text-muted">Total Transactions</small>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded p-3">
-                            {% if date_stats.min_date %}
-                            <h5 class="text-primary mb-0">{{ date_stats.min_date|date:"Y-m-d" }}</h5>
-                            <small class="text-muted">Earliest Sale Date</small>
-                            {% else %}
-                            <h5 class="text-muted mb-0">N/A</h5>
-                            <small class="text-muted">Earliest Sale Date</small>
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded p-3">
-                            {% if date_stats.max_date %}
-                            <h5 class="text-warning mb-0">{{ date_stats.max_date|date:"Y-m-d" }}</h5>
-                            <small class="text-muted">Latest Sale Date</small>
-                            {% else %}
-                            <h5 class="text-muted mb-0">N/A</h5>
-                            <small class="text-muted">Latest Sale Date</small>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% if date_stats.min_date and date_stats.max_date %}
-                <div class="mt-3 text-center">
-                    <small class="text-muted">
-                        <i class="bi bi-calendar-range"></i> 
-                        Sales Period: <strong>{{ date_stats.min_date|date:"M d, Y" }}</strong> to <strong>{{ date_stats.max_date|date:"M d, Y" }}</strong>
-                    </small>
-                </div>
-                {% endif %}
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3">
+              {% if date_stats.min_date %}
+              <h5 class="text-primary mb-0">{{ date_stats.min_date|date:"Y-m-d" }}</h5>
+              <small class="text-muted">Earliest Sale Date</small>
+              {% else %}
+              <h5 class="text-muted mb-0">N/A</h5>
+              <small class="text-muted">Earliest Sale Date</small>
+              {% endif %}
             </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3">
+              {% if date_stats.max_date %}
+              <h5 class="text-warning mb-0">{{ date_stats.max_date|date:"Y-m-d" }}</h5>
+              <small class="text-muted">Latest Sale Date</small>
+              {% else %}
+              <h5 class="text-muted mb-0">N/A</h5>
+              <small class="text-muted">Latest Sale Date</small>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% if date_stats.min_date and date_stats.max_date %}
+        <div class="mt-3 text-center">
+          <small class="text-muted">
+            <i class="bi bi-calendar-range"></i>
+            Sales Period: <strong>{{ date_stats.min_date|date:"M d, Y" }}</strong> to <strong>{{ date_stats.max_date|date:"M d, Y" }}</strong>
+          </small>
         </div>
         {% endif %}
-
-        {# ── Card 2: Sale Detail (line-item) upload ───────────────────────── #}
-        <div class="card mt-4">
-            <div class="card-header" style="background:var(--primary);color:#fff;">
-                <i class="bi bi-list-ul"></i> Upload Sale Detail (Line Items)
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <h6><i class="bi bi-info-circle"></i> File Requirements</h6>
-                    <p class="mb-2">HQ invoice line-item export. Required columns:</p>
-                    <ul class="small mb-0">
-                        <li><strong>Invoice Number</strong>, <strong>Shop ID / Shop Name</strong>, <strong>Sales Date / Sales Time</strong></li>
-                        <li><strong>Product Code</strong>, <strong>Product Name</strong>, <strong>Barcode</strong>, <strong>Product ID</strong> (SKU)</li>
-                        <li><strong>Color Name</strong>, <strong>Size Name</strong>, <strong>Brand</strong></li>
-                        <li><strong>Quantity</strong>, <strong>Fact Retail Price</strong>, <strong>Sales Amount</strong>, <strong>Settlement Amount</strong></li>
-                        <li><strong>Tag Price</strong>, <strong>Tag Amount</strong>, <strong>Discount</strong>, <strong>VAT Rate</strong></li>
-                        <li><strong>Salesmen</strong>, <strong>Salesmen Code</strong>, <strong>Promotion</strong></li>
-                    </ul>
-                    <p class="mt-2 mb-0 small text-warning">
-                        <i class="bi bi-arrow-repeat"></i> <strong>Re-uploading the same invoice+product code overwrites existing data</strong> — no duplicates created.
-                    </p>
-                </div>
-
-                <form method="post" action="{% url 'upload_sale_detail' %}" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label for="{{ detail_form.file.id_for_label }}" class="form-label">
-                            <i class="bi bi-file-earmark-spreadsheet"></i> Select File
-                        </label>
-                        {{ detail_form.file }}
-                        <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-upload"></i> Upload Sale Detail
-                    </button>
-                </form>
-
-                {% if detail_stats.total_count %}
-                <hr>
-                <div class="row text-center g-3 mt-1">
-                    <div class="col-md-4">
-                        <div class="border rounded p-3">
-                            <h5 class="mb-0" style="color:var(--text);">{{ detail_stats.total_count|default:0 }}</h5>
-                            <small class="text-muted">Line Items</small>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded p-3">
-                            <h5 class="mb-0" style="color:var(--text);">{{ detail_stats.min_date|date:"Y-m-d"|default:"—" }}</h5>
-                            <small class="text-muted">Earliest Date</small>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded p-3">
-                            <h5 class="mb-0" style="color:var(--text);">{{ detail_stats.max_date|date:"Y-m-d"|default:"—" }}</h5>
-                            <small class="text-muted">Latest Date</small>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+      </div>
     </div>
+    {% endif %}
+
+    {# ── Sale Detail (line-item) upload ── #}
+    <div class="card mt-3 shadow-sm">
+      <div class="card-header" style="background:var(--primary);color:#fff;">
+        <i class="bi bi-list-ul"></i> Upload Sale Detail (Line Items)
+      </div>
+      <div class="card-body">
+        <div class="alert alert-info mb-3">
+          <h6><i class="bi bi-info-circle"></i> File Requirements</h6>
+          <p class="mb-2">HQ invoice line-item export. Required columns:</p>
+          <ul class="small mb-0">
+            <li><strong>Invoice Number</strong>, <strong>Shop ID / Shop Name</strong>, <strong>Sales Date / Sales Time</strong></li>
+            <li><strong>Product Code</strong>, <strong>Product Name</strong>, <strong>Barcode</strong>, <strong>Product ID</strong> (SKU)</li>
+            <li><strong>Color Name</strong>, <strong>Size Name</strong>, <strong>Brand</strong></li>
+            <li><strong>Quantity</strong>, <strong>Fact Retail Price</strong>, <strong>Sales Amount</strong>, <strong>Settlement Amount</strong></li>
+            <li><strong>Tag Price</strong>, <strong>Tag Amount</strong>, <strong>Discount</strong>, <strong>VAT Rate</strong></li>
+            <li><strong>Salesmen</strong>, <strong>Salesmen Code</strong>, <strong>Promotion</strong></li>
+          </ul>
+          <p class="mt-2 mb-0 small text-warning">
+            <i class="bi bi-arrow-repeat"></i> <strong>Re-uploading the same invoice+product code overwrites existing data</strong> — no duplicates created.
+          </p>
+        </div>
+
+        <form method="post" action="{% url 'upload_sale_detail' %}" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="{{ detail_form.file.id_for_label }}" class="form-label">
+              <i class="bi bi-file-earmark-spreadsheet"></i> Select File
+            </label>
+            {{ detail_form.file }}
+            <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Upload Sale Detail
+          </button>
+        </form>
+
+        {% if detail_stats.total_count %}
+        <hr>
+        <div class="row text-center g-3 mt-1">
+          <div class="col-md-4">
+            <div class="border rounded p-3">
+              <h5 class="mb-0" style="color:var(--text);">{{ detail_stats.total_count|default:0 }}</h5>
+              <small class="text-muted">Line Items</small>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3">
+              <h5 class="mb-0" style="color:var(--text);">{{ detail_stats.min_date|date:"Y-m-d"|default:"—" }}</h5>
+              <small class="text-muted">Earliest Date</small>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3">
+              <h5 class="mb-0" style="color:var(--text);">{{ detail_stats.max_date|date:"Y-m-d"|default:"—" }}</h5>
+              <small class="text-muted">Latest Date</small>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div><!-- /col left -->
+
+  <!-- ── Right: Product Campaigns management ── -->
+  {% check_perm 'products.manage' as can_manage_prd %}
+  {% if can_manage_prd %}
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center" style="background:var(--primary);color:#fff;">
+        <span><i class="bi bi-flag"></i> Product Campaigns</span>
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalPrdAddCampaign">
+          <i class="bi bi-plus-lg"></i> New Campaign
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div id="prdCampaignAlert" class="alert mx-3 mt-3 mb-0 py-2 d-none"></div>
+        <table class="table table-hover mb-0" id="prdCampaignTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Product Code Prefix</th>
+              <th>Detail</th>
+              <th style="width:90px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="prdCampaignTbody">
+            <tr>
+              <td colspan="4" class="text-center text-muted py-3">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-md-7">
+    <div class="alert alert-info">
+      <i class="bi bi-lock"></i> Campaign management requires Admin permission.
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- /row -->
+
+<!-- ── Add Product Campaign Modal ── -->
+{% if can_manage_prd %}
+<div class="modal fade" id="modalPrdAddCampaign" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle"></i> New Product Campaign</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="prdAddAlert" class="alert d-none py-2"></div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Campaign Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="prdAddName" placeholder="e.g. Summer 2024 Campaign">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Product Code Prefix <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="prdAddPrefix" placeholder="e.g. 2024A or 2024A, 2024B">
+          <div class="form-text">One or more prefixes (comma-separated). Products whose code starts with any prefix belong to this campaign.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Detail / Notes</label>
+          <textarea class="form-control" id="prdAddDetail" rows="2" placeholder="Optional description…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="btnPrdAddSave" onclick="prdAddSave()">
+          <i class="bi bi-check-lg"></i> Save
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
+
+<!-- ── Edit Product Campaign Modal ── -->
+<div class="modal fade" id="modalPrdEditCampaign" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Product Campaign</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="prdEditAlert" class="alert d-none py-2"></div>
+        <input type="hidden" id="prdEditId">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Campaign Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="prdEditName">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Product Code Prefix(es) <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="prdEditPrefix" placeholder="e.g. 2024A or 2024A, 2024B">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Detail / Notes</label>
+          <textarea class="form-control" id="prdEditDetail" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnPrdEditSave" onclick="prdEditSave()">
+          <i class="bi bi-check-lg"></i> Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if can_manage_prd %}
+<script type="application/json" id="__prdUrl">"{% url 'manage_product_campaigns' %}"</script>
+<script type="application/json" id="__prdCsrf">"{{ csrf_token }}"</script>
+<script>
+var PRD_URL  = JSON.parse(document.getElementById('__prdUrl').textContent);
+var PRD_CSRF = JSON.parse(document.getElementById('__prdCsrf').textContent);
+var _prdList = [];
+
+function _prdEsc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _prdAlert(id, msg, type) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'alert alert-'+(type||'danger')+' py-2';
+  el.textContent = msg;
+  el.classList.remove('d-none');
+}
+function _prdHide(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.add('d-none');
+}
+
+function _prdRender() {
+  var tbody = document.getElementById('prdCampaignTbody');
+  if (!tbody) return;
+  if (!_prdList.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No campaigns yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _prdList.map(function(c) {
+    var pfxs = (c.prefix_list && c.prefix_list.length) ? c.prefix_list : [c.prefix];
+    return '<tr class="prd-campaign-row">'
+      + '<td><strong>'+_prdEsc(c.name)+'</strong><br><small class="text-muted">'+(c.created_at||'')+'</small></td>'
+      + '<td>'+pfxs.map(function(p){ return '<code class="me-1">'+_prdEsc(p)+'</code>'; }).join('')+'</td>'
+      + '<td><small>'+_prdEsc(c.detail||'—')+'</small></td>'
+      + '<td>'
+        + '<button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="prdOpenEdit('+c.id+')" title="Edit"><i class="bi bi-pencil"></i></button>'
+        + '<button type="button" class="btn btn-sm btn-outline-danger" onclick="prdDelete('+c.id+',\''+_prdEsc(c.name).replace(/'/g,"\\'")+'\')"><i class="bi bi-trash"></i></button>'
+      + '</td></tr>';
+  }).join('');
+}
+
+function _prdLoad() {
+  fetch(PRD_URL, { credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { _prdList = d.campaigns || []; _prdRender(); })
+    .catch(function(e) {
+      var tbody = document.getElementById('prdCampaignTbody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">Load error: '+e.message+'</td></tr>';
+    });
+}
+
+function _prdPost(body, onOk, onFail) {
+  fetch(PRD_URL, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': PRD_CSRF },
+    body: JSON.stringify(body)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    if (res && res.ok) onOk(res);
+    else onFail(res ? (res.error || 'Unknown error') : 'Empty response');
+  })
+  .catch(function(e) { onFail('Network error: ' + e.message); });
+}
+
+function prdAddSave() {
+  var name   = (document.getElementById('prdAddName').value   || '').trim();
+  var prefix = (document.getElementById('prdAddPrefix').value || '').trim();
+  var detail = (document.getElementById('prdAddDetail').value || '').trim();
+  _prdHide('prdAddAlert');
+  if (!name || !prefix) { _prdAlert('prdAddAlert', 'Name and prefix are required.'); return; }
+  var btn = document.getElementById('btnPrdAddSave');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  _prdPost(
+    { action: 'create', name: name, prefix: prefix, detail: detail },
+    function() {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modalPrdAddCampaign')).hide();
+      document.getElementById('prdAddName').value   = '';
+      document.getElementById('prdAddPrefix').value = '';
+      document.getElementById('prdAddDetail').value = '';
+      _prdLoad();
+      _prdAlert('prdCampaignAlert', 'Campaign created.', 'success');
+    },
+    function(err) {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+      _prdAlert('prdAddAlert', err);
+    }
+  );
+}
+
+function prdOpenEdit(id) {
+  var c = _prdList.find(function(x) { return x.id === id; });
+  if (!c) return;
+  document.getElementById('prdEditId').value     = c.id;
+  document.getElementById('prdEditName').value   = c.name;
+  document.getElementById('prdEditPrefix').value = c.prefix;
+  document.getElementById('prdEditDetail').value = c.detail || '';
+  _prdHide('prdEditAlert');
+  new bootstrap.Modal(document.getElementById('modalPrdEditCampaign')).show();
+}
+
+function prdEditSave() {
+  var id     = parseInt(document.getElementById('prdEditId').value, 10);
+  var name   = (document.getElementById('prdEditName').value   || '').trim();
+  var prefix = (document.getElementById('prdEditPrefix').value || '').trim();
+  var detail = (document.getElementById('prdEditDetail').value || '').trim();
+  _prdHide('prdEditAlert');
+  if (!name || !prefix) { _prdAlert('prdEditAlert', 'Name and prefix are required.'); return; }
+  var btn = document.getElementById('btnPrdEditSave');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  _prdPost(
+    { action: 'update', id: id, name: name, prefix: prefix, detail: detail },
+    function() {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modalPrdEditCampaign')).hide();
+      _prdLoad();
+      _prdAlert('prdCampaignAlert', 'Campaign updated.', 'success');
+    },
+    function(err) {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+      _prdAlert('prdEditAlert', err);
+    }
+  );
+}
+
+function prdDelete(id, name) {
+  if (!confirm('Delete campaign "' + name + '"?')) return;
+  _prdPost(
+    { action: 'delete', id: id },
+    function() { _prdLoad(); _prdAlert('prdCampaignAlert', 'Campaign deleted.', 'warning'); },
+    function(err) { alert('Delete failed: ' + err); }
+  );
+}
+
+_prdLoad();
+</script>
+{% endif %}
 {% endblock %}

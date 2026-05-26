@@ -50,3 +50,19 @@ class CouponCampaign(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.prefix})"
+
+
+class ProductCampaign(models.Model):
+    """Named product campaign grouping products by product code prefix."""
+
+    name = models.CharField(max_length=200, unique=True)
+    prefix = models.TextField()          # comma-separated prefixes, e.g. "2024A,2024B"
+    detail = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.prefix})"
