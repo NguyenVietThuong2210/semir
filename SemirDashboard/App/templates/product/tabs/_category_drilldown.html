@@ -1,0 +1,100 @@
+{% comment %}
+Reusable Brand → L1 → L2 → L3 category breakdown.
+Context: cat_groups (brand_cat_groups from _by_category), currency.
+{% endcomment %}
+{% load custom_filters %}
+{% if cat_groups %}
+<style>
+.cdr-tbl .cdr-brand > td { background:rgba(var(--orange-rgb),.30) !important; font-weight:700; border-top:2px solid rgba(var(--orange-rgb),.45) !important; }
+.cdr-tbl .cdr-l1    > td { background:rgba(var(--orange-rgb),.20) !important; font-weight:600; }
+.cdr-tbl .cdr-l2    > td { background:rgba(var(--orange-rgb),.12) !important; }
+</style>
+<div class="table-responsive" style="font-size:.80rem;">
+<table class="table table-sm align-middle mb-0 cdr-tbl" style="border-collapse:collapse;">
+    <thead>
+        <tr style="background:var(--primary);color:#fff;font-size:.78rem;">
+            <th>Brand</th>
+            <th>Category L1</th>
+            <th>Category L2</th>
+            <th>Category L3</th>
+            <th class="text-end">Qty</th>
+            <th class="text-end">Tag Amt</th>
+            <th class="text-end">Sales Amt</th>
+            <th class="text-end">Settlement</th>
+            <th class="text-end">Disc %</th>
+            <th class="text-end">Lines</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for br_grp in cat_groups %}
+    <tr class="cdr-brand">
+        <td>{{ br_grp.brand }}</td>
+        <td style="font-size:.78rem;font-weight:400;">
+            {{ br_grp.l1_groups|length }} categor{% if br_grp.l1_groups|length == 1 %}y{% else %}ies{% endif %}
+        </td>
+        <td></td><td></td>
+        <td class="text-end">{{ br_grp.subtotal.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted">{{ br_grp.subtotal.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ br_grp.subtotal.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ br_grp.subtotal.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if br_grp.subtotal.disc_pct and br_grp.subtotal.disc_pct > 20 %} text-danger{% endif %}">
+            {% if br_grp.subtotal.disc_pct is not None %}{{ br_grp.subtotal.disc_pct }}%{% else %}—{% endif %}
+        </td>
+        <td class="text-end text-muted">{{ br_grp.subtotal.lines|default:0 }}</td>
+    </tr>
+    {% for grp in br_grp.l1_groups %}
+    <tr class="cdr-l1">
+        <td class="text-muted ps-3" style="font-size:.78rem;">└</td>
+        <td>{% if grp.l1 %}{{ grp.l1|cat_name }}{% else %}—{% endif %}</td>
+        <td style="font-size:.76rem;font-weight:400;">
+            {{ grp.l2_groups|length }} sub-categor{% if grp.l2_groups|length == 1 %}y{% else %}ies{% endif %}
+        </td>
+        <td></td>
+        <td class="text-end">{{ grp.subtotal.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted">{{ grp.subtotal.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ grp.subtotal.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ grp.subtotal.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if grp.subtotal.disc_pct and grp.subtotal.disc_pct > 20 %} text-danger{% endif %}">
+            {% if grp.subtotal.disc_pct is not None %}{{ grp.subtotal.disc_pct }}%{% else %}—{% endif %}
+        </td>
+        <td class="text-end text-muted">{{ grp.subtotal.lines|default:0 }}</td>
+    </tr>
+    {% for l2g in grp.l2_groups %}
+    <tr class="cdr-l2">
+        <td></td>
+        <td class="text-muted ps-3" style="font-size:.78rem;">└</td>
+        <td style="font-weight:500;">{% if l2g.l2 %}{{ l2g.l2|cat_name }}{% else %}—{% endif %}</td>
+        <td style="font-size:.76rem;">
+            {% if l2g.rows|length > 1 %}{{ l2g.rows|length }} items{% endif %}
+        </td>
+        <td class="text-end">{{ l2g.subtotal.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted">{{ l2g.subtotal.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ l2g.subtotal.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd">{{ l2g.subtotal.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if l2g.subtotal.disc_pct and l2g.subtotal.disc_pct > 20 %} text-danger{% endif %}">
+            {% if l2g.subtotal.disc_pct is not None %}{{ l2g.subtotal.disc_pct }}%{% else %}—{% endif %}
+        </td>
+        <td class="text-end text-muted">{{ l2g.subtotal.lines|default:0 }}</td>
+    </tr>
+    {% for r in l2g.rows %}
+    <tr>
+        <td></td><td></td>
+        <td class="text-muted ps-3" style="font-size:.76rem;">└</td>
+        <td style="font-size:.78rem;">{% if r.category_l3 %}{{ r.category_l3|cat_name }}{% else %}—{% endif %}</td>
+        <td class="text-end" style="font-size:.76rem;">{{ r.qty|default:0 }}</td>
+        <td class="text-end amount-vnd text-muted" style="font-size:.76rem;">{{ r.tag_amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd" style="font-size:.76rem;">{{ r.amount|default:0|vnd }}</td>
+        <td class="text-end amount-vnd" style="font-size:.76rem;">{{ r.settlement|default:0|vnd }}</td>
+        <td class="text-end{% if r.disc_pct and r.disc_pct > 20 %} text-danger{% endif %}" style="font-size:.76rem;">
+            {% if r.disc_pct is not None %}{{ r.disc_pct }}%{% else %}—{% endif %}
+        </td>
+        <td class="text-end text-muted" style="font-size:.76rem;">{{ r.lines|default:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+    {% endfor %}
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}

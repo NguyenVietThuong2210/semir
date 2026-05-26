@@ -90,7 +90,7 @@ def product_tab(request, tab):
     return render(request, template, ctx)
 
 
-_EXPORT_TABS = ('month', 'year', 'week', 'sales_season', 'product_season', 'vip_grade', 'brand', 'campaign', 'shop', 'product')
+_EXPORT_TABS = ('month', 'year', 'week', 'sales_season', 'product_season', 'vip_grade', 'brand', 'category', 'campaign', 'shop', 'product')
 
 
 @requires_perm("products.manage")
