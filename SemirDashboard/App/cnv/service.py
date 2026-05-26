@@ -698,7 +698,7 @@ def compute_cnv_comparison(start_date, end_date):
 
     # Bulk fetch all rows in 2 queries, then use Python set ops — avoids slow SQL anti-joins
     _POS_FIELDS = ("vip_id", "phone", "name", "vip_grade", "email",
-                   "registration_date", "points", "used_points")
+                   "registration_date", "registration_store", "points", "used_points")
     _CNV_FIELDS = ("cnv_id", "phone", "last_name", "first_name", "level_name",
                    "email", "cnv_created_at", "points", "total_points", "used_points")
     _all_pos_rows = list(pos_all.values(*_POS_FIELDS).order_by())
@@ -862,25 +862,22 @@ def compute_cnv_comparison(start_date, end_date):
     zalo_app_list          = list(zalo_app_qs.order_by("-zalo_app_created_at").values(*_zf))
     zalo_oa_list           = list(zalo_oa_qs.order_by("-zalo_app_created_at").values(*_zf))
     zalo_app_inactive_list = list(zalo_app_inactive_qs.order_by("-cnv_created_at").values(*_zf))
+    # Build phone→registration_store from already-loaded _all_pos_rows (no extra query)
+    _pos_reg_store_map = {
+        r["phone"]: r.get("registration_store", "")
+        for r in _all_pos_rows if r["phone"]
+    }
     _all_z_phones = {r["phone"] for r in zalo_app_list + zalo_oa_list if r["phone"]}
     _pos_z_phones = _all_z_phones & pos_phones_all
-    _all_inactive_phones = {r["phone"] for r in zalo_app_inactive_list if r["phone"]}
-    _reg_store_map = {
-        row["phone"]: row["registration_store"]
-        for row in POSCustomer.objects.filter(
-            phone__in=_pos_z_phones | (_all_inactive_phones & pos_phones_all)
-        ).values("phone", "registration_store")
-        if row["phone"]
-    }
     for r in zalo_app_list:
         r["in_pos"] = r["phone"] in _pos_z_phones
-        r["registration_store"] = _reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
+        r["registration_store"] = _pos_reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
     for r in zalo_oa_list:
         r["in_pos"] = r["phone"] in _pos_z_phones
-        r["registration_store"] = _reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
+        r["registration_store"] = _pos_reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
     for r in zalo_app_inactive_list:
         r["in_pos"] = r["phone"] in pos_phones_all if r["phone"] else False
-        r["registration_store"] = _reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
+        r["registration_store"] = _pos_reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
 
     result = {
         "has_filter":                has_filter,

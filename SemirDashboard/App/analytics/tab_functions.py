@@ -1056,9 +1056,7 @@ def _customer_ca_zalo(start_date: str, end_date: str) -> dict:
         zalo_app_period_pct = round(zalo_app_period_count / total_cnv_all * 100, 1) if total_cnv_all else 0
         zalo_oa_period_pct  = round(zalo_oa_period_count  / total_cnv_all * 100, 1) if total_cnv_all else 0
 
-    # Zalo lists + in_pos flag (pos_phones needed only for this)
-    pos_phones_all, _ = _get_cnv_phone_sets()
-
+    # Fetch both zalo lists (indexed queries on zalo_app_id / zalo_oa_id)
     _zf = (
         'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
         'email', 'cnv_created_at', 'points', 'zalo_app_id', 'zalo_oa_id', 'zalo_app_created_at',
@@ -1073,12 +1071,29 @@ def _customer_ca_zalo(start_date: str, end_date: str) -> dict:
     zalo_mini_app_list = list(zalo_app_qs.order_by('-zalo_app_created_at').values(*_zf))
     zalo_oa_list       = list(zalo_oa_qs.order_by('-zalo_app_created_at').values(*_zf))
 
-    _all_z_phones = {r['phone'] for r in zalo_mini_app_list + zalo_oa_list if r['phone']}
-    _pos_z_phones = _all_z_phones & pos_phones_all
+    # One targeted POS lookup via DB subquery — avoids loading all 74k POS rows
+    # via get_cnv_phone_sets() and avoids SQLite "too many variables" for large IN lists.
+    from App.models import Customer as _POSCustomer
+    _active_zalo_phone_qs = (
+        CNVCustomer.objects
+        .filter(_Q(zalo_app_id__isnull=False) & ~_Q(zalo_app_id='')
+                | _Q(zalo_oa_id__isnull=False) & ~_Q(zalo_oa_id=''))
+        .values('phone')
+    )
+    _pos_zalo_rows = {
+        row['phone']: row['registration_store']
+        for row in _POSCustomer.objects
+        .filter(phone__in=_active_zalo_phone_qs, vip_id__isnull=False)
+        .exclude(vip_id=0).exclude(phone='')
+        .values('phone', 'registration_store')
+        if row['phone']
+    }
     for r in zalo_mini_app_list:
-        r['in_pos'] = r['phone'] in _pos_z_phones
+        r['in_pos'] = r['phone'] in _pos_zalo_rows
+        r['registration_store'] = _pos_zalo_rows.get(r['phone'], '') if r['in_pos'] else ''
     for r in zalo_oa_list:
-        r['in_pos'] = r['phone'] in _pos_z_phones
+        r['in_pos'] = r['phone'] in _pos_zalo_rows
+        r['registration_store'] = _pos_zalo_rows.get(r['phone'], '') if r['in_pos'] else ''
 
     return {
         'zalo_app_all_count':    zalo_app_all_count,
