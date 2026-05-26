@@ -66,13 +66,6 @@
                     {% endfor %}
                 </select>
             </div>
-            <div>
-                <label class="form-label small mb-1 fw-semibold">Product Code Prefix</label>
-                <input type="text" name="product_prefix"
-                       class="form-control form-control-sm" style="width:150px;"
-                       placeholder="e.g. SM25"
-                       value="{{ product_prefix }}">
-            </div>
             <div class="align-self-end">
                 <button type="submit" class="btn btn-primary btn-sm px-3">
                     <i class="bi bi-funnel-fill me-1"></i>Filter
@@ -667,8 +660,34 @@
 {% endif %}
 {% endwith %}
 
-{% if prefix_data %}
 <hr class="my-4">
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2 px-3">
+        <form method="get" class="d-flex align-items-end gap-3">
+            <input type="hidden" name="shop_group" value="{{ shop_group }}">
+            {% if year_filter %}<input type="hidden" name="year" value="{{ year_filter }}">{% endif %}
+            {% if season_filter %}<input type="hidden" name="season" value="{{ season_filter }}">{% endif %}
+            <div>
+                <label class="form-label small mb-1 fw-semibold">
+                    <i class="bi bi-search me-1"></i>Product Code Prefix
+                </label>
+                <input type="text" name="product_prefix"
+                       class="form-control form-control-sm" style="width:180px;"
+                       placeholder="e.g. SM25"
+                       value="{{ product_prefix }}">
+            </div>
+            <div class="align-self-end">
+                <button type="submit" class="btn btn-primary btn-sm px-3">Search</button>
+                {% if product_prefix %}
+                <a href="{% url 'inventory_dashboard' %}?shop_group={{ shop_group }}{% if year_filter %}&year={{ year_filter }}{% endif %}{% if season_filter %}&season={{ season_filter }}{% endif %}"
+                   class="btn btn-outline-secondary btn-sm ms-1">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if prefix_data %}
 <div class="d-flex align-items-center gap-2 mb-3">
     <span class="badge fs-6 px-3 py-2" style="background:var(--info,#0dcaf0);color:#000;">
         <i class="bi bi-search me-1"></i> Product Detail — Prefix "{{ prefix_data.prefix }}"
@@ -818,7 +837,6 @@
 {% endif %}
 
 {% elif product_prefix %}
-<hr class="my-4">
 <div class="alert alert-warning">
     <i class="bi bi-search me-1"></i>
     No inventory rows found with product code prefix <strong>"{{ product_prefix }}"</strong>.

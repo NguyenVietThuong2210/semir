@@ -526,7 +526,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="tzcofdUN4aRNy1UMcpITrh4tMTAD6VORRssTPdmtpQAhuJ0pQKLipyPOLakRX4qN">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="4BdNIHNLz93leaRCFFHHv1GpMkjV5vJHWORSmiRVLdyd6kI5I8ONZR3hElycrCRu">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -8655,6 +8655,20 @@
                         '<div class="alert alert-danger">Load error: ' + err.message + '</div>';
                 });
         });
+    });
+
+    /* ── Shop card lazy-load via Bootstrap collapse event (works for injected HTML) ── */
+    document.addEventListener('show.bs.collapse', function(e) {
+        var panel = e.target;
+        if (!panel.dataset.lazyUrl) return;
+        if (panel.dataset.lazyLoaded) return;
+        panel.dataset.lazyLoaded = '1';
+        var body = panel.querySelector('.card-body');
+        if (body) body.innerHTML = '<div class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>';
+        fetch(panel.dataset.lazyUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function(r){ return r.text(); })
+            .then(function(html){ if (body) body.innerHTML = html; })
+            .catch(function(err){ if (body) body.innerHTML = '<div class="alert alert-danger m-2">Load error: ' + err.message + '</div>'; });
     });
 
     /* ── Date helpers ── */
