@@ -66,6 +66,13 @@
                     {% endfor %}
                 </select>
             </div>
+            <div>
+                <label class="form-label small mb-1 fw-semibold">Product Code Prefix</label>
+                <input type="text" name="product_prefix"
+                       class="form-control form-control-sm" style="width:150px;"
+                       placeholder="e.g. SM25"
+                       value="{{ product_prefix }}">
+            </div>
             <div class="align-self-end">
                 <button type="submit" class="btn btn-primary btn-sm px-3">
                     <i class="bi bi-funnel-fill me-1"></i>Filter
@@ -76,9 +83,6 @@
     </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SECTION 1 — FOR SALE (tag_amount > 0)                          -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
 {% with fs=for_sale %}
 <div class="d-flex align-items-center gap-2 mb-3 mt-1">
     <span class="badge bg-success fs-6 px-3 py-2"><i class="bi bi-tag-fill me-1"></i> For Sale</span>
@@ -506,9 +510,6 @@
 {% endif %}
 {% endwith %}
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SECTION 2 — GIFTS (tag_amount = 0)                             -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
 {% with gi=gifts %}
 <hr class="my-4">
 <div class="d-flex align-items-center gap-2 mb-3">
@@ -665,5 +666,163 @@
 <div class="alert alert-secondary mb-4">No gift/non-commercial inventory items found.</div>
 {% endif %}
 {% endwith %}
+
+{% if prefix_data %}
+<hr class="my-4">
+<div class="d-flex align-items-center gap-2 mb-3">
+    <span class="badge fs-6 px-3 py-2" style="background:var(--info,#0dcaf0);color:#000;">
+        <i class="bi bi-search me-1"></i> Product Detail — Prefix "{{ prefix_data.prefix }}"
+    </span>
+    <span class="text-muted small">
+        {{ prefix_data.totals.sku_lines }} rows &nbsp;·&nbsp;
+        {{ prefix_data.shop_count }} shops &nbsp;·&nbsp;
+        On-Hand: {{ prefix_data.totals.on_hand_qty }} &nbsp;·&nbsp;
+        Value: {{ prefix_data.totals.inv_value|vnd }}
+    </span>
+</div>
+
+<!-- Overall product table (all shops combined) -->
+<div class="card mb-3 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center py-2"
+         style="background:var(--primary);color:#fff;">
+        <span>
+            <i class="bi bi-table me-1"></i>
+            <strong>All Products — "{{ prefix_data.prefix }}"</strong>
+        </span>
+        <small class="opacity-75">{{ prefix_data.products|length }} product variants</small>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
+            <table class="table table-sm table-hover mb-0" style="font-size:.82rem;">
+                <thead class="sticky-thead" style="background:var(--primary);color:#fff;">
+                    <tr>
+                        <th style="white-space:nowrap;">Product Code</th>
+                        <th>Product Name</th>
+                        <th>Product Name VN</th>
+                        <th>Brand</th>
+                        <th>Color</th>
+                        <th>Size</th>
+                        <th>Year</th>
+                        <th>Season</th>
+                        <th style="white-space:nowrap;">Tag Price</th>
+                        <th style="white-space:nowrap;">On-Hand</th>
+                        <th style="white-space:nowrap;">In Transit</th>
+                        <th style="white-space:nowrap;">Total Qty</th>
+                        <th style="white-space:nowrap;">Value (VND)</th>
+                        <th>Shops</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in prefix_data.products %}
+                <tr>
+                    <td style="white-space:nowrap;font-size:.78rem;">{{ p.product_code }}</td>
+                    <td>{{ p.product_name }}</td>
+                    <td>{{ p.product_name_vn|default:"—" }}</td>
+                    <td>{{ p.brand|default:"—" }}</td>
+                    <td>{{ p.color|default:"—" }}</td>
+                    <td>{{ p.size|default:"—" }}</td>
+                    <td>{{ p.year|default:"—" }}</td>
+                    <td>{{ p.season|default:"—" }}</td>
+                    <td class="amount-vnd">{{ p.tag_price|vnd }}</td>
+                    <td class="fw-semibold">{{ p.on_hand_qty }}</td>
+                    <td class="text-muted">{{ p.in_transit_qty }}</td>
+                    <td>{{ p.total_qty }}</td>
+                    <td class="amount-vnd">{{ p.inv_value|vnd }}</td>
+                    <td class="text-muted text-center">{{ p.shop_count }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Per-shop breakdown -->
+{% if prefix_data.by_shop %}
+<div class="card shadow-sm mb-4">
+    <div class="card-header py-2" style="background:var(--nav-bg);">
+        <span class="text-white fw-semibold">
+            <i class="bi bi-shop me-1"></i> By Shop — Products with prefix "{{ prefix_data.prefix }}"
+        </span>
+        <span class="badge bg-light text-dark ms-2">{{ prefix_data.shop_count }} shops</span>
+    </div>
+    <div class="card-body p-2">
+
+    {% for shop in prefix_data.by_shop %}
+    <div class="card mb-2 border">
+        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+             style="background:var(--primary);cursor:pointer;"
+             data-bs-toggle="collapse"
+             data-bs-target="#pfxShop-{{ forloop.counter }}"
+             aria-expanded="false">
+            <strong class="text-white">
+                <i class="bi bi-shop me-1"></i>{{ shop.shop_name }}
+            </strong>
+            <small class="text-white-50">
+                On-Hand: {{ shop.on_hand_qty }}
+                &nbsp;|&nbsp; Total: {{ shop.total_qty }}
+                &nbsp;|&nbsp; Value: {{ shop.inv_value|vnd }}
+                &nbsp;|&nbsp; {{ shop.lines }} SKU lines
+                &nbsp;<i class="bi bi-chevron-down"></i>
+            </small>
+        </div>
+        <div class="collapse" id="pfxShop-{{ forloop.counter }}">
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height:350px;overflow-y:auto;">
+                    <table class="table table-sm table-hover mb-0" style="font-size:.82rem;">
+                        <thead class="sticky-thead" style="background:var(--primary);color:#fff;">
+                            <tr>
+                                <th style="white-space:nowrap;">Product Code</th>
+                                <th>Product Name</th>
+                                <th>Product Name VN</th>
+                                <th>Brand</th>
+                                <th>Color</th>
+                                <th>Size</th>
+                                <th>Year</th>
+                                <th>Season</th>
+                                <th style="white-space:nowrap;">Tag Price</th>
+                                <th style="white-space:nowrap;">On-Hand</th>
+                                <th style="white-space:nowrap;">In Transit</th>
+                                <th style="white-space:nowrap;">Total Qty</th>
+                                <th style="white-space:nowrap;">Value (VND)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for p in shop.products %}
+                        <tr>
+                            <td style="white-space:nowrap;font-size:.78rem;">{{ p.product_code }}</td>
+                            <td>{{ p.product_name }}</td>
+                            <td>{{ p.product_name_vn|default:"—" }}</td>
+                            <td>{{ p.brand|default:"—" }}</td>
+                            <td>{{ p.color|default:"—" }}</td>
+                            <td>{{ p.size|default:"—" }}</td>
+                            <td>{{ p.year|default:"—" }}</td>
+                            <td>{{ p.season|default:"—" }}</td>
+                            <td class="amount-vnd">{{ p.tag_price|vnd }}</td>
+                            <td class="fw-semibold">{{ p.on_hand_qty }}</td>
+                            <td class="text-muted">{{ p.in_transit_qty }}</td>
+                            <td>{{ p.total_qty }}</td>
+                            <td class="amount-vnd">{{ p.inv_value|vnd }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    </div>
+</div>
+{% endif %}
+
+{% elif product_prefix %}
+<hr class="my-4">
+<div class="alert alert-warning">
+    <i class="bi bi-search me-1"></i>
+    No inventory rows found with product code prefix <strong>"{{ product_prefix }}"</strong>.
+</div>
+{% endif %}
 
 {% endblock %}

@@ -233,6 +233,90 @@ def get_inventory_overview(shop_group: str = None, year: int = None, season: str
     return result
 
 
+def get_product_prefix_detail(prefix: str, shop_group=None, year=None, season=None) -> dict:
+    """
+    Return per-product and per-shop breakdown for InventorySnapshots
+    whose product_code starts with `prefix` (case-insensitive).
+    Returns empty dict if prefix is blank or no rows match.
+    """
+    if not prefix or not prefix.strip():
+        return {}
+
+    qs = _shop_group_filter(
+        InventorySnapshot.objects.filter(product_code__istartswith=prefix.strip()),
+        shop_group or ''
+    )
+    if year:
+        qs = qs.filter(year=year)
+    if season:
+        qs = qs.filter(season=season)
+
+    totals = qs.aggregate(
+        sku_lines=Count('id'),
+        on_hand_qty=Sum('inventory_qty'),
+        in_transit_qty=Sum('in_transit_qty'),
+        total_qty=Sum('total_qty'),
+        inv_value=Sum('tag_amount'),
+    )
+    if not totals.get('sku_lines'):
+        return {}
+
+    products = list(
+        qs.values(
+            'product_code', 'product_name', 'product_name_vn', 'brand',
+            'color', 'size', 'year', 'season', 'gender',
+            'category_l1', 'category_l2', 'category_l3', 'tag_price',
+        )
+        .annotate(
+            on_hand_qty=Sum('inventory_qty'),
+            in_transit_qty=Sum('in_transit_qty'),
+            total_qty=Sum('total_qty'),
+            inv_value=Sum('tag_amount'),
+            shop_count=Count('shop_id', distinct=True),
+        )
+        .order_by('-on_hand_qty', 'product_code')
+    )
+
+    shop_product_rows = list(
+        qs.values(
+            'shop_name', 'product_code', 'product_name', 'product_name_vn',
+            'brand', 'color', 'size', 'year', 'season', 'tag_price',
+        )
+        .annotate(
+            on_hand_qty=Sum('inventory_qty'),
+            in_transit_qty=Sum('in_transit_qty'),
+            total_qty=Sum('total_qty'),
+            inv_value=Sum('tag_amount'),
+        )
+        .order_by('shop_name', '-on_hand_qty', 'product_code')
+    )
+
+    shop_map: dict = defaultdict(list)
+    shop_sums: dict = defaultdict(lambda: {'on_hand_qty': 0, 'in_transit_qty': 0, 'total_qty': 0, 'inv_value': 0, 'lines': 0})
+    for r in shop_product_rows:
+        sn = r['shop_name']
+        shop_map[sn].append(r)
+        s = shop_sums[sn]
+        s['on_hand_qty']    += r['on_hand_qty'] or 0
+        s['in_transit_qty'] += r['in_transit_qty'] or 0
+        s['total_qty']      += r['total_qty'] or 0
+        s['inv_value']      += r['inv_value'] or 0
+        s['lines']          += 1
+
+    by_shop = sorted(
+        [{'shop_name': sn, 'products': shop_map[sn], **shop_sums[sn]} for sn in shop_map],
+        key=lambda x: x['on_hand_qty'], reverse=True,
+    )
+
+    return {
+        'prefix':     prefix.strip(),
+        'totals':     totals,
+        'products':   products,
+        'by_shop':    by_shop,
+        'shop_count': len(by_shop),
+    }
+
+
 def get_shop_inventory_data(shop_name: str) -> dict:
     """
     Return inventory KPIs + breakdowns for one shop from InventorySnapshot.

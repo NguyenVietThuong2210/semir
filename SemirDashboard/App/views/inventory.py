@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 
 from App.permissions import requires_perm
-from App.analytics.inventory_functions import get_inventory_overview
+from App.analytics.inventory_functions import get_inventory_overview, get_product_prefix_detail
 from App.models import InventorySnapshot
 
 logger = logging.getLogger(__name__)
@@ -38,9 +38,10 @@ def _get_filter_options():
 
 @requires_perm("inventory.view")
 def inventory_dashboard(request):
-    shop_group = request.GET.get("shop_group", "")
-    year_str   = request.GET.get("year", "")
-    season     = request.GET.get("season", "")
+    shop_group     = request.GET.get("shop_group", "")
+    year_str       = request.GET.get("year", "")
+    season         = request.GET.get("season", "")
+    product_prefix = request.GET.get("product_prefix", "").strip()
 
     year = int(year_str) if year_str.isdigit() else None
 
@@ -53,6 +54,15 @@ def inventory_dashboard(request):
     if not data:
         messages.info(request, "No inventory data found. Please upload an inventory file first.")
         return redirect("upload_inventory")
+
+    prefix_data = {}
+    if product_prefix:
+        prefix_data = get_product_prefix_detail(
+            prefix=product_prefix,
+            shop_group=shop_group or None,
+            year=year,
+            season=season or None,
+        )
 
     years_available, seasons_available = _get_filter_options()
 
@@ -67,6 +77,8 @@ def inventory_dashboard(request):
         "season_filter":      season,
         "years_available":    years_available,
         "seasons_available":  seasons_available,
+        "product_prefix":     product_prefix,
+        "prefix_data":        prefix_data,
     })
 
 

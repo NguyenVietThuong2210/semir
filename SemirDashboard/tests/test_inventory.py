@@ -21,7 +21,9 @@ from django.template import Context, Template
 
 from App.models import InventorySnapshot
 from App.services import process_inventory_file
-from App.analytics.inventory_functions import get_shop_inventory_data, get_inventory_overview
+from App.analytics.inventory_functions import (
+    get_shop_inventory_data, get_inventory_overview, get_product_prefix_detail,
+)
 
 from tests.base import SnapshotTestCase, INPUT_DIR, Timer
 
@@ -391,6 +393,133 @@ class InventoryImportTest(SnapshotTestCase):
         )
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"Select a shop", r.content)
+
+    # ── get_product_prefix_detail ─────────────────────────────────────────────
+
+    @classmethod
+    def _first_prefix(cls, n=4):
+        code = (
+            InventorySnapshot.objects
+            .exclude(product_code='')
+            .order_by('product_code')
+            .values_list('product_code', flat=True)
+            .first()
+        )
+        return code[:n] if code and len(code) >= n else None
+
+    def test_prefix_detail_empty_prefix_returns_empty(self):
+        self.assertEqual(get_product_prefix_detail(""), {})
+        self.assertEqual(get_product_prefix_detail("   "), {})
+
+    def test_prefix_detail_no_match_returns_empty(self):
+        self.assertEqual(get_product_prefix_detail("XXXXNOTFOUND_ZZZ"), {})
+
+    def test_prefix_detail_returns_structure(self):
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        data = get_product_prefix_detail(prefix)
+        self.assertIsInstance(data, dict)
+        for key in ('prefix', 'totals', 'products', 'by_shop', 'shop_count'):
+            self.assertIn(key, data, f"Missing key '{key}' in prefix_data")
+        self.assertEqual(data['prefix'], prefix)
+
+    def test_prefix_detail_totals_keys(self):
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        data = get_product_prefix_detail(prefix)
+        if not data:
+            self.skipTest("No rows matched prefix")
+        for field in ('sku_lines', 'on_hand_qty', 'in_transit_qty', 'total_qty', 'inv_value'):
+            self.assertIn(field, data['totals'], f"Missing totals field '{field}'")
+        self.assertGreater(data['totals']['sku_lines'], 0)
+
+    def test_prefix_detail_products_row_structure(self):
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        data = get_product_prefix_detail(prefix)
+        if not data or not data.get('products'):
+            self.skipTest("No product rows for prefix")
+        row = data['products'][0]
+        for field in ('product_code', 'product_name', 'brand', 'on_hand_qty',
+                      'in_transit_qty', 'total_qty', 'inv_value', 'shop_count'):
+            self.assertIn(field, row, f"Missing products row field '{field}'")
+
+    def test_prefix_detail_by_shop_structure(self):
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        data = get_product_prefix_detail(prefix)
+        if not data or not data.get('by_shop'):
+            self.skipTest("No by_shop rows for prefix")
+        shop = data['by_shop'][0]
+        for field in ('shop_name', 'products', 'on_hand_qty', 'total_qty', 'inv_value', 'lines'):
+            self.assertIn(field, shop, f"Missing by_shop field '{field}'")
+        self.assertGreater(len(shop['products']), 0)
+
+    def test_prefix_detail_totals_match_db(self):
+        """Totals from get_product_prefix_detail must match direct DB query."""
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        data = get_product_prefix_detail(prefix)
+        if not data:
+            self.skipTest("No rows matched prefix")
+        from django.db.models import Sum, Count
+        expected = InventorySnapshot.objects.filter(
+            product_code__istartswith=prefix
+        ).aggregate(
+            sku_lines=Count('id'),
+            on_hand_qty=Sum('inventory_qty'),
+        )
+        self.assertEqual(data['totals']['sku_lines'], expected['sku_lines'])
+        self.assertEqual(data['totals']['on_hand_qty'], expected['on_hand_qty'] or 0)
+
+    def test_prefix_detail_shop_count_matches(self):
+        """shop_count must equal len(by_shop) and match DB distinct shop count."""
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        data = get_product_prefix_detail(prefix)
+        if not data:
+            self.skipTest("No rows matched prefix")
+        self.assertEqual(data['shop_count'], len(data['by_shop']))
+
+    def test_prefix_detail_all_codes_start_with_prefix(self):
+        """Every product row's product_code must start with the given prefix."""
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        data = get_product_prefix_detail(prefix)
+        if not data:
+            self.skipTest("No rows matched prefix")
+        for p in data['products']:
+            self.assertTrue(
+                p['product_code'].upper().startswith(prefix.upper()),
+                f"product_code '{p['product_code']}' does not start with '{prefix}'"
+            )
+
+    def test_inventory_dashboard_with_prefix_200(self):
+        """Dashboard with product_prefix param must return 200."""
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        r = self.client.get(
+            reverse("inventory_dashboard") + f"?product_prefix={prefix}",
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(prefix.encode(), r.content)
+
+    def test_inventory_dashboard_with_nonexistent_prefix_200(self):
+        """Dashboard with unmatched prefix must still return 200 (shows warning)."""
+        r = self.client.get(
+            reverse("inventory_dashboard") + "?product_prefix=XXXXNOTFOUND",
+            follow=True,
+        )
+        self.assertEqual(r.status_code, 200)
 
     def test_shop_detail_inventory_partial_with_shop(self):
         shop = self._first_shop()
