@@ -209,13 +209,20 @@ class SaleDetailImportTest(SnapshotTestCase):
         rows = data['by_category']
         self.assertIsInstance(rows, list)
         if rows:
-            grp = rows[0]
-            for field in ('l1', 'rows', 'subtotal'):
-                self.assertIn(field, grp, f"Missing by_category cat_groups field '{field}'")
-            if grp['rows']:
-                row = grp['rows'][0]
-                for field in ('category_l1', 'category_l2', 'qty', 'amount', 'lines'):
-                    self.assertIn(field, row, f"Missing by_category L2 row field '{field}'")
+            # by_category is Brand→L1→L2→L3 (_build_brand_cat_groups structure)
+            br_grp = rows[0]
+            for field in ('brand', 'l1_groups', 'subtotal'):
+                self.assertIn(field, br_grp, f"Missing by_category brand group field '{field}'")
+            if br_grp['l1_groups']:
+                l1_grp = br_grp['l1_groups'][0]
+                self.assertIn('l1', l1_grp)
+                if l1_grp['l2_groups']:
+                    l2_grp = l1_grp['l2_groups'][0]
+                    self.assertIn('l2', l2_grp)
+                    if l2_grp['rows']:
+                        row = l2_grp['rows'][0]
+                        for field in ('category_l1', 'category_l2', 'category_l3', 'qty', 'amount', 'lines'):
+                            self.assertIn(field, row, f"Missing by_category L3 row field '{field}'")
 
     def test_product_tab_shop(self):
         data = get_product_tab('shop')
@@ -332,21 +339,22 @@ class SaleDetailImportTest(SnapshotTestCase):
         })
 
     def test_snapshot_product_category(self):
+        # by_category is Brand→L1→L2→L3 (_build_brand_cat_groups structure)
         data = get_product_tab('category')
-        cat_groups = data.get('by_category', [])
-        all_l2 = [r for grp in cat_groups for r in grp.get('rows', [])]
+        brand_groups = data.get('by_category', [])
+        all_l1 = [l1g for br in brand_groups for l1g in br.get('l1_groups', [])]
         self.assert_snapshot("product_category", {
-            "l1_count": len(cat_groups),
-            "l2_count": len(all_l2),
-            "l1_categories": sorted(grp.get('l1', '') for grp in cat_groups),
+            "brand_count": len(brand_groups),
+            "l1_count": len(all_l1),
+            "brands": sorted(br.get('brand', '') for br in brand_groups),
             "by_category": [
                 {
-                    "l1": grp.get('l1'),
-                    "l2_count": len(grp.get('rows', [])),
-                    "subtotal_qty": int((grp.get('subtotal') or {}).get('qty') or 0),
-                    "subtotal_amount": float((grp.get('subtotal') or {}).get('amount') or 0),
+                    "brand": br.get('brand'),
+                    "l1_count": len(br.get('l1_groups', [])),
+                    "subtotal_qty": int((br.get('subtotal') or {}).get('qty') or 0),
+                    "subtotal_amount": float((br.get('subtotal') or {}).get('amount') or 0),
                 }
-                for grp in cat_groups
+                for br in brand_groups
             ],
         })
 

@@ -23,7 +23,9 @@
             <th>Product Name</th>
             <th>Brand</th>
             <th>Campaign</th>
-            <th>Category</th>
+            <th>Category L1</th>
+            <th>Category L2</th>
+            <th>Category L3</th>
             <th>Year</th>
             <th>Season</th>
             <th class="text-end">Qty (pcs)</th>
@@ -41,7 +43,9 @@
         <td>{{ r.product_name|default:"—" }}</td>
         <td>{{ r.brand|default:"—" }}</td>
         <td class="text-muted" style="font-size:.80rem;">{% if r.campaign %}{{ r.campaign }}{% else %}—{% endif %}</td>
-        <td>{{ r.category_l1|default:"—" }}</td>
+        <td style="font-size:.80rem;">{{ r.category_l1|cat_name }}</td>
+        <td style="font-size:.80rem;">{{ r.category_l2|cat_name }}</td>
+        <td style="font-size:.80rem;">{{ r.category_l3|cat_name }}</td>
         <td>{{ r.year|default:"—" }}</td>
         <td>{{ r.season|default:"—" }}</td>
         <td class="text-end fw-semibold">{{ r.qty|default:0 }}</td>
