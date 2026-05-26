@@ -1780,7 +1780,8 @@ def _build_mismatch_ws(wb, data, key, title, hf, font, align):
 def _build_zalo_ws(wb, data, key, title, hf, font, align):
     ws = wb.create_sheet(title)
     _cnv_hdr(ws, ["CNV ID", "Phone", "Full Name", "Level", "Email",
-                  "Reg Date", "Points", "Zalo App ID", "Zalo OA ID", "In POS"], hf, font, align)
+                  "Reg Date", "Points", "Zalo App ID", "Zalo OA ID", "In POS", "Register Store"],
+             hf, font, align)
     for c in (data.get(key) or []):
         rd = c.get("cnv_created_at")
         ws.append([
@@ -1794,8 +1795,9 @@ def _build_zalo_ws(wb, data, key, title, hf, font, align):
             c.get("zalo_app_id", "") or "",
             c.get("zalo_oa_id", "") or "",
             "Yes" if c.get("in_pos") else "No",
+            c.get("registration_store") or "",
         ])
-    for col, w in zip("ABCDEFGHIJ", [14, 14, 22, 10, 28, 12, 10, 20, 20, 8]):
+    for col, w in zip("ABCDEFGHIJK", [14, 14, 22, 10, 28, 12, 10, 20, 20, 8, 28]):
         ws.column_dimensions[col].width = w
 
 
