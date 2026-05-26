@@ -1,0 +1,588 @@
+{% load custom_filters perm_tags %}
+{% comment %}
+Lazy-loaded body for a single shop card in the By Shop tab.
+Context: data (keys: by_month/year/week/by_sales_season/by_product_season/by_vip_grade/by_brand/
+                      by_category/by_product/campaign_groups/top_by_brand/top_by_campaign/overview),
+         currency, shop_name, start_date, end_date, shop_group.
+{% endcomment %}
+
+{% if not data %}
+<div class="text-muted text-center py-3 small">No data for this shop in the selected period.</div>
+{% else %}
+
+{# ── 5 Overview sections (expand/collapse) ── #}
+<div class="mb-2">
+
+    {# 1. By Category #}
+    <details class="mb-1 border rounded">
+        <summary style="cursor:pointer;padding:6px 10px;background:rgba(var(--primary-rgb),.07);
+                        border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+            <span class="fw-semibold" style="font-size:.85rem;">
+                <i class="bi bi-grid-3x3-gap text-primary me-1"></i>By Category
+            </span>
+            <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+        </summary>
+        <div class="p-2">
+            {% if data.by_category %}
+            {% with cat_groups=data.by_category %}
+            {% include "product/tabs/_cat_drilldown.html" %}
+            {% endwith %}
+            {% else %}<p class="text-muted small text-center py-2 mb-0">No category data.</p>{% endif %}
+        </div>
+    </details>
+
+    {# 2. By Campaign #}
+    <details class="mb-1 border rounded">
+        <summary style="cursor:pointer;padding:6px 10px;background:rgba(var(--primary-rgb),.07);
+                        border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+            <span class="fw-semibold" style="font-size:.85rem;">
+                <i class="bi bi-flag text-primary me-1"></i>By Campaign
+            </span>
+            <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+        </summary>
+        <div class="p-2">
+            {% if data.campaign_groups %}
+            {% with campaign_groups=data.campaign_groups %}
+            {% include "product/tabs/_campaign_drilldown.html" %}
+            {% endwith %}
+            {% else %}<p class="text-muted small text-center py-2 mb-0">No campaign data. Configure campaigns at <a href="{% url 'manage_product_campaigns' %}">manage campaigns</a>.</p>{% endif %}
+        </div>
+    </details>
+
+    {# 3. Top Products (50) #}
+    <details class="mb-1 border rounded">
+        <summary style="cursor:pointer;padding:6px 10px;background:rgba(var(--primary-rgb),.07);
+                        border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+            <span class="fw-semibold" style="font-size:.85rem;">
+                <i class="bi bi-list-ol text-primary me-1"></i>Top Products
+                {% if data.by_product %}<span class="badge bg-secondary ms-1" style="font-size:.70rem;">{{ data.by_product|length }}</span>{% endif %}
+            </span>
+            <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+        </summary>
+        <div class="p-1">
+            {% if data.by_product %}
+            <div class="table-responsive" style="font-size:.78rem;">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead style="background:var(--primary);color:#fff;font-size:.75rem;">
+                    <tr>
+                        <th style="width:3%;">#</th>
+                        <th style="width:12%;">Code</th>
+                        <th>Product Name</th>
+                        <th>Brand</th>
+                        <th>Campaign</th>
+                        <th>Cat L1</th><th>Cat L2</th><th>Cat L3</th>
+                        <th>Year</th><th>Season</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Tag Amt ({{ currency }})</th>
+                        <th class="text-end">Sales Amt ({{ currency }})</th>
+                        <th class="text-end">Settlement ({{ currency }})</th>
+                        <th class="text-end">Disc %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in data.by_product %}
+                <tr>
+                    <td class="text-muted">{{ forloop.counter }}</td>
+                    <td class="text-muted" style="font-size:.72rem;white-space:nowrap;">{{ p.product_code|default:"—" }}</td>
+                    <td>{{ p.product_name|default:"—"|truncatechars:35 }}</td>
+                    <td class="text-muted" style="white-space:nowrap;">{{ p.brand|default:"—" }}</td>
+                    <td class="text-muted" style="font-size:.72rem;">{% if p.campaign %}{{ p.campaign }}{% else %}—{% endif %}</td>
+                    <td class="text-muted" style="font-size:.72rem;">{{ p.category_l1|cat_name }}</td>
+                    <td class="text-muted" style="font-size:.72rem;">{{ p.category_l2|cat_name }}</td>
+                    <td class="text-muted" style="font-size:.72rem;">{{ p.category_l3|cat_name }}</td>
+                    <td class="text-muted">{{ p.year|default:"—" }}</td>
+                    <td class="text-muted">{{ p.season|default:"—" }}</td>
+                    <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd text-muted">{{ p.tag_amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ p.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}<p class="text-muted small text-center py-2 mb-0">No product data.</p>{% endif %}
+        </div>
+    </details>
+
+    {# 4. Top by Campaign (50/campaign) #}
+    <details class="mb-1 border rounded">
+        <summary style="cursor:pointer;padding:6px 10px;background:rgba(var(--primary-rgb),.07);
+                        border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+            <span class="fw-semibold" style="font-size:.85rem;">
+                <i class="bi bi-flag text-primary me-1"></i>Top by Campaign
+            </span>
+            <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+        </summary>
+        <div class="p-1">
+            {% if data.top_by_campaign %}
+            {% for cg in data.top_by_campaign %}
+            <div class="card mb-2 border">
+                <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+                     style="background:rgba(var(--primary-rgb),.10);cursor:pointer;"
+                     data-bs-toggle="collapse"
+                     data-bs-target="#sctbc-{{ forloop.counter }}-{{ shop_name|slugify }}"
+                     aria-expanded="false">
+                    <strong style="font-size:.85rem;">
+                        <i class="bi bi-flag me-1 text-primary"></i>
+                        {% if cg.campaign %}{{ cg.campaign }}{% else %}<em>Not Assigned</em>{% endif %}
+                    </strong>
+                    <small class="text-muted">
+                        {{ cg.top_products|length }} products &nbsp;|&nbsp;
+                        Total: {{ cg.total_amount|floatformat:0|vnd }}
+                        &nbsp;<i class="bi bi-chevron-down ms-1"></i>
+                    </small>
+                </div>
+                <div class="collapse" id="sctbc-{{ forloop.counter }}-{{ shop_name|slugify }}">
+                    <div class="table-responsive p-1">
+                    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.78rem;">
+                        <thead style="background:var(--primary);color:#fff;font-size:.75rem;">
+                            <tr>
+                                <th style="width:3%;">#</th>
+                                <th style="width:12%;">Code</th>
+                                <th>Product Name</th>
+                                <th>Brand</th>
+                                <th>Cat L1</th><th>Cat L2</th><th>Cat L3</th>
+                                <th class="text-end">Qty</th>
+                                <th class="text-end">Tag Amt ({{ currency }})</th>
+                                <th class="text-end">Sales Amt ({{ currency }})</th>
+                                <th class="text-end">Settlement ({{ currency }})</th>
+                                <th class="text-end">Disc %</th>
+                                <th class="text-end">Lines</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for p in cg.top_products %}
+                        <tr>
+                            <td class="text-muted">{{ forloop.counter }}</td>
+                            <td class="text-muted" style="font-size:.71rem;white-space:nowrap;">{{ p.product_code|default:"—" }}</td>
+                            <td>{{ p.product_name|default:"—"|truncatechars:35 }}</td>
+                            <td class="text-muted" style="white-space:nowrap;">{{ p.brand }}</td>
+                            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l1|cat_name }}</td>
+                            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l2|cat_name }}</td>
+                            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l3|cat_name }}</td>
+                            <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
+                            <td class="text-end amount-vnd text-muted">{{ p.tag_amount|default:0|vnd }}</td>
+                            <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
+                            <td class="text-end amount-vnd">{{ p.settlement|default:0|vnd }}</td>
+                            <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">
+                                {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %}
+                            </td>
+                            <td class="text-end text-muted">{{ p.lines|default:0 }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}<p class="text-muted small text-center py-2 mb-0">No campaign data.</p>{% endif %}
+        </div>
+    </details>
+
+    {# 5. Top by Brand (50/brand) #}
+    <details class="mb-1 border rounded">
+        <summary style="cursor:pointer;padding:6px 10px;background:rgba(var(--orange-rgb),.08);
+                        border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+            <span class="fw-semibold" style="font-size:.85rem;">
+                <i class="bi bi-tag text-warning me-1"></i>Top by Brand
+            </span>
+            <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+        </summary>
+        <div class="p-1">
+            {% if data.top_by_brand %}
+            {% for br in data.top_by_brand %}
+            <div class="card mb-2 border">
+                <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+                     style="background:rgba(var(--orange-rgb),.10);cursor:pointer;"
+                     data-bs-toggle="collapse"
+                     data-bs-target="#sctbb-{{ forloop.counter }}-{{ shop_name|slugify }}"
+                     aria-expanded="false">
+                    <strong style="font-size:.85rem;">
+                        <i class="bi bi-tag me-1 text-warning"></i>{{ br.brand }}
+                    </strong>
+                    <small class="text-muted">
+                        {{ br.top_products|length }} products &nbsp;|&nbsp;
+                        Total: {{ br.total_amount|floatformat:0|vnd }}
+                        &nbsp;<i class="bi bi-chevron-down ms-1"></i>
+                    </small>
+                </div>
+                <div class="collapse" id="sctbb-{{ forloop.counter }}-{{ shop_name|slugify }}">
+                    <div class="table-responsive p-1">
+                    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.78rem;">
+                        <thead style="background:var(--primary);color:#fff;font-size:.75rem;">
+                            <tr>
+                                <th style="width:3%;">#</th>
+                                <th style="width:12%;">Code</th>
+                                <th>Product Name</th>
+                                <th>Campaign</th>
+                                <th>Cat L1</th><th>Cat L2</th><th>Cat L3</th>
+                                <th class="text-end">Qty</th>
+                                <th class="text-end">Tag Amt ({{ currency }})</th>
+                                <th class="text-end">Sales Amt ({{ currency }})</th>
+                                <th class="text-end">Settlement ({{ currency }})</th>
+                                <th class="text-end">Disc %</th>
+                                <th class="text-end">Lines</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for p in br.top_products %}
+                        <tr>
+                            <td class="text-muted">{{ forloop.counter }}</td>
+                            <td class="text-muted" style="font-size:.71rem;white-space:nowrap;">{{ p.product_code|default:"—" }}</td>
+                            <td>{{ p.product_name|default:"—"|truncatechars:35 }}</td>
+                            <td class="text-muted" style="font-size:.72rem;">{% if p.campaign %}{{ p.campaign }}{% else %}—{% endif %}</td>
+                            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l1|cat_name }}</td>
+                            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l2|cat_name }}</td>
+                            <td class="text-muted" style="font-size:.72rem;">{{ p.category_l3|cat_name }}</td>
+                            <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
+                            <td class="text-end amount-vnd text-muted">{{ p.tag_amount|default:0|vnd }}</td>
+                            <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
+                            <td class="text-end amount-vnd">{{ p.settlement|default:0|vnd }}</td>
+                            <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">
+                                {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %}
+                            </td>
+                            <td class="text-end text-muted">{{ p.lines|default:0 }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}<p class="text-muted small text-center py-2 mb-0">No brand data.</p>{% endif %}
+        </div>
+    </details>
+
+</div>{# /overview sections #}
+
+{# ── Period / Grade / Brand drilldown mini-tabs ── #}
+<ul class="nav nav-tabs mb-0 mt-3" role="tablist" style="font-size:.80rem;flex-wrap:wrap;"
+    id="shopCardTabs-{{ shop_name|slugify }}">
+    <li class="nav-item"><button class="nav-link active py-1 px-2" data-bs-toggle="tab"
+        data-bs-target="#sct-month-{{ shop_name|slugify }}" type="button">
+        <i class="bi bi-calendar-month"></i> By Month</button></li>
+    <li class="nav-item"><button class="nav-link py-1 px-2" data-bs-toggle="tab"
+        data-bs-target="#sct-year-{{ shop_name|slugify }}" type="button">
+        <i class="bi bi-calendar"></i> By Year</button></li>
+    <li class="nav-item"><button class="nav-link py-1 px-2" data-bs-toggle="tab"
+        data-bs-target="#sct-week-{{ shop_name|slugify }}" type="button">
+        <i class="bi bi-calendar-week"></i> By Week</button></li>
+    <li class="nav-item"><button class="nav-link py-1 px-2" data-bs-toggle="tab"
+        data-bs-target="#sct-season-{{ shop_name|slugify }}" type="button">
+        <i class="bi bi-calendar-range"></i> By Season</button></li>
+    <li class="nav-item"><button class="nav-link py-1 px-2" data-bs-toggle="tab"
+        data-bs-target="#sct-ps-{{ shop_name|slugify }}" type="button">
+        <i class="bi bi-tags"></i> By Product Season</button></li>
+    <li class="nav-item"><button class="nav-link py-1 px-2" data-bs-toggle="tab"
+        data-bs-target="#sct-vip-{{ shop_name|slugify }}" type="button">
+        <i class="bi bi-award"></i> By VIP Grade</button></li>
+    <li class="nav-item"><button class="nav-link py-1 px-2" data-bs-toggle="tab"
+        data-bs-target="#sct-brand-{{ shop_name|slugify }}" type="button">
+        <i class="bi bi-tag"></i> By Brand</button></li>
+</ul>
+
+<div class="tab-content border border-top-0 rounded-bottom p-2" style="max-height:680px;overflow-y:auto;">
+
+    {# ── By Month ── #}
+    <div class="tab-pane fade show active" id="sct-month-{{ shop_name|slugify }}" role="tabpanel">
+        {% if data.by_month %}
+        <div class="table-responsive mb-2" style="max-height:200px;overflow-y:auto;">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                <thead style="background:var(--secondary);color:#fff;position:sticky;top:0;z-index:2;">
+                    <tr><th>Month</th><th class="text-end">Qty</th>
+                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                    <th class="text-end">Disc %</th><th class="text-end">Lines</th></tr>
+                </thead>
+                <tbody>
+                {% for m in data.by_month %}
+                <tr>
+                    <td>{{ m.label }}</td>
+                    <td class="text-end fw-semibold">{{ m.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd">{{ m.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ m.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if m.disc_pct and m.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if m.disc_pct is not None %}{{ m.disc_pct }}%{% else %}—{% endif %}</td>
+                    <td class="text-end text-muted">{{ m.lines|default:0 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% for m in data.by_month %}
+        <div class="card mb-1 border" style="font-size:.78rem;">
+            <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                 style="background:rgba(var(--primary-rgb),.08);cursor:pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#scm-{{ shop_name|slugify }}-{{ forloop.counter }}" aria-expanded="false">
+                <span class="fw-semibold">{{ m.label }}</span>
+                <small class="text-muted">Qty:{{ m.qty|default:0 }} | {{ m.amount|default:0|vnd }} | {% if m.disc_pct is not None %}{{ m.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+            </div>
+            <div class="collapse" id="scm-{{ shop_name|slugify }}-{{ forloop.counter }}">
+                <div class="p-1">{% with cat_groups=m.cat_groups top_products=m.top_products campaign_groups=m.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}<div class="text-muted text-center py-3 small">No monthly data.</div>{% endif %}
+    </div>
+
+    {# ── By Year ── #}
+    <div class="tab-pane fade" id="sct-year-{{ shop_name|slugify }}" role="tabpanel">
+        {% if data.by_year %}
+        <div class="table-responsive mb-2">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                <thead style="background:var(--secondary);color:#fff;">
+                    <tr><th>Year</th><th class="text-end">Qty</th>
+                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                    <th class="text-end">Disc %</th><th class="text-end">Lines</th></tr>
+                </thead>
+                <tbody>
+                {% for y in data.by_year %}
+                <tr>
+                    <td>{{ y.label }}</td>
+                    <td class="text-end fw-semibold">{{ y.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd">{{ y.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ y.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if y.disc_pct and y.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if y.disc_pct is not None %}{{ y.disc_pct }}%{% else %}—{% endif %}</td>
+                    <td class="text-end text-muted">{{ y.lines|default:0 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% for y in data.by_year %}
+        <div class="card mb-1 border" style="font-size:.78rem;">
+            <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                 style="background:rgba(var(--primary-rgb),.08);cursor:pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#scy-{{ shop_name|slugify }}-{{ forloop.counter }}" aria-expanded="false">
+                <span class="fw-semibold">{{ y.label }}</span>
+                <small class="text-muted">Qty:{{ y.qty|default:0 }} | {{ y.amount|default:0|vnd }} | {% if y.disc_pct is not None %}{{ y.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+            </div>
+            <div class="collapse" id="scy-{{ shop_name|slugify }}-{{ forloop.counter }}">
+                <div class="p-1">{% with cat_groups=y.cat_groups top_products=y.top_products campaign_groups=y.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}<div class="text-muted text-center py-3 small">No yearly data.</div>{% endif %}
+    </div>
+
+    {# ── By Week ── #}
+    <div class="tab-pane fade" id="sct-week-{{ shop_name|slugify }}" role="tabpanel">
+        {% if data.by_week %}
+        <div class="table-responsive mb-2" style="max-height:200px;overflow-y:auto;">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                <thead style="background:var(--secondary);color:#fff;position:sticky;top:0;z-index:2;">
+                    <tr><th>Week</th><th class="text-end">Qty</th>
+                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                    <th class="text-end">Disc %</th><th class="text-end">Lines</th></tr>
+                </thead>
+                <tbody>
+                {% for w in data.by_week %}
+                <tr>
+                    <td>{{ w.label }}</td>
+                    <td class="text-end fw-semibold">{{ w.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd">{{ w.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ w.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if w.disc_pct and w.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if w.disc_pct is not None %}{{ w.disc_pct }}%{% else %}—{% endif %}</td>
+                    <td class="text-end text-muted">{{ w.lines|default:0 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% for w in data.by_week %}
+        <div class="card mb-1 border" style="font-size:.78rem;">
+            <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                 style="background:rgba(var(--orange-rgb),.06);cursor:pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#scw-{{ shop_name|slugify }}-{{ forloop.counter }}" aria-expanded="false">
+                <span class="fw-semibold">{{ w.label }}</span>
+                <small class="text-muted">Qty:{{ w.qty|default:0 }} | {{ w.amount|default:0|vnd }} | {% if w.disc_pct is not None %}{{ w.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+            </div>
+            <div class="collapse" id="scw-{{ shop_name|slugify }}-{{ forloop.counter }}">
+                <div class="p-1">{% with cat_groups=w.cat_groups top_products=w.top_products campaign_groups=w.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}<div class="text-muted text-center py-3 small">No weekly data.</div>{% endif %}
+    </div>
+
+    {# ── By Sales Season ── #}
+    <div class="tab-pane fade" id="sct-season-{{ shop_name|slugify }}" role="tabpanel">
+        {% if data.by_sales_season %}
+        <div class="table-responsive mb-2">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                <thead style="background:var(--secondary);color:#fff;">
+                    <tr><th>Season</th><th class="text-end">Qty</th>
+                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                    <th class="text-end">Disc %</th><th class="text-end">Lines</th></tr>
+                </thead>
+                <tbody>
+                {% for s in data.by_sales_season %}
+                <tr>
+                    <td>{{ s.label }}</td>
+                    <td class="text-end fw-semibold">{{ s.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd">{{ s.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ s.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if s.disc_pct and s.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if s.disc_pct is not None %}{{ s.disc_pct }}%{% else %}—{% endif %}</td>
+                    <td class="text-end text-muted">{{ s.lines|default:0 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% for s in data.by_sales_season %}
+        <div class="card mb-1 border" style="font-size:.78rem;">
+            <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                 style="background:rgba(var(--primary-rgb),.06);cursor:pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#scs-{{ shop_name|slugify }}-{{ forloop.counter }}" aria-expanded="false">
+                <span class="fw-semibold">{{ s.label }}</span>
+                <small class="text-muted">Qty:{{ s.qty|default:0 }} | {{ s.amount|default:0|vnd }} | {% if s.disc_pct is not None %}{{ s.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+            </div>
+            <div class="collapse" id="scs-{{ shop_name|slugify }}-{{ forloop.counter }}">
+                <div class="p-1">{% with cat_groups=s.cat_groups top_products=s.top_products campaign_groups=s.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}<div class="text-muted text-center py-3 small">No sales season data.</div>{% endif %}
+    </div>
+
+    {# ── By Product Season ── #}
+    <div class="tab-pane fade" id="sct-ps-{{ shop_name|slugify }}" role="tabpanel">
+        {% if data.by_product_season %}
+        <div class="table-responsive mb-2">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                <thead style="background:var(--secondary);color:#fff;">
+                    <tr><th>Product Season</th><th class="text-end">Qty</th>
+                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                    <th class="text-end">Disc %</th><th class="text-end">Lines</th></tr>
+                </thead>
+                <tbody>
+                {% for p in data.by_product_season %}
+                <tr>
+                    <td>{{ p.label }}</td>
+                    <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ p.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %}</td>
+                    <td class="text-end text-muted">{{ p.lines|default:0 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% for p in data.by_product_season %}
+        <div class="card mb-1 border" style="font-size:.78rem;">
+            <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                 style="background:rgba(var(--orange-rgb),.06);cursor:pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#scps-{{ shop_name|slugify }}-{{ forloop.counter }}" aria-expanded="false">
+                <span class="fw-semibold">{{ p.label }}</span>
+                <small class="text-muted">Qty:{{ p.qty|default:0 }} | {{ p.amount|default:0|vnd }} | {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+            </div>
+            <div class="collapse" id="scps-{{ shop_name|slugify }}-{{ forloop.counter }}">
+                <div class="p-1">{% with cat_groups=p.cat_groups top_products=p.top_products campaign_groups=p.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}<div class="text-muted text-center py-3 small">No product season data.</div>{% endif %}
+    </div>
+
+    {# ── By VIP Grade ── #}
+    <div class="tab-pane fade" id="sct-vip-{{ shop_name|slugify }}" role="tabpanel">
+        {% if data.by_vip_grade %}
+        <div class="table-responsive mb-2">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                <thead style="background:var(--secondary);color:#fff;">
+                    <tr><th>VIP Grade</th><th class="text-end">Qty</th>
+                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                    <th class="text-end">Disc %</th><th class="text-end">Lines</th></tr>
+                </thead>
+                <tbody>
+                {% for g in data.by_vip_grade %}
+                <tr>
+                    <td><strong>{{ g.grade }}</strong></td>
+                    <td class="text-end fw-semibold">{{ g.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd">{{ g.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ g.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if g.disc_pct and g.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if g.disc_pct is not None %}{{ g.disc_pct }}%{% else %}—{% endif %}</td>
+                    <td class="text-end text-muted">{{ g.lines|default:0 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% for g in data.by_vip_grade %}
+        <div class="card mb-1 border" style="font-size:.78rem;">
+            <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                 style="background:rgba(var(--primary-rgb),.06);cursor:pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#scvip-{{ shop_name|slugify }}-{{ forloop.counter }}" aria-expanded="false">
+                <span class="fw-semibold"><i class="bi bi-award me-1"></i>{{ g.grade }}</span>
+                <small class="text-muted">Qty:{{ g.qty|default:0 }} | {{ g.amount|default:0|vnd }} | {% if g.disc_pct is not None %}{{ g.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+            </div>
+            <div class="collapse" id="scvip-{{ shop_name|slugify }}-{{ forloop.counter }}">
+                <div class="p-1">{% with cat_groups=g.cat_groups top_products=g.top_products campaign_groups=g.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}<div class="text-muted text-center py-3 small">No VIP grade data.</div>{% endif %}
+    </div>
+
+    {# ── By Brand ── #}
+    <div class="tab-pane fade" id="sct-brand-{{ shop_name|slugify }}" role="tabpanel">
+        {% if data.by_brand %}
+        <div class="table-responsive mb-2">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.79rem;">
+                <thead style="background:var(--secondary);color:#fff;">
+                    <tr><th>Brand</th><th class="text-end">Qty</th>
+                    <th class="text-end">Sales Amt</th><th class="text-end">Settlement</th>
+                    <th class="text-end">Disc %</th><th class="text-end">Lines</th></tr>
+                </thead>
+                <tbody>
+                {% for b in data.by_brand %}
+                <tr>
+                    <td><strong>{{ b.brand|default:"—" }}</strong></td>
+                    <td class="text-end fw-semibold">{{ b.qty|default:0 }}</td>
+                    <td class="text-end amount-vnd">{{ b.amount|default:0|vnd }}</td>
+                    <td class="text-end amount-vnd">{{ b.settlement|default:0|vnd }}</td>
+                    <td class="text-end{% if b.disc_pct and b.disc_pct > 20 %} text-danger{% endif %}">
+                        {% if b.disc_pct is not None %}{{ b.disc_pct }}%{% else %}—{% endif %}</td>
+                    <td class="text-end text-muted">{{ b.lines|default:0 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% for b in data.by_brand %}
+        <div class="card mb-1 border" style="font-size:.78rem;">
+            <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center"
+                 style="background:rgba(var(--orange-rgb),.06);cursor:pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#scbr-{{ shop_name|slugify }}-{{ forloop.counter }}" aria-expanded="false">
+                <span class="fw-semibold"><i class="bi bi-tag me-1"></i>{{ b.brand|default:"—" }}</span>
+                <small class="text-muted">Qty:{{ b.qty|default:0 }} | {{ b.amount|default:0|vnd }} | {% if b.disc_pct is not None %}{{ b.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
+            </div>
+            <div class="collapse" id="scbr-{{ shop_name|slugify }}-{{ forloop.counter }}">
+                <div class="p-1">{% with cat_groups=b.cat_groups top_products=b.top_products campaign_groups=b.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}<div class="text-muted text-center py-3 small">No brand data.</div>{% endif %}
+    </div>
+
+</div>{# /tab-content #}
+
+{% endif %}{# /if data #}

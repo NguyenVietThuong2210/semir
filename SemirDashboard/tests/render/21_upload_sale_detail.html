@@ -511,7 +511,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="SmwCSAcbVtD1mpkb2Lzw6xZn9MxnRcuOhaAvibGDPi1TY1z6SSgJejOG3FLz0HUH">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="bK95Pc4UZmWzju8fiZigYtkohDmM06cTzDpApcwAk2F3fceSWklFWK5JgU60RfOP">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -784,7 +784,7 @@
         </div>
 
         <form method="post" enctype="multipart/form-data">
-          <input type="hidden" name="csrfmiddlewaretoken" value="SmwCSAcbVtD1mpkb2Lzw6xZn9MxnRcuOhaAvibGDPi1TY1z6SSgJejOG3FLz0HUH">
+          <input type="hidden" name="csrfmiddlewaretoken" value="bK95Pc4UZmWzju8fiZigYtkohDmM06cTzDpApcwAk2F3fceSWklFWK5JgU60RfOP">
           <div class="mb-3">
             <label for="id_file" class="form-label">
               <i class="bi bi-file-earmark-spreadsheet"></i> Select File
@@ -870,7 +870,7 @@
         </div>
 
         <form method="post" action="/upload/sale-detail/" enctype="multipart/form-data">
-          <input type="hidden" name="csrfmiddlewaretoken" value="SmwCSAcbVtD1mpkb2Lzw6xZn9MxnRcuOhaAvibGDPi1TY1z6SSgJejOG3FLz0HUH">
+          <input type="hidden" name="csrfmiddlewaretoken" value="bK95Pc4UZmWzju8fiZigYtkohDmM06cTzDpApcwAk2F3fceSWklFWK5JgU60RfOP">
           <div class="mb-3">
             <label for="id_file" class="form-label">
               <i class="bi bi-file-earmark-spreadsheet"></i> Select File
@@ -1022,6 +1022,157 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
+
+
+<script type="application/json" id="__prdUrl">"/products/campaigns/"</script>
+<script type="application/json" id="__prdCsrf">"bK95Pc4UZmWzju8fiZigYtkohDmM06cTzDpApcwAk2F3fceSWklFWK5JgU60RfOP"</script>
+<script>
+var PRD_URL  = null;
+var PRD_CSRF = null;
+var _prdList = [];
+try {
+  PRD_URL  = JSON.parse(document.getElementById('__prdUrl').textContent);
+  PRD_CSRF = JSON.parse(document.getElementById('__prdCsrf').textContent);
+} catch(e) {
+  console.error('Product campaigns init error:', e);
+}
+
+function _prdEsc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _prdAlert(id, msg, type) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'alert alert-'+(type||'danger')+' py-2';
+  el.textContent = msg;
+  el.classList.remove('d-none');
+}
+function _prdHide(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.add('d-none');
+}
+
+function _prdRender() {
+  var tbody = document.getElementById('prdCampaignTbody');
+  if (!tbody) return;
+  if (!_prdList.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No campaigns yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _prdList.map(function(c) {
+    var pfxs = (c.prefix_list && c.prefix_list.length) ? c.prefix_list : [c.prefix];
+    return '<tr class="prd-campaign-row">'
+      + '<td><strong>'+_prdEsc(c.name)+'</strong><br><small class="text-muted">'+(c.created_at||'')+'</small></td>'
+      + '<td>'+pfxs.map(function(p){ return '<code class="me-1">'+_prdEsc(p)+'</code>'; }).join('')+'</td>'
+      + '<td><small>'+_prdEsc(c.detail||'—')+'</small></td>'
+      + '<td>'
+        + '<button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="prdOpenEdit('+c.id+')" title="Edit"><i class="bi bi-pencil"></i></button>'
+        + '<button type="button" class="btn btn-sm btn-outline-danger" onclick="prdDelete('+c.id+',\''+_prdEsc(c.name).replace(/'/g,"\\'")+'\')"><i class="bi bi-trash"></i></button>'
+      + '</td></tr>';
+  }).join('');
+}
+
+function _prdLoad() {
+  if (!PRD_URL) return;
+  fetch(PRD_URL, { credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { _prdList = d.campaigns || []; _prdRender(); })
+    .catch(function(e) {
+      var tbody = document.getElementById('prdCampaignTbody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">Load error: '+e.message+'</td></tr>';
+    });
+}
+
+function _prdPost(body, onOk, onFail) {
+  if (!PRD_URL) { onFail('URL configuration error — reload the page'); return; }
+  fetch(PRD_URL, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': PRD_CSRF },
+    body: JSON.stringify(body)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    if (res && res.ok) onOk(res);
+    else onFail(res ? (res.error || 'Unknown error') : 'Empty response');
+  })
+  .catch(function(e) { onFail('Network error: ' + e.message); });
+}
+
+function prdAddSave() {
+  var name   = (document.getElementById('prdAddName').value   || '').trim();
+  var prefix = (document.getElementById('prdAddPrefix').value || '').trim();
+  var detail = (document.getElementById('prdAddDetail').value || '').trim();
+  _prdHide('prdAddAlert');
+  if (!name || !prefix) { _prdAlert('prdAddAlert', 'Name and prefix are required.'); return; }
+  var btn = document.getElementById('btnPrdAddSave');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  _prdPost(
+    { action: 'create', name: name, prefix: prefix, detail: detail },
+    function() {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modalPrdAddCampaign')).hide();
+      document.getElementById('prdAddName').value   = '';
+      document.getElementById('prdAddPrefix').value = '';
+      document.getElementById('prdAddDetail').value = '';
+      _prdLoad();
+      _prdAlert('prdCampaignAlert', 'Campaign created.', 'success');
+    },
+    function(err) {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+      _prdAlert('prdAddAlert', err);
+    }
+  );
+}
+
+function prdOpenEdit(id) {
+  var c = _prdList.find(function(x) { return x.id === id; });
+  if (!c) return;
+  document.getElementById('prdEditId').value     = c.id;
+  document.getElementById('prdEditName').value   = c.name;
+  document.getElementById('prdEditPrefix').value = c.prefix;
+  document.getElementById('prdEditDetail').value = c.detail || '';
+  _prdHide('prdEditAlert');
+  new bootstrap.Modal(document.getElementById('modalPrdEditCampaign')).show();
+}
+
+function prdEditSave() {
+  var id     = parseInt(document.getElementById('prdEditId').value, 10);
+  var name   = (document.getElementById('prdEditName').value   || '').trim();
+  var prefix = (document.getElementById('prdEditPrefix').value || '').trim();
+  var detail = (document.getElementById('prdEditDetail').value || '').trim();
+  _prdHide('prdEditAlert');
+  if (!name || !prefix) { _prdAlert('prdEditAlert', 'Name and prefix are required.'); return; }
+  var btn = document.getElementById('btnPrdEditSave');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  _prdPost(
+    { action: 'update', id: id, name: name, prefix: prefix, detail: detail },
+    function() {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modalPrdEditCampaign')).hide();
+      _prdLoad();
+      _prdAlert('prdCampaignAlert', 'Campaign updated.', 'success');
+    },
+    function(err) {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+      _prdAlert('prdEditAlert', err);
+    }
+  );
+}
+
+function prdDelete(id, name) {
+  if (!confirm('Delete campaign "' + name + '"?')) return;
+  _prdPost(
+    { action: 'delete', id: id },
+    function() { _prdLoad(); _prdAlert('prdCampaignAlert', 'Campaign deleted.', 'warning'); },
+    function(err) { alert('Delete failed: ' + err); }
+  );
+}
+
+_prdLoad();
+</script>
 
 
 </body>

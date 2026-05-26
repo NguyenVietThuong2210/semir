@@ -1,4 +1,4 @@
-"""App/analytics/product_analytics.py — Product-level sales analytics from SaleDetail."""
+﻿"""App/analytics/product_analytics.py — Product-level sales analytics from SaleDetail."""
 import logging
 from collections import OrderedDict
 
@@ -16,7 +16,7 @@ _CAMPAIGN_CACHE_KEY = 'product_campaigns_list'
 # Tabs served by product_tab AJAX endpoint
 PRODUCT_TABS = [
     'month', 'year', 'week', 'sales_season',
-    'product_season', 'vip_grade', 'brand', 'category', 'campaign', 'shop', 'product',
+    'product_season', 'vip_grade', 'brand', 'category', 'campaign', 'shop', 'shop_card', 'product',
     'top_by_brand', 'top_by_campaign',
 ]
 
@@ -145,7 +145,7 @@ def _build_cat_groups(cat_rows):
     return sorted(result, key=lambda x: -(x['subtotal']['amount'] or 0))
 
 
-def _top_products_by_period(qs, trunc_fn, period_key, top_n=10, campaigns=None):
+def _top_products_by_period(qs, trunc_fn, period_key, top_n=50, campaigns=None):
     """Query top N products per period.
     Returns ({period_val: [top_products]}, {period_val: [camp_rows]}, {period_val: {camp: [top_products]}}).
     Rows are DB-ordered by -amount within period, so first top_n seen per (period,camp) are correct.
@@ -227,7 +227,7 @@ def _top_products_by_period(qs, trunc_fn, period_key, top_n=10, campaigns=None):
     return by_period, camp_rows_by_period, top_camp
 
 
-def _top_products_by_group(qs, group_field, top_n=10, campaigns=None):
+def _top_products_by_group(qs, group_field, top_n=50, campaigns=None):
     """Query top N products per group value.
     Returns ({group_val: [top_products]}, {group_val: [camp_rows]}, {group_val: {camp: [top_products]}}).
     Rows are DB-ordered by -amount within group, so first top_n seen per (group,camp) are correct.
@@ -308,7 +308,7 @@ def _top_products_by_group(qs, group_field, top_n=10, campaigns=None):
     return by_group, camp_rows_by_group, top_camp
 
 
-def _period_with_cat(qs, trunc_fn, label_fn, period_key, top_n=10):
+def _period_with_cat(qs, trunc_fn, label_fn, period_key, top_n=50):
     """
     2 DB queries: (period × cat) + (period × product).
     Returns list of period dicts each with cat_groups + top_products.
@@ -395,7 +395,7 @@ def _sales_season_key(dt):
     return (y, code), f'{code} {y}'
 
 
-def _by_sales_season(qs, top_n=10):
+def _by_sales_season(qs, top_n=50):
     """
     Group by sales-date business season (M2-4/M5-7/M8-10/M11-1).
     Uses month-level aggregation then re-groups in Python (no extra DB query).
@@ -509,7 +509,7 @@ def _by_sales_season(qs, top_n=10):
     return result
 
 
-def _by_product_season(qs, top_n=10):
+def _by_product_season(qs, top_n=50):
     """Group by product design year+season (SaleDetail.year / season fields)."""
     rows = list(
         qs.values('year', 'season', 'category_l1', 'category_l2', 'category_l3')
@@ -606,7 +606,7 @@ def _by_product_season(qs, top_n=10):
     return result
 
 
-def _by_vip_grade(qs, top_n=10):
+def _by_vip_grade(qs, top_n=50):
     """Group by VIP grade via SaleDetail → SalesTransaction → Customer."""
     rows = list(
         qs.values('transaction__customer__vip_grade', 'category_l1', 'category_l2', 'category_l3')
@@ -669,7 +669,7 @@ def _by_vip_grade(qs, top_n=10):
     return result
 
 
-def _by_brand(qs, top_n=10):
+def _by_brand(qs, top_n=50):
     """Group by brand with category drill-down and top products."""
     rows = list(
         qs.values('brand', 'category_l1', 'category_l2', 'category_l3')
@@ -902,7 +902,7 @@ def _by_category(qs):
     return _build_brand_cat_groups(rows)
 
 
-def _by_product_campaign(qs, top_n=10):
+def _by_product_campaign(qs, top_n=50):
     """Campaign → L1 → L2 → L3 breakdown. Campaign derived from product_code prefix.
     Single DB query: includes product_name + brand so top products need no second fetch.
     Rows sorted by -amount so first top_n seen per campaign are correct top products.
@@ -1188,489 +1188,49 @@ def _group_trunc_by_shop(flat_rows, period_field, label_fn, top_by_shop=None,
 
 
 def _by_shop_full(qs):
-    """
-    Section 2: shop summary + full Section 1 per shop.
-    12 DB queries: totals(1) + year_cat+prod(2) + month_cat+prod(2) + week_cat+prod(2)
-                   + ps_cat+prod(2) + vip_prod(1) + brand_prod(1) + shop_top(1).
-    Sales season is re-grouped from month data in Python (no extra query).
-    """
-    # 1. Shop totals
-    shop_rows = list(
+    """Shop summary KPIs only — 1 DB query. Per-shop detail lazy-loaded via shop_card tab."""
+    rows = list(
         qs.values('shop_name')
         .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
                   settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
                   lines=Count('id'))
         .order_by('-amount')
     )
-    for r in shop_rows:
-        r['disc_pct'] = _disc_pct(r.get('tag_amount'), r.get('settlement'))
-        r['amount'] = float(r.get('amount') or 0)
+    for r in rows:
+        r['amount']     = float(r.get('amount') or 0)
         r['settlement'] = float(r.get('settlement') or 0)
         r['tag_amount'] = float(r.get('tag_amount') or 0)
-
-    if not shop_rows:
-        return shop_rows
-
-    campaigns = _load_campaigns()
-
-    # 2. Year × cat × shop  +  top products per year per shop
-    year_flat = list(
-        qs.annotate(year_trunc=TruncYear('sales_date'))
-        .values('shop_name', 'year_trunc', 'category_l1', 'category_l2', 'category_l3')
-        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
-                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
-                  lines=Count('id'))
-        .order_by('shop_name', '-year_trunc', 'category_l1', 'category_l2', 'category_l3')
-    )
-    tp_year_by_shop, camp_year_by_shop, tc_year_by_shop = _top_products_by_period_shop(
-        qs, TruncYear, 'year_trunc', campaigns=campaigns)
-    year_by_shop = _group_trunc_by_shop(
-        year_flat, 'year_trunc', lambda d: str(d.year) if d else '—',
-        top_by_shop=tp_year_by_shop, camp_rows_by_shop=camp_year_by_shop,
-        top_camp_by_shop=tc_year_by_shop,
-    )
-
-    # 3. Month × cat × shop  +  top products per month per shop
-    month_flat = list(
-        qs.annotate(month_trunc=TruncMonth('sales_date'))
-        .values('shop_name', 'month_trunc', 'category_l1', 'category_l2', 'category_l3')
-        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
-                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
-                  lines=Count('id'))
-        .order_by('shop_name', '-month_trunc', 'category_l1', 'category_l2', 'category_l3')
-    )
-    tp_month_by_shop, camp_month_by_shop, tc_month_by_shop = _top_products_by_period_shop(
-        qs, TruncMonth, 'month_trunc', campaigns=campaigns)
-    month_by_shop = _group_trunc_by_shop(
-        month_flat, 'month_trunc', lambda d: d.strftime('%Y-%m') if d else '—',
-        top_by_shop=tp_month_by_shop, camp_rows_by_shop=camp_month_by_shop,
-        top_camp_by_shop=tc_month_by_shop,
-    )
-
-    # Compute sales_season from month_flat (no extra DB query)
-    # Also derive top products for each sales_season from tp_month_by_shop
-    ss_shop_map: dict = {}
-    for r in month_flat:
-        sn = r.get('shop_name') or '—'
-        m = r.get('month_trunc')
-        if not m:
-            continue
-        sk, label = _sales_season_key(m)
-        if sn not in ss_shop_map:
-            ss_shop_map[sn] = OrderedDict()
-        if sk not in ss_shop_map[sn]:
-            ss_shop_map[sn][sk] = {
-                'label': label, 'qty': 0, 'amount': 0.0,
-                'settlement': 0.0, 'tag_amount': 0.0, 'lines': 0,
-                '_cat_rows': [], '_month_keys': [],
-            }
-        p = ss_shop_map[sn][sk]
-        p['qty'] += r.get('qty') or 0
-        p['amount'] += float(r.get('amount') or 0)
-        p['settlement'] += float(r.get('settlement') or 0)
-        p['tag_amount'] += float(r.get('tag_amount') or 0)
-        p['lines'] += r.get('lines') or 0
-        p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '',
-            'category_l2': r.get('category_l2') or '',
-            'category_l3': r.get('category_l3') or '',
-            'qty': r.get('qty') or 0,
-            'amount': float(r.get('amount') or 0),
-            'settlement': float(r.get('settlement') or 0),
-            'tag_amount': float(r.get('tag_amount') or 0),
-            'lines': r.get('lines') or 0,
-        })
-        mk = r.get('month_trunc')
-        if mk and mk not in p['_month_keys']:
-            p['_month_keys'].append(mk)
-
-    _so = ['M2-4', 'M5-7', 'M8-10', 'M11-1']
-    sales_season_by_shop: dict = {}
-    for sn, seasons in ss_shop_map.items():
-        lst = sorted(seasons.items(), key=lambda x: (-x[0][0], _so.index(x[0][1])))
-        result_lst = []
-        shop_month_top = tp_month_by_shop.get(sn, {})
-        shop_camp_month = camp_month_by_shop.get(sn, {})
-        for sk, p in lst:
-            p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
-            p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
-            # Merge top products + campaign rows from contributing months
-            prod_agg: dict = {}
-            camp_merge: dict = {}  # (camp,l1,l2,l3): agg_row
-            for mk in p.pop('_month_keys'):
-                for pr in shop_month_top.get(mk, []):
-                    key = pr['product_code']
-                    if key not in prod_agg:
-                        prod_agg[key] = dict(pr)
-                    else:
-                        prod_agg[key]['qty'] += pr['qty']
-                        prod_agg[key]['amount'] += pr['amount']
-                        prod_agg[key]['settlement'] += pr['settlement']
-                        prod_agg[key]['tag_amount'] += pr['tag_amount']
-                for cr in shop_camp_month.get(mk, []):
-                    ckey = (cr['campaign'], cr['category_l1'], cr['category_l2'], cr['category_l3'])
-                    if ckey not in camp_merge:
-                        camp_merge[ckey] = dict(cr)
-                    else:
-                        camp_merge[ckey]['qty'] += cr['qty']
-                        camp_merge[ckey]['amount'] += cr['amount']
-                        camp_merge[ckey]['settlement'] += cr['settlement']
-                        camp_merge[ckey]['tag_amount'] += cr['tag_amount']
-            sorted_prods = sorted(prod_agg.values(), key=lambda x: -(x.get('amount') or 0))
-            for pr in sorted_prods:
-                pr['disc_pct'] = _disc_pct(pr.get('tag_amount'), pr.get('settlement'))
-            p['top_products'] = sorted_prods[:10]
-            # Derive top N per campaign from sorted_prods (already amount-desc)
-            ss_top_by_camp: dict = {}
-            for pr in sorted_prods:
-                c = pr.get('campaign') or ''
-                ss_top_by_camp.setdefault(c, [])
-                if len(ss_top_by_camp[c]) < 10:
-                    ss_top_by_camp[c].append(pr)
-            p['campaign_groups'] = _build_campaign_groups(
-                list(camp_merge.values()), top_by_camp=ss_top_by_camp)
-            result_lst.append(p)
-        sales_season_by_shop[sn] = result_lst
-
-    # 4. Week × cat × shop  +  top products per week per shop
-    week_flat = list(
-        qs.annotate(week_trunc=TruncWeek('sales_date'))
-        .values('shop_name', 'week_trunc', 'category_l1', 'category_l2', 'category_l3')
-        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
-                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
-                  lines=Count('id'))
-        .order_by('shop_name', '-week_trunc', 'category_l1', 'category_l2', 'category_l3')
-    )
-    tp_week_by_shop, camp_week_by_shop, tc_week_by_shop = _top_products_by_period_shop(
-        qs, TruncWeek, 'week_trunc', campaigns=campaigns)
-    week_by_shop = _group_trunc_by_shop(
-        week_flat, 'week_trunc',
-        lambda d: f"W{d.strftime('%V')} {d.strftime('%Y')}" if d else '—',
-        top_by_shop=tp_week_by_shop, camp_rows_by_shop=camp_week_by_shop,
-        top_camp_by_shop=tc_week_by_shop,
-    )
-
-    # 5. Product season × cat × shop  +  top products per product_season per shop
-    ps_flat = list(
-        qs.values('shop_name', 'year', 'season', 'category_l1', 'category_l2', 'category_l3')
-        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
-                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
-                  lines=Count('id'))
-        .order_by('shop_name', '-year', 'season', 'category_l1', 'category_l2', 'category_l3')
-    )
-    ps_top_flat = list(
-        qs.values('shop_name', 'year', 'season', 'product_code', 'product_name', 'brand',
-                  'category_l1', 'category_l2', 'category_l3')
-        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
-                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'))
-        .order_by('shop_name', '-year', 'season', '-amount')
-    )
-    ps_top_by_shop: dict = {}
-    ps_top_camp_shop: dict = {}   # {sn: {key: {camp: [top_products]}}}
-    camp_agg_ps: dict = {}        # {sn: {key: {(camp,l1,l2,l3): agg_row}}}
-    for r in ps_top_flat:
-        sn   = r.get('shop_name') or '—'
-        key  = (r.get('year'), r.get('season') or '—')
-        camp = _lookup_campaign(r.get('product_code') or '', campaigns)
-        amt  = float(r.get('amount') or 0)
-        sett = float(r.get('settlement') or 0)
-        tag  = float(r.get('tag_amount') or 0)
-        l1 = r.get('category_l1') or ''
-        l2 = r.get('category_l2') or ''
-        l3 = r.get('category_l3') or ''
-
-        # ── Overall top 10 per (shop, key) ──
-        ps_top_by_shop.setdefault(sn, {}).setdefault(key, [])
-        if len(ps_top_by_shop[sn][key]) < 10:
-            entry = {
-                'product_code': r.get('product_code') or '',
-                'product_name': r.get('product_name') or '',
-                'brand': r.get('brand') or '—',
-                'category_l1': l1, 'category_l2': l2, 'category_l3': l3,
-                'qty': r.get('qty') or 0,
-                'amount': amt, 'settlement': sett, 'tag_amount': tag, 'campaign': camp,
-            }
-            entry['disc_pct'] = _disc_pct(tag, sett)
-            ps_top_by_shop[sn][key].append(entry)
-
-        # ── Top 10 per (shop, key, campaign) ──
-        ps_top_camp_shop.setdefault(sn, {}).setdefault(key, {}).setdefault(camp, [])
-        if len(ps_top_camp_shop[sn][key][camp]) < 10:
-            ce = {
-                'product_code': r.get('product_code') or '',
-                'product_name': r.get('product_name') or '',
-                'brand': r.get('brand') or '—',
-                'category_l1': l1, 'category_l2': l2, 'category_l3': l3,
-                'qty': r.get('qty') or 0,
-                'amount': amt, 'settlement': sett, 'tag_amount': tag, 'campaign': camp,
-            }
-            ce['disc_pct'] = _disc_pct(tag, sett)
-            ps_top_camp_shop[sn][key][camp].append(ce)
-
-        # ── Campaign aggregation (ALL rows) ──
-        ckey = (camp, l1, l2, l3)
-        camp_agg_ps.setdefault(sn, {}).setdefault(key, {})
-        if ckey not in camp_agg_ps[sn][key]:
-            camp_agg_ps[sn][key][ckey] = {'campaign': camp, 'category_l1': l1,
-                                           'category_l2': l2, 'category_l3': l3,
-                                           'qty': 0, 'amount': 0.0, 'settlement': 0.0,
-                                           'tag_amount': 0.0, 'lines': 0}
-        e = camp_agg_ps[sn][key][ckey]
-        e['qty'] += r.get('qty') or 0
-        e['amount'] += amt
-        e['settlement'] += sett
-        e['tag_amount'] += tag
-
-    ps_shop_map: dict = {}
-    for r in ps_flat:
-        sn = r.get('shop_name') or '—'
-        yr = r.get('year')
-        se = r.get('season') or '—'
-        key = (yr, se)
-        label = f"{yr} {se}" if yr else (se or '—')
-        if sn not in ps_shop_map:
-            ps_shop_map[sn] = OrderedDict()
-        if key not in ps_shop_map[sn]:
-            ps_shop_map[sn][key] = {
-                'label': label, 'qty': 0, 'amount': 0.0,
-                'settlement': 0.0, 'tag_amount': 0.0, 'lines': 0, '_cat_rows': [],
-            }
-        p = ps_shop_map[sn][key]
-        p['qty'] += r.get('qty') or 0
-        p['amount'] += float(r.get('amount') or 0)
-        p['settlement'] += float(r.get('settlement') or 0)
-        p['tag_amount'] += float(r.get('tag_amount') or 0)
-        p['lines'] += r.get('lines') or 0
-        p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '',
-            'category_l2': r.get('category_l2') or '',
-            'category_l3': r.get('category_l3') or '',
-            'qty': r.get('qty') or 0,
-            'amount': float(r.get('amount') or 0),
-            'settlement': float(r.get('settlement') or 0),
-            'tag_amount': float(r.get('tag_amount') or 0),
-            'lines': r.get('lines') or 0,
-        })
-    ps_by_shop: dict = {}
-    for sn, seasons in ps_shop_map.items():
-        lst = []
-        shop_ps_top      = ps_top_by_shop.get(sn, {})
-        shop_camp_ps     = camp_agg_ps.get(sn, {})
-        shop_ps_top_camp = ps_top_camp_shop.get(sn, {})
-        for key, p in seasons.items():
-            p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
-            p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
-            p['top_products'] = shop_ps_top.get(key, [])
-            camp_rows = list(shop_camp_ps.get(key, {}).values())
-            p['campaign_groups'] = _build_campaign_groups(
-                camp_rows, top_by_camp=shop_ps_top_camp.get(key))
-            lst.append(p)
-        ps_by_shop[sn] = lst
-
-    # 6. VIP Grade × cat × shop  +  top products per grade per shop
-    tp_vip_by_shop, camp_vip_by_shop, tc_vip_by_shop = _top_products_by_group_shop(
-        qs, 'transaction__customer__vip_grade', campaigns=campaigns)
-    vip_flat = list(
-        qs.values('shop_name', 'transaction__customer__vip_grade', 'category_l1', 'category_l2', 'category_l3')
-        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
-                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
-                  lines=Count('id'))
-        .order_by('shop_name', 'transaction__customer__vip_grade', 'category_l1', 'category_l2', 'category_l3')
-    )
-    vip_shop_map: dict = {}
-    for r in vip_flat:
-        sn = r.get('shop_name') or '—'
-        grade = r.get('transaction__customer__vip_grade') or 'No Grade'
-        if sn not in vip_shop_map:
-            vip_shop_map[sn] = {}
-        if grade not in vip_shop_map[sn]:
-            vip_shop_map[sn][grade] = {
-                'grade': grade, 'qty': 0, 'amount': 0.0,
-                'settlement': 0.0, 'tag_amount': 0.0, 'lines': 0, '_cat_rows': [],
-            }
-        p = vip_shop_map[sn][grade]
-        p['qty'] += r.get('qty') or 0
-        p['amount'] += float(r.get('amount') or 0)
-        p['settlement'] += float(r.get('settlement') or 0)
-        p['tag_amount'] += float(r.get('tag_amount') or 0)
-        p['lines'] += r.get('lines') or 0
-        p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '',
-            'category_l2': r.get('category_l2') or '',
-            'category_l3': r.get('category_l3') or '',
-            'qty': r.get('qty') or 0, 'amount': float(r.get('amount') or 0),
-            'settlement': float(r.get('settlement') or 0),
-            'tag_amount': float(r.get('tag_amount') or 0), 'lines': r.get('lines') or 0,
-        })
-    vip_by_shop: dict = {}
-    for sn, grades in vip_shop_map.items():
-        shop_vip_top      = tp_vip_by_shop.get(sn, {})
-        shop_vip_camp     = camp_vip_by_shop.get(sn, {})
-        shop_vip_top_camp = tc_vip_by_shop.get(sn, {})
-        lst = sorted(grades.values(), key=lambda x: GRADE_ORDER.get(x['grade'], 99))
-        for p in lst:
-            p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
-            p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
-            raw_grade  = p['grade']
-            lookup_key = None if raw_grade == 'No Grade' else raw_grade
-            p['top_products'] = (
-                shop_vip_top.get(lookup_key, []) or
-                shop_vip_top.get(raw_grade, []) or
-                shop_vip_top.get('—', [])
-            )
-            camp_rows = (
-                shop_vip_camp.get(lookup_key) or
-                shop_vip_camp.get(raw_grade) or
-                shop_vip_camp.get('—') or []
-            )
-            top_by_camp = (
-                shop_vip_top_camp.get(lookup_key) or
-                shop_vip_top_camp.get(raw_grade) or
-                shop_vip_top_camp.get('—') or {}
-            )
-            p['campaign_groups'] = _build_campaign_groups(camp_rows, top_by_camp=top_by_camp)
-        vip_by_shop[sn] = lst
-
-    # 7. Brand × cat × shop  +  top products per brand per shop
-    tp_brand_by_shop, camp_brand_by_shop, tc_brand_by_shop = _top_products_by_group_shop(
-        qs, 'brand', campaigns=campaigns)
-    brand_flat = list(
-        qs.values('shop_name', 'brand', 'category_l1', 'category_l2', 'category_l3')
-        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
-                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
-                  lines=Count('id'))
-        .order_by('shop_name', 'brand', 'category_l1', 'category_l2', 'category_l3')
-    )
-    brand_shop_map: dict = {}
-    for r in brand_flat:
-        sn = r.get('shop_name') or '—'
-        br = r.get('brand') or '—'
-        if sn not in brand_shop_map:
-            brand_shop_map[sn] = {}
-        if br not in brand_shop_map[sn]:
-            brand_shop_map[sn][br] = {
-                'brand': br, 'qty': 0, 'amount': 0.0,
-                'settlement': 0.0, 'tag_amount': 0.0, 'lines': 0, '_cat_rows': [],
-            }
-        p = brand_shop_map[sn][br]
-        p['qty'] += r.get('qty') or 0
-        p['amount'] += float(r.get('amount') or 0)
-        p['settlement'] += float(r.get('settlement') or 0)
-        p['tag_amount'] += float(r.get('tag_amount') or 0)
-        p['lines'] += r.get('lines') or 0
-        p['_cat_rows'].append({
-            'category_l1': r.get('category_l1') or '',
-            'category_l2': r.get('category_l2') or '',
-            'category_l3': r.get('category_l3') or '',
-            'qty': r.get('qty') or 0, 'amount': float(r.get('amount') or 0),
-            'settlement': float(r.get('settlement') or 0),
-            'tag_amount': float(r.get('tag_amount') or 0), 'lines': r.get('lines') or 0,
-        })
-    brand_by_shop: dict = {}
-    for sn, brands in brand_shop_map.items():
-        shop_brand_top      = tp_brand_by_shop.get(sn, {})
-        shop_brand_camp     = camp_brand_by_shop.get(sn, {})
-        shop_brand_top_camp = tc_brand_by_shop.get(sn, {})
-        lst = sorted(brands.values(), key=lambda x: -(x.get('amount') or 0))
-        for p in lst:
-            p['disc_pct'] = _disc_pct(p['tag_amount'], p['settlement'])
-            p['cat_groups'] = _build_cat_groups(p.pop('_cat_rows'))
-            p['top_products'] = shop_brand_top.get(p['brand'], [])
-            p['campaign_groups'] = _build_campaign_groups(
-                shop_brand_camp.get(p['brand'], []),
-                top_by_camp=shop_brand_top_camp.get(p['brand']))
-        brand_by_shop[sn] = lst
-
-    # 8. Top products × shop
-    tp_flat = list(
-        qs.values('shop_name', 'product_code', 'product_name', 'brand')
-        .annotate(qty=Sum('quantity'), amount=Sum('sales_amount'),
-                  settlement=Sum('settlement_amount'), tag_amount=Sum('tag_amount'),
-                  lines=Count('id'))
-        .order_by('shop_name', '-amount')
-    )
-    tp_by_shop: dict = {}
-    for r in tp_flat:
-        sn = r.get('shop_name') or '—'
-        if sn not in tp_by_shop:
-            tp_by_shop[sn] = []
-        if len(tp_by_shop[sn]) < 15:
-            entry = {
-                'product_code': r.get('product_code') or '',
-                'product_name': r.get('product_name') or '',
-                'brand': r.get('brand') or '—',
-                'qty': r.get('qty') or 0,
-                'amount': float(r.get('amount') or 0),
-                'settlement': float(r.get('settlement') or 0),
-                'tag_amount': float(r.get('tag_amount') or 0),
-                'lines': r.get('lines') or 0,
-                'campaign': _lookup_campaign(r.get('product_code') or '', campaigns),
-            }
-            entry['disc_pct'] = _disc_pct(entry['tag_amount'], entry['settlement'])
-            tp_by_shop[sn].append(entry)
-
-    # Compute category (L1→L2→L3) per shop from month_flat
-    cat_shop_map: dict = {}
-    for r in month_flat:
-        sn = r.get('shop_name') or '—'
-        l1 = r.get('category_l1') or ''
-        l2 = r.get('category_l2') or ''
-        l3 = r.get('category_l3') or ''
-        key = (l1, l2, l3)
-        if sn not in cat_shop_map:
-            cat_shop_map[sn] = {}
-        if key not in cat_shop_map[sn]:
-            cat_shop_map[sn][key] = {
-                'category_l1': l1, 'category_l2': l2, 'category_l3': l3,
-                'qty': 0, 'amount': 0.0, 'settlement': 0.0, 'tag_amount': 0.0, 'lines': 0,
-            }
-        p = cat_shop_map[sn][key]
-        p['qty'] += r.get('qty') or 0
-        p['amount'] += float(r.get('amount') or 0)
-        p['settlement'] += float(r.get('settlement') or 0)
-        p['tag_amount'] += float(r.get('tag_amount') or 0)
-        p['lines'] += r.get('lines') or 0
-    cat_groups_by_shop: dict = {}
-    for sn, cats in cat_shop_map.items():
-        flat = list(cats.values())
-        for c in flat:
-            c['disc_pct'] = _disc_pct(c.get('tag_amount'), c.get('settlement'))
-        cat_groups_by_shop[sn] = _build_cat_groups(flat)
-
-    # Overall shop-level campaign_groups — merge all months' camp rows per shop
-    shop_camp_all: dict = {}
-    for sn, months in camp_month_by_shop.items():
-        agg: dict = {}
-        for camp_rows in months.values():
-            for cr in camp_rows:
-                ckey = (cr['campaign'], cr['category_l1'], cr['category_l2'], cr['category_l3'])
-                if ckey not in agg:
-                    agg[ckey] = dict(cr)
-                else:
-                    agg[ckey]['qty'] += cr['qty']
-                    agg[ckey]['amount'] += cr['amount']
-                    agg[ckey]['settlement'] += cr['settlement']
-                    agg[ckey]['tag_amount'] += cr['tag_amount']
-        shop_camp_all[sn] = _build_campaign_groups(list(agg.values()))
-
-    # Attach everything to shop_rows
-    for r in shop_rows:
-        sn = r.get('shop_name') or '—'
-        r['by_year']          = year_by_shop.get(sn, [])
-        r['by_month']         = month_by_shop.get(sn, [])
-        r['by_week']          = week_by_shop.get(sn, [])
-        r['by_sales_season']  = sales_season_by_shop.get(sn, [])
-        r['by_product_season'] = ps_by_shop.get(sn, [])
-        r['by_vip_grade']     = vip_by_shop.get(sn, [])
-        r['by_brand']         = brand_by_shop.get(sn, [])
-        r['by_category']      = cat_groups_by_shop.get(sn, [])
-        r['top_products']     = tp_by_shop.get(sn, [])
-        r['campaign_groups']  = shop_camp_all.get(sn, [])
-
-    return shop_rows
+        r['disc_pct']   = _disc_pct(r['tag_amount'], r['settlement'])
+    return rows
 
 
-def _top_by_brand(qs, top_n=15):
+def _by_shop_card(qs, top_n=50):
+    """All detail for one shop (qs already filtered). Reuses top-level tab functions.
+    Returns same keys as global get_product_tab so _shop_card_body.html can use data.* directly.
+    """
+    return {
+        'by_year':           _period_with_cat(qs, TruncYear,
+                                 lambda d: str(d.year) if d else '—', 'year_trunc', top_n=top_n),
+        'by_month':          _period_with_cat(qs, TruncMonth,
+                                 lambda d: d.strftime('%Y-%m') if d else '—', 'month_trunc', top_n=top_n),
+        'by_week':           _period_with_cat(qs, TruncWeek,
+                                 lambda d: f"W{d.strftime('%V')} {d.strftime('%Y')}" if d else '—',
+                                 'week_trunc', top_n=top_n),
+        'by_sales_season':   _by_sales_season(qs, top_n=top_n),
+        'by_product_season': _by_product_season(qs, top_n=top_n),
+        'by_vip_grade':      _by_vip_grade(qs, top_n=top_n),
+        'by_brand':          _by_brand(qs, top_n=top_n),
+        'by_category':       _by_category(qs),
+        'by_product':        _by_product(qs, limit=top_n),
+        'campaign_groups':   _by_product_campaign(qs, top_n=top_n),
+        'top_by_brand':      _top_by_brand(qs, top_n=top_n),
+        'top_by_campaign':   _top_by_campaign(qs, top_n=top_n),
+    }
+
+
+
+
+def _top_by_brand(qs, top_n=50):
     """Top N products per brand, one DB query. Returns [{brand, top_products, total_amount}]."""
     campaigns = _load_campaigns()
     by_brand, camp_rows_by_brand, __ = _top_products_by_group(qs, 'brand', top_n=top_n, campaigns=campaigns)
@@ -1682,7 +1242,7 @@ def _top_by_brand(qs, top_n=15):
     return sorted(result, key=lambda x: -x['total_amount'])
 
 
-def _top_by_campaign(qs, top_n=15):
+def _top_by_campaign(qs, top_n=50):
     """Top N products per campaign (derived from product_code prefix), one DB query.
     Returns [{campaign, top_products, total_amount}] sorted by total_amount desc.
     Products not matching any campaign are grouped as '' (displayed as 'Not Assigned').
@@ -1756,6 +1316,8 @@ def get_product_tab(tab: str, date_from=None, date_to=None,
         tab_data['campaign_groups'] = _by_product_campaign(qs)
     elif tab == 'shop':
         tab_data['by_shop'] = _by_shop_full(qs)
+    elif tab == 'shop_card':
+        tab_data.update(_by_shop_card(qs))
     elif tab == 'product':
         tab_data['by_product'] = _by_product(qs)
     elif tab == 'top_by_brand':

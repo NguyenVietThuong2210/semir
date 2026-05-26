@@ -86,7 +86,8 @@ def product_tab(request, tab):
         "shop_name": shop_name,
         "currency": "VND",
     }
-    return render(request, f"product/tabs/{tab}.html", ctx)
+    template = "product/tabs/_shop_card_body.html" if tab == "shop_card" else f"product/tabs/{tab}.html"
+    return render(request, template, ctx)
 
 
 _EXPORT_TABS = ('month', 'year', 'week', 'sales_season', 'product_season', 'vip_grade', 'brand', 'category', 'campaign', 'shop', 'product')
