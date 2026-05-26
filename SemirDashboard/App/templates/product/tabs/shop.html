@@ -97,9 +97,9 @@
     <div class="collapse" id="shopDetail-{{ si }}"
          data-lazy-url="{% url 'product_tab' 'shop_card' %}?shop_name={{ r.shop_name|urlencode }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}">
         <div class="card-body p-2" id="shopDetailBody-{{ si }}">
-            <div class="text-center py-3 text-muted shop-lazy-placeholder">
-                <i class="bi bi-shop fs-3 d-block mb-1 opacity-50"></i>
-                <small>Click to load {{ r.shop_name }} breakdown</small>
+            <div class="text-center py-3 text-muted">
+                <i class="bi bi-chevron-up fs-4 d-block mb-1 opacity-50"></i>
+                <small>Collapse to hide / expand to load breakdown</small>
             </div>
         </div>
     </div>
@@ -111,28 +111,3 @@
 
 {% endif %}
 {% endwith %}
-
-<script>
-(function () {
-    var shopLoaded = {};
-    document.querySelectorAll('[data-lazy-url]').forEach(function (panel) {
-        var trigger = document.querySelector('[data-bs-target="#' + panel.id + '"]');
-        if (!trigger) return;
-        trigger.addEventListener('click', function () {
-            var panelId = panel.id;
-            if (shopLoaded[panelId]) return;
-            var url = panel.dataset.lazyUrl;
-            var body = panel.querySelector('.card-body');
-            fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
-                .then(function (r) { return r.text(); })
-                .then(function (html) {
-                    body.innerHTML = html;
-                    shopLoaded[panelId] = true;
-                })
-                .catch(function (err) {
-                    body.innerHTML = '<div class="alert alert-danger m-2">Load error: ' + err.message + '</div>';
-                });
-        });
-    });
-})();
-</script>

@@ -16,7 +16,7 @@ _CAMPAIGN_CACHE_KEY = 'product_campaigns_list'
 # Tabs served by product_tab AJAX endpoint
 PRODUCT_TABS = [
     'month', 'year', 'week', 'sales_season',
-    'product_season', 'vip_grade', 'brand', 'category', 'campaign', 'shop', 'shop_card', 'product',
+    'product_season', 'vip_grade', 'brand', 'campaign', 'shop', 'shop_card', 'product',
     'top_by_brand', 'top_by_campaign',
 ]
 
@@ -1310,8 +1310,6 @@ def get_product_tab(tab: str, date_from=None, date_to=None,
         tab_data['by_vip_grade'] = _by_vip_grade(qs)
     elif tab == 'brand':
         tab_data['by_brand'] = _by_brand(qs)
-    elif tab == 'category':
-        tab_data['by_category'] = _by_category(qs)
     elif tab == 'campaign':
         tab_data['campaign_groups'] = _by_product_campaign(qs)
     elif tab == 'shop':

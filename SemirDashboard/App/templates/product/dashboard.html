@@ -169,12 +169,6 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="#" data-tab="category"
-                   data-lazy-url="{% url 'product_tab' 'category' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
-                   By Category
-                </a>
-            </li>
-            <li class="nav-item">
                 <a class="nav-link" href="#" data-tab="campaign"
                    data-lazy-url="{% url 'product_tab' 'campaign' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}">
                    By Campaign
@@ -302,6 +296,20 @@
                         '<div class="alert alert-danger">Load error: ' + err.message + '</div>';
                 });
         });
+    });
+
+    /* ── Shop card lazy-load via Bootstrap collapse event (works for injected HTML) ── */
+    document.addEventListener('show.bs.collapse', function(e) {
+        var panel = e.target;
+        if (!panel.dataset.lazyUrl) return;
+        if (panel.dataset.lazyLoaded) return;
+        panel.dataset.lazyLoaded = '1';
+        var body = panel.querySelector('.card-body');
+        if (body) body.innerHTML = '<div class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>';
+        fetch(panel.dataset.lazyUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function(r){ return r.text(); })
+            .then(function(html){ if (body) body.innerHTML = html; })
+            .catch(function(err){ if (body) body.innerHTML = '<div class="alert alert-danger m-2">Load error: ' + err.message + '</div>'; });
     });
 
     /* ── Date helpers ── */
