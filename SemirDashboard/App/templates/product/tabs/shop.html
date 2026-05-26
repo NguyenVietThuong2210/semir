@@ -194,7 +194,7 @@
                             <small class="text-muted">Qty:{{ m.qty|default:0 }} | {{ m.amount|default:0|vnd }} | {% if m.disc_pct is not None %}{{ m.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
                         <div class="collapse" id="sm-{{ si }}-m{{ forloop.counter }}">
-                            <div class="p-1">{% with cat_groups=m.cat_groups top_products=m.top_products %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+                            <div class="p-1">{% with cat_groups=m.cat_groups top_products=m.top_products campaign_groups=m.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -238,7 +238,7 @@
                             <small class="text-muted">Qty:{{ y.qty|default:0 }} | {{ y.amount|default:0|vnd }} | {% if y.disc_pct is not None %}{{ y.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
                         <div class="collapse" id="sy-{{ si }}-y{{ forloop.counter }}">
-                            <div class="p-1">{% with cat_groups=y.cat_groups top_products=y.top_products %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+                            <div class="p-1">{% with cat_groups=y.cat_groups top_products=y.top_products campaign_groups=y.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -282,7 +282,7 @@
                             <small class="text-muted">Qty:{{ w.qty|default:0 }} | {{ w.amount|default:0|vnd }} | {% if w.disc_pct is not None %}{{ w.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
                         <div class="collapse" id="sw-{{ si }}-w{{ forloop.counter }}">
-                            <div class="p-1">{% with cat_groups=w.cat_groups top_products=w.top_products %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+                            <div class="p-1">{% with cat_groups=w.cat_groups top_products=w.top_products campaign_groups=w.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -326,7 +326,7 @@
                             <small class="text-muted">Qty:{{ s.qty|default:0 }} | {{ s.amount|default:0|vnd }} | {% if s.disc_pct is not None %}{{ s.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
                         <div class="collapse" id="sss-{{ si }}-s{{ forloop.counter }}">
-                            <div class="p-1">{% with cat_groups=s.cat_groups top_products=s.top_products %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+                            <div class="p-1">{% with cat_groups=s.cat_groups top_products=s.top_products campaign_groups=s.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -370,7 +370,7 @@
                             <small class="text-muted">Qty:{{ p.qty|default:0 }} | {{ p.amount|default:0|vnd }} | {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
                         <div class="collapse" id="sps-{{ si }}-p{{ forloop.counter }}">
-                            <div class="p-1">{% with cat_groups=p.cat_groups top_products=p.top_products %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+                            <div class="p-1">{% with cat_groups=p.cat_groups top_products=p.top_products campaign_groups=p.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -414,7 +414,7 @@
                             <small class="text-muted">Qty:{{ g.qty|default:0 }} | {{ g.amount|default:0|vnd }} | {% if g.disc_pct is not None %}{{ g.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
                         <div class="collapse" id="svg-{{ si }}-g{{ forloop.counter }}">
-                            <div class="p-1">{% with cat_groups=g.cat_groups top_products=g.top_products %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+                            <div class="p-1">{% with cat_groups=g.cat_groups top_products=g.top_products campaign_groups=g.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -458,7 +458,7 @@
                             <small class="text-muted">Qty:{{ b.qty|default:0 }} | {{ b.amount|default:0|vnd }} | {% if b.disc_pct is not None %}{{ b.disc_pct }}%{% else %}—{% endif %} <i class="bi bi-chevron-down ms-1"></i></small>
                         </div>
                         <div class="collapse" id="sbr-{{ si }}-b{{ forloop.counter }}">
-                            <div class="p-1">{% with cat_groups=b.cat_groups top_products=b.top_products %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
+                            <div class="p-1">{% with cat_groups=b.cat_groups top_products=b.top_products campaign_groups=b.campaign_groups %}{% include "product/tabs/_period_drilldown.html" %}{% endwith %}</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -469,7 +469,7 @@
                 <div class="tab-pane fade" id="shCategory-{{ si }}" role="tabpanel">
                     {% if r.by_category %}
                     <div style="font-size:.78rem;">
-                        {% with cat_groups=r.by_category top_products=r.top_products %}
+                        {% with cat_groups=r.by_category top_products=r.top_products campaign_groups=r.campaign_groups %}
                         {% include "product/tabs/_period_drilldown.html" %}
                         {% endwith %}
                     </div>

@@ -294,13 +294,20 @@
 {% endblock %}
 
 {% block extra_js %}
+{% check_perm 'products.manage' as can_manage_prd %}
 {% if can_manage_prd %}
 <script type="application/json" id="__prdUrl">"{% url 'manage_product_campaigns' %}"</script>
 <script type="application/json" id="__prdCsrf">"{{ csrf_token }}"</script>
 <script>
-var PRD_URL  = JSON.parse(document.getElementById('__prdUrl').textContent);
-var PRD_CSRF = JSON.parse(document.getElementById('__prdCsrf').textContent);
+var PRD_URL  = null;
+var PRD_CSRF = null;
 var _prdList = [];
+try {
+  PRD_URL  = JSON.parse(document.getElementById('__prdUrl').textContent);
+  PRD_CSRF = JSON.parse(document.getElementById('__prdCsrf').textContent);
+} catch(e) {
+  console.error('Product campaigns init error:', e);
+}
 
 function _prdEsc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -338,6 +345,7 @@ function _prdRender() {
 }
 
 function _prdLoad() {
+  if (!PRD_URL) return;
   fetch(PRD_URL, { credentials: 'same-origin' })
     .then(function(r) { return r.json(); })
     .then(function(d) { _prdList = d.campaigns || []; _prdRender(); })
@@ -348,6 +356,7 @@ function _prdLoad() {
 }
 
 function _prdPost(body, onOk, onFail) {
+  if (!PRD_URL) { onFail('URL configuration error — reload the page'); return; }
   fetch(PRD_URL, {
     method: 'POST',
     credentials: 'same-origin',
