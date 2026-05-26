@@ -233,20 +233,17 @@ class SaleDetailImportTest(SnapshotTestCase):
         for field in ('shop_name', 'qty', 'amount', 'lines', 'disc_pct'):
             self.assertIn(field, row, f"Missing by_shop field '{field}'")
 
-    def test_shop_full_has_all_sub_tabs(self):
-        """Each shop row in by_shop must include all 9 sub-tab data keys."""
+    def test_shop_full_has_kpi_fields(self):
+        """shop tab returns KPI-only rows; sub-tabs are lazy-loaded via shop_card tab."""
         data = get_product_tab('shop')
         rows = data.get('by_shop', [])
         self.assertGreater(len(rows), 0)
         row = rows[0]
-        for key in ('by_month', 'by_year', 'by_week', 'by_sales_season',
-                    'by_product_season', 'by_vip_grade', 'by_brand',
-                    'by_category', 'top_products'):
-            self.assertIn(key, row, f"Missing shop sub-tab key '{key}'")
-        # by_category for shop is already processed as cat_groups (list of dicts with 'l1')
-        if row['by_category']:
-            cg = row['by_category'][0]
-            self.assertIn('l1', cg, "by_category should be cat_groups format (has 'l1' key)")
+        for key in ('shop_name', 'qty', 'amount', 'settlement', 'tag_amount', 'lines', 'disc_pct'):
+            self.assertIn(key, row, f"Missing shop KPI field '{key}'")
+        # shop tab must NOT contain sub-tab keys (they live in shop_card tab)
+        for key in ('by_month', 'by_year', 'by_week', 'by_brand', 'by_category', 'top_products'):
+            self.assertNotIn(key, row, f"shop tab should not contain sub-tab key '{key}'")
 
     def test_shop_name_filter(self):
         """get_product_tab with shop_name returns data for that shop only."""
@@ -369,7 +366,6 @@ class SaleDetailImportTest(SnapshotTestCase):
                     "amount": float(r.get('amount') or 0),
                     "disc_pct": r.get('disc_pct'),
                     "lines": r.get('lines'),
-                    "sub_tab_keys": sorted(k for k in r if k.startswith('by_') or k == 'top_products'),
                 }
                 for r in data.get('by_shop', [])
             ],

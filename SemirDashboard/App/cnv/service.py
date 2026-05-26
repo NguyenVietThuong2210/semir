@@ -864,12 +864,23 @@ def compute_cnv_comparison(start_date, end_date):
     zalo_app_inactive_list = list(zalo_app_inactive_qs.order_by("-cnv_created_at").values(*_zf))
     _all_z_phones = {r["phone"] for r in zalo_app_list + zalo_oa_list if r["phone"]}
     _pos_z_phones = _all_z_phones & pos_phones_all
+    _all_inactive_phones = {r["phone"] for r in zalo_app_inactive_list if r["phone"]}
+    _reg_store_map = {
+        row["phone"]: row["registration_store"]
+        for row in POSCustomer.objects.filter(
+            phone__in=_pos_z_phones | (_all_inactive_phones & pos_phones_all)
+        ).values("phone", "registration_store")
+        if row["phone"]
+    }
     for r in zalo_app_list:
         r["in_pos"] = r["phone"] in _pos_z_phones
+        r["registration_store"] = _reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
     for r in zalo_oa_list:
         r["in_pos"] = r["phone"] in _pos_z_phones
+        r["registration_store"] = _reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
     for r in zalo_app_inactive_list:
         r["in_pos"] = r["phone"] in pos_phones_all if r["phone"] else False
+        r["registration_store"] = _reg_store_map.get(r["phone"], "") if r["in_pos"] else ""
 
     result = {
         "has_filter":                has_filter,

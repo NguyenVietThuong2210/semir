@@ -52,7 +52,7 @@
             <tr>
                 <th>CNV ID</th><th>Phone</th><th>Name</th><th>Level</th>
                 <th>Zalo App ID</th><th>Zalo OA ID</th><th>Zalo Active date</th>
-                <th>Points</th><th>In POS</th>
+                <th>Points</th><th>In POS</th><th>Register Store</th>
             </tr>
         </thead>
         <tbody>
@@ -67,9 +67,10 @@
             <td>{{ r.zalo_app_created_at|default:"-" }}</td>
             <td class="text-end">{{ r.points|default:0 }}</td>
             <td>{% if r.in_pos %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+            <td>{% if r.in_pos %}{{ r.registration_store|default:"-" }}{% else %}-{% endif %}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="text-center text-muted py-3">No Zalo Mini App customers.</td></tr>
+        <tr><td colspan="10" class="text-center text-muted py-3">No Zalo Mini App customers.</td></tr>
         {% endfor %}
         </tbody>
     </table>
@@ -83,7 +84,7 @@
             <tr>
                 <th>CNV ID</th><th>Phone</th><th>Name</th><th>Level</th>
                 <th>Zalo App ID</th><th>Zalo OA ID</th><th>Zalo Active date</th>
-                <th>Points</th><th>In POS</th>
+                <th>Points</th><th>In POS</th><th>Register Store</th>
             </tr>
         </thead>
         <tbody>
@@ -98,9 +99,10 @@
             <td>{{ r.zalo_app_created_at|default:"-" }}</td>
             <td class="text-end">{{ r.points|default:0 }}</td>
             <td>{% if r.in_pos %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+            <td>{% if r.in_pos %}{{ r.registration_store|default:"-" }}{% else %}-{% endif %}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="text-center text-muted py-3">No Zalo OA customers.</td></tr>
+        <tr><td colspan="10" class="text-center text-muted py-3">No Zalo OA customers.</td></tr>
         {% endfor %}
         </tbody>
     </table>

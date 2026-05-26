@@ -1543,7 +1543,7 @@ def export_customer_analytics_to_excel(
     zalo_blue_fill = PatternFill(start_color="0068FF", end_color="0068FF", fill_type="solid")
     zalo_headers = [
         'CNV ID', 'Phone', 'Full Name', 'Level', 'Email',
-        'Reg Date', 'Points', 'Mini App', 'Follow OA', 'In POS'
+        'Reg Date', 'Points', 'Mini App', 'Follow OA', 'In POS', 'Register Store'
     ]
 
     ws_zalo_app = wb.create_sheet("Zalo Mini App")
@@ -1563,8 +1563,9 @@ def export_customer_analytics_to_excel(
             'Yes' if c.get('zalo_app_id') else 'No',
             'Yes' if c.get('zalo_oa_id') else 'No',
             'Yes' if c.get('in_pos') else 'No',
+            c.get('registration_store') or '-',
         ])
-    for col, w in zip('ABCDEFGHIJ', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8]):
+    for col, w in zip('ABCDEFGHIJK', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8, 30]):
         ws_zalo_app.column_dimensions[col].width = w
 
     # ========================================================================
@@ -1588,8 +1589,9 @@ def export_customer_analytics_to_excel(
             'Yes' if c.get('zalo_app_id') else 'No',
             'Yes' if c.get('zalo_oa_id') else 'No',
             'Yes' if c.get('in_pos') else 'No',
+            c.get('registration_store') or '-',
         ])
-    for col, w in zip('ABCDEFGHIJ', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8]):
+    for col, w in zip('ABCDEFGHIJK', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8, 30]):
         ws_zalo_oa.column_dimensions[col].width = w
 
     # ========================================================================
@@ -1613,8 +1615,9 @@ def export_customer_analytics_to_excel(
             'No',
             'Yes' if c.get('zalo_oa_id') else 'No',
             'Yes' if c.get('in_pos') else 'No',
+            c.get('registration_store') or '-',
         ])
-    for col, w in zip('ABCDEFGHIJ', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8]):
+    for col, w in zip('ABCDEFGHIJK', [15, 15, 25, 12, 30, 12, 10, 10, 10, 8, 30]):
         ws_zalo_inactive.column_dimensions[col].width = w
 
     # ========================================================================
