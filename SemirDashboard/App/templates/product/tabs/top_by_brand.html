@@ -1,0 +1,75 @@
+{% load custom_filters perm_tags %}
+{% with rows=data.top_by_brand overview=data.overview %}
+{% if not rows %}
+<div class="text-muted text-center py-4">No data available.</div>
+{% else %}
+
+<p class="text-muted small mb-2">
+    Top 15 products per brand ranked by sales amount. Click a brand to expand.
+</p>
+
+{% for br in rows %}
+<div class="card mb-2 border">
+    <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
+         style="background:rgba(var(--orange-rgb),.12);cursor:pointer;"
+         data-bs-toggle="collapse"
+         data-bs-target="#tbb-{{ forloop.counter }}"
+         aria-expanded="false">
+        <strong style="font-size:.87rem;">
+            <i class="bi bi-tag me-1 text-warning"></i>{{ br.brand }}
+        </strong>
+        <small class="text-muted">
+            {{ br.top_products|length }} products &nbsp;|&nbsp;
+            Total: {{ br.total_amount|floatformat:0|vnd }}
+            &nbsp;<i class="bi bi-chevron-down ms-1"></i>
+        </small>
+    </div>
+    <div class="collapse" id="tbb-{{ forloop.counter }}">
+        <div class="table-responsive p-1">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.80rem;">
+            <thead style="background:var(--primary);color:#fff;font-size:.77rem;">
+                <tr>
+                    <th style="width:3%;">#</th>
+                    <th style="width:12%;">Code</th>
+                    <th>Product Name</th>
+                    <th>Campaign</th>
+                    <th>Category L1</th>
+                    <th>Category L2</th>
+                    <th>Category L3</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Tag Amt ({{ currency }})</th>
+                    <th class="text-end">Sales Amt ({{ currency }})</th>
+                    <th class="text-end">Settlement ({{ currency }})</th>
+                    <th class="text-end">Disc %</th>
+                    <th class="text-end">Lines</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in br.top_products %}
+            <tr>
+                <td class="text-muted">{{ forloop.counter }}</td>
+                <td class="text-muted" style="font-size:.73rem;white-space:nowrap;">{{ p.product_code|default:"—" }}</td>
+                <td>{{ p.product_name|default:"—"|truncatechars:35 }}</td>
+                <td class="text-muted" style="font-size:.76rem;">{% if p.campaign %}{{ p.campaign }}{% else %}—{% endif %}</td>
+                <td class="text-muted" style="font-size:.76rem;">{{ p.category_l1|cat_name }}</td>
+                <td class="text-muted" style="font-size:.76rem;">{{ p.category_l2|cat_name }}</td>
+                <td class="text-muted" style="font-size:.76rem;">{{ p.category_l3|cat_name }}</td>
+                <td class="text-end fw-semibold">{{ p.qty|default:0 }}</td>
+                <td class="text-end amount-vnd text-muted">{{ p.tag_amount|default:0|vnd }}</td>
+                <td class="text-end amount-vnd">{{ p.amount|default:0|vnd }}</td>
+                <td class="text-end amount-vnd">{{ p.settlement|default:0|vnd }}</td>
+                <td class="text-end{% if p.disc_pct and p.disc_pct > 20 %} text-danger{% endif %}">
+                    {% if p.disc_pct is not None %}{{ p.disc_pct }}%{% else %}—{% endif %}
+                </td>
+                <td class="text-end text-muted">{{ p.lines|default:0 }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endif %}
+{% endwith %}
