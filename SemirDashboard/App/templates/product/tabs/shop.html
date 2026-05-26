@@ -153,6 +153,12 @@
                         <i class="bi bi-list-ol"></i> Top Products
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-2" data-bs-toggle="tab"
+                            data-bs-target="#shCampaign-{{ si }}" type="button">
+                        <i class="bi bi-flag"></i> By Campaign
+                    </button>
+                </li>
             </ul>
 
             <div class="tab-content border border-top-0 rounded-bottom p-2" style="max-height:620px;overflow-y:auto;">
@@ -469,8 +475,8 @@
                 <div class="tab-pane fade" id="shCategory-{{ si }}" role="tabpanel">
                     {% if r.by_category %}
                     <div style="font-size:.78rem;">
-                        {% with cat_groups=r.by_category top_products=r.top_products campaign_groups=r.campaign_groups %}
-                        {% include "product/tabs/_period_drilldown.html" %}
+                        {% with cat_groups=r.by_category %}
+                        {% include "product/tabs/_cat_drilldown.html" %}
                         {% endwith %}
                     </div>
                     {% else %}<div class="text-muted text-center py-3 small">No category data.</div>{% endif %}
@@ -512,6 +518,17 @@
                         </table>
                     </div>
                     {% else %}<div class="text-muted text-center py-3 small">No top product data.</div>{% endif %}
+                </div>
+
+                {# ── By Campaign ── #}
+                <div class="tab-pane fade" id="shCampaign-{{ si }}" role="tabpanel">
+                    {% if r.campaign_groups %}
+                    <div style="font-size:.78rem;">
+                        {% with campaign_groups=r.campaign_groups %}
+                        {% include "product/tabs/_campaign_drilldown.html" %}
+                        {% endwith %}
+                    </div>
+                    {% else %}<div class="text-muted text-center py-3 small">No campaign data.</div>{% endif %}
                 </div>
 
             </div>{# /tab-content #}
