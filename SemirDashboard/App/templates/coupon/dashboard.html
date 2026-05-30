@@ -438,7 +438,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script type="application/json" id="__cpnFilterData">{{ campaigns_json|safe }}</script>
+{{ campaigns_json|json_script:"__cpnFilterData" }}
 <script>
     function _fmt(d) {
         return d.getFullYear() + '-'

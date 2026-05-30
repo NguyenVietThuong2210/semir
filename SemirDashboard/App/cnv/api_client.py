@@ -8,6 +8,7 @@ import logging
 import requests
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from django.conf import settings
 from django.core.cache import cache
 from urllib.parse import urlparse, parse_qs
 from bs4 import BeautifulSoup
@@ -44,13 +45,13 @@ class CNVAPIClient:
         """
         self.username = username
         self.password = password
-        self.base_url = "https://apis.cnvloyalty.com"
-        self.sso_url = "https://id.cnv.vn"
-        
-        # OAuth2 app credentials (from CNV SDK)
-        self.client_id = "***REDACTED_CLIENT_ID***"
-        self.client_secret = "***REDACTED_CLIENT_SECRET***"
-        self.redirect_uri = "http://localhost:5000/callback"
+        self.base_url = settings.CNV_API_BASE_URL
+        self.sso_url = settings.CNV_SSO_URL
+
+        # OAuth2 app credentials — loaded from environment via settings
+        self.client_id = settings.CNV_CLIENT_ID
+        self.client_secret = settings.CNV_CLIENT_SECRET
+        self.redirect_uri = settings.CNV_REDIRECT_URI
         
         logger.info("CNVAPIClient initialized for user: %s", username)
     

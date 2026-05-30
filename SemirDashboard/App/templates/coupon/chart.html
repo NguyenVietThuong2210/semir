@@ -616,10 +616,10 @@
 
 {% block extra_js %}
 {# Inject server data as JSON — avoids IDE JS-lint false positives #}
-<script type="application/json" id="__trendData">{{ trend_data_json|safe }}</script>
-<script type="application/json" id="__campaigns">{{ campaigns_json|safe }}</script>
-<script type="application/json" id="__allTime">{{ all_time_json|safe }}</script>
-<script type="application/json" id="__period">{{ period_json|safe }}</script>
+{{ trend_data_json|json_script:"__trendData" }}
+{{ campaigns_json|json_script:"__campaigns" }}
+{{ all_time_json|json_script:"__allTime" }}
+{{ period_json|json_script:"__period" }}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>

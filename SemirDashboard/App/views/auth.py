@@ -1,16 +1,22 @@
+import hashlib
+import logging
+
+from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.views.decorators.csrf import csrf_protect
-from django.views.decorators.cache import never_cache
 from django.contrib.auth.models import User
-import logging
+from django.http import HttpResponse
+from django.shortcuts import render, redirect
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import csrf_protect
+from django_ratelimit.decorators import ratelimit
 
 logger = logging.getLogger(__name__)
 
 
+@ratelimit(key='ip', rate='10/m', method='POST', block=True)
 @csrf_protect
 @never_cache
 def login_view(request):
@@ -32,15 +38,19 @@ def login_view(request):
 
             if user is not None:
                 login(request, user)
-                logger.info("login: user=%s", username, extra={"step": "auth"})
+                uid = hashlib.sha256(username.encode()).hexdigest()[:10]
+                logger.info("login: uid=%s", uid, extra={"step": "auth"})
 
                 # Regenerate session key for security
                 request.session.cycle_key()
 
-                next_url = request.GET.get('next', 'analytics_dashboard')
+                next_url = request.GET.get('next', '')
+                if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                    next_url = 'analytics_dashboard'
                 return redirect(next_url)
             else:
-                logger.warning("login_failed: user=%s", username, extra={"step": "auth"})
+                uid = hashlib.sha256(username.encode()).hexdigest()[:10]
+                logger.warning("login_failed: uid=%s", uid, extra={"step": "auth"})
                 messages.error(request, 'Invalid username or password')
         else:
             messages.error(request, 'Invalid username or password')
@@ -54,9 +64,10 @@ def login_view(request):
 def logout_view(request):
     """Secure logout with session cleanup"""
     if request.method == 'POST':
-        username = request.user.username if request.user.is_authenticated else 'Anonymous'
+        raw = request.user.username if request.user.is_authenticated else 'anonymous'
+        uid = hashlib.sha256(raw.encode()).hexdigest()[:10]
         logout(request)
-        logger.info("logout: user=%s", username, extra={"step": "auth"})
+        logger.info("logout: uid=%s", uid, extra={"step": "auth"})
         return redirect('login')
     return redirect('analytics_dashboard')
 
@@ -79,16 +90,17 @@ def register_view(request):
         if form.is_valid():
             user = form.save()
             username = form.cleaned_data.get('username')
-            logger.info("register: user=%s created", username, extra={"step": "auth"})
+            uid = hashlib.sha256(username.encode()).hexdigest()[:10]
+            logger.info("register: uid=%s created", uid, extra={"step": "auth"})
 
             # Auto-assign viewer role to new user
             from App.models import Role, UserProfile
             try:
                 viewer_role = Role.objects.get(name='viewer')
                 UserProfile.objects.create(user=user, role=viewer_role)
-                logger.info("register: viewer role assigned to user=%s", username)
+                logger.info("register: viewer role assigned uid=%s", uid)
             except Exception as e:
-                logger.warning("register: failed to assign viewer role to user=%s: %s", username, e)
+                logger.warning("register: failed to assign viewer role uid=%s: %s", uid, e)
 
             messages.success(request, f'Account created for {username}.')
             return redirect('user_management')

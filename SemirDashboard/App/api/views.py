@@ -13,6 +13,7 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
@@ -103,9 +104,14 @@ def _parse_date(val: str | None, param_name: str):
 # AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class _LoginThrottle(AnonRateThrottle):
+    scope = "login"
+
+
 class LoginView(APIView):
     """POST /api/v1/auth/token/ — Login, returns JWT pair + permissions."""
     permission_classes = [AllowAny]
+    throttle_classes = [_LoginThrottle]
 
     def post(self, request):
         from django.contrib.auth import authenticate

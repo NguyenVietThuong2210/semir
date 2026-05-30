@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 load_dotenv()
 
@@ -21,9 +22,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security
 SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "SECRET_KEY environment variable is not set. "
+        "Generate one with: python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
+    )
 DEBUG = os.getenv("DEBUG", "False") == "True"
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
-CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
+CSRF_TRUSTED_ORIGINS = [h.strip() for h in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if h.strip()]
 
 DATABASES = {
     "default": {
@@ -47,8 +53,8 @@ if not DEBUG:
     # Session security
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = "Lax"
-    CSRF_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SAMESITE = "Strict"
+    CSRF_COOKIE_SAMESITE = "Strict"
 
     # Session timeout (24 hours)
     SESSION_COOKIE_AGE = 86400
@@ -178,6 +184,9 @@ LOGOUT_REDIRECT_URL = "/login/"  # After logout go to login
 
 CNV_USERNAME = os.getenv("CNV_USERNAME", "")
 CNV_PASSWORD = os.getenv("CNV_PASSWORD", "")
+CNV_CLIENT_ID = os.getenv("CNV_CLIENT_ID", "")
+CNV_CLIENT_SECRET = os.getenv("CNV_CLIENT_SECRET", "")
+CNV_REDIRECT_URI = os.getenv("CNV_REDIRECT_URI", "http://localhost:5000/callback")
 
 CNV_API_BASE_URL = os.getenv("CNV_API_BASE_URL", "https://apis.cnvloyalty.com")
 CNV_SSO_URL = os.getenv("CNV_SSO_URL", "https://id.cnv.vn")
@@ -336,6 +345,15 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "10/min",
+        "user": "120/min",
+        "login": "5/min",
+    },
     "EXCEPTION_HANDLER": "App.api.views.custom_exception_handler",
 }
 
@@ -368,4 +386,9 @@ CORS_ALLOW_CREDENTIALS = True
 
 # In development, allow localhost origins for browser-based testing.
 if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGINS += [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]

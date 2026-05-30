@@ -24,8 +24,8 @@ import csv
 class Config:
     # SSO Configuration
     SSO_SERVER_URI = "https://id.cnv.vn"
-    SSO_CLIENT_ID = "***REDACTED_CLIENT_ID***"
-    SSO_CLIENT_SECRET = "***REDACTED_CLIENT_SECRET***"
+    SSO_CLIENT_ID = os.getenv("CNV_CLIENT_ID", "")
+    SSO_CLIENT_SECRET = os.getenv("CNV_CLIENT_SECRET", "")
     SSO_REDIRECT_URI = "http://localhost:5000/callback"
     
     # API Configuration

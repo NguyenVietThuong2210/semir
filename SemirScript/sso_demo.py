@@ -5,8 +5,8 @@ from flask import Flask, redirect, request, session, jsonify
 
 # ================= CONFIG =================
 SSO_SERVER_URI = "https://id.cnv.vn"   # change this
-SSO_CLIENT_ID = "***REDACTED_CLIENT_ID***"
-SSO_CLIENT_SECRET = "***REDACTED_CLIENT_SECRET***"
+SSO_CLIENT_ID = os.getenv("CNV_CLIENT_ID", "")
+SSO_CLIENT_SECRET = os.getenv("CNV_CLIENT_SECRET", "")
 SSO_REDIRECT_URI = "http://localhost:5000/callback"
 
 SCOPES = 'read_products,write_products,read_customers,write_customers,read_orders,write_orders'

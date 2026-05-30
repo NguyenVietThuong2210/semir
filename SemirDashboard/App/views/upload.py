@@ -2,6 +2,16 @@
 import logging
 import threading
 
+_ALLOWED_UPLOAD_EXTENSIONS = {"csv", "xls", "xlsx"}
+
+
+def _validate_upload_ext(f) -> str | None:
+    """Return error message if file extension is not allowed, else None."""
+    ext = f.name.rsplit(".", 1)[-1].lower() if "." in f.name else ""
+    if ext not in _ALLOWED_UPLOAD_EXTENSIONS:
+        return f"File type '.{ext}' is not allowed. Only CSV and Excel files are accepted."
+    return None
+
 from django.contrib import messages
 from django.db.models import Count, Max, Min
 from django.http import JsonResponse
@@ -73,6 +83,10 @@ def upload_customers(request):
                 messages.warning(request, "A customer upload is already in progress. Please wait for it to finish.")
                 return redirect("upload_customers")
             f = request.FILES["file"]
+            err = _validate_upload_ext(f)
+            if err:
+                messages.error(request, err)
+                return redirect("upload_customers")
             file_bytes = f.read()
             job_id = create_job("customers", f.name)
             logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_customers"})
@@ -107,6 +121,10 @@ def upload_used_points(request):
                 messages.warning(request, "A used-points upload is already in progress. Please wait.")
                 return redirect("upload_customers")
             f = request.FILES["file"]
+            err = _validate_upload_ext(f)
+            if err:
+                messages.error(request, err)
+                return redirect("upload_customers")
             file_bytes = f.read()
             job_id = create_job("used_points", f.name)
             logger.info("upload_used_points queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_used_points"})
@@ -126,6 +144,10 @@ def upload_sales(request):
                 messages.warning(request, "A sales upload is already in progress. Please wait.")
                 return redirect("upload_sales")
             f = request.FILES["file"]
+            err = _validate_upload_ext(f)
+            if err:
+                messages.error(request, err)
+                return redirect("upload_sales")
             file_bytes = f.read()
             job_id = create_job("sales", f.name)
             logger.info("upload_sales queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_sales"})
@@ -156,6 +178,10 @@ def upload_coupons(request):
             messages.warning(request, "A coupon upload is already in progress. Please wait.")
             return redirect("upload_coupons")
         f = request.FILES["file"]
+        err = _validate_upload_ext(f)
+        if err:
+            messages.error(request, err)
+            return redirect("upload_coupons")
         file_bytes = f.read()
         job_id = create_job("coupons", f.name)
         logger.info("upload_coupons queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_coupons"})
@@ -174,6 +200,10 @@ def upload_inventory(request):
                 messages.warning(request, "An inventory upload is already in progress. Please wait.")
                 return redirect("upload_inventory")
             f = request.FILES["file"]
+            err = _validate_upload_ext(f)
+            if err:
+                messages.error(request, err)
+                return redirect("upload_inventory")
             file_bytes = f.read()
             job_id = create_job("inventory", f.name)
             logger.info("upload_inventory queued job=%s file=%s user=%s", job_id, f.name, request.user,
@@ -212,6 +242,10 @@ def upload_sale_detail(request):
                 messages.warning(request, "A sale detail upload is already in progress. Please wait.")
                 return redirect("upload_sales")
             f = request.FILES["file"]
+            err = _validate_upload_ext(f)
+            if err:
+                messages.error(request, err)
+                return redirect("upload_sales")
             file_bytes = f.read()
             job_id = create_job("sale_detail", f.name)
             logger.info("upload_sale_detail queued job=%s file=%s user=%s", job_id, f.name, request.user,
