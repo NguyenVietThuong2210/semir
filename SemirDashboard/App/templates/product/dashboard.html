@@ -201,13 +201,7 @@
         </ul>
     </div>
     <div class="card-body tab-content-wrap">
-        <div id="tabContent">
-            {% if initial_tab == 'month' %}
-            {% with data=initial_data %}
-            {% include "product/tabs/month.html" %}
-            {% endwith %}
-            {% endif %}
-        </div>
+        <div id="tabContent">{% if initial_tab == 'month' %}{% with data=initial_data %}{% include "product/tabs/month.html" %}{% endwith %}{% endif %}</div>
         <div id="tabSpinner" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);">
             <span class="spinner-border spinner-border-sm me-2"></span>Loading…
         </div>
