@@ -176,14 +176,11 @@ LOGOUT_REDIRECT_URL = "/login/"  # After logout go to login
 # CNV LOYALTY API CONFIGURATION
 # ============================================================================
 
-# CNV API Credentials
-# IMPORTANT: Update these with your actual credentials
-CNV_USERNAME = "0334353610"
-CNV_PASSWORD = "***REMOVED***"
+CNV_USERNAME = os.getenv("CNV_USERNAME", "")
+CNV_PASSWORD = os.getenv("CNV_PASSWORD", "")
 
-# CNV API URLs
-CNV_API_BASE_URL = "https://apis.cnvloyalty.com"
-CNV_SSO_URL = "https://id.cnv.vn"
+CNV_API_BASE_URL = os.getenv("CNV_API_BASE_URL", "https://apis.cnvloyalty.com")
+CNV_SSO_URL = os.getenv("CNV_SSO_URL", "https://id.cnv.vn")
 
 # Cache configuration — Redis in production, LocMem in dev
 _REDIS_URL = os.getenv("REDIS_URL")
