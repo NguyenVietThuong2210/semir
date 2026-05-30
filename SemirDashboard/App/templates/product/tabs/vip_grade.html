@@ -1,4 +1,4 @@
-{% load custom_filters perm_tags %}
+﻿{% load custom_filters perm_tags %}
 {% with rows=data.by_vip_grade overview=data.overview %}
 {% if not rows %}
 <div class="text-muted text-center py-4">No data available. (Requires sale detail linked to customer records.)</div>
@@ -7,12 +7,18 @@
 {% check_perm 'products.export' as can_dl_vg %}
 {% if can_dl_vg %}
 <div class="d-flex justify-content-end mb-2">
-    <a href="{% url 'export_product_analytics' %}?tab=vip_grade{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}"
+    <a href="{% url 'export_product_analytics' %}?tab=vip_grade{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}{% if shop_name %}&shop_name={{ shop_name|urlencode }}{% endif %}"
        class="btn btn-sm btn-outline-success">
         <i class="bi bi-file-earmark-excel"></i> Download
     </a>
 </div>
 {% endif %}
+
+<div class="alert alert-info py-2 mb-3" style="font-size:.82rem;">
+    <i class="bi bi-info-circle me-1"></i>
+    <strong>Grade order:</strong> No Grade &lt; Member &lt; Silver &lt; Gold &lt; Diamond.
+    Walk-in buyers without a loyalty account are excluded from this table and shown separately below as "Buyer Without Info".
+</div>
 
 {# Summary table #}
 <div class="card mb-3 border-0 shadow-sm">

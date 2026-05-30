@@ -1,4 +1,4 @@
-{% load custom_filters perm_tags %}
+﻿{% load custom_filters perm_tags %}
 {% check_perm 'products.export' as can_dl %}
 {% with rows=data.by_shop overview=data.overview %}
 {% if not rows %}
@@ -10,7 +10,7 @@
         Shops sorted by sales amount. Click a shop to load its full breakdown.
     </p>
     {% if can_dl %}
-    <a href="{% url 'export_product_analytics' %}?tab=shop{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}"
+    <a href="{% url 'export_product_analytics' %}?tab=shop{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}{% if shop_name %}&shop_name={{ shop_name|urlencode }}{% endif %}"
        class="btn btn-outline-success btn-sm">
         <i class="bi bi-file-earmark-excel"></i> Download
     </a>
@@ -95,7 +95,7 @@
         </small>
     </div>
     <div class="collapse" id="shopDetail-{{ si }}"
-         data-lazy-url="{% url 'product_tab' 'shop_card' %}?shop_name={{ r.shop_name|urlencode }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}">
+         data-lazy-url="{% url 'product_tab' 'shop_card' %}?shop_name={{ r.shop_name|urlencode }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}{% if shop_name %}&shop_name={{ shop_name|urlencode }}{% endif %}">
         <div class="card-body p-2" id="shopDetailBody-{{ si }}">
             <div class="text-center py-3 text-muted">
                 <i class="bi bi-chevron-up fs-4 d-block mb-1 opacity-50"></i>

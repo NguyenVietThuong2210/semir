@@ -1,4 +1,13 @@
-{% load custom_filters %}
+{% load custom_filters perm_tags %}
+{% check_perm 'products.export' as can_dl_product %}
+{% if can_dl_product and shop_name %}
+<div class="d-flex justify-content-end mb-2">
+    <a href="{% url 'export_product_analytics' %}?shop_name={{ shop_name|urlencode }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+       class="btn btn-outline-success btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Download Excel
+    </a>
+</div>
+{% endif %}
 
 {# Overview KPIs #}
 {% with ov=overview %}

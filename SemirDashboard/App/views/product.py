@@ -185,12 +185,14 @@ def export_product_analytics(request):
     date_from = parse_date_silent(start_date)
     date_to   = parse_date_silent(end_date)
 
+    shop_name  = request.GET.get("shop_name", "").strip() or None
+
     export_tabs = [tab_param] if tab_param in _EXPORT_TABS else list(_EXPORT_TABS)
 
     tabs_data = {}
     for tab in export_tabs:
         d = get_product_tab(tab, date_from=date_from, date_to=date_to,
-                            shop_group=shop_group or None)
+                            shop_group=shop_group or None, shop_name=shop_name)
         if d:
             tabs_data[tab] = d
 
@@ -199,12 +201,14 @@ def export_product_analytics(request):
         return redirect("product_dashboard")
 
     wb = export_product_analytics_to_excel(
-        tabs_data, date_from=date_from, date_to=date_to, shop_group=shop_group
+        tabs_data, date_from=date_from, date_to=date_to,
+        shop_group=shop_group, shop_name=shop_name,
     )
     ts = datetime.now().strftime('%H%M%S')
     period = f"{date_from}_{date_to}" if date_from and date_to else datetime.now().strftime('%Y%m%d')
     tab_suffix = f"_{tab_param}" if tab_param in _EXPORT_TABS else ""
-    fn = f"product_analytics{tab_suffix}_{period}_{ts}.xlsx"
+    shop_suffix = f"_{shop_name.replace(' ', '_')[:20]}" if shop_name else ""
+    fn = f"product_analytics{tab_suffix}{shop_suffix}_{period}_{ts}.xlsx"
 
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

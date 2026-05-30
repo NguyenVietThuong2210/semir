@@ -1,4 +1,4 @@
-{% load custom_filters perm_tags %}
+﻿{% load custom_filters perm_tags %}
 {% with rows=data.by_product overview=data.overview %}
 {% if not rows %}
 <div class="text-muted text-center py-4">No data available.</div>
@@ -7,12 +7,14 @@
 {% check_perm 'products.export' as can_dl_prod %}
 {% if can_dl_prod %}
 <div class="d-flex justify-content-end mb-2">
-    <a href="{% url 'export_product_analytics' %}?tab=product{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}"
+    <a href="{% url 'export_product_analytics' %}?tab=product{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}{% if shop_name %}&shop_name={{ shop_name|urlencode }}{% endif %}"
        class="btn btn-sm btn-outline-success">
         <i class="bi bi-file-earmark-excel"></i> Download
     </a>
 </div>
 {% endif %}
+
+<p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Top 50 best-selling products ranked by sales amount. Shows product code, brand, campaign, category, collection season, and full sales metrics.</p>
 
 <div class="table-responsive tab-tbl-wrap">
 <table class="table table-sm table-hover align-middle mb-0" style="font-size:.84rem;">

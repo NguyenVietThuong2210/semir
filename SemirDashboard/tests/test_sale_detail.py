@@ -431,3 +431,48 @@ class SaleDetailImportTest(SnapshotTestCase):
         """shop_detail main page should still return 200 after adding product section."""
         r = self.client.get(reverse("shop_detail"), follow=True)
         self.assertEqual(r.status_code, 200)
+
+    def test_product_tab_shop_card_structure(self):
+        """shop_card tab returns all keys that _shop_card_body.html expects."""
+        shop = SaleDetail.objects.exclude(shop_name='').values_list('shop_name', flat=True).first()
+        if not shop:
+            self.skipTest("No SaleDetail rows in test DB")
+        data = get_product_tab('shop_card', shop_name=shop)
+        self.assertIsNotNone(data, "shop_card tab returned None")
+        for key in ('by_month', 'by_year', 'by_week', 'by_sales_season',
+                    'by_product_season', 'by_vip_grade', 'by_brand',
+                    'by_category', 'by_product', 'campaign_groups',
+                    'top_by_brand', 'top_by_campaign', 'overview'):
+            self.assertIn(key, data, f"shop_card tab missing key '{key}'")
+
+    def test_product_tab_shop_card_endpoint_200(self):
+        """product_tab/shop_card?shop_name=X must return 200 (used by per-shop collapse lazy-load)."""
+        shop = SaleDetail.objects.exclude(shop_name='').values_list('shop_name', flat=True).first()
+        if not shop:
+            self.skipTest("No SaleDetail rows in test DB")
+        import urllib.parse
+        r = self.client.get(
+            reverse("product_tab", kwargs={"tab": "shop_card"})
+            + f"?shop_name={urllib.parse.quote(shop)}",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(r.status_code, 200, f"shop_card endpoint returned {r.status_code}")
+
+    def test_shop_detail_overview_matches_shop_tab_row(self):
+        """KPI parity: shop_detail overview total_qty == By Shop tab row qty for the same shop."""
+        shop = SaleDetail.objects.exclude(shop_name='').values_list('shop_name', flat=True).first()
+        if not shop:
+            self.skipTest("No SaleDetail rows in test DB")
+        # Data from shop_detail product partial path
+        detail_data = get_product_tab('month', shop_name=shop)
+        detail_qty = detail_data['overview'].get('total_qty') or 0
+        # Data from By Shop tab (all shops, no shop_name filter)
+        shop_tab_data = get_product_tab('shop')
+        matching = [r for r in shop_tab_data.get('by_shop', []) if r['shop_name'] == shop]
+        self.assertEqual(len(matching), 1, f"Expected 1 row for shop '{shop}' in By Shop tab, got {len(matching)}")
+        shop_tab_qty = matching[0].get('qty') or 0
+        self.assertEqual(
+            int(detail_qty), int(shop_tab_qty),
+            f"Overview qty mismatch for shop '{shop}': "
+            f"shop_detail={detail_qty}, By Shop tab={shop_tab_qty}",
+        )

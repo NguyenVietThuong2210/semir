@@ -521,6 +521,20 @@ class InventoryImportTest(SnapshotTestCase):
         )
         self.assertEqual(r.status_code, 200)
 
+    def test_prefix_detail_case_insensitive(self):
+        """istartswith must match regardless of case."""
+        prefix = self._first_prefix()
+        if not prefix:
+            self.skipTest("No product codes in inventory DB")
+        data_upper = get_product_prefix_detail(prefix.upper())
+        data_lower = get_product_prefix_detail(prefix.lower())
+        if not data_upper or not data_lower:
+            self.skipTest("No rows matched prefix")
+        self.assertEqual(
+            data_upper['totals']['sku_lines'],
+            data_lower['totals']['sku_lines'],
+        )
+
     def test_shop_detail_inventory_partial_with_shop(self):
         shop = self._first_shop()
         if not shop:

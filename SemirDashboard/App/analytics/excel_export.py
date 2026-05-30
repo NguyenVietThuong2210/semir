@@ -2981,7 +2981,7 @@ def export_coupon_chart_to_excel(
 
 # ── Product Analytics Excel Export ───────────────────────────────────────────
 
-def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=None, shop_group=None):
+def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=None, shop_group=None, shop_name=None):
     """Export Sales & Product Analytics tabs to Excel workbook."""
     from App.analytics.category_translations import translate_category
     wb = Workbook()
@@ -2993,7 +2993,7 @@ def export_product_analytics_to_excel(tabs_data: dict, date_from=None, date_to=N
     ws.append(["Sales & Product Analytics Export"])
     ws['A1'].font = XL_TITLE_FONT
     ws.append([f"Period: {date_from} — {date_to}" if date_from else "Period: All Time"])
-    ws.append([f"Shop Group: {shop_group or 'All'}"])
+    ws.append([f"Shop: {shop_name}" if shop_name else f"Shop Group: {shop_group or 'All'}"])
     ws.append([])
     if overview:
         ws.append(["KPI", "Value"])

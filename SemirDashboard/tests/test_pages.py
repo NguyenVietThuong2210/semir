@@ -535,6 +535,18 @@ class ExportSmokeTest(SnapshotTestCase):
         r = self.client.get(reverse("export_product_analytics") + "?tab=product")
         self._assert_excel(r)
 
+    def test_export_product_analytics_with_shop_name(self):
+        """Export filtered to a specific shop — verifies shop_name param threads through."""
+        from App.models import SaleDetail
+        shop = SaleDetail.objects.values_list('shop_name', flat=True).order_by('shop_name').first()
+        if not shop:
+            self.skipTest("No SaleDetail data")
+        import urllib.parse
+        r = self.client.get(
+            reverse("export_product_analytics") + f"?shop_name={urllib.parse.quote(shop)}"
+        )
+        self._assert_excel(r)
+
     # ── Inventory dead stock export ───────────────────────────────────────────
 
     def test_export_inventory_dead_stock_200(self):

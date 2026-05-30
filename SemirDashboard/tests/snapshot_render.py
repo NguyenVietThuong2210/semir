@@ -57,6 +57,32 @@ pages = [
     ("/inventory/",                                                    "19_inventory_analytics"),
     ("/upload/inventory/",                                             "20_upload_inventory"),
     ("/upload/sales/",                                                 "21_upload_sale_detail"),
+    # Product tab AJAX endpoints — render each tab directly to verify descriptions
+    ("/products/tab/month/",                                           "22_product_tab_month"),
+    ("/products/tab/year/",                                            "23_product_tab_year"),
+    ("/products/tab/week/",                                            "24_product_tab_week"),
+    ("/products/tab/sales_season/",                                    "25_product_tab_sales_season"),
+    ("/products/tab/product_season/",                                  "26_product_tab_product_season"),
+    ("/products/tab/vip_grade/",                                       "27_product_tab_vip_grade"),
+    ("/products/tab/brand/",                                           "28_product_tab_brand"),
+    ("/products/tab/category/",                                        "29_product_tab_category"),
+    ("/products/tab/campaign/",                                        "30_product_tab_campaign"),
+    ("/products/tab/product/",                                         "31_product_tab_top_products"),
+    ("/products/tab/shop/",                                            "32_product_tab_shop"),
+]
+
+# CNV Customer Analytics tab endpoints — require X-Requested-With: XMLHttpRequest
+CNV_TABS = [
+    ("/cnv/customer-analytics/tab/bd_month/",                          "33_cnv_tab_bd_month"),
+    ("/cnv/customer-analytics/tab/bd_season/",                         "34_cnv_tab_bd_season"),
+    ("/cnv/customer-analytics/tab/bd_week/",                           "35_cnv_tab_bd_week"),
+    ("/cnv/customer-analytics/tab/bd_shop/",                           "36_cnv_tab_bd_shop"),
+    ("/cnv/customer-analytics/tab/bd_month_allshops/",                 "37_cnv_tab_bd_month_allshops"),
+    ("/cnv/customer-analytics/tab/bd_season_allshops/",                "38_cnv_tab_bd_season_allshops"),
+    ("/cnv/customer-analytics/tab/bd_week_allshops/",                  "39_cnv_tab_bd_week_allshops"),
+    ("/cnv/customer-analytics/tab/ca_pos_cnv/",                        "40_cnv_tab_pos_cnv"),
+    ("/cnv/customer-analytics/tab/ca_zalo/",                           "41_cnv_tab_zalo"),
+    ("/cnv/customer-analytics/tab/ca_points/",                         "42_cnv_tab_points"),
 ]
 
 
@@ -247,10 +273,13 @@ index_lines.append("|-------|-----|--------|------|--------|--------------|")
 
 total_issues = 0
 
-for url, label in pages:
+all_pages = [(url, label, {}) for url, label in pages] + \
+            [(url, label, {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}) for url, label in CNV_TABS]
+
+for url, label, extra_kwargs in all_pages:
     try:
         t0 = time.time()
-        r = c.get(url, follow=True)
+        r = c.get(url, follow=True, **extra_kwargs)
         elapsed = time.time() - t0
         html_text = r.content.decode("utf-8", errors="replace")
         size_kb = len(r.content) / 1024.0
