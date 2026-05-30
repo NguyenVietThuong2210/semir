@@ -1,6 +1,6 @@
 # Render Snapshot Index
 
-Generated: 2026-05-30 18:52:01
+Generated: 2026-05-30 19:07:52
 
 | Label | URL | Status | Size | Tables | Token issues |
 |-------|-----|--------|------|--------|--------------|
@@ -20,7 +20,7 @@ Generated: 2026-05-30 18:52:01
 | 14_cnv_sync_status | `/cnv/sync-status/` | 200 | 36.1KB | 1 | 0 |
 | 15_upload_customers | `/upload/customers/` | 200 | 37.2KB | 2 | 0 |
 | 16_user_management | `/users/` | 200 | 98.4KB | 1 | 0 |
-| 17_admin_logs | `/admin-logs/` | 200 | 99.8KB | 3 | 0 |
+| 17_admin_logs | `/admin-logs/` | 200 | 99.7KB | 3 | 0 |
 | 18_product_analytics | `/products/` | 200 | 368.1KB | 5 | 0 |
 | 19_inventory_analytics | `/inventory/` | 200 | 1235.6KB | 63 | 0 |
 | 20_upload_inventory | `/upload/inventory/` | 200 | 31.5KB | 0 | 0 |
@@ -32,7 +32,7 @@ Generated: 2026-05-30 18:52:01
 | 26_product_tab_product_season | `/products/tab/product_season/` | 200 | 1536.5KB | 57 | 0 |
 | 27_product_tab_vip_grade | `/products/tab/vip_grade/` | 200 | 334.3KB | 5 | 0 |
 | 28_product_tab_brand | `/products/tab/brand/` | 200 | 533.2KB | 13 | 0 |
-| 29_product_tab_category | `/products/tab/category/` | 200 | 159.1KB | 1 | 0 |
+| 29_product_tab_category | `/products/tab/category/` | 200 | 159.0KB | 1 | 0 |
 | 30_product_tab_campaign | `/products/tab/campaign/` | 200 | 140.1KB | 1 | 0 |
 | 31_product_tab_top_products | `/products/tab/product/` | 200 | 38.1KB | 1 | 0 |
 | 32_product_tab_shop | `/products/tab/shop/` | 200 | 29.2KB | 1 | 0 |
