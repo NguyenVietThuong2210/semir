@@ -1,6 +1,6 @@
 # Render Snapshot Index
 
-Generated: 2026-05-30 16:03:18
+Generated: 2026-05-30 18:52:01
 
 | Label | URL | Status | Size | Tables | Token issues |
 |-------|-----|--------|------|--------|--------------|
@@ -28,17 +28,17 @@ Generated: 2026-05-30 16:03:18
 | 22_product_tab_month | `/products/tab/month/` | 200 | 334.3KB | 5 | 0 |
 | 23_product_tab_year | `/products/tab/year/` | 200 | 334.2KB | 5 | 0 |
 | 24_product_tab_week | `/products/tab/week/` | 200 | 1110.4KB | 17 | 0 |
-| 25_product_tab_sales_season | `/products/tab/sales_season/` | 200 | 334.3KB | 5 | 0 |
+| 25_product_tab_sales_season | `/products/tab/sales_season/` | 200 | 334.2KB | 5 | 0 |
 | 26_product_tab_product_season | `/products/tab/product_season/` | 200 | 1536.5KB | 57 | 0 |
-| 27_product_tab_vip_grade | `/products/tab/vip_grade/` | 200 | 334.4KB | 5 | 0 |
+| 27_product_tab_vip_grade | `/products/tab/vip_grade/` | 200 | 334.3KB | 5 | 0 |
 | 28_product_tab_brand | `/products/tab/brand/` | 200 | 533.2KB | 13 | 0 |
-| 29_product_tab_category | `/products/tab/category/` | 200 | 159.0KB | 1 | 0 |
+| 29_product_tab_category | `/products/tab/category/` | 200 | 159.1KB | 1 | 0 |
 | 30_product_tab_campaign | `/products/tab/campaign/` | 200 | 140.1KB | 1 | 0 |
 | 31_product_tab_top_products | `/products/tab/product/` | 200 | 38.1KB | 1 | 0 |
 | 32_product_tab_shop | `/products/tab/shop/` | 200 | 29.2KB | 1 | 0 |
-| 33_cnv_tab_bd_month | `/cnv/customer-analytics/tab/bd_month/` | 200 | 7.4KB | 1 | 0 |
-| 34_cnv_tab_bd_season | `/cnv/customer-analytics/tab/bd_season/` | 200 | 3.9KB | 1 | 0 |
-| 35_cnv_tab_bd_week | `/cnv/customer-analytics/tab/bd_week/` | 200 | 28.1KB | 1 | 0 |
+| 33_cnv_tab_bd_month | `/cnv/customer-analytics/tab/bd_month/` | 200 | 7.5KB | 1 | 0 |
+| 34_cnv_tab_bd_season | `/cnv/customer-analytics/tab/bd_season/` | 200 | 4.0KB | 1 | 0 |
+| 35_cnv_tab_bd_week | `/cnv/customer-analytics/tab/bd_week/` | 200 | 28.2KB | 1 | 0 |
 | 36_cnv_tab_bd_shop | `/cnv/customer-analytics/tab/bd_shop/` | 200 | 890.8KB | 73 | 0 |
 | 37_cnv_tab_bd_month_allshops | `/cnv/customer-analytics/tab/bd_month_allshops/` | 200 | 206.4KB | 22 | 0 |
 | 38_cnv_tab_bd_season_allshops | `/cnv/customer-analytics/tab/bd_season_allshops/` | 200 | 83.1KB | 8 | 0 |

@@ -1,7 +1,7 @@
 {% load custom_filters perm_tags %}
 {% check_perm 'sales.export' as can_dl_analytics %}
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="text-muted small mb-0">Compare all shops for each week.</p>
+    <p class="text-muted small mb-0">All shops side by side for each week (Mon–Sun) — active customers and return visit rate per shop.</p>
     {% if can_dl_analytics %}<a href="{% url 'export_analytics' %}?tab=week_allshops{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
 </div>
 

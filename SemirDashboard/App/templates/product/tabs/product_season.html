@@ -5,19 +5,9 @@
 {% else %}
 
 {% check_perm 'products.export' as can_dl_ps %}
-{% if can_dl_ps %}
-<div class="d-flex justify-content-end mb-2">
-    <a href="{% url 'export_product_analytics' %}?tab=product_season{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}{% if shop_name %}&shop_name={{ shop_name|urlencode }}{% endif %}"
-       class="btn btn-sm btn-outline-success">
-        <i class="bi bi-file-earmark-excel"></i> Download
-    </a>
-</div>
-{% endif %}
-
-<div class="alert alert-info py-2 mb-3" style="font-size:.82rem;">
-    <i class="bi bi-info-circle me-1"></i>
-    <strong>Product Season</strong> — grouping by the product's design collection year &amp; season
-    (e.g. M2-4, M5-7). This shows <em>which collections are selling</em>, independent of the sales date.
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Sales grouped by the product's design collection (e.g. M2-4, M5-7) — shows which collections are selling best, regardless of when the sale was made. Compare with "By Sales Season" which groups by sale date.</p>
+    {% if can_dl_ps %}<a href="{% url 'export_product_analytics' %}?tab=product_season{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if shop_group %}&shop_group={{ shop_group }}{% endif %}{% if shop_name %}&shop_name={{ shop_name|urlencode }}{% endif %}" class="btn btn-sm btn-outline-success flex-shrink-0 ms-2"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
 </div>
 
 <div class="card mb-3 border-0 shadow-sm">

@@ -1,7 +1,7 @@
 {% load custom_filters perm_tags %}
 {% check_perm 'coupons.export' as can_dl_coupons %}
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="text-muted small mb-0">Sorted by Coupon ID (ascending). Customer name + phone from VIP ID lookup. <span class="badge bg-warning text-dark">Warning</span> = shop mismatch between coupon's using shop and invoice shop, or invoice not found.</p>
+    <p class="text-muted small mb-0">Sorted by coupon code. Customer name and phone are matched from the loyalty database. <span class="badge bg-warning text-dark">Warning</span> = the coupon's shop doesn't match the bill's shop, or no matching bill was found.</p>
     {% if can_dl_coupons %}<a href="{% url 'export_coupons' %}?tab=detail&start_date={{ start_date }}&end_date={{ end_date }}&coupon_id_prefix={{ coupon_id_prefix }}&shop_group={{ shop_group }}" class="btn btn-outline-success btn-sm ms-2 flex-shrink-0"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
 </div>
 <div class="table-responsive">
