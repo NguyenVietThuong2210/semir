@@ -71,22 +71,23 @@ class InventoryImportTest(SnapshotTestCase):
                          f"Expected no errors, got: {self.import_result['errors'][:5]}")
 
     def test_import_created_rows(self):
-        total = self.import_result['created'] + self.import_result['updated']
-        self.assertGreater(total, 0, "No rows imported")
+        self.assertGreater(self.import_result['created'], 0, "No rows imported")
 
     def test_db_row_count_matches_import(self):
         db_count = InventorySnapshot.objects.count()
-        expected = self.import_result['created'] + self.import_result['updated']
-        self.assertEqual(db_count, expected)
+        self.assertEqual(db_count, self.import_result['created'])
 
-    def test_upsert_idempotent(self):
-        """Re-importing same file must not increase row count."""
+    def test_truncate_replace_idempotent(self):
+        """Re-importing same file must truncate old data and re-create all rows (truncate+replace)."""
         inv_file = INPUT_DIR / "inventory.xlsx"
         before = InventorySnapshot.objects.count()
         result2 = process_inventory_file(_open(inv_file))
         after = InventorySnapshot.objects.count()
-        self.assertEqual(before, after, "Row count changed on re-import (upsert broken)")
-        self.assertEqual(result2['created'], 0, "Expected 0 created on re-import")
+        # Row count must stay the same after re-import
+        self.assertEqual(before, after, "Row count changed on re-import")
+        # All old rows deleted, all new rows created
+        self.assertEqual(result2['deleted'], before, "Expected all old rows deleted")
+        self.assertGreater(result2['created'], 0, "Expected rows re-created")
 
     def test_snapshot_db_shape(self):
         """Capture DB-level aggregates — regression anchor on imported data."""

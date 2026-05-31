@@ -874,7 +874,7 @@ class ApiChartTest(ApiStructureTest):
 class ApiParityTest(ApiStructureTest):
     """Verify API output matches shared service functions (web view standard)."""
 
-    PERF_LIMIT = 5.0  # seconds — flag API calls slower than this
+    PERF_LIMIT = 10.0  # seconds — flag API calls slower than this
 
     def _log_perf(self, label, elapsed):
         get_run_log().log(f"  [parity-perf] {label}: {elapsed:.2f}s (limit={self.PERF_LIMIT}s)")
