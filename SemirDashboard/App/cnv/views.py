@@ -631,7 +631,7 @@ def customer_chart(request):
         "cnv/customer_chart.html",
         {
             "overview":        data["overview"],
-            "chart_data_json": json.dumps(data),
+            "chart_data_json": data,
             "chart_shops":     data["shops"],   # sorted list for template checklist
             "start_date":      start_date,
             "end_date":        end_date,

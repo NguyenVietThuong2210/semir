@@ -172,7 +172,7 @@ def analytics_chart(request):
             "session_label": data.get("session_label"),
             "overview": data["overview"],
             "shop_stats": data["by_shop"],
-            "chart_data_json": json.dumps(chart_data),
+            "chart_data_json": chart_data,
             "start_date": start_date,
             "end_date": end_date,
             "shop_group": shop_group,

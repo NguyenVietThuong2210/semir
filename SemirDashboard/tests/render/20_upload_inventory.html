@@ -505,7 +505,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="FghI704roeHlvlXK4PnHmtnEOCaNl0bAwTzAE6n9r5EIVmwL8pXMmctVC3s40776">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="2cohM0wuRc30TLaU6YdIpaq4zU7E1tJ40k34IyigMinSqCtnYHSpMTXjQaMvGPLQ">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -753,9 +753,18 @@
     <div class="col-md-8 mx-auto">
         <div class="card">
             <div class="card-body">
-                <div class="alert alert-info">
-                    <h6><i class="bi bi-info-circle"></i> File Requirements</h6>
-                    <p class="mb-2">Your file should contain the following columns:</p>
+                <div class="alert alert-danger border-danger mb-3">
+                    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle-fill"></i> WARNING — Full Data Replacement</h6>
+                    <p class="mb-1">Uploading a new file will <strong>permanently delete ALL existing inventory data</strong> and replace it with the contents of the uploaded file.</p>
+                    <ul class="small mb-0">
+                        <li>There is <strong>no undo</strong> — deleted rows cannot be recovered.</li>
+                        <li>Ensure your file contains the <strong>complete, current inventory snapshot</strong> before uploading.</li>
+                        <li>Upload will be rejected if the file has zero valid rows.</li>
+                    </ul>
+                </div>
+
+                <div class="alert alert-info mb-3">
+                    <h6><i class="bi bi-info-circle"></i> Required Columns</h6>
                     <ul class="small mb-0">
                         <li><strong>Warehouse/Shop ID</strong> — Shop identifier (required)</li>
                         <li><strong>Warehouse/Shop</strong> — Shop name (required)</li>
@@ -766,13 +775,10 @@
                         <li><strong>Inventory Quantity</strong>, <strong>In Transit Quantity</strong>, <strong>Total Inventory Quantity</strong></li>
                         <li><strong>Tagprice</strong>, <strong>Tag Amount</strong>, <strong>Total Tag Amount</strong></li>
                     </ul>
-                    <p class="mt-2 mb-0 small text-warning">
-                        <i class="bi bi-arrow-repeat"></i> <strong>Re-uploading the same shop+product overwrites existing data</strong> — no duplicate rows created.
-                    </p>
                 </div>
 
-                <form method="post" enctype="multipart/form-data">
-                    <input type="hidden" name="csrfmiddlewaretoken" value="FghI704roeHlvlXK4PnHmtnEOCaNl0bAwTzAE6n9r5EIVmwL8pXMmctVC3s40776">
+                <form method="post" enctype="multipart/form-data" id="inventoryUploadForm">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="2cohM0wuRc30TLaU6YdIpaq4zU7E1tJ40k34IyigMinSqCtnYHSpMTXjQaMvGPLQ">
                     <div class="mb-3">
                         <label for="id_file" class="form-label">
                             <i class="bi bi-file-earmark-spreadsheet"></i> Select File
@@ -781,14 +787,27 @@
                         <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
                     </div>
                     <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-success btn-lg">
-                            <i class="bi bi-upload"></i> Upload Inventory Data
+                        <button type="button" class="btn btn-danger btn-lg" onclick="confirmInventoryUpload()">
+                            <i class="bi bi-upload"></i> Upload &amp; Replace All Inventory Data
                         </button>
                         <a href="/" class="btn btn-outline-secondary">
                             <i class="bi bi-arrow-left"></i> Back to Home
                         </a>
                     </div>
                 </form>
+
+                <script>
+                function confirmInventoryUpload() {
+                    const fileInput = document.querySelector('#inventoryUploadForm input[type=file]');
+                    if (!fileInput || !fileInput.files.length) {
+                        alert('Please select a file first.');
+                        return;
+                    }
+                    if (confirm('⚠️ WARNING\n\nThis will DELETE ALL existing inventory data and replace it with the uploaded file.\n\nThis action cannot be undone.\n\nAre you sure you want to continue?')) {
+                        document.getElementById('inventoryUploadForm').submit();
+                    }
+                }
+                </script>
             </div>
         </div>
 

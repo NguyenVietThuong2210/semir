@@ -84,7 +84,7 @@ def coupon_dashboard(request):
             "coupon_id_prefix": coupon_id_prefix,
             "shop_group": shop_group,
             "quick_btns": [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90), ("Last Year", 365)],
-            "campaigns_json": json.dumps(_campaigns),
+            "campaigns_json": _campaigns,
         },
     )
 
@@ -210,10 +210,10 @@ def coupon_chart(request):
         {
             "all_time": data["all_time"],
             "period": data["period"],
-            "all_time_json": json.dumps(data["all_time"]),
-            "period_json": json.dumps(data["period"]),
-            "trend_data_json": json.dumps(trend_data),
-            "campaigns_json": json.dumps(campaigns),
+            "all_time_json": data["all_time"],
+            "period_json": data["period"],
+            "trend_data_json": trend_data,
+            "campaigns_json": campaigns,
             "start_date": start_date,
             "end_date": end_date,
             "coupon_id_prefix": coupon_id_prefix,
