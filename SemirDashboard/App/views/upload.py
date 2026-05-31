@@ -214,7 +214,7 @@ def upload_inventory(request):
                 cache.delete("shop_detail_dropdowns")
                 bump_inventory_version()
             _start_thread(job_id, process_inventory_file, file_bytes, f.name, _inv_done)
-            messages.info(request, f"Inventory upload started — tracking job {job_id[:8]}…")
+            messages.warning(request, f"Inventory upload started — ALL existing inventory data will be replaced. Tracking job {job_id[:8]}…")
             return redirect("upload_inventory")
         else:
             messages.error(request, "Invalid form submission.")

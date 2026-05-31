@@ -1,34 +1,58 @@
 {% comment %}
-Reusable drill-down block showing category breakdown + campaign breakdown + top products + top products by campaign
-for one period/grade/brand.
+Reusable drill-down block — 4 individually expandable sections:
+  1. By Category   2. By Product Campaign   3. Top Products   4. Top by Campaign
 Context required: cat_groups, campaign_groups [{..., top_products:[]}], top_products, currency.
 {% endcomment %}
 {% load custom_filters %}
 
-{# ── Category Breakdown ── #}
-{% with cat_groups=cat_groups %}
-{% include "product/tabs/_cat_drilldown.html" %}
-{% endwith %}
-
-{# ── Campaign Breakdown ── #}
-{% if campaign_groups %}
-<div class="mt-2 pt-1" style="border-top:1px dashed var(--border);">
-    <p class="small text-muted fw-semibold mb-1 text-uppercase" style="font-size:.72rem;">
-        <i class="bi bi-flag me-1"></i>By Product Campaign
-    </p>
-    {% with campaign_groups=campaign_groups %}
-    {% include "product/tabs/_campaign_drilldown.html" %}
-    {% endwith %}
-</div>
+{# ── 1. By Category ── #}
+{% if cat_groups %}
+<details class="mb-1 border rounded">
+    <summary style="cursor:pointer;padding:5px 10px;background:rgba(var(--primary-rgb),.07);
+                    border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+        <span class="fw-semibold" style="font-size:.82rem;">
+            <i class="bi bi-grid-3x3-gap text-primary me-1"></i>By Category
+        </span>
+        <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+    </summary>
+    <div class="p-1">
+        {% with cat_groups=cat_groups %}
+        {% include "product/tabs/_cat_drilldown.html" %}
+        {% endwith %}
+    </div>
+</details>
 {% endif %}
 
-{# ── Top Products ── #}
+{# ── 2. By Product Campaign ── #}
+{% if campaign_groups %}
+<details class="mb-1 border rounded">
+    <summary style="cursor:pointer;padding:5px 10px;background:rgba(var(--primary-rgb),.07);
+                    border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+        <span class="fw-semibold" style="font-size:.82rem;">
+            <i class="bi bi-flag text-primary me-1"></i>By Product Campaign
+        </span>
+        <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+    </summary>
+    <div class="p-1">
+        {% with campaign_groups=campaign_groups %}
+        {% include "product/tabs/_campaign_drilldown.html" %}
+        {% endwith %}
+    </div>
+</details>
+{% endif %}
+
+{# ── 3. Top Products ── #}
 {% if top_products %}
-<div class="mt-2 pt-1" style="border-top:1px dashed var(--border);">
-    <p class="small text-muted fw-semibold mb-1 text-uppercase" style="font-size:.72rem;">
-        <i class="bi bi-list-ol me-1"></i>Top Products
-    </p>
-    <div class="table-responsive" style="font-size:.78rem;">
+<details class="mb-1 border rounded">
+    <summary style="cursor:pointer;padding:5px 10px;background:rgba(var(--primary-rgb),.07);
+                    border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+        <span class="fw-semibold" style="font-size:.82rem;">
+            <i class="bi bi-list-ol text-primary me-1"></i>Top Products
+            <span class="badge bg-secondary ms-1" style="font-size:.68rem;">{{ top_products|length }}</span>
+        </span>
+        <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+    </summary>
+    <div class="table-responsive p-1" style="font-size:.78rem;">
     <table class="table table-sm table-hover align-middle mb-0">
         <thead style="background:var(--secondary);color:#fff;font-size:.75rem;">
             <tr>
@@ -66,15 +90,20 @@ Context required: cat_groups, campaign_groups [{..., top_products:[]}], top_prod
         </tbody>
     </table>
     </div>
-</div>
+</details>
 {% endif %}
 
-{# ── Top Products by Campaign ── #}
+{# ── 4. Top Products by Campaign ── #}
 {% if campaign_groups %}
-<div class="mt-2 pt-1" style="border-top:1px dashed var(--border);">
-    <p class="small text-muted fw-semibold mb-1 text-uppercase" style="font-size:.72rem;">
-        <i class="bi bi-flag me-1"></i>Top Products by Campaign
-    </p>
+<details class="mb-1 border rounded">
+    <summary style="cursor:pointer;padding:5px 10px;background:rgba(var(--primary-rgb),.07);
+                    border-radius:4px;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+        <span class="fw-semibold" style="font-size:.82rem;">
+            <i class="bi bi-flag text-primary me-1"></i>Top Products by Campaign
+        </span>
+        <i class="bi bi-chevron-down text-muted" style="font-size:.75rem;"></i>
+    </summary>
+    <div class="p-1">
     {% for cg in campaign_groups %}{% if cg.top_products %}
     <details class="mb-1" style="font-size:.76rem;">
         <summary style="cursor:pointer;padding:3px 6px;border-radius:4px;
@@ -127,5 +156,6 @@ Context required: cat_groups, campaign_groups [{..., top_products:[]}], top_prod
         </div>
     </details>
     {% endif %}{% endfor %}
-</div>
+    </div>
+</details>
 {% endif %}

@@ -80,10 +80,12 @@ def _map_row(row):
 
 def process_inventory_file(file, progress_fn=None):
     """
-    Process inventory xlsx/csv → upsert InventorySnapshot rows.
-    Returns {created, updated, skipped, errors}.
+    Process inventory xlsx/csv → TRUNCATE existing data, then INSERT all rows.
+    Each upload replaces the entire inventory snapshot.
+    Returns {created, deleted, skipped, errors}.
     """
-    logger.info("=== START Inventory Import: %s ===", file.name, extra={"step": "inventory_import"})
+    logger.info("=== START Inventory Import (truncate+replace): %s ===", file.name,
+                extra={"step": "inventory_import"})
     df = read_file(file)
 
     # Normalize headers: strip + upper, then remap via _COL_MAP
@@ -94,80 +96,51 @@ def process_inventory_file(file, progress_fn=None):
     total_rows = len(df)
     logger.info("Total rows: %d", total_rows, extra={"step": "inventory_import"})
 
-    created = updated = skipped = 0
+    # Parse all rows first — abort if too many errors before touching the DB
+    to_create = []
+    skipped = 0
     errors = []
+    seen_keys = set()
 
-    for batch_num, batch_start in enumerate(range(0, total_rows, BATCH_SIZE), 1):
-        batch_end = min(batch_start + BATCH_SIZE, total_rows)
-        batch_df = df.iloc[batch_start:batch_end]
+    for idx, row in df.iterrows():
+        row_num = idx + 2
+        try:
+            data = _map_row(row.to_dict())
+            shop_id = data['shop_id']
+            product_code = data['product_code']
 
-        logger.info("[Batch %d] rows %d-%d", batch_num, batch_start + 1, batch_end,
-                    extra={"step": "inventory_import"})
+            if not shop_id or not product_code:
+                skipped += 1
+                continue
 
-        # Pre-fetch existing rows for this batch's (shop_id, product_code) pairs
-        pairs = [
-            (safe_str(row.get('shop_id', '')), safe_str(row.get('product_code', '')))
-            for _, row in batch_df.iterrows()
-        ]
-        existing = {
-            (obj.shop_id, obj.product_code): obj
-            for obj in InventorySnapshot.objects.filter(
-                shop_id__in=[p[0] for p in pairs],
-                product_code__in=[p[1] for p in pairs],
-            )
-        }
+            key = (shop_id, product_code)
+            if key in seen_keys:
+                skipped += 1
+                continue
+            seen_keys.add(key)
+            to_create.append(InventorySnapshot(**data))
 
-        to_create = {}  # keyed by (shop_id, product_code) — last row wins for intra-batch dups
-        to_update = {}  # same key pattern to avoid duplicate bulk_update calls
+        except Exception as exc:
+            errors.append(f"Row {row_num}: {exc}")
+            logger.error("Row %d error: %s", row_num, exc, extra={"step": "inventory_import"})
 
-        for idx, row in batch_df.iterrows():
-            row_num = idx + 2
-            try:
-                data = _map_row(row.to_dict())
-                shop_id = data['shop_id']
-                product_code = data['product_code']
+    # Truncate old data and insert new in a single atomic transaction
+    deleted = 0
+    created = 0
+    with transaction.atomic():
+        deleted, _ = InventorySnapshot.objects.all().delete()
+        logger.info("Truncated %d existing rows", deleted, extra={"step": "inventory_import"})
 
-                if not shop_id or not product_code:
-                    skipped += 1
-                    continue
+        for batch_start in range(0, len(to_create), BATCH_SIZE):
+            batch = to_create[batch_start:batch_start + BATCH_SIZE]
+            batch_num = batch_start // BATCH_SIZE + 1
+            InventorySnapshot.objects.bulk_create(batch, batch_size=BATCH_SIZE)
+            created += len(batch)
+            logger.info("[Batch %d] inserted %d rows", batch_num, len(batch),
+                        extra={"step": "inventory_import"})
+            if progress_fn:
+                progress_fn(min(batch_start + BATCH_SIZE, len(to_create)), len(to_create))
 
-                key = (shop_id, product_code)
-                if key in existing:
-                    obj = existing[key]
-                    for field, value in data.items():
-                        if field not in ('shop_id', 'product_code'):
-                            setattr(obj, field, value)
-                    to_update[key] = obj
-                else:
-                    to_create[key] = InventorySnapshot(**data)
-
-            except Exception as exc:
-                errors.append(f"Row {row_num}: {exc}")
-                logger.error("Row %d error: %s", row_num, exc, extra={"step": "inventory_import"})
-
-        update_fields = [
-            'shop_name', 'brand', 'product_name', 'product_name_vn', 'barcode', 'sku',
-            'color', 'size', 'year', 'season', 'gender', 'category_l1', 'category_l2',
-            'category_l3', 'tag_price', 'inventory_qty', 'in_transit_qty', 'total_qty',
-            'tag_amount', 'total_tag_amount', 'currency', 'uploaded_at',
-        ]
-
-        create_list = list(to_create.values())
-        update_list = list(to_update.values())
-        with transaction.atomic():
-            if create_list:
-                InventorySnapshot.objects.bulk_create(create_list, batch_size=1000, ignore_conflicts=True)
-                created += len(create_list)
-            if update_list:
-                InventorySnapshot.objects.bulk_update(update_list, fields=update_fields, batch_size=1000)
-                updated += len(update_list)
-
-        logger.info("[Batch %d] created=%d updated=%d", batch_num, len(create_list), len(update_list),
-                    extra={"step": "inventory_import"})
-
-        if progress_fn:
-            progress_fn(batch_end, total_rows)
-
-    logger.info("=== DONE Inventory Import: created=%d updated=%d skipped=%d errors=%d ===",
-                created, updated, skipped, len(errors), extra={"step": "inventory_import"})
-    return {'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors[:50]}
+    logger.info("=== DONE Inventory Import: deleted=%d created=%d skipped=%d errors=%d ===",
+                deleted, created, skipped, len(errors), extra={"step": "inventory_import"})
+    return {'created': created, 'deleted': deleted, 'skipped': skipped, 'errors': errors[:50]}

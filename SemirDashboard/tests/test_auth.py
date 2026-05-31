@@ -10,6 +10,7 @@ No fixture data needed — these tests create their own users.
 """
 import json
 from django.contrib.auth.models import User
+from django.test import override_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from tests.base import SnapshotTestCase
@@ -18,7 +19,13 @@ LOGIN_URL   = '/api/v1/auth/token/'
 REFRESH_URL = '/api/v1/auth/token/refresh/'
 LOGOUT_URL  = '/api/v1/auth/logout/'
 
+# Disable throttling for all auth tests — throttle is tested separately
+_NO_THROTTLE = override_settings(
+    DEFAULT_THROTTLE_RATES={'anon': '10000/min', 'user': '10000/min', 'login': '10000/min'}
+)
 
+
+@_NO_THROTTLE
 class LoginTest(SnapshotTestCase):
     @classmethod
     def setUpTestData(cls):
@@ -27,6 +34,11 @@ class LoginTest(SnapshotTestCase):
             password='StrongPass123!',
             is_active=True,
         )
+
+    def setUp(self):
+        super().setUp()
+        from django.core.cache import cache
+        cache.clear()
 
     def _post(self, url, data):
         return self.client.post(
