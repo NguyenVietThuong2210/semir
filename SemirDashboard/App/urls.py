@@ -47,8 +47,9 @@ urlpatterns = [
     path("products/campaigns/",        views.manage_product_campaigns,    name="manage_product_campaigns"),
 
     # ── Inventory Analytics ───────────────────────────────────────────────────
-    path("inventory/",         views.inventory_dashboard,         name="inventory_dashboard"),
-    path("inventory/export/",  views.export_inventory_dead_stock, name="export_inventory_dead_stock"),
+    path("inventory/",                views.inventory_dashboard,         name="inventory_dashboard"),
+    path("inventory/export/",         views.export_inventory_dead_stock, name="export_inventory_dead_stock"),
+    path("inventory/export/excel/",   views.export_inventory_excel,      name="export_inventory_excel"),
 
     # ── Customer ──────────────────────────────────────────────────────────────
     path("customer-detail/", views.customer_detail, name="customer_detail"),

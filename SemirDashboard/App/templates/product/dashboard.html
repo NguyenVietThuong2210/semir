@@ -26,9 +26,12 @@
 {% endblock %}
 
 {% block content %}
+{% check_perm 'products.export' as can_dl %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h2><i class="bi bi-graph-up-arrow me-2"></i>Sales &amp; Product Analytics</h2>
-    {% check_perm 'products.export' as can_dl %}
+    <div>
+        <h2><i class="bi bi-graph-up-arrow me-2"></i> Product Analytics</h2>
+        <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Analyze which products sell best by month, year, week, season, brand, category and shop. Filter by date range and shop group.</p>
+    </div>
     {% if can_dl %}
     <a href="{% url 'export_product_analytics' %}{% if lazy_params %}?{{ lazy_params }}{% endif %}"
        class="btn btn-outline-success btn-sm">
@@ -70,6 +73,9 @@
                 {% for label, days in quick_btns %}
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDaysBack({{ days }})">{{ label }}</button>
                 {% endfor %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="prodBtnThisMonth">This Month</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="prodBtnLastMonth">Last Month</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="prodBtnThisYear">This Year</button>
                 {% for yr in year_btns %}
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setYear({{ yr }})">{{ yr }}</button>
                 {% endfor %}
@@ -323,6 +329,21 @@
         document.querySelector('[name=start_date]').value = yr + '-01-01';
         document.querySelector('[name=end_date]').value   = yr + '-12-31';
     };
+    document.getElementById('prodBtnThisMonth')?.addEventListener('click', function(){
+        const n = new Date();
+        document.querySelector('[name=start_date]').value = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-01';
+        document.querySelector('[name=end_date]').value   = new Date(n.getFullYear(), n.getMonth()+1, 0).toISOString().slice(0,10);
+    });
+    document.getElementById('prodBtnLastMonth')?.addEventListener('click', function(){
+        const n = new Date(); n.setMonth(n.getMonth()-1);
+        document.querySelector('[name=start_date]').value = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-01';
+        document.querySelector('[name=end_date]').value   = new Date(n.getFullYear(), n.getMonth()+1, 0).toISOString().slice(0,10);
+    });
+    document.getElementById('prodBtnThisYear')?.addEventListener('click', function(){
+        const yr = new Date().getFullYear();
+        document.querySelector('[name=start_date]').value = yr + '-01-01';
+        document.querySelector('[name=end_date]').value   = yr + '-12-31';
+    });
 })();
 </script>
 {% endblock %}

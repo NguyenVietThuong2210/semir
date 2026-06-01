@@ -32,8 +32,18 @@
 {% endblock %}
 
 {% block content %}
+{% check_perm 'inventory.export' as can_export_inv %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h2><i class="bi bi-boxes"></i> Inventory Analytics</h2>
+    <div>
+        <h2><i class="bi bi-boxes"></i> Inventory Analytics</h2>
+        <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Snapshot of current stock levels by shop, brand and season. Filter by shop group, year and season. Use the Dead Stock section to identify slow-moving inventory.</p>
+    </div>
+    {% if can_export_inv %}
+    <a href="{% url 'export_inventory_excel' %}?shop_group={{ shop_group }}{% if year_filter %}&year={{ year_filter }}{% endif %}{% if season_filter %}&season={{ season_filter }}{% endif %}"
+       class="btn btn-outline-success btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Download Excel
+    </a>
+    {% endif %}
 </div>
 
 <!-- ── Filter Bar (same style as product/sales page) ──────────── -->

@@ -2,6 +2,7 @@
 import csv
 import io
 import logging
+from datetime import datetime
 
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -80,6 +81,100 @@ def inventory_dashboard(request):
         "product_prefix":     product_prefix,
         "prefix_data":        prefix_data,
     })
+
+
+@requires_perm("inventory.export")
+def export_inventory_excel(request):
+    """Export full inventory overview to Excel (for_sale by-shop summary + dead stock list)."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    shop_group = request.GET.get("shop_group", "")
+    year_str   = request.GET.get("year", "")
+    season     = request.GET.get("season", "")
+    year = int(year_str) if year_str.isdigit() else None
+
+    data = get_inventory_overview(shop_group=shop_group or None, year=year, season=season or None)
+    if not data:
+        messages.error(request, "No inventory data to export.")
+        return redirect("inventory_dashboard")
+
+    wb = openpyxl.Workbook()
+    hdr_fill = PatternFill("solid", fgColor="1a3a5c")
+    hdr_font = Font(bold=True, color="FFFFFF")
+
+    def _write_sheet(ws, rows, columns):
+        ws.append([c[0] for c in columns])
+        for cell in ws[1]:
+            cell.font = hdr_font
+            cell.fill = hdr_fill
+            cell.alignment = Alignment(horizontal="center")
+        for row in rows:
+            ws.append([row.get(c[1], "") for c in columns])
+        for i, col in enumerate(columns, 1):
+            ws.column_dimensions[get_column_letter(i)].width = col[2]
+
+    # Sheet 1: By Shop (for sale)
+    ws1 = wb.active
+    ws1.title = "By Shop (For Sale)"
+    by_shop = data.get("for_sale", {}).get("by_shop", [])
+    _write_sheet(ws1, by_shop, [
+        ("Shop", "shop_name", 30),
+        ("SKU Lines", "sku_lines", 12),
+        ("On Hand Qty", "on_hand_qty", 14),
+        ("In Transit", "in_transit_qty", 14),
+        ("Total Qty", "total_qty", 12),
+        ("Inv Value (VND)", "inv_value", 18),
+    ])
+
+    # Sheet 2: By Brand (for sale)
+    ws2 = wb.create_sheet("By Brand (For Sale)")
+    by_brand = data.get("for_sale", {}).get("by_brand", [])
+    _write_sheet(ws2, by_brand, [
+        ("Brand", "brand", 20),
+        ("SKU Lines", "sku_lines", 12),
+        ("On Hand Qty", "on_hand_qty", 14),
+        ("Inv Value (VND)", "inv_value", 18),
+    ])
+
+    # Sheet 3: Dead Stock
+    ws3 = wb.create_sheet("Dead Stock SKUs")
+    dead_top = data.get("for_sale", {}).get("dead", {}).get("top", [])
+    _write_sheet(ws3, dead_top, [
+        ("Shop", "shop_name", 28),
+        ("Product Code", "product_code", 14),
+        ("Product Name", "product_name", 30),
+        ("Color", "color", 12),
+        ("Size", "size", 8),
+        ("Brand", "brand", 14),
+        ("Year", "year", 8),
+        ("Season", "season", 10),
+        ("Tag Price", "tag_price", 12),
+        ("Qty", "qty", 8),
+        ("Value (VND)", "value", 16),
+    ])
+
+    # Sheet 4: Gifts (non-commercial)
+    ws4 = wb.create_sheet("By Shop (Gifts)")
+    gift_by_shop = data.get("gifts", {}).get("by_shop", [])
+    _write_sheet(ws4, gift_by_shop, [
+        ("Shop", "shop_name", 30),
+        ("SKU Lines", "sku_lines", 12),
+        ("On Hand Qty", "on_hand_qty", 14),
+        ("In Transit", "in_transit_qty", 14),
+    ])
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    slug = f"_{shop_group}" if shop_group else ""
+    slug += f"_{year}" if year else ""
+    slug += f"_{season}" if season else ""
+    fname = f"inventory{slug}_{ts}.xlsx"
+
+    resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+    wb.save(resp)
+    return resp
 
 
 @requires_perm("inventory.export")

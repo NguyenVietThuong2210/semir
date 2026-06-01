@@ -1,13 +1,14 @@
 {% load custom_filters perm_tags %}
 {% check_perm 'products.export' as can_dl_product %}
-{% if can_dl_product and shop_name %}
-<div class="d-flex justify-content-end mb-2">
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Top-selling products for this shop — ranked by quantity sold. Includes category, brand and discount breakdown.</p>
+    {% if can_dl_product and shop_name %}
     <a href="{% url 'export_product_analytics' %}?shop_name={{ shop_name|urlencode }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
-       class="btn btn-outline-success btn-sm">
+       class="btn btn-outline-success btn-sm flex-shrink-0 ms-2">
         <i class="bi bi-file-earmark-excel me-1"></i>Download Excel
     </a>
+    {% endif %}
 </div>
-{% endif %}
 
 {# Overview KPIs #}
 {% with ov=overview %}

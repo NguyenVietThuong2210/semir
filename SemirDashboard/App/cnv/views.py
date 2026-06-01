@@ -130,7 +130,7 @@ def customer_analytics(request):
         "lazy_params":  lazy_params,
         "start_date":   start_date,
         "end_date":     end_date,
-        "quick_btns":   [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90)],
+        "quick_btns":   [("Last 7 Days", 7), ("Last 30 Days", 30), ("Last 90 Days", 90), ("Last Year", 365)],
     }
     return render(request, "cnv/customer_analytics.html", context)
 
