@@ -953,6 +953,8 @@ class CustomerDetailView(APIView):
                     return Response({'detail': 'Customer not found'}, status=404)
         except Customer.DoesNotExist:
             return Response({'detail': 'Customer not found'}, status=404)
+        except Customer.MultipleObjectsReturned:
+            customer = Customer.objects.filter(vip_id=vip_id).first()
 
         # Mask phone (middle digits) — FR-006, PII protection
         masked_phone = _mask_phone(customer.phone or '')

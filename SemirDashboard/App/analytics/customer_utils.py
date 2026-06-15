@@ -116,6 +116,10 @@ def get_customer_info(vip_id, customer_obj=None):
             ).get(vip_id=vip_id)
         except Customer.DoesNotExist:
             cust = None
+        except Customer.MultipleObjectsReturned:
+            cust = Customer.objects.only(
+                'id', 'vip_id', 'vip_grade', 'registration_date', 'name'
+            ).filter(vip_id=vip_id).first()
     
     # Extract info
     if cust:

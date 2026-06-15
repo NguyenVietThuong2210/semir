@@ -42,6 +42,9 @@ def customer_detail(request):
                 customer = Customer.objects.get(vip_id=search_vip_id)
             except Customer.DoesNotExist:
                 logger.warning("Customer not found: vip_id=%s", search_vip_id)
+            except Customer.MultipleObjectsReturned:
+                customer = Customer.objects.filter(vip_id=search_vip_id).first()
+                logger.warning("Multiple customers found with vip_id=%s, using first", search_vip_id)
         elif search_phone:
             try:
                 customer = Customer.objects.get(phone=search_phone)
