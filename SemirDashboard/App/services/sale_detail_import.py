@@ -2,11 +2,10 @@
 App/services/sale_detail_import.py
 
 SaleDetail (HQ invoice line-item) file import.
-Upserts on unique_together (invoice_number, product_code, barcode).
+No unique constraint — all rows in file are inserted as-is.
 FK to SalesTransaction is resolved softly — null if header not yet imported.
 """
 import logging
-from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
@@ -15,7 +14,7 @@ from .file_reader import read_file, safe_str, safe_int, safe_decimal, parse_date
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 400  # kept low: SQLite IN-clause limit is 999 variables
+BATCH_SIZE = 400
 
 _COL_MAP = {
     'INVOICE NUMBER':    'invoice_number',
@@ -77,6 +76,7 @@ def _parse_time(val):
 
 def _parse_discount_pct(val):
     """Parse '100.00%' → Decimal('1.0000'), '50.5%' → Decimal('0.5050')."""
+    from decimal import Decimal, InvalidOperation
     if val is None:
         return None
     s = str(val).strip().rstrip('%')
@@ -123,9 +123,8 @@ def _map_row(row):
 
 def process_sale_detail_file(file, progress_fn=None):
     """
-    Process sale detail xlsx/csv → upsert SaleDetail rows.
-    FK to SalesTransaction resolved once via pre-load dict; null if header missing.
-    Returns {created, updated, skipped, errors}.
+    Process sale detail xlsx/csv → INSERT all rows without deduplication.
+    Returns {created, skipped, errors}.
     """
     logger.info("=== START Sale Detail Import: %s ===", file.name, extra={"step": "sale_detail_import"})
     df = read_file(file)
@@ -147,7 +146,7 @@ def process_sale_detail_file(file, progress_fn=None):
     )
     logger.info("Invoice set loaded: %d entries", len(invoice_map), extra={"step": "sale_detail_import"})
 
-    created = updated = skipped = 0
+    created = skipped = 0
     errors = []
 
     for batch_num, batch_start in enumerate(range(0, total_rows, BATCH_SIZE), 1):
@@ -157,37 +156,14 @@ def process_sale_detail_file(file, progress_fn=None):
         logger.info("[Batch %d] rows %d-%d", batch_num, batch_start + 1, batch_end,
                     extra={"step": "sale_detail_import"})
 
-        # Collect unique keys for this batch
-        batch_keys = []
-        for _, row in batch_df.iterrows():
-            inv     = safe_str(row.get('invoice_number', ''))
-            pc      = safe_str(row.get('product_code', ''))
-            barcode = safe_str(row.get('barcode', ''))
-            batch_keys.append((inv, pc, barcode))
-
-        # Pre-fetch existing SaleDetail rows
-        inv_nums      = list({k[0] for k in batch_keys})
-        product_codes = list({k[1] for k in batch_keys})
-        barcodes      = list({k[2] for k in batch_keys})
-        existing = {
-            (obj.invoice_number, obj.product_code, obj.barcode): obj
-            for obj in SaleDetail.objects.filter(
-                invoice_number__in=inv_nums,
-                product_code__in=product_codes,
-                barcode__in=barcodes,
-            )
-        }
-
-        to_create = {}   # key → SaleDetail (deduplicate within batch)
-        to_update = {}   # key → SaleDetail (last row wins for intra-batch duplicates)
+        to_create = []
 
         for idx, row in batch_df.iterrows():
             row_num = idx + 2
             try:
                 data = _map_row(row.to_dict())
-                inv     = data['invoice_number']
-                pc      = data['product_code']
-                barcode = data['barcode']
+                inv = data['invoice_number']
+                pc  = data['product_code']
 
                 if not inv or not pc or not data['sales_date']:
                     skipped += 1
@@ -195,50 +171,24 @@ def process_sale_detail_file(file, progress_fn=None):
 
                 # Soft FK: link to SalesTransaction if header exists
                 data['transaction_id'] = inv if inv in invoice_map else None
-                if data['transaction_id'] is None:
-                    logger.warning("No SalesTransaction for invoice %s (row %d)", inv, row_num,
-                                   extra={"step": "sale_detail_import"})
 
-                key = (inv, pc, barcode)
-                if key in existing:
-                    obj = existing[key]
-                    for field, value in data.items():
-                        if field != 'invoice_number':
-                            setattr(obj, field, value)
-                    to_update[key] = obj
-                else:
-                    # Last row wins for intra-batch duplicates
-                    to_create[key] = SaleDetail(**data)
+                to_create.append(SaleDetail(**data))
 
             except Exception as exc:
                 errors.append(f"Row {row_num}: {exc}")
                 logger.error("Row %d error: %s", row_num, exc, extra={"step": "sale_detail_import"})
 
-        update_fields = [
-            'transaction_id', 'shop_id', 'shop_name', 'sales_date', 'sales_time',
-            'brand', 'product_code', 'product_name', 'barcode', 'sku', 'color', 'size',
-            'year', 'season', 'gender', 'category_l1', 'category_l2', 'category_l3',
-            'quantity', 'fact_retail_price', 'sales_amount', 'settlement_amount',
-            'tag_price', 'tag_amount', 'discount_pct', 'vat_rate',
-            'salesmen', 'salesmen_code', 'promotion', 'currency',
-        ]
-
-        create_list = list(to_create.values())
-        update_list = list(to_update.values())
         with transaction.atomic():
-            if create_list:
-                SaleDetail.objects.bulk_create(create_list, batch_size=1000, ignore_conflicts=True)
-                created += len(create_list)
-            if update_list:
-                SaleDetail.objects.bulk_update(update_list, fields=update_fields, batch_size=1000)
-                updated += len(update_list)
+            if to_create:
+                SaleDetail.objects.bulk_create(to_create, batch_size=1000)
+                created += len(to_create)
 
-        logger.info("[Batch %d] created=%d updated=%d", batch_num, len(create_list), len(update_list),
+        logger.info("[Batch %d] created=%d", batch_num, len(to_create),
                     extra={"step": "sale_detail_import"})
 
         if progress_fn:
             progress_fn(batch_end, total_rows)
 
-    logger.info("=== DONE Sale Detail Import: created=%d updated=%d skipped=%d errors=%d ===",
-                created, updated, skipped, len(errors), extra={"step": "sale_detail_import"})
-    return {'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors[:50]}
+    logger.info("=== DONE Sale Detail Import: created=%d skipped=%d errors=%d ===",
+                created, skipped, len(errors), extra={"step": "sale_detail_import"})
+    return {'created': created, 'skipped': skipped, 'errors': errors[:50]}

@@ -128,7 +128,6 @@ class SaleDetail(models.Model):
     created_at        = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('invoice_number', 'product_code', 'barcode')
         indexes = [
             models.Index(fields=['sales_date', 'brand']),
             models.Index(fields=['sales_date', 'shop_id']),

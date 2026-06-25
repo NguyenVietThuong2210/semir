@@ -2,7 +2,7 @@
 tests/test_sale_detail.py — SaleDetail import + product analytics tests.
 
 Tests:
-  1. SaleDetail import: row count, upsert, no UNIQUE errors
+  1. SaleDetail import: row count, all rows inserted (no dedup), no errors
   2. get_product_tab() returns correct structure for all tabs
   3. New tabs: sales_season, vip_grade, brand, year; cat_groups + top_products in period rows
   4. shop_name filter for get_product_tab()
@@ -66,22 +66,21 @@ class SaleDetailImportTest(SnapshotTestCase):
                          f"Unexpected errors: {self.import_result['errors'][:5]}")
 
     def test_import_created_rows(self):
-        total = self.import_result['created'] + self.import_result['updated']
-        self.assertGreater(total, 0, "No rows imported")
+        self.assertGreater(self.import_result['created'], 0, "No rows imported")
 
     def test_db_count_matches_import(self):
         db_count = SaleDetail.objects.count()
-        expected = self.import_result['created'] + self.import_result['updated']
-        self.assertEqual(db_count, expected)
+        self.assertEqual(db_count, self.import_result['created'])
 
-    def test_upsert_idempotent(self):
+    def test_reimport_adds_rows(self):
+        """Re-importing the same file inserts all rows again (no dedup)."""
         sd_file = INPUT_DIR / "sale detail.xlsx"
         before = SaleDetail.objects.count()
         result2 = process_sale_detail_file(_open(sd_file))
         after = SaleDetail.objects.count()
-        self.assertEqual(before, after, "Row count changed on re-import (upsert broken)")
+        self.assertGreater(after, before, "Re-import should have added more rows")
         self.assertEqual(result2['errors'], [], f"Errors on re-import: {result2['errors'][:5]}")
-        self.assertEqual(result2['created'], 0, "Expected 0 creates on re-import")
+        self.assertGreater(result2['created'], 0, "Expected rows created on re-import")
 
     def test_snapshot_db_shape(self):
         from django.db.models import Count, Sum, Min, Max
