@@ -2,7 +2,7 @@
 App/services/sale_detail_import.py
 
 SaleDetail (HQ invoice line-item) file import.
-Upserts on unique_together (invoice_number, product_code).
+Upserts on unique_together (invoice_number, product_code, barcode).
 FK to SalesTransaction is resolved softly — null if header not yet imported.
 """
 import logging
@@ -160,18 +160,21 @@ def process_sale_detail_file(file, progress_fn=None):
         # Collect unique keys for this batch
         batch_keys = []
         for _, row in batch_df.iterrows():
-            inv = safe_str(row.get('invoice_number', ''))
-            pc  = safe_str(row.get('product_code', ''))
-            batch_keys.append((inv, pc))
+            inv     = safe_str(row.get('invoice_number', ''))
+            pc      = safe_str(row.get('product_code', ''))
+            barcode = safe_str(row.get('barcode', ''))
+            batch_keys.append((inv, pc, barcode))
 
         # Pre-fetch existing SaleDetail rows
         inv_nums      = list({k[0] for k in batch_keys})
         product_codes = list({k[1] for k in batch_keys})
+        barcodes      = list({k[2] for k in batch_keys})
         existing = {
-            (obj.invoice_number, obj.product_code): obj
+            (obj.invoice_number, obj.product_code, obj.barcode): obj
             for obj in SaleDetail.objects.filter(
                 invoice_number__in=inv_nums,
                 product_code__in=product_codes,
+                barcode__in=barcodes,
             )
         }
 
@@ -182,8 +185,9 @@ def process_sale_detail_file(file, progress_fn=None):
             row_num = idx + 2
             try:
                 data = _map_row(row.to_dict())
-                inv = data['invoice_number']
-                pc  = data['product_code']
+                inv     = data['invoice_number']
+                pc      = data['product_code']
+                barcode = data['barcode']
 
                 if not inv or not pc or not data['sales_date']:
                     skipped += 1
@@ -195,7 +199,7 @@ def process_sale_detail_file(file, progress_fn=None):
                     logger.warning("No SalesTransaction for invoice %s (row %d)", inv, row_num,
                                    extra={"step": "sale_detail_import"})
 
-                key = (inv, pc)
+                key = (inv, pc, barcode)
                 if key in existing:
                     obj = existing[key]
                     for field, value in data.items():
