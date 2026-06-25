@@ -131,6 +131,9 @@ def process_sale_detail_file(file, progress_fn=None):
     df = read_file(file)
 
     df.columns = df.columns.str.strip().str.upper()
+    missing = [h for h in ("INVOICE NUMBER", "PRODUCT CODE", "SALES DATE") if h not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required column(s): {', '.join(missing)}. Found: {list(df.columns)}")
     rename = {col: _COL_MAP[col] for col in df.columns if col in _COL_MAP}
     df = df.rename(columns=rename)
 

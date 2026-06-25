@@ -31,6 +31,9 @@ def process_customer_file(file, progress_fn=None):
     logger.info("=== START OPTIMIZED Customer Import: %s ===", file.name, extra={"step": "customer_import"})
     df = read_file(file)
     df.columns = df.columns.str.strip().str.upper()
+    missing = [h for h in ("VIP ID", "PHONE NO.") if h not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required column(s): {', '.join(missing)}. Found: {list(df.columns)}")
     total_rows = len(df)
     logger.info("Total rows to process: %d", total_rows)
 

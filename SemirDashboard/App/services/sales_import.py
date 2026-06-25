@@ -24,6 +24,9 @@ def process_sales_file(file, progress_fn=None):
     logger.info("=== START OPTIMIZED Sales Import: %s ===", file.name, extra={"step": "sales_import"})
     df = read_file(file)
     df.columns = df.columns.str.strip().str.upper()
+    missing = [h for h in ("INVOICE NUMBER", "SHOP NAME", "SALES DATE", "SETTLEMENT AMOUNT") if h not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required column(s): {', '.join(missing)}. Found: {list(df.columns)}")
     total_rows = len(df)
     logger.info("Total rows to process: %d", total_rows)
 

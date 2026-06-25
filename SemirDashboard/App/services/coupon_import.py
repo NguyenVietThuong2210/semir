@@ -30,6 +30,8 @@ def process_coupon_file(file, progress_fn=None):
 
     total_rows = len(df)
     logger.info("Raw columns: %s  Rows: %d", list(df.columns), total_rows)
+    if "Coupon ID" not in df.columns:
+        raise ValueError(f"Missing required column: 'Coupon ID'. Found: {list(df.columns)}")
 
     # Column mapping
     COL_MAP = {

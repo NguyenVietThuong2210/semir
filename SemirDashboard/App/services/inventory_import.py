@@ -90,6 +90,9 @@ def process_inventory_file(file, progress_fn=None):
 
     # Normalize headers: strip + upper, then remap via _COL_MAP
     df.columns = df.columns.str.strip().str.upper()
+    missing = [h for h in ("WAREHOUSE/SHOP ID", "PRODUCT CODE") if h not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required column(s): {', '.join(missing)}. Found: {list(df.columns)}")
     rename = {col: _COL_MAP[col] for col in df.columns if col in _COL_MAP}
     df = df.rename(columns=rename)
 

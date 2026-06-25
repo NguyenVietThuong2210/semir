@@ -1,8 +1,23 @@
 """App/views/upload.py — Data upload views (background thread processing)."""
+import io
 import logging
 import threading
 
+import pandas as pd
+
 _ALLOWED_UPLOAD_EXTENSIONS = {"csv", "xls", "xlsx"}
+
+# Required headers per upload type.
+# Keys that are uppercase are checked after normalising the file's headers to uppercase.
+# Coupon uses the original case because the service does not uppercase them.
+_REQUIRED_HEADERS = {
+    "customers":   (["VIP ID", "PHONE NO."], True),
+    "sales":       (["INVOICE NUMBER", "SHOP NAME", "SALES DATE", "SETTLEMENT AMOUNT"], True),
+    "coupons":     (["Coupon ID"], False),
+    "inventory":   (["WAREHOUSE/SHOP ID", "PRODUCT CODE"], True),
+    "sale_detail": (["INVOICE NUMBER", "PRODUCT CODE", "SALES DATE"], True),
+    "used_points": (["VIP ID", "PHONE NO.", "USED POINTS"], True),
+}
 
 
 def _validate_upload_ext(f) -> str | None:
@@ -11,6 +26,24 @@ def _validate_upload_ext(f) -> str | None:
     if ext not in _ALLOWED_UPLOAD_EXTENSIONS:
         return f"File type '.{ext}' is not allowed. Only CSV and Excel files are accepted."
     return None
+
+
+def _validate_headers(file_bytes: bytes, filename: str, upload_type: str) -> list[str]:
+    """
+    Read only the header row and return a list of missing required column names.
+    Returns [] if the file can't be parsed (let the service report the error).
+    """
+    required, uppercase = _REQUIRED_HEADERS.get(upload_type, ([], True))
+    if not required:
+        return []
+    fn = filename.lower()
+    try:
+        buf = io.BytesIO(file_bytes)
+        df = pd.read_csv(buf, nrows=0, dtype=str) if fn.endswith(".csv") else pd.read_excel(buf, nrows=0, dtype=str)
+    except Exception:
+        return []
+    cols = [str(c).strip().upper() for c in df.columns] if uppercase else [str(c).strip() for c in df.columns]
+    return [h for h in required if h not in cols]
 
 from django.contrib import messages
 from django.db.models import Count, Max, Min
@@ -88,6 +121,10 @@ def upload_customers(request):
                 messages.error(request, err)
                 return redirect("upload_customers")
             file_bytes = f.read()
+            missing = _validate_headers(file_bytes, f.name, "customers")
+            if missing:
+                messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: VIP ID, PHONE NO.")
+                return redirect("upload_customers")
             job_id = create_job("customers", f.name)
             logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_customers"})
             _start_thread(job_id, process_customer_file, file_bytes, f.name, None)
@@ -126,6 +163,10 @@ def upload_used_points(request):
                 messages.error(request, err)
                 return redirect("upload_customers")
             file_bytes = f.read()
+            missing = _validate_headers(file_bytes, f.name, "used_points")
+            if missing:
+                messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: VIP ID, Phone NO., Used Points.")
+                return redirect("upload_customers")
             job_id = create_job("used_points", f.name)
             logger.info("upload_used_points queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_used_points"})
             _start_thread(job_id, process_used_points_file, file_bytes, f.name)
@@ -149,6 +190,10 @@ def upload_sales(request):
                 messages.error(request, err)
                 return redirect("upload_sales")
             file_bytes = f.read()
+            missing = _validate_headers(file_bytes, f.name, "sales")
+            if missing:
+                messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: Invoice Number, Shop Name, Sales Date, Settlement Amount.")
+                return redirect("upload_sales")
             job_id = create_job("sales", f.name)
             logger.info("upload_sales queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_sales"})
             _start_thread(job_id, process_sales_file, file_bytes, f.name, None)
@@ -183,6 +228,10 @@ def upload_coupons(request):
             messages.error(request, err)
             return redirect("upload_coupons")
         file_bytes = f.read()
+        missing = _validate_headers(file_bytes, f.name, "coupons")
+        if missing:
+            messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected header: Coupon ID.")
+            return redirect("upload_coupons")
         job_id = create_job("coupons", f.name)
         logger.info("upload_coupons queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_coupons"})
         _start_thread(job_id, process_coupon_file, file_bytes, f.name, None)
@@ -205,6 +254,10 @@ def upload_inventory(request):
                 messages.error(request, err)
                 return redirect("upload_inventory")
             file_bytes = f.read()
+            missing = _validate_headers(file_bytes, f.name, "inventory")
+            if missing:
+                messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: Warehouse/Shop ID, Product Code.")
+                return redirect("upload_inventory")
             job_id = create_job("inventory", f.name)
             logger.info("upload_inventory queued job=%s file=%s user=%s", job_id, f.name, request.user,
                         extra={"step": "upload_inventory"})
@@ -247,6 +300,10 @@ def upload_sale_detail(request):
                 messages.error(request, err)
                 return redirect("upload_sales")
             file_bytes = f.read()
+            missing = _validate_headers(file_bytes, f.name, "sale_detail")
+            if missing:
+                messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: Invoice Number, Product Code, Sales Date.")
+                return redirect("upload_sales")
             job_id = create_job("sale_detail", f.name)
             logger.info("upload_sale_detail queued job=%s file=%s user=%s", job_id, f.name, request.user,
                         extra={"step": "upload_sale_detail"})
