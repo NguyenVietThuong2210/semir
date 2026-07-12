@@ -6,9 +6,12 @@ Uses CNV_USERNAME and CNV_PASSWORD from settings.
 """
 
 import logging
+import os
+import socket
 from datetime import timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from django_apscheduler.jobstores import DjangoJobStore
 from django_apscheduler.models import DjangoJobExecution
 from django.conf import settings
@@ -21,6 +24,25 @@ _STALE_SYNC_HOURS = 2
 
 logger = logging.getLogger(__name__)
 
+# ── Single-leader guard (prod runs gunicorn --workers 3; without this every
+#    worker starts its own scheduler → jobs fire 3×, causing 429 rate-limit
+#    storms, "already running" skips, and DjangoJobStore replace races). Only
+#    the worker that wins the Redis lock runs the scheduler. TTL + periodic
+#    refresh makes it self-healing if the leader worker dies.
+_SCHEDULER_LOCK_KEY = "cnv_scheduler_leader"
+_LOCK_TTL = 900        # 15 min — leader must refresh before this expires
+_LOCK_REFRESH = 300    # refresh every 5 min
+_leader_token = None   # set on the worker that owns the scheduler
+
+
+def _refresh_scheduler_leader():
+    """Extend the leader lock TTL; runs only inside the leader's scheduler."""
+    from django.core.cache import cache
+    global _leader_token
+    if _leader_token and cache.get(_SCHEDULER_LOCK_KEY) == _leader_token:
+        cache.set(_SCHEDULER_LOCK_KEY, _leader_token, _LOCK_TTL)
+        logger.debug("Scheduler leader lock refreshed (%s)", _leader_token)
+
 
 # Get credentials from settings
 CNV_USERNAME = settings.CNV_USERNAME
@@ -28,7 +50,7 @@ CNV_PASSWORD = settings.CNV_PASSWORD
 
 
 def sync_cnv_customers_only():
-    """Sync customers only. Runs every 10 minutes at :05, :15, :25, :35, :45, :55."""
+    """Sync customers only. Runs hourly at :05 (single leader worker)."""
     logger.info("=" * 60)
     logger.info("STARTING CUSTOMERS SYNC JOB")
     logger.info("=" * 60)
@@ -91,7 +113,7 @@ def sync_cnv_customers_only():
 
 
 def sync_cnv_orders_only():
-    """Sync orders only. Runs every 10 minutes at :00, :10, :20, :30, :40, :50."""
+    """Sync orders only. Runs hourly at :10 (single leader worker)."""
     logger.info("=" * 60)
     logger.info("STARTING ORDERS SYNC JOB")
     logger.info("=" * 60)
@@ -171,34 +193,64 @@ def start_scheduler():
     """
     logger.info("Initializing scheduler...")
 
+    # Single-leader guard: only the worker that wins the Redis lock runs the
+    # scheduler. Other workers return immediately (no duplicate schedulers).
+    global _leader_token
+    from django.core.cache import cache
+    token = f"{socket.gethostname()}:{os.getpid()}"
+    if not cache.add(_SCHEDULER_LOCK_KEY, token, _LOCK_TTL):
+        holder = cache.get(_SCHEDULER_LOCK_KEY)
+        logger.info("Scheduler leader lock held by %s — this worker (%s) will NOT start a scheduler.",
+                    holder, token)
+        return
+    _leader_token = token
+    logger.info("Acquired scheduler leader lock (%s) — starting the single scheduler.", token)
+
     scheduler = BackgroundScheduler(
         job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 900}
     )
 
     scheduler.add_jobstore(DjangoJobStore(), "default")
 
-    # C-09: customers sync every 10 minutes at :05, :15, :25, :35, :45, :55
-    # (CronTrigger(minute="5") fires only once per hour — docstrings promised 10 min)
+    # Clear any jobs persisted by a previous deploy so a changed trigger always
+    # takes effect (DjangoJobStore otherwise keeps the OLD next_run_time).
+    try:
+        scheduler.remove_all_jobs()
+        logger.info("Cleared stale jobs from DjangoJobStore before re-registering.")
+    except Exception as exc:
+        logger.warning("remove_all_jobs failed (continuing): %s", exc)
+
+    # Hourly for now (stability after the 3-scheduler fix). Bump to a 10-min
+    # multi-value CronTrigger once prod is confirmed stable on a single leader.
     scheduler.add_job(
         sync_cnv_customers_only,
-        trigger=CronTrigger(minute="5,15,25,35,45,55"),
+        trigger=CronTrigger(minute="15"),
         id="cnv_customers_sync",
         max_instances=1,
         replace_existing=True,
         name="CNV Customers Sync",
     )
-    logger.info("Registered job: CNV Customers Sync (every 10 min at :05,:15,:25,:35,:45,:55)")
+    logger.info("Registered job: CNV Customers Sync (hourly at :05)")
 
-    # C-09: orders sync every 10 minutes at :00, :10, :20, :30, :40, :50
     scheduler.add_job(
         sync_cnv_orders_only,
-        trigger=CronTrigger(minute="0,10,20,30,40,50"),
+        trigger=CronTrigger(minute="10"),
         id="cnv_orders_sync",
         max_instances=1,
         replace_existing=True,
         name="CNV Orders Sync",
     )
-    logger.info("Registered job: CNV Orders Sync (every 10 min at :00,:10,:20,:30,:40,:50)")
+    logger.info("Registered job: CNV Orders Sync (hourly at :10)")
+
+    # Keep the leader lock alive while this worker runs the scheduler.
+    scheduler.add_job(
+        _refresh_scheduler_leader,
+        trigger=IntervalTrigger(seconds=_LOCK_REFRESH),
+        id="scheduler_lock_refresh",
+        max_instances=1,
+        replace_existing=True,
+        name="Scheduler Leader Lock Refresh",
+    )
 
     # Cleanup daily at 2 AM
     scheduler.add_job(
@@ -219,12 +271,8 @@ def start_scheduler():
         logger.info("SCHEDULER STARTED SUCCESSFULLY")
         logger.info("=" * 60)
         logger.info("Scheduled jobs:")
-        logger.info(
-            "  [1] CNV Customers Sync - Every 10 min at :05, :15, :25, :35, :45, :55"
-        )
-        logger.info(
-            "  [2] CNV Orders Sync - Every 10 min at :00, :10, :20, :30, :40, :50"
-        )
+        logger.info("  [1] CNV Customers Sync - Hourly at :05")
+        logger.info("  [2] CNV Orders Sync - Hourly at :10")
         logger.info("  [3] Cleanup Old Logs - Daily at 2:00 AM")
         logger.info("=" * 60)
 

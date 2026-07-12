@@ -435,15 +435,46 @@ class SyncSkipNoDateTest(TestCase):
                         f"warning not logged: {logs.output}")
 
 
-# ── C-09: scheduler cron config ───────────────────────────────────────────────
+# ── C-09 / SCHED: single-leader scheduler guard ───────────────────────────────
 
-class SchedulerCronConfigTest(TestCase):
-    def test_source_configures_10_min_triggers(self):
+class SchedulerLeaderLockTest(TestCase):
+    """Prod runs gunicorn --workers 3; only ONE worker may start the scheduler.
+    Reverted to hourly cron (:05 / :10) for stability after the 3-scheduler fix."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.delete("cnv_scheduler_leader")
+
+    def test_only_first_worker_acquires_leader(self):
+        from django.core.cache import cache
+        key = "cnv_scheduler_leader"
+        # Worker 1 wins
+        self.assertTrue(cache.add(key, "w1", 900))
+        # Workers 2 & 3 lose → they must skip starting a scheduler
+        self.assertFalse(cache.add(key, "w2", 900))
+        self.assertFalse(cache.add(key, "w3", 900))
+        self.assertEqual(cache.get(key), "w1")
+
+    def test_refresh_extends_only_when_still_leader(self):
+        from django.core.cache import cache
+        from App.cnv import scheduler as sch
+        cache.set(sch._SCHEDULER_LOCK_KEY, "me", 900)
+        sch._leader_token = "me"
+        sch._refresh_scheduler_leader()
+        self.assertEqual(cache.get(sch._SCHEDULER_LOCK_KEY), "me")
+        # If another worker took over, a stale token must NOT clobber it
+        cache.set(sch._SCHEDULER_LOCK_KEY, "other", 900)
+        sch._leader_token = "me"
+        sch._refresh_scheduler_leader()
+        self.assertEqual(cache.get(sch._SCHEDULER_LOCK_KEY), "other")
+
+    def test_cron_is_hourly_for_stability(self):
         import inspect
         from App.cnv import scheduler as sch
-        src = inspect.getsource(sch)
-        self.assertIn('minute="5,15,25,35,45,55"', src)
-        self.assertIn('minute="0,10,20,30,40,50"', src)
+        src = inspect.getsource(sch.start_scheduler)
+        self.assertIn('CronTrigger(minute="5")', src)
+        self.assertIn('CronTrigger(minute="10")', src)
+        self.assertIn("remove_all_jobs", src)  # stale-trigger clear
 
 
 # ── A-01: total_amount over full queryset ─────────────────────────────────────
