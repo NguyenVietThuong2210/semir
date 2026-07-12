@@ -224,7 +224,7 @@ def start_scheduler():
     # multi-value CronTrigger once prod is confirmed stable on a single leader.
     scheduler.add_job(
         sync_cnv_customers_only,
-        trigger=CronTrigger(minute="32"),
+        trigger=CronTrigger(minute="35"),
         id="cnv_customers_sync",
         max_instances=1,
         replace_existing=True,
