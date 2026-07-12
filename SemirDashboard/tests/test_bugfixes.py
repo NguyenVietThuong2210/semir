@@ -468,10 +468,45 @@ class SchedulerLeaderLockTest(TestCase):
         sch._refresh_scheduler_leader()
         self.assertEqual(cache.get(sch._SCHEDULER_LOCK_KEY), "other")
 
+    def test_release_clears_lock_only_if_still_owner(self):
+        from django.core.cache import cache
+        from App.cnv import scheduler as sch
+        cache.set(sch._SCHEDULER_LOCK_KEY, "me", 900)
+        sch._leader_token = "me"
+        sch._release_scheduler_leader()
+        self.assertIsNone(cache.get(sch._SCHEDULER_LOCK_KEY))
+        # Someone else's lock must survive a stale release call
+        cache.set(sch._SCHEDULER_LOCK_KEY, "other", 900)
+        sch._leader_token = "me"
+        sch._release_scheduler_leader()
+        self.assertEqual(cache.get(sch._SCHEDULER_LOCK_KEY), "other")
+
+    def test_short_ttl_bounds_stale_lock_recovery(self):
+        """The 2026-07-12 incident: an old dead container's lock (long TTL)
+        blocked every new worker from ever becoming leader. TTL must stay short."""
+        from App.cnv import scheduler as sch
+        self.assertLessEqual(sch._LOCK_TTL, 180,
+            "TTL too long — a dead leader's stale key would starve new workers for minutes")
+        self.assertLess(sch._LOCK_REFRESH * 2, sch._LOCK_TTL,
+            "refresh interval must leave comfortable margin before TTL expiry")
+
+    def test_non_leader_spawns_retry_thread(self):
+        """A worker that loses the initial election must keep retrying —
+        NOT give up permanently until the next redeploy."""
+        from unittest.mock import patch
+        from App.cnv import scheduler as sch
+        with patch.object(sch, "_try_become_leader_and_start", return_value=False), \
+             patch("threading.Thread") as MockThread:
+            sch.start_scheduler()
+            MockThread.assert_called_once()
+            _, kwargs = MockThread.call_args
+            self.assertEqual(kwargs.get("target"), sch._leader_retry_loop)
+            self.assertTrue(kwargs.get("daemon"))
+
     def test_cron_is_hourly_for_stability(self):
         import inspect
         from App.cnv import scheduler as sch
-        src = inspect.getsource(sch.start_scheduler)
+        src = inspect.getsource(sch._build_and_start_scheduler)
         self.assertIn('CronTrigger(minute="5")', src)
         self.assertIn('CronTrigger(minute="10")', src)
         self.assertIn("remove_all_jobs", src)  # stale-trigger clear

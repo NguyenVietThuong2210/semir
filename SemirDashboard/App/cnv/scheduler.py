@@ -5,9 +5,12 @@ Scheduler for CNV sync jobs.
 Uses CNV_USERNAME and CNV_PASSWORD from settings.
 """
 
+import atexit
 import logging
 import os
 import socket
+import threading
+import time
 from datetime import timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -27,11 +30,18 @@ logger = logging.getLogger(__name__)
 # ── Single-leader guard (prod runs gunicorn --workers 3; without this every
 #    worker starts its own scheduler → jobs fire 3×, causing 429 rate-limit
 #    storms, "already running" skips, and DjangoJobStore replace races). Only
-#    the worker that wins the Redis lock runs the scheduler. TTL + periodic
-#    refresh makes it self-healing if the leader worker dies.
+#    the worker that wins the Redis lock runs the scheduler.
+#
+#    TTL is intentionally short: on a redeploy, the OLD container dies without
+#    releasing the lock (its Redis key outlives it — Redis is a separate,
+#    long-lived container). A long TTL here previously caused a real incident:
+#    every new worker saw the dead container's stale key and none started a
+#    scheduler until the old TTL expired naturally. Short TTL + a retry loop
+#    (below) bounds the gap to ~1 refresh cycle instead of up to 15 minutes.
 _SCHEDULER_LOCK_KEY = "cnv_scheduler_leader"
-_LOCK_TTL = 900        # 15 min — leader must refresh before this expires
-_LOCK_REFRESH = 300    # refresh every 5 min
+_LOCK_TTL = 120        # 2 min — short so a dead leader's slot frees up fast
+_LOCK_REFRESH = 40     # leader refreshes every 40s (3x margin before TTL)
+_LEADER_RETRY = 45     # non-leader workers re-attempt to become leader this often
 _leader_token = None   # set on the worker that owns the scheduler
 
 
@@ -42,6 +52,21 @@ def _refresh_scheduler_leader():
     if _leader_token and cache.get(_SCHEDULER_LOCK_KEY) == _leader_token:
         cache.set(_SCHEDULER_LOCK_KEY, _leader_token, _LOCK_TTL)
         logger.debug("Scheduler leader lock refreshed (%s)", _leader_token)
+
+
+def _release_scheduler_leader():
+    """Best-effort release on graceful process exit (atexit) so a standby
+    worker can take over almost immediately instead of waiting for TTL."""
+    global _leader_token
+    if not _leader_token:
+        return
+    try:
+        from django.core.cache import cache
+        if cache.get(_SCHEDULER_LOCK_KEY) == _leader_token:
+            cache.delete(_SCHEDULER_LOCK_KEY)
+            logger.info("Released scheduler leader lock (%s) on process exit.", _leader_token)
+    except Exception:
+        pass  # best-effort only — TTL is the real safety net
 
 
 # Get credentials from settings
@@ -186,15 +211,32 @@ def delete_old_job_executions(max_age=604_800):
 
 def start_scheduler():
     """
-    Start APScheduler with CNV sync jobs.
+    Elect a single leader worker (across all gunicorn workers) to run
+    APScheduler, then start it in that worker only.
 
     Note: In development mode, this may be called twice due to Django auto-reload.
-    This is normal. Jobs will still only execute once due to max_instances=1.
+    This is normal — the leader election handles it the same way as multiple
+    gunicorn workers.
     """
-    logger.info("Initializing scheduler...")
+    logger.info("Initializing scheduler (leader election)...")
 
-    # Single-leader guard: only the worker that wins the Redis lock runs the
-    # scheduler. Other workers return immediately (no duplicate schedulers).
+    if _try_become_leader_and_start():
+        return
+
+    # Lost the race at startup — do NOT give up permanently. Keep retrying in
+    # the background so this worker takes over automatically if the current
+    # leader dies later (crash, OOM, redeploy) without THIS worker restarting.
+    logger.info(
+        "Did not win scheduler leader election — will retry every %ss in the background.",
+        _LEADER_RETRY,
+    )
+    t = threading.Thread(target=_leader_retry_loop, daemon=True, name="cnv-scheduler-leader-retry")
+    t.start()
+
+
+def _try_become_leader_and_start() -> bool:
+    """Attempt to acquire the leader lock; if won, build and start the
+    scheduler in this process. Returns True iff this call became leader."""
     global _leader_token
     from django.core.cache import cache
     token = f"{socket.gethostname()}:{os.getpid()}"
@@ -202,10 +244,30 @@ def start_scheduler():
         holder = cache.get(_SCHEDULER_LOCK_KEY)
         logger.info("Scheduler leader lock held by %s — this worker (%s) will NOT start a scheduler.",
                     holder, token)
-        return
+        return False
     _leader_token = token
+    atexit.register(_release_scheduler_leader)
     logger.info("Acquired scheduler leader lock (%s) — starting the single scheduler.", token)
+    _build_and_start_scheduler()
+    return True
 
+
+def _leader_retry_loop():
+    """Runs in a background thread on every non-leader worker. Periodically
+    re-attempts the leader election so the fleet self-heals without a
+    redeploy if the current leader disappears."""
+    while True:
+        time.sleep(_LEADER_RETRY)
+        try:
+            if _try_become_leader_and_start():
+                logger.info("Became scheduler leader on retry — scheduler now running in this worker.")
+                return
+        except Exception:
+            logger.exception("Scheduler leader retry attempt failed")
+
+
+def _build_and_start_scheduler():
+    """Register jobs and start APScheduler. Called only in the elected leader."""
     scheduler = BackgroundScheduler(
         job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 900}
     )
@@ -224,7 +286,7 @@ def start_scheduler():
     # multi-value CronTrigger once prod is confirmed stable on a single leader.
     scheduler.add_job(
         sync_cnv_customers_only,
-        trigger=CronTrigger(minute="35"),
+        trigger=CronTrigger(minute="45"),
         id="cnv_customers_sync",
         max_instances=1,
         replace_existing=True,
