@@ -67,7 +67,9 @@ def get_cnv_phone_sets():
     }
     cnv_phones_all = {r["phone"] for r in cnv_list}
     result = (pos_phones_all, cnv_phones_all)
-    _djc.set(_key, result, timeout=600)
+    # C-10: TTL must match _fetch_bd_raw (300s) — a longer TTL leaves stale
+    # phone sets paired with fresh raw data for up to 5 minutes.
+    _djc.set(_key, result, timeout=300)
     return result
 
 

@@ -571,12 +571,22 @@ class CNVSyncService:
                 max_pages=100
             )
             
-            # Filter by updated_until (API might not support updated_at_to)
+            # Filter by updated_until (API might not support updated_at_to).
+            # C-03: records with no parseable date are SKIPPED with a warning —
+            # a single bad record must not crash the whole batch (None <= datetime → TypeError).
             if updated_until:
-                customers_data = [
-                    c for c in customers_data
-                    if self._parse_datetime(c.get('updated_at') or c.get('created_at')) <= updated_until
-                ]
+                _filtered = []
+                for c in customers_data:
+                    _dt = self._parse_datetime(c.get('updated_at') or c.get('created_at'))
+                    if _dt is None:
+                        logger.warning(
+                            "sync_customers_range: customer id=%s has no updated_at/created_at — skipped",
+                            c.get('id', '?')
+                        )
+                        continue
+                    if _dt <= updated_until:
+                        _filtered.append(c)
+                customers_data = _filtered
             
             total = len(customers_data)
             sync_log.total_records = total

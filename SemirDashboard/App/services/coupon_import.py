@@ -23,10 +23,14 @@ def process_coupon_file(file, progress_fn=None):
     """
     logger.info("=== START OPTIMIZED Coupon Import: %s ===", file.name, extra={"step": "coupon_import"})
 
+    # dtype=str (U-03): numeric coupon IDs must not become "123....0" floats
     if file.name.lower().endswith('.csv'):
-        df = pd.read_csv(file)
+        df = pd.read_csv(file, dtype=str)
     else:
-        df = pd.read_excel(file)
+        df = pd.read_excel(file, dtype=str)
+
+    # Strip header whitespace (U-07) — keep the view-level check and this one consistent
+    df.columns = [str(c).strip() for c in df.columns]
 
     total_rows = len(df)
     logger.info("Raw columns: %s  Rows: %d", list(df.columns), total_rows)
@@ -59,7 +63,8 @@ def process_coupon_file(file, progress_fn=None):
     if drop_cols:
         df.drop(columns=drop_cols, inplace=True)
 
-    created = updated = errors = 0
+    created = updated = 0
+    errors = []  # U-09: per-row error details, matching all other import services
 
     # Process in batches
     for batch_num, batch_start in enumerate(range(0, total_rows, BATCH_SIZE), 1):
@@ -82,10 +87,11 @@ def process_coupon_file(file, progress_fn=None):
         }
 
         # Process each row
+        seen_in_batch = set()  # U-05: dedup within batch so `created` counter is accurate
         for idx, row in batch_df.iterrows():
             cid = safe_str(row.get('coupon_id', ''))
             if not cid or cid in ('nan', 'None', ''):
-                errors += 1
+                errors.append(f"Row {idx + 2}: empty coupon_id")
                 continue
 
             try:
@@ -124,11 +130,17 @@ def process_coupon_file(file, progress_fn=None):
 
                 if cid in existing_coupons:
                     batch_updates[cid] = coupon_data
+                elif cid in seen_in_batch:
+                    # U-04/U-05: same coupon_id twice in one batch — last row wins,
+                    # replace the pending create instead of inserting a duplicate
+                    batch_creates = [c for c in batch_creates if c.coupon_id != cid]
+                    batch_creates.append(Coupon(**coupon_data))
                 else:
+                    seen_in_batch.add(cid)
                     batch_creates.append(Coupon(**coupon_data))
 
             except Exception as exc:
-                errors += 1
+                errors.append(f"coupon_id={cid}: {exc}")
                 logger.error("coupon %s error: %s", cid, exc)
 
         # Execute bulk operations
@@ -162,5 +174,5 @@ def process_coupon_file(file, progress_fn=None):
             progress_fn(min(batch_end, total_rows), total_rows)
 
     logger.info("=== DONE Coupon Import: created=%d updated=%d errors=%d ===",
-                created, updated, errors, extra={"step": "coupon_import"})
-    return {'created': created, 'updated': updated, 'errors': errors}
+                created, updated, len(errors), extra={"step": "coupon_import"})
+    return {'created': created, 'updated': updated, 'errors': errors[:50]}

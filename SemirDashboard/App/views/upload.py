@@ -45,6 +45,26 @@ def _validate_headers(file_bytes: bytes, filename: str, upload_type: str) -> lis
     cols = [str(c).strip().upper() for c in df.columns] if uppercase else [str(c).strip() for c in df.columns]
     return [h for h in required if h not in cols]
 
+
+def _validate_coupon_dups(file_bytes: bytes, filename: str) -> list[str]:
+    """U-04: reject files containing duplicated Coupon IDs BEFORE the job starts.
+    Returns list of duplicated IDs (empty = OK). Parse failures return [] and
+    are left for the service to report."""
+    fn = filename.lower()
+    try:
+        buf = io.BytesIO(file_bytes)
+        df = pd.read_csv(buf, dtype=str, usecols=lambda c: str(c).strip() == "Coupon ID") \
+            if fn.endswith(".csv") else pd.read_excel(buf, dtype=str)
+    except Exception:
+        return []
+    df.columns = [str(c).strip() for c in df.columns]
+    if "Coupon ID" not in df.columns:
+        return []
+    ids = df["Coupon ID"].dropna().astype(str).str.strip()
+    ids = ids[~ids.isin(("", "nan", "None"))]
+    dup = ids[ids.duplicated()].unique()
+    return list(dup[:20])
+
 from django.contrib import messages
 from django.db.models import Count, Max, Min
 from django.http import JsonResponse
@@ -61,7 +81,10 @@ from App.services import (
     process_sales_file,
     process_used_points_file,
 )
-from App.upload_jobs import NamedBytesIO, _now_iso, create_job, get_recent_jobs, is_type_running, make_progress_fn, update_job
+from App.upload_jobs import (
+    NamedBytesIO, _now_iso, acquire_type_lock, create_job, get_job,
+    get_recent_jobs, is_type_running, make_progress_fn, release_type_lock, update_job,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +116,10 @@ def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
         )
         logger.exception("Job %s failed", job_id, extra={"step": "upload_job"})
     finally:
+        # U-08: release the per-type lock claimed by the view before create_job
+        _jtype = (get_job(job_id) or {}).get("type", "")
+        if _jtype:
+            release_type_lock(_jtype)
         connection.close()  # release DB connection held by this thread
 
 
@@ -124,6 +151,9 @@ def upload_customers(request):
             missing = _validate_headers(file_bytes, f.name, "customers")
             if missing:
                 messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: VIP ID, PHONE NO.")
+                return redirect("upload_customers")
+            if not acquire_type_lock("customers"):  # U-08: atomic claim
+                messages.warning(request, "A customer upload is already in progress. Please wait.")
                 return redirect("upload_customers")
             job_id = create_job("customers", f.name)
             logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_customers"})
@@ -167,6 +197,9 @@ def upload_used_points(request):
             if missing:
                 messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: VIP ID, Phone NO., Used Points.")
                 return redirect("upload_customers")
+            if not acquire_type_lock("used_points"):  # U-08: atomic claim
+                messages.warning(request, "A used-points upload is already in progress. Please wait.")
+                return redirect("upload_customers")
             job_id = create_job("used_points", f.name)
             logger.info("upload_used_points queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_used_points"})
             _start_thread(job_id, process_used_points_file, file_bytes, f.name)
@@ -193,6 +226,9 @@ def upload_sales(request):
             missing = _validate_headers(file_bytes, f.name, "sales")
             if missing:
                 messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: Invoice Number, Shop Name, Sales Date, Settlement Amount.")
+                return redirect("upload_sales")
+            if not acquire_type_lock("sales"):  # U-08: atomic claim
+                messages.warning(request, "A sales upload is already in progress. Please wait.")
                 return redirect("upload_sales")
             job_id = create_job("sales", f.name)
             logger.info("upload_sales queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_sales"})
@@ -232,6 +268,17 @@ def upload_coupons(request):
         if missing:
             messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected header: Coupon ID.")
             return redirect("upload_coupons")
+        dups = _validate_coupon_dups(file_bytes, f.name)
+        if dups:
+            messages.error(
+                request,
+                f"File contains duplicated Coupon ID(s): {', '.join(dups[:10])}"
+                f"{'…' if len(dups) > 10 else ''}. Remove duplicates and upload again."
+            )
+            return redirect("upload_coupons")
+        if not acquire_type_lock("coupons"):  # U-08: atomic claim
+            messages.warning(request, "A coupon upload is already in progress. Please wait.")
+            return redirect("upload_coupons")
         job_id = create_job("coupons", f.name)
         logger.info("upload_coupons queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_coupons"})
         _start_thread(job_id, process_coupon_file, file_bytes, f.name, None)
@@ -257,6 +304,9 @@ def upload_inventory(request):
             missing = _validate_headers(file_bytes, f.name, "inventory")
             if missing:
                 messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: Warehouse/Shop ID, Product Code.")
+                return redirect("upload_inventory")
+            if not acquire_type_lock("inventory"):  # U-08: atomic claim
+                messages.warning(request, "An inventory upload is already in progress. Please wait.")
                 return redirect("upload_inventory")
             job_id = create_job("inventory", f.name)
             logger.info("upload_inventory queued job=%s file=%s user=%s", job_id, f.name, request.user,
@@ -303,6 +353,9 @@ def upload_sale_detail(request):
             missing = _validate_headers(file_bytes, f.name, "sale_detail")
             if missing:
                 messages.error(request, f"Missing required column(s): {', '.join(missing)}. Expected headers: Invoice Number, Product Code, Sales Date.")
+                return redirect("upload_sales")
+            if not acquire_type_lock("sale_detail"):  # U-08: atomic claim
+                messages.warning(request, "A sale detail upload is already in progress. Please wait.")
                 return redirect("upload_sales")
             job_id = create_job("sale_detail", f.name)
             logger.info("upload_sale_detail queued job=%s file=%s user=%s", job_id, f.name, request.user,

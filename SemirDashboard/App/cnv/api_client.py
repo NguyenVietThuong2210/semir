@@ -227,9 +227,11 @@ class CNVAPIClient:
             }
             
             token_url = f"{self.sso_url}/oauth/token"
-            token_response = requests.get(
+            # C-05: RFC 6749 §4.1.3 — token exchange MUST be POST with credentials
+            # in the body; GET leaks client_secret into server/proxy access logs.
+            token_response = requests.post(
                 token_url,
-                params=token_params,
+                data=token_params,
                 timeout=30
             )
             

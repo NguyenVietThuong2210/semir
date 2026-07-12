@@ -5,7 +5,10 @@ class Coupon(models.Model):
     department = models.CharField(max_length=1000, blank=True, null=True)
     creator = models.CharField(max_length=1000, blank=True, null=True)
     document_number = models.CharField(max_length=1000, blank=True, null=True)
-    coupon_id = models.CharField(max_length=1000, db_index=True)
+    # U-04: unique — coupon_id is the upsert key; without a DB constraint,
+    # duplicate rows in one import batch would both insert (ignore_conflicts
+    # has nothing to conflict against). Audit prod for dups BEFORE migrating.
+    coupon_id = models.CharField(max_length=1000, unique=True)
     face_value = models.DecimalField(
         max_digits=12, decimal_places=2, blank=True, null=True
     )

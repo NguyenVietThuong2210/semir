@@ -129,11 +129,6 @@ def run_zalo_sync(cookie: str):
     if stale_count:
         logger.warning("Cleared %d stale zalo sync log(s)", stale_count)
 
-    # DB-level guard: check CNVSyncLog
-    if CNVSyncLog.objects.filter(sync_type="zalo_sync", status="running").exists():
-        logger.warning("Zalo sync already running (DB log). Skipping.")
-        return
-
     # In-memory guard (fast path for same-process double-call)
     with _zalo_sync_lock:
         if _zalo_sync_running:
@@ -141,6 +136,26 @@ def run_zalo_sync(cookie: str):
             return
         _zalo_sync_running = True
 
+    # C-07: distributed lock — cache.add is atomic and cross-process on Redis
+    # (production backend). Two gunicorn workers can no longer both pass the
+    # per-process flag and start parallel syncs.
+    from django.core.cache import cache as _cache
+    if not _cache.add("zalo_sync_lock", timezone.now().isoformat(), timeout=_STALE_ZALO_HOURS * 3600):
+        logger.warning("Zalo sync already running (distributed lock). Skipping.")
+        with _zalo_sync_lock:
+            _zalo_sync_running = False
+        return
+
+    # DB-level guard: check CNVSyncLog (secondary safety + visibility)
+    if CNVSyncLog.objects.filter(sync_type="zalo_sync", status="running").exists():
+        logger.warning("Zalo sync already running (DB log). Skipping.")
+        _cache.delete("zalo_sync_lock")
+        with _zalo_sync_lock:
+            _zalo_sync_running = False
+        return
+
+    # C-07: create the DB claim BEFORE any further work so other processes
+    # see it immediately.
     sync_log = CNVSyncLog.objects.create(
         sync_type="zalo_sync",
         status="running",
@@ -156,6 +171,7 @@ def run_zalo_sync(cookie: str):
         logger.exception("Zalo sync crashed: %s", exc)
         sync_log.mark_failed(str(exc))
     finally:
+        _cache.delete("zalo_sync_lock")  # C-07: always release, even on crash
         with _zalo_sync_lock:
             _zalo_sync_running = False
         db_connection.close()  # release DB connection held by this thread

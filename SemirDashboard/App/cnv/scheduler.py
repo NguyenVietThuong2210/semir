@@ -177,27 +177,28 @@ def start_scheduler():
 
     scheduler.add_jobstore(DjangoJobStore(), "default")
 
-    # Customers sync every 1 hour at :5
+    # C-09: customers sync every 10 minutes at :05, :15, :25, :35, :45, :55
+    # (CronTrigger(minute="5") fires only once per hour — docstrings promised 10 min)
     scheduler.add_job(
         sync_cnv_customers_only,
-        trigger=CronTrigger(minute="5"),
+        trigger=CronTrigger(minute="5,15,25,35,45,55"),
         id="cnv_customers_sync",
         max_instances=1,
         replace_existing=True,
         name="CNV Customers Sync",
     )
-    logger.info("Registered job: CNV Customers Sync ( every 1 hour at :05)")
+    logger.info("Registered job: CNV Customers Sync (every 10 min at :05,:15,:25,:35,:45,:55)")
 
-    # Orders sync every 1 hour at :35
+    # C-09: orders sync every 10 minutes at :00, :10, :20, :30, :40, :50
     scheduler.add_job(
         sync_cnv_orders_only,
-        trigger=CronTrigger(minute="10"),
+        trigger=CronTrigger(minute="0,10,20,30,40,50"),
         id="cnv_orders_sync",
         max_instances=1,
         replace_existing=True,
         name="CNV Orders Sync",
     )
-    logger.info("Registered job: CNV Orders Sync ( every 1 hour at :35)")
+    logger.info("Registered job: CNV Orders Sync (every 10 min at :00,:10,:20,:30,:40,:50)")
 
     # Cleanup daily at 2 AM
     scheduler.add_job(

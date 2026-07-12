@@ -408,7 +408,9 @@ def get_customer_detail_data(customer, max_invoices=None, include_coupons=True):
 
     Shared by App/views/customer.py (web) and App/api/views.py (API).
     The web view calls with defaults (all invoices + coupons).
-    The API calls with max_invoices=50, include_coupons=False.
+    The API calls with include_coupons=False (no invoice cap — max_invoices
+    is currently unused by any caller; stats are computed over the full
+    queryset regardless of the cap).
 
     Returns:
         {
@@ -466,12 +468,18 @@ def get_customer_detail_data(customer, max_invoices=None, include_coupons=True):
             from App.analytics.coupon_analytics import format_face_value, calc_coupon_amount
             entry['coupon_id'] = coupon.coupon_id
             entry['face_value_display'] = format_face_value(coupon.face_value)
-            entry['coupon_amount'] = calc_coupon_amount(coupon.face_value, inv.settlement_amount)
+            # A-04: sales_amount is the standard base for coupon amounts everywhere
+            # (coupon dashboard already uses it) — settlement_amount diverged here.
+            entry['coupon_amount'] = calc_coupon_amount(coupon.face_value, inv.sales_amount)
         invoices.append(entry)
 
+    # A-01: total_amount must aggregate over the FULL queryset, not the
+    # (potentially max_invoices-capped) list — same reason total_invoice_count
+    # is a separate .count() above.
+    from django.db.models import Sum as _Sum
     stats = {
         'total_purchases':   total_invoice_count,
-        'total_amount':      sum((inv['amount'] or Decimal(0)) for inv in invoices),
+        'total_amount':      qs.aggregate(s=_Sum('settlement_amount'))['s'] or Decimal(0),
         'last_purchase_date': max((inv['sales_day'] for inv in invoices if inv['sales_day']), default=None),
     }
 

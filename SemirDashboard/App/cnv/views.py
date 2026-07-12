@@ -10,8 +10,35 @@ from django.conf import settings
 from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
-from App.permissions import requires_perm
+from App.permissions import requires_perm, user_has_perm
 from django.views.decorators.http import require_POST
+
+
+def _ajax_perm_check(request, codename):
+    """C-01: for AJAX views returning HTML fragments — 401/403 instead of a
+    login redirect that fetch() would silently follow (same pattern as
+    App/views/shop_detail.py)."""
+    if not request.user.is_authenticated:
+        return HttpResponse(
+            '<div class="alert alert-warning m-0">Session expired. '
+            '<a href="/login/">Log in again</a>.</div>',
+            status=401,
+        )
+    if not user_has_perm(request.user, codename):
+        return HttpResponse(
+            '<div class="alert alert-danger m-0">Permission denied.</div>',
+            status=403,
+        )
+    return None
+
+
+def _json_perm_check(request, codename):
+    """C-01: JSON variant for endpoints whose callers parse JSON."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Session expired. Log in again."}, status=401)
+    if not user_has_perm(request.user, codename):
+        return JsonResponse({"error": "Permission denied."}, status=403)
+    return None
 from datetime import datetime, timedelta, date as _date
 from django.utils import timezone
 
@@ -135,7 +162,6 @@ def customer_analytics(request):
     return render(request, "cnv/customer_analytics.html", context)
 
 
-@requires_perm("cnv.view")
 def customer_tab(request, tab: str):
     """
     AJAX endpoint: returns a rendered HTML fragment for one Customer Analytics tab.
@@ -143,6 +169,10 @@ def customer_tab(request, tab: str):
     """
     from django.http import HttpResponseBadRequest
     from App.analytics.tab_functions import get_customer_tab, CUSTOMER_TABS
+
+    err = _ajax_perm_check(request, "cnv.view")
+    if err:
+        return err
 
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return HttpResponseBadRequest("AJAX only")
@@ -235,17 +265,21 @@ def export_customer_analytics(request):
     return response
 
 
-@requires_perm("cnv.sync")
 def sync_cnv_points(request):
     """
     AJAX endpoint: sync points for a list of CNV customer IDs.
     POST body JSON: { "cnv_ids": [123, 456, ...] }
-    Returns JSON: { "results": [ {cnv_id, status, points, total_points, used_points, level_name}, ... ] }
+    Returns JSON: { "results": [...] } for small batches, or
+    { "status": "started", "count": N } when the batch runs in the background (C-06).
     """
     import json
     from django.http import JsonResponse
     from decimal import Decimal
     from App.cnv.api_client import CNVAPIClient
+
+    err = _json_perm_check(request, "cnv.sync")
+    if err:
+        return err
 
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
@@ -260,42 +294,61 @@ def sync_cnv_points(request):
         return JsonResponse({"error": "No cnv_ids provided"}, status=400)
 
     client = CNVAPIClient(settings.CNV_USERNAME, settings.CNV_PASSWORD)
-    results = []
+
+    def _sync_ids(ids):
+        results = []
+        for cnv_id in ids:
+            try:
+                response = client.get_customer_membership(int(cnv_id))
+                if response and "membership" in response:
+                    m = response["membership"]
+                    points = Decimal(str(m.get("points", 0)))
+                    total_pts = Decimal(str(m.get("total_points", 0)))
+                    used_pts = Decimal(str(m.get("used_points", 0)))
+                    level_name = m.get("level_name")
+
+                    CNVCustomer.objects.filter(cnv_id=cnv_id).update(
+                        points=points,
+                        total_points=total_pts,
+                        used_points=used_pts,
+                        level_name=level_name,
+                    )
+                    results.append(
+                        {
+                            "cnv_id": cnv_id,
+                            "status": "ok",
+                            "points": float(points),
+                            "total_points": float(total_pts),
+                            "used_points": float(used_pts),
+                            "level_name": level_name,
+                        }
+                    )
+                else:
+                    logger.warning("sync_cnv_points: no membership data for cnv_id=%s", cnv_id, extra={"step": "cnv_points_sync"})
+                    results.append({"cnv_id": cnv_id, "status": "no_data"})
+            except Exception as e:
+                logger.error("sync_cnv_points: cnv_id=%s error=%s", cnv_id, e, extra={"step": "cnv_points_sync"})
+                results.append({"cnv_id": cnv_id, "status": "error", "error": str(e)})
+        return results
 
     logger.info("sync_cnv_points: syncing %d ids by=%s", len(cnv_ids), request.user, extra={"step": "cnv_points_sync"})
-    for cnv_id in cnv_ids:
-        try:
-            response = client.get_customer_membership(int(cnv_id))
-            if response and "membership" in response:
-                m = response["membership"]
-                points = Decimal(str(m.get("points", 0)))
-                total_pts = Decimal(str(m.get("total_points", 0)))
-                used_pts = Decimal(str(m.get("used_points", 0)))
-                level_name = m.get("level_name")
 
-                CNVCustomer.objects.filter(cnv_id=cnv_id).update(
-                    points=points,
-                    total_points=total_pts,
-                    used_points=used_pts,
-                    level_name=level_name,
-                )
-                results.append(
-                    {
-                        "cnv_id": cnv_id,
-                        "status": "ok",
-                        "points": float(points),
-                        "total_points": float(total_pts),
-                        "used_points": float(used_pts),
-                        "level_name": level_name,
-                    }
-                )
-            else:
-                logger.warning("sync_cnv_points: no membership data for cnv_id=%s", cnv_id, extra={"step": "cnv_points_sync"})
-                results.append({"cnv_id": cnv_id, "status": "no_data"})
-        except Exception as e:
-            logger.error("sync_cnv_points: cnv_id=%s error=%s", cnv_id, e, extra={"step": "cnv_points_sync"})
-            results.append({"cnv_id": cnv_id, "status": "error", "error": str(e)})
+    # C-06: large batches would hold the request thread for minutes (CNV rate
+    # limit) — run them in a background thread and return immediately. No hard
+    # cap per user decision; the frontend confirms before sending large lists.
+    if len(cnv_ids) > 200:
+        def _bg():
+            from django.db import connection
+            try:
+                res = _sync_ids(cnv_ids)
+                ok_bg = sum(1 for r in res if r["status"] == "ok")
+                logger.info("sync_cnv_points(bg): done ok=%d total=%d", ok_bg, len(res), extra={"step": "cnv_points_sync"})
+            finally:
+                connection.close()
+        threading.Thread(target=_bg, daemon=True).start()
+        return JsonResponse({"status": "started", "count": len(cnv_ids)})
 
+    results = _sync_ids(cnv_ids)
     ok = sum(1 for r in results if r["status"] == "ok")
     logger.info("sync_cnv_points: done ok=%d no_data=%d error=%d", ok, len(results) - ok, sum(1 for r in results if r["status"] == "error"), extra={"step": "cnv_points_sync"})
     return JsonResponse({"results": results})
@@ -306,7 +359,6 @@ def sync_cnv_points(request):
 # ============================================================================
 
 
-@requires_perm("cnv.sync")
 @require_POST
 def trigger_sync(request):
     """
@@ -314,6 +366,10 @@ def trigger_sync(request):
     Checks CNVSyncLog for running jobs before starting.
     """
     import json
+
+    err = _json_perm_check(request, "cnv.sync")
+    if err:
+        return err
 
     try:
         body = json.loads(request.body)
@@ -379,7 +435,6 @@ def trigger_sync(request):
     )
 
 
-@requires_perm("cnv.sync")
 @require_POST
 def trigger_zalo_sync(request):
     """
@@ -388,6 +443,10 @@ def trigger_zalo_sync(request):
     """
     import json
     from App.cnv.zalo_sync import run_zalo_sync, is_zalo_sync_running
+
+    err = _json_perm_check(request, "cnv.sync")
+    if err:
+        return err
 
     try:
         body = json.loads(request.body)

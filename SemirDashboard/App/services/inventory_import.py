@@ -127,6 +127,14 @@ def process_inventory_file(file, progress_fn=None):
             errors.append(f"Row {row_num}: {exc}")
             logger.error("Row %d error: %s", row_num, exc, extra={"step": "inventory_import"})
 
+    # Guard (U-01): never truncate when the file produced zero valid rows —
+    # a bad file must not wipe the existing snapshot.
+    if not to_create:
+        raise ValueError(
+            f"No valid rows to import (skipped={skipped}, errors={len(errors)}). "
+            "Existing inventory NOT modified."
+        )
+
     # Truncate old data and insert new in a single atomic transaction
     deleted = 0
     created = 0

@@ -100,6 +100,10 @@ def _load_sales(date_from=None, date_to=None, shop_group=None):
         if c['vip_id']
     }
 
+    # A-05: cache a plain dict — locmem stores by reference, and a cached
+    # defaultdict would grow phantom keys if any future caller subscripts a
+    # missing vip_id, silently corrupting the cache for the whole TTL.
+    customer_purchases = dict(customer_purchases)
     _djc.set(_key, (customer_purchases, info_map, date_stats), timeout=300)
 
     def _ci_fresh(vip_id, customer_obj=None):
@@ -1069,7 +1073,9 @@ def _customer_ca_zalo(start_date: str, end_date: str) -> dict:
     ).exclude(zalo_oa_id='')
 
     zalo_mini_app_list = list(zalo_app_qs.order_by('-zalo_app_created_at').values(*_zf))
-    zalo_oa_list       = list(zalo_oa_qs.order_by('-zalo_app_created_at').values(*_zf))
+    # A-06: OA list sorts by CNV creation date — OA-only customers have no
+    # zalo_app_created_at and would otherwise always sink to the bottom.
+    zalo_oa_list       = list(zalo_oa_qs.order_by('-cnv_created_at').values(*_zf))
 
     # One targeted POS lookup via DB subquery — avoids loading all 74k POS rows
     # via get_cnv_phone_sets() and avoids SQLite "too many variables" for large IN lists.

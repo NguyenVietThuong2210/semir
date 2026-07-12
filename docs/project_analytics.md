@@ -253,3 +253,21 @@ Returns `{}` for unknown shop. Otherwise:
 | `tab_functions.py` | Per-tab data + shop detail functions (KEY) |
 | `inventory_functions.py` | Shop inventory KPIs, by_brand, by_season, dead SKUs |
 | `product_analytics.py` | SaleDetail product analytics for all 5 product tabs |
+
+## Known intentional divergence (locked 2026-07-11)
+
+### Shop returning ≠ sum of global returning (A-02)
+`aggregate_by_shop()` uses the customer's earliest purchase **at that specific shop**
+(`sh_first_date`) for the within-season prior-history check, while `aggregate_by_season()`
+uses the customer's **global** earliest purchase. A customer whose registration-day invoices
+span multiple shops counts as *returning* in the global season tab but NOT in each shop's
+season breakdown. Consequence: `sum(per-shop returning)` may differ from global returning.
+This is **intentional** (each shop measures loyalty to itself) — locked by
+`tests/test_business_rules.py::test_shop_season_returning_is_shop_scoped_intentional`.
+Do not "fix" without user approval.
+
+### Coupon period stats show usage_rate=100% under date filter (A-08 — deferred by user)
+When a date filter is active, the period queryset counts coupons **used** in the range
+(filter on `using_date`), so `period_used == period_total` and unused is always 0.
+Technically correct semantics ("coupons used in period"), acknowledged as confusing;
+fix deferred by user decision 2026-07-11.

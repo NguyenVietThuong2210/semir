@@ -14,11 +14,14 @@ logger = logging.getLogger('customer_analytics')
 
 
 def read_file(file):
+    """Read csv/xlsx with dtype=str (U-06): preserves leading zeros on IDs and
+    prevents float artifacts on barcodes/codes. Numeric fields are converted
+    downstream via safe_int/safe_decimal, dates via parse_date."""
     logger.debug("read_file: %s", file.name)
     if file.name.lower().endswith('.csv'):
-        df = pd.read_csv(file)
+        df = pd.read_csv(file, dtype=str)
     else:
-        df = pd.read_excel(file)
+        df = pd.read_excel(file, dtype=str)
     logger.debug("read_file shape: %s", df.shape)
     return df
 
@@ -67,7 +70,10 @@ def safe_decimal(value, default=0):
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError):
-        return Decimal(default)
+        try:
+            return Decimal(str(value).strip().replace(',', ''))
+        except (InvalidOperation, TypeError):
+            return Decimal(default)
 
 
 def safe_int(value, default=0):
@@ -79,7 +85,12 @@ def safe_int(value, default=0):
     try:
         return int(value)
     except (ValueError, TypeError):
-        return default
+        # String floats like "28.0" (Excel numeric cells read with dtype=str)
+        # must not silently become the default (U-06 prerequisite fix)
+        try:
+            return int(float(str(value).strip().replace(',', '')))
+        except (ValueError, TypeError):
+            return default
 
 
 def safe_str(value):

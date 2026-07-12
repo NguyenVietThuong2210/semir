@@ -156,7 +156,12 @@ def get_session_for_range(date_from, date_to):
     # Check if all months fit in a single season
     for label, m_list in SEASON_DEFS:
         if months.issubset(set(m_list)):
-            return label
+            # A-07: qualify with year, matching get_session_key() label format.
+            # January belongs to the PREVIOUS year's M11-1 season.
+            if label == 'M11-1':
+                y = date_from.year - 1 if date_from.month == 1 else date_from.year
+                return f"{label} {y}-{y + 1}"
+            return f"{label} {date_from.year}"
 
     return None
 

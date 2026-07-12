@@ -295,11 +295,11 @@
 .dark-tabs .nav-link.active { background:#fff; color:var(--nav-bg); border-color:#fff; font-weight:600; }
 .dark-tabs { border-bottom:none; }
 
-td.c-green { background:rgba(var(--success-rgb),.08)!important; color:#000!important; }
-td.c-info  { background:rgba(var(--accent-rgb),.09)!important;  color:#000!important; }
-td.c-blue  { background:rgba(var(--primary-rgb),.08)!important; color:#000!important; }
-td.c-gray  { background:var(--gray-tint)!important;              color:#000!important; }
-td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!important; }
+td.c-green { background:rgba(var(--success-rgb),.08)!important; color:var(--text)!important; }
+td.c-info  { background:rgba(var(--accent-rgb),.09)!important;  color:var(--text)!important; }
+td.c-blue  { background:rgba(var(--primary-rgb),.08)!important; color:var(--text)!important; }
+td.c-gray  { background:var(--gray-tint)!important;              color:var(--text)!important; }
+td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:var(--text)!important; }
 
 /* ================================================================
    COLUMN WIDTH SYSTEM - same type = same width across all tables
@@ -627,7 +627,7 @@ td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!impo
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="GDO1YAW2j6wuVWRZyVDwJncv2X6CC6QO5tVGhJk28UvlP8Rd3MeONxLR0AvXlLLU">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="CLhguxSxEoZ1URnXMKj6GfgUj3KWkQrCNvlKKzgw7ugqhYx4isXfM6MmwSzPQRc4">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -644,6 +644,7 @@ td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!impo
 
     <main class="">
         <div class="container-fluid px-3">
+            
             
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -1431,7 +1432,7 @@ td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!impo
 </div>
 
 <div class="card mb-4">
-    <div class="card-header">
+    <div class="card-header" style="background:var(--primary);color:#fff;">
         <i class="bi bi-people"></i> Customer Details
         
         <span class="badge bg-info float-end">Top 100 of 44016</span>
@@ -2973,6 +2974,32 @@ td.c-amber { background:rgba(var(--orange-rgb),.12)!important;   color:#000!impo
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- UI-01: global loading overlay — showLoading/hideLoading were called in 5
+         templates but never defined anywhere (ReferenceError on every call). -->
+    <div id="global-loading-overlay" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.35);align-items:center;justify-content:center;">
+        <div style="background:var(--card-bg,#fff);color:var(--text);padding:18px 28px;border-radius:8px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 24px rgba(0,0,0,.25);">
+            <div class="spinner-border text-primary" role="status" style="width:1.5rem;height:1.5rem;"></div>
+            <span id="global-loading-msg">Loading…</span>
+        </div>
+    </div>
+    <script>
+    function showLoading(msg) {
+        var ov = document.getElementById('global-loading-overlay');
+        if (!ov) return;
+        var m = document.getElementById('global-loading-msg');
+        if (m) m.textContent = msg || 'Loading…';
+        ov.style.display = 'flex';
+    }
+    function hideLoading() {
+        var ov = document.getElementById('global-loading-overlay');
+        if (ov) ov.style.display = 'none';
+    }
+    setTimeout(function(){
+        document.querySelectorAll('#django-flash .alert:not(.alert-danger)').forEach(function(el){
+            try { bootstrap.Alert.getOrCreateInstance(el).close(); } catch(e){}
+        });
+    }, 6000);
+    </script>
     
 <script>
 function _fmt(d) {

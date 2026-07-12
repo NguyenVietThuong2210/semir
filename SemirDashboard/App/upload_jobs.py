@@ -150,6 +150,23 @@ def is_type_running(job_type: str) -> bool:
     return False
 
 
+_TYPE_LOCK_PFX = "upload_type_lock:"
+_TYPE_LOCK_TTL = 1800  # safety net — normally released when the job finishes
+
+
+def acquire_type_lock(job_type: str) -> bool:
+    """U-08: atomic check-and-claim via cache.add — closes the TOCTOU gap
+    between is_type_running() and create_job() under concurrent requests
+    (cross-process on Redis)."""
+    from django.core.cache import cache
+    return bool(cache.add(f"{_TYPE_LOCK_PFX}{job_type}", _now_iso(), _TYPE_LOCK_TTL))
+
+
+def release_type_lock(job_type: str) -> None:
+    from django.core.cache import cache
+    cache.delete(f"{_TYPE_LOCK_PFX}{job_type}")
+
+
 def make_progress_fn(job_id: str):
     """Return a callback: progress_fn(processed, total) → updates job in cache."""
     def _fn(processed: int, total: int):

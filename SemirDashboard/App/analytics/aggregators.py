@@ -468,6 +468,12 @@ def aggregate_by_shop(customer_purchases, get_customer_info_fn, all_session_keys
                 shop_sess[sh][sk]['amount'] += sp_amount
 
                 _, is_ret_in_season = calculate_return_visits(sp, reg_date)
+                # INTENTIONAL (A-02, confirmed 2026-07-11): shop-scoped first-date,
+                # unlike the global season aggregator which uses the customer's
+                # global first purchase. A customer whose reg-day invoices span
+                # multiple shops counts as returning globally but NOT per-shop —
+                # so sum(shop returning) may differ from global returning.
+                # See docs/project_analytics.md "Known intentional divergence".
                 has_prior_shop_purchases = sh_first_date < session_first_date
 
                 if is_ret_in_season or has_prior_shop_purchases:

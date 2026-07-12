@@ -153,10 +153,17 @@ class TokenRefreshView(APIView):
             )
         try:
             refresh = RefreshToken(refresh_token)
+            # C-04 phase 1: issue a rotated refresh token alongside the access token.
+            # The old refresh token is NOT blacklisted yet — mobile clients that do not
+            # store the new token keep working. Blacklisting is enabled in phase 2
+            # once the mobile app persists the rotated token.
+            refresh.set_jti()
+            refresh.set_exp()
             access = refresh.access_token
             expires_in = int(access.payload['exp'] - access.payload['iat'])
             return Response({
                 'access': str(access),
+                'refresh': str(refresh),
                 'access_expires_in': expires_in,
             })
         except (TokenError, InvalidToken):
@@ -394,7 +401,8 @@ class CustomerAnalyticsView(APIView):
     permission_classes = [IsAuthenticated, make_perm_class('cnv.view')]
 
     def get(self, request):
-        from App.analytics.tab_functions import _parse_cnv_period_filter
+        # C-11: import from the authoritative module, not a private cross-module delegate
+        from App.cnv.service import parse_cnv_period_filter as _parse_cnv_period_filter
         from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets, get_cnv_customer_kpis
 
         date_from_str = request.GET.get('date_from', '')
@@ -948,6 +956,10 @@ class CustomerDetailView(APIView):
             else:
                 # Strip formatting — match on last 9 digits for flexibility
                 digits = ''.join(c for c in phone if c.isdigit())
+                # C-08: too-short input would endswith-match unrelated customers
+                # (empty digits matches the ENTIRE table) — hard 400 below 9 digits.
+                if len(digits) < 9:
+                    return Response({'detail': 'Phone must contain at least 9 digits'}, status=400)
                 customer = Customer.objects.filter(phone__endswith=digits[-9:]).first()
                 if customer is None:
                     return Response({'detail': 'Customer not found'}, status=404)
@@ -1077,22 +1089,22 @@ class CustomerChartView(APIView):
         date_from_str = request.GET.get('date_from', '')
         date_to_str = request.GET.get('date_to', '')
 
-        from App.analytics.tab_functions import _parse_cnv_period_filter
-        from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets
+        # C-11: import from the authoritative module, not a private cross-module delegate
+        from App.cnv.service import parse_cnv_period_filter, get_cnv_phone_sets
 
-        period_filter, _ = _parse_cnv_period_filter(date_from_str, date_to_str)
-        pos_phones_all, cnv_phones_all = get_cnv_phone_sets()
-        bd = compute_cnv_breakdown(period_filter, pos_phones_all, cnv_phones_all,
-                                   dims=frozenset({'grade'}))
+        period_filter, _ = parse_cnv_period_filter(date_from_str, date_to_str)
+        _, cnv_phones_all = get_cnv_phone_sets()
 
-        grades = bd.get('grade', [])
-        _grade_counts = [g.get('pos_customers', g.get('total_pos', 0)) for g in grades]
+        # C-02: compute_cnv_breakdown never returns a 'grade' key (dims is ignored) —
+        # use _compute_grade_rows, the same source the analytics endpoint uses.
+        grades = _compute_grade_rows(cnv_phones_all, period_filter)
+        _grade_counts = [g.get('new_pos', 0) for g in grades]
         _grade_total = sum(_grade_counts) or 1
         donuts = [{
             'title': 'By Grade',
             'slices': [
                 {
-                    'label': str(g.get('grade', '')),
+                    'label': str(g.get('label', '')),
                     'value': _fmt(count),
                     'color': DONUT_PALETTE[i % len(DONUT_PALETTE)],
                     'percentage': round(count / _grade_total * 100, 1),

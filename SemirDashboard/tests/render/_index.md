@@ -1,41 +1,41 @@
 # Render Snapshot Index
 
-Generated: 2026-06-01 21:51:50
+Generated: 2026-07-11 23:49:37
 
 | Label | URL | Status | Size | Tables | Token issues |
 |-------|-----|--------|------|--------|--------------|
-| 01_home | `/` | 200 | 32.6KB | 0 | 0 |
-| 02_sales_alltime | `/analytics/` | 200 | 130.5KB | 3 | 0 |
-| 03_sales_2025 | `/analytics/?start_date=2025-01-01&end_date=2025-12-31` | 200 | 129.7KB | 3 | 0 |
-| 04_customer_alltime | `/cnv/customer-analytics/` | 200 | 51.7KB | 1 | 0 |
-| 05_customer_2025 | `/cnv/customer-analytics/?start_date=2025-01-01&end_date=2025-12-31` | 200 | 53.0KB | 1 | 0 |
-| 06_coupon_alltime | `/coupons/` | 200 | 52.0KB | 1 | 0 |
-| 07_coupon_2025 | `/coupons/?start_date=2025-01-01&end_date=2025-12-31` | 200 | 51.8KB | 1 | 0 |
-| 08_shop_detail | `/shop-detail/` | 200 | 50.3KB | 0 | 0 |
-| 09_customer_detail | `/customer-detail/` | 200 | 23.1KB | 0 | 0 |
-| 10_formulas | `/formulas/` | 200 | 37.5KB | 1 | 0 |
-| 11_sales_chart | `/analytics/chart/` | 200 | 1167.6KB | 0 | 0 |
-| 12_coupon_chart | `/coupons/chart/` | 200 | 112.0KB | 0 | 0 |
-| 13_customer_chart | `/cnv/customer-chart/` | 200 | 727.9KB | 0 | 0 |
-| 14_cnv_sync_status | `/cnv/sync-status/` | 200 | 36.1KB | 1 | 0 |
-| 15_upload_customers | `/upload/customers/` | 200 | 37.2KB | 2 | 0 |
-| 16_user_management | `/users/` | 200 | 98.4KB | 1 | 0 |
-| 17_admin_logs | `/admin-logs/` | 200 | 97.7KB | 3 | 0 |
-| 18_product_analytics | `/products/` | 200 | 371.2KB | 5 | 0 |
-| 19_inventory_analytics | `/inventory/` | 200 | 1236.0KB | 63 | 0 |
-| 20_upload_inventory | `/upload/inventory/` | 200 | 32.7KB | 0 | 0 |
-| 21_upload_sale_detail | `/upload/sales/` | 200 | 44.4KB | 1 | 0 |
-| 22_product_tab_month | `/products/tab/month/` | 200 | 335.8KB | 5 | 0 |
-| 23_product_tab_year | `/products/tab/year/` | 200 | 335.8KB | 5 | 0 |
-| 24_product_tab_week | `/products/tab/week/` | 200 | 1116.5KB | 17 | 0 |
-| 25_product_tab_sales_season | `/products/tab/sales_season/` | 200 | 335.7KB | 5 | 0 |
-| 26_product_tab_product_season | `/products/tab/product_season/` | 200 | 1557.8KB | 57 | 0 |
-| 27_product_tab_vip_grade | `/products/tab/vip_grade/` | 200 | 335.9KB | 5 | 0 |
-| 28_product_tab_brand | `/products/tab/brand/` | 200 | 537.7KB | 13 | 0 |
-| 29_product_tab_category | `/products/tab/category/` | 200 | 159.0KB | 1 | 0 |
-| 30_product_tab_campaign | `/products/tab/campaign/` | 200 | 140.1KB | 1 | 0 |
+| 01_home | `/` | 200 | 34.0KB | 0 | 0 |
+| 02_sales_alltime | `/analytics/` | 200 | 132.0KB | 3 | 0 |
+| 03_sales_2025 | `/analytics/?start_date=2025-01-01&end_date=2025-12-31` | 200 | 131.2KB | 3 | 0 |
+| 04_customer_alltime | `/cnv/customer-analytics/` | 200 | 52.7KB | 1 | 0 |
+| 05_customer_2025 | `/cnv/customer-analytics/?start_date=2025-01-01&end_date=2025-12-31` | 200 | 54.1KB | 1 | 0 |
+| 06_coupon_alltime | `/coupons/` | 200 | 53.4KB | 1 | 0 |
+| 07_coupon_2025 | `/coupons/?start_date=2025-01-01&end_date=2025-12-31` | 200 | 53.2KB | 1 | 0 |
+| 08_shop_detail | `/shop-detail/` | 200 | 51.7KB | 0 | 0 |
+| 09_customer_detail | `/customer-detail/` | 200 | 24.5KB | 0 | 0 |
+| 10_formulas | `/formulas/` | 200 | 38.9KB | 1 | 0 |
+| 11_sales_chart | `/analytics/chart/` | 200 | 1169.0KB | 0 | 0 |
+| 12_coupon_chart | `/coupons/chart/` | 200 | 113.3KB | 0 | 0 |
+| 13_customer_chart | `/cnv/customer-chart/` | 200 | 729.3KB | 0 | 0 |
+| 14_cnv_sync_status | `/cnv/sync-status/` | 200 | 37.4KB | 1 | 0 |
+| 15_upload_customers | `/upload/customers/` | 200 | 38.6KB | 2 | 0 |
+| 16_user_management | `/users/` | 200 | 99.8KB | 1 | 0 |
+| 17_admin_logs | `/admin-logs/` | 200 | 100.3KB | 3 | 0 |
+| 18_product_analytics | `/products/` | 200 | 381.1KB | 5 | 0 |
+| 19_inventory_analytics | `/inventory/` | 200 | 1237.4KB | 63 | 0 |
+| 20_upload_inventory | `/upload/inventory/` | 200 | 34.1KB | 0 | 0 |
+| 21_upload_sale_detail | `/upload/sales/` | 200 | 45.8KB | 1 | 0 |
+| 22_product_tab_month | `/products/tab/month/` | 200 | 344.4KB | 5 | 0 |
+| 23_product_tab_year | `/products/tab/year/` | 200 | 344.3KB | 5 | 0 |
+| 24_product_tab_week | `/products/tab/week/` | 200 | 1406.5KB | 21 | 0 |
+| 25_product_tab_sales_season | `/products/tab/sales_season/` | 200 | 344.2KB | 5 | 0 |
+| 26_product_tab_product_season | `/products/tab/product_season/` | 200 | 1629.8KB | 61 | 0 |
+| 27_product_tab_vip_grade | `/products/tab/vip_grade/` | 200 | 344.4KB | 5 | 0 |
+| 28_product_tab_brand | `/products/tab/brand/` | 200 | 547.3KB | 13 | 0 |
+| 29_product_tab_category | `/products/tab/category/` | 200 | 164.7KB | 1 | 0 |
+| 30_product_tab_campaign | `/products/tab/campaign/` | 200 | 144.9KB | 1 | 0 |
 | 31_product_tab_top_products | `/products/tab/product/` | 200 | 38.1KB | 1 | 0 |
-| 32_product_tab_shop | `/products/tab/shop/` | 200 | 29.2KB | 1 | 0 |
+| 32_product_tab_shop | `/products/tab/shop/` | 200 | 29.3KB | 1 | 0 |
 | 33_cnv_tab_bd_month | `/cnv/customer-analytics/tab/bd_month/` | 200 | 7.5KB | 1 | 0 |
 | 34_cnv_tab_bd_season | `/cnv/customer-analytics/tab/bd_season/` | 200 | 4.0KB | 1 | 0 |
 | 35_cnv_tab_bd_week | `/cnv/customer-analytics/tab/bd_week/` | 200 | 28.2KB | 1 | 0 |
