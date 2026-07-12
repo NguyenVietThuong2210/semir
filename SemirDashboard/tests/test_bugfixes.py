@@ -219,6 +219,78 @@ class UploadViewValidationTest(TestCase):
         release_type_lock("sales")
 
 
+# ── R2: unified upload validation pipeline ────────────────────────────────────
+
+class UploadValidationPipelineTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_superuser("r2admin", "r2@t.com", "pw")
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.client.force_login(self.admin)
+
+    def test_validate_upload_zero_rows_inventory_error(self):
+        from App.services.upload_validation import validate_upload
+        data = _xlsx_bytes(["WAREHOUSE/SHOP ID", "PRODUCT CODE"], [])
+        vr = validate_upload(data, "inv.xlsx", "inventory")
+        self.assertFalse(vr.ok)
+        self.assertTrue(any("no data rows" in e for e in vr.errors))
+
+    def test_validate_upload_zero_rows_sales_warning_only(self):
+        from App.services.upload_validation import validate_upload
+        data = _xlsx_bytes(
+            ["INVOICE NUMBER", "SHOP NAME", "SALES DATE", "SETTLEMENT AMOUNT"], []
+        )
+        vr = validate_upload(data, "s.xlsx", "sales")
+        self.assertTrue(vr.ok)
+        self.assertTrue(vr.warnings)
+
+    def test_customers_dup_vip_phone_rejected(self):
+        from App.services.upload_validation import validate_upload
+        data = _xlsx_bytes(["VIP ID", "PHONE NO."], [["1", "090"], ["1", "090"]])
+        vr = validate_upload(data, "c.xlsx", "customers")
+        self.assertFalse(vr.ok)
+        self.assertTrue(any("duplicated" in e for e in vr.errors))
+
+    def test_sale_detail_dup_is_warning_not_error(self):
+        from App.services.upload_validation import validate_upload
+        data = _xlsx_bytes(
+            ["INVOICE NUMBER", "PRODUCT CODE", "SALES DATE", "BARCODE"],
+            [["I1", "P1", "2026-01-01", "B1"], ["I1", "P1", "2026-01-01", "B1"]],
+        )
+        vr = validate_upload(data, "sd.xlsx", "sale_detail")
+        self.assertTrue(vr.ok, vr.errors)
+        self.assertTrue(vr.warnings)
+
+    def test_used_points_view_good_file_starts_job(self):
+        """Coverage gap (plan Phase 6): used_points view-level happy path."""
+        from unittest.mock import patch
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        data = _xlsx_bytes(["VIP ID", "PHONE NO.", "USED POINTS"], [["1", "0901234567", "10"]])
+        with patch("App.views.upload._start_thread") as started:
+            self.client.post(reverse("upload_used_points"),
+                             {"file": SimpleUploadedFile("up.xlsx", data)})
+        started.assert_called_once()
+
+    def test_file_hash_warning_on_reupload(self):
+        """U-10: same content hash re-uploaded → warning, upload still proceeds."""
+        from unittest.mock import patch
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from App.upload_jobs import create_job, update_job, _now_iso
+        from App.services.upload_validation import file_sha256
+        data = _xlsx_bytes(["Coupon ID"], [["H1"]])
+        jid = create_job("coupons", "prev.xlsx", file_hash=file_sha256(data))
+        update_job(jid, status="done", finished_at=_now_iso())
+        with patch("App.views.upload._start_thread") as started:
+            r = self.client.post(reverse("upload_coupons"),
+                                 {"file": SimpleUploadedFile("again.xlsx", data)}, follow=True)
+        started.assert_called_once()  # proceeds
+        msgs = " ".join(str(m) for m in r.context["messages"])
+        self.assertIn("already imported", msgs)
+
+
 # ── C-01: CNV AJAX perm guards ────────────────────────────────────────────────
 
 class CnvAjaxAuthGuardTest(TestCase):

@@ -30,10 +30,19 @@ def process_sales_file(file, progress_fn=None):
     total_rows = len(df)
     logger.info("Total rows to process: %d", total_rows)
 
-    # Pre-load ALL customers once (more efficient than batch queries)
-    logger.info("Pre-loading customer map...")
-    customer_map = {c.vip_id: c for c in Customer.objects.only('id', 'vip_id')}
-    logger.info("customer_map loaded: %d customers", len(customer_map))
+    # U-12 (R2): pre-load only the customers referenced by THIS file instead of
+    # the whole table (74k+ rows ≈ 10 MB per upload thread).
+    logger.info("Pre-loading customer map (file-scoped)...")
+    customer_map = {}
+    if 'VIP ID' in df.columns:
+        _vips = {safe_str(v) for v in df['VIP ID'].tolist()}
+        _vips -= {'', 'nan', 'None'}
+        _vlist = list(_vips)
+        for _i in range(0, len(_vlist), 900):  # SQLite IN-clause limit
+            for c in Customer.objects.only('id', 'vip_id').filter(vip_id__in=_vlist[_i:_i + 900]):
+                customer_map[c.vip_id] = c
+    logger.info("customer_map loaded: %d customers (file had %d distinct VIP IDs)",
+                len(customer_map), len(customer_map) if 'VIP ID' not in df.columns else len(_vips))
 
     created = updated = 0
     errors = []

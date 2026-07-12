@@ -42,6 +42,63 @@ def calc_coupon_amount(face_value, invoice_amount):
     return (discount / base) * Decimal(str(invoice_amount or 0))
 
 
+def resolve_invoice_amount(txn_sales_amount, face_value, *, falsy_uses_face_value=True):
+    """
+    Resolve the effective invoice amount for a used coupon (R1 consolidation).
+
+    Two historical semantics exist in this codebase and BOTH are preserved:
+      falsy_uses_face_value=True  (coupon dashboard/tabs): a missing txn OR a
+          0/None sales_amount falls back to face_value.
+      falsy_uses_face_value=False (shop-detail coupon KPIs): only a MISSING txn
+          falls back to face_value; an actual 0 amount stays 0.
+    Do NOT unify these without user approval — they produce different totals
+    for zero-amount transactions.
+    """
+    if falsy_uses_face_value:
+        return (
+            Decimal(str(txn_sales_amount)) if txn_sales_amount else None
+        ) or face_value or Decimal(0)
+    return (
+        Decimal(str(txn_sales_amount)) if txn_sales_amount is not None
+        else (face_value or Decimal(0))
+    )
+
+
+def fetch_docket_txn_amounts(used_rows):
+    """One-query map docket/invoice_number → sales_amount for used-coupon rows
+    (dicts carrying 'docket_number')."""
+    dockets = [r['docket_number'] for r in used_rows if r['docket_number']]
+    return {
+        t['invoice_number']: t['sales_amount']
+        for t in SalesTransaction.objects.filter(invoice_number__in=dockets)
+        .values('invoice_number', 'sales_amount')
+    }
+
+
+def accumulate_coupon_amounts(used_rows, txn_amounts, *, falsy_uses_face_value):
+    """
+    Shared accumulator over used-coupon rows ({'pk','docket_number','face_value'}).
+    Returns (invoice_amount_sum, coupon_amount_sum, unique_invoice_amount_sum)
+    where "unique" counts each docket once (rows without a docket are each unique).
+    """
+    total = Decimal(0)
+    coupon_total = Decimal(0)
+    unique_total = Decimal(0)
+    seen = set()
+    for r in used_rows:
+        amt = txn_amounts.get(r['docket_number']) if r['docket_number'] else None
+        inv_amount = resolve_invoice_amount(
+            amt, r['face_value'], falsy_uses_face_value=falsy_uses_face_value
+        )
+        total += inv_amount
+        coupon_total += calc_coupon_amount(r['face_value'], inv_amount)
+        dk = r['docket_number'] or f'__pk{r["pk"]}'
+        if dk not in seen:
+            seen.add(dk)
+            unique_total += inv_amount
+    return total, coupon_total, unique_total
+
+
 def format_face_value(face_value):
     """
     Format face value for display.
@@ -578,55 +635,21 @@ def get_coupon_summary(date_from=None, date_to=None, coupon_id_prefix=None, shop
     period_usage_rate = round(period_used / period_total * 100 if period_total else 0, 2)
 
     # Amounts — fetch used coupons + join transactions (no customer lookup, no detail building)
+    # R1: consolidated via accumulate_coupon_amounts. falsy_uses_face_value=False —
+    # this call path historically kept a real 0 sales_amount as 0.
     _all_used = list(qs.filter(using_date__isnull=False).values(
         'pk', 'coupon_id', 'face_value', 'docket_number'
     ))
-    _all_dockets = [r['docket_number'] for r in _all_used if r['docket_number']]
-    _txn_all = {
-        t['invoice_number']: t['sales_amount']
-        for t in SalesTransaction.objects.filter(
-            invoice_number__in=_all_dockets
-        ).values('invoice_number', 'sales_amount')
-    }
-
-    all_time_amount = Decimal(0)
-    all_time_coupon_amount = Decimal(0)
-    all_time_unique_amount = Decimal(0)
-    _seen_all = set()
-    for r in _all_used:
-        inv_amount = _txn_all.get(r['docket_number']) if r['docket_number'] else None
-        inv_amount = Decimal(str(inv_amount)) if inv_amount is not None else (r['face_value'] or Decimal(0))
-        all_time_amount += inv_amount
-        all_time_coupon_amount += calc_coupon_amount(r['face_value'], inv_amount)
-        dk = r['docket_number'] or f"__no_docket_{r['pk']}"
-        if dk not in _seen_all:
-            _seen_all.add(dk)
-            all_time_unique_amount += inv_amount
+    all_time_amount, all_time_coupon_amount, all_time_unique_amount = accumulate_coupon_amounts(
+        _all_used, fetch_docket_txn_amounts(_all_used), falsy_uses_face_value=False
+    )
 
     _pd_used = list(period_qs.filter(using_date__isnull=False).values(
         'pk', 'face_value', 'docket_number'
     ))
-    _pd_dockets = [r['docket_number'] for r in _pd_used if r['docket_number']]
-    _txn_pd = {
-        t['invoice_number']: t['sales_amount']
-        for t in SalesTransaction.objects.filter(
-            invoice_number__in=_pd_dockets
-        ).values('invoice_number', 'sales_amount')
-    }
-
-    period_amount = Decimal(0)
-    period_coupon_amount = Decimal(0)
-    period_unique_amount = Decimal(0)
-    _seen_pd = set()
-    for r in _pd_used:
-        inv_amount = _txn_pd.get(r['docket_number']) if r['docket_number'] else None
-        inv_amount = Decimal(str(inv_amount)) if inv_amount is not None else (r['face_value'] or Decimal(0))
-        period_amount += inv_amount
-        period_coupon_amount += calc_coupon_amount(r['face_value'], inv_amount)
-        dk = r['docket_number'] or f"__no_docket_{r['pk']}"
-        if dk not in _seen_pd:
-            _seen_pd.add(dk)
-            period_unique_amount += inv_amount
+    period_amount, period_coupon_amount, period_unique_amount = accumulate_coupon_amounts(
+        _pd_used, fetch_docket_txn_amounts(_pd_used), falsy_uses_face_value=False
+    )
 
     at_used_pct   = round(all_time_used / all_time_total * 100, 1) if all_time_total else 0
     at_unused_pct = round(all_time_unused / all_time_total * 100, 1) if all_time_total else 0

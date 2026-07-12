@@ -42,7 +42,7 @@ class NamedBytesIO(io.BytesIO):
         self.name = name
 
 
-def create_job(job_type: str, filename: str) -> str:
+def create_job(job_type: str, filename: str, file_hash: str = None) -> str:
     from django.core.cache import cache
 
     job_id = str(uuid.uuid4())
@@ -51,6 +51,7 @@ def create_job(job_type: str, filename: str) -> str:
         "type":        job_type,
         "type_label":  JOB_TYPE_LABELS.get(job_type, job_type),
         "filename":    filename,
+        "file_hash":   file_hash,  # U-10: re-upload detection
         "status":      "queued",
         "started_at":  _now_iso(),
         "finished_at": None,

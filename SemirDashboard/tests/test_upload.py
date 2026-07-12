@@ -359,7 +359,12 @@ class UploadViewHeaderValidationTests(TestCase):
         self.assertTrue(any("WAREHOUSE/SHOP ID" in m or "PRODUCT CODE" in m for m in msgs), msgs)
 
     def test_inventory_good_headers_starts_job(self):
-        data = _make_xlsx(["Warehouse/Shop ID", "Product Code", "Brand"])
+        # R2: inventory now requires ≥1 data row (header-only would only
+        # trigger the truncate guard later) — a realistic good file has data.
+        data = _make_xlsx(
+            ["Warehouse/Shop ID", "Product Code", "Brand"],
+            [{"Warehouse/Shop ID": "S1", "Product Code": "P1", "Brand": "B"}],
+        )
         with patch("App.views.upload._start_thread") as mock_thread:
             r = self.client.post(
                 "/upload/inventory/",
