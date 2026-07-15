@@ -137,12 +137,30 @@ def _slug(text: str) -> str:
     return s[:40] or "tab"
 
 
-def _settle(page, ms=None):
-    """Wait for lazy-tab AJAX + chart render after a click/navigation."""
+def _settle(page, ms=None, shot_name=""):
+    """Wait for lazy-tab AJAX + chart render after a click/navigation.
+
+    2026-07-15 root-cause fix: a verify run showed a Shop Detail AJAX section
+    still displaying "Loading..." in the BASELINE capture (2 days earlier),
+    inflating a pixel-diff by 883px of page height and 100k+ pixels — mistaken
+    at first glance for a real data change. The wait-for-no-"Loading..." check
+    that this comment used to describe was never actually present in this
+    function; it is added for real now, with a generous timeout and an
+    explicit WARNING (instead of silently swallowing the timeout) so a
+    still-loading capture is visible in the run log rather than discovered
+    days later via a confusing diff.
+    """
     try:
         page.wait_for_load_state("networkidle", timeout=15_000)
     except Exception:
         pass
+    try:
+        page.wait_for_function(
+            "() => !document.body.innerText.includes('Loading...')", timeout=45_000
+        )
+    except Exception:
+        print(f"    [WARN] '{shot_name or '?'}': still showing 'Loading...' after 45s wait — "
+              f"screenshot may be captured mid-AJAX. Re-run if this page's diff looks suspicious.")
     page.wait_for_timeout(ms or SETTLE_MS)
 
 
@@ -166,8 +184,9 @@ def _click_all_tabs(page, out_dir, base_name, manifest):
             if btn.get_attribute("class") and "active" in btn.get_attribute("class") and i == 0:
                 continue  # initial tab already captured in the base shot
             btn.click()
-            _settle(page, 1500)
-            _shot(page, out_dir, f"{base_name}__tab_{i:02d}_{label}", manifest)
+            shot_name = f"{base_name}__tab_{i:02d}_{label}"
+            _settle(page, 1500, shot_name)
+            _shot(page, out_dir, shot_name, manifest)
         except Exception as exc:
             print(f"    [tab-skip] {base_name} #{i}: {exc}")
 
@@ -181,8 +200,17 @@ def _click_all_tabs(page, out_dir, base_name, manifest):
                 if "active" in cls and i == 0:
                     continue
                 a.click()
-                _settle(page, 1500)
-                _shot(page, out_dir, f"{base_name}__{sel[2:6]}_{i:02d}_{_slug(key)}", manifest)
+                # 3500ms (was 1500ms): heavy tabs (Category/Campaign tree
+                # aggregation over 337k+ line items) were still resolving
+                # when the NEXT tab's click fired. Confirmed 2026-07-15 this
+                # is a PRE-EXISTING lazy-tab JS race (identical corruption
+                # found in the pre-2.3.0 baseline capture too) — more settle
+                # time does not fix it since the bug is a late AJAX response
+                # landing in whatever pane is "current" rather than its own
+                # pane. Tracked separately; not blocking on capture settle time.
+                shot_name = f"{base_name}__{sel[2:6]}_{i:02d}_{_slug(key)}"
+                _settle(page, 3500, shot_name)
+                _shot(page, out_dir, shot_name, manifest)
             except Exception as exc:
                 print(f"    [stab-skip] {base_name} #{i}: {exc}")
 
@@ -208,8 +236,9 @@ def _capture_shop_detail(page, out_dir, base_name, manifest):
                 f"#{sid}",
                 "el => el.closest('.shop-select-row')?.querySelector('button')?.click()"
             )
-            _settle(page, 3500)
-            _shot(page, out_dir, f"{base_name}__sec_{_slug(sid)}", manifest)
+            shot_name = f"{base_name}__sec_{_slug(sid)}"
+            _settle(page, 3500, shot_name)
+            _shot(page, out_dir, shot_name, manifest)
         except Exception as exc:
             print(f"    [sel-skip] #{sid}: {exc}")
     # product section sub-tabs (hand-rolled data-stab) — after productShopSel loaded
@@ -217,8 +246,9 @@ def _capture_shop_detail(page, out_dir, base_name, manifest):
         try:
             key = a.get_attribute("data-stab") or f"s{i}"
             a.click()
-            _settle(page, 1500)
-            _shot(page, out_dir, f"{base_name}__prod_{i:02d}_{_slug(key)}", manifest)
+            shot_name = f"{base_name}__prod_{i:02d}_{_slug(key)}"
+            _settle(page, 1500, shot_name)
+            _shot(page, out_dir, shot_name, manifest)
         except Exception as exc:
             print(f"    [stab-skip] product #{i}: {exc}")
 
@@ -233,8 +263,9 @@ def _capture_customer_detail(page, out_dir, base_name, manifest, env):
     try:
         page.fill("input[name='vip_id']", vip)
         page.keyboard.press("Enter")
-        _settle(page, 2500)
-        _shot(page, out_dir, f"{base_name}__vip_{_slug(vip)}", manifest)
+        shot_name = f"{base_name}__vip_{_slug(vip)}"
+        _settle(page, 2500, shot_name)
+        _shot(page, out_dir, shot_name, manifest)
     except Exception as exc:
         print(f"    [vip-skip] {exc}")
 

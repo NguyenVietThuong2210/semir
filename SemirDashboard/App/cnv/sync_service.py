@@ -449,10 +449,10 @@ class CNVSyncService:
         Sync customers from CNV API (max DEFAULT_MAX_SYNC_PAGES pages per run).
 
         Checkpoint strategy:
-        - First sync: Fetch pages 1-500, save latest updated_at
+        - First sync: Fetch pages 1-100, save latest updated_at
         - Next syncs: Continue from saved checkpoint
-        - Each sync processes max 50,000 records (500 pages)
-        
+        - Each sync processes max 10,000 records (100 pages)
+
         Args:
             incremental: If True, use checkpoint from last successful sync
             max_pages: Override max pages (for testing)
@@ -651,10 +651,10 @@ class CNVSyncService:
         Sync orders from CNV API (max DEFAULT_MAX_SYNC_PAGES pages per run).
 
         Checkpoint strategy:
-        - First sync: Fetch pages 1-500, save latest updated_at
+        - First sync: Fetch pages 1-100, save latest updated_at
         - Next syncs: Continue from saved checkpoint
-        - Each sync processes max 50,000 records (500 pages)
-        
+        - Each sync processes max 10,000 records (100 pages)
+
         Args:
             incremental: If True, use checkpoint from last successful sync
             start_date: Filter orders from this date

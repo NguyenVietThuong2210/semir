@@ -1,6 +1,6 @@
 """App/views/admin_logs.py — Admin log viewer page.
 
-Reads the last 50 INFO, WARNING, and ERROR log entries from the rotating
+Reads the last 500 INFO, WARNING, and ERROR log entries from the rotating
 JSON log files and renders them in a three-table dashboard.
 
 Access: superuser only (/admin-logs/).
@@ -24,7 +24,7 @@ _LOG_FILES = {
     "WARNING": [_LOGS_DIR / "app.log", _LOGS_DIR / "cnv_sync.log", _LOGS_DIR / "errors.log"],
     "ERROR":   [_LOGS_DIR / "errors.log", _LOGS_DIR / "app.log", _LOGS_DIR / "cnv_sync.log"],
 }
-_LIMIT = 50
+_LIMIT = 500
 
 
 def _read_json_log(paths: list, level_filter: str | None = None, limit: int = _LIMIT) -> list:

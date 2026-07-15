@@ -22,7 +22,7 @@ OAuth2 HTTP client with token lifecycle management.
 | `authenticate()` | OAuth2 login via SSO, caches token 30d |
 | `get_customers(page, page_size, updated_since, ids)` | Paginated customer list (100/page) |
 | `get_orders(page, page_size, start_date, end_date, updated_since, updated_until)` | Paginated orders |
-| `fetch_all_customers(updated_since, max_pages)` | Bulk fetch up to `DEFAULT_MAX_SYNC_PAGES` pages — 500 pages / 50K records (bumped from 100/10K on 2026-07-14; override via `settings.CNV_MAX_SYNC_PAGES`) |
+| `fetch_all_customers(updated_since, max_pages)` | Bulk fetch up to `DEFAULT_MAX_SYNC_PAGES` pages — 100 pages / 10K records per run (briefly 500/50K on 2026-07-14, reverted 2026-07-15 per user request; override via `settings.CNV_MAX_SYNC_PAGES`) |
 | `fetch_all_orders(...)` | Bulk fetch orders with date/checkpoint filtering |
 | `fetch_customers_by_ids(customer_ids, batch_size)` | Batch fetch by ID (max 100 per call) |
 | `get_customer_membership(customer_id)` | Fetch loyalty membership data |

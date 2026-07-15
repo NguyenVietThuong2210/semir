@@ -43,6 +43,14 @@ _LOCK_TTL = 120        # 2 min — short so a dead leader's slot frees up fast
 _LOCK_REFRESH = 40     # leader refreshes every 40s (3x margin before TTL)
 _LEADER_RETRY = 45     # non-leader workers re-attempt to become leader this often
 _leader_token = None   # set on the worker that owns the scheduler
+_last_logged_holder = None  # 2026-07-15: last "lock held by X" value THIS worker
+                            # logged — the retry loop calls _try_become_leader_and_start
+                            # every 45s forever for every non-leader worker; logging on
+                            # every failed attempt (unchanged steady state) produced
+                            # ~2 lines/45s = ~3800 lines/day of pure noise that crowded
+                            # out useful INFO entries on /admin-logs/. Only log when the
+                            # observed holder actually CHANGES (worth knowing) — startup
+                            # and leader handover still get one log line each.
 
 
 def _refresh_scheduler_leader():
@@ -237,15 +245,21 @@ def start_scheduler():
 def _try_become_leader_and_start() -> bool:
     """Attempt to acquire the leader lock; if won, build and start the
     scheduler in this process. Returns True iff this call became leader."""
-    global _leader_token
+    global _leader_token, _last_logged_holder
     from django.core.cache import cache
     token = f"{socket.gethostname()}:{os.getpid()}"
     if not cache.add(_SCHEDULER_LOCK_KEY, token, _LOCK_TTL):
         holder = cache.get(_SCHEDULER_LOCK_KEY)
-        logger.info("Scheduler leader lock held by %s — this worker (%s) will NOT start a scheduler.",
-                    holder, token)
+        # Only log when the holder is different from what THIS worker last
+        # logged — avoids re-logging the same "still not leader" fact every
+        # 45s forever (see _last_logged_holder comment above).
+        if holder != _last_logged_holder:
+            logger.info("Scheduler leader lock held by %s — this worker (%s) will NOT start a scheduler.",
+                        holder, token)
+            _last_logged_holder = holder
         return False
     _leader_token = token
+    _last_logged_holder = token
     atexit.register(_release_scheduler_leader)
     logger.info("Acquired scheduler leader lock (%s) — starting the single scheduler.", token)
     _build_and_start_scheduler()

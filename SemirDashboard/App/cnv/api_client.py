@@ -16,10 +16,10 @@ import secrets
 
 logger = logging.getLogger(__name__)
 
-# Default max pages per sync run (PAGE_SIZE=100 records/page → 50,000 records).
-# Bumped from 100 pages (10,000 records) 2026-07-14 per user request; override
-# via settings.CNV_MAX_SYNC_PAGES.
-DEFAULT_MAX_SYNC_PAGES = getattr(settings, "CNV_MAX_SYNC_PAGES", 500)
+# Default max pages per sync run (PAGE_SIZE=100 records/page → 10,000 records).
+# Briefly bumped to 500 pages (50,000 records) 2026-07-14, reverted back to
+# 100 pages 2026-07-15 per user request; override via settings.CNV_MAX_SYNC_PAGES.
+DEFAULT_MAX_SYNC_PAGES = getattr(settings, "CNV_MAX_SYNC_PAGES", 100)
 
 
 class CNVAPIClient:
@@ -405,7 +405,7 @@ class CNVAPIClient:
 
         Strategy:
         - Sort by updated_at ascending (oldest first)
-        - Fetch max 500 pages (50,000 records)
+        - Fetch max 100 pages (10,000 records)
         - Track latest updated_at as checkpoint
         - Next sync continues from checkpoint
 
@@ -518,7 +518,7 @@ class CNVAPIClient:
         Fetch orders with max DEFAULT_MAX_SYNC_PAGES pages per sync.
 
         Strategy:
-        - Fetch max 500 pages (50,000 records)
+        - Fetch max 100 pages (10,000 records)
         - Use updated_at_from and updated_at_to to scan by date range
         - Next sync continues from checkpoint
 

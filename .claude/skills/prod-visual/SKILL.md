@@ -90,3 +90,22 @@ tối thiểu 5 ảnh PASS ngẫu nhiên cũng phải mở xác nhận không tr
 - FAIL do timestamp/đồng hồ → thêm selector vào `MASK_SELECTORS`, KHÔNG nâng ngưỡng
 - Tool chỉ GET — an toàn production; TUYỆT ĐỐI không thêm bước submit form upload/sync
 - Console Windows: luôn set `PYTHONIOENCODING=utf-8` trước khi chạy
+
+## ⚠️ QUY TẮC BẮT BUỘC — KHÔNG BAO GIỜ kết luận "data-trôi" chỉ bằng mắt
+
+Sự cố 2026-07-15: đã kết luận sai 9 FAIL là "data-trôi" chỉ vì diff % nhỏ (0.3-0.6%) và nhìn ảnh full-page không thấy vùng đỏ rõ — thực ra root cause là 1 CSS fix chủ đích (UI-07), và 1 lỗi capture-timing của chính baseline. Trước khi phân loại BẤT KỲ FAIL nào là (b) data-trôi, PHẢI:
+
+1. Đo bounding-box pixel chính xác bằng code, không đoán bằng mắt:
+   ```python
+   from PIL import Image, ImageChops
+   a = Image.open('baseline/X.png').convert('RGB'); b = Image.open('current/X.png').convert('RGB')
+   print('sizes:', a.size, b.size)   # size khác nhau => có nội dung thật bị thêm/bớt, không phải trôi lặt vặt
+   delta = ImageChops.difference(a, b).convert('L')
+   mask = delta.point(lambda v: 255 if v > 16 else 0)
+   print('bbox:', mask.getbbox())    # vùng khác biệt gọn 1 chỗ => 1 nguyên nhân cụ thể, không phải rải rác toàn trang
+   ```
+2. Crop đúng vùng bbox đó từ CẢ 2 ảnh, xem nội dung thật là gì (không chỉ nhìn full-page)
+3. Nếu nghi ngờ do AJAX chưa load xong → tìm chữ "Loading..." còn sót trong ảnh
+4. Chỉ sau khi xác định rõ nội dung mới được phân loại (a)/(b)/(c) — số liệu KPI phải so byte-for-byte nếu nghi ngờ, không suy luận từ % diff
+
+`_settle()` đã có wait-for-"Loading..." với timeout 45s + cảnh báo WARN nếu vẫn còn sau khi hết giờ (thay vì âm thầm chụp ảnh dở dang) — nhưng vẫn PHẢI kiểm tra bbox/crop thủ công khi FAIL đáng ngờ, vì AJAX có thể chậm hơn cả 45s trong vài trường hợp.

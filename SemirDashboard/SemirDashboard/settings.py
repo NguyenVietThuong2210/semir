@@ -197,8 +197,9 @@ CNV_SSO_URL = os.getenv("CNV_SSO_URL", "https://id.cnv.vn")
 CNV_MEMBERSHIP_RATE_LIMIT = int(os.getenv("CNV_MEMBERSHIP_RATE_LIMIT", "50"))
 
 # Max pages fetched per customers/orders sync run (PAGE_SIZE=100 records/page).
-# 500 pages = 50,000 records per run.
-CNV_MAX_SYNC_PAGES = int(os.getenv("CNV_MAX_SYNC_PAGES", "500"))
+# 100 pages = 10,000 records per run (reverted 2026-07-15 per user request;
+# was briefly 500 pages/50,000 records on 2026-07-14).
+CNV_MAX_SYNC_PAGES = int(os.getenv("CNV_MAX_SYNC_PAGES", "100"))
 
 # Cache configuration — Redis in production, LocMem in dev
 _REDIS_URL = os.getenv("REDIS_URL")

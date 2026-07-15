@@ -446,7 +446,10 @@ class SchedulerLeaderLockTest(TestCase):
 
     def setUp(self):
         from django.core.cache import cache
+        from App.cnv import scheduler as sch
         cache.delete("cnv_scheduler_leader")
+        sch._last_logged_holder = None
+        sch._leader_token = None
 
     def test_only_first_worker_acquires_leader(self):
         from django.core.cache import cache
@@ -505,6 +508,41 @@ class SchedulerLeaderLockTest(TestCase):
             _, kwargs = MockThread.call_args
             self.assertEqual(kwargs.get("target"), sch._leader_retry_loop)
             self.assertTrue(kwargs.get("daemon"))
+
+    def test_retry_loop_logs_holder_once_not_every_attempt(self):
+        """2026-07-15 bug: _leader_retry_loop calls _try_become_leader_and_start
+        every 45s FOREVER for every non-leader worker. Logging on every failed
+        attempt (unchanged steady state) produced ~3800 lines/day of pure noise
+        on /admin-logs/, crowding out useful INFO entries. Must log only once
+        per distinct holder value observed."""
+        from django.core.cache import cache
+        from App.cnv import scheduler as sch
+        cache.set("cnv_scheduler_leader", "other-worker", 900)
+
+        with self.assertLogs("App.cnv.scheduler", level="INFO") as logs:
+            self.assertFalse(sch._try_become_leader_and_start())
+        self.assertEqual(len(logs.output), 1, f"expected 1 log line, got: {logs.output}")
+
+        # Same holder, called again (simulating the next 45s retry tick) — must NOT re-log
+        import logging
+        marker = logging.getLogger("App.cnv.scheduler")
+        with self.assertRaises(AssertionError):  # assertLogs raises if NOTHING was logged
+            with self.assertLogs("App.cnv.scheduler", level="INFO"):
+                self.assertFalse(sch._try_become_leader_and_start())
+
+    def test_retry_loop_logs_again_when_holder_changes(self):
+        """A genuine leadership change (old leader died, new one took over)
+        must still be logged — only IDENTICAL repeats are suppressed."""
+        from django.core.cache import cache
+        from App.cnv import scheduler as sch
+        cache.set("cnv_scheduler_leader", "worker-A", 900)
+        with self.assertLogs("App.cnv.scheduler", level="INFO"):
+            self.assertFalse(sch._try_become_leader_and_start())
+
+        cache.set("cnv_scheduler_leader", "worker-B", 900)  # leadership changed
+        with self.assertLogs("App.cnv.scheduler", level="INFO") as logs:
+            self.assertFalse(sch._try_become_leader_and_start())
+        self.assertIn("worker-B", logs.output[0])
 
     def test_cron_is_every_10_minutes(self):
         """C-09 (restored 2026-07-14): now that the leader lock self-heals
@@ -579,13 +617,15 @@ class SchedulerCronMechanicsLocalTest(TestCase):
             "orders used the fast override instead of its own default trigger")
 
 
-# ── 2026-07-14: page-limit bump (10k → 50k) + shared distributed rate limit ───
+# ── 2026-07-14: page-limit bump 10k→50k, REVERTED back to 10k 2026-07-15 ──────
+# (per user request) + shared distributed rate limit ─────────────────────────
 
 class SyncPageLimitTest(TestCase):
-    def test_default_max_sync_pages_is_500(self):
-        """500 pages x PAGE_SIZE=100 = 50,000 records/run (was 100 pages/10k)."""
+    def test_default_max_sync_pages_is_100(self):
+        """100 pages x PAGE_SIZE=100 = 10,000 records/run. Briefly 500/50k on
+        2026-07-14, reverted back to 100/10k on 2026-07-15 per user request."""
         from App.cnv.api_client import CNVAPIClient, DEFAULT_MAX_SYNC_PAGES
-        self.assertEqual(DEFAULT_MAX_SYNC_PAGES, 500)
+        self.assertEqual(DEFAULT_MAX_SYNC_PAGES, 100)
         self.assertEqual(CNVAPIClient.PAGE_SIZE, 100)
 
     def test_fetch_all_customers_uses_default_max_pages(self):
