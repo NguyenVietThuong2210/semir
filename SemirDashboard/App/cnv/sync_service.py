@@ -20,15 +20,24 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from App.cnv.models import CNVCustomer, CNVOrder, CNVSyncLog
-from .api_client import CNVAPIClient
+from .api_client import CNVAPIClient, DEFAULT_MAX_SYNC_PAGES
+from .rate_limit import get_membership_rate_limiter
 
 logger = logging.getLogger(__name__)
 
-MEMBERSHIP_RATE_LIMIT = 50  # max API calls per second (CNV limit: 100/s, use 50 for safety)
+# Kept for backward compatibility (tests import this name); the effective
+# limit now lives in settings.CNV_MEMBERSHIP_RATE_LIMIT and is enforced by
+# the distributed rate limiter shared with the manual admin sync view (see
+# App/cnv/rate_limit.py — a purely in-process limiter here could not prevent
+# the 2026-07-12 multi-worker 429 incident).
+MEMBERSHIP_RATE_LIMIT = 50
 
 
 class _RateLimiter:
-    """Thread-safe token bucket — enforces minimum interval between calls."""
+    """Thread-safe token bucket — enforces minimum interval between calls.
+    Retained for any direct unit tests; production code now uses the
+    distributed limiter from rate_limit.py so the budget is shared across
+    gunicorn workers and the manual sync_cnv_points admin action."""
 
     def __init__(self, rate: float):
         self._min_interval = 1.0 / rate
@@ -72,7 +81,9 @@ class CNVSyncService:
             password: CNV account password
         """
         self.client = CNVAPIClient(username, password)
-        self._rate_limiter = _RateLimiter(MEMBERSHIP_RATE_LIMIT)
+        # Distributed limiter: shared budget across ALL gunicorn workers AND
+        # the manual "sync points" admin view, not just this instance.
+        self._rate_limiter = get_membership_rate_limiter()
     
     def _parse_datetime(self, dt_str: Optional[str]) -> Optional[datetime]:
         """
@@ -435,12 +446,12 @@ class CNVSyncService:
         max_pages: Optional[int] = None
     ) -> Tuple[int, int, int]:
         """
-        Sync customers from CNV API (max 100 pages per run).
-        
+        Sync customers from CNV API (max DEFAULT_MAX_SYNC_PAGES pages per run).
+
         Checkpoint strategy:
-        - First sync: Fetch pages 1-100, save latest updated_at
+        - First sync: Fetch pages 1-500, save latest updated_at
         - Next syncs: Continue from saved checkpoint
-        - Each sync processes max 10,000 records (100 pages)
+        - Each sync processes max 50,000 records (500 pages)
         
         Args:
             incremental: If True, use checkpoint from last successful sync
@@ -565,10 +576,10 @@ class CNVSyncService:
         try:
             logger.info("sync_customers_range: from=%s to=%s", updated_since, updated_until)
             
-            # Fetch data for this date range (max 100 pages)
+            # Fetch data for this date range (max DEFAULT_MAX_SYNC_PAGES pages)
             customers_data = self.client.fetch_all_customers(
                 updated_since=updated_since,
-                max_pages=100
+                max_pages=DEFAULT_MAX_SYNC_PAGES
             )
             
             # Filter by updated_until (API might not support updated_at_to).
@@ -637,12 +648,12 @@ class CNVSyncService:
         max_pages: Optional[int] = None
     ) -> Tuple[int, int, int]:
         """
-        Sync orders from CNV API (max 100 pages per run).
-        
+        Sync orders from CNV API (max DEFAULT_MAX_SYNC_PAGES pages per run).
+
         Checkpoint strategy:
-        - First sync: Fetch pages 1-100, save latest updated_at
+        - First sync: Fetch pages 1-500, save latest updated_at
         - Next syncs: Continue from saved checkpoint
-        - Each sync processes max 10,000 records (100 pages)
+        - Each sync processes max 50,000 records (500 pages)
         
         Args:
             incremental: If True, use checkpoint from last successful sync
@@ -791,11 +802,11 @@ class CNVSyncService:
         try:
             logger.info("sync_orders_range: from=%s to=%s", updated_since, updated_until)
             
-            # Fetch data for this date range (max 100 pages)
+            # Fetch data for this date range (max DEFAULT_MAX_SYNC_PAGES pages)
             orders_data = self.client.fetch_all_orders(
                 updated_since=updated_since,
                 updated_until=updated_until,
-                max_pages=100
+                max_pages=DEFAULT_MAX_SYNC_PAGES
             )
             
             total = len(orders_data)
@@ -971,11 +982,11 @@ class CNVSyncService:
             sync_log = CNVSyncLog.objects.create(sync_type='orders')
             
             try:
-                # Fetch orders for this month (max 100 pages)
+                # Fetch orders for this month (max DEFAULT_MAX_SYNC_PAGES pages)
                 orders_data = self.client.fetch_all_orders(
                     updated_since=month_start,
                     updated_until=month_end,
-                    max_pages=100
+                    max_pages=DEFAULT_MAX_SYNC_PAGES
                 )
                 
                 total = len(orders_data)

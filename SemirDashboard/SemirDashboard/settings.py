@@ -191,6 +191,15 @@ CNV_REDIRECT_URI = os.getenv("CNV_REDIRECT_URI", "http://localhost:5000/callback
 CNV_API_BASE_URL = os.getenv("CNV_API_BASE_URL", "https://apis.cnvloyalty.com")
 CNV_SSO_URL = os.getenv("CNV_SSO_URL", "https://id.cnv.vn")
 
+# Distributed rate limit (shared across ALL gunicorn workers via Redis) for
+# CNV membership-fetch calls. CNV's own bucket is 100 req/s — keep this well
+# under that so fixed-window boundary bursts can't trip a 429.
+CNV_MEMBERSHIP_RATE_LIMIT = int(os.getenv("CNV_MEMBERSHIP_RATE_LIMIT", "50"))
+
+# Max pages fetched per customers/orders sync run (PAGE_SIZE=100 records/page).
+# 500 pages = 50,000 records per run.
+CNV_MAX_SYNC_PAGES = int(os.getenv("CNV_MAX_SYNC_PAGES", "500"))
+
 # Cache configuration — Redis in production, LocMem in dev
 _REDIS_URL = os.getenv("REDIS_URL")
 if _REDIS_URL:

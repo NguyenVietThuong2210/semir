@@ -22,7 +22,7 @@ OAuth2 HTTP client with token lifecycle management.
 | `authenticate()` | OAuth2 login via SSO, caches token 30d |
 | `get_customers(page, page_size, updated_since, ids)` | Paginated customer list (100/page) |
 | `get_orders(page, page_size, start_date, end_date, updated_since, updated_until)` | Paginated orders |
-| `fetch_all_customers(updated_since, max_pages)` | Bulk fetch up to 100 pages (10K records) |
+| `fetch_all_customers(updated_since, max_pages)` | Bulk fetch up to `DEFAULT_MAX_SYNC_PAGES` pages — 500 pages / 50K records (bumped from 100/10K on 2026-07-14; override via `settings.CNV_MAX_SYNC_PAGES`) |
 | `fetch_all_orders(...)` | Bulk fetch orders with date/checkpoint filtering |
 | `fetch_customers_by_ids(customer_ids, batch_size)` | Batch fetch by ID (max 100 per call) |
 | `get_customer_membership(customer_id)` | Fetch loyalty membership data |
@@ -34,7 +34,7 @@ OAuth2 HTTP client with token lifecycle management.
 
 Checkpoint-based incremental sync. Batch size: 500.
 
-**Rate limiter (2026-05-10):** `MEMBERSHIP_RATE_LIMIT = 50` req/s (CNV limit is 100/s; 50 used for safety). `_RateLimiter` class — thread-safe, uses `threading.Lock`. `acquire()` called before every `get_customer_membership()` call.
+**Rate limiter (updated 2026-07-14):** `get_membership_rate_limiter()` in `App/cnv/rate_limit.py` — a **distributed** (Redis/Django-cache-backed) fixed-window limiter, default 50 req/s (CNV limit is 100/s; override via `settings.CNV_MEMBERSHIP_RATE_LIMIT`). `acquire()` called before every `get_customer_membership()` call — **both** in `CNVSyncService._fetch_membership()` (scheduled cron sync) **and** in `App/cnv/views.py sync_cnv_points` (manual admin "sync points" action), so the combined call rate across all gunicorn workers and both call sites stays under CNV's cap. The old per-process `_RateLimiter` class in `sync_service.py` is kept only for direct unit tests — production code no longer uses it, because a purely in-process limiter could not prevent the 2026-07-12 incident (3 concurrent schedulers × 50 req/s = 150 req/s → 429s).
 
 | Method | Purpose |
 |--------|---------|
@@ -91,12 +91,13 @@ Always check with `if not period_filter:` — NOT `if period_filter is None:`.
 
 ## Scheduler — `App/cnv/scheduler.py`
 
-APScheduler jobs registered on app startup (`start_scheduler()`):
+APScheduler jobs, started via `start_scheduler()` → single-leader election → `_build_and_start_scheduler()`:
 
 | Job | Schedule | Purpose |
 |-----|----------|---------|
-| `sync_cnv_customers_only` | Every hour at :05 | Incremental customer sync |
-| `sync_cnv_orders_only` | Every hour at :10 | Incremental order sync |
+| `sync_cnv_customers_only` | Every 10 min at :05,:15,:25,:35,:45,:55 | Incremental customer sync |
+| `sync_cnv_orders_only` | Every 10 min at :00,:10,:20,:30,:40,:50 | Incremental order sync |
+| `scheduler_lock_refresh` | Every `_LOCK_REFRESH`s (40s) | Keeps this worker's leader lock alive |
 | `delete_old_job_executions` | Daily at 2:00 AM | Cleanup old job records (7d retention) |
 
 **Settings:**
@@ -104,6 +105,17 @@ APScheduler jobs registered on app startup (`start_scheduler()`):
 - `max_instances=1` (no overlapping runs)
 - `misfire_grace_time=900s`
 - Stale sync threshold: 2 hours
+
+**Single-leader guard (added 2026-07-12, incident fix):** prod runs `gunicorn --workers 3`. Without a guard, every worker starts its own scheduler → jobs fire 3× → CNV 429 storms + DjangoJobStore replace races. Only the worker that wins a Redis-backed lock (`cache.add("cnv_scheduler_leader", ...)`) runs the scheduler:
+- `_LOCK_TTL = 120s`, `_LOCK_REFRESH = 40s` — kept short deliberately. A long TTL previously caused a real outage: when the `web` container is redeployed, the OLD container dies without releasing the lock (Redis is a separate long-lived container, so its key outlives the process that set it); every new worker saw the dead container's stale key and refused to start a scheduler until the old TTL expired naturally (was up to 900s/15min before this fix).
+- `_LEADER_RETRY = 45s` — a worker that loses the initial election keeps retrying in a background thread (`_leader_retry_loop`) instead of giving up permanently. Before this, a worker that lost the startup race would NEVER become leader until the next full redeploy, even if the leader later died.
+- `_release_scheduler_leader()` registered via `atexit` — best-effort immediate release on graceful shutdown so a standby worker can take over in seconds instead of waiting for TTL.
+- **Immediate manual unblock** if a stale lock is ever suspected on prod: `docker exec -it semir_redis redis-cli DEL cnv_scheduler_leader` (the retry loop will pick it up within `_LEADER_RETRY` seconds — no restart needed after this fix, unlike the pre-2026-07-14 code).
+
+**Local testability without calling CNV:**
+- `python manage.py cnv_scheduler_smoketest [--duration N] [--interval N]` — mocks the sync functions, substitutes a fast `IntervalTrigger` for the production `CronTrigger`, and prints live fire counts. Proves cron mechanics work on a given machine before ever deploying.
+- `tests/test_bugfixes.py::SchedulerCronMechanicsLocalTest` — same idea as an automated, CI-safe test (~4.5s wall time, zero CNV calls).
+- Both rely on `_build_and_start_scheduler(customers_trigger=..., orders_trigger=..., use_django_jobstore=False, refresh_lock=False)` — override params that default to the real production behavior when omitted.
 
 ---
 

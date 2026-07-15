@@ -75,7 +75,7 @@ CNV_PASSWORD = settings.CNV_PASSWORD
 
 
 def sync_cnv_customers_only():
-    """Sync customers only. Runs hourly at :05 (single leader worker)."""
+    """Sync customers only. Runs every 10 min at :05,:15,:25,:35,:45,:55 (single leader worker)."""
     logger.info("=" * 60)
     logger.info("STARTING CUSTOMERS SYNC JOB")
     logger.info("=" * 60)
@@ -138,7 +138,7 @@ def sync_cnv_customers_only():
 
 
 def sync_cnv_orders_only():
-    """Sync orders only. Runs hourly at :10 (single leader worker)."""
+    """Sync orders only. Runs every 10 min at :00,:10,:20,:30,:40,:50 (single leader worker)."""
     logger.info("=" * 60)
     logger.info("STARTING ORDERS SYNC JOB")
     logger.info("=" * 60)
@@ -266,53 +266,79 @@ def _leader_retry_loop():
             logger.exception("Scheduler leader retry attempt failed")
 
 
-def _build_and_start_scheduler():
-    """Register jobs and start APScheduler. Called only in the elected leader."""
+def _build_and_start_scheduler(customers_trigger=None, orders_trigger=None,
+                                use_django_jobstore=True, refresh_lock=True):
+    """Register jobs and start APScheduler.
+
+    Parameters exist so this can be exercised locally/in tests WITHOUT hitting
+    the real CNV API and WITHOUT waiting real hours for a CronTrigger to fire:
+      - customers_trigger / orders_trigger: override the production
+        CronTrigger with e.g. an IntervalTrigger(seconds=2) for a fast local
+        smoke test. Defaults (None) use the real production cadence.
+      - use_django_jobstore=False: use APScheduler's in-memory MemoryJobStore
+        instead of DjangoJobStore, so a test doesn't need a background
+        thread touching the Django test DB across the test's transaction.
+      - refresh_lock=False: skip registering the leader-lock-refresh job
+        (irrelevant for a single-process local test).
+
+    Called only in the elected leader in production.
+    """
     scheduler = BackgroundScheduler(
         job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 900}
     )
 
-    scheduler.add_jobstore(DjangoJobStore(), "default")
+    if use_django_jobstore:
+        scheduler.add_jobstore(DjangoJobStore(), "default")
+        # Clear any jobs persisted by a previous deploy so a changed trigger
+        # always takes effect (DjangoJobStore otherwise keeps the OLD
+        # next_run_time).
+        try:
+            scheduler.remove_all_jobs()
+            logger.info("Cleared stale jobs from DjangoJobStore before re-registering.")
+        except Exception as exc:
+            logger.warning("remove_all_jobs failed (continuing): %s", exc)
 
-    # Clear any jobs persisted by a previous deploy so a changed trigger always
-    # takes effect (DjangoJobStore otherwise keeps the OLD next_run_time).
-    try:
-        scheduler.remove_all_jobs()
-        logger.info("Cleared stale jobs from DjangoJobStore before re-registering.")
-    except Exception as exc:
-        logger.warning("remove_all_jobs failed (continuing): %s", exc)
+    # Production cadence: every 10 minutes. (CronTrigger(minute="5") alone
+    # fires only once per hour — a single value is NOT the same as "every
+    # 10 min"; the comma-separated list is required.) Safe to run at this
+    # cadence now that a stale leader lock can only block a new leader for
+    # up to _LOCK_TTL seconds (was up to 15 min pre-2026-07-12 incident) and
+    # a non-leader worker keeps retrying instead of giving up permanently.
+    customers_desc = ("every 10 min at :05,:15,:25,:35,:45,:55" if customers_trigger is None
+                       else f"TEST/custom trigger {customers_trigger}")
+    orders_desc = ("every 10 min at :00,:10,:20,:30,:40,:50" if orders_trigger is None
+                   else f"TEST/custom trigger {orders_trigger}")
 
-    # Hourly for now (stability after the 3-scheduler fix). Bump to a 10-min
-    # multi-value CronTrigger once prod is confirmed stable on a single leader.
     scheduler.add_job(
         sync_cnv_customers_only,
-        trigger=CronTrigger(minute="45"),
+        trigger=customers_trigger or CronTrigger(minute="5,15,25,35,45,55"),
         id="cnv_customers_sync",
         max_instances=1,
         replace_existing=True,
         name="CNV Customers Sync",
     )
-    logger.info("Registered job: CNV Customers Sync (hourly at :05)")
+    logger.info("Registered job: CNV Customers Sync (%s)", customers_desc)
 
     scheduler.add_job(
         sync_cnv_orders_only,
-        trigger=CronTrigger(minute="10"),
+        trigger=orders_trigger or CronTrigger(minute="0,10,20,30,40,50"),
         id="cnv_orders_sync",
         max_instances=1,
         replace_existing=True,
         name="CNV Orders Sync",
     )
-    logger.info("Registered job: CNV Orders Sync (hourly at :10)")
+    logger.info("Registered job: CNV Orders Sync (%s)", orders_desc)
 
-    # Keep the leader lock alive while this worker runs the scheduler.
-    scheduler.add_job(
-        _refresh_scheduler_leader,
-        trigger=IntervalTrigger(seconds=_LOCK_REFRESH),
-        id="scheduler_lock_refresh",
-        max_instances=1,
-        replace_existing=True,
-        name="Scheduler Leader Lock Refresh",
-    )
+    if refresh_lock:
+        # Keep the leader lock alive while this worker runs the scheduler.
+        scheduler.add_job(
+            _refresh_scheduler_leader,
+            trigger=IntervalTrigger(seconds=_LOCK_REFRESH),
+            id="scheduler_lock_refresh",
+            max_instances=1,
+            replace_existing=True,
+            name="Scheduler Leader Lock Refresh",
+        )
 
     # Cleanup daily at 2 AM
     scheduler.add_job(
@@ -333,8 +359,8 @@ def _build_and_start_scheduler():
         logger.info("SCHEDULER STARTED SUCCESSFULLY")
         logger.info("=" * 60)
         logger.info("Scheduled jobs:")
-        logger.info("  [1] CNV Customers Sync - Hourly at :05")
-        logger.info("  [2] CNV Orders Sync - Hourly at :10")
+        logger.info("  [1] CNV Customers Sync - %s", customers_desc)
+        logger.info("  [2] CNV Orders Sync - %s", orders_desc)
         logger.info("  [3] Cleanup Old Logs - Daily at 2:00 AM")
         logger.info("=" * 60)
 

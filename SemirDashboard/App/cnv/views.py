@@ -276,6 +276,7 @@ def sync_cnv_points(request):
     from django.http import JsonResponse
     from decimal import Decimal
     from App.cnv.api_client import CNVAPIClient
+    from App.cnv.rate_limit import get_membership_rate_limiter
 
     err = _json_perm_check(request, "cnv.sync")
     if err:
@@ -294,11 +295,17 @@ def sync_cnv_points(request):
         return JsonResponse({"error": "No cnv_ids provided"}, status=400)
 
     client = CNVAPIClient(settings.CNV_USERNAME, settings.CNV_PASSWORD)
+    # Same distributed limiter the scheduled cron sync uses (App/cnv/rate_limit.py) —
+    # this loop previously had NO rate limit at all, so a large manual batch
+    # run concurrently with the cron sync could push the combined call rate
+    # over CNV's 100 req/s cap and trigger 429s.
+    rate_limiter = get_membership_rate_limiter()
 
     def _sync_ids(ids):
         results = []
         for cnv_id in ids:
             try:
+                rate_limiter.acquire()
                 response = client.get_customer_membership(int(cnv_id))
                 if response and "membership" in response:
                     m = response["membership"]

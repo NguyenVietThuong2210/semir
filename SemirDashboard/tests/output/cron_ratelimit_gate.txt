@@ -1,0 +1,428 @@
+﻿python : Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+At line:1 char:40
++ ... rDashboard; python manage.py test tests.test_bugfixes tests.test_cnv_ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Creating test d...che=shared')...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Found 72 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: corsheaders, messages, rest_framework, rest_framework_simplejwt, staticfiles
+  Apply all migrations: App, admin, auth, contenttypes, django_apscheduler, sessions, token_blacklist
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying App.0001_initial... OK
+  Applying App.0002_coupon... OK
+  Applying App.0003_cnvcustomer_cnvorder_cnvsynclog... OK
+  Applying App.0004_cnvsynclog_checkpoint_updated_at_and_more... OK
+  Applying App.0005_remove_cnvcustomer_cnv_custome_custome_a44ad1_idx_and_more... OK
+  Applying App.0006_rename_cnv_custome_phone_a1b2c3_idx_cnv_custome_phone_3161f6_idx_and_more... OK
+  Applying App.0007_add_zalo_fields_to_cnvcustomer... OK
+  Applying App.0008_role_userprofile... OK
+  Applying App.0009_add_coupon_campaign... OK
+  Applying App.0010_alter_couponcampaign_prefix... OK
+  Applying App.0011_cnvcustomer_cnv_created_at_idx... OK
+  Applying App.0012_add_shop_name_indexes... OK
+  Applying App.0013_inventorysnapshot_saledetail... OK
+  Applying App.0014_saledetail_shop_name_date_index... OK
+  Applying App.0015_alter_saledetail_unique_together... OK
+  Applying App.0016_product_campaign... OK
+  Applying App.0017_saledetail_unique_add_barcode... OK
+  Applying App.0018_saledetail_remove_unique_together... OK
+  Applying App.0019_coupon_id_unique... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying django_apscheduler.0001_initial... OK
+  Applying django_apscheduler.0002_auto_20180412_0758... OK
+  Applying django_apscheduler.0003_auto_20200716_1632... OK
+  Applying django_apscheduler.0004_auto_20200717_1043... OK
+  Applying django_apscheduler.0005_migrate_name_to_id... OK
+  Applying django_apscheduler.0006_remove_djangojob_name... OK
+  Applying django_apscheduler.0007_auto_20200717_1404... OK
+  Applying django_apscheduler.0008_remove_djangojobexecution_started... OK
+  Applying django_apscheduler.0009_djangojobexecution_unique_job_executions... OK
+  Applying sessions.0001_initial... OK
+  Applying token_blacklist.0001_initial... OK
+  Applying token_blacklist.0002_outstandingtoken_jti_hex... OK
+  Applying token_blacklist.0003_auto_20171017_2007... OK
+  Applying token_blacklist.0004_auto_20171017_2013... OK
+  Applying token_blacklist.0005_remove_outstandingtoken_jti... OK
+  Applying token_blacklist.0006_auto_20171017_2113... OK
+  Applying token_blacklist.0007_auto_20171017_2214... OK
+  Applying token_blacklist.0008_migrate_to_bigautofield... OK
+  Applying token_blacklist.0010_fix_migrate_to_bigautofield... OK
+  Applying token_blacklist.0011_linearizes_history... OK
+  Applying token_blacklist.0012_alter_outstandingtoken_user... OK
+test_full_phone_still_works (tests.test_bugfixes.ApiPhoneSearchGuardTest.test_full_phone_still_works) ... 
+d:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py:62: UserWarning: No directory at: 
+D:\New-jouney\semir\SemirDashboard\staticfiles\
+  mw_instance = middleware(adapted_handler)
+ok
+test_no_digit_phone_400 (tests.test_bugfixes.ApiPhoneSearchGuardTest.test_no_digit_phone_400) ... [WARNING] 2026-07-14 
+22:10:38,949 django.request req=- step=- � Bad Request: /api/v1/analytics/customer-detail/
+ok
+test_short_phone_400 (tests.test_bugfixes.ApiPhoneSearchGuardTest.test_short_phone_400) ... [WARNING] 2026-07-14 
+22:10:40,610 django.request req=- step=- � Bad Request: /api/v1/analytics/customer-detail/
+ok
+test_customer_tab_unauthenticated_401_not_redirect 
+(tests.test_bugfixes.CnvAjaxAuthGuardTest.test_customer_tab_unauthenticated_401_not_redirect) ... [WARNING] 2026-07-14 
+22:10:42,290 django.request req=- step=- � Unauthorized: /cnv/customer-analytics/tab/points/
+ok
+test_sync_points_authenticated_still_works 
+(tests.test_bugfixes.CnvAjaxAuthGuardTest.test_sync_points_authenticated_still_works)
+Guard: valid admin gets a normal (non-401) response. ... [WARNING] 2026-07-14 22:10:42,307 django.request req=- step=- 
+� Bad Request: /cnv/sync-cnv-points/
+ok
+test_sync_points_unauthenticated_401_json 
+(tests.test_bugfixes.CnvAjaxAuthGuardTest.test_sync_points_unauthenticated_401_json) ... [WARNING] 2026-07-14 
+22:10:42,311 django.request req=- step=- � Unauthorized: /cnv/sync-cnv-points/
+ok
+test_trigger_sync_unauthenticated_401_json 
+(tests.test_bugfixes.CnvAjaxAuthGuardTest.test_trigger_sync_unauthenticated_401_json) ... [WARNING] 2026-07-14 
+22:10:42,313 django.request req=- step=- � Unauthorized: /cnv/trigger-sync/
+ok
+test_trigger_zalo_unauthenticated_401_json 
+(tests.test_bugfixes.CnvAjaxAuthGuardTest.test_trigger_zalo_unauthenticated_401_json) ... [WARNING] 2026-07-14 
+22:10:42,330 django.request req=- step=- � Unauthorized: /cnv/trigger-zalo-sync/
+ok
+test_coupon_amount_based_on_sales_amount 
+(tests.test_bugfixes.CouponAmountFieldTest.test_coupon_amount_based_on_sales_amount)
+A-04 bug test: must equal calc(face, sales_amount=500), not settlement=400. ... ok
+test_dup_in_batch_single_row_created 
+(tests.test_bugfixes.CouponImportHardeningTest.test_dup_in_batch_single_row_created)
+U-04/U-05 bug test: same ID twice in one file \u2192 1 row, last wins. ... [INFO] 2026-07-14 22:10:42,421 
+App.services.coupon_import req=- step=coupon_import � === START OPTIMIZED Coupon Import: test.xlsx ===
+[INFO] 2026-07-14 22:10:42,481 App.services.coupon_import req=- step=- � Raw columns: ['Coupon ID', 'Face Value']  
+Rows: 2
+[INFO] 2026-07-14 22:10:42,515 App.services.coupon_import req=- step=- � [Batch 1] rows 1-2
+[INFO] 2026-07-14 22:10:42,518 App.services.coupon_import req=- step=- � [Batch 1] created=1
+[INFO] 2026-07-14 22:10:42,518 App.services.coupon_import req=- step=coupon_import � === DONE Coupon Import: created=1 
+updated=0 errors=0 ===
+ok
+test_errors_is_list (tests.test_bugfixes.CouponImportHardeningTest.test_errors_is_list)
+U-09 bug test: errors is a list with per-row detail, not an int. ... [INFO] 2026-07-14 22:10:42,547 
+App.services.coupon_import req=- step=coupon_import � === START OPTIMIZED Coupon Import: test.xlsx ===
+[INFO] 2026-07-14 22:10:42,553 App.services.coupon_import req=- step=- � Raw columns: ['Coupon ID']  Rows: 2
+[INFO] 2026-07-14 22:10:42,554 App.services.coupon_import req=- step=- � [Batch 1] rows 1-2
+[INFO] 2026-07-14 22:10:42,558 App.services.coupon_import req=- step=- � [Batch 1] created=1
+[INFO] 2026-07-14 22:10:42,558 App.services.coupon_import req=- step=coupon_import � === DONE Coupon Import: created=1 
+updated=0 errors=1 ===
+ok
+test_header_whitespace_accepted (tests.test_bugfixes.CouponImportHardeningTest.test_header_whitespace_accepted)
+U-07 bug test: ' Coupon ID' (leading space) must import fine. ... [INFO] 2026-07-14 22:10:42,605 
+App.services.coupon_import req=- step=coupon_import � === START OPTIMIZED Coupon Import: test.xlsx ===
+[INFO] 2026-07-14 22:10:42,617 App.services.coupon_import req=- step=- � Raw columns: ['Coupon ID', 'Used']  Rows: 1
+[INFO] 2026-07-14 22:10:42,619 App.services.coupon_import req=- step=- � [Batch 1] rows 1-1
+[INFO] 2026-07-14 22:10:42,623 App.services.coupon_import req=- step=- � [Batch 1] created=1
+[INFO] 2026-07-14 22:10:42,623 App.services.coupon_import req=- step=coupon_import � === DONE Coupon Import: created=1 
+updated=0 errors=0 ===
+ok
+test_numeric_coupon_id_no_float_suffix 
+(tests.test_bugfixes.CouponImportHardeningTest.test_numeric_coupon_id_no_float_suffix)
+U-03 bug test: numeric IDs must not become '123...0' strings. ... [INFO] 2026-07-14 22:10:42,655 
+App.services.coupon_import req=- step=coupon_import � === START OPTIMIZED Coupon Import: test.xlsx ===
+[INFO] 2026-07-14 22:10:42,665 App.services.coupon_import req=- step=- � Raw columns: ['Coupon ID', 'Used']  Rows: 1
+[INFO] 2026-07-14 22:10:42,666 App.services.coupon_import req=- step=- � [Batch 1] rows 1-1
+[INFO] 2026-07-14 22:10:42,668 App.services.coupon_import req=- step=- � [Batch 1] created=1
+[INFO] 2026-07-14 22:10:42,668 App.services.coupon_import req=- step=coupon_import � === DONE Coupon Import: created=1 
+updated=0 errors=0 ===
+ok
+test_upsert_still_works (tests.test_bugfixes.CouponImportHardeningTest.test_upsert_still_works)
+Guard: re-import same ID updates, does not duplicate (numbers stable). ... [INFO] 2026-07-14 22:10:42,695 
+App.services.coupon_import req=- step=coupon_import � === START OPTIMIZED Coupon Import: test.xlsx ===
+[INFO] 2026-07-14 22:10:42,707 App.services.coupon_import req=- step=- � Raw columns: ['Coupon ID', 'Face Value']  
+Rows: 1
+[INFO] 2026-07-14 22:10:42,710 App.services.coupon_import req=- step=- � [Batch 1] rows 1-1
+[INFO] 2026-07-14 22:10:42,713 App.services.coupon_import req=- step=- � [Batch 1] created=1
+[INFO] 2026-07-14 22:10:42,714 App.services.coupon_import req=- step=coupon_import � === DONE Coupon Import: created=1 
+updated=0 errors=0 ===
+[INFO] 2026-07-14 22:10:42,741 App.services.coupon_import req=- step=coupon_import � === START OPTIMIZED Coupon 
+Import: test.xlsx ===
+[INFO] 2026-07-14 22:10:42,748 App.services.coupon_import req=- step=- � Raw columns: ['Coupon ID', 'Face Value']  
+Rows: 1
+[INFO] 2026-07-14 22:10:42,749 App.services.coupon_import req=- step=- � [Batch 1] rows 1-1
+[INFO] 2026-07-14 22:10:42,756 App.services.coupon_import req=- step=- � [Batch 1] updated=1
+[INFO] 2026-07-14 22:10:42,756 App.services.coupon_import req=- step=coupon_import � === DONE Coupon Import: created=0 
+updated=1 errors=0 ===
+ok
+test_total_amount_full_even_when_capped 
+(tests.test_bugfixes.CustomerDetailTotalAmountTest.test_total_amount_full_even_when_capped)
+A-01 bug test: max_invoices=5 must still report the FULL total (1000). ... ok
+test_total_amount_uncapped_unchanged 
+(tests.test_bugfixes.CustomerDetailTotalAmountTest.test_total_amount_uncapped_unchanged)
+A-01 guard: default (uncapped) result identical to before. ... ok
+test_parse_date_string_datetime (tests.test_bugfixes.FileReaderStringSafetyTest.test_parse_date_string_datetime)
+dtype=str turns Excel dates into strings � parse_date must handle them. ... ok
+test_read_file_preserves_leading_zeros 
+(tests.test_bugfixes.FileReaderStringSafetyTest.test_read_file_preserves_leading_zeros)
+U-06 bug test: VIP ID '001234' must survive the read. ... ok
+test_safe_decimal_strings (tests.test_bugfixes.FileReaderStringSafetyTest.test_safe_decimal_strings) ... ok
+test_safe_int_string_float (tests.test_bugfixes.FileReaderStringSafetyTest.test_safe_int_string_float)
+U-06 prerequisite bug test: '28.0' must be 28, not 0. ... ok
+test_grade_donut_has_slices (tests.test_bugfixes.GradeDonutTest.test_grade_donut_has_slices)
+C-02 bug test: donut was permanently empty pre-fix. ... 
+d:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py:62: UserWarning: No directory at: 
+D:\New-jouney\semir\SemirDashboard\staticfiles\
+  mw_instance = middleware(adapted_handler)
+ok
+test_header_only_file_preserves_existing_data 
+(tests.test_bugfixes.InventoryZeroRowGuardTest.test_header_only_file_preserves_existing_data) ... [INFO] 2026-07-14 
+22:10:46,309 App.services.inventory_import req=- step=inventory_import � === START Inventory Import 
+(truncate+replace): test.xlsx ===
+[INFO] 2026-07-14 22:10:46,316 App.services.inventory_import req=- step=inventory_import � Total rows: 0
+ok
+test_valid_file_still_replaces (tests.test_bugfixes.InventoryZeroRowGuardTest.test_valid_file_still_replaces)
+U-01 guard: normal truncate+replace behavior unchanged. ... [INFO] 2026-07-14 22:10:46,342 
+App.services.inventory_import req=- step=inventory_import � === START Inventory Import (truncate+replace): test.xlsx 
+===
+[INFO] 2026-07-14 22:10:46,348 App.services.inventory_import req=- step=inventory_import � Total rows: 2
+[INFO] 2026-07-14 22:10:46,350 App.services.inventory_import req=- step=inventory_import � Truncated 3 existing rows
+[INFO] 2026-07-14 22:10:46,351 App.services.inventory_import req=- step=inventory_import � [Batch 1] inserted 2 rows
+[INFO] 2026-07-14 22:10:46,352 App.services.inventory_import req=- step=inventory_import � === DONE Inventory Import: 
+deleted=3 created=2 skipped=0 errors=0 ===
+ok
+test_zero_valid_rows_preserves_existing_data 
+(tests.test_bugfixes.InventoryZeroRowGuardTest.test_zero_valid_rows_preserves_existing_data)
+U-01 bug test: file with headers but no usable rows must raise and keep data. ... [INFO] 2026-07-14 22:10:46,375 
+App.services.inventory_import req=- step=inventory_import � === START Inventory Import (truncate+replace): test.xlsx 
+===
+[INFO] 2026-07-14 22:10:46,382 App.services.inventory_import req=- step=inventory_import � Total rows: 0
+ok
+test_default_rate_is_50_under_cnv_cap_of_100 
+(tests.test_bugfixes.MembershipRateLimiterSharedTest.test_default_rate_is_50_under_cnv_cap_of_100) ... ok
+test_distributed_limiter_enforces_budget_across_instances 
+(tests.test_bugfixes.MembershipRateLimiterSharedTest.test_distributed_limiter_enforces_budget_across_instances)
+Two independent DistributedRateLimiter instances sharing the same ... FAIL
+test_sync_service_and_view_share_the_same_limiter_instance 
+(tests.test_bugfixes.MembershipRateLimiterSharedTest.test_sync_service_and_view_share_the_same_limiter_instance)
+Bug test: pre-fix, cnv/views.py built its own CNVAPIClient loop ... [INFO] 2026-07-14 22:10:47,002 App.cnv.rate_limit 
+req=- step=- � CNV membership rate limiter initialized: 50 req/s (shared, distributed)
+ok
+test_view_calls_rate_limiter_before_each_membership_fetch 
+(tests.test_bugfixes.MembershipRateLimiterSharedTest.test_view_calls_rate_limiter_before_each_membership_fetch)
+Bug test: sync_cnv_points view must throttle � pre-fix it looped ... ok
+test_customers_and_orders_triggers_are_independent 
+(tests.test_bugfixes.SchedulerCronMechanicsLocalTest.test_customers_and_orders_triggers_are_independent)
+Guard: overriding one trigger must not affect the other's default. ... [INFO] 2026-07-14 22:10:47,021 
+App.cnv.scheduler req=- step=- � Registered job: CNV Customers Sync (custom trigger interval[0:00:01])
+[INFO] 2026-07-14 22:10:47,021 App.cnv.scheduler req=- step=- � Registered job: CNV Orders Sync (every 10 min at 
+:00,:10,:20,:30,:40,:50)
+[INFO] 2026-07-14 22:10:47,022 App.cnv.scheduler req=- step=- � Registered job: Delete Old Job Executions (Daily 2 AM)
+[INFO] 2026-07-14 22:10:47,022 App.cnv.scheduler req=- step=- � Starting scheduler...
+[INFO] 2026-07-14 22:10:47,023 App.cnv.scheduler req=- step=- � 
+============================================================
+[INFO] 2026-07-14 22:10:47,024 App.cnv.scheduler req=- step=- � SCHEDULER STARTED SUCCESSFULLY
+[INFO] 2026-07-14 22:10:47,024 App.cnv.scheduler req=- step=- � 
+============================================================
+[INFO] 2026-07-14 22:10:47,024 App.cnv.scheduler req=- step=- � Scheduled jobs:
+[INFO] 2026-07-14 22:10:47,024 App.cnv.scheduler req=- step=- �   [1] CNV Customers Sync - every 10 min at 
+:05,:15,:25,:35,:45,:55
+[INFO] 2026-07-14 22:10:47,024 App.cnv.scheduler req=- step=- �   [2] CNV Orders Sync - every 10 min at 
+:00,:10,:20,:30,:40,:50
+[INFO] 2026-07-14 22:10:47,025 App.cnv.scheduler req=- step=- �   [3] Cleanup Old Logs - Daily at 2:00 AM
+[INFO] 2026-07-14 22:10:47,025 App.cnv.scheduler req=- step=- � 
+============================================================
+ok
+test_jobs_fire_repeatedly_on_schedule_without_calling_cnv 
+(tests.test_bugfixes.SchedulerCronMechanicsLocalTest.test_jobs_fire_repeatedly_on_schedule_without_calling_cnv) ... 
+[INFO] 2026-07-14 22:10:49,528 App.cnv.scheduler req=- step=- � Registered job: CNV Customers Sync (custom trigger 
+interval[0:00:01])
+[INFO] 2026-07-14 22:10:49,528 App.cnv.scheduler req=- step=- � Registered job: CNV Orders Sync (custom trigger 
+interval[0:00:01.500000])
+[INFO] 2026-07-14 22:10:49,528 App.cnv.scheduler req=- step=- � Registered job: Delete Old Job Executions (Daily 2 AM)
+[INFO] 2026-07-14 22:10:49,528 App.cnv.scheduler req=- step=- � Starting scheduler...
+[INFO] 2026-07-14 22:10:49,529 App.cnv.scheduler req=- step=- � 
+============================================================
+[INFO] 2026-07-14 22:10:49,530 App.cnv.scheduler req=- step=- � SCHEDULER STARTED SUCCESSFULLY
+[INFO] 2026-07-14 22:10:49,530 App.cnv.scheduler req=- step=- � 
+============================================================
+[INFO] 2026-07-14 22:10:49,530 App.cnv.scheduler req=- step=- � Scheduled jobs:
+[INFO] 2026-07-14 22:10:49,530 App.cnv.scheduler req=- step=- �   [1] CNV Customers Sync - every 10 min at 
+:05,:15,:25,:35,:45,:55
+[INFO] 2026-07-14 22:10:49,530 App.cnv.scheduler req=- step=- �   [2] CNV Orders Sync - every 10 min at 
+:00,:10,:20,:30,:40,:50
+[INFO] 2026-07-14 22:10:49,530 App.cnv.scheduler req=- step=- �   [3] Cleanup Old Logs - Daily at 2:00 AM
+[INFO] 2026-07-14 22:10:49,530 App.cnv.scheduler req=- step=- � 
+============================================================
+ok
+test_cron_is_every_10_minutes (tests.test_bugfixes.SchedulerLeaderLockTest.test_cron_is_every_10_minutes)
+C-09 (restored 2026-07-14): now that the leader lock self-heals ... ok
+test_non_leader_spawns_retry_thread (tests.test_bugfixes.SchedulerLeaderLockTest.test_non_leader_spawns_retry_thread)
+A worker that loses the initial election must keep retrying � ... [INFO] 2026-07-14 22:10:54,037 App.cnv.scheduler 
+req=- step=- � Initializing scheduler (leader election)...
+[INFO] 2026-07-14 22:10:54,037 App.cnv.scheduler req=- step=- � Did not win scheduler leader election � will retry 
+every 45s in the background.
+ok
+test_only_first_worker_acquires_leader 
+(tests.test_bugfixes.SchedulerLeaderLockTest.test_only_first_worker_acquires_leader) ... ok
+test_refresh_extends_only_when_still_leader 
+(tests.test_bugfixes.SchedulerLeaderLockTest.test_refresh_extends_only_when_still_leader) ... ok
+test_release_clears_lock_only_if_still_owner 
+(tests.test_bugfixes.SchedulerLeaderLockTest.test_release_clears_lock_only_if_still_owner) ... [INFO] 2026-07-14 
+22:10:54,040 App.cnv.scheduler req=- step=- � Released scheduler leader lock (me) on process exit.
+ok
+test_short_ttl_bounds_stale_lock_recovery 
+(tests.test_bugfixes.SchedulerLeaderLockTest.test_short_ttl_bounds_stale_lock_recovery)
+The 2026-07-12 incident: an old dead container's lock (long TTL) ... ok
+test_m11_1_label_cross_year (tests.test_bugfixes.SeasonRangeLabelTest.test_m11_1_label_cross_year) ... ok
+test_m11_1_label_starting_in_january (tests.test_bugfixes.SeasonRangeLabelTest.test_m11_1_label_starting_in_january) 
+... ok
+test_multi_season_range_returns_none (tests.test_bugfixes.SeasonRangeLabelTest.test_multi_season_range_returns_none) 
+... ok
+test_regular_season_label_has_year (tests.test_bugfixes.SeasonRangeLabelTest.test_regular_season_label_has_year) ... ok
+test_default_max_sync_pages_is_500 (tests.test_bugfixes.SyncPageLimitTest.test_default_max_sync_pages_is_500)
+500 pages x PAGE_SIZE=100 = 50,000 records/run (was 100 pages/10k). ... ok
+test_fetch_all_customers_uses_default_max_pages 
+(tests.test_bugfixes.SyncPageLimitTest.test_fetch_all_customers_uses_default_max_pages) ... [INFO] 2026-07-14 
+22:10:54,045 App.cnv.api_client req=- step=- � Fetching customers (max 500 pages, checkpoint: None)
+[INFO] 2026-07-14 22:10:54,045 App.cnv.api_client req=- step=- �   Page 1: no more customers
+[INFO] 2026-07-14 22:10:54,045 App.cnv.api_client req=- step=- � Fetched 0 customers (0 pages)
+ok
+test_sync_service_call_sites_use_shared_constant 
+(tests.test_bugfixes.SyncPageLimitTest.test_sync_service_call_sites_use_shared_constant)
+The 3 sync_service.py call sites must scale with api_client's ... ok
+test_record_without_dates_skipped_with_warning 
+(tests.test_bugfixes.SyncSkipNoDateTest.test_record_without_dates_skipped_with_warning)
+C-03 bug test: a record missing updated_at+created_at must not crash ... ok
+test_old_refresh_still_valid_phase1 (tests.test_bugfixes.TokenRefreshRotationTest.test_old_refresh_still_valid_phase1)
+Phase 1: old token NOT blacklisted (mobile compatibility). ... 
+d:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py:62: UserWarning: No directory at: 
+D:\New-jouney\semir\SemirDashboard\staticfiles\
+  mw_instance = middleware(adapted_handler)
+ok
+test_refresh_returns_new_refresh_token 
+(tests.test_bugfixes.TokenRefreshRotationTest.test_refresh_returns_new_refresh_token) ... ok
+test_customers_dup_vip_phone_rejected 
+(tests.test_bugfixes.UploadValidationPipelineTest.test_customers_dup_vip_phone_rejected) ... ok
+test_file_hash_warning_on_reupload 
+(tests.test_bugfixes.UploadValidationPipelineTest.test_file_hash_warning_on_reupload)
+U-10: same content hash re-uploaded \u2192 warning, upload still proceeds. ... 
+d:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py:62: UserWarning: No directory at: 
+D:\New-jouney\semir\SemirDashboard\staticfiles\
+  mw_instance = middleware(adapted_handler)
+[INFO] 2026-07-14 22:11:00,679 App.views.upload req=d78c97d0615a step=upload_coupons � upload_coupons queued 
+job=9501ab4b-f5b7-49a4-bcc1-5a21d2cab552 file=again.xlsx user=r2admin
+ok
+test_sale_detail_dup_is_warning_not_error 
+(tests.test_bugfixes.UploadValidationPipelineTest.test_sale_detail_dup_is_warning_not_error) ... ok
+test_used_points_view_good_file_starts_job 
+(tests.test_bugfixes.UploadValidationPipelineTest.test_used_points_view_good_file_starts_job)
+Coverage gap (plan Phase 6): used_points view-level happy path. ... 
+d:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py:62: UserWarning: No directory at: 
+D:\New-jouney\semir\SemirDashboard\staticfiles\
+  mw_instance = middleware(adapted_handler)
+[INFO] 2026-07-14 22:11:00,853 App.views.upload req=d692662cb1a7 step=upload_used_points � upload_used_points queued 
+job=5ef2e268-70d3-43d2-9267-a3d6929572bc file=up.xlsx user=r2admin
+ok
+test_validate_upload_zero_rows_inventory_error 
+(tests.test_bugfixes.UploadValidationPipelineTest.test_validate_upload_zero_rows_inventory_error) ... ok
+test_validate_upload_zero_rows_sales_warning_only 
+(tests.test_bugfixes.UploadValidationPipelineTest.test_validate_upload_zero_rows_sales_warning_only) ... ok
+test_coupon_file_with_dup_ids_rejected_before_job 
+(tests.test_bugfixes.UploadViewValidationTest.test_coupon_file_with_dup_ids_rejected_before_job)
+U-04 bug test: duplicated Coupon IDs in file \u2192 error message, no job. ... 
+d:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py:62: UserWarning: No directory at: 
+D:\New-jouney\semir\SemirDashboard\staticfiles\
+  mw_instance = middleware(adapted_handler)
+ok
+test_type_lock_atomicity (tests.test_bugfixes.UploadViewValidationTest.test_type_lock_atomicity) ... ok
+test_type_lock_blocks_second_upload (tests.test_bugfixes.UploadViewValidationTest.test_type_lock_blocks_second_upload)
+U-08 bug test: lock already held \u2192 second upload rejected, no thread. ... 
+d:\New-jouney\semir\venv\Lib\site-packages\django\core\handlers\base.py:62: UserWarning: No directory at: 
+D:\New-jouney\semir\SemirDashboard\staticfiles\
+  mw_instance = middleware(adapted_handler)
+ok
+test_429_retry_also_fails_returns_empty 
+(tests.test_cnv_sync.FetchMembershipTest.test_429_retry_also_fails_returns_empty) ... [WARNING] 2026-07-14 
+22:11:02,989 App.cnv.sync_service req=- step=- � Rate limit hit for customer 99, retrying in 1s
+[ERROR] 2026-07-14 22:11:02,990 App.cnv.sync_service req=- step=- � Membership retry failed for customer 99: 429 Too 
+Many Requests
+ok
+test_429_triggers_retry_after_1s_sleep 
+(tests.test_cnv_sync.FetchMembershipTest.test_429_triggers_retry_after_1s_sleep) ... [WARNING] 2026-07-14 22:11:03,003 
+App.cnv.sync_service req=- step=- � Rate limit hit for customer 99, retrying in 1s
+ok
+test_rate_limiter_called_before_api (tests.test_cnv_sync.FetchMembershipTest.test_rate_limiter_called_before_api)
+acquire() must be called before every membership API request. ... [WARNING] 2026-07-14 22:11:03,005 
+App.cnv.sync_service req=- step=- � No membership data for customer 1
+ok
+test_returns_empty_dict_on_generic_exception 
+(tests.test_cnv_sync.FetchMembershipTest.test_returns_empty_dict_on_generic_exception) ... [ERROR] 2026-07-14 
+22:11:03,007 App.cnv.sync_service req=- step=- � Error fetching membership for customer 123: Network error
+ok
+test_returns_empty_dict_when_no_membership_key 
+(tests.test_cnv_sync.FetchMembershipTest.test_returns_empty_dict_when_no_membership_key) ... [WARNING] 2026-07-14 
+22:11:03,009 App.cnv.sync_service req=- step=- � No membership data for customer 123
+ok
+test_returns_membership_fields_on_success 
+(tests.test_cnv_sync.FetchMembershipTest.test_returns_membership_fields_on_success) ... ok
+test_rate_is_50 (tests.test_cnv_sync.RateLimiterTest.test_rate_is_50) ... ok
+test_second_acquire_waits_min_interval (tests.test_cnv_sync.RateLimiterTest.test_second_acquire_waits_min_interval) 
+... ok
+test_single_acquire_does_not_block (tests.test_cnv_sync.RateLimiterTest.test_single_acquire_does_not_block) ... ok
+test_thread_safe_no_exception (tests.test_cnv_sync.RateLimiterTest.test_thread_safe_no_exception)
+Multiple threads acquiring concurrently must not raise. ... ok
+test_throughput_stays_under_limit (tests.test_cnv_sync.RateLimiterTest.test_throughput_stays_under_limit)
+10 sequential calls at rate=50 should take at least 9*(1/50)=0.18s. ... ok
+test_membership_fields_absent_after_failed_fetch 
+(tests.test_cnv_sync.TransformCustomerTest.test_membership_fields_absent_after_failed_fetch)
+After merging an empty fetch result, level_name and used_points still absent. ... ok
+test_membership_fields_present_after_successful_fetch 
+(tests.test_cnv_sync.TransformCustomerTest.test_membership_fields_present_after_successful_fetch)
+After merging a successful fetch, level_name and used_points are present. ... ok
+test_transform_does_not_include_level_name 
+(tests.test_cnv_sync.TransformCustomerTest.test_transform_does_not_include_level_name)
+level_name must NOT be in transform output � only added on successful fetch. ... ok
+test_transform_does_not_include_points 
+(tests.test_cnv_sync.TransformCustomerTest.test_transform_does_not_include_points)
+points must NOT be in transform output � authoritative value comes from membership API. ... ok
+test_transform_does_not_include_total_points 
+(tests.test_cnv_sync.TransformCustomerTest.test_transform_does_not_include_total_points)
+total_points must NOT be in transform output � authoritative value comes from membership API. ... ok
+test_transform_does_not_include_used_points 
+(tests.test_cnv_sync.TransformCustomerTest.test_transform_does_not_include_used_points)
+used_points must NOT be in transform output � only added on successful fetch. ... ok
+
+======================================================================
+FAIL: test_distributed_limiter_enforces_budget_across_instances 
+(tests.test_bugfixes.MembershipRateLimiterSharedTest.test_distributed_limiter_enforces_budget_across_instances)
+Two independent DistributedRateLimiter instances sharing the same
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\New-jouney\semir\SemirDashboard\tests\test_bugfixes.py", line 662, in 
+test_distributed_limiter_enforces_budget_across_instances
+    self.assertGreaterEqual(elapsed, 0.9,
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+        "second limiter should have had to wait for the next window "
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        "(shared budget), not gotten its own separate 3 slots instantly")
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0.6161511999962386 not greater than or equal to 0.9 : second limiter should have had to wait for the 
+next window (shared budget), not gotten its own separate 3 slots instantly
+
+----------------------------------------------------------------------
+Ran 72 tests in 30.276s
+
+FAILED (failures=1)
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+  Applying token_blacklist.0013_alter_blacklistedtoken_options_and_more... OK
+System check identified no issues (0 silenced).

@@ -16,6 +16,11 @@ import secrets
 
 logger = logging.getLogger(__name__)
 
+# Default max pages per sync run (PAGE_SIZE=100 records/page → 50,000 records).
+# Bumped from 100 pages (10,000 records) 2026-07-14 per user request; override
+# via settings.CNV_MAX_SYNC_PAGES.
+DEFAULT_MAX_SYNC_PAGES = getattr(settings, "CNV_MAX_SYNC_PAGES", 500)
+
 
 class CNVAPIClient:
     """
@@ -396,23 +401,23 @@ class CNVAPIClient:
     def fetch_all_customers(self, updated_since: Optional[datetime] = None,
                            max_pages: Optional[int] = None) -> List[Dict]:
         """
-        Fetch customers with max 100 pages per sync (API limit).
-        
+        Fetch customers with max DEFAULT_MAX_SYNC_PAGES pages per sync.
+
         Strategy:
         - Sort by updated_at ascending (oldest first)
-        - Fetch max 100 pages (10,000 records)
+        - Fetch max 500 pages (50,000 records)
         - Track latest updated_at as checkpoint
         - Next sync continues from checkpoint
-        
+
         Args:
             updated_since: Continue from this checkpoint (updated_at)
-            max_pages: Override max pages (default: 100)
-            
+            max_pages: Override max pages (default: DEFAULT_MAX_SYNC_PAGES)
+
         Returns:
             List of customer dicts
         """
         if max_pages is None:
-            max_pages = 100  # API limit
+            max_pages = DEFAULT_MAX_SYNC_PAGES
         
         logger.info("Fetching customers (max %d pages, checkpoint: %s)", max_pages, updated_since)
         
@@ -510,25 +515,25 @@ class CNVAPIClient:
                         updated_until: Optional[datetime] = None,
                         max_pages: Optional[int] = None) -> List[Dict]:
         """
-        Fetch orders with max 100 pages per sync (API limit).
-        
+        Fetch orders with max DEFAULT_MAX_SYNC_PAGES pages per sync.
+
         Strategy:
-        - Fetch max 100 pages (10,000 records)
+        - Fetch max 500 pages (50,000 records)
         - Use updated_at_from and updated_at_to to scan by date range
         - Next sync continues from checkpoint
-        
+
         Args:
             start_date: Filter orders from this date
             end_date: Filter orders until this date
             updated_since: Continue from this checkpoint (updated_at)
             updated_until: Stop at this datetime (updated_at)
-            max_pages: Override max pages (default: 100)
-            
+            max_pages: Override max pages (default: DEFAULT_MAX_SYNC_PAGES)
+
         Returns:
             List of order dicts
         """
         if max_pages is None:
-            max_pages = 100  # API limit
+            max_pages = DEFAULT_MAX_SYNC_PAGES
         
         logger.info("Fetching orders (max %d pages, checkpoint: %s, until: %s)", max_pages, updated_since, updated_until)
         

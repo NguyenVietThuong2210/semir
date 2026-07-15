@@ -26,9 +26,12 @@ cd SemirDashboard && python manage.py runserver
 cd SemirDashboard && python manage.py makemigrations
 cd SemirDashboard && python manage.py migrate
 
-# CNV loyalty sync
-cd SemirDashboard && python manage.py sync_cnv_customers
-cd SemirDashboard && python manage.py sync_cnv_orders
+# CNV loyalty sync (manual, one-off — scheduled cron runs every 10 min via App/cnv/scheduler.py)
+cd SemirDashboard && python manage.py sync_cnv --customers
+cd SemirDashboard && python manage.py sync_cnv --orders
+
+# Test the CNV scheduler locally WITHOUT calling the real CNV API (mocked sync + fast interval trigger)
+cd SemirDashboard && python manage.py cnv_scheduler_smoketest --duration 30 --interval 3
 
 # Run all shop_detail tests
 cd SemirDashboard && python manage.py test tests.test_shop_detail -v 2

@@ -60,7 +60,7 @@ PAGES = [
     ("04_coupons",            "/coupons/"),
     ("05_coupon_chart",       "/coupons/chart/"),
     ("06_shop_detail",        "/shop-detail/"),
-    ("07_customer_detail",    "/customer/detail/"),
+    ("07_customer_detail",    "/customer-detail/"),
     ("08_products",           "/products/"),
     ("09_inventory",          "/inventory/"),
     ("10_cnv_customer",       "/cnv/customer-analytics/"),
@@ -72,6 +72,7 @@ PAGES = [
     ("16_upload_inventory",   "/upload/inventory/"),
     ("17_users",              "/users/"),
     ("18_formulas",           "/formulas/"),
+    ("19_admin_logs",         "/admin-logs/"),  # added 2026-07-15 coverage check — was missing entirely
 ]
 
 # Vùng động cần che trước khi chụp (selector CSS) — timestamps, đồng hồ…
