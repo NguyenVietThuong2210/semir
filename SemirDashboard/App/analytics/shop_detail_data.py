@@ -166,17 +166,17 @@ def get_shop_detail_customer_data(registration_store: str,
     pos_phones_all, cnv_phones_all = _get_cnv_phone_sets()
 
     # ── Period data (includes breakdowns) ─────────────────────────────────────
-    # Perf plan P3-03: store_filter=None (company-wide) instead of scoping to
-    # this shop. Verified: store_filter only short-circuits rows for OTHER
-    # shops (an early `continue`), so the accumulated numbers for THIS shop
-    # are bit-for-bit identical either way — but with store_filter=None the
-    # cache key becomes period-only (not period+shop), so viewing N different
-    # shops within the 300s cache window costs 1 full computation instead of
-    # N. The label-based lookup below is unchanged.
+    # P3-03 revert (2026-07-25): store_filter=None was measured to make the
+    # cold-cache path ~3.3x slower (0.76s -> 2.51s on prod-scale data, 23
+    # shops) because compute_cnv_breakdown ignores `dims` and always builds
+    # all 7 aggregation tables per record — store_filter's early `continue`
+    # is what used to skip ~22/23 of all records. Company-wide caching also
+    # means every shop's cold view forces one shared expensive recompute
+    # instead of N small independent ones. Back to per-shop scoping.
     bd_period = compute_cnv_breakdown(
         period_filter, pos_phones_all, cnv_phones_all,
         dims=frozenset({'shop', 'season_shop', 'month_shop', 'week_shop'}),
-        store_filter=None,
+        store_filter=registration_store,
     )
     period_summary = next((r for r in bd_period['shop'] if r['label'] == registration_store), None)
     detail         = next((sh for sh in bd_period['shop_detail'] if sh['shop'] == registration_store), None)
@@ -192,7 +192,7 @@ def get_shop_detail_customer_data(registration_store: str,
         bd_at = compute_cnv_breakdown(
             {}, pos_phones_all, cnv_phones_all,
             dims=frozenset({'shop'}),
-            store_filter=None,
+            store_filter=registration_store,
         )
         at_summary = next((r for r in bd_at['shop'] if r['label'] == registration_store), None)
 

@@ -1,6 +1,6 @@
 # PLAN_PERFORMANCE.md — Backend Performance Improvement Plan (QA-Verified)
 
-> **Created:** 2026-07-18 · **Branch:** release/2.3.0 · **Status:** ✅ **Phase 1 (12/12), Phase 2 (7/8), Phase 3 (4/4) IMPLEMENTED & VERIFIED — 2026-07-19.** Only P2-02 remains undone, blocked on business sign-off (staleness tolerance for coupon usage status). Not committed to git — awaiting explicit instruction.
+> **Created:** 2026-07-18 · **Branch:** release/2.3.0 · **Status:** ✅ **Phase 1 (12/12), Phase 2 (7/8), Phase 3 (3/4) IMPLEMENTED & VERIFIED — 2026-07-19.** Only P2-02 remains undone, blocked on business sign-off (staleness tolerance for coupon usage status). **P3-03 reverted 2026-07-25** after a real cold-cache latency regression was caught in production — see post-mortem in the P3-03 section. Not committed to git — awaiting explicit instruction.
 > **Environment:** Django 6.0.2 · pandas · Cache prod: Redis (django_redis 6.0.0) · Cache dev: LocMem · DB prod: PostgreSQL 16 · DB dev: SQLite 3.45.3
 > **Source:** 5 domain deep-dive agents (Analytics Engine, CNV Integration, Upload/Import, API+Web Views, DB/ORM) → 5 independent QA Senior Leader verification agents (re-read actual code, corrected numbers, rejected 2 unsafe proposals)
 > **Scope:** Performance only. No user-facing feature change.
@@ -476,7 +476,7 @@ for idx, rec in zip(df.index, records):
 
 ---
 
-### P3-03 — Merge per-shop `compute_cnv_breakdown` calls into one company-wide call ✅ DONE & VERIFIED (2026-07-19)
+### P3-03 — Merge per-shop `compute_cnv_breakdown` calls into one company-wide call ❌ REVERTED (2026-07-25) — see post-mortem below
 **Implemented exactly per plan:** both calls in `get_shop_detail_customer_data` (period + all-time) changed from `store_filter=registration_store` to `store_filter=None`, keeping the existing label-based lookup unchanged.
 **New tests in `tests/test_shop_detail.py`:** `test_customer_data_bitforbit_matches_old_store_filter_approach` — for up to 5 real shops, calls `compute_cnv_breakdown` BOTH the new way (`store_filter=None`, looked up by label) and the old way (`store_filter=<shop>` directly) and asserts the `shop` summary row and `shop_detail` rows are byte-for-byte identical for every shop. `test_customer_direct_is_faster_than_all_stores` updated with a documented reason (the old premise — "direct is always faster" — no longer holds since both paths now share one cache entry; the test instead verifies the 2nd call reusing the shared cache is faster than the 1st cold call). All 4 targeted tests pass (bit-for-bit test + updated speed test + `test_customer_alltime_matches_bd_shop_tab` + `test_customer_period_matches_bd_shop_tab`).
 **File:line:** `App/analytics/shop_detail_data.py:141-183` (`get_shop_detail_customer_data`), backfill logic in `App/cnv/service.py:559-568`
@@ -492,6 +492,16 @@ for idx, rec in zip(df.index, records):
 - [ ] `UPDATE_SNAPSHOTS=1` → only `_last_run` differs
 **QA Gate:** 1) bit-for-bit comparison for ≥3 shops — JSON diff must be empty 2) full `tests.test_shop_detail` green 3) benchmark: open 3-5 different shops in one session, total time before/after 4) visual snapshot check (CLAUDE.md Step 5) confirms Shop Detail UI unchanged
 **Risk:** Cần-verify (logic traced and confirmed safe, but mandatory bit-for-bit comparison test required before merge — highest-traced item, still flagged for extra caution)
+
+**⚠️ POST-MORTEM (2026-07-25) — reverted after a real production regression:**
+This item's DoD/QA gate only verified output correctness (bit-for-bit) and *warm-cache* speedup — it never measured **cold-cache latency for the single-shop case**, which is the common path (any shop not viewed in the last 300s). That gap hid a real regression:
+- `compute_cnv_breakdown`'s docstring says `dims` is "accepted but ignored — always computes all dims" — every record always gets pushed through all 7 aggregation tables (season/month/week/shop/season_shop/month_shop/week_shop) unless skipped.
+- With the old `store_filter=<shop>`, the early `continue` (then lines 347/426/502) skipped ~22 of 23 shops' records before doing any of that work — cheap.
+- With `store_filter=None`, **no record is skipped** — every request that misses the shared cache now pays for all 7 tables × the whole company's records, not just one shop's.
+- Measured on prod-scale local data (74,631 POS customers, 23 shops): cold-cache compute went from **0.76s (per-shop) → 2.51s (company-wide)**, a **~3.3x regression**, plus a thundering-herd risk (concurrent cold requests across different shops now all recompute the same expensive shared key instead of 23 independent cheap ones).
+- This was caught in production `prod-visual` verify: Shop Detail's Customer Analytics section was reproducibly stuck on "Loading..." post-deploy, in every run, only in that one section — traced to this change, not a screenshot-tool artifact.
+- **Fix:** reverted both call sites in `get_shop_detail_customer_data` (`App/analytics/shop_detail_data.py`) back to `store_filter=registration_store`. Confirmed via `tests.test_shop_detail` (33/33 pass, snapshots unchanged) and direct re-timing (cold compute back to ~0.93s).
+- **Lesson:** a QA gate that only checks "output identical + warm path faster" is not sufficient for a change that alters cache-key granularity — cold-path cost for the common case must be measured too.
 
 ---
 
@@ -597,7 +607,7 @@ After implementation, 4 independent QA agents (not the implementer) re-verified 
 | P2-04 `_compute_grade_rows` cache | **1 query** (cold) → **0 queries** (warm) | `CaptureQueriesContext`, independently re-run by QA agent |
 | P3-01 double-parse elimination | `pandas.read_csv` called **1x** (was 2x) for a full real upload request+background-thread cycle | Verified twice independently: once on `/upload/sales/`, once on `/upload/coupons/` (different agent) — both via real `Client.post()`, `_start_thread` unmocked |
 | P3-02 CNV grouped `bulk_update` | **50 UPDATE queries → 2** for a 50-customer mixed-membership-status batch (**96% reduction**) | `CaptureQueriesContext`, independently constructed by QA agent (not reusing implementation's own test) |
-| P3-03 merged `compute_cnv_breakdown` | **4.32s** (company-wide, cold) vs **0.07s** (shared cache) — **~62x** once cache is warm | Real dev DB, independently re-measured; also independently re-verified bit-for-bit with a **real period filter** (2025-01-01→2025-12-31), not just all-time, across 5 shops — 0 mismatches |
+| P3-03 merged `compute_cnv_breakdown` | ❌ **REVERTED 2026-07-25** — warm-cache path was 62x faster, but single-shop *cold*-cache path was never measured and turned out **~3.3x slower** (0.76s→2.51s), causing a real production "stuck loading" regression. Back to per-shop `store_filter`. | Real dev DB, prod-scale (74,631 customers, 23 shops); root-caused via `prod-visual` verify + direct timing |
 | P3-04 `process_used_points_file` bulk | N per-row UPDATEs → 1 SELECT + 1 bulk_update per 2000-row batch | Independently re-derived test (3 duplicate rows, ascending values) — DB reflects last row (99), `updated=3`, matching design |
 
 Items without a direct before/after number (P1-01, P1-02–P1-07, P1-11, P2-02 blocked, P2-05–P2-08) are either config/rate-limit changes (not speed changes), a 1-line dead-code removal with negligible measurable impact, or batch-size/query-scoping changes whose benefit scales with file size rather than having a single fixed number — QA confirmed these are logically correct but did not attempt to manufacture an arbitrary benchmark for them.
@@ -609,6 +619,10 @@ Items without a direct before/after number (P1-01, P1-02–P1-07, P1-11, P2-02 b
 - **Test-coverage gap found and closed:** no test previously verified, with real numbers, that the double-parse fix (P3-01) actually reduced parse count in the real request→thread pipeline (existing tests all mocked `_start_thread`). The Upload/Import QA agent wrote and ran that verification independently (parse count confirmed = 1).
 - **Harmless `CacheKeyWarning`** (memcached-incompatible characters) on the new `cnv_kpis:...` cache key — pre-existing pattern already present on `bd_raw:...`, irrelevant since production uses Redis, not memcached.
 
-### Verdict
+### Verdict (updated 2026-07-25)
 
-**24/24 implemented items are confirmed safe — no calculated/output data was changed by anything in this plan.** The one real defect found (P1-12's index being built on the wrong expression) did not affect correctness (it simply made the optimization not work), and has been fixed and re-verified. All 4 domain QA reports and this session's own implementation evidence are consistent with each other.
+**24/24 implemented items never changed any calculated/output data — that guarantee held.** Two real defects surfaced after this sign-off, both found through production verification rather than this QA pass, and both now fixed:
+- **P1-12** (2026-07-19): index built on the wrong expression — didn't affect correctness, just made the optimization not work. Fixed and re-verified.
+- **P3-03** (2026-07-25): cold-cache latency for the single-shop path was never measured at sign-off time — only output-correctness and warm-cache speed were. That gap let a real ~3.3x cold-path regression ship to production (see post-mortem in the P3-03 section above). Reverted; `tests.test_shop_detail` 33/33 pass, output unchanged.
+
+**Standing lesson for future items in this plan:** any change that alters cache-key granularity (merging N keys into 1, or the reverse) must have its cold-path cost measured for the common single-unit case, not just the warm/repeat-view case — a bit-for-bit output match says nothing about latency.
