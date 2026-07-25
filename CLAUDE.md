@@ -33,6 +33,10 @@ cd SemirDashboard && python manage.py sync_cnv --orders
 # Test the CNV scheduler locally WITHOUT calling the real CNV API (mocked sync + fast interval trigger)
 cd SemirDashboard && python manage.py cnv_scheduler_smoketest --duration 30 --interval 3
 
+# CNV customer sync gap check (checkpoint can permanently skip customers tied on updated_at — see docs/project_cnv.md)
+cd SemirDashboard && python manage.py check_cnv_gap --export "path/Customers_File_*.xls" --out App/cnv/input/cnv_gap_<date>.txt
+cd SemirDashboard && python manage.py sync_cnv --customers --ids-file App/cnv/input/cnv_gap_<date>.txt
+
 # Run all shop_detail tests
 cd SemirDashboard && python manage.py test tests.test_shop_detail -v 2
 

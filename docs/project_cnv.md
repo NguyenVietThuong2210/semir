@@ -59,6 +59,14 @@ Checkpoint-based incremental sync. Batch size: 500.
 5. For each customer: `_fetch_membership` (rate-limited) → merge into update dict if successful
 6. Update `checkpoint_updated_at` + mark `status='completed'`
 
+**⚠️ Known checkpoint gap (found 2026-07-25, unfixed — root cause, not yet patched):** the checkpoint saved after each run is `max(updated_at across this run's fetched records) + 1 microsecond`; the next run then fetches `updated_at_from >= checkpoint`. The CNV API sorts by `updated_at` ascending. If several customers share the *exact same* `updated_at` (a batch-write tie on CNV's side — e.g. a bulk import or reprocessing event on their platform) and that tie straddles a run's `max_pages` cutoff (100 pages × 100/page = 10,000 records, `sync_customers`/`fetch_all_customers`), the customers past the cutoff are not fetched this run — and since the checkpoint already advanced past their exact `updated_at`, every future incremental run's `>=` filter excludes them too, permanently. Nothing throws and nothing logs an error — nothing "failed", the records are just structurally unreachable by the incremental cursor from then on. Confirmed via a full CNV admin-portal export diffed against production (2026-07-25): 165 customers existed in CNV but had never synced, 100% grade=Member (consistent with never having been updated since their tied creation), clustered heavily on specific days (104 of 165 on one single day). `sync_orders()` uses the identical `latest_updated_at + 1us` checkpoint pattern and is structurally exposed to the same class of bug — not yet audited/confirmed against a real order export.
+
+**Diagnosis & one-off recovery tools (added 2026-07-25, not a fix for the underlying checkpoint design):**
+- `python manage.py check_cnv_gap --export "path/Customers_File_*.xls" --out App/cnv/input/cnv_gap_<date>.txt` — diffs a CNV admin-portal customer export (column `Id khách hàng`) against `CNVCustomer`, reports/writes missing IDs.
+- `python manage.py sync_cnv --customers --ids-file App/cnv/input/cnv_gap_<date>.txt` — fetches those specific IDs directly via `CNVSyncService.backfill_customers_by_ids()` (reuses the existing `fetch_customers_by_ids` + `_process_customer_batch` pipeline) and upserts them. Deliberately does **not** touch `checkpoint_updated_at` — it's a gap-fill for already-identified stragglers, not a replacement for the scheduled incremental sync.
+- Tests: `tests/test_cnv_sync.py::BackfillCustomersByIdsTest`.
+- **Not yet done:** a structural fix to the checkpoint itself (e.g. dedupe-by-ID + refetch the tied boundary timestamp inclusively every run, since re-processing an already-synced customer is a harmless idempotent upsert) would close this permanently — flagged for the business/technical owner to prioritize, not applied without sign-off since it changes a live, business-critical incremental sync path.
+
 ---
 
 ## Service Module — `App/cnv/service.py` (KEY — not in old docs)

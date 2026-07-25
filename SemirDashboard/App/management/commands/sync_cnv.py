@@ -65,6 +65,14 @@ class Command(BaseCommand):
             type=int,
             help='Maximum pages to fetch (for testing)',
         )
+
+        parser.add_argument(
+            '--ids-file',
+            type=str,
+            help='Backfill: path to a text file of CNV customer IDs (one per line) to '
+                 'fetch and upsert directly, bypassing the incremental checkpoint. '
+                 'Does not affect the incremental cursor for the next scheduled sync.',
+        )
     
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('=' * 60))
@@ -122,6 +130,33 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f'Limited to {max_pages} pages (testing mode)'))
         
         try:
+            # Backfill by explicit ID list (out-of-band gap-fill — see
+            # CNVSyncService.backfill_customers_by_ids for why this exists)
+            if options['ids_file']:
+                from pathlib import Path
+                ids_path = Path(options['ids_file'])
+                if not ids_path.exists():
+                    self.stdout.write(self.style.ERROR(f'IDs file not found: {ids_path}'))
+                    return
+                customer_ids = [
+                    int(line.strip()) for line in ids_path.read_text(encoding='utf-8').splitlines()
+                    if line.strip().isdigit()
+                ]
+                self.stdout.write(self.style.SUCCESS(
+                    f'\n[BACKFILL] Fetching {len(customer_ids)} customer IDs from {ids_path.name}...'
+                ))
+                created, updated, failed = service.backfill_customers_by_ids(customer_ids)
+                self.stdout.write(self.style.SUCCESS('\n[OK] BACKFILL COMPLETED'))
+                self.stdout.write(f'  Requested: {len(customer_ids)}')
+                self.stdout.write(f'  Created: {created}')
+                self.stdout.write(f'  Updated: {updated}')
+                self.stdout.write(f'  Failed: {failed}')
+                self.stdout.write(self.style.WARNING(
+                    '  Note: incremental checkpoint was NOT modified by this run.'
+                ))
+                self.stdout.write(self.style.SUCCESS('\n' + '=' * 60))
+                return
+
             # Check if initial sync requested
             if options['initial']:
                 self.stdout.write(self.style.WARNING('Running INITIAL sync'))

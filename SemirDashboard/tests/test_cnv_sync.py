@@ -376,3 +376,154 @@ class ProcessOrderBatchTest(TestCase):
         )
         self.assertEqual((created, updated, failed), (0, 1, 0))
         self.assertEqual(CNVOrder.objects.get(order_code='ORD2').customer_code, 'NEW')
+
+
+class CheckpointTieBoundaryFixTest(TestCase):
+    """2026-07-25 fix: sync_customers()/sync_orders() used to save
+    `checkpoint = latest_updated_at + 1 microsecond`, then filter the next
+    run's fetch with `updated_at_from >= checkpoint`. If several records
+    shared the exact same updated_at (a tie) and that tie straddled a run's
+    max_pages cutoff, the +1us push meant the next run's `>=` filter
+    permanently excluded the tied stragglers — confirmed root cause of 165
+    customers silently never syncing. The fix: save the checkpoint as the
+    exact boundary timestamp (no offset), so an inclusive `>=` filter next
+    run naturally re-includes anyone tied at that exact moment."""
+
+    def _make_service(self):
+        with patch('App.cnv.sync_service.CNVAPIClient'):
+            service = CNVSyncService(username='u', password='p')
+        return service
+
+    def _raw_customer(self, cnv_id, updated_at, phone=None):
+        return {
+            'id': cnv_id, 'last_name': 'N', 'first_name': 'A',
+            'phone': phone or f'090000{cnv_id:04d}',
+            'email': '', 'gender': 'female', 'birthday_day': 1, 'birthday_month': 1,
+            'birthday_year': 1990, 'tags': '', 'physical_card_code': '',
+            'points': 0, 'exp_points': 0, 'total_spending': 0, 'total_points': 0,
+            'created_at': updated_at, 'updated_at': updated_at,
+        }
+
+    def test_checkpoint_saved_without_microsecond_offset(self):
+        """A tied batch (2 customers, identical updated_at) must produce a
+        checkpoint equal to that exact timestamp — not timestamp + 1us."""
+        tied_at = '2026-07-18T10:00:00.000Z'
+        service = self._make_service()
+        service.client.fetch_all_customers = MagicMock(
+            return_value=[self._raw_customer(1001, tied_at), self._raw_customer(1002, tied_at)]
+        )
+        with patch.object(service, '_fetch_membership', return_value={}):
+            service.sync_customers(incremental=False)
+
+        from App.cnv.models import CNVSyncLog
+        log = CNVSyncLog.objects.filter(sync_type='customers', status='completed').first()
+        expected = service._parse_datetime(tied_at)
+        self.assertEqual(log.checkpoint_updated_at, expected,
+                          "checkpoint must equal the exact tied timestamp, no +1us offset")
+
+    def test_next_run_refetches_from_exact_tied_boundary(self):
+        """After a tied batch, the NEXT incremental run must query
+        updated_since == the exact boundary timestamp (inclusive), so a
+        real CNV API's `updated_at_from >=` filter would re-include any
+        customer still tied at that exact moment that this run missed."""
+        tied_at = '2026-07-18T10:00:00.000Z'
+        service = self._make_service()
+        service.client.fetch_all_customers = MagicMock(
+            return_value=[self._raw_customer(2001, tied_at)]
+        )
+        with patch.object(service, '_fetch_membership', return_value={}):
+            service.sync_customers(incremental=False)
+
+        service.client.fetch_all_customers = MagicMock(return_value=[])
+        with patch.object(service, '_fetch_membership', return_value={}):
+            service.sync_customers(incremental=True)
+
+        expected = service._parse_datetime(tied_at)
+        _, kwargs = service.client.fetch_all_customers.call_args
+        self.assertEqual(kwargs.get('updated_since'), expected,
+                          "next run must resume from the exact tied timestamp, not past it")
+
+    def test_sync_orders_checkpoint_also_has_no_offset(self):
+        tied_at = '2026-07-18T10:00:00.000Z'
+        service = self._make_service()
+        raw_order = {
+            'id': 5001, 'name': '#5001', 'created_at': tied_at, 'updated_at': tied_at,
+            'customer': {}, 'financial_status': 'paid', 'location_id': 'S1', 'total_price': 1000,
+        }
+        service.client.fetch_all_orders = MagicMock(return_value=[raw_order])
+        service.sync_orders(incremental=False)
+
+        from App.cnv.models import CNVSyncLog
+        log = CNVSyncLog.objects.filter(sync_type='orders', status='completed').first()
+        expected = service._parse_datetime(tied_at)
+        self.assertEqual(log.checkpoint_updated_at, expected,
+                          "order checkpoint must also have no +1us offset")
+
+
+class BackfillCustomersByIdsTest(TestCase):
+    """2026-07-25 incident: sync_customers()'s checkpoint (max(updated_at in
+    batch) + 1us, then next run filters updated_at >= checkpoint) permanently
+    drops customers whose updated_at ties with the last-fetched record across
+    a max_pages cutoff. backfill_customers_by_ids() fetches specific IDs
+    directly, bypassing that cursor entirely."""
+
+    def _make_service(self):
+        with patch('App.cnv.sync_service.CNVAPIClient'):
+            service = CNVSyncService(username='u', password='p')
+        return service
+
+    def _raw_customer(self, cnv_id, phone='0900000000'):
+        return {
+            'id': cnv_id, 'last_name': 'N', 'first_name': 'A', 'phone': phone,
+            'email': '', 'gender': 'female', 'birthday_day': 1, 'birthday_month': 1,
+            'birthday_year': 1990, 'tags': '', 'physical_card_code': '',
+            'points': 999, 'exp_points': 1, 'total_spending': 1, 'total_points': 999,
+            'created_at': '2025-01-01T00:00:00.000Z', 'updated_at': '2026-01-01T00:00:00.000Z',
+        }
+
+    def test_fetches_by_ids_and_creates_customers(self):
+        from App.cnv.models import CNVCustomer
+        service = self._make_service()
+        requested_ids = [111, 222, 333]
+        service.client.fetch_customers_by_ids = MagicMock(
+            return_value=[self._raw_customer(i) for i in requested_ids]
+        )
+        with patch.object(service, '_fetch_membership', return_value={}):
+            created, updated, failed = service.backfill_customers_by_ids(requested_ids)
+
+        self.assertEqual((created, updated, failed), (3, 0, 0))
+        service.client.fetch_customers_by_ids.assert_called_once_with(requested_ids, batch_size=100)
+        self.assertEqual(
+            set(CNVCustomer.objects.filter(cnv_id__in=requested_ids).values_list('cnv_id', flat=True)),
+            {111, 222, 333},
+        )
+
+    def test_does_not_touch_incremental_checkpoint(self):
+        """Must never move CNVSyncLog's incremental cursor for `sync_customers`
+        — this is a one-off gap-fill, not a replacement for the scheduled sync."""
+        from App.cnv.models import CNVSyncLog
+        from django.utils import timezone
+        existing_checkpoint = timezone.now()
+        CNVSyncLog.objects.create(
+            sync_type='customers', status='completed',
+            checkpoint_updated_at=existing_checkpoint,
+        )
+        service = self._make_service()
+        service.client.fetch_customers_by_ids = MagicMock(return_value=[self._raw_customer(444)])
+        with patch.object(service, '_fetch_membership', return_value={}):
+            service.backfill_customers_by_ids([444])
+
+        latest = CNVSyncLog.objects.filter(
+            sync_type='customers', status='completed', checkpoint_updated_at__isnull=False
+        ).order_by('-checkpoint_updated_at').first()
+        self.assertEqual(latest.checkpoint_updated_at, existing_checkpoint,
+                          "backfill must not create/advance the incremental checkpoint")
+
+    def test_ids_not_returned_by_api_are_logged_not_silently_dropped(self):
+        service = self._make_service()
+        service.client.fetch_customers_by_ids = MagicMock(
+            return_value=[self._raw_customer(1)]  # only 1 of 2 requested IDs returned
+        )
+        with patch.object(service, '_fetch_membership', return_value={}):
+            created, updated, failed = service.backfill_customers_by_ids([1, 2])
+        self.assertEqual((created, updated, failed), (1, 0, 0))

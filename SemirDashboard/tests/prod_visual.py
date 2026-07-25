@@ -218,7 +218,22 @@ def _click_all_tabs(page, out_dir, base_name, manifest):
 def _capture_shop_detail(page, out_dir, base_name, manifest):
     """Shop Detail: mỗi section có dropdown chọn shop riêng — chọn shop đầu
     tiên (option index 1) cho TỪNG section để mọi partial AJAX đều có data,
-    sau đó duyệt tiếp các sub-tab của product section."""
+    sau đó duyệt tiếp các sub-tab của product section.
+
+    2026-07-25 fix: the generic `_settle()` "no 'Loading...' text anywhere"
+    check races with `loadSection()` — if it runs before the click's fetch()
+    has set spinner.style.display='block', it passes trivially at t=0 and
+    the capture only gets the fixed 3500ms wait, which the Customer section
+    (the one section backed by the heavier compute_cnv_breakdown aggregation,
+    and usually the first cold hit of that cache in a run) can exceed on a
+    cold cache. Wait for THIS section's own spinner to hide instead of the
+    page-wide text heuristic — deterministic, no race with click timing.
+    """
+    section_by_select = {
+        "salesShopSel": "sales", "customerShopSel": "customer",
+        "couponShopSel": "coupon", "campaignSel": "coupon",
+        "inventoryShopSel": "inventory", "productShopSel": "product",
+    }
     selects = ["salesShopSel", "customerShopSel", "couponShopSel",
                "campaignSel", "inventoryShopSel", "productShopSel"]
     for sid in selects:
@@ -237,7 +252,17 @@ def _capture_shop_detail(page, out_dir, base_name, manifest):
                 "el => el.closest('.shop-select-row')?.querySelector('button')?.click()"
             )
             shot_name = f"{base_name}__sec_{_slug(sid)}"
-            _settle(page, 3500, shot_name)
+            section = section_by_select.get(sid)
+            try:
+                page.wait_for_function(
+                    "sec => { const s = document.getElementById(sec + 'Spinner'); "
+                    "return !s || s.style.display === 'none'; }",
+                    arg=section, timeout=30_000,
+                )
+            except Exception:
+                print(f"    [WARN] '{shot_name}': {section}Spinner still visible after 30s wait — "
+                      f"screenshot may be captured mid-AJAX. Re-run if this section's diff looks suspicious.")
+            page.wait_for_timeout(1500)
             _shot(page, out_dir, shot_name, manifest)
         except Exception as exc:
             print(f"    [sel-skip] #{sid}: {exc}")

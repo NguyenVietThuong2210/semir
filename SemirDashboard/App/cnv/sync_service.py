@@ -553,11 +553,21 @@ class CNVSyncService:
                 if (i + self.BATCH_SIZE) % self.LOG_INTERVAL == 0:
                     logger.info("sync_customers: processed %d/%d customers", i + self.BATCH_SIZE, total)
 
-            # Save checkpoint for next sync
+            # Save checkpoint for next sync — deliberately NO "+1us" offset
+            # (2026-07-25 fix, see class docstring "Known checkpoint gap"):
+            # the CNV API sorts by updated_at ascending and updated_at_from
+            # is inclusive (>=). If several customers share the exact same
+            # updated_at and that tie straddles this run's max_pages cutoff,
+            # advancing the checkpoint PAST that timestamp would permanently
+            # exclude the stragglers from every future run's >= filter —
+            # confirmed as the root cause of 165 customers silently never
+            # syncing. Using the boundary timestamp itself (inclusive) means
+            # the tied group is simply re-fetched next run too; re-processing
+            # an already-synced customer is a harmless idempotent upsert
+            # (bulk_create ignore_conflicts / bulk_update), so correctness
+            # wins over the small amount of redundant work.
             if latest_updated_at:
-                # Add 1 microsecond to avoid re-fetching the last record
-                from datetime import timedelta
-                sync_log.checkpoint_updated_at = latest_updated_at + timedelta(microseconds=1)
+                sync_log.checkpoint_updated_at = latest_updated_at
                 logger.info("sync_customers: checkpoint saved=%s", sync_log.checkpoint_updated_at)
             elif checkpoint:
                 # No successful batches, keep old checkpoint
@@ -779,9 +789,9 @@ class CNVSyncService:
             logger.debug("sync_orders: final latest_updated_at=%s", latest_updated_at)
 
             if latest_updated_at:
-                # Add 1 microsecond to avoid re-fetching the last record
-                from datetime import timedelta
-                sync_log.checkpoint_updated_at = latest_updated_at + timedelta(microseconds=1)
+                # No "+1us" offset — same tie-boundary fix as sync_customers()
+                # above; see that method's comment for the full rationale.
+                sync_log.checkpoint_updated_at = latest_updated_at
                 logger.info("sync_orders: checkpoint saved=%s", sync_log.checkpoint_updated_at)
             elif checkpoint:
                 # No successful batches, keep old checkpoint
@@ -945,10 +955,10 @@ class CNVSyncService:
                 if (i + self.BATCH_SIZE) % self.LOG_INTERVAL == 0:
                     logger.info("initial_sync_customers: processed %d/%d", i + self.BATCH_SIZE, total)
 
-            # Save checkpoint
+            # Save checkpoint — no "+1us" offset (seeds the first incremental
+            # checkpoint for sync_customers(); same tie-boundary fix, see there).
             if latest_updated_at:
-                from datetime import timedelta
-                sync_log.checkpoint_updated_at = latest_updated_at + timedelta(microseconds=1)
+                sync_log.checkpoint_updated_at = latest_updated_at
                 logger.info("initial_sync_customers: checkpoint saved=%s", sync_log.checkpoint_updated_at)
 
             sync_log.created_count = total_created
@@ -966,7 +976,95 @@ class CNVSyncService:
             logger.error("initial_sync_customers: failed: %s", e, exc_info=True)
             sync_log.mark_failed(str(e))
             raise
-    
+
+    def backfill_customers_by_ids(self, customer_ids: List[int]) -> Tuple[int, int, int]:
+        """
+        Out-of-band gap-fill: fetch a specific, already-known list of customer
+        IDs directly (bypassing the `updated_since` incremental cursor
+        entirely) and process them through the same safe batch pipeline as
+        every other sync path.
+
+        Root cause this exists for (found 2026-07-25, checkpoint design fixed
+        same day — see `sync_customers()`'s "no +1us offset" comment): the
+        checkpoint used to be `max(updated_at in this run's batch) + 1
+        microsecond`, then the NEXT run filtered `updated_at_from >=
+        checkpoint`. The CNV API sorts by `updated_at` ascending; if several
+        customers shared the exact same `updated_at` (a batch-write tie on
+        CNV's side) and that tie straddled the `max_pages` cutoff of a single
+        run, the customers on the far side of the cutoff were never fetched
+        — and every future run's `>= checkpoint` filter permanently excluded
+        them too, since checkpoint had advanced to (that exact tied
+        timestamp + 1us). This produced silent, permanent, unlogged data
+        loss: nothing threw, the skipped records just never appeared in any
+        future incremental fetch. Confirmed via a full CNV export diff: 165
+        customers present in CNV, missing from PROD, 100% grade=Member
+        (new/never-updated-since registration — exactly the profile that
+        hits a tie on first write), clustered on specific days (104 of 165
+        on one single day). The checkpoint no longer adds the +1us offset,
+        so this specific mechanism cannot recur — this method remains useful
+        as a general-purpose "fetch these specific IDs" tool (e.g. for the
+        165 already-affected customers, or any future gap `check_cnv_gap`
+        finds from other causes).
+
+        Deliberately does NOT touch CNVSyncLog.checkpoint_updated_at — this
+        is a one-off gap-fill for already-identified stragglers, not a
+        replacement for the incremental cursor, and must never move it
+        backward or interfere with the next scheduled incremental run.
+
+        Args:
+            customer_ids: explicit list of CNV customer IDs to fetch and upsert
+
+        Returns:
+            Tuple of (created_count, updated_count, failed_count)
+        """
+        sync_log = CNVSyncLog.objects.create(sync_type='customers')
+
+        try:
+            logger.info("backfill_customers_by_ids: %d IDs requested", len(customer_ids))
+
+            customers_data = self.client.fetch_customers_by_ids(customer_ids, batch_size=100)
+
+            total = len(customers_data)
+            sync_log.total_records = total
+            sync_log.save()
+
+            fetched_ids = {int(c['id']) for c in customers_data if c.get('id') is not None}
+            still_missing = sorted(set(customer_ids) - fetched_ids)
+            if still_missing:
+                logger.warning(
+                    "backfill_customers_by_ids: CNV API did not return %d/%d requested IDs: %s",
+                    len(still_missing), len(customer_ids), still_missing[:50],
+                )
+
+            if total == 0:
+                logger.warning("backfill_customers_by_ids: API returned 0 of %d requested IDs", len(customer_ids))
+                sync_log.mark_completed()
+                return 0, 0, 0
+
+            total_created = total_updated = total_failed = 0
+            for i in range(0, total, self.BATCH_SIZE):
+                batch = customers_data[i:i + self.BATCH_SIZE]
+                created, updated, failed = self._process_customer_batch(batch)
+                total_created += created
+                total_updated += updated
+                total_failed += failed
+
+            sync_log.created_count = total_created
+            sync_log.updated_count = total_updated
+            sync_log.failed_count = total_failed
+            sync_log.mark_completed()
+
+            logger.info(
+                "backfill_customers_by_ids: done created=%d updated=%d failed=%d still_missing=%d",
+                total_created, total_updated, total_failed, len(still_missing),
+            )
+            return total_created, total_updated, total_failed
+
+        except Exception as e:
+            logger.error("backfill_customers_by_ids: failed: %s", e, exc_info=True)
+            sync_log.mark_failed(str(e))
+            raise
+
     def initial_sync_orders_by_month(self) -> Tuple[int, int, int]:
         """
         Initial sync: Scan orders from June 2024 to now, month by month.
@@ -1077,11 +1175,12 @@ class CNVSyncService:
             
             current_month = next_month
         
-        # Save final checkpoint
+        # Save final checkpoint — no "+1us" offset (seeds the first incremental
+        # checkpoint for sync_orders(); same tie-boundary fix as sync_customers()).
         if latest_updated_at:
             # Create a summary sync log with final checkpoint
             final_log = CNVSyncLog.objects.create(sync_type='orders')
-            final_log.checkpoint_updated_at = latest_updated_at + timedelta(microseconds=1)
+            final_log.checkpoint_updated_at = latest_updated_at
             final_log.total_records = total_created + total_updated
             final_log.created_count = total_created
             final_log.updated_count = total_updated
