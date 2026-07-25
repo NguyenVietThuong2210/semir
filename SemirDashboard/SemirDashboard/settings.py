@@ -70,6 +70,7 @@ if not DEBUG:
             "HOST": os.getenv("DB_HOST", "db"),
             "PORT": os.getenv("DB_PORT", "5432"),
             "CONN_MAX_AGE": 600,  # Keep connections alive for 10 minutes
+            "CONN_HEALTH_CHECKS": True,  # discard a stale persistent connection instead of erroring
         }
     }
 
@@ -81,6 +82,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Required for GinIndex/TrigramExtension (P1-12) — registering this app
+    # does not create any tables on its own and is safe on SQLite dev too.
+    "django.contrib.postgres",
     "App",
     "django_apscheduler",
     # SemirPhone API layer (Sprint 0)
@@ -196,6 +200,11 @@ CNV_SSO_URL = os.getenv("CNV_SSO_URL", "https://id.cnv.vn")
 # under that so fixed-window boundary bursts can't trip a 429.
 CNV_MEMBERSHIP_RATE_LIMIT = int(os.getenv("CNV_MEMBERSHIP_RATE_LIMIT", "50"))
 
+# Perf plan P1-04 (2026-07-18): separate distributed rate limit for the Zalo
+# mini-app/OA lookup endpoint (contactcdp) — a different CNV endpoint from
+# membership, kept on its own budget/key so it never competes with it.
+CNV_ZALO_RATE_LIMIT = int(os.getenv("CNV_ZALO_RATE_LIMIT", "30"))
+
 # Max pages fetched per customers/orders sync run (PAGE_SIZE=100 records/page).
 # 100 pages = 10,000 records per run (reverted 2026-07-15 per user request;
 # was briefly 500 pages/50,000 records on 2026-07-14).
@@ -214,6 +223,10 @@ if _REDIS_URL:
                 "CONNECTION_POOL_KWARGS": {"max_connections": 20},
                 "SOCKET_CONNECT_TIMEOUT": 5,
                 "SOCKET_TIMEOUT": 5,
+                # A transient Redis outage should degrade to cache-miss
+                # (recompute from DB), not a 500 on every cached page — every
+                # cache.get() call site already treats None as a miss.
+                "IGNORE_EXCEPTIONS": True,
             },
             "KEY_PREFIX": "semir",
             "TIMEOUT": 600,

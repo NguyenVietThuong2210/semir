@@ -54,6 +54,11 @@ class ValidationResult:
     errors: list = field(default_factory=list)     # block the upload
     warnings: list = field(default_factory=list)   # shown, upload proceeds
     row_count: int = 0
+    # Perf plan P3-01: the DataFrame already parsed during validation, so the
+    # background import thread can reuse it instead of parsing the file a
+    # 2nd time. None when the file was unparseable (service re-parses and
+    # raises with full context, unchanged from before this field existed).
+    df: object = None
 
     @property
     def ok(self) -> bool:
@@ -163,6 +168,7 @@ def validate_upload(file_bytes: bytes, filename: str, upload_type: str) -> Valid
         )
         return result
     result.row_count = len(df)
+    result.df = df
 
     if result.row_count == 0:
         # Destructive import (truncate+replace) must never start on an empty file;

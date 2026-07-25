@@ -710,6 +710,86 @@ class MembershipRateLimiterSharedTest(TestCase):
             "shared with the first limiter's usage of the same window")
 
 
+class ZaloRateLimiterTest(TestCase):
+    """Perf plan P1-04 (2026-07-18): zalo_sync.py's contactcdp fetch had ZERO
+    throttling — this is the same class of risk as the pre-fix membership
+    endpoint (2026-07-12 incident), just on a different CNV endpoint. Must
+    have its own budget/key, independent from the membership limiter."""
+
+    def test_default_zalo_rate_is_30_and_has_its_own_key(self):
+        from App.cnv.rate_limit import DEFAULT_ZALO_RATE_LIMIT, get_zalo_rate_limiter, get_membership_rate_limiter
+        self.assertEqual(DEFAULT_ZALO_RATE_LIMIT, 30)
+        zalo_limiter = get_zalo_rate_limiter()
+        membership_limiter = get_membership_rate_limiter()
+        self.assertNotEqual(zalo_limiter._key, membership_limiter._key,
+            "Zalo limiter must not share a cache key with the membership limiter")
+
+    def test_zalo_limiter_is_a_process_wide_singleton(self):
+        from App.cnv.rate_limit import get_zalo_rate_limiter
+        self.assertIs(get_zalo_rate_limiter(), get_zalo_rate_limiter())
+
+    def test_fetch_zalo_data_calls_rate_limiter_before_http_call(self):
+        """Bug test: pre-fix, _fetch_zalo_data called session.get() with no
+        acquire() at all."""
+        import inspect
+        from App.cnv import zalo_sync
+        src = inspect.getsource(zalo_sync._fetch_zalo_data)
+        self.assertIn("get_zalo_rate_limiter", src)
+        self.assertIn(".acquire()", src)
+
+    def test_throughput_stays_under_configured_rate(self):
+        """Mock >=100 acquire() calls through the real distributed limiter at
+        a small rate, and confirm the limiter meaningfully throttles calls
+        (elapsed time is NOT near-instant, as it would be with no limiter at
+        all). NOTE on tolerance: this is a fixed-window (not sliding-window)
+        counter — a burst can land right at a window boundary and get two
+        windows' worth of budget in a shorter wall-clock span than the naive
+        n/rate estimate, so this asserts a generous upper bound (proving
+        throttling occurred) rather than a tight ±10% one, which the existing
+        MembershipRateLimiterSharedTest already had to relax for the same
+        phase-alignment reason."""
+        from django.core.cache import cache
+        from App.cnv.rate_limit import DistributedRateLimiter
+        cache.clear()
+        rate = 20
+        limiter = DistributedRateLimiter(rate=rate, key="test_zalo_throughput")
+        n = 100
+        start = time.monotonic()
+        for _ in range(n):
+            limiter.acquire()
+        elapsed = time.monotonic() - start
+        actual_rate = n / elapsed
+        self.assertGreater(elapsed, 1.0,
+            "100 calls at rate=20 completed in under 1s — limiter did not throttle at all")
+        self.assertLessEqual(actual_rate, rate * 2,
+            f"observed throughput {actual_rate:.1f} req/s is more than 2x the "
+            f"configured {rate} req/s — limiter budget is not being enforced")
+
+
+class PaginationRateLimitTest(TestCase):
+    """Perf plan P1-05 (2026-07-18): fetch_all_customers/fetch_all_orders list
+    pagination had ZERO throttling — only the membership fetch did. Rather
+    than invent a new, unconfirmed rate for this endpoint, it shares the
+    membership limiter's budget so the COMBINED rate (list pagination +
+    membership fetches, across all workers) stays under the already-proven-
+    safe cap — the conservative choice given no authoritative CNV rate-limit
+    docs exist for the list endpoints specifically."""
+
+    def test_fetch_all_customers_calls_shared_membership_limiter(self):
+        import inspect
+        from App.cnv.api_client import CNVAPIClient
+        src = inspect.getsource(CNVAPIClient.fetch_all_customers)
+        self.assertIn("get_membership_rate_limiter", src)
+        self.assertIn(".acquire()", src)
+
+    def test_fetch_all_orders_calls_shared_membership_limiter(self):
+        import inspect
+        from App.cnv.api_client import CNVAPIClient
+        src = inspect.getsource(CNVAPIClient.fetch_all_orders)
+        self.assertIn("get_membership_rate_limiter", src)
+        self.assertIn(".acquire()", src)
+
+
 # ── A-01: total_amount over full queryset ─────────────────────────────────────
 
 class CustomerDetailTotalAmountTest(TestCase):

@@ -22,8 +22,8 @@ OAuth2 HTTP client with token lifecycle management.
 | `authenticate()` | OAuth2 login via SSO, caches token 30d |
 | `get_customers(page, page_size, updated_since, ids)` | Paginated customer list (100/page) |
 | `get_orders(page, page_size, start_date, end_date, updated_since, updated_until)` | Paginated orders |
-| `fetch_all_customers(updated_since, max_pages)` | Bulk fetch up to `DEFAULT_MAX_SYNC_PAGES` pages — 100 pages / 10K records per run (briefly 500/50K on 2026-07-14, reverted 2026-07-15 per user request; override via `settings.CNV_MAX_SYNC_PAGES`) |
-| `fetch_all_orders(...)` | Bulk fetch orders with date/checkpoint filtering |
+| `fetch_all_customers(updated_since, max_pages)` | Bulk fetch up to `DEFAULT_MAX_SYNC_PAGES` pages — 100 pages / 10K records per run (briefly 500/50K on 2026-07-14, reverted 2026-07-15 per user request; override via `settings.CNV_MAX_SYNC_PAGES`). **Perf plan P1-05 (2026-07-18):** each page fetch now calls `get_membership_rate_limiter().acquire()` before the request — shares the membership budget rather than a new unconfirmed rate, since no CNV documentation exists for the list endpoint specifically. |
+| `fetch_all_orders(...)` | Bulk fetch orders with date/checkpoint filtering — same shared rate limiter as above |
 | `fetch_customers_by_ids(customer_ids, batch_size)` | Batch fetch by ID (max 100 per call) |
 | `get_customer_membership(customer_id)` | Fetch loyalty membership data |
 | `_make_request(method, endpoint, **kwargs)` | Base authenticated HTTP request |
@@ -34,7 +34,9 @@ OAuth2 HTTP client with token lifecycle management.
 
 Checkpoint-based incremental sync. Batch size: 500.
 
-**Rate limiter (updated 2026-07-14):** `get_membership_rate_limiter()` in `App/cnv/rate_limit.py` — a **distributed** (Redis/Django-cache-backed) fixed-window limiter, default 50 req/s (CNV limit is 100/s; override via `settings.CNV_MEMBERSHIP_RATE_LIMIT`). `acquire()` called before every `get_customer_membership()` call — **both** in `CNVSyncService._fetch_membership()` (scheduled cron sync) **and** in `App/cnv/views.py sync_cnv_points` (manual admin "sync points" action), so the combined call rate across all gunicorn workers and both call sites stays under CNV's cap. The old per-process `_RateLimiter` class in `sync_service.py` is kept only for direct unit tests — production code no longer uses it, because a purely in-process limiter could not prevent the 2026-07-12 incident (3 concurrent schedulers × 50 req/s = 150 req/s → 429s).
+**Rate limiter (updated 2026-07-14):** `get_membership_rate_limiter()` in `App/cnv/rate_limit.py` — a **distributed** (Redis/Django-cache-backed) fixed-window limiter, default 50 req/s (CNV limit is 100/s; override via `settings.CNV_MEMBERSHIP_RATE_LIMIT`). `acquire()` called before every `get_customer_membership()` call — **both** in `CNVSyncService._fetch_membership()` (scheduled cron sync) **and** in `App/cnv/views.py sync_cnv_points` (manual admin "sync points" action), so the combined call rate across all gunicorn workers and both call sites stays under CNV's cap. The old per-process `_RateLimiter` class in `sync_service.py` is kept only for direct unit tests — production code no longer uses it, because a purely in-process limiter could not prevent the 2026-07-12 incident (3 concurrent schedulers × 50 req/s = 150 req/s → 429s). **Perf plan P1-05 (2026-07-18):** `api_client.py`'s list-pagination fetch (`fetch_all_customers`/`fetch_all_orders`) now also acquires from this SAME limiter (see API Client section above). **Perf plan P1-04:** a separate `get_zalo_rate_limiter()` (default 30 req/s, `settings.CNV_ZALO_RATE_LIMIT`) protects the Zalo contactcdp endpoint (`App/cnv/zalo_sync.py`) — its own key/budget, never shared with membership.
+
+**Concurrency (perf plan P1-03, 2026-07-18):** membership fetches in `_process_customer_batch` use `ThreadPoolExecutor(max_workers=30)` (was 10) — safe to raise because the rate limiter above is the actual hard cap regardless of thread count; more threads just means less time spent waiting on `acquire()` when per-call latency is high.
 
 | Method | Purpose |
 |--------|---------|
@@ -46,6 +48,8 @@ Checkpoint-based incremental sync. Batch size: 500.
 | `_transform_order(data)` | Map API response → CNVOrder fields |
 
 **Zero-overwrite rule (2026-05-10):** `_transform_customer` intentionally omits `points`, `total_points`, `used_points`, `level_name`. Only `_fetch_membership` sets these. If membership fetch fails → these columns are NOT in the update dict → DB keeps existing values (never reset to 0).
+
+**Perf plan P3-02 (2026-07-18):** `_process_customer_batch`'s existing-record update path changed from 1 `.update()` query per record to grouped `bulk_update()` calls — grouped by the exact set of fields present in each record's transform dict (preserving the zero-overwrite rule above: a group missing the 4 membership fields never gets a `bulk_update(fields=...)` call that includes them, so those DB columns are never touched). `_process_order_batch` uses a single `bulk_update()` (no grouping needed — `_transform_order` always sets every field). Existing-record lookup now fetches both `id` (real PK, required by `bulk_update`) and `cnv_id` (natural key).
 
 **Flow:**
 1. Check for orphaned running sync (>2h → mark failed)
@@ -71,10 +75,13 @@ parse_cnv_period_filter('', '')                       → ({}, False)
 Always check with `if not period_filter:` — NOT `if period_filter is None:`.
 
 ### `get_cnv_phone_sets()`
-- Cached 10 min
+- Cached 5 min (300s) — docstring previously said "10 minutes", corrected 2026-07-18; must match `_fetch_bd_raw`'s TTL (see comment `C-10` in the code)
 - Returns `(pos_phones_all, cnv_phones_all)` as Python sets
 - Used for POS↔CNV phone matching
 - **Implementation (2026-05-04):** cold path calls `_fetch_bd_raw({})` and derives sets in-memory — eliminates the 2 separate POSCustomer+CNVCustomer phone-only queries that used to duplicate the BD raw fetch. Calling `get_cnv_phone_sets()` now also primes the `_fetch_bd_raw({})` cache for the subsequent `compute_cnv_breakdown({})` call.
+
+### `get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_all)`
+- **Perf plan P2-03 (2026-07-18):** now cached 300s, key `f"cnv_kpis:{start}:{end}:{has_filter}"`. Costs exactly 6 DB queries when `has_filter=True` (2 `.count()`, 2 `.exclude().count()`, 2 inline-subquery `values_list`), 0 when `has_filter=False` (pure Python on already-passed-in phone sets). Used by both the web `customer_analytics` view and the mobile `CustomerAnalyticsView` API.
 
 ### `_fetch_bd_raw(period_filter)`
 - Cached 5 min per period_filter
@@ -159,12 +166,14 @@ All under `/cnv/`, see `App/cnv/urls.py`.
 | `trigger_sync` | `/cnv/trigger-sync/` | `page_cnv_sync` | Manual sync trigger (POST) |
 | `trigger_zalo_sync` | `/cnv/trigger-zalo-sync/` | `page_cnv_sync` | Manual Zalo sync trigger (POST) |
 
+**Mobile API (`App/api/views/analytics.py`, `charts.py`) — perf plan P2-04 (2026-07-18):** `_compute_grade_rows(cnv_phones_all, period_filter)` (mobile-only, no web caller) is now cached 300s, key `f"grade_rows:{period}"`. Before this, `CustomerAnalyticsView` calling it twice (all-time + period) plus `CustomerChartView` calling it again independently could trigger up to 3 full `Customer` table scans for overlapping data within one user session.
+
 ---
 
 ## POS ↔ CNV Customer Matching
 - Match key: **phone number**
 - `Customer.phone` ↔ `CNVCustomer.phone` (both db_indexed)
-- Sets computed by `get_cnv_phone_sets()` → cached 10 min
+- Sets computed by `get_cnv_phone_sets()` → cached 5 min (300s)
 - Used in `customer_analytics` view for POS vs CNV comparison
 
 ---

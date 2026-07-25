@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 # CNV's bucket capacity.
 DEFAULT_MEMBERSHIP_RATE_LIMIT = 50
 
+# Zalo mini-app/OA lookup endpoint (contactcdp) is a separate CNV endpoint from
+# membership — kept as its own budget/key so it never borrows from or competes
+# with the membership limiter above.
+DEFAULT_ZALO_RATE_LIMIT = 30
+
 
 class DistributedRateLimiter:
     """Fixed-window rate limiter backed by Django's cache (Redis in prod,
@@ -60,6 +65,7 @@ class DistributedRateLimiter:
 
 
 _membership_limiter = None
+_zalo_limiter = None
 
 
 def get_membership_rate_limiter() -> DistributedRateLimiter:
@@ -71,3 +77,15 @@ def get_membership_rate_limiter() -> DistributedRateLimiter:
         _membership_limiter = DistributedRateLimiter(rate, key="cnv_membership_rl")
         logger.info("CNV membership rate limiter initialized: %s req/s (shared, distributed)", rate)
     return _membership_limiter
+
+
+def get_zalo_rate_limiter() -> DistributedRateLimiter:
+    """Separate budget/key from the membership limiter — the Zalo contactcdp
+    endpoint is a different CNV endpoint and must not share (or steal from)
+    the membership call budget."""
+    global _zalo_limiter
+    if _zalo_limiter is None:
+        rate = getattr(settings, "CNV_ZALO_RATE_LIMIT", DEFAULT_ZALO_RATE_LIMIT)
+        _zalo_limiter = DistributedRateLimiter(rate, key="cnv_zalo_rl")
+        logger.info("CNV Zalo rate limiter initialized: %s req/s (shared, distributed)", rate)
+    return _zalo_limiter

@@ -315,6 +315,32 @@ class CustomerAnalyticsTest(SnapshotTestCase):
         data = _compute_cnv_comparison("not-a-date", "also-bad")
         self.assertFalse(data["has_filter"])
 
+    def test_cnv_kpis_cache_hit_no_requery(self):
+        """Perf plan P2-03 (2026-07-18): get_cnv_customer_kpis costs exactly
+        6 DB queries when has_filter=True (traced line-by-line) and 0 when
+        has_filter=False. A 2nd call with the SAME period must be a full
+        cache hit (0 queries) and return a bit-for-bit identical result."""
+        from django.core.cache import cache as _c
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        from App.cnv.service import get_cnv_customer_kpis, get_cnv_phone_sets, parse_cnv_period_filter
+        _c.clear()
+
+        period_filter, has_filter = parse_cnv_period_filter("2025-01-01", "2025-12-31")
+        self.assertTrue(has_filter)
+        pos_phones_all, cnv_phones_all = get_cnv_phone_sets()
+
+        with CaptureQueriesContext(connection) as ctx1:
+            first = get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_all)
+        self.assertEqual(len(ctx1.captured_queries), 6,
+            f"expected exactly 6 queries on cold call, got {len(ctx1.captured_queries)}")
+
+        with CaptureQueriesContext(connection) as ctx2:
+            second = get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_all)
+        self.assertEqual(len(ctx2.captured_queries), 0,
+            f"expected 0 queries on cache-hit call, got {len(ctx2.captured_queries)}")
+        self.assertEqual(first, second)
+
 
 class CustomerTabSnapshotTest(SnapshotTestCase):
     """

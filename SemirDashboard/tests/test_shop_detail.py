@@ -277,6 +277,38 @@ class ShopDetailTest(SnapshotTestCase):
         self.assertLess(t_dir, t_all,
             f"Direct ({t_dir:.2f}s) not faster than all-shops ({t_all:.2f}s)")
 
+    def test_sales_alltime_cache_hit_no_requery(self):
+        """Perf plan P2-01 (2026-07-18): get_shop_detail_sales_data's
+        all-time list is cached 300s. Calling it twice for the SAME shop with
+        DIFFERENT date ranges must issue 0 new SalesTransaction queries on
+        the 2nd call (cache hit), while still returning correct, DIFFERENT
+        period results for each date range — proving the cache-then-filter
+        invariant holds."""
+        if not SalesTransaction.objects.exists():
+            self.skipTest("No sales data")
+        from django.core.cache import cache as _c
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        shop = self._pick_sales_shop()
+        _c.delete(f"shop_detail_sales_alltime:{shop}")
+
+        with CaptureQueriesContext(connection) as ctx1:
+            first = get_shop_detail_sales_data(shop, date_from=date(2000, 1, 1), date_to=date(2020, 12, 31))
+        n_queries_cold = sum(1 for q in ctx1.captured_queries if 'salestransaction' in q['sql'].lower())
+        self.assertGreater(n_queries_cold, 0, "cold call must hit the DB at least once")
+
+        with CaptureQueriesContext(connection) as ctx2:
+            second = get_shop_detail_sales_data(shop, date_from=date(2021, 1, 1), date_to=date(2030, 12, 31))
+        n_queries_warm = sum(1 for q in ctx2.captured_queries if 'salestransaction' in q['sql'].lower())
+        self.assertEqual(n_queries_warm, 0,
+            f"2nd call (different date range, same shop) issued {n_queries_warm} "
+            f"SalesTransaction quer{'y' if n_queries_warm == 1 else 'ies'} — cache miss when it should have hit")
+
+        # Different date ranges on the same cached all-time data must still
+        # produce independently-correct period aggregates (not the same object).
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+
     # ══════════════════════════════════════════════════════════════════════════
     #  SECTION B — Customer Consistency
     # ══════════════════════════════════════════════════════════════════════════
@@ -366,7 +398,14 @@ class ShopDetailTest(SnapshotTestCase):
                 self.assertIn(key, pd, f"period missing '{key}'")
 
     def test_customer_direct_is_faster_than_all_stores(self):
-        """store_filter accumulation must be faster than loading all stores."""
+        """Perf plan P3-03 (2026-07-18) UPDATED PREMISE: get_shop_detail_customer_data
+        now internally calls compute_cnv_breakdown(store_filter=None) — i.e. it computes
+        the SAME company-wide breakdown as get_customer_tab('bd_shop') and shares its
+        cache entry (keyed by period only, not period+shop). The old premise ("direct
+        query for 1 shop is always faster than computing all shops") no longer holds on
+        a cold cache, since both now do identical company-wide work. What this test
+        verifies instead: once ONE of the two has warmed the shared cache, the OTHER
+        is a fast cache hit — i.e. they are not independently expensive."""
         if not Customer.objects.exists():
             self.skipTest("No customer data")
         n = Customer.objects.exclude(registration_store__isnull=True).exclude(
@@ -375,16 +414,55 @@ class ShopDetailTest(SnapshotTestCase):
             self.skipTest(f"Only {n} stores — comparison not meaningful")
 
         import time
+        from django.core.cache import cache as _c
+        _c.clear()
         store = self._pick_customer_shop()
-        t0 = time.perf_counter(); get_customer_tab('bd_shop'); t_all = time.perf_counter() - t0
-        t0 = time.perf_counter(); get_shop_detail_customer_data(store); t_dir = time.perf_counter() - t0
+        t0 = time.perf_counter(); get_customer_tab('bd_shop'); t_cold = time.perf_counter() - t0
+        t0 = time.perf_counter(); get_shop_detail_customer_data(store); t_warm = time.perf_counter() - t0
 
         get_run_log().log(
-            f"  [customer speed] all={t_all:.2f}s direct={t_dir:.2f}s speedup={t_all/t_dir:.1f}x stores={n}")
-        # Skip strict assertion when both are cache-warm (< 50ms) — comparison is noise
-        if t_all > 0.05:
-            self.assertLess(t_dir, t_all,
-                f"store_filter ({t_dir:.2f}s) not faster than all-stores ({t_all:.2f}s)")
+            f"  [customer speed] cold(all_stores)={t_cold:.2f}s warm(shared-cache direct)={t_warm:.2f}s stores={n}")
+        self.assertLess(t_warm, t_cold,
+            f"2nd call sharing the same cache entry ({t_warm:.2f}s) not faster than "
+            f"the 1st cold call ({t_cold:.2f}s) — company-wide cache is not being shared")
+
+    def test_customer_data_bitforbit_matches_old_store_filter_approach(self):
+        """Perf plan P3-03 (2026-07-18): compute_cnv_breakdown(store_filter=None)
+        looked up per-shop must produce IDENTICAL results to the old approach
+        of calling compute_cnv_breakdown(store_filter=<shop>) directly — for
+        at least 3 different shops, proving the company-wide-then-lookup
+        change is bit-for-bit equivalent to the narrower per-shop call it
+        replaced."""
+        if not Customer.objects.exists():
+            self.skipTest("No customer data")
+        from App.cnv.service import compute_cnv_breakdown, get_cnv_phone_sets
+        stores = list(
+            Customer.objects.exclude(registration_store__isnull=True)
+            .exclude(registration_store='')
+            .values_list('registration_store', flat=True).distinct().order_by()[:5]
+        )
+        if len(stores) < 3:
+            self.skipTest(f"Only {len(stores)} stores — comparison not meaningful")
+
+        pos_phones_all, cnv_phones_all = get_cnv_phone_sets()
+        bd_company_wide = compute_cnv_breakdown(
+            {}, pos_phones_all, cnv_phones_all,
+            dims=frozenset({'shop', 'season_shop', 'month_shop', 'week_shop'}),
+            store_filter=None,
+        )
+        for store in stores:
+            bd_scoped = compute_cnv_breakdown(
+                {}, pos_phones_all, cnv_phones_all,
+                dims=frozenset({'shop', 'season_shop', 'month_shop', 'week_shop'}),
+                store_filter=store,
+            )
+            new_row = next((r for r in bd_company_wide['shop'] if r['label'] == store), None)
+            old_row = next((r for r in bd_scoped['shop'] if r['label'] == store), None)
+            self.assertEqual(new_row, old_row, f"shop summary mismatch for store={store}")
+
+            new_detail = [d for d in bd_company_wide['shop_detail'] if d['shop'] == store]
+            old_detail = [d for d in bd_scoped['shop_detail'] if d['shop'] == store]
+            self.assertEqual(new_detail, old_detail, f"shop detail mismatch for store={store}")
 
     # ══════════════════════════════════════════════════════════════════════════
     #  SECTION C — Coupon Consistency

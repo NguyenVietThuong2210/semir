@@ -17,17 +17,21 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 5000
 
 
-def process_coupon_file(file, progress_fn=None):
+def process_coupon_file(file, progress_fn=None, df=None):
     """
     OPTIMIZED: Process coupons in batches.
+
+    Perf plan P3-01: `df` lets the caller pass a DataFrame already parsed
+    during request-thread validation, avoiding a 2nd parse here.
     """
     logger.info("=== START OPTIMIZED Coupon Import: %s ===", file.name, extra={"step": "coupon_import"})
 
-    # dtype=str (U-03): numeric coupon IDs must not become "123....0" floats
-    if file.name.lower().endswith('.csv'):
-        df = pd.read_csv(file, dtype=str)
-    else:
-        df = pd.read_excel(file, dtype=str)
+    if df is None:
+        # dtype=str (U-03): numeric coupon IDs must not become "123....0" floats
+        if file.name.lower().endswith('.csv'):
+            df = pd.read_csv(file, dtype=str)
+        else:
+            df = pd.read_excel(file, dtype=str)
 
     # Strip header whitespace (U-07) — keep the view-level check and this one consistent
     df.columns = [str(c).strip() for c in df.columns]
@@ -146,7 +150,8 @@ def process_coupon_file(file, progress_fn=None):
         # Execute bulk operations
         with transaction.atomic():
             if batch_creates:
-                Coupon.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
+                # 3000: floor(65535 params / 18 fields incl. id) with margin — verified on real PostgreSQL 16.
+                Coupon.objects.bulk_create(batch_creates, batch_size=3000, ignore_conflicts=True)
                 created += len(batch_creates)
                 logger.info("[Batch %d] created=%d", batch_num, len(batch_creates))
 
@@ -165,7 +170,9 @@ def process_coupon_file(file, progress_fn=None):
                         fields=['department', 'creator', 'document_number', 'face_value',
                                'used', 'begin_date', 'end_date', 'using_shop', 'using_date',
                                'push', 'member_id', 'member_name', 'member_phone', 'docket_number'],
-                        batch_size=1000
+                        # 1900: bulk_update costs ~2 params/field + 1, not 1
+                        # like bulk_create — floor(65535/(2*14+1)) with margin.
+                        batch_size=1900
                     )
                     updated += len(coupons_to_update)
                     logger.info("[Batch %d] updated=%d", batch_num, len(coupons_to_update))

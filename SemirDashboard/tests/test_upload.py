@@ -375,6 +375,60 @@ class UploadViewHeaderValidationTests(TestCase):
         mock_thread.assert_called_once()
 
 
+class UsedPointsImportCorrectnessTest(TestCase):
+    """Perf plan P3-04 (2026-07-18): process_used_points_file had ZERO
+    correctness test coverage before this — these tests establish the real
+    baseline behavior of the CURRENT (per-row .update()) implementation
+    first, so a later bulk_update optimization can be verified to change
+    NOTHING about these results."""
+
+    def setUp(self):
+        from App.models import Customer
+        self.c1 = Customer.objects.create(vip_id="V1", phone="0900000001", name="Cust1")
+        self.c2 = Customer.objects.create(vip_id="V2", phone="0900000002", name="Cust2")
+
+    def _csv(self, rows: str):
+        from App.services import process_used_points_file
+        header = "VIP ID,PHONE NO.,USED POINTS,USED POINTS NOTE\r\n"
+        data = (header + rows).encode()
+
+        class _N(io.BytesIO):
+            pass
+        f = _N(data)
+        f.name = "used_points.csv"
+        return process_used_points_file(f)
+
+    def test_matching_row_updates_customer(self):
+        result = self._csv("V1,0900000001,50,note1\r\n")
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual(result["skipped"], 0)
+        self.c1.refresh_from_db()
+        self.assertEqual(self.c1.used_points, 50)
+        self.assertEqual(self.c1.used_points_note, "note1")
+
+    def test_no_match_skipped(self):
+        result = self._csv("V999,0900000999,10,\r\n")
+        self.assertEqual(result["updated"], 0)
+        self.assertEqual(result["skipped"], 1)
+        self.assertTrue(any("no match" in e for e in result["errors"]))
+
+    def test_duplicate_rows_same_key_last_wins(self):
+        """2 rows, same (vip_id, phone), different used_points — DB must end
+        up with the LAST row's value; `updated` counts per FILE ROW matched
+        (not deduped), matching the current per-row .update() semantics."""
+        result = self._csv("V1,0900000001,10,first\r\nV1,0900000001,99,last\r\n")
+        self.assertEqual(result["updated"], 2, "must count both matching rows, not dedup")
+        self.c1.refresh_from_db()
+        self.assertEqual(self.c1.used_points, 99, "DB must reflect the LAST row's value")
+        self.assertEqual(self.c1.used_points_note, "last")
+
+    def test_total_processed_matches_row_count(self):
+        result = self._csv("V1,0900000001,50,\r\nV2,0900000002,60,\r\nV999,0900000999,10,\r\n")
+        self.assertEqual(result["total_processed"], 3)
+        self.assertEqual(result["updated"], 2)
+        self.assertEqual(result["skipped"], 1)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: wrap bytes as a Django InMemoryUploadedFile
 # ─────────────────────────────────────────────────────────────────────────────

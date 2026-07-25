@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models.functions import Upper
+from django.contrib.postgres.indexes import GinIndex, OpClass
 
 
 class Coupon(models.Model):
@@ -29,10 +31,40 @@ class Coupon(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["coupon_id"]),
+            # P1-11: models.Index(fields=["coupon_id"]) removed — coupon_id
+            # already has unique=True (migration 0019), which creates its own
+            # unique index; the explicit one here was a duplicate since day 1
+            # (migration 0002 created both on the same column).
             models.Index(fields=["docket_number"]),
             models.Index(fields=["using_date"]),
             models.Index(fields=["used"]),
+            # P1-08: coupon_id__istartswith is compiled by Postgres to
+            # UPPER(coupon_id::text) LIKE UPPER(x)||'%'. A plain expression
+            # index on UPPER(coupon_id) is NOT enough — Postgres's default
+            # (non-C) collation means a btree can't serve LIKE 'prefix%' at
+            # all unless the index uses the text_pattern_ops operator class
+            # (confirmed by EXPLAIN ANALYZE: without text_pattern_ops the
+            # planner ignored the index entirely even with enable_seqscan=off;
+            # with it, the same query dropped from ~14ms Seq Scan to a
+            # naturally-chosen 0.18ms Bitmap Index Scan). Postgres-only DDL —
+            # see migration 0021's SeparateDatabaseAndState wrapping.
+            models.Index(
+                OpClass(Upper("coupon_id"), name="text_pattern_ops"),
+                name="coupon_upper_couponid_idx",
+            ),
+            # P1-10: Shop Detail coupon tab filters using_shop + using_date
+            # together on every AJAX partial load — replaces 2 separate scans
+            # with one composite index covering the hot path.
+            models.Index(fields=["using_shop", "using_date"], name="coupon_usingshop_usingdate_idx"),
+            # P1-12: using_shop__icontains (shop-group filter) — Postgres only.
+            # QA deep-dive (2026-07-19) found the index MUST be on Upper(using_shop),
+            # not the raw column: Django always compiles icontains on Postgres to
+            # UPPER(col::text) LIKE UPPER(pattern) (see lookup_cast() in
+            # django/db/backends/postgresql/operations.py) — a GIN trigram index on
+            # the raw column can NEVER be used for that expression (confirmed via
+            # EXPLAIN ANALYZE: Seq Scan even with enable_seqscan=off). Same class of
+            # bug as P1-08/P1-09 (text_pattern_ops), just missed here originally.
+            GinIndex(OpClass(Upper("using_shop"), name="gin_trgm_ops"), name="coupon_usingshop_trgm_gin"),
         ]
 
     def __str__(self):

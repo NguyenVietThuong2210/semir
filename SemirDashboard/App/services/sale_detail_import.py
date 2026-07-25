@@ -14,7 +14,11 @@ from .file_reader import read_file, safe_str, safe_int, safe_decimal, parse_date
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 400
+# Perf plan P2-08: 1700 = floor(65535 / 33 fields incl. id) with margin,
+# verified on real PostgreSQL 16. Must match the bulk_create batch_size below
+# — previously outer=400 < inner=1000 made the inner cap a no-op; now they're
+# equal so both bound the same thing consistently.
+BATCH_SIZE = 1700
 
 _COL_MAP = {
     'INVOICE NUMBER':    'invoice_number',
@@ -121,13 +125,17 @@ def _map_row(row):
     }
 
 
-def process_sale_detail_file(file, progress_fn=None):
+def process_sale_detail_file(file, progress_fn=None, df=None):
     """
     Process sale detail xlsx/csv → INSERT all rows without deduplication.
     Returns {created, skipped, errors}.
+
+    Perf plan P3-01: `df` lets the caller pass a DataFrame already parsed
+    during request-thread validation, avoiding a 2nd parse here.
     """
     logger.info("=== START Sale Detail Import: %s ===", file.name, extra={"step": "sale_detail_import"})
-    df = read_file(file)
+    if df is None:
+        df = read_file(file)
 
     df.columns = df.columns.str.strip().str.upper()
     missing = [h for h in ("INVOICE NUMBER", "PRODUCT CODE", "SALES DATE") if h not in df.columns]
@@ -139,11 +147,22 @@ def process_sale_detail_file(file, progress_fn=None):
     total_rows = len(df)
     logger.info("Total rows: %d", total_rows, extra={"step": "sale_detail_import"})
 
-    # Pre-load known invoice numbers (one pass, avoid per-row queries)
-    logger.info("Pre-loading SalesTransaction invoice set...", extra={"step": "sale_detail_import"})
-    invoice_map = set(
-        SalesTransaction.objects.values_list('invoice_number', flat=True)
-    )
+    # Pre-load known invoice numbers — perf plan P2-05: scoped to invoices
+    # present in THIS file only (was: full-table scan of every invoice ever
+    # imported, regardless of file size). Equivalence: every `inv` tested
+    # below via `inv in invoice_map` always comes from this file, so
+    # narrowing the queried set to file_invoices cannot change any result —
+    # it's a set intersection with the exact set membership is tested against.
+    logger.info("Pre-loading SalesTransaction invoice set (scoped to file)...", extra={"step": "sale_detail_import"})
+    _file_invoices = {safe_str(v) for v in df['invoice_number'].tolist()}
+    _file_invoices -= {'', 'nan', 'None'}
+    _ilist = list(_file_invoices)
+    invoice_map = set()
+    for _i in range(0, len(_ilist), 900):
+        invoice_map.update(
+            SalesTransaction.objects.filter(invoice_number__in=_ilist[_i:_i + 900])
+                                     .values_list('invoice_number', flat=True)
+        )
     logger.info("Invoice set loaded: %d entries", len(invoice_map), extra={"step": "sale_detail_import"})
 
     created = skipped = 0
@@ -158,10 +177,14 @@ def process_sale_detail_file(file, progress_fn=None):
 
         to_create = []
 
-        for idx, row in batch_df.iterrows():
+        # Perf plan P2-06: to_dict('records') once instead of iterrows()
+        # (dstructs a Series) + .to_dict() per row — same dict shape/values
+        # (verified: NaN, dtype=str values round-trip identically either way).
+        records = batch_df.to_dict('records')
+        for idx, rec in zip(batch_df.index, records):
             row_num = idx + 2
             try:
-                data = _map_row(row.to_dict())
+                data = _map_row(rec)
                 inv = data['invoice_number']
                 pc  = data['product_code']
 
@@ -180,7 +203,7 @@ def process_sale_detail_file(file, progress_fn=None):
 
         with transaction.atomic():
             if to_create:
-                SaleDetail.objects.bulk_create(to_create, batch_size=1000)
+                SaleDetail.objects.bulk_create(to_create, batch_size=BATCH_SIZE)
                 created += len(to_create)
 
         logger.info("[Batch %d] created=%d", batch_num, len(to_create),

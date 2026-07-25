@@ -45,13 +45,19 @@ logger = logging.getLogger(__name__)
 
 # ── Background thread runner ──────────────────────────────────────────────────
 
-def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
-    """Execute upload service function in a background thread."""
+def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None, df=None):
+    """Execute upload service function in a background thread.
+
+    Perf plan P3-01: `df` is the DataFrame already parsed during
+    request-thread validation (see _pre_upload_checks) — passing it through
+    avoids parsing the file a 2nd time here. `df=None` (e.g. direct calls
+    from tests, bypassing the view) falls back to the service's own parse,
+    unchanged from before this parameter existed."""
     from django.db import connection
     update_job(job_id, status="running")
     try:
         f = NamedBytesIO(file_bytes, filename)
-        result = fn(f, progress_fn=make_progress_fn(job_id))
+        result = fn(f, progress_fn=make_progress_fn(job_id), df=df)
         if on_done_fn:
             on_done_fn()
         update_job(
@@ -79,7 +85,9 @@ def _run_upload(job_id, fn, file_bytes, filename, on_done_fn=None):
 
 def _pre_upload_checks(request, f, upload_type):
     """R2 unified pipeline: ext → headers → dup-keys → zero-rows → U-10 hash.
-    Returns (file_bytes, file_hash) or None (errors already messaged)."""
+    Returns (file_bytes, file_hash, df) or None (errors already messaged).
+    `df` (perf plan P3-01) is the DataFrame validate_upload already parsed —
+    pass it to _start_thread so the background thread doesn't parse again."""
     file_bytes = f.read()
     vr = validate_upload(file_bytes, f.name, upload_type)
     for w in vr.warnings:
@@ -100,13 +108,13 @@ def _pre_upload_checks(request, f, upload_type):
                 f"data for insert-type imports."
             )
             break
-    return file_bytes, file_hash
+    return file_bytes, file_hash, vr.df
 
 
-def _start_thread(job_id, fn, file_bytes, filename, on_done_fn=None):
+def _start_thread(job_id, fn, file_bytes, filename, on_done_fn=None, df=None):
     t = threading.Thread(
         target=_run_upload,
-        args=(job_id, fn, file_bytes, filename, on_done_fn),
+        args=(job_id, fn, file_bytes, filename, on_done_fn, df),
         daemon=True,
     )
     t.start()
@@ -126,13 +134,13 @@ def upload_customers(request):
             pre = _pre_upload_checks(request, f, "customers")
             if pre is None:
                 return redirect("upload_customers")
-            file_bytes, file_hash = pre
+            file_bytes, file_hash, df = pre
             if not acquire_type_lock("customers"):  # U-08: atomic claim
                 messages.warning(request, "A customer upload is already in progress. Please wait.")
                 return redirect("upload_customers")
             job_id = create_job("customers", f.name, file_hash=file_hash)
             logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_customers"})
-            _start_thread(job_id, process_customer_file, file_bytes, f.name, None)
+            _start_thread(job_id, process_customer_file, file_bytes, f.name, None, df)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
             return redirect("upload_customers")
         else:
@@ -166,13 +174,13 @@ def upload_used_points(request):
             pre = _pre_upload_checks(request, f, "used_points")
             if pre is None:
                 return redirect("upload_customers")
-            file_bytes, file_hash = pre
+            file_bytes, file_hash, df = pre
             if not acquire_type_lock("used_points"):  # U-08: atomic claim
                 messages.warning(request, "A used-points upload is already in progress. Please wait.")
                 return redirect("upload_customers")
             job_id = create_job("used_points", f.name, file_hash=file_hash)
             logger.info("upload_used_points queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_used_points"})
-            _start_thread(job_id, process_used_points_file, file_bytes, f.name)
+            _start_thread(job_id, process_used_points_file, file_bytes, f.name, None, df)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
         else:
             messages.error(request, "Invalid form submission.")
@@ -191,13 +199,13 @@ def upload_sales(request):
             pre = _pre_upload_checks(request, f, "sales")
             if pre is None:
                 return redirect("upload_sales")
-            file_bytes, file_hash = pre
+            file_bytes, file_hash, df = pre
             if not acquire_type_lock("sales"):  # U-08: atomic claim
                 messages.warning(request, "A sales upload is already in progress. Please wait.")
                 return redirect("upload_sales")
             job_id = create_job("sales", f.name, file_hash=file_hash)
             logger.info("upload_sales queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_sales"})
-            _start_thread(job_id, process_sales_file, file_bytes, f.name, None)
+            _start_thread(job_id, process_sales_file, file_bytes, f.name, None, df)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
             return redirect("upload_sales")
         else:
@@ -227,13 +235,13 @@ def upload_coupons(request):
         pre = _pre_upload_checks(request, f, "coupons")
         if pre is None:
             return redirect("upload_coupons")
-        file_bytes, file_hash = pre
+        file_bytes, file_hash, df = pre
         if not acquire_type_lock("coupons"):  # U-08: atomic claim
             messages.warning(request, "A coupon upload is already in progress. Please wait.")
             return redirect("upload_coupons")
         job_id = create_job("coupons", f.name, file_hash=file_hash)
         logger.info("upload_coupons queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_coupons"})
-        _start_thread(job_id, process_coupon_file, file_bytes, f.name, None)
+        _start_thread(job_id, process_coupon_file, file_bytes, f.name, None, df)
         messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
         return redirect("upload_coupons")
     return render(request, "upload/coupons.html")
@@ -251,7 +259,7 @@ def upload_inventory(request):
             pre = _pre_upload_checks(request, f, "inventory")
             if pre is None:
                 return redirect("upload_inventory")
-            file_bytes, file_hash = pre
+            file_bytes, file_hash, df = pre
             if not acquire_type_lock("inventory"):  # U-08: atomic claim
                 messages.warning(request, "An inventory upload is already in progress. Please wait.")
                 return redirect("upload_inventory")
@@ -263,7 +271,7 @@ def upload_inventory(request):
                 from App.analytics.inventory_functions import bump_inventory_version
                 cache.delete("shop_detail_dropdowns")
                 bump_inventory_version()
-            _start_thread(job_id, process_inventory_file, file_bytes, f.name, _inv_done)
+            _start_thread(job_id, process_inventory_file, file_bytes, f.name, _inv_done, df)
             messages.warning(request, f"Inventory upload started — ALL existing inventory data will be replaced. Tracking job {job_id[:8]}…")
             return redirect("upload_inventory")
         else:
@@ -295,7 +303,7 @@ def upload_sale_detail(request):
             pre = _pre_upload_checks(request, f, "sale_detail")
             if pre is None:
                 return redirect("upload_sales")
-            file_bytes, file_hash = pre
+            file_bytes, file_hash, df = pre
             if not acquire_type_lock("sale_detail"):  # U-08: atomic claim
                 messages.warning(request, "A sale detail upload is already in progress. Please wait.")
                 return redirect("upload_sales")
@@ -305,7 +313,7 @@ def upload_sale_detail(request):
             def _sd_done():
                 from App.analytics.product_analytics import bump_product_version
                 bump_product_version()
-            _start_thread(job_id, process_sale_detail_file, file_bytes, f.name, _sd_done)
+            _start_thread(job_id, process_sale_detail_file, file_bytes, f.name, _sd_done, df)
             messages.info(request, f"Sale detail upload started — tracking job {job_id[:8]}…")
         else:
             messages.error(request, "Invalid form submission.")

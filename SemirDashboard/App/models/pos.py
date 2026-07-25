@@ -1,5 +1,7 @@
 from django.db import models
 from django.core.validators import EmailValidator
+from django.db.models.functions import Upper
+from django.contrib.postgres.indexes import GinIndex, OpClass
 
 
 class Customer(models.Model):
@@ -74,6 +76,11 @@ class SalesTransaction(models.Model):
         indexes = [
             models.Index(fields=["vip_id", "sales_date"]),
             models.Index(fields=["sales_date"]),
+            # P1-12: shop_name__icontains (shop-group filter) can't use a
+            # plain btree index — Postgres-only, see migration 0021.
+            # QA deep-dive (2026-07-19): must index Upper(shop_name), not the raw
+            # column — see the detailed comment in App/models/coupon.py for why.
+            GinIndex(OpClass(Upper("shop_name"), name="gin_trgm_ops"), name="sales_shop_trgm_gin"),
         ]
 
     def __str__(self):
@@ -135,6 +142,10 @@ class SaleDetail(models.Model):
             models.Index(fields=['year', 'season', 'brand']),
             models.Index(fields=['sku', 'brand']),
             models.Index(fields=['salesmen', 'sales_date']),
+            # P1-12: shop_name__icontains (shop-group filter) — Postgres only.
+            # QA deep-dive (2026-07-19): must index Upper(shop_name), not the raw
+            # column — see the detailed comment in App/models/coupon.py for why.
+            GinIndex(OpClass(Upper('shop_name'), name='gin_trgm_ops'), name='saledet_shop_trgm_gin'),
         ]
 
     def __str__(self):

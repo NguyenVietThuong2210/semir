@@ -216,3 +216,163 @@ class TransformCustomerTest(TestCase):
         transformed.update({})  # simulates failed fetch
         self.assertNotIn('level_name', transformed)
         self.assertNotIn('used_points', transformed)
+
+
+class ProcessCustomerBatchTest(TestCase):
+    """Perf plan P3-02 (2026-07-18): _process_customer_batch changed from
+    1 UPDATE query per existing record to grouped bulk_update calls. This is
+    a DB-level integration test (the invariant lives in what actually lands
+    in the database, not just in the transform dict) — no such test existed
+    before this change."""
+
+    def _make_service(self):
+        with patch('App.cnv.sync_service.CNVAPIClient'):
+            service = CNVSyncService(username='u', password='p')
+        return service
+
+    def _raw_customer(self, cnv_id, phone='0900000000'):
+        return {
+            'id': cnv_id, 'last_name': 'N', 'first_name': 'A', 'phone': phone,
+            'email': '', 'gender': 'female', 'birthday_day': 1, 'birthday_month': 1,
+            'birthday_year': 1990, 'tags': '', 'physical_card_code': '',
+            'points': 999, 'exp_points': 1, 'total_spending': 1, 'total_points': 999,
+            'created_at': '2025-01-01T00:00:00.000Z', 'updated_at': '2026-01-01T00:00:00.000Z',
+        }
+
+    def test_membership_fetch_fail_does_not_overwrite_existing_points(self):
+        """Zero-overwrite rule at the DB level: a customer with existing
+        points=100 must still have points=100 after a batch run where
+        membership fetch fails for that customer."""
+        from App.cnv.models import CNVCustomer
+        existing = CNVCustomer.objects.create(
+            cnv_id=555, phone='0900000001', points=Decimal('100'),
+            used_points=Decimal('50'), total_points=Decimal('150'), level_name='Gold',
+        )
+        service = self._make_service()
+        with patch.object(service, '_fetch_membership', return_value={}):
+            created, updated, failed = service._process_customer_batch(
+                [self._raw_customer(555, phone='0900000001')]
+            )
+        self.assertEqual((created, updated, failed), (0, 1, 0))
+        existing.refresh_from_db()
+        self.assertEqual(existing.points, Decimal('100'), "points must NOT be reset when membership fetch fails")
+        self.assertEqual(existing.used_points, Decimal('50'))
+        self.assertEqual(existing.total_points, Decimal('150'))
+        self.assertEqual(existing.level_name, 'Gold')
+        # Non-membership fields ARE updated from the transform (existing behavior).
+        self.assertEqual(existing.phone, '0900000001')
+
+    def test_membership_fetch_success_updates_points(self):
+        """When membership fetch succeeds, points/used_points/total_points/
+        level_name ARE written."""
+        from App.cnv.models import CNVCustomer
+        existing = CNVCustomer.objects.create(cnv_id=556, phone='0900000002', points=Decimal('0'))
+        service = self._make_service()
+        membership = {
+            'level_name': 'Diamond', 'used_points': Decimal('20'),
+            'points': Decimal('300'), 'total_points': Decimal('320'),
+        }
+        with patch.object(service, '_fetch_membership', return_value=membership):
+            created, updated, failed = service._process_customer_batch(
+                [self._raw_customer(556, phone='0900000002')]
+            )
+        self.assertEqual((created, updated, failed), (0, 1, 0))
+        existing.refresh_from_db()
+        self.assertEqual(existing.points, Decimal('300'))
+        self.assertEqual(existing.used_points, Decimal('20'))
+        self.assertEqual(existing.level_name, 'Diamond')
+
+    def test_mixed_success_and_failure_grouped_correctly(self):
+        """A batch with SOME memberships succeeding and SOME failing must
+        update each customer correctly — proving the field-set grouping
+        doesn't cross-contaminate the two groups."""
+        from App.cnv.models import CNVCustomer
+        ok_cust = CNVCustomer.objects.create(cnv_id=601, phone='p601', points=Decimal('0'))
+        fail_cust = CNVCustomer.objects.create(
+            cnv_id=602, phone='p602', points=Decimal('777'), level_name='Silver'
+        )
+        service = self._make_service()
+
+        def _fetch_side_effect(cid):
+            if cid == 601:
+                return {'level_name': 'Gold', 'used_points': Decimal('1'),
+                         'points': Decimal('500'), 'total_points': Decimal('501')}
+            return {}
+
+        with patch.object(service, '_fetch_membership', side_effect=_fetch_side_effect):
+            created, updated, failed = service._process_customer_batch([
+                self._raw_customer(601, phone='p601'),
+                self._raw_customer(602, phone='p602'),
+            ])
+        self.assertEqual((created, updated, failed), (0, 2, 0))
+        ok_cust.refresh_from_db()
+        fail_cust.refresh_from_db()
+        self.assertEqual(ok_cust.points, Decimal('500'))
+        self.assertEqual(ok_cust.level_name, 'Gold')
+        self.assertEqual(fail_cust.points, Decimal('777'), "unaffected customer's points must be untouched")
+        self.assertEqual(fail_cust.level_name, 'Silver')
+
+    def test_new_customer_created_when_cnv_id_not_existing(self):
+        from App.cnv.models import CNVCustomer
+        service = self._make_service()
+        with patch.object(service, '_fetch_membership', return_value={}):
+            created, updated, failed = service._process_customer_batch(
+                [self._raw_customer(999, phone='pnew')]
+            )
+        self.assertEqual((created, updated, failed), (1, 0, 0))
+        self.assertTrue(CNVCustomer.objects.filter(cnv_id=999).exists())
+
+    def test_query_count_reduced_vs_per_row_update(self):
+        """A batch of 10 existing customers all failing membership fetch
+        (single field-group) must issue O(1) UPDATE-related queries, not 10
+        — proving the grouped bulk_update actually reduces query count."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from App.cnv.models import CNVCustomer
+        for i in range(700, 710):
+            CNVCustomer.objects.create(cnv_id=i, phone=f'p{i}')
+        service = self._make_service()
+        batch = [self._raw_customer(i, phone=f'p{i}') for i in range(700, 710)]
+        with patch.object(service, '_fetch_membership', return_value={}):
+            with CaptureQueriesContext(connection) as ctx:
+                created, updated, failed = service._process_customer_batch(batch)
+        self.assertEqual((created, updated, failed), (0, 10, 0))
+        update_related = [q for q in ctx.captured_queries if 'UPDATE' in q['sql'].upper()]
+        self.assertLessEqual(len(update_related), 2,
+            f"expected O(1) UPDATE statements for a single field-group batch of 10, got {len(update_related)}")
+
+
+class ProcessOrderBatchTest(TestCase):
+    """Perf plan P3-02: _process_order_batch changed from 1 UPDATE query per
+    record to a single bulk_update (no zero-overwrite risk for orders —
+    _transform_order always sets every field)."""
+
+    def _make_service(self):
+        with patch('App.cnv.sync_service.CNVAPIClient'):
+            service = CNVSyncService(username='u', password='p')
+        return service
+
+    def _raw_order(self, order_code, customer_code='C1'):
+        return {
+            'name': order_code, 'id': order_code,
+            'customer': {'id': customer_code, 'first_name': 'A', 'last_name': 'N', 'phone': 'p1'},
+            'created_at': '2025-01-01T00:00:00.000Z', 'location_id': 'S1',
+            'total_price': 100000,
+        }
+
+    def test_new_order_created(self):
+        from App.cnv.models import CNVOrder
+        service = self._make_service()
+        created, updated, failed = service._process_order_batch([self._raw_order('ORD1')])
+        self.assertEqual((created, updated, failed), (1, 0, 0))
+        self.assertTrue(CNVOrder.objects.filter(order_code='ORD1').exists())
+
+    def test_existing_order_updated_via_bulk_update(self):
+        from App.cnv.models import CNVOrder
+        service = self._make_service()
+        service._process_order_batch([self._raw_order('ORD2', customer_code='OLD')])
+        created, updated, failed = service._process_order_batch(
+            [self._raw_order('ORD2', customer_code='NEW')]
+        )
+        self.assertEqual((created, updated, failed), (0, 1, 0))
+        self.assertEqual(CNVOrder.objects.get(order_code='ORD2').customer_code, 'NEW')

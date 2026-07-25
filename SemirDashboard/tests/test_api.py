@@ -454,7 +454,7 @@ class ApiStructureTest(SnapshotTestCase):
         sales_shops = set(
             SalesTransaction.objects
             .exclude(shop_name='').exclude(shop_name__isnull=True)
-            .values_list('shop_name', flat=True).distinct()
+            .order_by('shop_name').values_list('shop_name', flat=True).distinct()
         )
         # Coupon uses using_shop (not shop_name)
         coupon_shops = set(
@@ -827,6 +827,32 @@ class ApiChartTest(ApiStructureTest):
     def test_customer_chart_with_date_filter(self):
         data, _ = self._json(CUSTOMER_CHART_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
         self.assertIn('donuts', data)
+
+    def test_grade_rows_cached_across_page_then_chart(self):
+        """Perf plan P2-04 (2026-07-18): opening Customer Analytics then the
+        Chart right after must NOT re-scan the Customer table for grade rows
+        3 times (all-time + period in CustomerAnalyticsView, then again in
+        CustomerChartView) — the 2nd and 3rd calls within the cache window
+        must be cache hits."""
+        from django.core.cache import cache as _c
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        _c.clear()
+
+        with CaptureQueriesContext(connection) as ctx1:
+            resp1, _ = self._get(CUSTOMER_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self.assertEqual(resp1.status_code, 200)
+        n_cold = sum(1 for q in ctx1.captured_queries if '"App_customer"' in q['sql'] and 'vip_grade' in q['sql'])
+
+        with CaptureQueriesContext(connection) as ctx2:
+            resp2, _ = self._get(CUSTOMER_CHART_URL, {'date_from': PERIOD_FROM, 'date_to': PERIOD_TO})
+        self.assertEqual(resp2.status_code, 200)
+        n_warm = sum(1 for q in ctx2.captured_queries if '"App_customer"' in q['sql'] and 'vip_grade' in q['sql'])
+
+        self.assertGreater(n_cold, 0, "cold call must query Customer.vip_grade at least once")
+        self.assertEqual(n_warm, 0,
+            f"CustomerChartView issued {n_warm} fresh Customer.vip_grade quer{'y' if n_warm==1 else 'ies'} "
+            f"right after CustomerAnalyticsView computed the same period — grade rows cache miss")
 
     # ── Coupon Chart ──────────────────────────────────────────────────────────
 

@@ -121,7 +121,7 @@ This file powers ALL lazy-loaded AJAX tabs and the shop detail page.
 **File:** `App/analytics/tab_functions.py`
 
 ### `get_shop_detail_sales_data(shop, date_from, date_to)`
-One DB call → all-time + period + by_season/month/week.
+One DB call → all-time + period + by_season/month/week. **Perf plan P2-01 (2026-07-18):** the all-time `SalesTransaction` query is now cached 300s per shop (key `f"shop_detail_sales_alltime:{shop_name}"`) — the ONLY function in this file's family that lacked this before; matches the existing `_load_sales` pattern in `sales_tabs.py`. The `date_from`/`date_to` filter always runs in Python AFTER the cached fetch, so period results stay correct on every call regardless of cache state.
 Returns:
 ```python
 {
@@ -140,12 +140,13 @@ Returns CNV breakdown for one store (POS vs CNV customer comparison).
 - **No dates** → all-time data, returns dict with `all_time` key
 - **With dates** → period + breakdown by season/month/week, returns dict with `period` key
 - Returns `None` if store has no matching CNV data
+- **Perf plan P3-03 (2026-07-18):** internally calls `compute_cnv_breakdown(store_filter=None)` (company-wide) instead of `store_filter=store` — verified bit-for-bit identical per-shop results either way, but the cache entry is now shared across ALL shops for the same period (was: one cache entry per shop) — viewing N different shops within the 300s cache window now costs 1 full computation instead of N.
 
 **Critical:** `parse_cnv_period_filter(start_date, end_date)` returns `({}, False)` when no dates given (empty dict, NOT None).
 Check with `if not period_filter:` — NOT `if period_filter is None:`.
 
 ### `get_shop_detail_coupon_data(shop, date_from, date_to)`
-Returns coupon usage for one shop.
+Returns coupon usage for one shop. ~9 queries (no date filter) / ~12 queries (with date filter). **Not yet cached** — perf plan item P2-02 proposes a 300s cache here (same pattern as the sales function above) but is BLOCKED pending business sign-off on accepting ≤5 min staleness for coupon used/unused status (see `plan_performance.md`).
 ```python
 {
     'shop': str,

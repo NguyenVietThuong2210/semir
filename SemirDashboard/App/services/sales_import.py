@@ -17,12 +17,19 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 5000
 
 
-def process_sales_file(file, progress_fn=None):
+def process_sales_file(file, progress_fn=None, df=None):
     """
     OPTIMIZED: Process 100k+ sales records in batches.
+
+    Perf plan P3-01: `df` lets the caller (App/views/upload.py) pass in a
+    DataFrame already parsed during request-thread validation, avoiding a
+    2nd parse of the same file in this background-thread service. Default
+    None preserves the original behavior for any direct caller (tests, etc.)
+    that doesn't have a pre-parsed df.
     """
     logger.info("=== START OPTIMIZED Sales Import: %s ===", file.name, extra={"step": "sales_import"})
-    df = read_file(file)
+    if df is None:
+        df = read_file(file)
     df.columns = df.columns.str.strip().str.upper()
     missing = [h for h in ("INVOICE NUMBER", "SHOP NAME", "SALES DATE", "SETTLEMENT AMOUNT") if h not in df.columns]
     if missing:
@@ -58,8 +65,13 @@ def process_sales_file(file, progress_fn=None):
         batch_creates = []
         batch_updates = {}
 
+        # Perf plan P2-07: to_dict('records') once, reused for both the
+        # invoice-number extraction pass and the main processing pass below
+        # (was: 2 separate iterrows() passes over the same batch_df).
+        records = batch_df.to_dict('records')
+
         # Extract invoice numbers for this batch
-        invoices_in_batch = [safe_str(row.get('INVOICE NUMBER', '')) for _, row in batch_df.iterrows()]
+        invoices_in_batch = [safe_str(rec.get('INVOICE NUMBER', '')) for rec in records]
 
         # Pre-fetch existing transactions
         existing_invoices = {
@@ -70,7 +82,13 @@ def process_sales_file(file, progress_fn=None):
         logger.info("[Batch %d] existing=%d", batch_num, len(existing_invoices))
 
         # Process each row
-        for idx, row in batch_df.iterrows():
+        # Perf plan P2-08 prerequisite: dedup within batch (same pattern as
+        # U-05 in coupon_import.py) so `created` stays accurate when 2 rows
+        # in the same batch share an invoice_number that doesn't exist yet —
+        # without this, bulk_create(ignore_conflicts=True) silently drops the
+        # 2nd insert but `created += len(batch_creates)` would still count it.
+        seen_in_batch = set()
+        for idx, row in zip(batch_df.index, records):
             row_num = idx + 2
             try:
                 inv = safe_str(row.get('INVOICE NUMBER', ''))
@@ -102,7 +120,14 @@ def process_sales_file(file, progress_fn=None):
 
                 if inv in existing_invoices:
                     batch_updates[inv] = sales_data
+                elif inv in seen_in_batch:
+                    # Same invoice_number twice in one batch, neither exists
+                    # yet — last row wins, replace the pending create instead
+                    # of appending a duplicate (see comment above).
+                    batch_creates = [c for c in batch_creates if c.invoice_number != inv]
+                    batch_creates.append(SalesTransaction(**sales_data))
                 else:
+                    seen_in_batch.add(inv)
                     batch_creates.append(SalesTransaction(**sales_data))
 
             except Exception as exc:
@@ -113,7 +138,8 @@ def process_sales_file(file, progress_fn=None):
         with transaction.atomic():
             # Bulk create new transactions
             if batch_creates:
-                SalesTransaction.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
+                # 3000: floor(65535 params / 18 fields incl. id) with margin — verified on real PostgreSQL 16.
+                SalesTransaction.objects.bulk_create(batch_creates, batch_size=3000, ignore_conflicts=True)
                 created += len(batch_creates)
                 logger.info("[Batch %d] created=%d", batch_num, len(batch_creates))
 
@@ -134,7 +160,10 @@ def process_sales_file(file, progress_fn=None):
                                'vip_id', 'vip_name', 'quantity', 'settlement_amount',
                                'sales_amount', 'tag_amount', 'per_customer_transaction',
                                'discount', 'rounding', 'customer'],
-                        batch_size=1000
+                        # 1800: bulk_update costs ~2 params/field + 1 (CASE WHEN
+                        # per field), not 1 like bulk_create — floor(65535/(2*15+1))
+                        # with margin, verified on real PostgreSQL 16.
+                        batch_size=1800
                     )
                     updated += len(transactions_to_update)
                     logger.info("[Batch %d] updated=%d", batch_num, len(transactions_to_update))

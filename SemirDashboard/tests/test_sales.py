@@ -59,6 +59,30 @@ class SalesImportTest(SnapshotTestCase):
         t.report()
         self.assertGreater(SalesTransaction.objects.count(), 0)
 
+    def test_duplicate_invoice_in_same_batch_not_overcounted(self):
+        """Perf plan P2-08 prerequisite: 2 rows sharing the same (new)
+        invoice_number in the same upload batch must not double-count
+        `created`, and the DB must end up with exactly 1 row (last row wins) —
+        same guard as coupon_import.py's existing seen_in_batch dedup."""
+        csv_bytes = (
+            b"INVOICE NUMBER,SHOP NAME,SALES DATE,SETTLEMENT AMOUNT,SALES AMOUNT,"
+            b"VIP ID,QUANTITY\r\n"
+            b"DUPTEST001,Test Shop,2025-01-01,100,100,V1,1\r\n"
+            b"DUPTEST001,Test Shop,2025-01-01,200,200,V1,2\r\n"
+        )
+
+        class _N(io.BytesIO):
+            pass
+        f = _N(csv_bytes)
+        f.name = "dup_invoice_test.csv"
+
+        result = process_sales_file(f)
+        self.assertEqual(result["created"], 1,
+            f"expected created=1 for 2 duplicate-invoice rows in one batch, got {result['created']}")
+        rows = list(SalesTransaction.objects.filter(invoice_number="DUPTEST001"))
+        self.assertEqual(len(rows), 1, "expected exactly 1 DB row for the duplicate invoice_number")
+        self.assertEqual(rows[0].quantity, 2, "expected the LAST row's data to win")
+
 
 class SalesAnalyticsTest(SnapshotTestCase):
 

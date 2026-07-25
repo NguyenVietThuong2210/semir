@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 5000
 
 
-def process_customer_file(file, progress_fn=None):
+def process_customer_file(file, progress_fn=None, df=None):
     """
     OPTIMIZED: Process 100k+ customer records in batches.
 
@@ -27,9 +27,13 @@ def process_customer_file(file, progress_fn=None):
     - Bulk creates for new customers
     - Bulk updates for existing customers
     - Pre-fetch existing records to minimize queries
+
+    Perf plan P3-01: `df` lets the caller pass a DataFrame already parsed
+    during request-thread validation, avoiding a 2nd parse here.
     """
     logger.info("=== START OPTIMIZED Customer Import: %s ===", file.name, extra={"step": "customer_import"})
-    df = read_file(file)
+    if df is None:
+        df = read_file(file)
     df.columns = df.columns.str.strip().str.upper()
     missing = [h for h in ("VIP ID", "PHONE NO.") if h not in df.columns]
     if missing:
@@ -52,9 +56,14 @@ def process_customer_file(file, progress_fn=None):
         batch_creates = []
         batch_updates = {}
 
+        # Perf plan P2-07: to_dict('records') once, reused for both the
+        # VIP-ID/phone extraction pass and the main processing pass below
+        # (was: 3 separate iterrows() passes over the same batch_df).
+        records = batch_df.to_dict('records')
+
         # Extract VIP IDs and phones for this batch
-        vip_ids_in_batch = [safe_str(row.get('VIP ID', '')) for _, row in batch_df.iterrows()]
-        phones_in_batch = [safe_str(row.get('PHONE NO.', '')) for _, row in batch_df.iterrows()]
+        vip_ids_in_batch = [safe_str(rec.get('VIP ID', '')) for rec in records]
+        phones_in_batch = [safe_str(rec.get('PHONE NO.', '')) for rec in records]
 
         # Pre-fetch existing customers in one query
         existing_customers = {
@@ -68,7 +77,7 @@ def process_customer_file(file, progress_fn=None):
         logger.info("[Batch %d] existing=%d", batch_num, len(existing_customers))
 
         # Process each row in batch
-        for idx, row in batch_df.iterrows():
+        for idx, row in zip(batch_df.index, records):
             row_num = idx + 2
             try:
                 vip_id = safe_str(row.get('VIP ID', ''))
@@ -114,7 +123,8 @@ def process_customer_file(file, progress_fn=None):
         with transaction.atomic():
             # Bulk create new customers
             if batch_creates:
-                Customer.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
+                # 2600: floor(65535 params / 22 fields incl. id) with margin — verified on real PostgreSQL 16.
+                Customer.objects.bulk_create(batch_creates, batch_size=2600, ignore_conflicts=True)
                 created += len(batch_creates)
                 logger.info("[Batch %d] created=%d", batch_num, len(batch_creates))
 
@@ -134,7 +144,9 @@ def process_customer_file(file, progress_fn=None):
                                'gender', 'birthday', 'city_state', 'postal_code', 'country',
                                'email', 'contact_address', 'registration_store',
                                'registration_date', 'points'],
-                        batch_size=1000
+                        # 1800: bulk_update costs ~2 params/field + 1, not 1
+                        # like bulk_create — floor(65535/(2*15+1)) with margin.
+                        batch_size=1800
                     )
                     updated += len(customers_to_update)
                     logger.info("[Batch %d] updated=%d", batch_num, len(customers_to_update))
@@ -152,7 +164,7 @@ def process_customer_file(file, progress_fn=None):
     }
 
 
-def process_used_points_file(file, progress_fn=None):
+def process_used_points_file(file, progress_fn=None, df=None):
     """
     Process an Excel/CSV file to update Customer.used_points and used_points_note.
 
@@ -164,17 +176,21 @@ def process_used_points_file(file, progress_fn=None):
 
     Duplicate matching: same VIP ID AND Phone  →  update both fields.
     Returns dict: { total_processed, updated, skipped, errors: [...] }
+
+    Perf plan P3-01: `df` lets the caller pass a DataFrame already parsed
+    during request-thread validation, avoiding a 2nd parse here.
     """
     logger.info("=== START UsedPoints Import: %s ===", file.name, extra={"step": "used_points_import"})
     # ── Read file ────────────────────────────────────────────────
-    filename = file.name.lower()
-    try:
-        if filename.endswith('.csv'):
-            df = pd.read_csv(file, dtype=str)
-        else:
-            df = pd.read_excel(file, dtype=str)
-    except Exception as e:
-        raise ValueError(f"Cannot read file: {e}")
+    if df is None:
+        filename = file.name.lower()
+        try:
+            if filename.endswith('.csv'):
+                df = pd.read_csv(file, dtype=str)
+            else:
+                df = pd.read_excel(file, dtype=str)
+        except Exception as e:
+            raise ValueError(f"Cannot read file: {e}")
 
     df.columns = [str(c).strip() for c in df.columns]
     df = df.dropna(how='all')
@@ -205,9 +221,19 @@ def process_used_points_file(file, progress_fn=None):
 
     total_records = len(df)
     records = df.to_dict('records')
+
+    # Perf plan P3-04: prefetch Customer objects for this batch's (vip_id,
+    # phone) pairs once, then bulk_update — was: 1 UPDATE query per row.
+    # `updated` counts per FILE ROW matched (not deduped) to preserve the
+    # exact current semantics for duplicate rows; DB value = LAST row's data
+    # via dict overwrite (each pk appears at most once in the bulk_update
+    # list — required, since Django's CASE WHEN would otherwise take the
+    # FIRST match for a repeated pk, the opposite of "last row wins").
     for i in range(0, len(records), BATCH):
         batch = records[i:i + BATCH]
         with transaction.atomic():           # per-batch transaction (not one giant lock)
+            batch_keys = []
+            parsed_rows = []
             for rec in batch:
                 total_processed += 1
                 try:
@@ -228,22 +254,37 @@ def process_used_points_file(file, progress_fn=None):
                         skipped += 1
                         continue
 
-                    rows_updated = Customer.objects.filter(
-                        vip_id=vip_id, phone=phone
-                    ).update(
-                        used_points=used_pts,
-                        used_points_note=note or None,
-                    )
-
-                    if rows_updated:
-                        updated += rows_updated
-                    else:
-                        skipped += 1
-                        errors.append(f"Row {total_processed}: no match for VIP ID={vip_id}, Phone={phone}")
+                    batch_keys.append((vip_id, phone))
+                    parsed_rows.append((total_processed, vip_id, phone, used_pts, note))
 
                 except Exception as e:
                     errors.append(f"Row {total_processed}: {e}")
                     skipped += 1
+
+            customer_map = {
+                (c.vip_id, c.phone): c
+                for c in Customer.objects.filter(
+                    vip_id__in={k[0] for k in batch_keys},
+                    phone__in={k[1] for k in batch_keys},
+                )
+            } if batch_keys else {}
+
+            pending = {}  # (vip_id, phone) -> Customer, dict overwrite = "last row wins"
+            for row_num, vip_id, phone, used_pts, note in parsed_rows:
+                cust = customer_map.get((vip_id, phone))
+                if cust is None:
+                    skipped += 1
+                    errors.append(f"Row {row_num}: no match for VIP ID={vip_id}, Phone={phone}")
+                    continue
+                cust.used_points = used_pts
+                cust.used_points_note = note or None
+                pending[(vip_id, phone)] = cust
+                updated += 1  # counts per FILE ROW matched, not deduped — see comment above
+
+            if pending:
+                Customer.objects.bulk_update(
+                    list(pending.values()), ['used_points', 'used_points_note'], batch_size=1800
+                )
 
         if progress_fn:
             progress_fn(min(i + BATCH, total_records), total_records)

@@ -109,7 +109,7 @@ def calculate_return_rate_analytics(date_from=None, date_to=None, shop_group=Non
         if vip_id == '0':
             continue
 
-        purchases_sorted = sorted(purchases, key=lambda x: x['date'])
+        purchases_sorted = purchases  # already sorted by build_customer_purchase_map()
         n = len(purchases_sorted)
         total_invoices_without_vip0 += n
 

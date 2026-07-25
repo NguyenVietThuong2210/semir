@@ -85,6 +85,16 @@ def get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_
     """
     from App.models import SalesTransaction as _ST
     from django.db.models import Q as _DQ
+    from django.core.cache import cache as _djc3
+
+    # Perf plan P2-03: cache 300s (matches get_cnv_phone_sets/_fetch_bd_raw
+    # TTL) — has_filter=True costs 6 DB queries per call today, otherwise
+    # re-run on every request even within the same 5-minute window.
+    _period_key = f"{period_filter.get('start', '')}:{period_filter.get('end', '')}"
+    _kpi_key = f"cnv_kpis:{_period_key}:{has_filter}"
+    _cached = _djc3.get(_kpi_key)
+    if _cached is not None:
+        return _cached
 
     total_pos = len(pos_phones_all)
     total_cnv = len(cnv_phones_all)
@@ -143,7 +153,7 @@ def get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_
     # active_period = all unique new customers across both systems
     active_period = pos_only_period + cnv_only_period + synced_period
 
-    return {
+    result = {
         'total_pos':        total_pos,
         'total_cnv':        total_cnv,
         'both':             both,
@@ -158,6 +168,8 @@ def get_cnv_customer_kpis(period_filter, has_filter, pos_phones_all, cnv_phones_
         'synced_period':    synced_period,
         'active_period':    active_period,
     }
+    _djc3.set(_kpi_key, result, timeout=300)
+    return result
 
 
 # ── Registration breakdown (BD tabs) ──────────────────────────────────────────

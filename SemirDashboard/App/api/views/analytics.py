@@ -310,11 +310,29 @@ class CustomerAnalyticsView(APIView):
 
 
 def _compute_grade_rows(cnv_phones_all: set, period_filter=None) -> list:
-    """POS customer grade breakdown. CNV has no grade concept, so CNV-only columns are always 0."""
+    """POS customer grade breakdown. CNV has no grade concept, so CNV-only columns are always 0.
+
+    Mobile-API-only (App/api/views/*) — no web view calls this. Cached 300s
+    (perf plan P2-04) to match the get_cnv_phone_sets/_fetch_bd_raw TTL:
+    without this, opening the Customer Analytics page then the Chart right
+    after triggers up to 3 independent full scans of the Customer table for
+    overlapping data (CustomerAnalyticsView calls this twice — all-time +
+    period — and CustomerChartView calls it again independently).
+    """
     from collections import defaultdict
+    from django.core.cache import cache as _djc4
     from App.models import Customer as _POS
     from App.analytics.customer_utils import normalize_grade
     _GRADE_ORDER = ['No Grade', 'Member', 'Silver', 'Gold', 'Diamond']
+
+    _period_key = ''
+    if period_filter and period_filter.get('start') and period_filter.get('end'):
+        _period_key = f"{period_filter['start']}:{period_filter['end']}"
+    _cache_key = f"grade_rows:{_period_key}"
+    _cached = _djc4.get(_cache_key)
+    if _cached is not None:
+        return _cached
+
     qs = _POS.objects.filter(vip_id__isnull=False).exclude(vip_id=0).exclude(phone='').exclude(phone__isnull=True)
     if period_filter and period_filter.get('start') and period_filter.get('end'):
         qs = qs.filter(registration_date__gte=period_filter['start'], registration_date__lte=period_filter['end'])
@@ -334,6 +352,7 @@ def _compute_grade_rows(cnv_phones_all: set, period_filter=None) -> list:
             'new_cnv_only': 0,
             'zalo_app': 0,
         })
+    _djc4.set(_cache_key, rows, timeout=300)
     return rows
 
 

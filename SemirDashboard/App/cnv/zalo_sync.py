@@ -14,6 +14,7 @@ import requests
 from django.utils import timezone
 
 from App.cnv.models import CNVCustomer, CNVSyncLog
+from App.cnv.rate_limit import get_zalo_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ def _fetch_zalo_data(cnv_id: int, cookie: str):
     """
     url = f"{ZALO_API_BASE}/{cnv_id}"
     try:
+        get_zalo_rate_limiter().acquire()
         session = _get_thread_session(cookie)
         resp = session.get(url, timeout=10)
         if resp.status_code == 200:
@@ -231,6 +233,7 @@ def _do_sync(cookie: str, sync_log: CNVSyncLog):
                 CNVCustomer.objects.bulk_update(
                     pending_updates,
                     ["zalo_app_id", "zalo_oa_id", "zalo_app_created_at"],
+                    batch_size=500,
                 )
 
             if processed % LOG_INTERVAL == 0 or chunk_start + BATCH_SIZE >= total:

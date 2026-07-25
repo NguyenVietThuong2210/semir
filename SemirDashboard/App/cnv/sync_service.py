@@ -304,9 +304,10 @@ class CNVSyncService:
                 logger.error("Transform error: %s", e)
                 failed_count += 1
 
-        # Fetch memberships in parallel (max 10 concurrent HTTP calls)
+        # Fetch memberships in parallel (concurrency bounded by the shared
+        # DistributedRateLimiter, not by thread count — see rate_limit.py)
         if cnv_ids:
-            with ThreadPoolExecutor(max_workers=10) as pool:
+            with ThreadPoolExecutor(max_workers=30) as pool:
                 futures = {pool.submit(self._fetch_membership, cid): cid for cid in cnv_ids}
                 for fut in as_completed(futures):
                     cid = futures[fut]
@@ -320,41 +321,59 @@ class CNVSyncService:
         if not cnv_ids:
             return 0, 0, failed_count
         
-        # Check existing records
-        existing_cnv_ids = set(
+        # Check existing records — need both `id` (real PK, required by
+        # bulk_update below) and `cnv_id` (the natural key used everywhere
+        # else in this method).
+        existing_map = dict(
             CNVCustomer.objects.filter(cnv_id__in=cnv_ids)
-            .values_list('cnv_id', flat=True)
+            .values_list('cnv_id', 'id')
         )
-        
+        existing_cnv_ids = set(existing_map.keys())
+
         # Separate new vs existing
         new_customers = []
         update_cnv_ids = []
-        
+
         for cnv_id, data in transformed_map.items():
             if cnv_id in existing_cnv_ids:
                 update_cnv_ids.append((cnv_id, data))
             else:
                 new_customers.append(CNVCustomer(**data))
-        
+
         # Bulk create new records
         if new_customers:
             try:
-                CNVCustomer.objects.bulk_create(new_customers, ignore_conflicts=True)
+                CNVCustomer.objects.bulk_create(new_customers, ignore_conflicts=True, batch_size=500)
                 created_count = len(new_customers)
             except Exception as e:
                 logger.error("Bulk create failed: %s", e)
                 failed_count += len(new_customers)
-        
-        # Update existing records
-        for cnv_id, data in update_cnv_ids:
-            try:
-                CNVCustomer.objects.filter(cnv_id=cnv_id).update(**{
-                    k: v for k, v in data.items() if k != 'cnv_id'
-                })
-                updated_count += 1
-            except Exception as e:
-                logger.error("Update failed for CNV#%s: %s", cnv_id, e)
-                failed_count += 1
+
+        # Update existing records — grouped by field-set, then bulk_update
+        # per group (was: 1 UPDATE query per record). Grouping is required
+        # to preserve the zero-overwrite rule: `data` may or may not include
+        # points/total_points/used_points/level_name depending on whether
+        # _fetch_membership succeeded for that customer, and bulk_update's
+        # `fields=` must match exactly what each object should have written —
+        # passing a field not actually set on some objects in the group would
+        # write that model field's Python default (e.g. 0) instead of
+        # leaving the DB value untouched.
+        if update_cnv_ids:
+            field_groups: dict = {}
+            for cnv_id, data in update_cnv_ids:
+                field_names = tuple(k for k in data.keys() if k != 'cnv_id')
+                obj = CNVCustomer(
+                    pk=existing_map[cnv_id],
+                    **{k: v for k, v in data.items() if k != 'cnv_id'},
+                )
+                field_groups.setdefault(field_names, []).append(obj)
+            for field_names, objs in field_groups.items():
+                try:
+                    CNVCustomer.objects.bulk_update(objs, fields=list(field_names), batch_size=500)
+                    updated_count += len(objs)
+                except Exception as e:
+                    logger.error("Bulk update failed for fields=%s: %s", field_names, e)
+                    failed_count += len(objs)
         
         logger.info(
             "_process_customer_batch: size=%d created=%d updated=%d failed=%d",
@@ -421,22 +440,29 @@ class CNVSyncService:
         # Bulk create new records
         if new_orders:
             try:
-                CNVOrder.objects.bulk_create(new_orders, ignore_conflicts=True)
+                CNVOrder.objects.bulk_create(new_orders, ignore_conflicts=True, batch_size=500)
                 created_count = len(new_orders)
             except Exception as e:
                 logger.error("Bulk create failed: %s", e)
                 failed_count += len(new_orders)
 
-        # Update existing records
-        for code, data in update_codes:
+        # Update existing records — single bulk_update (was: 1 UPDATE query
+        # per record). Unlike customers, `_transform_order` always sets every
+        # field unconditionally, so there is no zero-overwrite risk here and
+        # no need to group by field-set — `order_code` is the model's pk
+        # (declared non-auto in the model), so it can be used directly.
+        if update_codes:
+            update_fields = [k for k in next(iter(update_codes))[1].keys() if k != 'order_code']
+            objs = [
+                CNVOrder(pk=code, **{k: v for k, v in data.items() if k != 'order_code'})
+                for code, data in update_codes
+            ]
             try:
-                CNVOrder.objects.filter(order_code=code).update(**{
-                    k: v for k, v in data.items() if k != 'order_code'
-                })
-                updated_count += 1
+                CNVOrder.objects.bulk_update(objs, fields=update_fields, batch_size=500)
+                updated_count += len(objs)
             except Exception as e:
-                logger.error("Update failed for order %s: %s", code, e)
-                failed_count += 1
+                logger.error("Bulk update failed for orders: %s", e)
+                failed_count += len(objs)
 
         return created_count, updated_count, failed_count
 

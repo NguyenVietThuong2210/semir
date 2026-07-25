@@ -47,10 +47,17 @@ def get_shop_detail_sales_data(shop_name: str, date_from=None, date_to=None) -> 
 
     FIELDS = ('vip_id', 'sales_date', 'invoice_number', 'sales_amount', 'shop_name')
 
-    # ── Load ALL-TIME sales for this shop (no date filter) ────────────────────
-    all_time_list = list(
-        SalesTransaction.objects.filter(shop_name=shop_name).values(*FIELDS).order_by()
-    )
+    # ── Load ALL-TIME sales for this shop (no date filter) — cached 5 min,
+    # same pattern as _load_sales() and info_map below. The date_from/date_to
+    # filter always runs in Python AFTER this (cache-hit or not), so caching
+    # here never affects period-filtered results.
+    _alltime_key = f"shop_detail_sales_alltime:{shop_name}"
+    all_time_list = _djc2.get(_alltime_key)
+    if all_time_list is None:
+        all_time_list = list(
+            SalesTransaction.objects.filter(shop_name=shop_name).values(*FIELDS).order_by()
+        )
+        _djc2.set(_alltime_key, all_time_list, 300)
     if not all_time_list:
         return None
 
@@ -159,10 +166,17 @@ def get_shop_detail_customer_data(registration_store: str,
     pos_phones_all, cnv_phones_all = _get_cnv_phone_sets()
 
     # ── Period data (includes breakdowns) ─────────────────────────────────────
+    # Perf plan P3-03: store_filter=None (company-wide) instead of scoping to
+    # this shop. Verified: store_filter only short-circuits rows for OTHER
+    # shops (an early `continue`), so the accumulated numbers for THIS shop
+    # are bit-for-bit identical either way — but with store_filter=None the
+    # cache key becomes period-only (not period+shop), so viewing N different
+    # shops within the 300s cache window costs 1 full computation instead of
+    # N. The label-based lookup below is unchanged.
     bd_period = compute_cnv_breakdown(
         period_filter, pos_phones_all, cnv_phones_all,
         dims=frozenset({'shop', 'season_shop', 'month_shop', 'week_shop'}),
-        store_filter=registration_store,
+        store_filter=None,
     )
     period_summary = next((r for r in bd_period['shop'] if r['label'] == registration_store), None)
     detail         = next((sh for sh in bd_period['shop_detail'] if sh['shop'] == registration_store), None)
@@ -178,7 +192,7 @@ def get_shop_detail_customer_data(registration_store: str,
         bd_at = compute_cnv_breakdown(
             {}, pos_phones_all, cnv_phones_all,
             dims=frozenset({'shop'}),
-            store_filter=registration_store,
+            store_filter=None,
         )
         at_summary = next((r for r in bd_at['shop'] if r['label'] == registration_store), None)
 

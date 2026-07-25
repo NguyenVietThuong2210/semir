@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models.functions import Upper
+from django.contrib.postgres.indexes import GinIndex, OpClass
 
 
 class InventorySnapshot(models.Model):
@@ -38,6 +40,16 @@ class InventorySnapshot(models.Model):
             models.Index(fields=['shop_name', 'brand']),
             models.Index(fields=['year', 'season']),
             models.Index(fields=['sku', 'shop_id']),
+            # P1-09: product_code__istartswith needs text_pattern_ops, same
+            # reason as P1-08 in App/models/coupon.py — Postgres-only DDL.
+            models.Index(
+                OpClass(Upper('product_code'), name='text_pattern_ops'),
+                name='invsnap_upper_prodcode_idx',
+            ),
+            # P1-12: shop_name__icontains (shop-group filter) — Postgres only.
+            # QA deep-dive (2026-07-19): must index Upper(shop_name), not the raw
+            # column — see the detailed comment in App/models/coupon.py for why.
+            GinIndex(OpClass(Upper('shop_name'), name='gin_trgm_ops'), name='invsnap_shop_trgm_gin'),
         ]
 
     def __str__(self):

@@ -14,6 +14,8 @@ from urllib.parse import urlparse, parse_qs
 from bs4 import BeautifulSoup
 import secrets
 
+from App.cnv.rate_limit import get_membership_rate_limiter
+
 logger = logging.getLogger(__name__)
 
 # Default max pages per sync run (PAGE_SIZE=100 records/page → 10,000 records).
@@ -426,6 +428,11 @@ class CNVAPIClient:
         
         while page <= max_pages:
             try:
+                # Shares the membership rate limiter's budget (rather than a
+                # separate one) so the COMBINED rate of list pagination +
+                # membership fetches — across every gunicorn worker — never
+                # exceeds the already-proven-safe cap (see rate_limit.py).
+                get_membership_rate_limiter().acquire()
                 response = self.get_customers(
                     page=page,
                     page_size=self.PAGE_SIZE,
@@ -542,6 +549,7 @@ class CNVAPIClient:
         
         while page <= max_pages:
             try:
+                get_membership_rate_limiter().acquire()
                 response = self.get_orders(
                     page=page,
                     page_size=self.PAGE_SIZE,

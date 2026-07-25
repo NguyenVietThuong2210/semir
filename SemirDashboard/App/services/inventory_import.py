@@ -13,7 +13,12 @@ from .file_reader import read_file, safe_str, safe_int, safe_decimal
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 400  # kept low: SQLite IN-clause limit is 999 variables
+# Perf plan P2-08: this file has no __in= queries, so the old "SQLite
+# IN-clause limit is 999 variables" comment was factually incorrect here —
+# the real constraint is PostgreSQL's 65,535 bulk_create parameter limit.
+# 2000 = floor(65535 / 25 fields incl. id) with margin, verified on real
+# PostgreSQL 16.
+BATCH_SIZE = 2000
 
 _COL_MAP = {
     'WAREHOUSE/SHOP ID':          'shop_id',
@@ -78,15 +83,19 @@ def _map_row(row):
     }
 
 
-def process_inventory_file(file, progress_fn=None):
+def process_inventory_file(file, progress_fn=None, df=None):
     """
     Process inventory xlsx/csv → TRUNCATE existing data, then INSERT all rows.
     Each upload replaces the entire inventory snapshot.
     Returns {created, deleted, skipped, errors}.
+
+    Perf plan P3-01: `df` lets the caller pass a DataFrame already parsed
+    during request-thread validation, avoiding a 2nd parse here.
     """
     logger.info("=== START Inventory Import (truncate+replace): %s ===", file.name,
                 extra={"step": "inventory_import"})
-    df = read_file(file)
+    if df is None:
+        df = read_file(file)
 
     # Normalize headers: strip + upper, then remap via _COL_MAP
     df.columns = df.columns.str.strip().str.upper()
@@ -105,10 +114,14 @@ def process_inventory_file(file, progress_fn=None):
     errors = []
     seen_keys = set()
 
-    for idx, row in df.iterrows():
+    # Perf plan P2-06: to_dict('records') once instead of iterrows() +
+    # .to_dict() per row — identical dict shape/values (NaN, dtype=str
+    # values round-trip the same either way).
+    _records = df.to_dict('records')
+    for idx, rec in zip(df.index, _records):
         row_num = idx + 2
         try:
-            data = _map_row(row.to_dict())
+            data = _map_row(rec)
             shop_id = data['shop_id']
             product_code = data['product_code']
 
