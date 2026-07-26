@@ -83,7 +83,7 @@ CNV_PASSWORD = settings.CNV_PASSWORD
 
 
 def sync_cnv_customers_only():
-    """Sync customers only. Runs every 10 min at :05,:15,:25,:35,:45,:55 (single leader worker)."""
+    """Sync customers only. Runs once per hour at :05 (single leader worker)."""
     logger.info("=" * 60)
     logger.info("STARTING CUSTOMERS SYNC JOB")
     logger.info("=" * 60)
@@ -146,7 +146,7 @@ def sync_cnv_customers_only():
 
 
 def sync_cnv_orders_only():
-    """Sync orders only. Runs every 10 min at :00,:10,:20,:30,:40,:50 (single leader worker)."""
+    """Sync orders only. Runs once per hour at :10 (single leader worker)."""
     logger.info("=" * 60)
     logger.info("STARTING ORDERS SYNC JOB")
     logger.info("=" * 60)
@@ -312,20 +312,19 @@ def _build_and_start_scheduler(customers_trigger=None, orders_trigger=None,
         except Exception as exc:
             logger.warning("remove_all_jobs failed (continuing): %s", exc)
 
-    # Production cadence: every 10 minutes. (CronTrigger(minute="5") alone
-    # fires only once per hour — a single value is NOT the same as "every
-    # 10 min"; the comma-separated list is required.) Safe to run at this
-    # cadence now that a stale leader lock can only block a new leader for
-    # up to _LOCK_TTL seconds (was up to 15 min pre-2026-07-12 incident) and
-    # a non-leader worker keeps retrying instead of giving up permanently.
-    customers_desc = ("every 10 min at :05,:15,:25,:35,:45,:55" if customers_trigger is None
+    # Production cadence (changed 2026-07-26, was every 10 min): once per
+    # hour — customers at :05, orders at :10. A single CronTrigger(minute=N)
+    # value fires exactly once per hour (unlike the old comma-separated list
+    # which fired every 10 min); the two jobs are offset by 5 min so they
+    # don't both hit the CNV API / rate limiter at the same instant.
+    customers_desc = ("hourly at :05" if customers_trigger is None
                        else f"TEST/custom trigger {customers_trigger}")
-    orders_desc = ("every 10 min at :00,:10,:20,:30,:40,:50" if orders_trigger is None
+    orders_desc = ("hourly at :10" if orders_trigger is None
                    else f"TEST/custom trigger {orders_trigger}")
 
     scheduler.add_job(
         sync_cnv_customers_only,
-        trigger=customers_trigger or CronTrigger(minute="5,15,25,35,45,55"),
+        trigger=customers_trigger or CronTrigger(minute="5"),
         id="cnv_customers_sync",
         max_instances=1,
         replace_existing=True,
@@ -335,7 +334,7 @@ def _build_and_start_scheduler(customers_trigger=None, orders_trigger=None,
 
     scheduler.add_job(
         sync_cnv_orders_only,
-        trigger=orders_trigger or CronTrigger(minute="0,10,20,30,40,50"),
+        trigger=orders_trigger or CronTrigger(minute="10"),
         id="cnv_orders_sync",
         max_instances=1,
         replace_existing=True,

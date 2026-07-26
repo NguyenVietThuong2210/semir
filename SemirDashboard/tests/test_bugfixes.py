@@ -544,16 +544,16 @@ class SchedulerLeaderLockTest(TestCase):
             self.assertFalse(sch._try_become_leader_and_start())
         self.assertIn("worker-B", logs.output[0])
 
-    def test_cron_is_every_10_minutes(self):
-        """C-09 (restored 2026-07-14): now that the leader lock self-heals
-        (short TTL + retry loop), the intended 10-min cadence is safe to run
-        again — a single CronTrigger(minute="5") value fires only once/hour,
-        the comma-separated list is required for true 10-min cadence."""
+    def test_cron_is_hourly(self):
+        """2026-07-26: cadence reduced from every 10 min to once per hour —
+        customers at :05, orders at :10 (5-min offset so they don't both hit
+        the CNV API at the same instant). A single CronTrigger(minute="5")
+        value fires exactly once per hour."""
         import inspect
         from App.cnv import scheduler as sch
         src = inspect.getsource(sch._build_and_start_scheduler)
-        self.assertIn('CronTrigger(minute="5,15,25,35,45,55")', src)
-        self.assertIn('CronTrigger(minute="0,10,20,30,40,50")', src)
+        self.assertIn('CronTrigger(minute="5")', src)
+        self.assertIn('CronTrigger(minute="10")', src)
         self.assertIn("remove_all_jobs", src)  # stale-trigger clear
 
 
@@ -603,7 +603,7 @@ class SchedulerCronMechanicsLocalTest(TestCase):
             scheduler = sch._build_and_start_scheduler(
                 customers_trigger=IntervalTrigger(seconds=1),
                 # orders_trigger left as default (production CronTrigger,
-                # every 10 min — will NOT fire during this short test)
+                # hourly — will NOT fire during this short test)
                 use_django_jobstore=False,
                 refresh_lock=False,
             )
