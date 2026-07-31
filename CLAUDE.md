@@ -26,7 +26,7 @@ cd SemirDashboard && python manage.py runserver
 cd SemirDashboard && python manage.py makemigrations
 cd SemirDashboard && python manage.py migrate
 
-# CNV loyalty sync (manual, one-off — scheduled cron runs every 10 min via App/cnv/scheduler.py)
+# CNV loyalty sync (manual, one-off — scheduled cron runs hourly via App/cnv/scheduler.py: customers :05, orders :10)
 cd SemirDashboard && python manage.py sync_cnv --customers
 cd SemirDashboard && python manage.py sync_cnv --orders
 

@@ -14,11 +14,10 @@ from .file_reader import read_file, safe_str, safe_int, safe_decimal, parse_date
 
 logger = logging.getLogger(__name__)
 
-# Perf plan P2-08: 1700 = floor(65535 / 33 fields incl. id) with margin,
-# verified on real PostgreSQL 16. Must match the bulk_create batch_size below
-# — previously outer=400 < inner=1000 made the inner cap a no-op; now they're
-# equal so both bound the same thing consistently.
-BATCH_SIZE = 1700
+# 2026-07-26: reverted from 1700 to 1000 (uniform across all upload types —
+# see customer_import.py for the OOM incident this fixes). This constant
+# also bounds the bulk_create batch_size directly below.
+BATCH_SIZE = 1000
 
 _COL_MAP = {
     'INVOICE NUMBER':    'invoice_number',

@@ -110,8 +110,8 @@ APScheduler jobs, started via `start_scheduler()` → single-leader election →
 
 | Job | Schedule | Purpose |
 |-----|----------|---------|
-| `sync_cnv_customers_only` | Every 10 min at :05,:15,:25,:35,:45,:55 | Incremental customer sync |
-| `sync_cnv_orders_only` | Every 10 min at :00,:10,:20,:30,:40,:50 | Incremental order sync |
+| `sync_cnv_customers_only` | Hourly at :05 (changed 2026-07-26, was every 10 min) | Incremental customer sync |
+| `sync_cnv_orders_only` | Hourly at :10 (changed 2026-07-26, was every 10 min) | Incremental order sync |
 | `scheduler_lock_refresh` | Every `_LOCK_REFRESH`s (40s) | Keeps this worker's leader lock alive |
 | `delete_old_job_executions` | Daily at 2:00 AM | Cleanup old job records (7d retention) |
 

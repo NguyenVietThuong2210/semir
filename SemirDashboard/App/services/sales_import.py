@@ -138,8 +138,9 @@ def process_sales_file(file, progress_fn=None, df=None):
         with transaction.atomic():
             # Bulk create new transactions
             if batch_creates:
-                # 3000: floor(65535 params / 18 fields incl. id) with margin — verified on real PostgreSQL 16.
-                SalesTransaction.objects.bulk_create(batch_creates, batch_size=3000, ignore_conflicts=True)
+                # 2026-07-26: reverted from 3000 to 1000 (uniform across all
+                # upload types — see customer_import.py for the OOM incident this fixes)
+                SalesTransaction.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
                 created += len(batch_creates)
                 logger.info("[Batch %d] created=%d", batch_num, len(batch_creates))
 
@@ -160,10 +161,8 @@ def process_sales_file(file, progress_fn=None, df=None):
                                'vip_id', 'vip_name', 'quantity', 'settlement_amount',
                                'sales_amount', 'tag_amount', 'per_customer_transaction',
                                'discount', 'rounding', 'customer'],
-                        # 1800: bulk_update costs ~2 params/field + 1 (CASE WHEN
-                        # per field), not 1 like bulk_create — floor(65535/(2*15+1))
-                        # with margin, verified on real PostgreSQL 16.
-                        batch_size=1800
+                        # 2026-07-26: reverted from 1800 to 1000 (see bulk_create above)
+                        batch_size=1000
                     )
                     updated += len(transactions_to_update)
                     logger.info("[Batch %d] updated=%d", batch_num, len(transactions_to_update))

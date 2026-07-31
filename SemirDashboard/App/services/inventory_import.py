@@ -13,12 +13,10 @@ from .file_reader import read_file, safe_str, safe_int, safe_decimal
 
 logger = logging.getLogger(__name__)
 
-# Perf plan P2-08: this file has no __in= queries, so the old "SQLite
-# IN-clause limit is 999 variables" comment was factually incorrect here —
-# the real constraint is PostgreSQL's 65,535 bulk_create parameter limit.
-# 2000 = floor(65535 / 25 fields incl. id) with margin, verified on real
-# PostgreSQL 16.
-BATCH_SIZE = 2000
+# 2026-07-26: reverted from 2000 to 1000 (uniform across all upload types —
+# see customer_import.py for the OOM incident this fixes). This constant
+# also bounds the bulk_create batch_size directly below.
+BATCH_SIZE = 1000
 
 _COL_MAP = {
     'WAREHOUSE/SHOP ID':          'shop_id',

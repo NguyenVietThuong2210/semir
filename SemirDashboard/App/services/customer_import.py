@@ -123,8 +123,12 @@ def process_customer_file(file, progress_fn=None, df=None):
         with transaction.atomic():
             # Bulk create new customers
             if batch_creates:
-                # 2600: floor(65535 params / 22 fields incl. id) with margin — verified on real PostgreSQL 16.
-                Customer.objects.bulk_create(batch_creates, batch_size=2600, ignore_conflicts=True)
+                # 2026-07-26: reverted from 2600 to 1000 (uniform across all
+                # upload types) — the larger batch made each single SQL
+                # statement (more CASE WHEN/params) heavy enough on a
+                # memory-constrained (1.9GB) prod host to contribute to an
+                # OOM incident. 1000 trades some throughput for headroom.
+                Customer.objects.bulk_create(batch_creates, batch_size=1000, ignore_conflicts=True)
                 created += len(batch_creates)
                 logger.info("[Batch %d] created=%d", batch_num, len(batch_creates))
 
@@ -144,9 +148,8 @@ def process_customer_file(file, progress_fn=None, df=None):
                                'gender', 'birthday', 'city_state', 'postal_code', 'country',
                                'email', 'contact_address', 'registration_store',
                                'registration_date', 'points'],
-                        # 1800: bulk_update costs ~2 params/field + 1, not 1
-                        # like bulk_create — floor(65535/(2*15+1)) with margin.
-                        batch_size=1800
+                        # 2026-07-26: reverted from 1800 to 1000 (see bulk_create above)
+                        batch_size=1000
                     )
                     updated += len(customers_to_update)
                     logger.info("[Batch %d] updated=%d", batch_num, len(customers_to_update))
@@ -282,8 +285,9 @@ def process_used_points_file(file, progress_fn=None, df=None):
                 updated += 1  # counts per FILE ROW matched, not deduped — see comment above
 
             if pending:
+                # 2026-07-26: reverted from 1800 to 1000 (see process_customer_file above)
                 Customer.objects.bulk_update(
-                    list(pending.values()), ['used_points', 'used_points_note'], batch_size=1800
+                    list(pending.values()), ['used_points', 'used_points_note'], batch_size=1000
                 )
 
         if progress_fn:
