@@ -526,7 +526,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="0rKCjrxmQI2sdCwYXX30pA8UoQDuE1PTbbO6ztVljOjRAJG5tFH9vrEmBFsna2Al">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="soCUBBZzyZjaTmRiCwPdhawWHTgtcLZxZJLRN51PBmNSWFOZYFNQkB2ple7PG7i4">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -8801,6 +8801,16 @@
     /* ── Section 1 tabs ── */
     const tabCache = {'month': document.getElementById('tabContent').innerHTML};
     const loaded   = {'month': true};
+    /* 2026-08-13: fixes a real race — a slow tab's fetch resolving AFTER the
+       user has already clicked a different tab used to unconditionally
+       overwrite #tabContent with the stale tab's data while the newly
+       clicked tab's nav-link showed as active (confirmed via prod-visual:
+       "By VIP Grade" active but showing "By Season"/"By Product Season"
+       content). currentTab tracks which tab the user last asked for; a
+       response is only rendered if it's still the one the user is waiting
+       on — a superseded response still updates the cache (so clicking back
+       to it later is instant) but never touches the visible DOM. */
+    let currentTab = 'month';
     document.querySelectorAll('#prodTabs .nav-link').forEach(function(link){
         link.addEventListener('click', function(e){
             e.preventDefault();
@@ -8808,6 +8818,7 @@
             this.classList.add('active');
             const tab = this.dataset.tab;
             const url = this.dataset.lazyUrl;
+            currentTab = tab;
 
             if (loaded[tab]) {
                 /* Restore from cache — instant, no spinner */
@@ -8821,12 +8832,14 @@
             fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
                 .then(r => r.text())
                 .then(html => {
-                    document.getElementById('tabSpinner').style.display = 'none';
-                    document.getElementById('tabContent').innerHTML = html;
                     tabCache[tab] = html;
                     loaded[tab] = true;
+                    if (tab !== currentTab) return;   // superseded by a later click — cache only
+                    document.getElementById('tabSpinner').style.display = 'none';
+                    document.getElementById('tabContent').innerHTML = html;
                 })
                 .catch(err => {
+                    if (tab !== currentTab) return;
                     document.getElementById('tabSpinner').style.display = 'none';
                     document.getElementById('tabContent').innerHTML =
                         '<div class="alert alert-danger">Load error: ' + err.message + '</div>';

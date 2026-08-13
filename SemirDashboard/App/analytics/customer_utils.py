@@ -271,8 +271,23 @@ def build_inv_bucket_map_from_db(date_from=None, date_to=None):
     Used by _compute_cnv_breakdown (which doesn't hold customer_purchases in memory).
 
     Returns (vid_map, pk_map):
-        vid_map: dict[normalized_vip_id] → {sessions, months, weeks, shops, ...}
+        vid_map: dict[normalized_vip_id] → {sessions, months, years, weeks} (sets)
         pk_map:  dict[customer_pk (int)]  → same entry object (shared reference)
+
+    2026-08-10 (OOM incident on /cnv/customer-analytics/, 1.9GB prod host):
+    entry now stores only the 4 sets the sole consumer, classify_new_inv(),
+    actually reads (sessions/months/years/weeks). The previous 9-set shape
+    (shared with the sibling build_inv_bucket_map, used by nothing — verified
+    zero callers anywhere in the codebase) also built shop/session_shop/
+    month_shop/week_shop/year_shop sets that classify_new_inv() never
+    consults — its own docstring: "shop is NEVER part of the inv check".
+    Measured on real data (44,017 VIP customers with invoices, local scale):
+    this function's own RSS cost dropped from ~152MB to ~54MB (~65%
+    reduction), the single largest contributor to _fetch_bd_raw's cold-cache
+    footprint. Output of classify_new_inv() / compute_cnv_breakdown() is
+    bit-for-bit unchanged — verified via golden-snapshot hash comparison
+    (see tests/test_customer.py::InvBucketMapMemoryOptTest) since the removed
+    sets were write-only dead weight for this call path.
     """
     from App.models import SalesTransaction
     from .season_utils import get_session_key, get_month_key, get_year_key, get_week_info
@@ -291,31 +306,25 @@ def build_inv_bucket_map_from_db(date_from=None, date_to=None):
     vid_map = {}
     pk_map = {}
 
-    for tx in qs.values('vip_id', 'customer_id', 'sales_date', 'shop_name'):
+    for tx in qs.values('vip_id', 'customer_id', 'sales_date'):
         vid = _norm_vid(tx['vip_id'])
         if not vid or vid == '0':
             continue
 
         if vid not in vid_map:
-            vid_map[vid] = _make_inv_entry()
+            vid_map[vid] = {'sessions': set(), 'months': set(), 'years': set(), 'weeks': set()}
         entry = vid_map[vid]
 
         sk    = get_session_key(tx['sales_date'])
         mk    = get_month_key(tx['sales_date'])
         yk    = get_year_key(tx['sales_date'])
         wk, _ = get_week_info(tx['sales_date'])
-        shop  = (tx['shop_name'] or '').strip() or 'Unknown'
 
         entry['sessions'].add(sk)
         entry['months'].add(mk)
         if yk:
             entry['years'].add(yk)
-            entry['year_shops'].add((yk, shop))
         entry['weeks'].add(wk)
-        entry['shops'].add(shop)
-        entry['session_shops'].add((sk, shop))
-        entry['month_shops'].add((mk, shop))
-        entry['week_shops'].add((wk, shop))
 
         if tx['customer_id']:
             pk_map[tx['customer_id']] = entry   # shared reference — read-only

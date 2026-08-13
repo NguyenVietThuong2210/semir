@@ -18,6 +18,7 @@ import io
 import time
 from datetime import date, datetime
 
+from django.test import TestCase
 from django.utils import timezone
 
 from App.models import Customer
@@ -159,6 +160,88 @@ def _load_cnv_customers_from_csv():
         created += len(batch)
 
     return created, len(rows) - created
+
+
+class InvBucketMapMemoryOptTest(TestCase):
+    """2026-08-10 OOM incident (/cnv/customer-analytics/, 1.9GB prod host):
+    build_inv_bucket_map_from_db() used to build 9 sets per VIP customer
+    (sessions/months/years/weeks/shops/session_shops/month_shops/week_shops/
+    year_shops); classify_new_inv() — its only consumer — reads just 4
+    (sessions/months/years/weeks), confirmed by its own docstring: "shop is
+    NEVER part of the inv check". The other 5 were write-only dead weight,
+    measured at ~65% of this function's own memory cost. Fixed to build only
+    the 4 read sets. These tests lock in that classify_new_inv()'s return
+    value is unaffected — the whole point of the optimization is that NOTHING
+    observable changes, only the unused sets disappear."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from App.models import Customer as POSCustomer, SalesTransaction
+        cust = POSCustomer.objects.create(vip_id="V1", phone="0900000001", name="A")
+        # 3 invoices for V1 spanning 2 different shops/months — if shop-keyed
+        # sets were still being read anywhere, mixing shops here would catch it.
+        SalesTransaction.objects.create(
+            invoice_number="INV1", vip_id="V1", customer=cust, shop_name="Shop A", quantity=1,
+            sales_date=date(2025, 3, 15), settlement_amount=100000, sales_amount=100000,
+        )
+        SalesTransaction.objects.create(
+            invoice_number="INV2", vip_id="V1", customer=cust, shop_name="Shop B", quantity=1,
+            sales_date=date(2025, 3, 20), settlement_amount=200000, sales_amount=200000,
+        )
+        SalesTransaction.objects.create(
+            invoice_number="INV3", vip_id="V1", customer=cust, shop_name="Shop A", quantity=1,
+            sales_date=date(2025, 8, 5), settlement_amount=150000, sales_amount=150000,
+        )
+
+    def test_entry_shape_has_only_4_sets(self):
+        from App.analytics.customer_utils import build_inv_bucket_map_from_db
+        vid_map, pk_map = build_inv_bucket_map_from_db(date(2025, 1, 1), date(2025, 12, 31))
+        entry = vid_map["V1"]
+        self.assertEqual(set(entry.keys()), {"sessions", "months", "years", "weeks"},
+                          "entry must contain exactly the 4 sets classify_new_inv() reads — "
+                          "no shop/session_shop/month_shop/week_shop/year_shop dead weight")
+
+    def test_classify_new_inv_unaffected_by_optimization(self):
+        """The actual behavioral contract: same registration bucket → still
+        classified as having an invoice, for both the season and month checks,
+        across 2 different shops (proves shop was never load-bearing)."""
+        from App.analytics.customer_utils import build_inv_bucket_map_from_db, classify_new_inv
+        from App.analytics.season_utils import get_session_key, get_month_key, get_year_key
+        vid_map, pk_map = build_inv_bucket_map_from_db(date(2025, 1, 1), date(2025, 12, 31))
+        entry = vid_map["V1"]
+
+        reg_sk = get_session_key(date(2025, 3, 10))   # same season as INV1/INV2 (Mar, 2 shops)
+        reg_mk = get_month_key(date(2025, 3, 10))
+        reg_yk = get_year_key(date(2025, 3, 10))
+        chk = classify_new_inv(entry, reg_sk=reg_sk, reg_mk=reg_mk, reg_yk=reg_yk)
+        self.assertTrue(chk["any"])
+        self.assertTrue(chk["season"], "invoice exists in registration season (across 2 shops)")
+        self.assertTrue(chk["month"], "invoice exists in registration month")
+        self.assertTrue(chk["year"])
+
+        # A month with no invoice at all → must be False, not just missing
+        reg_mk_empty = get_month_key(date(2025, 11, 1))
+        chk_empty = classify_new_inv(entry, reg_mk=reg_mk_empty)
+        self.assertFalse(chk_empty["month"])
+
+    def test_pk_map_shares_same_entry_object_as_vid_map(self):
+        """pk_map[customer_id] must be the SAME object as vid_map[vid] (shared
+        reference, not a copy) — unchanged invariant from before the optimization."""
+        from App.models import Customer as POSCustomer
+        from App.analytics.customer_utils import build_inv_bucket_map_from_db
+        cust = POSCustomer.objects.get(vip_id="V1")
+        vid_map, pk_map = build_inv_bucket_map_from_db(date(2025, 1, 1), date(2025, 12, 31))
+        self.assertIs(pk_map[cust.id], vid_map["V1"])
+
+    def test_no_shop_data_leaks_into_entry_values(self):
+        """Regression guard: entry values must never contain 'Shop A'/'Shop B'
+        strings or (bucket, shop) tuples anywhere — proves shop truly dropped."""
+        from App.analytics.customer_utils import build_inv_bucket_map_from_db
+        vid_map, _ = build_inv_bucket_map_from_db(date(2025, 1, 1), date(2025, 12, 31))
+        entry = vid_map["V1"]
+        for value_set in entry.values():
+            for item in value_set:
+                self.assertNotIsInstance(item, tuple, f"found a (bucket, shop) tuple: {item!r}")
 
 
 class CNVCustomerImportTest(SnapshotTestCase):
