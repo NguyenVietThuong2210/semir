@@ -33,7 +33,13 @@ def _build_coupon_qs(coupon_id_prefix=None, shop_group=None, date_from=None, dat
     Returns (qs, period_qs).
     """
     from App.models import Coupon
-    qs = Coupon.objects.all()
+    # .order_by(): Coupon has no Meta.ordering — without this, row order is
+    # undefined on Postgres and can vary between executions of the same
+    # query (see the identical fix in calculate_coupon_analytics(),
+    # coupon_analytics.py). Callers that need a different order (e.g.
+    # _coupon_detail_tab's '-using_date') re-.order_by() with an explicit
+    # 'coupon_id' tie-breaker rather than relying on this default surviving.
+    qs = Coupon.objects.all().order_by('coupon_id')
 
     if using_shop_exact:
         qs = qs.filter(using_shop=using_shop_exact)
@@ -139,10 +145,16 @@ def _coupon_shop_tab(date_from, date_to, coupon_id_prefix, shop_group):
         _all_used, fetch_docket_txn_amounts(_all_used), falsy_uses_face_value=True
     )
 
-    # All-time duplicate count (aggregate query — no row fetch)
+    # All-time duplicate count (aggregate query — no row fetch). .order_by()
+    # clears qs's 'coupon_id' ordering before .values()/.annotate() —
+    # otherwise it leaks into the GROUP BY (same footgun CLAUDE.md documents
+    # for .distinct()), making every group size 1 and silently zeroing this
+    # count (discovered 2026-08-30, same root cause as the fix in
+    # coupon_analytics.py's _dup_dockets_period).
     _dup_all_count = (
         qs.filter(using_date__isnull=False, docket_number__isnull=False)
         .exclude(docket_number='')
+        .order_by()
         .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1).count()
     )
 
@@ -157,10 +169,12 @@ def _coupon_shop_tab(date_from, date_to, coupon_id_prefix, shop_group):
         .values('invoice_number', 'sales_amount')
     }
 
-    # Period duplicate count
+    # Period duplicate count — .order_by() clears the leaked ordering, see
+    # comment on _dup_all_count above.
     _dup_period_count = (
         period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
         .exclude(docket_number='')
+        .order_by()
         .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1).count()
     )
 
@@ -199,9 +213,11 @@ def _coupon_shop_tab(date_from, date_to, coupon_id_prefix, shop_group):
             shop_data[shop]['seen_dockets'].add(dk)
             shop_data[shop]['unique_amount'] += inv_amount
 
-    # Add unused coupon counts per shop (aggregate — no row fetch)
+    # Add unused coupon counts per shop (aggregate — no row fetch).
+    # .order_by() clears the leaked ordering, see comment on _dup_all_count above.
     for _row in (
         period_qs.filter(using_date__isnull=True)
+        .order_by()
         .values('using_shop').annotate(_cnt=Count('id'))
     ):
         shop = _row['using_shop'] or 'Unknown'
@@ -272,16 +288,23 @@ def _coupon_detail_tab(date_from, date_to, coupon_id_prefix, shop_group):
     _, period_qs = _build_coupon_qs(coupon_id_prefix, shop_group, date_from, date_to)
 
     # Duplicate detection for is_duplicate flag (aggregate, no row fetch)
+    # .order_by() clears the leaked ordering, see comment on _dup_all_count above.
     _dup_set = set(
         period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
         .exclude(docket_number='')
+        .order_by()
         .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1)
         .values_list('docket_number', flat=True)
     )
 
-    # Fetch period used coupons (all fields needed for details)
+    # Fetch period used coupons (all fields needed for details). 'coupon_id'
+    # tie-breaker: using_date alone is not unique — without this, row order
+    # for same-day ties is undefined on Postgres (discovered 2026-08-30
+    # switching dev to Postgres; see the identical fix + comment in
+    # calculate_coupon_analytics(), coupon_analytics.py — this is a separate
+    # "lean" implementation of the same Detail tab, not shared code).
     _period_used = list(
-        period_qs.filter(using_date__isnull=False).order_by('-using_date')
+        period_qs.filter(using_date__isnull=False).order_by('-using_date', 'coupon_id')
     )
     if not _period_used:
         return {'details': []}
@@ -391,9 +414,11 @@ def _coupon_duplicates_tab(date_from, date_to, coupon_id_prefix, shop_group):
     _, period_qs = _build_coupon_qs(coupon_id_prefix, shop_group, date_from, date_to)
 
     # Detect duplicate dockets
+    # .order_by() clears the leaked ordering, see comment on _dup_all_count above.
     _dup_dockets = set(
         period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
         .exclude(docket_number='')
+        .order_by()
         .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1)
         .values_list('docket_number', flat=True)
     )

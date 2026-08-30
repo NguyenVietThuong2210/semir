@@ -88,6 +88,13 @@ type: project
 | `/inventory/` | `inventory_dashboard` | requires `inventory.view` — InventorySnapshot-based |
 | `/inventory/export/` | `export_inventory_dead_stock` | requires `inventory.export` — dead stock CSV |
 
+### Customer Membership
+| URL | View | Notes |
+|-----|------|-------|
+| `/membership/` | `membership_dashboard` | requires `membership.view` — grade KPI comparison + trend chart + tier table |
+| `/membership/backfill-import/` | `membership_backfill_import` | POST only, requires `membership.import` — uploads a historical customer export, creates a `manual_import` snapshot batch for a PO-chosen date, never touches the live `Customer` table |
+| `/membership/partial/table/` | `membership_table_partial` | AJAX partial, requires `membership.view` — customer tier-progress table for a given batch |
+
 ### Admin
 | URL | View | Notes |
 |-----|------|-------|

@@ -143,7 +143,14 @@ def calculate_coupon_analytics(
     Returns:
         Dict with all_time, period, by_shop, and details data
     """
-    qs = Coupon.objects.all()
+    # .order_by() required: Coupon has no Meta.ordering, so without this the
+    # row order (and therefore `details`' row order below) is undefined —
+    # Postgres does not guarantee any particular order absent ORDER BY and
+    # can vary between executions of the same query (discovered 2026-08-30
+    # switching dev to Postgres: a snapshot test regenerated against this
+    # query produced a DIFFERENT arbitrary row on a second, otherwise
+    # identical run).
+    qs = Coupon.objects.all().order_by('coupon_id')
 
     # Apply shop group filter using icontains
     if shop_group:
@@ -245,9 +252,14 @@ def calculate_coupon_analytics(
         for t in SalesTransaction.objects.filter(invoice_number__in=_all_dockets)
     }
 
-    # Period used coupons + bulk-fetch their transactions
+    # Period used coupons + bulk-fetch their transactions. 'coupon_id'
+    # tie-breaker: using_date alone is not unique (many coupons can share the
+    # same calendar day), and .order_by() here REPLACES qs's top-level
+    # ordering rather than extending it — without this, `coupon_details`
+    # (built by iterating this list below) has undefined order for same-day
+    # ties on Postgres (discovered 2026-08-30 switching dev to Postgres).
     _period_used_coupons = list(
-        period_qs.filter(using_date__isnull=False).order_by("-using_date")
+        period_qs.filter(using_date__isnull=False).order_by("-using_date", "coupon_id")
     )
     _period_dockets = [c.docket_number for c in _period_used_coupons if c.docket_number]
     txn_map_period = {
@@ -281,10 +293,16 @@ def calculate_coupon_analytics(
         .values_list("docket_number", flat=True)
     )
 
-    # Period duplicates (within filtered qs)
+    # Period duplicates (within filtered qs). .order_by() clears qs's
+    # 'coupon_id' ordering before .values()/.annotate() — otherwise it leaks
+    # into the GROUP BY (same footgun CLAUDE.md documents for .distinct()),
+    # making every group size 1 and silently zeroing all duplicate counts
+    # (discovered 2026-08-30: introduced by the .order_by('coupon_id') fix
+    # for non-deterministic row order elsewhere in this same file).
     _dup_dockets_period = set(
         period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
         .exclude(docket_number="")
+        .order_by()
         .values("docket_number")
         .annotate(_c=_Count("id"))
         .filter(_c__gt=1)
@@ -440,10 +458,12 @@ def calculate_coupon_analytics(
             }
         )
 
-    # Add unused coupons to shop totals — single aggregate query, no row fetch
+    # Add unused coupons to shop totals — single aggregate query, no row fetch.
+    # .order_by() clears the leaked ordering, see comment on _dup_dockets_period above.
     from django.db.models import Count as _CntU
     _unused_by_shop = (
         period_qs.filter(using_date__isnull=True)
+        .order_by()
         .values('using_shop')
         .annotate(_cnt=_CntU('id'))
     )

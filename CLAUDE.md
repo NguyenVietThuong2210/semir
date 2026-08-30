@@ -19,6 +19,10 @@ If nothing changed in a layer, no update is needed — but the review is still r
 ## Commands
 
 ```bash
+# Local dev database (Postgres 16, matching prod's engine — run once per machine reboot,
+# not the same file as docker-compose.yml which is the real prod stack pulled by scripts/deploy.sh)
+docker compose -f docker-compose.local.yml up -d
+
 # Dev server (from repo root)
 cd SemirDashboard && python manage.py runserver
 
@@ -84,7 +88,7 @@ from django.contrib.auth.models import User
 with override_settings(ALLOWED_HOSTS=['*']):
     c = Client()
     c.force_login(User.objects.filter(is_superuser=True).first())
-    pages = ['/', '/analytics/', '/analytics/chart/', '/coupons/', '/coupons/chart/', '/shop-detail/', '/cnv/customer-analytics/', '/cnv/sync-status/']
+    pages = ['/', '/analytics/', '/analytics/chart/', '/coupons/', '/coupons/chart/', '/shop-detail/', '/cnv/customer-analytics/', '/cnv/sync-status/', '/membership/']
     for p in pages:
         r = c.get(p, follow=True, SERVER_NAME='localhost')
         print(f'[{r.status_code}] {p}')
@@ -198,6 +202,8 @@ M11-1 label format: `M11-1 2024-2025` (not `2025/2026`). Jan belongs to the *nex
 
 **Coupon campaign prefix** — `CouponCampaign.prefix` is comma-separated. A coupon belongs to a campaign if its `coupon_id` starts with any prefix in the list.
 
+**Membership grade upgrade thresholds** (`App/analytics/calculations.py`) — locked, PO-confirmed 2026-08-14: Silver ≥6,000,000 / Gold ≥12,000,000 / Diamond ≥20,000,000 VND annual spend (calendar year, Jan 1 → date). Downgrade thresholds are informational only — no grade-change-date data exists to enforce them. See `docs/project_business_logic.md` → "Customer Membership Snapshot Rules".
+
 ## Test Infrastructure
 
 Tests extend `SnapshotTestCase` from `tests/base.py`. Key features:
@@ -209,7 +215,7 @@ All tests that load fixture data (74k customers + 118k sales + 239k coupons) sho
 
 ## Database Notes
 
-Dev: SQLite3 (`SemirDashboard/db.sqlite3`). Prod: PostgreSQL 16.
+Dev: PostgreSQL 16 via `docker compose -f docker-compose.local.yml up -d` (was SQLite3 until 2026-08-14 — switched so Postgres-only code paths, e.g. GinIndex/trigram search, actually run in tests instead of being skipped). Prod: PostgreSQL 16. `SemirDashboard/db.sqlite3` still exists as a legacy fallback only if `DB_HOST` is unset — not the normal dev path anymore.
 
 `Meta.ordering` on `SalesTransaction` and `Customer` models affects `.distinct()` queries — always call `.order_by()` before `.distinct()` to clear model ordering. Indexes exist on `shop_name`, `registration_store`, `using_shop` (migration 0012).
 

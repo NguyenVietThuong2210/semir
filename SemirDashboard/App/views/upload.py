@@ -140,7 +140,24 @@ def upload_customers(request):
                 return redirect("upload_customers")
             job_id = create_job("customers", f.name, file_hash=file_hash)
             logger.info("upload_customers queued job=%s file=%s user=%s", job_id, f.name, request.user, extra={"step": "upload_customers"})
-            _start_thread(job_id, process_customer_file, file_bytes, f.name, None, df)
+
+            uploaded_by = request.user if request.user.is_authenticated else None
+
+            def _membership_done():
+                # Must swallow its own exceptions: on_done_fn() runs inside
+                # the same try block as the import itself in _run_upload(),
+                # so an uncaught error here would flip the whole (already-
+                # successful) customer-import job to status="error".
+                try:
+                    from App.services.membership_snapshot import create_auto_snapshot
+                    create_auto_snapshot(uploaded_by=uploaded_by)
+                except Exception:
+                    logger.exception(
+                        "membership auto-snapshot failed after customer upload job=%s", job_id,
+                        extra={"step": "membership_snapshot"},
+                    )
+
+            _start_thread(job_id, process_customer_file, file_bytes, f.name, _membership_done, df)
             messages.info(request, f"Upload started — tracking job {job_id[:8]}…")
             return redirect("upload_customers")
         else:

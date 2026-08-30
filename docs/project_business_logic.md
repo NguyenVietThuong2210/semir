@@ -48,10 +48,35 @@ Old definition (OBSOLETE): SS = Jan-Jun, AW = Jul-Dec.
 - `Customer.phone` ↔ `CNVCustomer.phone` (both db_indexed)
 - Cached phone sets via `get_cnv_phone_sets()` (10 min TTL)
 
+## Customer Membership Snapshot Rules (added 2026-08-14)
+**Files:** `App/models/membership.py`, `App/analytics/membership.py`, `App/analytics/calculations.py`, `App/services/membership_snapshot.py`, `App/views/membership.py`
+
+Because `Customer.vip_grade` is overwritten on every re-upload with no history kept, the app takes a **snapshot** of the already-computed per-customer state (grade, annual spend, points, annual purchase count) every time customer data changes, so the PO can compare grade-level member counts across time.
+
+**Upgrade thresholds (LOCKED, PO-confirmed 2026-08-14, system-wide, do not change without approval):** annual `settlement_amount` spend, calendar year Jan 1 → the snapshot/as-of date.
+| Grade | Annual spend threshold |
+|-------|------------------------|
+| Silver | ≥ 6,000,000 VND |
+| Gold | ≥ 12,000,000 VND |
+| Diamond | ≥ 20,000,000 VND |
+
+**Downgrade thresholds — INFORMATIONAL ONLY, not auto-enforced:** the rule is "purchase count within 1 year of the customer's last grade-change date," but that date does not exist anywhere in the source data (no such column on `Customer`, never read from the uploaded file). `MembershipSnapshot.grade_changed_at` is stored but always `NULL` — PO decision (confirmed): leave it blank rather than synthesize a proxy date.
+| Grade | Min annual purchases to avoid downgrade |
+|-------|-------------------------------------------|
+| Silver | 2 |
+| Gold | 3 |
+| Diamond | 4 |
+
+**Two snapshot mechanisms:**
+1. **Automatic** — triggered right after a customer upload finishes successfully (`_membership_done` hook in `App/views/upload.py::upload_customers`), snapshotting the entire current `Customer` table (not just the newly-uploaded delta). Runs in the same background thread as the import; failures are logged but never flip the customer-import job to `status="error"`.
+2. **Manual backfill import** — `/membership/backfill-import/`, PO uploads an old customer export file (same column format as the main customer import) and picks a historical `snapshot_date`. Parses the file independently (`_parse_customer_rows()`) and **never writes to the live `Customer` table**.
+
+**"No Grade" exclusion (PO feedback 2026-08-14):** the grade-level KPI views — `get_grade_breakdown()`, `compare_batches()`, `get_all_batch_grade_series()` (KPI comparison table, trend chart) — exclude the `'No Grade'` bucket entirely; it's not an actionable membership tier, just customers with a blank/missing `vip_grade`. Individual "No Grade" customers are still visible and filterable in the per-customer tier progress table (`get_customer_tier_table()`), since they have a genuine upgrade path to Silver. Separately, VIP ID `"0"` (buyer without info, already excluded from all other grade analytics in the codebase) is force-mapped to `'No Grade'` in the snapshot regardless of whatever raw `vip_grade` the import file carries for that row.
+
 ## Permissions System
 **File:** `App/permissions.py`
 
-24 permissions in `PERMISSION_DEFS`, named `{domain}.{action}` and grouped into 9 domains:
+26 permissions in `PERMISSION_DEFS`, named `{domain}.{action}` and grouped into 10 domains:
 
 | Codename | Display label | Domain group |
 |---|---|---|
@@ -79,6 +104,8 @@ Old definition (OBSOLETE): SS = Jan-Jun, AW = Jul-Dec.
 | `data.upload` | Upload Data | Data Management |
 | `data.formulas` | View Formulas | Data Management |
 | `admin.users` | Manage Users | Admin |
+| `membership.view` | View Customer Membership | Customer Membership |
+| `membership.import` | Backfill Membership Snapshot Import | Customer Membership |
 
 **Built-in:** `VIEWER_PERMISSIONS = ["sales.view", "products.view", "inventory.view"]` — minimal viewer role.
 

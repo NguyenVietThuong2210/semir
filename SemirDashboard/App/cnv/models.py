@@ -98,8 +98,13 @@ class CNVOrder(models.Model):
     order_code = models.CharField(max_length=100, primary_key=True)
     order_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
 
-    # Customer reference
-    customer_code = models.CharField(max_length=100, db_index=True)
+    # Customer reference — nullable like its sibling fields: a CNV order can
+    # legitimately arrive with no nested customer object AND no top-level
+    # customerCode fallback (_transform_order then produces None). This was
+    # silently masked in SQLite dev (INSERT OR IGNORE drops NOT NULL
+    # violations too, not just PK/unique conflicts) but is a hard error on
+    # Postgres (matching prod) — discovered 2026-08-30 switching dev to Postgres.
+    customer_code = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     customer_name = models.CharField(max_length=255, null=True, blank=True)
     customer_phone = models.CharField(max_length=50, null=True, blank=True)
 

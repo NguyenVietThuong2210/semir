@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -340,10 +341,13 @@ class CNVSyncService:
             else:
                 new_customers.append(CNVCustomer(**data))
 
-        # Bulk create new records
+        # Bulk create new records. Wrapped in its own atomic()/savepoint —
+        # see the matching comment in _process_order_batch for why: a failure
+        # here must not poison any surrounding transaction on Postgres.
         if new_customers:
             try:
-                CNVCustomer.objects.bulk_create(new_customers, ignore_conflicts=True, batch_size=500)
+                with transaction.atomic():
+                    CNVCustomer.objects.bulk_create(new_customers, ignore_conflicts=True, batch_size=500)
                 created_count = len(new_customers)
             except Exception as e:
                 logger.error("Bulk create failed: %s", e)
@@ -369,7 +373,8 @@ class CNVSyncService:
                 field_groups.setdefault(field_names, []).append(obj)
             for field_names, objs in field_groups.items():
                 try:
-                    CNVCustomer.objects.bulk_update(objs, fields=list(field_names), batch_size=500)
+                    with transaction.atomic():
+                        CNVCustomer.objects.bulk_update(objs, fields=list(field_names), batch_size=500)
                     updated_count += len(objs)
                 except Exception as e:
                     logger.error("Bulk update failed for fields=%s: %s", field_names, e)
@@ -437,10 +442,17 @@ class CNVSyncService:
             else:
                 new_orders.append(CNVOrder(**data))
 
-        # Bulk create new records
+        # Bulk create new records. Wrapped in its own atomic()/savepoint —
+        # without this, a failure here (e.g. a NOT NULL violation Postgres
+        # enforces but SQLite's INSERT OR IGNORE used to mask) leaves the
+        # whole surrounding transaction aborted on Postgres, so every later
+        # statement in the same transaction (e.g. sync_log.mark_completed())
+        # fails too with "current transaction is aborted" — discovered
+        # 2026-08-30 switching dev to Postgres.
         if new_orders:
             try:
-                CNVOrder.objects.bulk_create(new_orders, ignore_conflicts=True, batch_size=500)
+                with transaction.atomic():
+                    CNVOrder.objects.bulk_create(new_orders, ignore_conflicts=True, batch_size=500)
                 created_count = len(new_orders)
             except Exception as e:
                 logger.error("Bulk create failed: %s", e)
@@ -458,7 +470,8 @@ class CNVSyncService:
                 for code, data in update_codes
             ]
             try:
-                CNVOrder.objects.bulk_update(objs, fields=update_fields, batch_size=500)
+                with transaction.atomic():
+                    CNVOrder.objects.bulk_update(objs, fields=update_fields, batch_size=500)
                 updated_count += len(objs)
             except Exception as e:
                 logger.error("Bulk update failed for orders: %s", e)

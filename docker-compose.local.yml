@@ -1,0 +1,33 @@
+# Local development database ONLY — PostgreSQL 16, matching production's
+# engine. This is separate from docker-compose.yml (the real prod stack:
+# redis/db/web/nginx, pulled by scripts/deploy.sh on the server) so a local
+# `docker compose up` never collides with prod's file. Local dev previously
+# ran on SQLite; this gives Postgres-only code paths (GinIndex/trigram
+# search, migration 0021) a real backend so tests exercise them instead of
+# being skipped.
+#
+# Usage (from repo root):
+#   docker compose -f docker-compose.local.yml up -d      # start
+#   docker compose -f docker-compose.local.yml down       # stop (data persists in the volume)
+#   docker compose -f docker-compose.local.yml down -v    # stop AND wipe the local dev database
+services:
+  db:
+    image: postgres:16
+    container_name: semir_local_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-semir_db}
+      POSTGRES_USER: ${DB_USER:-semir_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-semir_local_dev_pw}
+    ports:
+      - "5432:5432"
+    volumes:
+      - semir_local_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-semir_user} -d ${DB_NAME:-semir_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  semir_local_pgdata:

@@ -20,6 +20,7 @@ JOB_TYPE_LABELS = {
     "coupons":      "Coupon Data",
     "inventory":    "Inventory Snapshot",
     "sale_detail":  "Sale Detail (Line Items)",
+    "membership_backfill": "Membership Backfill Snapshot",
 }
 
 _INDEX_KEY    = "upload_jobs_index"     # list of {"id": ..., "started_at": ...}

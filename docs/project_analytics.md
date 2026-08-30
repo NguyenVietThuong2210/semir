@@ -241,6 +241,26 @@ Returns `{}` for unknown shop. Otherwise:
 
 ---
 
+## Customer Membership Analytics (added 2026-08-14)
+**File:** `App/analytics/membership.py` — DB-touching aggregation/read helpers, feeding the pure rules in `App/analytics/calculations.py`. Models: `App/models/membership.py` → `MembershipSnapshotBatch`, `MembershipSnapshot`.
+
+| Function | Returns |
+|----------|---------|
+| `compute_annual_spend_map(as_of_date)` | `dict[normalized_vip_id] -> {annual_spend, annual_purchase_count}` — ONE grouped query over `SalesTransaction`, calendar year Jan 1 → `as_of_date` inclusive. `.order_by()` before `.values()/.annotate()` clears `SalesTransaction.Meta.ordering` (see Database Notes footgun). |
+| `list_batches()` | All `MembershipSnapshotBatch` rows, newest first |
+| `get_grade_breakdown(batch_id)` | `dict[grade] -> count`, only `DISPLAY_GRADES` keys present (4 — `GRADE_ORDER` minus `'No Grade'`; PO feedback 2026-08-14, "No Grade" is noise in the grade-level KPI view, not an actionable tier — do not `breakdown['No Grade']`, it will `KeyError`) |
+| `compare_batches(from_id, to_id)` | Per-grade `{grade, from_count, to_count, delta, delta_pct}` list, same `DISPLAY_GRADES` exclusion |
+| `get_all_batch_grade_series()` | Chronological list across ALL batches, for the trend chart, same `DISPLAY_GRADES` exclusion |
+| `get_customer_tier_table(batch_id, grade_filter, shop_filter, sort, limit=500)` | Returns `(rows, total_count)` tuple — `rows` is per-customer data + `next_grade`/`amount_to_next_tier` (via `calculations.next_tier_info()`), sorted ascending by amount remaining by default, capped at `limit` (an unfiltered batch can hold tens of thousands of rows — rendering them all into one AJAX response is a real payload/DOM problem); `total_count` is the full filtered count before the cap, for a "showing top N of TOTAL" UI message. Pass `limit=None` for the full set. Individual "No Grade" customers ARE returned here (unlike the grade-level functions above) — they have a real upgrade path to Silver via `next_tier_info()`. |
+
+**Pure rules** (`App/analytics/calculations.py`, no DB access): `GRADE_UPGRADE_THRESHOLDS`, `GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES` (informational only), `next_tier_info(grade, annual_spend)`. See `docs/project_business_logic.md` → "Customer Membership Snapshot Rules" for the locked threshold values and the two snapshot mechanisms (auto on customer-upload completion, manual backfill import).
+
+Reuses `normalize_grade`/`GRADE_ORDER`/`_norm_vid` from `App/analytics/customer_utils.py` — do not redefine. `DISPLAY_GRADES` lives in `App/analytics/membership.py` itself (derived from `GRADE_ORDER`), not in `customer_utils.py`.
+
+VIP ID `"0"` (buyer without info) is force-mapped to grade `'No Grade'` in `App/services/membership_snapshot.py::_build_rows()` regardless of the raw `vip_grade` value on the row — matches the exclusion rule enforced everywhere else in the codebase (`customer_utils.get_ci`, `aggregators.py`, `core.py`, `sales_tabs.py`).
+
+---
+
 ## Analytics Module Summary
 
 | File | Purpose |

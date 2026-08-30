@@ -54,3 +54,23 @@ class InventoryUploadForm(forms.Form):
             'class': 'form-control'
         })
     )
+
+
+class MembershipBackfillForm(forms.Form):
+    file = forms.FileField(
+        label='Historical Customer Export',
+        help_text='Same column format as the main customer import (VIP ID, PHONE NO., VIP GRADE, ...).',
+        widget=forms.FileInput(attrs={
+            'accept': '.csv,.xlsx,.xls',
+            'class': 'form-control'
+        })
+    )
+    snapshot_date = forms.DateField(
+        label='Snapshot Date (historical, as-of date this file represents)',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    note = forms.CharField(
+        label='Note',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Q1 2025 export'})
+    )

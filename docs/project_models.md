@@ -150,6 +150,55 @@ Indexes: `(shop_name, brand)`, `(year, season)`, `(sku, shop_id)`
 
 ---
 
+## Membership Models — `App/models/membership.py`
+
+Snapshot-based tracking for the Customer Membership KPI page (added 2026-08-14). Unlike `InventorySnapshot`, this IS a true time-series: each import event creates a new `MembershipSnapshotBatch` + a full set of `MembershipSnapshot` rows, nothing is overwritten.
+
+### MembershipSnapshotBatch
+| Field | Type | Notes |
+|-------|------|-------|
+| snapshot_date | DateField | db_index — as-of date; anchors the annual-spend calendar-year window (Jan 1 → snapshot_date) |
+| source | CharField(20) | `auto` (triggered right after a customer upload) / `manual_import` (PO-backfilled historical file) |
+| created_at | DateTimeField | auto_now_add |
+| uploaded_by | FK → User | null, blank, on_delete=SET_NULL |
+| source_filename | CharField(255) | blank — manual_import only |
+| note | TextField | blank — manual_import only, PO-entered |
+| row_count | IntegerField | default=0 |
+
+```python
+class Meta:
+    ordering = ["-snapshot_date", "-created_at"]
+```
+
+### MembershipSnapshot
+One row per customer per batch — lean, denormalized reporting table.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| batch | FK → MembershipSnapshotBatch | on_delete=CASCADE |
+| vip_id | CharField(1000) | |
+| phone | CharField(1000) | blank |
+| name | CharField(1000) | blank |
+| grade | CharField(20) | `normalize_grade()` output |
+| registration_date | DateField | null, blank |
+| registration_store | CharField(1000) | blank |
+| annual_spend | DecimalField(14,2) | default=0 — settlement_amount sum, Jan 1 → snapshot_date |
+| annual_purchase_count | IntegerField | default=0 |
+| points | IntegerField | default=0 |
+| grade_changed_at | DateField | null, blank — **always NULL today.** No source data (Customer model, imported customer files) tracks a date of last grade change anywhere; PO decision (confirmed 2026-08-14) is to leave it blank rather than synthesize a proxy date. Backfill later if a real source becomes available. |
+
+```python
+class Meta:
+    unique_together = ("batch", "vip_id", "phone")   # mirrors Customer's own (vip_id, phone) uniqueness
+```
+Indexes: `(batch, grade)`, `(vip_id)`, `(batch, registration_store)`
+
+`amount_to_next_tier` is intentionally **not** a stored column — it's fully derived from `grade` + `annual_spend` at read time via `App/analytics/calculations.py::next_tier_info()`, to avoid a second source of truth.
+
+**Grade upgrade thresholds (locked, PO-confirmed, system-wide):** Silver ≥ 6,000,000 VND/year, Gold ≥ 12,000,000 VND/year, Diamond ≥ 20,000,000 VND/year (annual = calendar year, Jan 1 through the snapshot/as-of date).
+
+---
+
 ## Coupon Models — `App/models/coupon.py`
 
 ### Coupon

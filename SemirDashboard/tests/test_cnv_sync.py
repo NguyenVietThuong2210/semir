@@ -377,6 +377,50 @@ class ProcessOrderBatchTest(TestCase):
         self.assertEqual((created, updated, failed), (0, 1, 0))
         self.assertEqual(CNVOrder.objects.get(order_code='ORD2').customer_code, 'NEW')
 
+    def test_order_with_no_customer_info_still_created(self):
+        # 2026-08-30: an order with no nested customer object and no
+        # customerCode fallback makes _transform_order produce
+        # customer_code=None. On Postgres this used to be a hard NOT NULL
+        # violation (masked on SQLite dev, since INSERT OR IGNORE there
+        # silently drops NOT NULL violations too, not just PK/unique
+        # conflicts) — customer_code is now nullable, matching its sibling
+        # customer_name/customer_phone fields.
+        from App.cnv.models import CNVOrder
+        service = self._make_service()
+        raw = {
+            'name': 'ORD3', 'id': 'ORD3', 'customer': {},
+            'created_at': '2025-01-01T00:00:00.000Z', 'location_id': 'S1',
+            'total_price': 100000,
+        }
+        created, updated, failed = service._process_order_batch([raw])
+        self.assertEqual((created, updated, failed), (1, 0, 0))
+        self.assertIsNone(CNVOrder.objects.get(order_code='ORD3').customer_code)
+
+    def test_bulk_create_failure_does_not_poison_later_statements(self):
+        # 2026-08-30: on Postgres, any error inside a transaction aborts the
+        # WHOLE transaction — every later statement (e.g. sync_log's own
+        # save() calls right after this batch) then fails too with
+        # "current transaction is aborted", unless the failing operation is
+        # wrapped in its own transaction.atomic()/savepoint. Force a real DB
+        # error inside bulk_create to prove the atomic() wrapping in
+        # _process_order_batch contains the damage — a later save() on an
+        # unrelated model must still succeed in the same test (which, like
+        # sync_orders() itself, runs inside Django TestCase's own outer
+        # transaction — the exact context that exposes this class of bug).
+        from django.db.utils import IntegrityError
+        from App.cnv.models import CNVSyncLog
+
+        service = self._make_service()
+        with patch('App.cnv.models.CNVOrder.objects.bulk_create', side_effect=IntegrityError('forced')):
+            created, updated, failed = service._process_order_batch([self._raw_order('ORD4')])
+        self.assertEqual((created, updated, failed), (0, 0, 1))
+
+        # If bulk_create's failure had poisoned the transaction, this save()
+        # would raise django.db.utils.InternalError ("transaction aborted").
+        log = CNVSyncLog.objects.create(sync_type='orders')
+        log.mark_completed()
+        self.assertEqual(log.status, 'completed')
+
 
 class CheckpointTieBoundaryFixTest(TestCase):
     """2026-07-25 fix: sync_customers()/sync_orders() used to save

@@ -63,6 +63,11 @@ urlpatterns = [
     path("shop-detail/partial/inventory/", views.shop_detail_inventory_partial,  name="shop_detail_inventory_partial"),
     path("shop-detail/partial/product/",   views.shop_detail_product_partial,    name="shop_detail_product_partial"),
 
+    # ── Customer Membership ───────────────────────────────────────────────────
+    path("membership/",                 views.membership_dashboard,       name="membership_dashboard"),
+    path("membership/backfill-import/", views.membership_backfill_import, name="membership_backfill_import"),
+    path("membership/partial/table/",   views.membership_table_partial,   name="membership_table_partial"),
+
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/",       users.user_management, name="user_management"),
     path("admin-logs/",  views.admin_logs,       name="admin_logs"),

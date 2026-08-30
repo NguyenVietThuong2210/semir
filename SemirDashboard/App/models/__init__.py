@@ -2,6 +2,7 @@ from .pos import Customer, SalesTransaction, SaleDetail
 from .coupon import Coupon, CouponCampaign, ProductCampaign
 from .user import Role, UserProfile
 from .inventory import InventorySnapshot
+from .membership import MembershipSnapshotBatch, MembershipSnapshot
 
 __all__ = [
     "Customer",
@@ -13,4 +14,6 @@ __all__ = [
     "Role",
     "UserProfile",
     "InventorySnapshot",
+    "MembershipSnapshotBatch",
+    "MembershipSnapshot",
 ]

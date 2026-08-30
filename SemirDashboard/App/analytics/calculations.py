@@ -110,7 +110,7 @@ def create_empty_bucket():
 def create_empty_grade_bucket():
     """
     Create empty bucket for grade aggregation with sets.
-    
+
     Returns:
         Dict with sets for customer tracking
     """
@@ -120,3 +120,52 @@ def create_empty_grade_bucket():
         'invoices': 0,
         'amount': Decimal(0)
     }
+
+
+# ---------------------------------------------------------------------------
+# MEMBERSHIP GRADE THRESHOLDS — LOCKED, PO-confirmed 2026-08-14, system-wide.
+# DO NOT CHANGE WITHOUT USER APPROVAL.
+#
+# Upgrade: annual settlement_amount spend, calendar year Jan 1 through the
+# snapshot/as-of date.
+#
+# Downgrade thresholds are INFORMATIONAL ONLY — cannot be auto-enforced.
+# The rule is "purchase count within 1 year of the customer's last
+# grade-change date," but that date does not exist anywhere in the source
+# data (see App/models/membership.py::MembershipSnapshot.grade_changed_at).
+# ---------------------------------------------------------------------------
+GRADE_UPGRADE_THRESHOLDS = {
+    'Silver': Decimal('6000000'),
+    'Gold': Decimal('12000000'),
+    'Diamond': Decimal('20000000'),
+}
+
+GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES = {
+    'Silver': 2,
+    'Gold': 3,
+    'Diamond': 4,
+}
+
+_NEXT_TIER_TARGET = {
+    'No Grade': 'Silver',
+    'Member': 'Silver',
+    'Silver': 'Gold',
+    'Gold': 'Diamond',
+}
+
+
+def next_tier_info(grade, annual_spend):
+    """
+    Pure. Given a customer's current grade and their annual spend, return how
+    much more spend they need to reach the next tier.
+
+    Returns:
+        (next_grade, amount_remaining) tuple
+        - next_grade: str or None (None if grade is Diamond or unrecognized)
+        - amount_remaining: Decimal, floored at 0 (never negative)
+    """
+    target = _NEXT_TIER_TARGET.get(grade)
+    if not target:
+        return (None, Decimal('0'))
+    remaining = GRADE_UPGRADE_THRESHOLDS[target] - (annual_spend or Decimal('0'))
+    return (target, remaining if remaining > 0 else Decimal('0'))

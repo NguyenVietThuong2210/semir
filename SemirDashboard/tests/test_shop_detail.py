@@ -966,3 +966,54 @@ class ShopDetailTest(SnapshotTestCase):
         self.record_page_timing("shop_detail_full_direct", total, t._checkpoints)
         t.report()
         self.assertLess(total, 60, f"Full page load too slow: {total:.1f}s")
+
+
+# ---------------------------------------------------------------------------
+# Shop Detail coupon duplicate-invoice detection — isolated, hand-crafted
+# fixture (the shared ~430k-row fixture above has zero real duplicate
+# dockets, so it can never catch a regression in this specific count).
+# 2026-08-30: get_shop_detail_coupon_data()'s duplicate-count queries fed an
+# already-.order_by('coupon_id')-ordered queryset (from _build_coupon_qs)
+# straight into .values('docket_number').annotate(Count('id')) — the
+# ordering leaks into the implicit GROUP BY, and since coupon_id is unique
+# every group becomes size 1, silently zeroing the count on Postgres. Same
+# root cause as the coupon_analytics.py/coupon_tabs.py fix, missed here on
+# the first pass and caught by independent review.
+# ---------------------------------------------------------------------------
+
+from django.test import TestCase as _PlainTestCase
+
+
+class ShopDetailCouponDuplicateInvoiceTest(_PlainTestCase):
+    def setUp(self):
+        from App.models import Coupon as _Coupon
+        # Two coupons sharing docket_number 'DUP1' at the same shop = 1 duplicate invoice
+        _Coupon.objects.create(
+            coupon_id='SDC1', using_shop='Test Shop', using_date=date(2025, 6, 1),
+            docket_number='DUP1', face_value=100000, used=1,
+        )
+        _Coupon.objects.create(
+            coupon_id='SDC2', using_shop='Test Shop', using_date=date(2025, 6, 1),
+            docket_number='DUP1', face_value=100000, used=1,
+        )
+        # Non-duplicate coupon at the same shop
+        _Coupon.objects.create(
+            coupon_id='SDC3', using_shop='Test Shop', using_date=date(2025, 6, 2),
+            docket_number='SOLO1', face_value=50000, used=1,
+        )
+
+    def test_alltime_duplicate_invoice_count(self):
+        data = get_shop_detail_coupon_data('Test Shop')
+        self.assertEqual(data['all_time']['duplicate_invoice_count'], 1)
+
+    def test_period_duplicate_invoice_count(self):
+        data = get_shop_detail_coupon_data(
+            'Test Shop', date_from=date(2025, 1, 1), date_to=date(2025, 12, 31))
+        self.assertEqual(data['period']['duplicate_invoice_count'], 1)
+
+    def test_details_is_duplicate_flag(self):
+        data = get_shop_detail_coupon_data('Test Shop')
+        flagged = {d['coupon_id']: d['is_duplicate'] for d in data['details']}
+        self.assertTrue(flagged['SDC1'])
+        self.assertTrue(flagged['SDC2'])
+        self.assertFalse(flagged['SDC3'])

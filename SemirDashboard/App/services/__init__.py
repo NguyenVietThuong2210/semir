@@ -3,6 +3,7 @@ from .sales_import import process_sales_file
 from .coupon_import import process_coupon_file
 from .inventory_import import process_inventory_file
 from .sale_detail_import import process_sale_detail_file
+from .membership_snapshot import create_auto_snapshot, create_backfill_snapshot
 from .file_reader import read_file, parse_date, safe_decimal, safe_int, safe_str
 
 __all__ = [
@@ -12,6 +13,8 @@ __all__ = [
     "process_coupon_file",
     "process_inventory_file",
     "process_sale_detail_file",
+    "create_auto_snapshot",
+    "create_backfill_snapshot",
     "read_file",
     "parse_date",
     "safe_decimal",

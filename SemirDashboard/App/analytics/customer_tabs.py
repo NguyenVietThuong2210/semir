@@ -146,7 +146,12 @@ def _customer_ca_points(start_date: str, end_date: str) -> dict:
             'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
             'email', 'cnv_created_at', 'points', 'total_points', 'used_points',
         )
-        .order_by('-used_points')
+        # 'cnv_id' tie-breaker: used_points is not unique, so ties would
+        # otherwise sort arbitrarily on Postgres (no guaranteed order absent
+        # a fully-deterministic key — discovered 2026-08-30 switching dev to
+        # Postgres, where a snapshot test picked a different tied row across
+        # two otherwise-identical runs).
+        .order_by('-used_points', 'cnv_id')
     )
     cnv_used_points_list = [
         {**r, 'in_pos': bool(r['phone']) and r['phone'] in pos_phones_all}
@@ -160,6 +165,7 @@ def _customer_ca_points(start_date: str, end_date: str) -> dict:
         c['phone']: c
         for c in pos_all.filter(phone__in=_cnv_phone_qs)
         .values('vip_id', 'phone', 'name', 'vip_grade', 'points', 'used_points')
+        .order_by('vip_id')
     }
     _cnv_map = {
         c['phone']: c
@@ -168,6 +174,7 @@ def _customer_ca_points(start_date: str, end_date: str) -> dict:
             'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
             'points', 'total_points', 'used_points',
         )
+        .order_by('cnv_id')
     }
     points_mismatch = []
     total_points_mismatch = []
@@ -199,8 +206,12 @@ def _customer_ca_points(start_date: str, end_date: str) -> dict:
             points_mismatch.append({**base, 'diff': cnv_pts - pos_net})
         if pos_net != cnv_total:
             total_points_mismatch.append({**base, 'diff': cnv_total - pos_net})
-    points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
-    total_points_mismatch.sort(key=lambda x: abs(x['diff']), reverse=True)
+    # 'phone' tie-breaker: multiple customers can share the same abs(diff);
+    # Python's sort is stable so ties otherwise fall back to _pos_map's
+    # iteration order — now deterministic via .order_by() above, but this
+    # key makes the guarantee explicit at the point it's actually needed.
+    points_mismatch.sort(key=lambda x: (abs(x['diff']), x['phone']), reverse=True)
+    total_points_mismatch.sort(key=lambda x: (abs(x['diff']), x['phone']), reverse=True)
 
     return {
         'cnv_used_points_count':       len(cnv_used_points_list),
@@ -329,11 +340,15 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
     _cnv_phone_qs = cnv_all.values('phone')
     _pos_phone_qs = pos_all.values('phone')
 
-    # All-time pos_only + cnv_only lists
+    # All-time pos_only + cnv_only lists. Tie-breaker (vip_id / cnv_id) added
+    # for the same reason as _customer_ca_points' used_points sort: neither
+    # registration_date nor cnv_created_at is unique, so without a
+    # fully-deterministic key Postgres can order tied rows differently
+    # between runs (SQLite happened to look stable by accident).
     pos_only_all = list(
         pos_all.exclude(phone__in=_cnv_phone_qs)
         .values('vip_id', 'phone', 'name', 'vip_grade', 'email', 'registration_date', 'points')
-        .order_by('-registration_date')
+        .order_by('-registration_date', 'vip_id')
     )
     cnv_only_all = list(
         cnv_all.exclude(phone__in=_pos_phone_qs)
@@ -341,7 +356,7 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
             'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
             'email', 'cnv_created_at', 'points', 'total_points', 'used_points',
         )
-        .order_by('-cnv_created_at')
+        .order_by('-cnv_created_at', 'cnv_id')
     )
 
     # Period lists

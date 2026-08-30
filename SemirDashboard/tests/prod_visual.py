@@ -164,9 +164,36 @@ def _settle(page, ms=None, shot_name=""):
     page.wait_for_timeout(ms or SETTLE_MS)
 
 
-def _shot(page, out_dir: Path, shot_name: str, manifest: list):
+def _shot(page, out_dir: Path, shot_name: str, manifest: list, max_retries: int = 5):
+    """Take a full-page screenshot — but NEVER save one that's still showing
+    'Loading...'. A stuck-loading screenshot has no real content in it, so
+    it can't be compared against anything and must never be silently
+    accepted as valid PASS/FAIL evidence (2026-08-13 incident: several
+    Products tabs were captured mid-AJAX and the resulting "diff" was
+    meaningless noise — nothing to actually compare).
+
+    Retries with extra wait a bounded number of times; if STILL loading,
+    refuses to save the file entirely — including deleting any stale file
+    left over from a previous run under this name, so a leftover screenshot
+    can never be mistaken for a fresh, valid capture. The name is dropped
+    from `manifest` too, so it's visibly MISSING from the run rather than
+    silently wrong.
+    """
+    dest = out_dir / f"{shot_name}.png"
+    for attempt in range(max_retries):
+        still_loading = page.evaluate("() => document.body.innerText.includes('Loading...')")
+        if not still_loading:
+            break
+        print(f"    [retry {attempt+1}/{max_retries}] '{shot_name}': still 'Loading...' — waiting before capture")
+        page.wait_for_timeout(3000)
+    else:
+        print(f"    [ERROR] '{shot_name}': still showing 'Loading...' after {max_retries} retries — "
+              f"REFUSING to save this screenshot (would not be valid evidence). Investigate manually.")
+        dest.unlink(missing_ok=True)  # never leave a stale file masquerading as this run's capture
+        return
+
     _mask_dynamic(page)
-    page.screenshot(path=str(out_dir / f"{shot_name}.png"), full_page=True)
+    page.screenshot(path=str(dest), full_page=True)
     manifest.append(shot_name)
     print(f"    [shot] {shot_name}")
 
@@ -200,16 +227,30 @@ def _click_all_tabs(page, out_dir, base_name, manifest):
                 if "active" in cls and i == 0:
                     continue
                 a.click()
-                # 3500ms (was 1500ms): heavy tabs (Category/Campaign tree
-                # aggregation over 337k+ line items) were still resolving
-                # when the NEXT tab's click fired. Confirmed 2026-07-15 this
-                # is a PRE-EXISTING lazy-tab JS race (identical corruption
-                # found in the pre-2.3.0 baseline capture too) — more settle
-                # time does not fix it since the bug is a late AJAX response
-                # landing in whatever pane is "current" rather than its own
-                # pane. Tracked separately; not blocking on capture settle time.
                 shot_name = f"{base_name}__{sel[2:6]}_{i:02d}_{_slug(key)}"
-                _settle(page, 3500, shot_name)
+                # 2026-08-13: was a fixed 3500ms _settle() wait — root cause of
+                # the underlying race (a slow tab's late AJAX response landing
+                # in whatever pane was "current") is now fixed app-side
+                # (product/dashboard.html + shop_detail/_product_partial.html
+                # both track which tab the user last asked for and discard
+                # superseded responses instead of rendering them). But heavy
+                # tabs (Category/Campaign tree aggregation over 337k+ line
+                # items) can still genuinely take longer than 3500ms to
+                # resolve — wait for the actual spinner (any element whose id
+                # ends in "Spinner", covers tabSpinner/shopTabSpinner/
+                # prodShopTabSpinner across both templates) to hide instead of
+                # a fixed timeout, so slow-but-correct tabs aren't captured
+                # mid-load.
+                try:
+                    page.wait_for_function(
+                        "() => ![...document.querySelectorAll('[id$=Spinner]')]"
+                        ".some(s => getComputedStyle(s).display !== 'none')",
+                        timeout=30_000,
+                    )
+                except Exception:
+                    print(f"    [WARN] '{shot_name}': a spinner is still visible after 30s wait — "
+                          f"screenshot may be captured mid-AJAX. Re-run if this tab's diff looks suspicious.")
+                page.wait_for_timeout(1000)
                 _shot(page, out_dir, shot_name, manifest)
             except Exception as exc:
                 print(f"    [stab-skip] {base_name} #{i}: {exc}")

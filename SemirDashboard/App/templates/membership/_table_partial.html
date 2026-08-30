@@ -1,0 +1,68 @@
+{% load custom_filters %}
+<p class="sub-section-title mb-2" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">
+    <i class="bi bi-list-ul me-1"></i>
+    {% if total_count > rows|length %}
+    Showing top {{ rows|length }} of {{ total_count }} customers (closest to next tier first) — narrow with the Grade/Store filters to see a specific subset.
+    {% else %}
+    {{ rows|length }} customer{{ rows|length|pluralize }}
+    {% endif %}
+</p>
+{% if rows %}
+<div class="table-responsive" style="max-height:1600px;overflow-y:auto;">
+<table class="table table-sm table-hover align-middle mb-0 w-100" style="font-size:.82rem;table-layout:fixed;">
+<colgroup>
+    <col style="width:10%">  {# VIP ID #}
+    <col style="width:18%">  {# Name #}
+    <col style="width:12%">  {# Phone #}
+    <col style="width:10%">  {# Grade #}
+    <col style="width:13%">  {# Annual Spend #}
+    <col style="width:10%">  {# Annual Purchases #}
+    <col style="width:8%">   {# Points #}
+    <col style="width:9%">   {# Next Tier #}
+    <col style="width:10%">  {# Amount to Next Tier #}
+</colgroup>
+<thead class="sticky-thead" style="background:var(--primary);color:white;">
+<tr>
+    <th>VIP ID</th>
+    <th>Name</th>
+    <th>Phone</th>
+    <th>Grade</th>
+    <th class="text-end">Annual Spend</th>
+    <th class="text-end">Annual Purchases</th>
+    <th class="text-end">Points</th>
+    <th>Next Tier</th>
+    <th class="text-end">Amount to Next Tier</th>
+</tr>
+</thead>
+<tbody>
+{% for r in rows %}
+<tr>
+    <td>{{ r.vip_id }}</td>
+    <td class="text-truncate" title="{{ r.name|default:'' }}">{{ r.name|default:"-" }}</td>
+    <td>{{ r.phone|default:"-" }}</td>
+    <td>
+        {% if r.grade == "Member" %}
+        <span class="badge bg-secondary">{{ r.grade }}</span>
+        {% elif r.grade == "Silver" %}
+        <span class="badge" style="background:var(--silver);color:#fff;">{{ r.grade }}</span>
+        {% elif r.grade == "Gold" %}
+        <span class="badge bg-warning text-dark">{{ r.grade }}</span>
+        {% elif r.grade == "Diamond" %}
+        <span class="badge bg-info">{{ r.grade }}</span>
+        {% else %}
+        <span class="badge bg-light text-dark border">{{ r.grade|default:"No Grade" }}</span>
+        {% endif %}
+    </td>
+    <td class="text-end amount-vnd">{{ r.annual_spend|vnd }}</td>
+    <td class="text-end">{{ r.annual_purchase_count }}</td>
+    <td class="text-end">{{ r.points }}</td>
+    <td>{{ r.next_grade|default:"—" }}</td>
+    <td class="text-end amount-vnd">{% if r.next_grade %}{{ r.amount_to_next_tier|vnd }}{% else %}—{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<p class="text-muted small py-2 mb-0"><i class="bi bi-info-circle me-1"></i>No customers found for this filter.</p>
+{% endif %}

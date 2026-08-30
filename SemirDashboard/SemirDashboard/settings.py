@@ -31,12 +31,31 @@ DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
 CSRF_TRUSTED_ORIGINS = [h.strip() for h in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if h.strip()]
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+# DB engine: Postgres whenever DB_HOST is explicitly set (local dev via
+# docker-compose, DB_HOST=localhost) OR in prod (not DEBUG — prod's .env
+# relies on the "db" default below, the docker-compose service hostname, and
+# does not set DB_HOST explicitly). SQLite is a last-resort fallback only for
+# an environment with neither condition (no docker, DEBUG=True).
+if os.getenv("DB_HOST") or not DEBUG:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DB_NAME"),
+            "USER": os.getenv("DB_USER"),
+            "PASSWORD": os.getenv("DB_PASSWORD"),
+            "HOST": os.getenv("DB_HOST", "db"),
+            "PORT": os.getenv("DB_PORT", "5432"),
+            "CONN_MAX_AGE": 600,  # Keep connections alive for 10 minutes
+            "CONN_HEALTH_CHECKS": True,  # discard a stale persistent connection instead of erroring
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -60,19 +79,6 @@ if not DEBUG:
     SESSION_COOKIE_AGE = 86400
     SESSION_SAVE_EVERY_REQUEST = True  # Auto-refresh session
     SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DB_NAME"),
-            "USER": os.getenv("DB_USER"),
-            "PASSWORD": os.getenv("DB_PASSWORD"),
-            "HOST": os.getenv("DB_HOST", "db"),
-            "PORT": os.getenv("DB_PORT", "5432"),
-            "CONN_MAX_AGE": 600,  # Keep connections alive for 10 minutes
-            "CONN_HEALTH_CHECKS": True,  # discard a stale persistent connection instead of erroring
-        }
-    }
 
 # Application definition
 INSTALLED_APPS = [

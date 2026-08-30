@@ -29,6 +29,8 @@ PERMISSION_DEFS = [
     ("data.upload",         "Upload Data",                      "Data Management"),
     ("data.formulas",       "View Formulas",                    "Data Management"),
     ("admin.users",         "Manage Users",                     "Admin"),
+    ("membership.view",     "View Customer Membership",         "Customer Membership"),
+    ("membership.import",   "Backfill Membership Snapshot Import", "Customer Membership"),
 ]
 
 ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]

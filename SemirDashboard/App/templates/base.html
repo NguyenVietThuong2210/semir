@@ -382,6 +382,18 @@
                             {% endif %}
                             {% endif %}
 
+                            {# ── Customer Membership ── #}
+                            {% check_perm 'membership.view' as can_membership %}
+                            {% if can_membership %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Customer Membership</h6></li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'membership_dashboard' %}">
+                                    <i class="bi bi-award"></i> Customer Membership
+                                </a>
+                            </li>
+                            {% endif %}
+
                             {# ── Coupons ── #}
                             {% check_perm 'coupons.view' as can_coupons %}
                             {% check_perm 'coupons.chart' as can_coupon_chart %}

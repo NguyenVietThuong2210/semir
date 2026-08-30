@@ -273,9 +273,16 @@ def get_shop_detail_coupon_data(using_shop: str, date_from=None, date_to=None,
         _at_used_rows, fetch_docket_txn_amounts(_at_used_rows), falsy_uses_face_value=True
     )
 
+    # .order_by() clears qs's 'coupon_id' ordering (from _build_coupon_qs)
+    # before .values()/.annotate() — otherwise it leaks into the GROUP BY
+    # (same footgun CLAUDE.md documents for .distinct()), and since coupon_id
+    # is unique every group becomes size 1, silently zeroing this count.
+    # Same root cause as the fix in coupon_analytics.py/coupon_tabs.py —
+    # missed here initially (discovered 2026-08-30 via independent review).
     _dup_at = (
         qs.filter(using_date__isnull=False, docket_number__isnull=False)
         .exclude(docket_number='')
+        .order_by()
         .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1).count()
     )
 
@@ -304,16 +311,22 @@ def get_shop_detail_coupon_data(using_shop: str, date_from=None, date_to=None,
     # _dup_set fetched once; _dup_pd derived from len to avoid a duplicate COUNT query
     from App.models import Customer as _Cust
 
+    # .order_by() clears the leaked ordering, see comment on _dup_at above.
     _dup_set = set(
         period_qs.filter(using_date__isnull=False, docket_number__isnull=False)
         .exclude(docket_number='')
+        .order_by()
         .values('docket_number').annotate(_c=Count('id')).filter(_c__gt=1)
         .values_list('docket_number', flat=True)
     )
     if period_qs is not qs:
         _dup_pd = len(_dup_set)
 
-    _period_used = list(period_qs.filter(using_date__isnull=False).order_by('-using_date')[:500])
+    # 'coupon_id' tie-breaker: using_date alone is not unique, so without it
+    # row order for same-day ties (and therefore which 500 rows this slice
+    # keeps) is undefined on Postgres — see the identical fix + comment in
+    # App/analytics/coupon_tabs.py::_coupon_detail_tab.
+    _period_used = list(period_qs.filter(using_date__isnull=False).order_by('-using_date', 'coupon_id')[:500])
     if _period_used:
         _dockets = [c.docket_number for c in _period_used if c.docket_number]
         _txn_map = {t.invoice_number: t for t in SalesTransaction.objects.filter(invoice_number__in=_dockets).order_by()}

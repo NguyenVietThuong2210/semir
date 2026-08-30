@@ -69,6 +69,8 @@ pages = [
     ("/products/tab/campaign/",                                        "30_product_tab_campaign"),
     ("/products/tab/product/",                                         "31_product_tab_top_products"),
     ("/products/tab/shop/",                                            "32_product_tab_shop"),
+    ("/membership/",                                                   "43_membership_dashboard"),
+    ("/membership/partial/table/",                                     "44_membership_tier_table"),
 ]
 
 # CNV Customer Analytics tab endpoints — require X-Requested-With: XMLHttpRequest
