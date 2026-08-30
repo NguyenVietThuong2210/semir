@@ -47,7 +47,7 @@
                 <label>From Snapshot</label>
                 <select name="from_batch" class="form-select form-select-sm">
                     <option value="">— None —</option>
-                    {% for b in batches %}
+                    {% for b in batches reversed %}
                     <option value="{{ b.id }}"{% if b.id == from_batch %} selected{% endif %}>{{ b.snapshot_date }} — {{ b.get_source_display }}{% if b.note %} ({{ b.note }}){% endif %}</option>
                     {% endfor %}
                 </select>
@@ -56,7 +56,7 @@
                 <label>To Snapshot</label>
                 <select name="to_batch" class="form-select form-select-sm">
                     <option value="">— None —</option>
-                    {% for b in batches %}
+                    {% for b in batches reversed %}
                     <option value="{{ b.id }}"{% if b.id == to_batch %} selected{% endif %}>{{ b.snapshot_date }} — {{ b.get_source_display }}{% if b.note %} ({{ b.note }}){% endif %}</option>
                     {% endfor %}
                 </select>
