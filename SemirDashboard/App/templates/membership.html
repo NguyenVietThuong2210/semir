@@ -149,6 +149,14 @@
         <span class="section-title"><i class="bi bi-graph-up me-2"></i>Members per Grade Over Time</span>
     </div>
     <div class="section-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+            <div id="trendSnapshotPicker" class="d-flex flex-wrap align-items-center gap-2">
+                <span style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);">Snapshots:</span>
+                <label style="font-size:.85rem;font-weight:600;cursor:pointer;"><input type="checkbox" id="trendSelectAll" checked> All</label>
+                <!-- Individual checkboxes injected by JS from chart_series -->
+            </div>
+            <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Click a legend label below to show/hide that grade's line.</p>
+        </div>
         <div class="chart-wrap">
             <canvas id="membershipTrendChart"></canvas>
         </div>
@@ -204,16 +212,32 @@
         'Gold': '#e8a33d', 'Diamond': '#0d6efd',
     };
     const canvas = document.getElementById('membershipTrendChart');
-    if (canvas && CD.length) {
-        const labels = CD.map(b => b.snapshot_date);
+    let trendChart = null;
+
+    function selectedBatchIds() {
+        return Array.from(document.querySelectorAll('#trendSnapshotPicker input[data-batch-id]:checked'))
+            .map(cb => Number(cb.dataset.batchId));
+    }
+
+    function renderTrendChart() {
+        if (!canvas || !CD.length) return;
+        const ids = selectedBatchIds();
+        const rows = CD.filter(b => ids.includes(b.batch_id));
+        const labels = rows.map(b => b.snapshot_date);
         const datasets = GRADES.map(g => ({
             label: g,
-            data: CD.map(b => (b.counts && b.counts[g]) || 0),
+            data: rows.map(b => (b.counts && b.counts[g]) || 0),
             borderColor: GRADE_COLORS[g],
             backgroundColor: GRADE_COLORS[g] + '33',
             borderWidth: 2, pointRadius: 3, tension: 0.3, fill: false,
         }));
-        new Chart(canvas, {
+        if (trendChart) {
+            trendChart.data.labels = labels;
+            trendChart.data.datasets = datasets;
+            trendChart.update();
+            return;
+        }
+        trendChart = new Chart(canvas, {
             type: 'line',
             data: { labels, datasets },
             options: {
@@ -222,6 +246,31 @@
                 scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
             },
         });
+    }
+
+    if (canvas && CD.length) {
+        // Build one checkbox per snapshot, newest first — matches the
+        // From/To dropdowns' chronological convention.
+        const picker = document.getElementById('trendSnapshotPicker');
+        [...CD].slice().reverse().forEach(b => {
+            const label = document.createElement('label');
+            label.style.cssText = 'font-size:.85rem;font-weight:500;cursor:pointer;';
+            label.innerHTML = '<input type="checkbox" data-batch-id="' + b.batch_id + '" checked> ' + b.snapshot_date;
+            picker.appendChild(label);
+        });
+        picker.addEventListener('change', function(e) {
+            if (e.target.id === 'trendSelectAll') {
+                document.querySelectorAll('#trendSnapshotPicker input[data-batch-id]').forEach(cb => {
+                    cb.checked = e.target.checked;
+                });
+            } else {
+                const all = document.querySelectorAll('#trendSnapshotPicker input[data-batch-id]');
+                const allChecked = Array.from(all).every(cb => cb.checked);
+                document.getElementById('trendSelectAll').checked = allChecked;
+            }
+            renderTrendChart();
+        });
+        renderTrendChart();
     }
 
     window.loadTierTable = function() {

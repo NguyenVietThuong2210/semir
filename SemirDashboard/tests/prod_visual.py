@@ -73,6 +73,7 @@ PAGES = [
     ("17_users",              "/users/"),
     ("18_formulas",           "/formulas/"),
     ("19_admin_logs",         "/admin-logs/"),  # added 2026-07-15 coverage check — was missing entirely
+    ("20_membership",         "/membership/"),  # added 2026-08-30 coverage check — new page (release/2.4.0)
 ]
 
 # Vùng động cần che trước khi chụp (selector CSS) — timestamps, đồng hồ…
