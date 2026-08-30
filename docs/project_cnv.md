@@ -38,6 +38,8 @@ Checkpoint-based incremental sync. Batch size: 500.
 
 **Concurrency (perf plan P1-03, 2026-07-18):** membership fetches in `_process_customer_batch` use `ThreadPoolExecutor(max_workers=30)` (was 10) — safe to raise because the rate limiter above is the actual hard cap regardless of thread count; more threads just means less time spent waiting on `acquire()` when per-call latency is high.
 
+**None/error-safe `incr()` (fixed 2026-08-30):** `DistributedRateLimiter.acquire()` no longer crashes when `cache.incr()` returns `None` or raises `ValueError`. Cause: prod's Redis `CACHES["default"]` has `IGNORE_EXCEPTIONS=True` (`settings.py`) so a Redis hiccup or connection-pool exhaustion (30 concurrent membership-fetch threads vs `CONNECTION_POOL_KWARGS: {max_connections: 20}`) makes `incr()` return `None` instead of raising; separately, the window key's short 2s TTL can expire between the `add()` and `incr()` calls under contention, which raises `ValueError` on some backends. `acquire()` now treats both cases as "count unreadable" and — because this limiter's whole purpose is to never let CNV's rate cap be exceeded (see module docstring) — treats "unreadable" the same as "over budget": it backs off and retries in the next window rather than assuming the call is safe to make. See `App/cnv/rate_limit.py` and `tests/test_cnv_sync.py::DistributedRateLimiterNoneTest`.
+
 | Method | Purpose |
 |--------|---------|
 | `sync_customers(incremental=True)` | Main customer sync |

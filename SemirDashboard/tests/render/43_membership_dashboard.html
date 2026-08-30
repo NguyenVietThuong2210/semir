@@ -536,7 +536,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="6E7LNR5PkFkLgCHFdYl12Ob9NJkh0S9PGd4RZEkwBnWaOxcZQxtgMBVFn48wGglu">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="MXYkL8X4MzQlViCVqAMcKHAhjIDq2J0LJLU5vQ7DudbesrLpeTqtyBwAtpf1Hp5F">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -577,9 +577,13 @@
                 <select name="from_batch" class="form-select form-select-sm">
                     <option value="">— None —</option>
                     
-                    <option value="2">Aug. 1, 2026 — Automatic</option>
+                    <option value="4">Dec. 31, 2025 — Manual Backfill Import</option>
                     
-                    <option value="1" selected>March 1, 2026 — Automatic</option>
+                    <option value="1">March 1, 2026 — Automatic</option>
+                    
+                    <option value="3" selected>May 15, 2026 — Automatic</option>
+                    
+                    <option value="2">Aug. 1, 2026 — Automatic</option>
                     
                 </select>
             </div>
@@ -588,9 +592,13 @@
                 <select name="to_batch" class="form-select form-select-sm">
                     <option value="">— None —</option>
                     
-                    <option value="2" selected>Aug. 1, 2026 — Automatic</option>
+                    <option value="4">Dec. 31, 2025 — Manual Backfill Import</option>
                     
                     <option value="1">March 1, 2026 — Automatic</option>
+                    
+                    <option value="3">May 15, 2026 — Automatic</option>
+                    
+                    <option value="2" selected>Aug. 1, 2026 — Automatic</option>
                     
                 </select>
             </div>
@@ -606,7 +614,7 @@
                 <i class="bi bi-upload me-1"></i>Backfill a Historical Snapshot
             </p>
             <form method="post" action="/membership/backfill-import/" enctype="multipart/form-data" class="shop-select-row">
-                <input type="hidden" name="csrfmiddlewaretoken" value="6E7LNR5PkFkLgCHFdYl12Ob9NJkh0S9PGd4RZEkwBnWaOxcZQxtgMBVFn48wGglu">
+                <input type="hidden" name="csrfmiddlewaretoken" value="MXYkL8X4MzQlViCVqAMcKHAhjIDq2J0LJLU5vQ7DudbesrLpeTqtyBwAtpf1Hp5F">
                 <div>
                     <label for="id_file">Historical Customer Export</label>
                     <input type="file" name="file" accept=".csv,.xlsx,.xls" class="form-control" required aria-describedby="id_file_helptext" id="id_file">
@@ -714,6 +722,14 @@
         <span class="section-title"><i class="bi bi-graph-up me-2"></i>Members per Grade Over Time</span>
     </div>
     <div class="section-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+            <div id="trendSnapshotPicker" class="d-flex flex-wrap align-items-center gap-2">
+                <span style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);">Snapshots:</span>
+                <label style="font-size:.85rem;font-weight:600;cursor:pointer;"><input type="checkbox" id="trendSelectAll" checked> All</label>
+                <!-- Individual checkboxes injected by JS from chart_series -->
+            </div>
+            <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Click a legend label below to show/hide that grade's line.</p>
+        </div>
         <div class="chart-wrap">
             <canvas id="membershipTrendChart"></canvas>
         </div>
@@ -788,7 +804,7 @@
     </script>
     
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script id="membership-chart-data" type="application/json">[{"batch_id": 1, "snapshot_date": "2026-03-01", "source": "auto", "counts": {"Member": 70581, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 2, "snapshot_date": "2026-08-01", "source": "auto", "counts": {"Member": 70581, "Silver": 2810, "Gold": 852, "Diamond": 388}}]</script>
+<script id="membership-chart-data" type="application/json">[{"batch_id": 4, "snapshot_date": "2025-12-31", "source": "manual_import", "counts": {"Member": 55873, "Silver": 2078, "Gold": 674, "Diamond": 302}}, {"batch_id": 1, "snapshot_date": "2026-03-01", "source": "auto", "counts": {"Member": 70581, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 3, "snapshot_date": "2026-05-15", "source": "auto", "counts": {"Member": 70581, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 2, "snapshot_date": "2026-08-01", "source": "auto", "counts": {"Member": 70581, "Silver": 2810, "Gold": 852, "Diamond": 388}}]</script>
 <script>
 (function(){
     const CD = JSON.parse(document.getElementById('membership-chart-data').textContent || '[]');
@@ -798,16 +814,32 @@
         'Gold': '#e8a33d', 'Diamond': '#0d6efd',
     };
     const canvas = document.getElementById('membershipTrendChart');
-    if (canvas && CD.length) {
-        const labels = CD.map(b => b.snapshot_date);
+    let trendChart = null;
+
+    function selectedBatchIds() {
+        return Array.from(document.querySelectorAll('#trendSnapshotPicker input[data-batch-id]:checked'))
+            .map(cb => Number(cb.dataset.batchId));
+    }
+
+    function renderTrendChart() {
+        if (!canvas || !CD.length) return;
+        const ids = selectedBatchIds();
+        const rows = CD.filter(b => ids.includes(b.batch_id));
+        const labels = rows.map(b => b.snapshot_date);
         const datasets = GRADES.map(g => ({
             label: g,
-            data: CD.map(b => (b.counts && b.counts[g]) || 0),
+            data: rows.map(b => (b.counts && b.counts[g]) || 0),
             borderColor: GRADE_COLORS[g],
             backgroundColor: GRADE_COLORS[g] + '33',
             borderWidth: 2, pointRadius: 3, tension: 0.3, fill: false,
         }));
-        new Chart(canvas, {
+        if (trendChart) {
+            trendChart.data.labels = labels;
+            trendChart.data.datasets = datasets;
+            trendChart.update();
+            return;
+        }
+        trendChart = new Chart(canvas, {
             type: 'line',
             data: { labels, datasets },
             options: {
@@ -816,6 +848,31 @@
                 scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
             },
         });
+    }
+
+    if (canvas && CD.length) {
+        // Build one checkbox per snapshot, newest first — matches the
+        // From/To dropdowns' chronological convention.
+        const picker = document.getElementById('trendSnapshotPicker');
+        [...CD].slice().reverse().forEach(b => {
+            const label = document.createElement('label');
+            label.style.cssText = 'font-size:.85rem;font-weight:500;cursor:pointer;';
+            label.innerHTML = '<input type="checkbox" data-batch-id="' + b.batch_id + '" checked> ' + b.snapshot_date;
+            picker.appendChild(label);
+        });
+        picker.addEventListener('change', function(e) {
+            if (e.target.id === 'trendSelectAll') {
+                document.querySelectorAll('#trendSnapshotPicker input[data-batch-id]').forEach(cb => {
+                    cb.checked = e.target.checked;
+                });
+            } else {
+                const all = document.querySelectorAll('#trendSnapshotPicker input[data-batch-id]');
+                const allChecked = Array.from(all).every(cb => cb.checked);
+                document.getElementById('trendSelectAll').checked = allChecked;
+            }
+            renderTrendChart();
+        });
+        renderTrendChart();
     }
 
     window.loadTierTable = function() {

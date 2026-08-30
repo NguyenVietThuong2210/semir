@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch, call
 from django.test import TestCase
 
 from App.cnv.sync_service import CNVSyncService, _RateLimiter, MEMBERSHIP_RATE_LIMIT
+from App.cnv.rate_limit import DistributedRateLimiter
 
 
 class RateLimiterTest(TestCase):
@@ -63,6 +64,68 @@ class RateLimiterTest(TestCase):
         for t in threads:
             t.join()
         self.assertEqual(errors, [])
+
+
+class DistributedRateLimiterNoneTest(TestCase):
+    """DistributedRateLimiter.acquire() must not crash when cache.incr()
+    returns None or raises ValueError — the exact production bug: prod's
+    Redis cache has IGNORE_EXCEPTIONS=True (settings.py), so under
+    connection-pool pressure (30 concurrent threads vs max_connections=20)
+    or a transient Redis hiccup, cache.incr() can swallow an internal error
+    and return None instead of propagating it, or (on a plain missing key)
+    raise ValueError. Before the fix, `count <= self._rate` raised
+    `TypeError: '<=' not supported between instances of 'NoneType' and
+    'int'` — the exact error seen 27 times in production admin logs."""
+
+    @patch('App.cnv.rate_limit.time.sleep')
+    def test_none_count_does_not_raise_and_eventually_returns(self, mock_sleep):
+        from django.core.cache import cache
+
+        rl = DistributedRateLimiter(rate=50, key='test_none_rl')
+        call_count = {'n': 0}
+        original_incr = cache.incr
+
+        def flaky_incr(key, delta=1):
+            call_count['n'] += 1
+            if call_count['n'] == 1:
+                return None  # simulate IGNORE_EXCEPTIONS swallow -> None
+            return original_incr(key, delta)
+
+        with patch.object(cache, 'incr', side_effect=flaky_incr):
+            rl.acquire()  # must not raise, must return (not hang)
+
+        # First reading was unreadable (None) -> must have backed off and
+        # retried, not assumed "under budget".
+        self.assertGreaterEqual(call_count['n'], 2)
+        mock_sleep.assert_called()
+
+    @patch('App.cnv.rate_limit.time.sleep')
+    def test_incr_valueerror_does_not_raise(self, mock_sleep):
+        from django.core.cache import cache
+
+        rl = DistributedRateLimiter(rate=50, key='test_valueerror_rl')
+        call_count = {'n': 0}
+        original_incr = cache.incr
+
+        def flaky_incr(key, delta=1):
+            call_count['n'] += 1
+            if call_count['n'] == 1:
+                raise ValueError("Key 'test_valueerror_rl' not found")
+            return original_incr(key, delta)
+
+        with patch.object(cache, 'incr', side_effect=flaky_incr):
+            rl.acquire()  # must not raise, must return
+
+        self.assertGreaterEqual(call_count['n'], 2)
+        mock_sleep.assert_called()
+
+    def test_normal_operation_still_works(self):
+        """Sanity: with a healthy cache backend, acquire() returns immediately
+        for a single call under budget (no regression from the None handling)."""
+        rl = DistributedRateLimiter(rate=50, key='test_healthy_rl')
+        t0 = time.monotonic()
+        rl.acquire()
+        self.assertLess(time.monotonic() - t0, 0.5)
 
 
 class FetchMembershipTest(TestCase):

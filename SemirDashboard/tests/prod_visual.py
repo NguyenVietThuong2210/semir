@@ -150,6 +150,14 @@ def _settle(page, ms=None, shot_name=""):
     explicit WARNING (instead of silently swallowing the timeout) so a
     still-loading capture is visible in the run log rather than discovered
     days later via a confusing diff.
+
+    2026-08-30: the check matched the literal substring 'Loading...' (three
+    ASCII periods) — but Sales Analytics' spinner text is "Loading data…"
+    (a word in between, and a Unicode ellipsis U+2026, not three periods),
+    so this check silently never matched it. Several verify runs saved
+    genuinely mid-AJAX screenshots for that page as if they were valid,
+    producing large false-diff noise. Narrowed to just 'Loading' (no
+    trailing punctuation assumed) so any spinner wording is caught.
     """
     try:
         page.wait_for_load_state("networkidle", timeout=15_000)
@@ -157,7 +165,7 @@ def _settle(page, ms=None, shot_name=""):
         pass
     try:
         page.wait_for_function(
-            "() => !document.body.innerText.includes('Loading...')", timeout=45_000
+            "() => !document.body.innerText.includes('Loading')", timeout=45_000
         )
     except Exception:
         print(f"    [WARN] '{shot_name or '?'}': still showing 'Loading...' after 45s wait — "
@@ -182,7 +190,7 @@ def _shot(page, out_dir: Path, shot_name: str, manifest: list, max_retries: int 
     """
     dest = out_dir / f"{shot_name}.png"
     for attempt in range(max_retries):
-        still_loading = page.evaluate("() => document.body.innerText.includes('Loading...')")
+        still_loading = page.evaluate("() => document.body.innerText.includes('Loading')")
         if not still_loading:
             break
         print(f"    [retry {attempt+1}/{max_retries}] '{shot_name}': still 'Loading...' — waiting before capture")

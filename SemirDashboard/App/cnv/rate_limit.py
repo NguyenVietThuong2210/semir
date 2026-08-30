@@ -56,10 +56,31 @@ class DistributedRateLimiter:
             window = int(now)
             cache_key = f"{self._key}:{window}"
             cache.add(cache_key, 0, timeout=2)  # idempotent: ensure key exists
-            count = cache.incr(cache_key)
-            if count <= self._rate:
+            try:
+                count = cache.incr(cache_key)
+            except ValueError:
+                # incr() raises ValueError when the key doesn't exist. The
+                # key's TTL is a short 2s and add()/incr() are two separate
+                # cache round-trips — under 30-thread contention there's a
+                # real (if narrow) race where the key can expire, or never
+                # get created, between the two calls. Treat like count=None
+                # below rather than letting this propagate.
+                count = None
+            # count is None when the cache backend swallowed an error instead
+            # of raising it — prod's Redis cache has IGNORE_EXCEPTIONS=True
+            # (settings.py), so a transient Redis hiccup or connection-pool
+            # exhaustion (30 concurrent callers vs CONNECTION_POOL_KWARGS
+            # max_connections=20) makes incr() return None rather than raise.
+            # We cannot distinguish "confirmed under budget" from "couldn't
+            # read the count" — and this limiter exists specifically to stop
+            # CNV rate-limit 429s (see module docstring, 2026-07-12 incident)
+            # — so an unreadable count must be treated as OVER budget, never
+            # assumed safe: back off and retry next window, same as the
+            # normal over-budget path.
+            if count is not None and count <= self._rate:
                 return
-            # Over budget for this window — wait for the next one to start.
+            # Over budget (or unreadable) for this window — wait for the next
+            # one to start.
             sleep_s = max(1 - (now - window), 0.01)
             time.sleep(sleep_s)
 

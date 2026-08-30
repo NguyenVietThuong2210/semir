@@ -16,6 +16,27 @@ After every completed task, review and update each layer that the change touches
 
 If nothing changed in a layer, no update is needed — but the review is still required.
 
+## Resource Discipline (enforced)
+
+The host machine is a single shared resource across Claude and every sub-agent it spawns. Violating this section is a session-ending failure mode (OOM, forced user shutdown) — treat it as seriously as the Critical Business Rules below. Added 2026-08-30 after a session ran the full test suite 5-7 times over ~9 hours (largely back-to-back) plus concurrent sub-agent-driven Docker/Playwright work, degrading the user's machine to the point of a forced stop.
+
+**Rule 1 — One heavy operation at a time, session-wide.** "Heavy" = starting/stopping Docker or docker-compose, running `manage.py test` at any scope, running `prod_visual.py` or `snapshot_visual.py` (both launch real Chrome), or `flutter build`. Before starting any heavy operation, check both:
+- `docker ps` — no container from this session should already be running (or you're reusing it, not duplicating it).
+- A process check for `python`/`chrome`/`node` — no heavy process from an earlier step should still be alive.
+If either check shows a live heavy process, wait for it or stop it first. Never start a second heavy operation "to make progress while the first one runs."
+
+**Rule 2 — Only Claude (the coordinator) runs heavy operations directly. Sub-agents do not.** Do not delegate Docker startup, test-suite runs (any scope), or Playwright/Chrome capture to a sub-agent via the Agent tool — run these yourself with Bash/PowerShell so you keep the PID/container handle. Sub-agent-spawned background processes have been observed to go orphaned (untrackable, unkillable by the coordinator) once the sub-agent's own turn ends. Sub-agents may investigate, read logs, draft code, or report on a run you already performed — they may not launch the run themselves.
+
+**Rule 3 — Never spawn two sub-agents in the same message (or near-simultaneously) if either might touch Docker, the test suite, or Playwright.** Concurrent sub-agents are fine only when confirmed read-only (search, grep, doc review).
+
+**Rule 4 — An unexplained process/container death is a STOP signal, not a retry signal.** When a background process dies with no clear application-level traceback (container disappears, process killed silently, exit code doesn't match a known test failure): don't immediately retry. Check `docker ps -a`, process list, and free memory (`Get-CimInstance Win32_OperatingSystem | Select FreePhysicalMemory,TotalVisibleMemorySize`); report the finding to the user in one short message. Retry at most once, only after confirming a clean process list. If it dies a second time, stop and ask the user how to proceed.
+
+**Rule 5 — If the user says the machine is struggling (CPU/fan/lag/crash complaints), that instruction persists for the rest of the session, not just the next reply.** Do not revert to spawning heavy or concurrent operations later in the same session without re-confirming it's safe.
+
+**Rule 6 — "Testing for Release" (below) runs the full suite twice per invocation (Step 1 + Step 3).** If Step 1 fails, fix and re-run only the failing subset before re-attempting the full two-step sequence — do not re-pay both ~80-minute runs for every fix iteration. Only run the complete Testing for Release checklist once per actual release attempt, not once per fix.
+
+**Rule 7 — Always use `-f docker-compose.local.yml` explicitly for local dev, never bare `docker compose up -d`.** A bare command defaults to `docker-compose.yml` (the real production stack: nginx+web+redis+postgres) and has collided with the local dev Postgres container's port multiple times, killing it mid-run.
+
 ## Commands
 
 ```bash
