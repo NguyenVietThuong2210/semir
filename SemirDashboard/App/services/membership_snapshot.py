@@ -17,7 +17,7 @@ share _build_rows() so the aggregation/write logic is never duplicated:
 import logging
 from datetime import date
 
-from App.analytics.customer_utils import normalize_grade, _norm_vid
+from App.analytics.customer_utils import resolve_grade, _norm_vid
 from App.analytics.membership import compute_annual_spend_map
 from App.services.file_reader import read_file, parse_date, safe_str, safe_int
 
@@ -66,11 +66,7 @@ def _build_rows(batch, customer_dicts, as_of_date):
     to_create = []
     for c in customer_dicts:
         agg = spend_map.get(_norm_vid(c['vip_id']), zero)
-        # VIP ID "0" = buyer without info, excluded from grade analytics
-        # everywhere else in the codebase (customer_utils.get_ci, aggregators,
-        # core.py, sales_tabs.py) — force 'No Grade' here too regardless of
-        # whatever raw vip_grade value the import file happens to carry.
-        grade = 'No Grade' if c['vip_id'] == '0' else normalize_grade(c['vip_grade'])
+        grade = resolve_grade(c['vip_id'], c['vip_grade'])
         to_create.append(MembershipSnapshot(
             batch=batch,
             vip_id=c['vip_id'],

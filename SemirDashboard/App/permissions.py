@@ -31,6 +31,7 @@ PERMISSION_DEFS = [
     ("admin.users",         "Manage Users",                     "Admin"),
     ("membership.view",     "View Customer Membership",         "Customer Membership"),
     ("membership.import",   "Backfill Membership Snapshot Import", "Customer Membership"),
+    ("membership.delete",   "Delete Membership Snapshot",       "Customer Membership"),
 ]
 
 ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]

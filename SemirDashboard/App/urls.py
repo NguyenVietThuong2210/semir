@@ -66,7 +66,10 @@ urlpatterns = [
     # ── Customer Membership ───────────────────────────────────────────────────
     path("membership/",                 views.membership_dashboard,       name="membership_dashboard"),
     path("membership/backfill-import/", views.membership_backfill_import, name="membership_backfill_import"),
+    path("membership/delete-batch/<int:batch_id>/", views.membership_delete_batch, name="membership_delete_batch"),
     path("membership/partial/table/",   views.membership_table_partial,   name="membership_table_partial"),
+    path("membership/partial/store-breakdown/", views.membership_store_breakdown_partial, name="membership_store_breakdown_partial"),
+    path("membership/partial/trend/",   views.membership_trend_partial,   name="membership_trend_partial"),
 
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/",       users.user_management, name="user_management"),

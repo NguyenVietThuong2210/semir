@@ -16,7 +16,10 @@ from .shop_detail import (
 )
 from .product import product_dashboard, product_tab, export_product_analytics, manage_product_campaigns
 from .inventory import inventory_dashboard, export_inventory_dead_stock, export_inventory_excel
-from .membership import membership_dashboard, membership_table_partial, membership_backfill_import
+from .membership import (
+    membership_dashboard, membership_table_partial, membership_backfill_import,
+    membership_store_breakdown_partial, membership_delete_batch, membership_trend_partial,
+)
 from . import auth, users
 
 __all__ = [
@@ -60,4 +63,7 @@ __all__ = [
     "membership_dashboard",
     "membership_table_partial",
     "membership_backfill_import",
+    "membership_store_breakdown_partial",
+    "membership_delete_batch",
+    "membership_trend_partial",
 ]

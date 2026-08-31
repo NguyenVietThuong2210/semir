@@ -35,48 +35,66 @@ If either check shows a live heavy process, wait for it or stop it first. Never 
 
 **Rule 6 — "Testing for Release" (below) runs the full suite twice per invocation (Step 1 + Step 3).** If Step 1 fails, fix and re-run only the failing subset before re-attempting the full two-step sequence — do not re-pay both ~80-minute runs for every fix iteration. Only run the complete Testing for Release checklist once per actual release attempt, not once per fix.
 
-**Rule 7 — Always use `-f docker-compose.local.yml` explicitly for local dev, never bare `docker compose up -d`.** A bare command defaults to `docker-compose.yml` (the real production stack: nginx+web+redis+postgres) and has collided with the local dev Postgres container's port multiple times, killing it mid-run.
+**Rule 7 — One Docker setup: `docker-compose.yml` + a gitignored `docker-compose.override.yml`.** `docker-compose.yml` (bare `docker compose ...`, no `-f`) is the real prod stack (nginx+web+redis+postgres, port 5432) — the same file `scripts/deploy.sh` pulls on the real server, untouched for local dev. Docker Compose auto-merges `docker-compose.override.yml` on top of it on every bare `docker compose up` (no `-f` needed) if that file exists alongside it — it is gitignored (never deployed) and contains just two local-only overrides: `web.environment: DEBUG=True` (prod's `DEBUG=False` makes Django's `settings.py` set `SECURE_SSL_REDIRECT=True`, which gunicorn alone — no nginx — can't serve locally) and `web.ports: 8000:8000` (publish it directly) plus `nginx.restart: "no"` (nginx has no local SSL cert and would otherwise crash-loop forever). This means the user's own habitual command — `docker compose down; docker system prune -f; docker compose up --build -d` — works completely unchanged and IS the correct way to start local dev; no `-f` flag, no second compose file. `docker-compose.local.yml`/`scripts/dev-db.sh` (a separate Postgres-only container on port 5433) no longer exists — do not recreate it, this override-based approach fully replaced it (2026-08-30/31).
+
+**The `web` container has no source bind-mount** (build-time `COPY` only, matching prod). A code edit therefore needs `docker compose cp <file> web:/app/<path>` followed by `docker compose restart web` before it's live — there is no autoreload while iterating through the container. For genuine instant-autoreload dev, run Django on the HOST instead, pointed at the same containerized Postgres (`.env`'s `DB_PORT=5432` matches `docker-compose.yml`'s exposed port): `docker compose stop web` (keep `db`+`redis` running, free port 8000) then `cd SemirDashboard && ../venv/Scripts/python.exe manage.py runserver` — verified working 2026-08-31 (host process reads the same live data the container would).
 
 ## Commands
 
 ```bash
-# Local dev database (Postgres 16, matching prod's engine — run once per machine reboot,
-# not the same file as docker-compose.yml which is the real prod stack pulled by scripts/deploy.sh)
-docker compose -f docker-compose.local.yml up -d
+# Local dev — one stack, the user's own habitual command (docker-compose.override.yml
+# auto-merges DEBUG=True + publishes web:8000 + disables nginx, see Rule 7):
+docker compose down
+docker system prune -f
+docker compose up --build -d
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py perm sync
+docker compose exec web python manage.py collectstatic --noinput
 
-# Dev server (from repo root)
-cd SemirDashboard && python manage.py runserver
+# Applying a code edit inside the running container (no bind-mount — required after every change):
+docker compose cp SemirDashboard/App/<path> web:/app/App/<path>
+docker compose restart web
 
-# Migrations
-cd SemirDashboard && python manage.py makemigrations
-cd SemirDashboard && python manage.py migrate
+# Fast iteration instead (instant autoreload, no cp/restart per change):
+docker compose stop web          # keep db+redis running, free host port 8000
+cd SemirDashboard && ../venv/Scripts/python.exe manage.py runserver
+
+# Migrations (run inside the container, or via the host venv per above)
+docker compose exec web python manage.py makemigrations
+docker compose exec web python manage.py migrate
 
 # CNV loyalty sync (manual, one-off — scheduled cron runs hourly via App/cnv/scheduler.py: customers :05, orders :10)
-cd SemirDashboard && python manage.py sync_cnv --customers
-cd SemirDashboard && python manage.py sync_cnv --orders
+docker compose exec web python manage.py sync_cnv --customers
+docker compose exec web python manage.py sync_cnv --orders
 
 # Test the CNV scheduler locally WITHOUT calling the real CNV API (mocked sync + fast interval trigger)
-cd SemirDashboard && python manage.py cnv_scheduler_smoketest --duration 30 --interval 3
+docker compose exec web python manage.py cnv_scheduler_smoketest --duration 30 --interval 3
 
 # CNV customer sync gap check (checkpoint can permanently skip customers tied on updated_at — see docs/project_cnv.md)
-cd SemirDashboard && python manage.py check_cnv_gap --export "path/Customers_File_*.xls" --out App/cnv/input/cnv_gap_<date>.txt
-cd SemirDashboard && python manage.py sync_cnv --customers --ids-file App/cnv/input/cnv_gap_<date>.txt
+docker compose exec web python manage.py check_cnv_gap --export "path/Customers_File_*.xls" --out App/cnv/input/cnv_gap_<date>.txt
+docker compose exec web python manage.py sync_cnv --customers --ids-file App/cnv/input/cnv_gap_<date>.txt
 
-# Run all shop_detail tests
-cd SemirDashboard && python manage.py test tests.test_shop_detail -v 2
+# Run all shop_detail tests (edited test files must be `docker compose cp`'d into
+# the container first — no bind-mount, see Rule 7)
+docker compose exec web python manage.py test tests.test_shop_detail -v 2
 
 # Run a single test
-cd SemirDashboard && python manage.py test tests.test_shop_detail.ShopDetailTest.test_sales_alltime_matches_shop_tab -v 2
+docker compose exec web python manage.py test tests.test_shop_detail.ShopDetailTest.test_sales_alltime_matches_shop_tab -v 2
 
 # Run all tests
-cd SemirDashboard && python manage.py test tests -v 2
+docker compose exec web python manage.py test tests -v 2
 
 # Regenerate stale snapshots (after template or data shape changes)
-cd SemirDashboard && UPDATE_SNAPSHOTS=1 python manage.py test tests.test_shop_detail -v 2
+docker compose exec web python manage.py test tests.test_shop_detail -v 2 -e UPDATE_SNAPSHOTS=1
+# (or: docker compose exec -e UPDATE_SNAPSHOTS=1 -T web python manage.py test tests.test_shop_detail -v 2,
+# then `docker compose cp web:/app/tests/snapshots/. SemirDashboard/tests/snapshots/` to pull the
+# regenerated files onto the host — the container has no bind-mount, so they never land there on their own)
 
-# Regenerate visual UI snapshots (REQUIRED after ANY template change)
-cd SemirDashboard && python manage.py shell -c "exec(open('tests/snapshot_render.py').read())"
-cd SemirDashboard && python tests/snapshot_visual.py
+# Regenerate visual UI snapshots (REQUIRED after ANY template change) — MUST run via the
+# HOST venv, not the container: snapshot_visual.py needs a local Chrome install, and its
+# input (snapshot_render.py's HTML output) must land on the actual host disk for it to read
+cd SemirDashboard && ../venv/Scripts/python.exe manage.py shell -c "exec(open('tests/snapshot_render.py').read())"
+cd SemirDashboard && ../venv/Scripts/python.exe tests/snapshot_visual.py
 ```
 
 ## Testing for Release
@@ -236,7 +254,7 @@ All tests that load fixture data (74k customers + 118k sales + 239k coupons) sho
 
 ## Database Notes
 
-Dev: PostgreSQL 16 via `docker compose -f docker-compose.local.yml up -d` (was SQLite3 until 2026-08-14 — switched so Postgres-only code paths, e.g. GinIndex/trigram search, actually run in tests instead of being skipped). Prod: PostgreSQL 16. `SemirDashboard/db.sqlite3` still exists as a legacy fallback only if `DB_HOST` is unset — not the normal dev path anymore.
+Dev and prod both run PostgreSQL 16 via the same `docker-compose.yml` (`db` service, port 5432, see Rule 7) — was SQLite3 until 2026-08-14, switched so Postgres-only code paths (e.g. GinIndex/trigram search) actually run in tests instead of being skipped. `SemirDashboard/db.sqlite3` still exists as a legacy fallback only if `DB_HOST` is unset — not the normal dev path anymore. Note: `postgres:16` (glibc) vs `postgres:16-alpine` (musl) have different default text collation — if the image tag ever changes, string-sorted query results can shift even with byte-identical data (found 2026-08-30, see `docker-compose.yml`'s pinned image).
 
 `Meta.ordering` on `SalesTransaction` and `Customer` models affects `.distinct()` queries — always call `.order_by()` before `.distinct()` to clear model ordering. Indexes exist on `shop_name`, `registration_store`, `using_shop` (migration 0012).
 

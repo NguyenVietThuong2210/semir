@@ -91,9 +91,12 @@ type: project
 ### Customer Membership
 | URL | View | Notes |
 |-----|------|-------|
-| `/membership/` | `membership_dashboard` | requires `membership.view` — grade KPI comparison + trend chart + tier table |
+| `/membership/` | `membership_dashboard` | requires `membership.view` — grade KPI comparison + grade-by-store breakdown + trend chart + tier table + Manage Snapshots list. `registration_stores` in context is the LIVE `Customer` table (shares `shop_detail.py`'s `_get_dropdown_options()` cache), not scoped to any snapshot batch |
 | `/membership/backfill-import/` | `membership_backfill_import` | POST only, requires `membership.import` — uploads a historical customer export, creates a `manual_import` snapshot batch for a PO-chosen date, never touches the live `Customer` table |
-| `/membership/partial/table/` | `membership_table_partial` | AJAX partial, requires `membership.view` — customer tier-progress table for a given batch |
+| `/membership/delete-batch/<int:batch_id>/` | `membership_delete_batch` | POST only, requires `membership.delete` — deletes a `MembershipSnapshotBatch`; cascades to its `MembershipSnapshot` rows |
+| `/membership/partial/table/` | `membership_table_partial` | AJAX partial, requires `membership.view` — Customer Tier Progress table. Reads the LIVE `Customer` table (`get_live_customer_tier_table()`), NOT a snapshot batch (changed 2026-08-31, PO feedback) — no `batch` param, works even with zero snapshot batches |
+| `/membership/partial/store-breakdown/` | `membership_store_breakdown_partial` | AJAX partial, requires `membership.view` — grade counts per registration store for a given batch (defaults to latest). With `store=<name>` (+ optional `from_batch`, added 2026-08-31): switches to a Grade/From/To/Diff/%Change comparison for just that store, reusing `membership/_grade_comparison_table.html` |
+| `/membership/partial/trend/` | `membership_trend_partial` | AJAX partial, requires `membership.view`, added 2026-08-31 — JSON (not HTML, the trend chart is built client-side by Chart.js) `{"series": [...]}`, same shape as `get_all_batch_grade_series()`. `store=<name>` scopes every batch's counts to one registration store |
 
 ### Admin
 | URL | View | Notes |

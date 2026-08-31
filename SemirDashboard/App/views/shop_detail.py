@@ -39,7 +39,10 @@ def _ajax_perm_check(request, codename):
 
 
 def _get_dropdown_options():
-    """Return (sales_shops, customer_shops, coupon_shops, campaigns) — cached 5 min."""
+    """Return (sales_shops, customer_shops, coupon_shops, campaigns, inventory_shops,
+    product_shops) — cached 5 min. `customer_shops` (index 1) is also reused by
+    App/views/membership.py for its Registration Store dropdown — a positional
+    reorder here would silently break that caller with no exception."""
     key = "shop_detail_dropdowns"
     cached = cache.get(key)
     if cached:

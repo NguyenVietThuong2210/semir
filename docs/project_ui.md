@@ -159,6 +159,8 @@ All `tbl-hdr-*` classes use `var(--primary)` — no per-column color coding.
 }
 ```
 
+**Footgun (found 2026-08-31, membership.html):** `<thead style="background:var(--primary);color:white;">` looks correct and the `<thead>` itself DOES compute that background — but it silently renders as Bootstrap's default gray instead. Bootstrap 5's own CSS (`.table > :not(caption) > * > *`) sets `background-color` directly on each `<th>`/`<td>`, which paints over the ancestor `<thead>`'s background. The class must be applied **on the `<th>` itself, with `!important`** (the pattern above) — a plain inline style on `<thead>` is not enough, no matter how correct `var(--primary)` resolves. Always verify with computed style (`getComputedStyle(th).backgroundColor`), not just by looking at the `<thead>`'s own style attribute.
+
 ### Stat Cards (KPI Cards)
 
 Light background cards on analytics pages — never solid blue for stat cards:

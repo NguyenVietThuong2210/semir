@@ -88,6 +88,24 @@ def normalize_grade(raw):
     return raw
 
 
+def resolve_grade(vip_id, raw_grade):
+    """
+    The membership grade a customer resolves to, given their raw vip_id and
+    raw vip_grade. VIP ID "0" (buyer without info, excluded from grade
+    analytics everywhere in the codebase) is force-mapped to 'No Grade'
+    regardless of whatever raw grade value is on the row; every other
+    customer goes through normalize_grade().
+
+    Extracted 2026-08-31 (independent review finding: this exact one-liner
+    was duplicated in App/services/membership_snapshot.py::_build_rows() and
+    App/analytics/membership.py::get_live_customer_tier_table() with no
+    shared test — a future edit to one path without the other would silently
+    make snapshot data and live data disagree on a customer's grade with
+    nothing to catch it).
+    """
+    return 'No Grade' if vip_id == '0' else normalize_grade(raw_grade)
+
+
 def get_customer_info(vip_id, customer_obj=None):
     """
     🔑 UNIFIED CUSTOMER LOOKUP - Single source of truth
