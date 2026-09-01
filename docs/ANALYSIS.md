@@ -111,7 +111,7 @@ SemirDashboard (Django)  ←── CSV/Excel uploads
 - Membership grade upgrade thresholds (`App/analytics/calculations.py`) — LOCKED: Silver ≥6,000,000 / Gold ≥12,000,000 / Diamond ≥20,000,000 VND annual spend (calendar year, Jan 1 → date). See `docs/project_business_logic.md` → "Customer Membership Snapshot Rules".
 
 ### Permission System
-28 permissions defined in `App/permissions.py` (web, incl. `membership.view`/`membership.import` added 2026-08-14, `membership.delete` added 2026-08-31). Same permission strings checked in SemirPhone via `UserSession.hasPermission()` (mobile):
+29 permissions defined in `App/permissions.py` (web, incl. `membership.view`/`membership.import` added 2026-08-14, `membership.delete` added 2026-08-31, `membership.export` added 2026-09-01). Same permission strings checked in SemirPhone via `UserSession.hasPermission()` (mobile):
 - `page_analytics`, `page_coupons`, `page_cnv_comparison`, `page_shop_detail`
 - `download_analytics`, `download_coupons`, `download_shop_detail`
 - `manage_users`, `manage_campaigns`

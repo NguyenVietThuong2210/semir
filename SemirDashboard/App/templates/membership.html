@@ -31,6 +31,7 @@
 {% endblock %}
 
 {% block content %}
+{% check_perm 'membership.export' as can_dl_membership %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
         <h2><i class="bi bi-award"></i> Customer Membership</h2>
@@ -150,6 +151,15 @@
 <div class="section-card shadow-sm">
     <div class="section-header">
         <span class="section-title"><i class="bi bi-bar-chart me-2"></i>Members per Grade — Comparison</span>
+        {% if can_dl_membership %}
+            {% if to_batch %}
+            <a href="{% url 'export_membership_excel' %}?section=comparison&from_batch={{ from_batch|default:'' }}&to_batch={{ to_batch }}"
+               class="btn btn-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+            {% else %}
+            <button class="btn btn-light btn-sm" disabled title="Select a snapshot to export">
+                <i class="bi bi-file-earmark-excel me-1"></i>Download Excel</button>
+            {% endif %}
+        {% endif %}
     </div>
     <div class="section-body">
         {% if not from_batch %}
@@ -168,6 +178,15 @@
 <div class="section-card shadow-sm">
     <div class="section-header">
         <span class="section-title"><i class="bi bi-shop me-2"></i>Members per Grade — by Registration Store</span>
+        {% if can_dl_membership %}
+            {% if to_batch %}
+            <a href="{% url 'export_membership_excel' %}?section=store&from_batch={{ from_batch|default:'' }}&to_batch={{ to_batch }}"
+               class="btn btn-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+            {% else %}
+            <button class="btn btn-light btn-sm" disabled title="Select a snapshot to export">
+                <i class="bi bi-file-earmark-excel me-1"></i>Download Excel</button>
+            {% endif %}
+        {% endif %}
     </div>
     <div class="section-body">
         {% if not from_batch %}
@@ -187,8 +206,26 @@
 <div class="section-card shadow-sm">
     <div class="section-header">
         <span class="section-title"><i class="bi bi-people-fill me-2"></i>Comparison — Members Who Changed Grade</span>
+        {% if can_dl_membership %}
+            {% if from_batch and to_batch %}
+            <a id="moversDownloadLink" href="{% url 'export_membership_excel' %}?section=movers&from_batch={{ from_batch }}&to_batch={{ to_batch }}"
+               class="btn btn-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+            {% else %}
+            <button id="moversDownloadLink" class="btn btn-light btn-sm" disabled title="Select both a From and To snapshot">
+                <i class="bi bi-file-earmark-excel me-1"></i>Download Excel</button>
+            {% endif %}
+        {% endif %}
     </div>
     <div class="section-body">
+        <p class="sub-section-title mb-2" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">
+            <i class="bi bi-shop me-1"></i>Overview by Store
+        </p>
+        <div class="loading-spinner" id="moversOverviewSpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
+        <div id="moversOverviewResult">
+            <p class="no-data-msg text-muted">Loading…</p>
+        </div>
+
+        <div class="mt-3 pt-3" style="border-top:1px dashed var(--border);">
         <div class="shop-select-row mb-3">
             <div>
                 <label>Registration Store</label>
@@ -225,6 +262,7 @@
         <div id="moversResult">
             <p class="no-data-msg text-muted">Loading…</p>
         </div>
+        </div>
     </div>
 </div>
 
@@ -234,6 +272,10 @@
 <div class="section-card shadow-sm">
     <div class="section-header">
         <span class="section-title"><i class="bi bi-graph-up me-2"></i>Members per Grade Over Time</span>
+        {% if can_dl_membership %}
+        <a id="trendDownloadLink" href="{% url 'export_membership_excel' %}?section=trend"
+           class="btn btn-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+        {% endif %}
     </div>
     <div class="section-body">
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
@@ -270,6 +312,10 @@
 <div class="section-card shadow-sm">
     <div class="section-header">
         <span class="section-title"><i class="bi bi-people me-2"></i>Customer Tier Progress</span>
+        {% if can_dl_membership %}
+        <a id="tierDownloadLink" href="{% url 'export_membership_excel' %}?section=tier"
+           class="btn btn-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+        {% endif %}
     </div>
     <div class="section-body">
         <div class="shop-select-row mb-3">
@@ -380,6 +426,12 @@
         const trendStoreSel = document.getElementById('trendStoreSel');
         if (trendStoreSel) {
             trendStoreSel.addEventListener('change', function() {
+                const trendDownloadLink = document.getElementById('trendDownloadLink');
+                if (trendDownloadLink) {
+                    let downloadUrl = "{% url 'export_membership_excel' %}?section=trend";
+                    if (trendStoreSel.value) downloadUrl += '&store=' + encodeURIComponent(trendStoreSel.value);
+                    trendDownloadLink.href = downloadUrl;
+                }
                 fetch("{% url 'membership_trend_partial' %}?store=" + encodeURIComponent(trendStoreSel.value), {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                 })
@@ -414,6 +466,29 @@
     };
     loadStoreBreakdown();
 
+    window.loadMoversOverview = function() {
+        const result = document.getElementById('moversOverviewResult');
+        const spinner = document.getElementById('moversOverviewSpinner');
+        if (!result) return;
+        const toBatch = "{{ to_batch|default:'' }}";
+        const fromBatch = "{{ from_batch|default:'' }}";
+        if (!toBatch || !fromBatch) {
+            result.innerHTML = '<p class="no-data-msg text-muted">Select both a "From" and "To" snapshot above.</p>';
+            return;
+        }
+        spinner.style.display = 'block';
+        result.innerHTML = '';
+        let url = "{% url 'membership_movers_overview_partial' %}?from_batch=" + encodeURIComponent(fromBatch) + '&to_batch=' + encodeURIComponent(toBatch);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })
+            .catch(err => {
+                spinner.style.display = 'none';
+                result.innerHTML = '<div class="alert alert-danger">Network error: ' + err.message + '</div>';
+            });
+    };
+    loadMoversOverview();
+
     window.loadMovers = function() {
         const result = document.getElementById('moversResult');
         const spinner = document.getElementById('moversSpinner');
@@ -433,6 +508,12 @@
         if (store) url += '&store=' + encodeURIComponent(store);
         if (grade) url += '&grade=' + encodeURIComponent(grade);
         if (direction) url += '&direction=' + encodeURIComponent(direction);
+        let downloadUrl = "{% url 'export_membership_excel' %}?section=movers&from_batch=" + encodeURIComponent(fromBatch) + '&to_batch=' + encodeURIComponent(toBatch);
+        if (store) downloadUrl += '&store=' + encodeURIComponent(store);
+        if (grade) downloadUrl += '&grade=' + encodeURIComponent(grade);
+        if (direction) downloadUrl += '&direction=' + encodeURIComponent(direction);
+        const moversDownloadLink = document.getElementById('moversDownloadLink');
+        if (moversDownloadLink) moversDownloadLink.href = downloadUrl;
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })
@@ -453,6 +534,11 @@
         let url = "{% url 'membership_table_partial' %}?";
         if (grade) url += 'grade=' + encodeURIComponent(grade);
         if (shop) url += (url.endsWith('?') ? '' : '&') + 'shop=' + encodeURIComponent(shop);
+        let downloadUrl = "{% url 'export_membership_excel' %}?section=tier";
+        if (grade) downloadUrl += '&grade=' + encodeURIComponent(grade);
+        if (shop) downloadUrl += '&shop=' + encodeURIComponent(shop);
+        const tierDownloadLink = document.getElementById('tierDownloadLink');
+        if (tierDownloadLink) tierDownloadLink.href = downloadUrl;
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })

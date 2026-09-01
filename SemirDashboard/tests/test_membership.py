@@ -9,7 +9,11 @@ Covers:
      MembershipSnapshotBatch.grade_counts/grade_members (JSON — redesigned
      2026-09-01, see App/models/membership.py docstring)
   4. Auto-hook wiring into upload_customers
-  5. create_backfill_snapshot() never touches the live Customer table
+  5. create_backfill_snapshot() never touches the live Customer table;
+     also overrides each row's registration_store with the vip_id's
+     CURRENT live Customer.registration_store (PO decision 2026-09-02),
+     falling back to the file's own value when there's no live match.
+     5B. _resolve_live_stores() bulk helper — exactly 1 query.
   6. compare_batches() delta calculation
   7. get_live_customer_tier_table() — live Customer-table counterpart
   8. Web smoke — /membership/ permission gating
@@ -28,7 +32,9 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pandas as pd
+from openpyxl import load_workbook
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import Client, TestCase
 
 from App.models import Customer, SalesTransaction, Role, UserProfile
@@ -39,9 +45,12 @@ from App.analytics.membership import (
     compute_annual_spend_map, compare_batches,
     get_grade_breakdown, get_all_batch_grade_series, get_grade_breakdown_by_store,
     get_grade_breakdown_by_store_comparison, get_grade_changes,
+    get_grade_changes_overview_by_store, get_grade_changes_store_transitions,
     get_live_customer_tier_table, get_snapshot_registration_stores, DISPLAY_GRADES,
 )
-from App.services.membership_snapshot import create_auto_snapshot, create_backfill_snapshot
+from App.services.membership_snapshot import (
+    create_auto_snapshot, create_backfill_snapshot, _resolve_live_stores,
+)
 
 from tests.base import SnapshotTestCase
 
@@ -261,6 +270,17 @@ class CreateAutoSnapshotTest(TestCase):
         batch = create_auto_snapshot(as_of_date=date(2026, 6, 1))
         self.assertEqual(batch.grade_counts['by_store']['(No Store)'].get('Gold', 0), 1)
 
+    def test_unaffected_by_backfill_live_store_resolution(self):
+        # Regression check only (not new logic): create_auto_snapshot()
+        # already reads registration_store straight from the live Customer
+        # table by construction, so the backfill-only _resolve_live_stores()
+        # fix must not touch its behavior or call it.
+        _customer('C10', 'P10', grade='Silver', store='Shop A')
+        with patch("App.services.membership_snapshot._resolve_live_stores") as mock_resolve:
+            batch = create_auto_snapshot(as_of_date=date(2026, 6, 1))
+        mock_resolve.assert_not_called()
+        self.assertEqual(batch.grade_counts['by_store']['Shop A'].get('Silver', 0), 1)
+
 
 # ---------------------------------------------------------------------------
 # 4. Auto-hook wiring into upload_customers
@@ -346,6 +366,95 @@ class CreateBackfillSnapshotTest(TestCase):
         self.assertEqual(batch.source, 'manual_import')
         self.assertEqual(batch.grade_counts['overall'].get('Diamond', 0), 1)
         self.assertEqual(batch.grade_members['overall']['Diamond'], ['B1'])
+
+    def test_uses_live_store_not_file_store(self):
+        # PO decision 2026-09-02: old historical files can use a different
+        # store-naming format than the live table — the backfill snapshot
+        # must attribute the row to the CURRENT live store, not the file's.
+        _customer('B2', 'PB2', grade='Gold', store='巴拉越南河内市SAVICO MEGAMALL-直营店')
+
+        data = _make_xlsx(
+            ["VIP ID", "PHONE NO.", "Name", "VIP GRADE", "REGISTRATION STORE"],
+            [{"VIP ID": "B2", "PHONE NO.": "PB2", "Name": "Backfilled",
+              "VIP GRADE": "Gold", "REGISTRATION STORE": "Savico Megamall"}],
+        )
+        f = _django_file(data, "backfill.xlsx")
+        result = create_backfill_snapshot(f, snapshot_date=date(2025, 1, 15))
+
+        batch = MembershipSnapshotBatch.objects.get(pk=result['batch_id'])
+        self.assertNotIn('Savico Megamall', batch.grade_counts['by_store'])
+        self.assertEqual(
+            batch.grade_counts['by_store']['巴拉越南河内市SAVICO MEGAMALL-直营店'].get('Gold', 0), 1,
+        )
+        self.assertEqual(
+            batch.grade_members['by_store']['巴拉越南河内市SAVICO MEGAMALL-直营店']['Gold'], ['B2'],
+        )
+
+    def test_falls_back_to_file_store_when_no_live_match(self):
+        # vip_id in the uploaded file but not in the live Customer table
+        # (deleted since, or never re-uploaded) — keep the file's own value.
+        data = _make_xlsx(
+            ["VIP ID", "PHONE NO.", "Name", "VIP GRADE", "REGISTRATION STORE"],
+            [{"VIP ID": "GONE1", "PHONE NO.": "P999", "Name": "Ghost",
+              "VIP GRADE": "Silver", "REGISTRATION STORE": "Old Shop Name"}],
+        )
+        f = _django_file(data, "backfill.xlsx")
+        result = create_backfill_snapshot(f, snapshot_date=date(2025, 1, 15))
+
+        batch = MembershipSnapshotBatch.objects.get(pk=result['batch_id'])
+        self.assertEqual(batch.grade_counts['by_store']['Old Shop Name'].get('Silver', 0), 1)
+        self.assertEqual(batch.grade_members['by_store']['Old Shop Name']['Silver'], ['GONE1'])
+
+    def test_uses_live_store_when_live_store_is_blank(self):
+        # Direct test for the blank-live-store edge case (review follow-up,
+        # 2026-09-02) -- the file's store is non-blank but the live store is
+        # blank; the row must land under the canonical '(No Store)' bucket,
+        # not a raw '' key, matching _resolve_live_stores()'s coercion.
+        _customer('B3', 'PB3', grade='Silver', store='')
+
+        data = _make_xlsx(
+            ["VIP ID", "PHONE NO.", "Name", "VIP GRADE", "REGISTRATION STORE"],
+            [{"VIP ID": "B3", "PHONE NO.": "PB3", "Name": "Backfilled",
+              "VIP GRADE": "Silver", "REGISTRATION STORE": "Some Old Store"}],
+        )
+        f = _django_file(data, "backfill.xlsx")
+        result = create_backfill_snapshot(f, snapshot_date=date(2025, 1, 15))
+
+        batch = MembershipSnapshotBatch.objects.get(pk=result['batch_id'])
+        self.assertIn('(No Store)', batch.grade_counts['by_store'])
+        self.assertNotIn('', batch.grade_counts['by_store'])
+        self.assertEqual(batch.grade_counts['by_store']['(No Store)'].get('Silver', 0), 1)
+
+
+# ---------------------------------------------------------------------------
+# 5B. _resolve_live_stores() — bulk store-lookup helper
+# ---------------------------------------------------------------------------
+
+class ResolveLiveStoresTest(TestCase):
+    def test_returns_only_existing_vip_ids_with_correct_values(self):
+        _customer('E1', 'PE1', store='Shop A')
+        _customer('E2', 'PE2', store='Shop B')
+
+        result = _resolve_live_stores(['E1', 'E2', 'MISSING1', 'MISSING2'])
+
+        self.assertEqual(result, {'E1': 'Shop A', 'E2': 'Shop B'})
+        self.assertNotIn('MISSING1', result)
+        self.assertNotIn('MISSING2', result)
+
+    def test_exactly_one_query_regardless_of_input_size(self):
+        _customer('E3', 'PE3', store='Shop C')
+        vip_ids = ['E3'] + [f'NOPE{i}' for i in range(500)]
+        with self.assertNumQueries(1):
+            _resolve_live_stores(vip_ids)
+
+    def test_blank_live_store_coerced_to_no_store_placeholder(self):
+        # Centralized here 2026-09-02 (see docstring) after a real bug where
+        # a caller used the raw '' value as a by_store dict key instead of
+        # the canonical '(No Store)' placeholder every other store-keying
+        # path in this codebase uses.
+        _customer('E4', 'PE4', store='')
+        result = _resolve_live_stores(['E4'])
+        self.assertEqual(result, {'E4': '(No Store)'})
 
 
 # ---------------------------------------------------------------------------
@@ -819,6 +928,40 @@ class GetGradeBreakdownByStoreComparisonTest(TestCase):
         rows = {r['store']: r for r in get_grade_breakdown_by_store_comparison(b1.id, b2.id)}
         self.assertNotIn('Shop NG', rows)  # total_from == total_to == 0 -> excluded entirely
 
+    def test_all_stores_total_row_appended_last(self):
+        # Added 2026-09-02, PO feedback — the last row is the 'All Stores'
+        # total, computed from get_grade_breakdown() (the 'overall' bucket),
+        # NOT a sum of the per-store rows above it.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'AS1', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'AS1', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'AS2', 'Gold', 'Shop A')
+        _add_snapshot_member(b1, 'AS3', 'Silver', 'Shop B')
+        _add_snapshot_member(b2, 'AS3', 'Gold', 'Shop B')
+
+        rows = get_grade_breakdown_by_store_comparison(b1.id, b2.id)
+        for row in rows[:-1]:
+            self.assertFalse(row['is_total'])
+        total_row = rows[-1]
+        self.assertEqual(total_row['store'], 'All Stores')
+        self.assertTrue(total_row['is_total'])
+
+        expected_from = get_grade_breakdown(b1.id)
+        expected_to = get_grade_breakdown(b2.id)
+        counts_by_grade = {c['grade']: c for c in total_row['counts']}
+        for g in DISPLAY_GRADES:
+            self.assertEqual(counts_by_grade[g]['from'], expected_from[g])
+            self.assertEqual(counts_by_grade[g]['to'], expected_to[g])
+        self.assertEqual(total_row['total_from'], sum(expected_from.values()))
+        self.assertEqual(total_row['total_to'], sum(expected_to.values()))
+        # Cross-check against compare_batches() (no store=) — the same
+        # authoritative "all stores combined" source.
+        comparison = {c['grade']: c for c in compare_batches(b1.id, b2.id)}
+        for g in DISPLAY_GRADES:
+            self.assertEqual(counts_by_grade[g]['from'], comparison[g]['from_count'])
+            self.assertEqual(counts_by_grade[g]['to'], comparison[g]['to_count'])
+
 
 class MembershipStoreBreakdownPartialWebTest(TestCase):
     """membership_store_breakdown_partial — always renders the From/To
@@ -853,6 +996,7 @@ class MembershipStoreBreakdownPartialWebTest(TestCase):
         self.assertIn(b"Shop A", r.content)
         self.assertIn(b"From", r.content)
         self.assertIn(b"To", r.content)
+        self.assertIn(b"All Stores", r.content)
 
     def test_blocked_for_anonymous(self):
         client = Client()
@@ -936,7 +1080,12 @@ class GetGradeChangesTest(TestCase):
         rows, total = get_grade_changes(b1.id, b2.id)
         self.assertEqual(total, 0)
 
-    def test_store_filter_scopes_both_sides(self):
+    def test_store_filter_matches_same_store_both_sides(self):
+        # Still true under the new OR-semantics (store=='X' if from_store==X
+        # OR to_store==X): a customer whose store is unchanged is matched by
+        # that one store's filter, and NOT by an unrelated store's filter.
+        # See test_store_filter_or_semantics_matches_either_side (below) for
+        # the actual behavior-change case (store differs between snapshots).
         b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
         b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
         _add_snapshot_member(b1, 'M5', 'Member', 'Shop A')
@@ -1012,6 +1161,287 @@ class GetGradeChangesTest(TestCase):
         self.assertIsNone(rows[0]['name'])
         self.assertIsNone(rows[0]['phone'])
 
+    def test_from_store_to_store_fields_same_store(self):
+        # Store unchanged between snapshots -> from_store == to_store.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'SS1', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'SS1', 'Silver', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(total, 1)
+        self.assertEqual(rows[0]['from_store'], 'Shop A')
+        self.assertEqual(rows[0]['to_store'], 'Shop A')
+
+    def test_from_store_to_store_fields_different_store(self):
+        # Store-name-drift case (e.g. a customer re-import that reformatted a
+        # store's name between the two snapshots) -> from_store != to_store,
+        # both populated correctly rather than the change being invisible.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'DS1', 'Member', 'Old Store Name')
+        _add_snapshot_member(b2, 'DS1', 'Silver', 'New Store Name')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(total, 1)
+        self.assertEqual(rows[0]['from_store'], 'Old Store Name')
+        self.assertEqual(rows[0]['to_store'], 'New Store Name')
+
+    def test_store_filter_or_semantics_matches_either_side(self):
+        # PO feedback: a customer who moved FROM store X TO store Y (X != Y)
+        # must now be findable via EITHER store's filter — this is the
+        # regression-fixing behavior change from the old AND/scoped-both-
+        # sides semantics, which made these customers unfindable by any
+        # store filter.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'OR1', 'Member', 'X')
+        _add_snapshot_member(b2, 'OR1', 'Silver', 'Y')
+
+        rows_x, total_x = get_grade_changes(b1.id, b2.id, store='X')
+        self.assertEqual(total_x, 1)
+        self.assertEqual(rows_x[0]['vip_id'], 'OR1')
+
+        rows_y, total_y = get_grade_changes(b1.id, b2.id, store='Y')
+        self.assertEqual(total_y, 1)
+        self.assertEqual(rows_y[0]['vip_id'], 'OR1')
+
+        rows_z, total_z = get_grade_changes(b1.id, b2.id, store='Z')
+        self.assertEqual(total_z, 0)
+
+
+# ---------------------------------------------------------------------------
+# 15B. get_grade_changes_overview_by_store() — aggregate Downgrade/Upgrade
+#      overview table, added 2026-09-02 (PO feedback). Sits above the
+#      individual-customer list get_grade_changes() powers.
+# ---------------------------------------------------------------------------
+
+class GetGradeChangesOverviewByStoreTest(TestCase):
+    def test_missing_batch_returns_empty_list(self):
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        self.assertEqual(get_grade_changes_overview_by_store(None, b2.id), [])
+        self.assertEqual(get_grade_changes_overview_by_store(b2.id, None), [])
+        self.assertEqual(get_grade_changes_overview_by_store(None, None), [])
+
+    def test_per_store_downgrade_upgrade_counts(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        # Shop A: two upgrades to Silver, one downgrade to Silver.
+        _add_snapshot_member(b1, 'OV1', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'OV1', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'OV2', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'OV2', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'OV3', 'Gold', 'Shop A')
+        _add_snapshot_member(b2, 'OV3', 'Silver', 'Shop A')
+        # Shop B: one upgrade to Gold.
+        _add_snapshot_member(b1, 'OV4', 'Silver', 'Shop B')
+        _add_snapshot_member(b2, 'OV4', 'Gold', 'Shop B')
+        # Shop C: configured members, but NO grade change between batches —
+        # must still appear in the list with all-zero counts.
+        _add_snapshot_member(b1, 'OV5', 'Silver', 'Shop C')
+        _add_snapshot_member(b2, 'OV5', 'Silver', 'Shop C')
+
+        rows = get_grade_changes_overview_by_store(b1.id, b2.id)
+        by_store = {r['store']: r for r in rows}
+
+        self.assertIn('Shop A', by_store)
+        counts_a = {c['grade']: c for c in by_store['Shop A']['counts']}
+        self.assertEqual(counts_a['Silver']['upgrade'], 2)
+        self.assertEqual(counts_a['Silver']['downgrade'], 1)
+        self.assertEqual(by_store['Shop A']['total_upgrade'], 2)
+        self.assertEqual(by_store['Shop A']['total_downgrade'], 1)
+        self.assertFalse(by_store['Shop A']['is_total'])
+
+        counts_b = {c['grade']: c for c in by_store['Shop B']['counts']}
+        self.assertEqual(counts_b['Gold']['upgrade'], 1)
+        self.assertEqual(counts_b['Gold']['downgrade'], 0)
+
+        # Shop C: zero changes, must still appear with all-zero counts.
+        self.assertIn('Shop C', by_store)
+        self.assertEqual(by_store['Shop C']['total_upgrade'], 0)
+        self.assertEqual(by_store['Shop C']['total_downgrade'], 0)
+        for c in by_store['Shop C']['counts']:
+            self.assertEqual(c['upgrade'], 0)
+            self.assertEqual(c['downgrade'], 0)
+
+    def test_all_stores_row_last_and_matches_independent_tally(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'AT1', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'AT1', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'AT2', 'Gold', 'Shop A')
+        _add_snapshot_member(b2, 'AT2', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'AT3', 'Silver', 'Shop B')
+        _add_snapshot_member(b2, 'AT3', 'Gold', 'Shop B')
+        _add_snapshot_member(b1, 'AT4', 'Silver', 'Shop B')  # unchanged, not counted
+        _add_snapshot_member(b2, 'AT4', 'Silver', 'Shop B')
+
+        rows = get_grade_changes_overview_by_store(b1.id, b2.id)
+        total_row = rows[-1]
+        self.assertEqual(total_row['store'], 'All Stores')
+        self.assertTrue(total_row['is_total'])
+        for row in rows[:-1]:
+            self.assertFalse(row['is_total'])
+
+        # Independent verification path: tally get_grade_changes() directly
+        # (limit=None — full set) by to_grade/direction, rather than summing
+        # the per-store rows already computed above.
+        changes, total = get_grade_changes(b1.id, b2.id, limit=None)
+        self.assertEqual(total, 3)
+        expected_up = {g: 0 for g in DISPLAY_GRADES}
+        expected_down = {g: 0 for g in DISPLAY_GRADES}
+        for c in changes:
+            bucket = expected_up if c['direction'] == 'upgrade' else expected_down
+            bucket[c['to_grade']] += 1
+
+        counts_by_grade = {c['grade']: c for c in total_row['counts']}
+        for g in DISPLAY_GRADES:
+            self.assertEqual(counts_by_grade[g]['upgrade'], expected_up[g])
+            self.assertEqual(counts_by_grade[g]['downgrade'], expected_down[g])
+        self.assertEqual(total_row['total_upgrade'], sum(expected_up.values()))
+        self.assertEqual(total_row['total_downgrade'], sum(expected_down.values()))
+
+    def test_db_query_count_is_exactly_two(self):
+        # Critical performance constraint — must be one query per batch
+        # (via _grade_members_json()), NOT one query per store.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        for i in range(10):
+            store = f"Shop {i}"
+            _add_snapshot_member(b1, f'Q{i}', 'Member', store)
+            _add_snapshot_member(b2, f'Q{i}', 'Silver', store)
+
+        with self.assertNumQueries(2):
+            get_grade_changes_overview_by_store(b1.id, b2.id)
+
+
+# ---------------------------------------------------------------------------
+# 15D. get_grade_changes_store_transitions() — itemized (from_store, to_store)
+#      appendix for changes get_grade_changes_overview_by_store() cannot
+#      attribute to a single store (store-name-drift cases). Added 2026-09.
+# ---------------------------------------------------------------------------
+
+def _build_transitions_scenario():
+    """Shared fixture for grouping/reconciliation tests below.
+
+    Same-store changes (attributable by the main overview table):
+      SAME1: Shop A -> Shop A, Member -> Silver (upgrade)
+      SAME2: Shop A -> Shop A, Gold -> Silver (downgrade)
+      SAME3: Shop F -> Shop F, Silver -> Gold (upgrade)
+      -> 3 changes total, all invisible to get_grade_changes_store_transitions().
+
+    Different-store changes (the "invisible" remainder this function surfaces):
+      Shop A -> Shop B (3 members, the largest group — must sort first):
+        T1: Member -> Silver (upgrade)
+        T2: Diamond -> Gold (downgrade)
+        T3: Silver -> Gold (upgrade)
+      Shop C -> Shop D (1 member):
+        T4: Member -> Silver (upgrade)
+      (No Store) -> Shop E (1 member, blank store on the from-side):
+        T5: Gold -> Diamond (upgrade)
+      -> 5 changes total.
+
+    Grand total across both groups: 8 changes.
+    """
+    b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+    b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+
+    _add_snapshot_member(b1, 'SAME1', 'Member', 'Shop A')
+    _add_snapshot_member(b2, 'SAME1', 'Silver', 'Shop A')
+    _add_snapshot_member(b1, 'SAME2', 'Gold', 'Shop A')
+    _add_snapshot_member(b2, 'SAME2', 'Silver', 'Shop A')
+    _add_snapshot_member(b1, 'SAME3', 'Silver', 'Shop F')
+    _add_snapshot_member(b2, 'SAME3', 'Gold', 'Shop F')
+
+    _add_snapshot_member(b1, 'T1', 'Member', 'Shop A')
+    _add_snapshot_member(b2, 'T1', 'Silver', 'Shop B')
+    _add_snapshot_member(b1, 'T2', 'Diamond', 'Shop A')
+    _add_snapshot_member(b2, 'T2', 'Gold', 'Shop B')
+    _add_snapshot_member(b1, 'T3', 'Silver', 'Shop A')
+    _add_snapshot_member(b2, 'T3', 'Gold', 'Shop B')
+
+    _add_snapshot_member(b1, 'T4', 'Member', 'Shop C')
+    _add_snapshot_member(b2, 'T4', 'Silver', 'Shop D')
+
+    _add_snapshot_member(b1, 'T5', 'Gold', '')  # blank -> '(No Store)'
+    _add_snapshot_member(b2, 'T5', 'Diamond', 'Shop E')
+
+    return b1, b2
+
+
+class GetGradeChangesStoreTransitionsTest(TestCase):
+    def test_missing_batch_returns_empty_list(self):
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        self.assertEqual(get_grade_changes_store_transitions(None, b2.id), [])
+        self.assertEqual(get_grade_changes_store_transitions(b2.id, None), [])
+        self.assertEqual(get_grade_changes_store_transitions(None, None), [])
+
+    def test_grouping_counts_sort_order_and_same_store_exclusion(self):
+        b1, b2 = _build_transitions_scenario()
+
+        transitions = get_grade_changes_store_transitions(b1.id, b2.id)
+        pairs = {(t['from_store'], t['to_store']): t for t in transitions}
+
+        # Same-store customers must NOT appear here — they belong in the
+        # main overview table, not this appendix.
+        self.assertNotIn(('Shop A', 'Shop A'), pairs)
+        self.assertNotIn(('Shop F', 'Shop F'), pairs)
+        self.assertEqual(len(transitions), 3)
+
+        # Grouping + per-grade counts.
+        self.assertIn(('Shop A', 'Shop B'), pairs)
+        ab = pairs[('Shop A', 'Shop B')]
+        counts_ab = {c['grade']: c for c in ab['counts']}
+        self.assertEqual(counts_ab['Silver']['upgrade'], 1)   # T1
+        self.assertEqual(counts_ab['Gold']['downgrade'], 1)   # T2
+        self.assertEqual(counts_ab['Gold']['upgrade'], 1)     # T3
+        self.assertEqual(ab['total_upgrade'], 2)
+        self.assertEqual(ab['total_downgrade'], 1)
+
+        self.assertIn(('Shop C', 'Shop D'), pairs)
+        cd = pairs[('Shop C', 'Shop D')]
+        self.assertEqual(cd['total_upgrade'], 1)
+        self.assertEqual(cd['total_downgrade'], 0)
+
+        self.assertIn(('(No Store)', 'Shop E'), pairs)
+        ne = pairs[('(No Store)', 'Shop E')]
+        self.assertEqual(ne['total_upgrade'], 1)
+        self.assertEqual(ne['total_downgrade'], 0)
+
+        # Sort order: highest total (Shop A -> Shop B, total=3) must be first.
+        self.assertEqual((transitions[0]['from_store'], transitions[0]['to_store']), ('Shop A', 'Shop B'))
+        totals = [t['total_downgrade'] + t['total_upgrade'] for t in transitions]
+        self.assertEqual(totals, sorted(totals, reverse=True))
+
+    def test_db_query_count_is_exactly_two(self):
+        b1, b2 = _build_transitions_scenario()
+        with self.assertNumQueries(2):
+            get_grade_changes_store_transitions(b1.id, b2.id)
+
+    def test_reconciliation_with_overview_by_store(self):
+        # Core correctness property of this whole feature: this function's
+        # rows are a strict partition of "the changes NOT captured by
+        # get_grade_changes_overview_by_store()'s per-store rows" — so
+        # summing both, non-total-row totals from the overview plus every
+        # row's totals from this function, must exactly equal the overview's
+        # 'All Stores' row.
+        b1, b2 = _build_transitions_scenario()
+
+        transitions = get_grade_changes_store_transitions(b1.id, b2.id)
+        overview = get_grade_changes_overview_by_store(b1.id, b2.id)
+
+        transitions_total = sum(t['total_downgrade'] + t['total_upgrade'] for t in transitions)
+        overview_non_total = sum(
+            r['total_downgrade'] + r['total_upgrade'] for r in overview if not r['is_total']
+        )
+        all_stores_row = next(r for r in overview if r['is_total'])
+        all_stores_total = all_stores_row['total_downgrade'] + all_stores_row['total_upgrade']
+
+        self.assertEqual(all_stores_total, 8)  # 3 same-store + 5 different-store
+        self.assertEqual(transitions_total, 5)
+        self.assertEqual(overview_non_total, 3)
+        self.assertEqual(transitions_total + overview_non_total, all_stores_total)
+
 
 class MembershipMoversPartialWebTest(TestCase):
     def test_shows_changed_members(self):
@@ -1082,6 +1512,92 @@ class MembershipMoversPartialWebTest(TestCase):
         self.assertIn(b"MV5", r.content)
         self.assertNotIn(b"MV4", r.content)
 
+    def test_store_filter_matches_either_from_or_to_store(self):
+        # OR-semantics regression test at the HTTP/view layer (added
+        # 2026-09-02 review follow-up) — a customer whose store changed
+        # between snapshots must now be findable by filtering on EITHER
+        # their old or their new store, not excluded from both like the
+        # pre-2026-09-02 AND-semantics did.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'MV6', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'MV6', 'Silver', 'Shop B')  # store changed A -> B
+
+        user = User.objects.create_superuser("movers6", password="pw")
+        client = Client()
+        client.force_login(user)
+        r_a = client.get(
+            f"/membership/partial/movers/?from_batch={b1.id}&to_batch={b2.id}&store=Shop+A",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertIn(b"MV6", r_a.content)
+        r_b = client.get(
+            f"/membership/partial/movers/?from_batch={b1.id}&to_batch={b2.id}&store=Shop+B",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertIn(b"MV6", r_b.content)
+        r_c = client.get(
+            f"/membership/partial/movers/?from_batch={b1.id}&to_batch={b2.id}&store=Shop+C",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertNotIn(b"MV6", r_c.content)
+
+
+# ---------------------------------------------------------------------------
+# 15C. membership_movers_overview_partial web tests (added 2026-09-02)
+# ---------------------------------------------------------------------------
+
+class MembershipMoversOverviewPartialWebTest(TestCase):
+    def test_shows_downgrade_upgrade_counts(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'MO1', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'MO1', 'Silver', 'Shop A')
+
+        user = User.objects.create_superuser("moversov1", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/partial/movers-overview/?from_batch={b1.id}&to_batch={b2.id}",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"Shop A", r.content)
+        self.assertIn(b"All Stores", r.content)
+
+    def test_drifted_store_shows_as_single_arrow_row_in_the_one_table(self):
+        # Merged into ONE table (2026-09-02, PO feedback: "đừng làm nó
+        # complicated") — a customer whose store differs between From/To no
+        # longer gets a separate appendix table; they appear as one "A -> B"
+        # row inside the same table as the real per-store rows.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'MO2', 'Member', 'Old Store Name')
+        _add_snapshot_member(b2, 'MO2', 'Silver', 'New Store Name')
+
+        user = User.objects.create_superuser("moversov3", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/partial/movers-overview/?from_batch={b1.id}&to_batch={b2.id}",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Old Store Name → New Store Name".encode(), r.content)
+        # No separate appendix section/heading anymore -- one table only.
+        self.assertNotIn(b"Store Name Changes", r.content)
+
+    def test_requires_both_batches(self):
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        user = User.objects.create_superuser("moversov2", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/partial/movers-overview/?to_batch={b2.id}",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"Select both", r.content)
+
+    def test_blocked_for_anonymous(self):
+        client = Client()
+        r = client.get("/membership/partial/movers-overview/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 401)
+
 
 # ---------------------------------------------------------------------------
 # 16. membership_trend_partial — JSON endpoint for the chart's store filter
@@ -1116,3 +1632,378 @@ class MembershipTrendPartialWebTest(TestCase):
         client = Client()
         r = client.get("/membership/partial/trend/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(r.status_code, 401)
+
+
+# ---------------------------------------------------------------------------
+# 17. export_membership_excel — per-section Excel download buttons
+#     (added 2026-09-01: comparison | store | movers | trend | tier)
+# ---------------------------------------------------------------------------
+
+class ExportMembershipExcelTest(_ClearDropdownCacheMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        self.b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(self.b1, 'EXP1', 'Member', 'Shop A')
+        _add_snapshot_member(self.b2, 'EXP1', 'Silver', 'Shop A')
+        self.user = User.objects.create_superuser("exportadmin", password="pw")
+        self.client_ = Client()
+        self.client_.force_login(self.user)
+
+    def _get(self, params):
+        return self.client_.get(f"/membership/export/?{params}", SERVER_NAME="localhost")
+
+    def test_comparison_export_returns_xlsx(self):
+        r = self._get(f"section=comparison&from_batch={self.b1.id}&to_batch={self.b2.id}")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            r["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertTrue(r.content)
+        wb = load_workbook(io.BytesIO(r.content))
+        ws = wb.active
+        self.assertEqual(ws.title, "Grade Comparison")
+        header = [c.value for c in ws[3]]
+        self.assertEqual(header, ["Grade", "From", "To", "Diff", "% Change"])
+        rows = {row[0]: row for row in ws.iter_rows(min_row=4, values_only=True)}
+        self.assertIn('Silver', rows)
+        self.assertEqual(rows['Silver'][1], 0)   # from_count
+        self.assertEqual(rows['Silver'][2], 1)   # to_count
+
+    def test_comparison_export_missing_batch_redirects(self):
+        r = self._get("section=comparison")
+        self.assertEqual(r.status_code, 302)
+
+    def test_store_export_returns_xlsx(self):
+        r = self._get(f"section=store&from_batch={self.b1.id}&to_batch={self.b2.id}")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        self.assertEqual(wb.active.title, "By Registration Store")
+        self.assertGreater(wb.active.max_row, 1)
+        header = [c.value for c in wb.active[1]]
+        self.assertEqual(header[0], "Store")
+        self.assertIn("Silver From", header)
+        self.assertIn("Silver To", header)
+
+    def test_movers_export_returns_xlsx(self):
+        r = self._get(f"section=movers&from_batch={self.b1.id}&to_batch={self.b2.id}")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        self.assertEqual(wb.active.title, "Grade Changes")
+        header = [c.value for c in wb.active[1]]
+        self.assertEqual(
+            header,
+            ["VIP ID", "Name", "Phone", "Store", "From Store", "To Store",
+             "From Grade", "To Grade", "Direction"],
+        )
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], 'EXP1')
+        self.assertEqual(rows[0][4], 'Shop A')  # from_store
+        self.assertEqual(rows[0][5], 'Shop A')  # to_store
+        self.assertEqual(rows[0][6], 'Member')  # from_grade
+        self.assertEqual(rows[0][7], 'Silver')  # to_grade
+
+    def test_movers_export_full_dataset_not_capped_at_ui_limit(self):
+        # UI partial view/table is limited for display; the export must
+        # contain the FULL filtered set. Use >20 changed members to prove it.
+        b3 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 2, 1), source='auto')
+        b4 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 7, 1), source='auto')
+        for i in range(25):
+            vid = f"MOV{i}"
+            _add_snapshot_member(b3, vid, 'Member', 'Shop A')
+            _add_snapshot_member(b4, vid, 'Silver', 'Shop A')
+        r = self._get(f"section=movers&from_batch={b3.id}&to_batch={b4.id}")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(len(rows), 25)
+
+    def test_movers_export_requires_both_batches(self):
+        r = self._get(f"section=movers&to_batch={self.b2.id}")
+        self.assertEqual(r.status_code, 302)
+
+    def test_trend_export_returns_xlsx(self):
+        r = self._get("section=trend")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        self.assertEqual(wb.active.title, "Grade Trend")
+        header = [c.value for c in wb.active[1]]
+        self.assertEqual(header[0], "Snapshot Date")
+        self.assertIn("Silver", header)
+
+    def test_tier_export_returns_xlsx(self):
+        _customer('TIER1', 'PT1', grade='Gold')
+        r = self._get("section=tier")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        self.assertEqual(wb.active.title, "Customer Tier Progress")
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+        self.assertTrue(any(row[0] == 'TIER1' for row in rows))
+
+    def test_tier_export_full_dataset_not_capped_at_ui_limit(self):
+        # UI partial caps get_live_customer_tier_table() at limit=500; the
+        # export must pass limit=None and return every row.
+        for i in range(505):
+            _customer(f"TCUST{i}", f"PTC{i}", grade='Member')
+        r = self._get("section=tier")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+        self.assertGreater(len(rows), 500)
+
+    def test_invalid_section_redirects(self):
+        r = self._get("section=bogus")
+        self.assertEqual(r.status_code, 302)
+
+    def test_export_blocked_without_permission(self):
+        user = User.objects.create_user("noexport", password="pw")  # no role/perm assigned
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/export/?section=comparison&from_batch={self.b1.id}&to_batch={self.b2.id}",
+            SERVER_NAME="localhost",
+        )
+        self.assertEqual(r.status_code, 302)  # requires_perm redirects to "home"
+
+    def test_export_blocked_for_anonymous(self):
+        client = Client()
+        r = client.get(
+            f"/membership/export/?section=comparison&from_batch={self.b1.id}&to_batch={self.b2.id}",
+            SERVER_NAME="localhost",
+        )
+        self.assertEqual(r.status_code, 302)  # @login_required redirects to login
+
+    def test_export_blocked_with_view_but_not_export_permission(self):
+        # Distinct from test_export_blocked_without_permission (no role at
+        # all) — this user CAN see the page (membership.view) but must still
+        # be blocked from the export endpoint without membership.export.
+        role = Role.objects.create(name='membership_view_no_export', permissions=['membership.view'], is_system=False)
+        user = User.objects.create_user("viewnoexport", password="pw")
+        UserProfile.objects.create(user=user, role=role)
+        client = Client()
+        client.force_login(user)
+        r = client.get("/membership/", SERVER_NAME="localhost")
+        self.assertEqual(r.status_code, 200)  # can view the page
+        r = client.get(
+            f"/membership/export/?section=comparison&from_batch={self.b1.id}&to_batch={self.b2.id}",
+            SERVER_NAME="localhost",
+        )
+        self.assertEqual(r.status_code, 302)  # but not export
+
+    def test_store_export_with_no_per_store_data_still_shows_all_stores_total(self):
+        # Two batches with zero snapshot members each -> no per-store rows,
+        # but get_grade_breakdown_by_store_comparison() now always appends an
+        # 'All Stores' total row (added for the by-Store overview feature) ->
+        # the export gracefully shows that all-zero total instead of
+        # redirecting, consistent with how section=comparison already
+        # behaves for a batch with no data.
+        b_empty1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 9, 1), source='auto')
+        b_empty2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 10, 1), source='auto')
+        r = self._get(f"section=store&from_batch={b_empty1.id}&to_batch={b_empty2.id}")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], 'All Stores')
+
+    def test_movers_export_with_store_grade_direction_filters(self):
+        b3 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 3, 1), source='auto')
+        b4 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 8, 1), source='auto')
+        _add_snapshot_member(b3, 'FMOV1', 'Member', 'Shop A')
+        _add_snapshot_member(b4, 'FMOV1', 'Silver', 'Shop A')   # upgrade, Shop A
+        _add_snapshot_member(b3, 'FMOV2', 'Gold', 'Shop B')
+        _add_snapshot_member(b4, 'FMOV2', 'Silver', 'Shop B')   # downgrade, Shop B
+        r = self._get(
+            f"section=movers&from_batch={b3.id}&to_batch={b4.id}"
+            "&store=Shop+A&grade=Silver&direction=upgrade"
+        )
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], 'FMOV1')
+
+    def test_movers_export_empty_filtered_result_redirects(self):
+        r = self._get(
+            f"section=movers&from_batch={self.b1.id}&to_batch={self.b2.id}&direction=downgrade"
+        )  # the only real change in setUp (EXP1) is an upgrade
+        self.assertEqual(r.status_code, 302)
+
+    def test_trend_export_with_store_filter(self):
+        r = self._get("section=trend&store=Shop+A")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        self.assertEqual(wb.active.title, "Grade Trend")
+
+    def test_trend_export_with_nonmatching_store_filter_returns_zeroed_series(self):
+        # get_all_batch_grade_series() always returns one row per EXISTING
+        # batch (never an empty list while batches exist) -- a store filter
+        # that matches nothing just zeroes every grade's count rather than
+        # redirecting. Confirms the filter is applied, not ignored.
+        r = self._get("section=trend&store=NoSuchStoreAnywhere")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(len(rows), 2)  # b1 and b2 from setUp
+        for row in rows:
+            self.assertEqual(sum(row[2:]), 0)  # all grade counts zeroed
+
+    def test_tier_export_with_grade_and_shop_filters(self):
+        _customer('TIERF1', 'PTF1', grade='Gold', store='Shop X')
+        _customer('TIERF2', 'PTF2', grade='Silver', store='Shop Y')
+        r = self._get("section=tier&grade=Gold&shop=Shop+X")
+        self.assertEqual(r.status_code, 200)
+        wb = load_workbook(io.BytesIO(r.content))
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+        self.assertTrue(any(row[0] == 'TIERF1' for row in rows))
+        self.assertFalse(any(row[0] == 'TIERF2' for row in rows))
+
+    def test_tier_export_empty_filtered_result_redirects(self):
+        r = self._get("section=tier&grade=Diamond&shop=NoSuchShopAnywhere")
+        self.assertEqual(r.status_code, 302)
+
+
+# ---------------------------------------------------------------------------
+# 17. normalize_membership_stores management command — one-time retroactive
+#     fix for EXISTING MembershipSnapshotBatch rows' `by_store` attribution,
+#     mirroring the live-Customer-store rule create_backfill_snapshot() now
+#     applies to future manual-import backfills via _resolve_live_stores()
+#     (see App/management/commands/normalize_membership_stores.py docstring).
+# ---------------------------------------------------------------------------
+
+class NormalizeMembershipStoresCommandTest(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def _run(self, **kwargs):
+        out = io.StringIO()
+        call_command('normalize_membership_stores', stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_dry_run_writes_nothing(self):
+        # Live store differs from what the manual-import batch has recorded.
+        _customer('N1', 'PN1', store='New Store Name')
+        batch = MembershipSnapshotBatch.objects.create(
+            snapshot_date=date(2026, 1, 1), source='manual_import')
+        _add_snapshot_member(batch, 'N1', 'Silver', 'Old Store Name')
+
+        before_counts = json.loads(json.dumps(batch.grade_counts))
+        before_members = json.loads(json.dumps(batch.grade_members))
+
+        self._run()  # no apply=True -> dry-run
+
+        batch.refresh_from_db()
+        self.assertEqual(batch.grade_counts, before_counts)
+        self.assertEqual(batch.grade_members, before_members)
+
+    def test_apply_updates_store_attribution_and_counts(self):
+        _customer('N2', 'PN2', store='New Store Name')
+        batch = MembershipSnapshotBatch.objects.create(
+            snapshot_date=date(2026, 1, 1), source='manual_import')
+        _add_snapshot_member(batch, 'N2', 'Silver', 'Old Store Name')
+
+        self._run(apply=True)
+
+        batch.refresh_from_db()
+        self.assertNotIn('Old Store Name', batch.grade_counts['by_store'])
+        self.assertEqual(batch.grade_counts['by_store']['New Store Name'].get('Silver', 0), 1)
+        self.assertEqual(batch.grade_members['by_store']['New Store Name']['Silver'], ['N2'])
+        # 'overall' is grade-level, not store-level — untouched by the move.
+        self.assertEqual(batch.grade_counts['overall']['Silver'], 1)
+        self.assertEqual(batch.grade_members['overall']['Silver'], ['N2'])
+
+    def test_blank_live_store_coerced_to_no_store_placeholder(self):
+        # Regression test (found via live-data reconciliation, 2026-09-02):
+        # a customer whose LIVE registration_store is genuinely blank ('')
+        # must be bucketed under the canonical '(No Store)' placeholder, not
+        # a raw empty-string key -- matching _build_rows()'s own
+        # `store_key = c['registration_store'] or '(No Store)'` convention.
+        # A raw '' key silently diverged from '(No Store)' downstream (e.g.
+        # get_grade_changes_store_transitions()'s `store or '(No Store)'`
+        # comparison treated them as equal and incorrectly skipped a real
+        # transition, breaking the overview-table reconciliation invariant).
+        _customer('N4', 'PN4', store='')  # live store is blank
+        batch = MembershipSnapshotBatch.objects.create(
+            snapshot_date=date(2026, 1, 1), source='manual_import')
+        _add_snapshot_member(batch, 'N4', 'Silver', 'Old Store Name')
+
+        self._run(apply=True)
+
+        batch.refresh_from_db()
+        self.assertIn('(No Store)', batch.grade_counts['by_store'])
+        self.assertNotIn('', batch.grade_counts['by_store'])
+        self.assertEqual(batch.grade_counts['by_store']['(No Store)'].get('Silver', 0), 1)
+        self.assertEqual(batch.grade_members['by_store']['(No Store)']['Silver'], ['N4'])
+
+    def test_vip_id_not_in_live_customer_kept_under_original_store(self):
+        batch = MembershipSnapshotBatch.objects.create(
+            snapshot_date=date(2026, 1, 1), source='manual_import')
+        _add_snapshot_member(batch, 'GHOST1', 'Gold', 'Ghost Old Store')
+        # No live Customer row created for GHOST1 at all.
+
+        self._run(apply=True)
+
+        batch.refresh_from_db()
+        self.assertEqual(batch.grade_counts['by_store']['Ghost Old Store'].get('Gold', 0), 1)
+        self.assertEqual(batch.grade_members['by_store']['Ghost Old Store']['Gold'], ['GHOST1'])
+
+    def test_default_scope_excludes_auto_batches_include_auto_widens_it(self):
+        _customer('N3', 'PN3', store='Live Store')
+        auto_batch = MembershipSnapshotBatch.objects.create(
+            snapshot_date=date(2026, 1, 1), source='auto')
+        _add_snapshot_member(auto_batch, 'N3', 'Silver', 'Stale Store')
+
+        self._run(apply=True)  # default scope: manual_import only
+
+        auto_batch.refresh_from_db()
+        self.assertIn('Stale Store', auto_batch.grade_counts['by_store'])
+        self.assertNotIn('Live Store', auto_batch.grade_counts['by_store'])
+
+        self._run(apply=True, include_auto=True)
+
+        auto_batch.refresh_from_db()
+        self.assertNotIn('Stale Store', auto_batch.grade_counts['by_store'])
+        self.assertIn('Live Store', auto_batch.grade_counts['by_store'])
+
+    def test_batch_id_targets_only_that_batch(self):
+        _customer('N4', 'PN4', store='Live Store A')
+        _customer('N5', 'PN5', store='Live Store B')
+        target = MembershipSnapshotBatch.objects.create(
+            snapshot_date=date(2026, 1, 1), source='manual_import')
+        _add_snapshot_member(target, 'N4', 'Silver', 'Old A')
+        other = MembershipSnapshotBatch.objects.create(
+            snapshot_date=date(2026, 2, 1), source='manual_import')
+        _add_snapshot_member(other, 'N5', 'Silver', 'Old B')
+
+        self._run(apply=True, batch_id=target.id)
+
+        target.refresh_from_db()
+        other.refresh_from_db()
+        self.assertIn('Live Store A', target.grade_counts['by_store'])
+        self.assertIn('Old B', other.grade_counts['by_store'])
+        self.assertNotIn('Live Store B', other.grade_counts['by_store'])
+
+    def test_unknown_batch_id_raises_command_error(self):
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            self._run(batch_id=999999)
+
+    def test_live_store_lookup_is_one_query_per_batch(self):
+        # Expected 3 queries total for one batch, regardless of vip_id count:
+        #   1. fetch the in-scope batch list (the command's scoping queryset)
+        #   2. _resolve_live_stores() — exactly ONE bulk Customer query for
+        #      the whole batch's vip_ids (never one per vip_id)
+        #   3. batch.save(update_fields=[...]) — the UPDATE for this batch
+        # cache.delete() is not a DB query.
+        batch = MembershipSnapshotBatch.objects.create(
+            snapshot_date=date(2026, 1, 1), source='manual_import')
+        for i in range(50):
+            vid = f'BULK{i}'
+            _customer(vid, f'PBULK{i}', store=f'Live Store {i % 3}')
+            _add_snapshot_member(batch, vid, 'Silver', f'Old Store {i % 5}')
+
+        with self.assertNumQueries(3):
+            call_command('normalize_membership_stores', apply=True, stdout=io.StringIO())

@@ -74,6 +74,15 @@ docker compose exec web python manage.py cnv_scheduler_smoketest --duration 30 -
 docker compose exec web python manage.py check_cnv_gap --export "path/Customers_File_*.xls" --out App/cnv/input/cnv_gap_<date>.txt
 docker compose exec web python manage.py sync_cnv --customers --ids-file App/cnv/input/cnv_gap_<date>.txt
 
+# One-time fix: retroactively normalize existing MembershipSnapshotBatch rows' by_store
+# attribution to the current live Customer.registration_store per vip_id (manual-import
+# backfill batches only inherited stale store-name formats from their upload file — see
+# docs/project_business_logic.md → "Customer Membership Snapshot Rules"). Dry-run by
+# default (prints what would change, writes nothing) — add --apply to persist.
+docker compose exec web python manage.py normalize_membership_stores
+docker compose exec web python manage.py normalize_membership_stores --apply
+docker compose exec web python manage.py normalize_membership_stores --batch-id 42 --apply
+
 # Run all shop_detail tests (edited test files must be `docker compose cp`'d into
 # the container first — no bind-mount, see Rule 7)
 docker compose exec web python manage.py test tests.test_shop_detail -v 2

@@ -13,7 +13,11 @@ _build_rows() so the aggregation/write logic is never duplicated:
 2. create_backfill_snapshot() — parses an uploaded historical file with the
    SAME column format as process_customer_file, via _parse_customer_rows()
    (kept separate from process_customer_file since it must never write to
-   the live Customer table).
+   the live Customer table). As of 2026-09-02 (PO decision), each row's
+   registration_store is overridden with that vip_id's CURRENT live
+   Customer.registration_store (via _resolve_live_stores()) rather than the
+   file's own column value — see create_backfill_snapshot()'s docstring for
+   the full rationale/trade-off.
 """
 import logging
 from datetime import date
@@ -55,6 +59,35 @@ def _parse_customer_rows(file, df=None):
             'points': safe_int(row.get('POINTS', 0)),
         })
     return parsed
+
+
+def _resolve_live_stores(vip_ids):
+    """
+    Bulk-resolve the CURRENT live Customer.registration_store for a set of
+    vip_ids in exactly ONE query (this file processes tens of thousands of
+    rows per backfill upload — never loop a per-row query here).
+
+    Returns dict[vip_id] -> registration_store for whichever of the given
+    vip_ids currently exist in Customer. vip_ids with no live match are
+    simply absent from the returned dict — callers must apply their own
+    fallback (create_backfill_snapshot() keeps the file's own value).
+
+    A blank live registration_store is coerced to the canonical '(No Store)'
+    placeholder HERE, not left for each caller to remember — matches
+    _build_rows()'s own `store_key = c['registration_store'] or '(No
+    Store)'` convention. Centralized after a real bug (2026-09-02): the
+    normalize_membership_stores management command originally used a raw ''
+    value as a by_store dict key instead of '(No Store)', which silently
+    diverged from every other store-keying path and broke
+    get_grade_changes_store_transitions()'s from_store == to_store
+    comparison for the affected vip_id. Coercing once here, instead of at
+    each of this function's (currently 2, possibly more later) call sites,
+    removes the chance of a future caller forgetting it.
+    """
+    from App.models import Customer
+
+    rows = Customer.objects.filter(vip_id__in=list(vip_ids)).values_list('vip_id', 'registration_store')
+    return {vip_id: (store or '(No Store)') for vip_id, store in rows}
 
 
 def _build_rows(batch, customer_dicts):
@@ -115,10 +148,37 @@ def create_backfill_snapshot(file, progress_fn=None, df=None, *, snapshot_date, 
     App.views.upload._run_upload calls — snapshot_date/uploaded_by/note are
     bound via functools.partial() in the view before _start_thread runs it.
     Never writes to Customer.
+
+    Store attribution (PO decision, 2026-09-02): each row's
+    registration_store is overridden with that vip_id's CURRENT live
+    Customer.registration_store (_resolve_live_stores()), NOT read literally
+    from the uploaded file's own REGISTRATION STORE column. Old historical
+    export files can use a completely different store-naming format than the
+    live table (confirmed on real data: comparing a manual-import batch
+    against an auto-snapshot, only 3 of 39 distinct store names matched
+    exactly — the rest were the same physical stores under reformatted
+    names, e.g. 'Savico Megamall' vs the live table's
+    '巴拉越南河内市SAVICO MEGAMALL-直营店'). The PO's own words: "the live
+    Customer table is the latest/authoritative version, and every vip_id's
+    store should follow this current store name... use one unified set of
+    store names." This is a deliberate trade-off, not an oversight: it makes
+    ALL snapshots (auto and manual) share one consistent, current
+    store-naming vocabulary for store-level grade comparisons, at the cost
+    of losing byte-accurate historical store attribution for the (much
+    rarer) case where a customer GENUINELY changed store between the file's
+    date and today — that case is now indistinguishable from a mere
+    naming-format change and gets silently attributed to the customer's
+    current store instead of their true historical one. vip_ids with no live
+    Customer match (deleted since, or never re-uploaded) keep the file's own
+    registration_store value as the best available information.
     """
     from App.models.membership import MembershipSnapshotBatch
 
     customer_dicts = _parse_customer_rows(file, df=df)
+    live_stores = _resolve_live_stores([c['vip_id'] for c in customer_dicts])
+    for c in customer_dicts:
+        if c['vip_id'] in live_stores:
+            c['registration_store'] = live_stores[c['vip_id']]
     batch = MembershipSnapshotBatch.objects.create(
         snapshot_date=snapshot_date, source='manual_import', uploaded_by=uploaded_by,
         note=note, source_filename=getattr(file, 'name', ''),

@@ -14,7 +14,7 @@
 </thead>
 <tbody>
 {% for row in rows %}
-<tr>
+<tr {% if row.is_total %}class="fw-bold" style="border-top:2px solid var(--primary);"{% endif %}>
     <td>{{ row.store }}</td>
     {% for c in row.counts %}
     <td class="text-end">{{ c.from }}</td>

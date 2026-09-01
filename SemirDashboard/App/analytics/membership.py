@@ -12,9 +12,11 @@ Redesigned 2026-09-01: MembershipSnapshotBatch stores per-batch grade
 breakdowns as two JSON fields (grade_counts, grade_members) instead of one
 DB row per customer — see App/models/membership.py docstring for the full
 rationale. Every function below reads ONLY grade_counts (small, a few KB)
-EXCEPT get_grade_changes()/_members_bucket() which read grade_members (large,
-~1-2MB at 100k customers) — never mix the two in the same query, and never
-read grade_members for more than 2 batches at once (see their docstrings).
+EXCEPT get_grade_changes()/get_grade_changes_overview_by_store()/
+get_grade_changes_store_transitions()/_grade_members_json()/_vid_store_map()
+which read grade_members (large, ~1-2MB at 100k customers) — never mix the
+two in the same query, and never read grade_members for more than 2 batches
+at once (see their docstrings).
 """
 from datetime import date
 from decimal import Decimal
@@ -157,12 +159,19 @@ def get_grade_breakdown_by_store(batch_id):
 def get_grade_breakdown_by_store_comparison(from_batch_id, to_batch_id):
     """
     List of {'store', 'counts': [{'grade','from','to'}, ...], 'total_from',
-    'total_to'} for the union of stores present in either batch, sorted by
-    store name. Powers the "Members per Grade — by Registration Store"
-    matrix's From/To columns (PO feedback 2026-09-01) — replaced the old
-    single-store drill-down comparison mode, now redundant since this matrix
-    already shows from/to per store and get_grade_changes() shows the actual
+    'total_to', 'is_total'} for the union of stores present in either batch,
+    sorted by store name, PLUS a final 'All Stores' row (is_total=True).
+    Powers the "Members per Grade — by Registration Store" matrix's From/To
+    columns (PO feedback 2026-09-01) — replaced the old single-store
+    drill-down comparison mode, now redundant since this matrix already
+    shows from/to per store and get_grade_changes() shows the actual
     individual customers who moved.
+
+    The trailing 'All Stores' row (added 2026-09-01) is computed via
+    get_grade_breakdown(from_batch_id)/get_grade_breakdown(to_batch_id) with
+    no store= arg — i.e. the 'overall' bucket, the same authoritative
+    all-stores source compare_batches() already uses — NOT a sum of the
+    per-store rows above.
     """
     from_map = _store_grade_counts_map(from_batch_id)
     to_map = _store_grade_counts_map(to_batch_id)
@@ -184,7 +193,19 @@ def get_grade_breakdown_by_store_comparison(from_batch_id, to_batch_id):
             'counts': counts,
             'total_from': total_from,
             'total_to': total_to,
+            'is_total': False,
         })
+
+    overall_from = get_grade_breakdown(from_batch_id)
+    overall_to = get_grade_breakdown(to_batch_id)
+    overall_counts = [{'grade': g, 'from': overall_from[g], 'to': overall_to[g]} for g in DISPLAY_GRADES]
+    out.append({
+        'store': 'All Stores',
+        'is_total': True,
+        'counts': overall_counts,
+        'total_from': sum(overall_from.values()),
+        'total_to': sum(overall_to.values()),
+    })
     return out
 
 
@@ -244,23 +265,263 @@ def get_all_batch_grade_series(store=None):
     return out
 
 
-def _members_bucket(batch_id, store=None):
-    """Internal helper. dict[grade] -> [vip_id, ...] for ONE batch, optionally
-    scoped to one store — reads grade_members (the LARGE JSON field). Only
-    ever call this for exactly 2 batches at a time (get_grade_changes) —
-    never in a loop across many batches, which would reintroduce the
-    O(total accumulated data) cost this redesign exists to avoid."""
+def _grade_members_json(batch_id):
+    """Internal helper. Fetches the WHOLE grade_members JSON field ONCE for
+    ONE batch_id — mirrors _store_grade_counts_map()'s "fetch once, slice in
+    Python" pattern for the smaller grade_counts field, applied here to the
+    large grade_members field instead. Returns the raw
+    {'overall': {grade: [vip_id,...]}, 'by_store': {store: {grade: [...]}}}
+    dict, or {} if batch_id is falsy/missing.
+
+    Exists specifically so get_grade_changes()/get_grade_changes_overview_by_store()/
+    get_grade_changes_store_transitions() can compute an across-ALL-stores
+    aggregate with exactly ONE query per batch, instead of one query PER
+    STORE (looping a per-store fetch over ~30-40 stores would mean ~60-80
+    queries for one page section). Callers slice per-store data out of the
+    already-fetched dict in Python (see _vid_store_map() for the
+    vip_id -> store reverse-index built the same way) — no further DB access."""
     from App.models.membership import MembershipSnapshotBatch
 
     if not batch_id:
         return {}
     try:
-        grade_members = MembershipSnapshotBatch.objects.values_list('grade_members', flat=True).get(pk=batch_id)
+        return MembershipSnapshotBatch.objects.values_list('grade_members', flat=True).get(pk=batch_id)
     except MembershipSnapshotBatch.DoesNotExist:
         return {}
-    if store:
-        return grade_members.get('by_store', {}).get(store, {})
-    return grade_members.get('overall', {})
+
+
+def _vid_store_map(grade_members_json):
+    """Internal helper. dict[vip_id] -> store_name, built by iterating an
+    ALREADY-FETCHED grade_members JSON dict's 'by_store' bucket (for each
+    store, for each grade's vip_id list, map vip_id -> that store name). Pure
+    Python over already-fetched data — no DB access — same "fetch once, slice
+    in Python" discipline as _grade_members_json() itself.
+
+    Used by get_grade_changes() (to attach from_store/to_store to each row)
+    and get_grade_changes_store_transitions() (to group changes by
+    (from_store, to_store) pair) so a changed vip_id's per-snapshot store can
+    be recovered without a second query. A vip_id missing from every store's
+    list (shouldn't normally happen — _add_snapshot_member always writes both
+    'overall' and 'by_store') simply has no entry in the returned dict;
+    callers use `.get(vid)` and treat a missing key as unknown (None)."""
+    out = {}
+    for store, grades in grade_members_json.get('by_store', {}).items():
+        for vids in grades.values():
+            for vid in vids:
+                out[vid] = store
+    return out
+
+
+def _diff_grade_changes(from_bucket, to_bucket):
+    """Internal helper — the vip_id-diff logic shared by get_grade_changes()
+    and get_grade_changes_overview_by_store(), factored out so the two
+    features can never disagree on what counts as a "grade change".
+    `from_bucket`/`to_bucket` are already-fetched {grade: [vip_id,...]}
+    dicts (no DB access here). Returns an unsorted, unfiltered, unpaged list
+    of {'vip_id', 'from_grade', 'to_grade', 'direction'} — same per-row shape
+    get_grade_changes() returns before its grade=/direction= filtering.
+
+    Excludes VIP ID "0" (buyer without info, excluded from grade analytics
+    everywhere in the codebase) and any transition involving 'No Grade' on
+    either side (DISPLAY_GRADES convention — 'No Grade' is noise, not an
+    actionable tier change). A vip_id present in only one bucket is a
+    different kind of event (new/removed customer), not a grade change, and
+    is naturally excluded by the `&` intersection below."""
+    from_grade_of = {vid: g for g, vids in from_bucket.items() for vid in vids}
+    to_grade_of = {vid: g for g, vids in to_bucket.items() for vid in vids}
+
+    changed = []
+    for vid in from_grade_of.keys() & to_grade_of.keys():
+        if vid == '0':
+            continue
+        g_from, g_to = from_grade_of[vid], to_grade_of[vid]
+        if g_from == g_to:
+            continue
+        if g_from not in DISPLAY_GRADES or g_to not in DISPLAY_GRADES:
+            continue
+        dirn = 'upgrade' if GRADE_ORDER[g_to] > GRADE_ORDER[g_from] else 'downgrade'
+        changed.append({'vip_id': vid, 'from_grade': g_from, 'to_grade': g_to, 'direction': dirn})
+    return changed
+
+
+def get_grade_changes_overview_by_store(from_batch_id, to_batch_id):
+    """
+    Aggregate overview for the "Comparison — Members Who Changed Grade"
+    section (sits above the individual-customer list get_grade_changes()
+    powers): for every store and every DISPLAY_GRADES grade, how many
+    customers' NEW (to) grade is that grade, split downgrade vs upgrade.
+    Reuses _diff_grade_changes() — the exact same diff logic get_grade_changes()
+    uses (vip_id-in-both-buckets, exclude vid '0', exclude non-DISPLAY_GRADES
+    transitions) — so the two features never disagree on what counts as a
+    change.
+
+    Performance: exactly 2 DB queries total, one per batch (via
+    _grade_members_json()) — NOT one query per store. See
+    _grade_members_json()'s docstring for why that matters (~30-40 stores on
+    this page would otherwise mean ~60-80 queries).
+
+    Returns a flat list, each element:
+    {'store': str, 'counts': [{'grade','downgrade','upgrade'}, ...] (one per
+    DISPLAY_GRADES), 'total_downgrade': int, 'total_upgrade': int,
+    'is_total': bool}, sorted by store name, PLUS a final 'All Stores' row
+    (is_total=True) computed directly from the 'overall' bucket of each
+    batch's grade_members — NOT a sum of the per-store rows, matching how
+    get_grade_breakdown()/get_grade_breakdown_by_store_comparison() treat
+    'overall' as the authoritative all-stores figure rather than a derived
+    sum.
+
+    Unlike get_grade_breakdown_by_store()'s "No Grade"-only-store exclusion,
+    a store with configured members but ZERO grade changes between the two
+    batches is still meaningful and is NEVER excluded here — that other
+    exclusion is about a store having zero real-grade MEMBERS at all, a
+    different condition from zero CHANGES.
+
+    Returns [] if from_batch_id or to_batch_id is falsy/missing (matches
+    get_grade_changes()'s behavior with a missing batch — no 'All Stores'
+    row either in that case).
+    """
+    if not from_batch_id or not to_batch_id:
+        return []
+
+    from_json = _grade_members_json(from_batch_id)  # 1 query
+    to_json = _grade_members_json(to_batch_id)      # 1 query
+
+    from_by_store = from_json.get('by_store', {})
+    to_by_store = to_json.get('by_store', {})
+    stores = sorted(set(from_by_store) | set(to_by_store))
+
+    def _counts_for(from_bucket, to_bucket):
+        changed = _diff_grade_changes(from_bucket, to_bucket)
+        upgrade = {g: 0 for g in DISPLAY_GRADES}
+        downgrade = {g: 0 for g in DISPLAY_GRADES}
+        for r in changed:
+            bucket = upgrade if r['direction'] == 'upgrade' else downgrade
+            bucket[r['to_grade']] += 1
+        counts = [{'grade': g, 'downgrade': downgrade[g], 'upgrade': upgrade[g]} for g in DISPLAY_GRADES]
+        return counts, sum(downgrade.values()), sum(upgrade.values())
+
+    out = []
+    for store in stores:
+        counts, total_downgrade, total_upgrade = _counts_for(
+            from_by_store.get(store, {}), to_by_store.get(store, {}),
+        )
+        out.append({
+            'store': store,
+            'counts': counts,
+            'total_downgrade': total_downgrade,
+            'total_upgrade': total_upgrade,
+            'is_total': False,
+        })
+
+    overall_counts, overall_total_downgrade, overall_total_upgrade = _counts_for(
+        from_json.get('overall', {}), to_json.get('overall', {}),
+    )
+    out.append({
+        'store': 'All Stores',
+        'is_total': True,
+        'counts': overall_counts,
+        'total_downgrade': overall_total_downgrade,
+        'total_upgrade': overall_total_upgrade,
+    })
+    return out
+
+
+def get_grade_changes_store_transitions(from_batch_id, to_batch_id):
+    """
+    Itemized appendix to get_grade_changes_overview_by_store() (added 2026-09,
+    PO feedback): that table only attributes a grade change to a store when
+    the customer's recorded registration_store is the LITERAL SAME string in
+    both the from- and to-snapshot's grade_members — a customer whose store
+    name drifted between the two snapshots (e.g. an intervening customer
+    re-import that changed store-name formatting, 'Savico Megamall' (old) vs
+    the Vietnamese-branded name for the exact same physical store (new)) is
+    correctly excluded from every per-store row there, and only shows up in
+    that table's 'All Stores' total — invisible in the per-store breakdown.
+    This function makes exactly those "invisible" changes visible: it groups
+    them explicitly by their (from_store, to_store) pair instead of requiring
+    an exact match, so a store-name rename shows up as its own row rather
+    than disappearing.
+
+    Reuses the exact same diff as get_grade_changes()/
+    get_grade_changes_overview_by_store() — _diff_grade_changes() over each
+    batch's 'overall' bucket — and the same _vid_store_map() reverse-index
+    used by get_grade_changes() to recover each changed vip_id's per-snapshot
+    store. Rows where from_store == to_store (same store both times — already
+    correctly attributed by get_grade_changes_overview_by_store()) are
+    skipped; this function exists specifically to surface the REMAINDER, so
+    it is a strict partition of "changes NOT captured by the main per-store
+    table" — see the reconciliation test in tests/test_membership.py, which
+    asserts summing this function's total_downgrade/total_upgrade across all
+    rows, plus summing get_grade_changes_overview_by_store()'s non-total-row
+    totals, exactly equals its 'All Stores' row's totals.
+
+    A missing/blank store on either side of a pair is the literal string
+    '(No Store)' (matches the blank-store convention used everywhere else in
+    this file, e.g. _add_snapshot_member()/get_snapshot_registration_stores()).
+
+    Performance: exactly 2 DB queries total, one per batch (via
+    _grade_members_json()) — same discipline as get_grade_changes_overview_by_store().
+
+    Returns a flat list, each element:
+    {'from_store': str, 'to_store': str, 'counts': [{'grade','downgrade',
+    'upgrade'}, ...] (one per DISPLAY_GRADES), 'total_downgrade': int,
+    'total_upgrade': int}, sorted by (total_downgrade + total_upgrade)
+    descending — most-impactful renames first, since a real dataset can have
+    dozens of distinct from->to pairs and only a handful matter. No
+    'is_total'/'All Stores' row here — this is an itemized appendix, not a
+    summary matrix; get_grade_changes_overview_by_store()'s 'All Stores' row
+    remains the single source of truth for the true total.
+
+    Returns [] if from_batch_id or to_batch_id is falsy/missing (matches
+    get_grade_changes()/get_grade_changes_overview_by_store()).
+    """
+    if not from_batch_id or not to_batch_id:
+        return []
+
+    from_json = _grade_members_json(from_batch_id)  # 1 query
+    to_json = _grade_members_json(to_batch_id)      # 1 query
+
+    changed = _diff_grade_changes(from_json.get('overall', {}), to_json.get('overall', {}))
+    from_store_of = _vid_store_map(from_json)
+    to_store_of = _vid_store_map(to_json)
+
+    groups = {}
+    for r in changed:
+        from_store = from_store_of.get(r['vip_id']) or '(No Store)'
+        to_store = to_store_of.get(r['vip_id']) or '(No Store)'
+        if from_store == to_store:
+            # Already correctly attributed by get_grade_changes_overview_by_store() —
+            # this function exists specifically to surface the remainder.
+            continue
+        groups.setdefault((from_store, to_store), []).append(r)
+
+    def _counts_for(rows):
+        # Same 4-line counting body as get_grade_changes_overview_by_store()'s
+        # nested _counts_for() — that one starts from two raw grade_members
+        # buckets and calls _diff_grade_changes() itself; this one starts
+        # from an already-diffed row list (a (from_store, to_store) pair
+        # isn't representable as a single grade_members bucket to re-diff),
+        # but the counting logic below must not diverge from it.
+        upgrade = {g: 0 for g in DISPLAY_GRADES}
+        downgrade = {g: 0 for g in DISPLAY_GRADES}
+        for r in rows:
+            bucket = upgrade if r['direction'] == 'upgrade' else downgrade
+            bucket[r['to_grade']] += 1
+        counts = [{'grade': g, 'downgrade': downgrade[g], 'upgrade': upgrade[g]} for g in DISPLAY_GRADES]
+        return counts, sum(downgrade.values()), sum(upgrade.values())
+
+    out = []
+    for (from_store, to_store), rows in groups.items():
+        counts, total_downgrade, total_upgrade = _counts_for(rows)
+        out.append({
+            'from_store': from_store,
+            'to_store': to_store,
+            'counts': counts,
+            'total_downgrade': total_downgrade,
+            'total_upgrade': total_upgrade,
+        })
+    out.sort(key=lambda r: r['total_downgrade'] + r['total_upgrade'], reverse=True)
+    return out
 
 
 def get_grade_changes(from_batch_id, to_batch_id, store=None, grade=None, direction=None, limit=20, offset=0):
@@ -277,10 +538,30 @@ def get_grade_changes(from_batch_id, to_batch_id, store=None, grade=None, direct
     grade-level view on this page — 'No Grade' is noise, not an actionable
     tier change).
 
-    `store` scopes both sides to one registration_store (a customer who
-    changed store between the two snapshots would only show up if they were
-    in that store in BOTH — reasonable given the feature answers "who changed
-    grade at this store", not a customer-relocation report).
+    Refactored 2026-09 to read each batch's WHOLE grade_members JSON once via
+    _grade_members_json() (still exactly 2 queries total, one per batch — the
+    same count as the old _members_bucket()-per-side approach) and ALWAYS
+    diff the 'overall' buckets, never a store-scoped bucket — see `store`
+    below for why. Each row also carries `from_store`/`to_store` (the
+    customer's registration_store as recorded in the from-snapshot's and
+    to-snapshot's grade_members['by_store'] JSON respectively, via the
+    internal _vid_store_map() helper, built from the same already-fetched
+    JSON — no extra queries). Either may be `None` if the vip_id has no
+    by_store entry in that snapshot (shouldn't normally happen). These are
+    NEW fields, independent of the live-Customer-joined `registration_store`
+    field below (which is unchanged).
+
+    `store` filters the result POST-HOC with OR semantics (changed 2026-09):
+    a row is kept if `store is None or row['from_store'] == store or
+    row['to_store'] == store`. Previously `store` scoped BOTH the from- and
+    to-buckets to that store BEFORE diffing, which meant a customer whose
+    recorded store differed between the two snapshots (e.g. a customer
+    re-import that changed store-name formatting — 'Savico Megamall' (old) vs
+    the Vietnamese-branded name for the exact same physical store (new)) was
+    invisible under ANY store filter, since their vip_id was never in the
+    same store's bucket on both sides — exactly the customers this filter
+    most needs to surface. See get_grade_changes_store_transitions() for the
+    dedicated (from_store, to_store) pair breakdown of these drift cases.
     `grade` filters on the customer's NEW (to) grade — deliberately a single
     filter, not separate old/new-grade filters: e.g. grade='Silver' shows
     BOTH Member->Silver upgrades and Gold->Silver downgrades, disambiguated
@@ -301,27 +582,23 @@ def get_grade_changes(from_batch_id, to_batch_id, store=None, grade=None, direct
     """
     from App.models import Customer
 
-    from_bucket = _members_bucket(from_batch_id, store)
-    to_bucket = _members_bucket(to_batch_id, store)
+    from_json = _grade_members_json(from_batch_id)  # 1 query
+    to_json = _grade_members_json(to_batch_id)       # 1 query
 
-    from_grade_of = {vid: g for g, vids in from_bucket.items() for vid in vids}
-    to_grade_of = {vid: g for g, vids in to_bucket.items() for vid in vids}
+    changed = _diff_grade_changes(from_json.get('overall', {}), to_json.get('overall', {}))
 
-    changed = []
-    for vid in from_grade_of.keys() & to_grade_of.keys():
-        if vid == '0':
-            continue
-        g_from, g_to = from_grade_of[vid], to_grade_of[vid]
-        if g_from == g_to:
-            continue
-        if g_from not in DISPLAY_GRADES or g_to not in DISPLAY_GRADES:
-            continue
-        dirn = 'upgrade' if GRADE_ORDER[g_to] > GRADE_ORDER[g_from] else 'downgrade'
-        if grade and g_to != grade:
-            continue
-        if direction and direction != dirn:
-            continue
-        changed.append({'vip_id': vid, 'from_grade': g_from, 'to_grade': g_to, 'direction': dirn})
+    from_store_of = _vid_store_map(from_json)
+    to_store_of = _vid_store_map(to_json)
+    for r in changed:
+        r['from_store'] = from_store_of.get(r['vip_id'])
+        r['to_store'] = to_store_of.get(r['vip_id'])
+
+    if grade:
+        changed = [r for r in changed if r['to_grade'] == grade]
+    if direction:
+        changed = [r for r in changed if r['direction'] == direction]
+    if store:
+        changed = [r for r in changed if r['from_store'] == store or r['to_store'] == store]
 
     changed.sort(key=lambda r: r['vip_id'])
     total_count = len(changed)

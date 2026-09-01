@@ -19,7 +19,7 @@ from .inventory import inventory_dashboard, export_inventory_dead_stock, export_
 from .membership import (
     membership_dashboard, membership_table_partial, membership_backfill_import,
     membership_store_breakdown_partial, membership_delete_batch, membership_trend_partial,
-    membership_movers_partial,
+    membership_movers_partial, membership_movers_overview_partial, export_membership_excel,
 )
 from . import auth, users
 
@@ -68,4 +68,6 @@ __all__ = [
     "membership_delete_batch",
     "membership_trend_partial",
     "membership_movers_partial",
+    "membership_movers_overview_partial",
+    "export_membership_excel",
 ]

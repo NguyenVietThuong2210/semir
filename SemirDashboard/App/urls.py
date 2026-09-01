@@ -71,6 +71,8 @@ urlpatterns = [
     path("membership/partial/store-breakdown/", views.membership_store_breakdown_partial, name="membership_store_breakdown_partial"),
     path("membership/partial/trend/",   views.membership_trend_partial,   name="membership_trend_partial"),
     path("membership/partial/movers/",  views.membership_movers_partial,  name="membership_movers_partial"),
+    path("membership/partial/movers-overview/", views.membership_movers_overview_partial, name="membership_movers_overview_partial"),
+    path("membership/export/",          views.export_membership_excel,    name="export_membership_excel"),
 
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/",       users.user_management, name="user_management"),

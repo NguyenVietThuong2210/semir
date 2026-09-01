@@ -11,19 +11,21 @@
 <div class="table-responsive" style="max-height:700px;overflow-y:auto;">
 <table class="table table-sm table-hover align-middle mb-0 w-100" style="font-size:.82rem;table-layout:fixed;">
 <colgroup>
-    <col style="width:10%">  {# VIP ID #}
-    <col style="width:20%">  {# Name #}
-    <col style="width:18%">  {# Store #}
-    <col style="width:14%">  {# From grade #}
-    <col style="width:5%">   {# arrow #}
-    <col style="width:14%">  {# To grade #}
-    <col style="width:19%">  {# Direction #}
+    <col style="width:8%">   {# VIP ID #}
+    <col style="width:16%">  {# Name #}
+    <col style="width:14%">  {# From Store #}
+    <col style="width:14%">  {# To Store #}
+    <col style="width:13%">  {# From grade #}
+    <col style="width:4%">   {# arrow #}
+    <col style="width:13%">  {# To grade #}
+    <col style="width:18%">  {# Direction #}
 </colgroup>
 <thead class="sticky-thead">
 <tr>
     <th class="tbl-hdr-primary">VIP ID</th>
     <th class="tbl-hdr-primary">Name</th>
-    <th class="tbl-hdr-primary">Store</th>
+    <th class="tbl-hdr-primary">From Store</th>
+    <th class="tbl-hdr-primary">To Store</th>
     <th class="text-center tbl-hdr-primary" colspan="3">Grade Change</th>
     <th class="tbl-hdr-primary">Direction</th>
 </tr>
@@ -33,7 +35,13 @@
 <tr>
     <td>{{ r.vip_id }}</td>
     <td class="text-truncate" title="{{ r.name|default:'' }}">{{ r.name|default:"-" }}</td>
-    <td class="text-truncate" title="{{ r.registration_store|default:'' }}">{{ r.registration_store|default:"-" }}</td>
+    {% comment %}
+    from_store/to_store are snapshot-based and normally always set for a mover row;
+    fall back to the live registration_store only in the defensive edge case where
+    both are None (e.g. legacy data with no snapshot store recorded).
+    {% endcomment %}
+    <td class="text-truncate" title="{{ r.from_store|default:r.registration_store|default:'' }}">{{ r.from_store|default:r.registration_store|default:"-" }}</td>
+    <td class="text-truncate" title="{{ r.to_store|default:r.registration_store|default:'' }}">{{ r.to_store|default:r.registration_store|default:"-" }}</td>
     <td class="text-end">
         {% if r.from_grade == "Member" %}
         <span class="badge bg-secondary">{{ r.from_grade }}</span>
