@@ -264,6 +264,13 @@
 .loading-spinner { display:none; text-align:center; padding:2rem 0; color:var(--text-muted); }
 .sticky-thead th { position:sticky; top:0; z-index:2; }
 .chart-wrap { position:relative; height:320px; }
+/* Bootstrap 5's .table CSS sets background-color directly on <th>/<td>
+   (`.table > :not(caption) > * > *`), which paints over a plain inline
+   background set on the ancestor <thead> — the header row silently renders
+   Bootstrap's default gray instead of blue. `!important` on the <th> itself
+   is required to win, matching the working .tbl-hdr-* pattern already used
+   in coupon/dashboard.html. */
+.tbl-hdr-primary { background:var(--primary) !important; color:#fff !important; }
 </style>
 
 </head>
@@ -526,7 +533,7 @@
                     <li class="nav-item dropdown ms-2">
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                             data-bs-toggle="dropdown">
-                            <i class="bi bi-person-circle"></i> alex
+                            <i class="bi bi-person-circle"></i> admin
                             
                             
                             <span class="badge bg-light text-dark ms-1" style="font-size:.7rem;">admin</span>
@@ -536,7 +543,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <form method="post" action="/logout/">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="MXYkL8X4MzQlViCVqAMcKHAhjIDq2J0LJLU5vQ7DudbesrLpeTqtyBwAtpf1Hp5F">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-box-arrow-right"></i> Logout
                                     </button>
@@ -577,13 +584,21 @@
                 <select name="from_batch" class="form-select form-select-sm">
                     <option value="">— None —</option>
                     
-                    <option value="4">Dec. 31, 2025 — Manual Backfill Import</option>
+                    <option value="2">Dec. 1, 2025 — Manual Backfill Import</option>
                     
-                    <option value="1">March 1, 2026 — Automatic</option>
+                    <option value="3">Jan. 1, 2026 — Automatic</option>
                     
-                    <option value="3" selected>May 15, 2026 — Automatic</option>
+                    <option value="4">Feb. 1, 2026 — Automatic</option>
                     
-                    <option value="2">Aug. 1, 2026 — Automatic</option>
+                    <option value="5">March 1, 2026 — Automatic</option>
+                    
+                    <option value="6">April 1, 2026 — Automatic</option>
+                    
+                    <option value="7">May 1, 2026 — Automatic</option>
+                    
+                    <option value="8" selected>June 1, 2026 — Automatic</option>
+                    
+                    <option value="9">July 1, 2026 — Automatic</option>
                     
                 </select>
             </div>
@@ -592,13 +607,21 @@
                 <select name="to_batch" class="form-select form-select-sm">
                     <option value="">— None —</option>
                     
-                    <option value="4">Dec. 31, 2025 — Manual Backfill Import</option>
+                    <option value="2">Dec. 1, 2025 — Manual Backfill Import</option>
                     
-                    <option value="1">March 1, 2026 — Automatic</option>
+                    <option value="3">Jan. 1, 2026 — Automatic</option>
                     
-                    <option value="3">May 15, 2026 — Automatic</option>
+                    <option value="4">Feb. 1, 2026 — Automatic</option>
                     
-                    <option value="2" selected>Aug. 1, 2026 — Automatic</option>
+                    <option value="5">March 1, 2026 — Automatic</option>
+                    
+                    <option value="6">April 1, 2026 — Automatic</option>
+                    
+                    <option value="7">May 1, 2026 — Automatic</option>
+                    
+                    <option value="8">June 1, 2026 — Automatic</option>
+                    
+                    <option value="9" selected>July 1, 2026 — Automatic</option>
                     
                 </select>
             </div>
@@ -611,10 +634,162 @@
         
         <div class="mt-3 pt-3" style="border-top:1px dashed var(--border);">
             <p class="sub-section-title mb-2" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">
+                <i class="bi bi-collection me-1"></i>Manage Snapshots
+            </p>
+            <div class="table-responsive" style="max-height:230px;overflow-y:auto;">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;">
+                    <thead class="sticky-thead">
+                        <tr>
+                            <th class="tbl-hdr-primary">Date</th>
+                            <th class="tbl-hdr-primary">Source</th>
+                            <th class="text-end tbl-hdr-primary">Rows</th>
+                            <th class="tbl-hdr-primary">Note</th>
+                            <th class="text-end tbl-hdr-primary">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td>July 1, 2026</td>
+                            <td>Automatic</td>
+                            <td class="text-end">74630</td>
+                            <td class="text-muted">—</td>
+                            <td class="text-end">
+                                <form method="post" action="/membership/delete-batch/9/" class="d-inline"
+                                      onsubmit="return confirm('Delete snapshot July 1, 2026 (Automatic, 74630 rows)? This cannot be undone.');">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete this snapshot">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>June 1, 2026</td>
+                            <td>Automatic</td>
+                            <td class="text-end">74630</td>
+                            <td class="text-muted">—</td>
+                            <td class="text-end">
+                                <form method="post" action="/membership/delete-batch/8/" class="d-inline"
+                                      onsubmit="return confirm('Delete snapshot June 1, 2026 (Automatic, 74630 rows)? This cannot be undone.');">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete this snapshot">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>May 1, 2026</td>
+                            <td>Automatic</td>
+                            <td class="text-end">74630</td>
+                            <td class="text-muted">—</td>
+                            <td class="text-end">
+                                <form method="post" action="/membership/delete-batch/7/" class="d-inline"
+                                      onsubmit="return confirm('Delete snapshot May 1, 2026 (Automatic, 74630 rows)? This cannot be undone.');">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete this snapshot">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>April 1, 2026</td>
+                            <td>Automatic</td>
+                            <td class="text-end">74630</td>
+                            <td class="text-muted">—</td>
+                            <td class="text-end">
+                                <form method="post" action="/membership/delete-batch/6/" class="d-inline"
+                                      onsubmit="return confirm('Delete snapshot April 1, 2026 (Automatic, 74630 rows)? This cannot be undone.');">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete this snapshot">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>March 1, 2026</td>
+                            <td>Automatic</td>
+                            <td class="text-end">74630</td>
+                            <td class="text-muted">—</td>
+                            <td class="text-end">
+                                <form method="post" action="/membership/delete-batch/5/" class="d-inline"
+                                      onsubmit="return confirm('Delete snapshot March 1, 2026 (Automatic, 74630 rows)? This cannot be undone.');">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete this snapshot">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>Feb. 1, 2026</td>
+                            <td>Automatic</td>
+                            <td class="text-end">74630</td>
+                            <td class="text-muted">—</td>
+                            <td class="text-end">
+                                <form method="post" action="/membership/delete-batch/4/" class="d-inline"
+                                      onsubmit="return confirm('Delete snapshot Feb. 1, 2026 (Automatic, 74630 rows)? This cannot be undone.');">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete this snapshot">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>Jan. 1, 2026</td>
+                            <td>Automatic</td>
+                            <td class="text-end">74630</td>
+                            <td class="text-muted">—</td>
+                            <td class="text-end">
+                                <form method="post" action="/membership/delete-batch/3/" class="d-inline"
+                                      onsubmit="return confirm('Delete snapshot Jan. 1, 2026 (Automatic, 74630 rows)? This cannot be undone.');">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete this snapshot">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>Dec. 1, 2025</td>
+                            <td>Manual Backfill Import</td>
+                            <td class="text-end">58927</td>
+                            <td class="text-muted">—</td>
+                            <td class="text-end">
+                                <form method="post" action="/membership/delete-batch/2/" class="d-inline"
+                                      onsubmit="return confirm('Delete snapshot Dec. 1, 2025 (Manual Backfill Import, 58927 rows)? This cannot be undone.');">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete this snapshot">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+
+        
+        <div class="mt-3 pt-3" style="border-top:1px dashed var(--border);">
+            <p class="sub-section-title mb-2" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">
                 <i class="bi bi-upload me-1"></i>Backfill a Historical Snapshot
             </p>
             <form method="post" action="/membership/backfill-import/" enctype="multipart/form-data" class="shop-select-row">
-                <input type="hidden" name="csrfmiddlewaretoken" value="MXYkL8X4MzQlViCVqAMcKHAhjIDq2J0LJLU5vQ7DudbesrLpeTqtyBwAtpf1Hp5F">
+                <input type="hidden" name="csrfmiddlewaretoken" value="76Fu3N85TJTcKCoXDi5xHUuuXe54y2460mdKZTBKIx0hQ5LrhHxsLCfNVrJl5M1u">
                 <div>
                     <label for="id_file">Historical Customer Export</label>
                     <input type="file" name="file" accept=".csv,.xlsx,.xls" class="form-control" required aria-describedby="id_file_helptext" id="id_file">
@@ -647,69 +822,217 @@
     </div>
     <div class="section-body">
         
-        <div class="table-responsive">
-            <table class="table table-striped table-hover align-middle mb-0">
-                <thead style="background-color:var(--primary);color:white;">
-                    <tr>
-                        <th>Grade</th>
-                        <th class="text-end">From</th>
-                        <th class="text-end">To</th>
-                        <th class="text-end">Diff</th>
-                        <th class="text-end">% Change</th>
-                    </tr>
-                </thead>
-                <tbody>
+        
+<div class="table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0" style="table-layout:fixed;width:100%;">
+        <colgroup>
+            <col style="width:30%">
+            <col style="width:17.5%">
+            <col style="width:17.5%">
+            <col style="width:17.5%">
+            <col style="width:17.5%">
+        </colgroup>
+        <thead>
+            <tr>
+                <th class="tbl-hdr-primary">Grade</th>
+                <th class="text-end tbl-hdr-primary">From</th>
+                <th class="text-end tbl-hdr-primary">To</th>
+                <th class="text-end tbl-hdr-primary">Diff</th>
+                <th class="text-end tbl-hdr-primary">% Change</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+            <tr>
+                <td><strong>Member</strong></td>
+                <td class="text-end">70580</td>
+                <td class="text-end">70580</td>
+                <td class="text-end" style="color:var(--text-muted);font-weight:600;">
+                    0
+                </td>
+                <td class="text-end" style="color:var(--text-muted);font-weight:600;">
+                    0.0%
+                </td>
+            </tr>
+            
+            <tr>
+                <td><strong>Silver</strong></td>
+                <td class="text-end">2810</td>
+                <td class="text-end">2810</td>
+                <td class="text-end" style="color:var(--text-muted);font-weight:600;">
+                    0
+                </td>
+                <td class="text-end" style="color:var(--text-muted);font-weight:600;">
+                    0.0%
+                </td>
+            </tr>
+            
+            <tr>
+                <td><strong>Gold</strong></td>
+                <td class="text-end">852</td>
+                <td class="text-end">852</td>
+                <td class="text-end" style="color:var(--text-muted);font-weight:600;">
+                    0
+                </td>
+                <td class="text-end" style="color:var(--text-muted);font-weight:600;">
+                    0.0%
+                </td>
+            </tr>
+            
+            <tr>
+                <td><strong>Diamond</strong></td>
+                <td class="text-end">388</td>
+                <td class="text-end">388</td>
+                <td class="text-end" style="color:var(--text-muted);font-weight:600;">
+                    0
+                </td>
+                <td class="text-end" style="color:var(--text-muted);font-weight:600;">
+                    0.0%
+                </td>
+            </tr>
+            
+        </tbody>
+    </table>
+</div>
+
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SECTION 2B — Grade breakdown by Registration Store — From/To matrix.
+     Redesigned 2026-09-01: was "To"-only with a per-store drill-down mode;
+     the drill-down is now redundant (this matrix shows From/To directly,
+     and Section 2C below shows the actual customers who moved) — removed.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="section-card shadow-sm">
+    <div class="section-header">
+        <span class="section-title"><i class="bi bi-shop me-2"></i>Members per Grade — by Registration Store</span>
+    </div>
+    <div class="section-body">
+        
+        <div class="loading-spinner" id="storeBreakdownSpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
+        <div id="storeBreakdownResult">
+            <p class="no-data-msg text-muted">Loading…</p>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SECTION 2C — Comparison: individual customers whose grade changed
+     between the From/To snapshots. Added 2026-09-01, PO feedback.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="section-card shadow-sm">
+    <div class="section-header">
+        <span class="section-title"><i class="bi bi-people-fill me-2"></i>Comparison — Members Who Changed Grade</span>
+    </div>
+    <div class="section-body">
+        <div class="shop-select-row mb-3">
+            <div>
+                <label>Registration Store</label>
+                <select id="moversStoreSel" class="form-select form-select-sm" onchange="loadMovers()">
+                    <option value="">All Stores</option>
                     
-                    <tr>
-                        <td><strong>Member</strong></td>
-                        <td class="text-end">70581</td>
-                        <td class="text-end">70581</td>
-                        <td class="text-end" style="color:var(--text-muted);font-weight:600;">
-                            0
-                        </td>
-                        <td class="text-end" style="color:var(--text-muted);font-weight:600;">
-                            0.0%
-                        </td>
-                    </tr>
+                    <option value="AEON MALL Hải Phòng">AEON MALL Hải Phòng</option>
                     
-                    <tr>
-                        <td><strong>Silver</strong></td>
-                        <td class="text-end">2810</td>
-                        <td class="text-end">2810</td>
-                        <td class="text-end" style="color:var(--text-muted);font-weight:600;">
-                            0
-                        </td>
-                        <td class="text-end" style="color:var(--text-muted);font-weight:600;">
-                            0.0%
-                        </td>
-                    </tr>
+                    <option value="AEON MALL Long Biên">AEON MALL Long Biên</option>
                     
-                    <tr>
-                        <td><strong>Gold</strong></td>
-                        <td class="text-end">852</td>
-                        <td class="text-end">852</td>
-                        <td class="text-end" style="color:var(--text-muted);font-weight:600;">
-                            0
-                        </td>
-                        <td class="text-end" style="color:var(--text-muted);font-weight:600;">
-                            0.0%
-                        </td>
-                    </tr>
+                    <option value="AEON MALL Tân Phú">AEON MALL Tân Phú</option>
                     
-                    <tr>
-                        <td><strong>Diamond</strong></td>
-                        <td class="text-end">388</td>
-                        <td class="text-end">388</td>
-                        <td class="text-end" style="color:var(--text-muted);font-weight:600;">
-                            0
-                        </td>
-                        <td class="text-end" style="color:var(--text-muted);font-weight:600;">
-                            0.0%
-                        </td>
-                    </tr>
+                    <option value="AEON Mall Hà Đông">AEON Mall Hà Đông</option>
                     
-                </tbody>
-            </table>
+                    <option value="BL VN North Warehouse">BL VN North Warehouse</option>
+                    
+                    <option value="Bala VN Hanoi AEON MALL LONG BIEN- Direct">Bala VN Hanoi AEON MALL LONG BIEN- Direct</option>
+                    
+                    <option value="Bala VN Hanoi Lotte Westlake Mall - Direct">Bala VN Hanoi Lotte Westlake Mall - Direct</option>
+                    
+                    <option value="Bala VN Hanoi Vincom Royal City- Direct">Bala VN Hanoi Vincom Royal City- Direct</option>
+                    
+                    <option value="Bala VN Hanoi Vincom Times City- Direct">Bala VN Hanoi Vincom Times City- Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct">Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh Thiso Mall Sala - Direct">Bala VN Ho Chi Minh Thiso Mall Sala - Direct</option>
+                    
+                    <option value="Bala VN Hue Aeon Mall Hue-  POP-UP">Bala VN Hue Aeon Mall Hue-  POP-UP</option>
+                    
+                    <option value="Balabala VN Can Tho Street Shop-Franchise">Balabala VN Can Tho Street Shop-Franchise</option>
+                    
+                    <option value="Savico Megamall">Savico Megamall</option>
+                    
+                    <option value="Semir VN HANOI HANOI CENTER- Direct">Semir VN HANOI HANOI CENTER- Direct</option>
+                    
+                    <option value="Semir VN HUE AEON Mall- Direct">Semir VN HUE AEON Mall- Direct</option>
+                    
+                    <option value="Van Hanh Mall">Van Hanh Mall</option>
+                    
+                    <option value="ba VN HCM Taka Dept.">ba VN HCM Taka Dept.</option>
+                    
+                    <option value="巴拉巴拉越南河内westlake mall-直营店">巴拉巴拉越南河内westlake mall-直营店</option>
+                    
+                    <option value="巴拉越南河内市HA DONG AEON MALL-直营店">巴拉越南河内市HA DONG AEON MALL-直营店</option>
+                    
+                    <option value="巴拉越南河内市LOTTE WESTLAKE-快闪店">巴拉越南河内市LOTTE WESTLAKE-快闪店</option>
+                    
+                    <option value="巴拉越南河内市SAVICO MEGAMALL-直营店">巴拉越南河内市SAVICO MEGAMALL-直营店</option>
+                    
+                    <option value="巴拉越南海防AEON MALL-直营店">巴拉越南海防AEON MALL-直营店</option>
+                    
+                    <option value="巴拉越南胡志明 VAN HANH MALL">巴拉越南胡志明 VAN HANH MALL</option>
+                    
+                    <option value="巴拉越南胡志明Crescent Mall-直营店">巴拉越南胡志明Crescent Mall-直营店</option>
+                    
+                    <option value="巴拉越南胡志明Thiso Mall Sala-直营店">巴拉越南胡志明Thiso Mall Sala-直营店</option>
+                    
+                    <option value="巴拉越南胡志明市HMC Takashimaya Dept. Store-直营店">巴拉越南胡志明市HMC Takashimaya Dept. Store-直营店</option>
+                    
+                    <option value="巴拉越南胡志明市VAN HANH MALL-直营店">巴拉越南胡志明市VAN HANH MALL-直营店</option>
+                    
+                    <option value="巴拉越南顺化Aeon Hue-直营快闪店">巴拉越南顺化Aeon Hue-直营快闪店</option>
+                    
+                    <option value="巴拉越南顺化Aeon Hue-直营快闪店(24SHAR0323)">巴拉越南顺化Aeon Hue-直营快闪店(24SHAR0323)</option>
+                    
+                    <option value="森马森汇 - BA VN HANOI LOTTE WESTLAKE POP UP">森马森汇 - BA VN HANOI LOTTE WESTLAKE POP UP</option>
+                    
+                    <option value="森马森汇 - BA VN HANOI ROYAL CITY">森马森汇 - BA VN HANOI ROYAL CITY</option>
+                    
+                    <option value="森马森汇 - BA VN Times city">森马森汇 - BA VN Times city</option>
+                    
+                    <option value="森马森汇 - SE VN HANOI VINCOM TIMES CITY">森马森汇 - SE VN HANOI VINCOM TIMES CITY</option>
+                    
+                    <option value="森马森汇 - SE VN HUE AEON MALL">森马森汇 - SE VN HUE AEON MALL</option>
+                    
+                    <option value="森马越南河内市VINCOM TIMES CITY-直营店">森马越南河内市VINCOM TIMES CITY-直营店</option>
+                    
+                    <option value="森马越南胡志明Thiso 临时特卖店">森马越南胡志明Thiso 临时特卖店</option>
+                    
+                    <option value="森马越南胡志明VHM 临时特卖店">森马越南胡志明VHM 临时特卖店</option>
+                    
+                </select>
+            </div>
+            <div>
+                <label>New Grade</label>
+                <select id="moversGradeSel" class="form-select form-select-sm" onchange="loadMovers()">
+                    <option value="">All Grades</option>
+                    <option value="Member">Member</option>
+                    <option value="Silver">Silver</option>
+                    <option value="Gold">Gold</option>
+                    <option value="Diamond">Diamond</option>
+                </select>
+            </div>
+            <div>
+                <label>Direction</label>
+                <select id="moversDirectionSel" class="form-select form-select-sm" onchange="loadMovers()">
+                    <option value="">All</option>
+                    <option value="upgrade">Upgraded</option>
+                    <option value="downgrade">Downgraded</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="loading-spinner" id="moversSpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
+        <div id="moversResult">
+            <p class="no-data-msg text-muted">Loading…</p>
         </div>
     </div>
 </div>
@@ -730,14 +1053,102 @@
             </div>
             <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Click a legend label below to show/hide that grade's line.</p>
         </div>
+        <div class="shop-select-row mb-2">
+            <div>
+                <label>Registration Store</label>
+                <select id="trendStoreSel" class="form-select form-select-sm">
+                    <option value="">All Stores</option>
+                    
+                    <option value="AEON MALL Hải Phòng">AEON MALL Hải Phòng</option>
+                    
+                    <option value="AEON MALL Long Biên">AEON MALL Long Biên</option>
+                    
+                    <option value="AEON MALL Tân Phú">AEON MALL Tân Phú</option>
+                    
+                    <option value="AEON Mall Hà Đông">AEON Mall Hà Đông</option>
+                    
+                    <option value="BL VN North Warehouse">BL VN North Warehouse</option>
+                    
+                    <option value="Bala VN Hanoi AEON MALL LONG BIEN- Direct">Bala VN Hanoi AEON MALL LONG BIEN- Direct</option>
+                    
+                    <option value="Bala VN Hanoi Lotte Westlake Mall - Direct">Bala VN Hanoi Lotte Westlake Mall - Direct</option>
+                    
+                    <option value="Bala VN Hanoi Vincom Royal City- Direct">Bala VN Hanoi Vincom Royal City- Direct</option>
+                    
+                    <option value="Bala VN Hanoi Vincom Times City- Direct">Bala VN Hanoi Vincom Times City- Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct">Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh Thiso Mall Sala - Direct">Bala VN Ho Chi Minh Thiso Mall Sala - Direct</option>
+                    
+                    <option value="Bala VN Hue Aeon Mall Hue-  POP-UP">Bala VN Hue Aeon Mall Hue-  POP-UP</option>
+                    
+                    <option value="Balabala VN Can Tho Street Shop-Franchise">Balabala VN Can Tho Street Shop-Franchise</option>
+                    
+                    <option value="Savico Megamall">Savico Megamall</option>
+                    
+                    <option value="Semir VN HANOI HANOI CENTER- Direct">Semir VN HANOI HANOI CENTER- Direct</option>
+                    
+                    <option value="Semir VN HUE AEON Mall- Direct">Semir VN HUE AEON Mall- Direct</option>
+                    
+                    <option value="Van Hanh Mall">Van Hanh Mall</option>
+                    
+                    <option value="ba VN HCM Taka Dept.">ba VN HCM Taka Dept.</option>
+                    
+                    <option value="巴拉巴拉越南河内westlake mall-直营店">巴拉巴拉越南河内westlake mall-直营店</option>
+                    
+                    <option value="巴拉越南河内市HA DONG AEON MALL-直营店">巴拉越南河内市HA DONG AEON MALL-直营店</option>
+                    
+                    <option value="巴拉越南河内市LOTTE WESTLAKE-快闪店">巴拉越南河内市LOTTE WESTLAKE-快闪店</option>
+                    
+                    <option value="巴拉越南河内市SAVICO MEGAMALL-直营店">巴拉越南河内市SAVICO MEGAMALL-直营店</option>
+                    
+                    <option value="巴拉越南海防AEON MALL-直营店">巴拉越南海防AEON MALL-直营店</option>
+                    
+                    <option value="巴拉越南胡志明 VAN HANH MALL">巴拉越南胡志明 VAN HANH MALL</option>
+                    
+                    <option value="巴拉越南胡志明Crescent Mall-直营店">巴拉越南胡志明Crescent Mall-直营店</option>
+                    
+                    <option value="巴拉越南胡志明Thiso Mall Sala-直营店">巴拉越南胡志明Thiso Mall Sala-直营店</option>
+                    
+                    <option value="巴拉越南胡志明市HMC Takashimaya Dept. Store-直营店">巴拉越南胡志明市HMC Takashimaya Dept. Store-直营店</option>
+                    
+                    <option value="巴拉越南胡志明市VAN HANH MALL-直营店">巴拉越南胡志明市VAN HANH MALL-直营店</option>
+                    
+                    <option value="巴拉越南顺化Aeon Hue-直营快闪店">巴拉越南顺化Aeon Hue-直营快闪店</option>
+                    
+                    <option value="巴拉越南顺化Aeon Hue-直营快闪店(24SHAR0323)">巴拉越南顺化Aeon Hue-直营快闪店(24SHAR0323)</option>
+                    
+                    <option value="森马森汇 - BA VN HANOI LOTTE WESTLAKE POP UP">森马森汇 - BA VN HANOI LOTTE WESTLAKE POP UP</option>
+                    
+                    <option value="森马森汇 - BA VN HANOI ROYAL CITY">森马森汇 - BA VN HANOI ROYAL CITY</option>
+                    
+                    <option value="森马森汇 - BA VN Times city">森马森汇 - BA VN Times city</option>
+                    
+                    <option value="森马森汇 - SE VN HANOI VINCOM TIMES CITY">森马森汇 - SE VN HANOI VINCOM TIMES CITY</option>
+                    
+                    <option value="森马森汇 - SE VN HUE AEON MALL">森马森汇 - SE VN HUE AEON MALL</option>
+                    
+                    <option value="森马越南河内市VINCOM TIMES CITY-直营店">森马越南河内市VINCOM TIMES CITY-直营店</option>
+                    
+                    <option value="森马越南胡志明Thiso 临时特卖店">森马越南胡志明Thiso 临时特卖店</option>
+                    
+                    <option value="森马越南胡志明VHM 临时特卖店">森马越南胡志明VHM 临时特卖店</option>
+                    
+                </select>
+            </div>
+        </div>
         <div class="chart-wrap">
             <canvas id="membershipTrendChart"></canvas>
         </div>
     </div>
 </div>
 
+
 <!-- ══════════════════════════════════════════════════════════════════
-     SECTION 4 — Customer tier table
+     SECTION 4 — Customer tier table. Reads the LIVE Customer table, not a
+     snapshot — always available regardless of whether any snapshot batch
+     has ever been taken (PO feedback 2026-08-31).
      ══════════════════════════════════════════════════════════════════ -->
 <div class="section-card shadow-sm">
     <div class="section-header">
@@ -757,7 +1168,56 @@
             </div>
             <div>
                 <label>Registration Store</label>
-                <input type="text" id="tierShopInp" class="form-control form-control-sm" placeholder="e.g. Bala VN Haiphong AEON MALL">
+                <select id="tierShopSel" class="form-select form-select-sm">
+                    <option value="">All Stores</option>
+                    
+                    <option value="BL VN North Warehouse">BL VN North Warehouse</option>
+                    
+                    <option value="Bala VN Hanoi AEON MALL LONG BIEN- Direct">Bala VN Hanoi AEON MALL LONG BIEN- Direct</option>
+                    
+                    <option value="Bala VN Hanoi Lotte Westlake Mall - Direct">Bala VN Hanoi Lotte Westlake Mall - Direct</option>
+                    
+                    <option value="Bala VN Hanoi Vincom Royal City- Direct">Bala VN Hanoi Vincom Royal City- Direct</option>
+                    
+                    <option value="Bala VN Hanoi Vincom Times City- Direct">Bala VN Hanoi Vincom Times City- Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct">Bala VN Ho Chi Minh AEON MALL Tan Phu - Direct</option>
+                    
+                    <option value="Bala VN Ho Chi Minh Thiso Mall Sala - Direct">Bala VN Ho Chi Minh Thiso Mall Sala - Direct</option>
+                    
+                    <option value="Bala VN Hue Aeon Mall Hue-  POP-UP">Bala VN Hue Aeon Mall Hue-  POP-UP</option>
+                    
+                    <option value="Balabala VN Can Tho Street Shop-Franchise">Balabala VN Can Tho Street Shop-Franchise</option>
+                    
+                    <option value="Semir VN HANOI HANOI CENTER- Direct">Semir VN HANOI HANOI CENTER- Direct</option>
+                    
+                    <option value="Semir VN HUE AEON Mall- Direct">Semir VN HUE AEON Mall- Direct</option>
+                    
+                    <option value="巴拉越南河内市HA DONG AEON MALL-直营店">巴拉越南河内市HA DONG AEON MALL-直营店</option>
+                    
+                    <option value="巴拉越南河内市LOTTE WESTLAKE-快闪店">巴拉越南河内市LOTTE WESTLAKE-快闪店</option>
+                    
+                    <option value="巴拉越南河内市SAVICO MEGAMALL-直营店">巴拉越南河内市SAVICO MEGAMALL-直营店</option>
+                    
+                    <option value="巴拉越南海防AEON MALL-直营店">巴拉越南海防AEON MALL-直营店</option>
+                    
+                    <option value="巴拉越南胡志明 VAN HANH MALL">巴拉越南胡志明 VAN HANH MALL</option>
+                    
+                    <option value="巴拉越南胡志明Crescent Mall-直营店">巴拉越南胡志明Crescent Mall-直营店</option>
+                    
+                    <option value="巴拉越南胡志明市HMC Takashimaya Dept. Store-直营店">巴拉越南胡志明市HMC Takashimaya Dept. Store-直营店</option>
+                    
+                    <option value="巴拉越南胡志明市VAN HANH MALL-直营店">巴拉越南胡志明市VAN HANH MALL-直营店</option>
+                    
+                    <option value="巴拉越南顺化Aeon Hue-直营快闪店(24SHAR0323)">巴拉越南顺化Aeon Hue-直营快闪店(24SHAR0323)</option>
+                    
+                    <option value="森马越南河内市VINCOM TIMES CITY-直营店">森马越南河内市VINCOM TIMES CITY-直营店</option>
+                    
+                    <option value="森马越南胡志明Thiso 临时特卖店">森马越南胡志明Thiso 临时特卖店</option>
+                    
+                    <option value="森马越南胡志明VHM 临时特卖店">森马越南胡志明VHM 临时特卖店</option>
+                    
+                </select>
             </div>
             <button type="button" class="btn btn-primary btn-sm align-self-end" onclick="loadTierTable()">
                 <i class="bi bi-search"></i> Load
@@ -765,11 +1225,10 @@
         </div>
         <div class="loading-spinner" id="tierSpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
         <div id="tierResult">
-            <p class="no-data-msg text-muted">Click Load to view the customer tier progress table for the "To" snapshot.</p>
+            <p class="no-data-msg text-muted">Click Load to view current customers and their progress to the next tier.</p>
         </div>
     </div>
 </div>
-
 
 
         </div>
@@ -804,10 +1263,10 @@
     </script>
     
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script id="membership-chart-data" type="application/json">[{"batch_id": 4, "snapshot_date": "2025-12-31", "source": "manual_import", "counts": {"Member": 55873, "Silver": 2078, "Gold": 674, "Diamond": 302}}, {"batch_id": 1, "snapshot_date": "2026-03-01", "source": "auto", "counts": {"Member": 70581, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 3, "snapshot_date": "2026-05-15", "source": "auto", "counts": {"Member": 70581, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 2, "snapshot_date": "2026-08-01", "source": "auto", "counts": {"Member": 70581, "Silver": 2810, "Gold": 852, "Diamond": 388}}]</script>
+<script id="membership-chart-data" type="application/json">[{"batch_id": 2, "snapshot_date": "2025-12-01", "source": "manual_import", "counts": {"Member": 55873, "Silver": 2078, "Gold": 674, "Diamond": 302}}, {"batch_id": 3, "snapshot_date": "2026-01-01", "source": "auto", "counts": {"Member": 70580, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 4, "snapshot_date": "2026-02-01", "source": "auto", "counts": {"Member": 70580, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 5, "snapshot_date": "2026-03-01", "source": "auto", "counts": {"Member": 70580, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 6, "snapshot_date": "2026-04-01", "source": "auto", "counts": {"Member": 70580, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 7, "snapshot_date": "2026-05-01", "source": "auto", "counts": {"Member": 70580, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 8, "snapshot_date": "2026-06-01", "source": "auto", "counts": {"Member": 70580, "Silver": 2810, "Gold": 852, "Diamond": 388}}, {"batch_id": 9, "snapshot_date": "2026-07-01", "source": "auto", "counts": {"Member": 70580, "Silver": 2810, "Gold": 852, "Diamond": 388}}]</script>
 <script>
 (function(){
-    const CD = JSON.parse(document.getElementById('membership-chart-data').textContent || '[]');
+    let CD = JSON.parse(document.getElementById('membership-chart-data').textContent || '[]');
     const GRADES = ['Member', 'Silver', 'Gold', 'Diamond'];
     const GRADE_COLORS = {
         'Member': '#495057', 'Silver': '#a0aec0',
@@ -873,23 +1332,83 @@
             renderTrendChart();
         });
         renderTrendChart();
+
+        const trendStoreSel = document.getElementById('trendStoreSel');
+        if (trendStoreSel) {
+            trendStoreSel.addEventListener('change', function() {
+                fetch("/membership/partial/trend/?store=" + encodeURIComponent(trendStoreSel.value), {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                })
+                    .then(r => r.json())
+                    .then(data => { CD = data.series || []; renderTrendChart(); })
+                    .catch(err => console.error('membership_trend_partial fetch failed:', err));
+            });
+        }
     }
 
-    window.loadTierTable = function() {
-        const grade = document.getElementById('tierGradeSel').value;
-        const shop = document.getElementById('tierShopInp').value;
-        const spinner = document.getElementById('tierSpinner');
-        const result = document.getElementById('tierResult');
-        const toBatch = "2";
+    window.loadStoreBreakdown = function() {
+        const result = document.getElementById('storeBreakdownResult');
+        const spinner = document.getElementById('storeBreakdownSpinner');
+        if (!result) return;
+        const toBatch = "9";
         if (!toBatch) {
             result.innerHTML = '<p class="no-data-msg text-muted">No "To" snapshot selected.</p>';
             return;
         }
+        const fromBatch = "8";
         spinner.style.display = 'block';
         result.innerHTML = '';
-        let url = "/membership/partial/table/?batch=" + encodeURIComponent(toBatch);
+        let url = "/membership/partial/store-breakdown/?batch=" + encodeURIComponent(toBatch);
+        if (fromBatch) url += '&from_batch=' + encodeURIComponent(fromBatch);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })
+            .catch(err => {
+                spinner.style.display = 'none';
+                result.innerHTML = '<div class="alert alert-danger">Network error: ' + err.message + '</div>';
+            });
+    };
+    loadStoreBreakdown();
+
+    window.loadMovers = function() {
+        const result = document.getElementById('moversResult');
+        const spinner = document.getElementById('moversSpinner');
+        if (!result) return;
+        const toBatch = "9";
+        const fromBatch = "8";
+        if (!toBatch || !fromBatch) {
+            result.innerHTML = '<p class="no-data-msg text-muted">Select both a "From" and "To" snapshot above.</p>';
+            return;
+        }
+        const store = document.getElementById('moversStoreSel').value;
+        const grade = document.getElementById('moversGradeSel').value;
+        const direction = document.getElementById('moversDirectionSel').value;
+        spinner.style.display = 'block';
+        result.innerHTML = '';
+        let url = "/membership/partial/movers/?from_batch=" + encodeURIComponent(fromBatch) + '&to_batch=' + encodeURIComponent(toBatch);
+        if (store) url += '&store=' + encodeURIComponent(store);
         if (grade) url += '&grade=' + encodeURIComponent(grade);
-        if (shop) url += '&shop=' + encodeURIComponent(shop);
+        if (direction) url += '&direction=' + encodeURIComponent(direction);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })
+            .catch(err => {
+                spinner.style.display = 'none';
+                result.innerHTML = '<div class="alert alert-danger">Network error: ' + err.message + '</div>';
+            });
+    };
+    loadMovers();
+
+    window.loadTierTable = function() {
+        const grade = document.getElementById('tierGradeSel').value;
+        const shop = document.getElementById('tierShopSel').value;
+        const spinner = document.getElementById('tierSpinner');
+        const result = document.getElementById('tierResult');
+        spinner.style.display = 'block';
+        result.innerHTML = '';
+        let url = "/membership/partial/table/?";
+        if (grade) url += 'grade=' + encodeURIComponent(grade);
+        if (shop) url += (url.endsWith('?') ? '' : '&') + 'shop=' + encodeURIComponent(shop);
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })

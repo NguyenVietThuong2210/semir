@@ -1,8 +1,9 @@
 """
 App/services/membership_snapshot.py
 
-Builds MembershipSnapshotBatch + MembershipSnapshot rows. Two entry points
-share _build_rows() so the aggregation/write logic is never duplicated:
+Builds MembershipSnapshotBatch rows (grade_counts/grade_members JSON fields
+— see App/models/membership.py docstring). Two entry points share
+_build_rows() so the aggregation/write logic is never duplicated:
 
 1. create_auto_snapshot() — snapshots the ENTIRE current Customer table.
    Called from the on_done_fn hook after a successful customer upload
@@ -17,12 +18,10 @@ share _build_rows() so the aggregation/write logic is never duplicated:
 import logging
 from datetime import date
 
-from App.analytics.customer_utils import resolve_grade, _norm_vid
-from App.analytics.membership import compute_annual_spend_map
+from App.analytics.customer_utils import resolve_grade
 from App.services.file_reader import read_file, parse_date, safe_str, safe_int
 
 logger = logging.getLogger(__name__)
-BATCH_SIZE = 1000
 
 
 def _parse_customer_rows(file, df=None):
@@ -58,36 +57,34 @@ def _parse_customer_rows(file, df=None):
     return parsed
 
 
-def _build_rows(batch, customer_dicts, as_of_date):
-    from App.models.membership import MembershipSnapshot
+def _build_rows(batch, customer_dicts):
+    """
+    Aggregates customer_dicts into batch.grade_counts/grade_members (JSON —
+    see App/models/membership.py docstring) instead of writing one DB row
+    per customer. annual_spend/annual_purchase_count/points are intentionally
+    NOT stored here (they were only ever read by the now-deleted
+    get_customer_tier_table(); "Customer Tier Progress" reads them live from
+    Customer instead) — this is the storage reduction the redesign exists for.
+    """
+    overall_counts, overall_members = {}, {}
+    by_store_counts, by_store_members = {}, {}
 
-    spend_map = compute_annual_spend_map(as_of_date)
-    zero = {'annual_spend': 0, 'annual_purchase_count': 0}
-    to_create = []
     for c in customer_dicts:
-        agg = spend_map.get(_norm_vid(c['vip_id']), zero)
         grade = resolve_grade(c['vip_id'], c['vip_grade'])
-        to_create.append(MembershipSnapshot(
-            batch=batch,
-            vip_id=c['vip_id'],
-            phone=c['phone'],
-            name=c['name'],
-            grade=grade,
-            registration_date=c['registration_date'],
-            registration_store=c['registration_store'],
-            annual_spend=agg['annual_spend'],
-            annual_purchase_count=agg['annual_purchase_count'],
-            points=c['points'],
-            grade_changed_at=None,
-        ))
-        if len(to_create) >= BATCH_SIZE:
-            MembershipSnapshot.objects.bulk_create(to_create, batch_size=BATCH_SIZE, ignore_conflicts=True)
-            to_create = []
-    if to_create:
-        MembershipSnapshot.objects.bulk_create(to_create, batch_size=BATCH_SIZE, ignore_conflicts=True)
+        store_key = c['registration_store'] or '(No Store)'
 
+        overall_counts[grade] = overall_counts.get(grade, 0) + 1
+        overall_members.setdefault(grade, []).append(c['vip_id'])
+
+        store_counts = by_store_counts.setdefault(store_key, {})
+        store_counts[grade] = store_counts.get(grade, 0) + 1
+        store_members = by_store_members.setdefault(store_key, {})
+        store_members.setdefault(grade, []).append(c['vip_id'])
+
+    batch.grade_counts = {'overall': overall_counts, 'by_store': by_store_counts}
+    batch.grade_members = {'overall': overall_members, 'by_store': by_store_members}
     batch.row_count = len(customer_dicts)
-    batch.save(update_fields=['row_count'])
+    batch.save(update_fields=['grade_counts', 'grade_members', 'row_count'])
 
     from django.core.cache import cache
     cache.delete("membership_batches_dropdown")
@@ -104,7 +101,7 @@ def create_auto_snapshot(as_of_date=None, uploaded_by=None):
     customer_dicts = list(Customer.objects.values(
         'vip_id', 'phone', 'name', 'vip_grade', 'registration_date', 'registration_store', 'points',
     ))
-    _build_rows(batch, customer_dicts, as_of_date)
+    _build_rows(batch, customer_dicts)
     logger.info(
         "membership auto-snapshot batch=%s rows=%d as_of=%s",
         batch.id, batch.row_count, as_of_date, extra={"step": "membership_snapshot"},
@@ -126,7 +123,7 @@ def create_backfill_snapshot(file, progress_fn=None, df=None, *, snapshot_date, 
         snapshot_date=snapshot_date, source='manual_import', uploaded_by=uploaded_by,
         note=note, source_filename=getattr(file, 'name', ''),
     )
-    _build_rows(batch, customer_dicts, snapshot_date)
+    _build_rows(batch, customer_dicts)
     logger.info(
         "membership backfill-snapshot batch=%s rows=%d as_of=%s file=%s",
         batch.id, batch.row_count, snapshot_date, batch.source_filename,

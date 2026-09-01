@@ -216,7 +216,7 @@ def get_shop_detail_customer_data(registration_store: str,
             zalo_app_created_at__lte=period_filter['end'],
         )
     zalo_active_list = list(
-        _zalo_qs.order_by('-zalo_app_created_at')
+        _zalo_qs.order_by('-zalo_app_created_at', 'cnv_id')
         .values('cnv_id', 'phone', 'last_name', 'first_name',
                 'level_name', 'cnv_created_at', 'zalo_app_id',
                 'zalo_oa_id', 'zalo_app_created_at')

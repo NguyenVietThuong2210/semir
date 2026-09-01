@@ -132,7 +132,7 @@ def create_empty_grade_bucket():
 # Downgrade thresholds are INFORMATIONAL ONLY — cannot be auto-enforced.
 # The rule is "purchase count within 1 year of the customer's last
 # grade-change date," but that date does not exist anywhere in the source
-# data (see App/models/membership.py::MembershipSnapshot.grade_changed_at).
+# data (was never populated even before the 2026-09-01 storage redesign).
 # ---------------------------------------------------------------------------
 GRADE_UPGRADE_THRESHOLDS = {
     'Silver': Decimal('6000000'),

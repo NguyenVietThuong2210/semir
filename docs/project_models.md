@@ -152,7 +152,7 @@ Indexes: `(shop_name, brand)`, `(year, season)`, `(sku, shop_id)`
 
 ## Membership Models — `App/models/membership.py`
 
-Snapshot-based tracking for the Customer Membership KPI page (added 2026-08-14). Unlike `InventorySnapshot`, this IS a true time-series: each import event creates a new `MembershipSnapshotBatch` + a full set of `MembershipSnapshot` rows, nothing is overwritten.
+Snapshot-based tracking for the Customer Membership KPI page (added 2026-08-14). Each import event (or manual backfill) creates a new `MembershipSnapshotBatch` row; the per-grade/per-store breakdown is stored directly on that row as JSON (redesigned 2026-09-01 — see below), not as per-customer child rows.
 
 ### MembershipSnapshotBatch
 | Field | Type | Notes |
@@ -163,35 +163,17 @@ Snapshot-based tracking for the Customer Membership KPI page (added 2026-08-14).
 | uploaded_by | FK → User | null, blank, on_delete=SET_NULL |
 | source_filename | CharField(255) | blank — manual_import only |
 | note | TextField | blank — manual_import only, PO-entered |
-| row_count | IntegerField | default=0 |
+| row_count | IntegerField | default=0 — total customers included in the batch |
+| grade_counts | JSONField | default=dict, blank — **small (a few KB)**. `{'overall': {grade: count}, 'by_store': {store: {grade: count}}}`, keyed by all 5 grades including `'No Grade'`. Read by every list/chart view (`get_grade_breakdown`, `get_grade_breakdown_by_store`, `get_grade_breakdown_by_store_comparison`, `get_all_batch_grade_series`) via `.values('grade_counts')` — deliberately never read together with `grade_members`, so the trend chart's one-query-per-page-load stays a few KB regardless of batch count or customer count. |
+| grade_members | JSONField | default=dict, blank — **large (~1-2MB at 100k customers)**. Same shape as `grade_counts` but lists of `vip_id` instead of counts: `{'overall': {grade: [vip_id, ...]}, 'by_store': {store: {grade: [vip_id, ...]}}}`. Read ONLY by `get_grade_changes()` (the grade-change diff/"movers" feature), always exactly 2 batches at a time — never read for the trend chart/breakdown/comparison views. |
 
 ```python
 class Meta:
+    indexes = [models.Index(fields=["source", "snapshot_date"])]
     ordering = ["-snapshot_date", "-created_at"]
 ```
 
-### MembershipSnapshot
-One row per customer per batch — lean, denormalized reporting table.
-
-| Field | Type | Notes |
-|-------|------|-------|
-| batch | FK → MembershipSnapshotBatch | on_delete=CASCADE |
-| vip_id | CharField(1000) | |
-| phone | CharField(1000) | blank |
-| name | CharField(1000) | blank |
-| grade | CharField(20) | `normalize_grade()` output |
-| registration_date | DateField | null, blank |
-| registration_store | CharField(1000) | blank |
-| annual_spend | DecimalField(14,2) | default=0 — settlement_amount sum, Jan 1 → snapshot_date |
-| annual_purchase_count | IntegerField | default=0 |
-| points | IntegerField | default=0 |
-| grade_changed_at | DateField | null, blank — **always NULL today.** No source data (Customer model, imported customer files) tracks a date of last grade change anywhere; PO decision (confirmed 2026-08-14) is to leave it blank rather than synthesize a proxy date. Backfill later if a real source becomes available. |
-
-```python
-class Meta:
-    unique_together = ("batch", "vip_id", "phone")   # mirrors Customer's own (vip_id, phone) uniqueness
-```
-Indexes: `(batch, grade)`, `(vip_id)`, `(batch, registration_store)`
+**Redesign history (2026-09-01, PO request — storage/performance):** originally a header row + a `MembershipSnapshot` child row PER CUSTOMER (100k customers = 100k child rows per batch, 267 bytes/row measured). A query touching all batches (the trend chart) degraded to a full Postgres Sequential Scan once total rows got large — extrapolated ~60s to load the trend chart after 5 years of daily snapshots at 100k customers, even after fixing an N+1 query pattern in `get_all_batch_grade_series()`. Replaced with the two JSON fields above (migration `0024_membership_json_snapshot.py`, lossless data conversion of all pre-existing rows, verified byte-for-byte count match). Measured result: 33x storage reduction (148MB → 4.43MB for 8 batches, helped further by Postgres TOAST compression on the JSONB values) and the trend/breakdown/comparison queries now cost O(batch count), not O(customer count), since they only ever read `grade_counts`. The old `MembershipSnapshot` per-customer model no longer exists. `annual_spend`/`annual_purchase_count`/`points` are no longer stored per snapshot (they were only ever read by the now-deleted `get_customer_tier_table`); `get_live_customer_tier_table()` still computes these live from `Customer`/`SalesTransaction` for the "current" tier-progress view, unaffected by this redesign.
 
 `amount_to_next_tier` is intentionally **not** a stored column — it's fully derived from `grade` + `annual_spend` at read time via `App/analytics/calculations.py::next_tier_info()`, to avoid a second source of truth.
 

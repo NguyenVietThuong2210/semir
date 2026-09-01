@@ -9,7 +9,8 @@ from App.analytics.membership import (
     DISPLAY_GRADES,
     compare_batches,
     get_all_batch_grade_series,
-    get_grade_breakdown_by_store,
+    get_grade_breakdown_by_store_comparison,
+    get_grade_changes,
     get_live_customer_tier_table,
     get_snapshot_registration_stores,
     list_batches,
@@ -96,6 +97,16 @@ def membership_table_partial(request):
 
 
 def membership_store_breakdown_partial(request):
+    """
+    "Members per Grade — by Registration Store" — a From/To matrix, one row
+    per store, columns = Member/Silver/Gold/Diamond each split into From/To
+    (text green if increased, red if decreased, in the template). Redesigned
+    2026-09-01, PO feedback: previously "To"-only with a separate per-store
+    drill-down mode; the drill-down is now redundant (this matrix already
+    shows From/To per store, and membership_movers_partial below shows the
+    actual individual customers who moved) — removed rather than kept
+    alongside, per independent UI-design review.
+    """
     err = _ajax_perm_check(request, "membership.view")
     if err:
         return err
@@ -106,27 +117,55 @@ def membership_store_breakdown_partial(request):
         except (TypeError, ValueError):
             return None
 
-    batch_id = _parse_id(request.GET.get("batch"))
-    if not batch_id:
+    to_batch_id = _parse_id(request.GET.get("batch"))
+    if not to_batch_id:
         batches = list_batches()
-        batch_id = batches[0].id if batches else None  # newest first (Meta.ordering)
+        to_batch_id = batches[0].id if batches else None  # newest first (Meta.ordering)
+    from_batch_id = _parse_id(request.GET.get("from_batch"))
 
-    if not batch_id:
+    if not to_batch_id:
         return HttpResponse('<div class="alert alert-warning m-0">No snapshot selected.</div>')
 
-    store = request.GET.get("store") or None
-    if store:
-        # Drill-down: one store's Grade/From/To/Diff/%Change, reusing the
-        # exact table markup as Section 2's overall comparison (PO feedback
-        # 2026-08-31: "want comparison here too") — added 2026-08-31.
-        from_batch_id = _parse_id(request.GET.get("from_batch"))
-        comparison = compare_batches(from_batch_id, batch_id, store=store)
-        return render(request, "membership/_store_grade_comparison_partial.html", {
-            "comparison": comparison, "from_batch": from_batch_id, "store": store,
-        })
+    rows = get_grade_breakdown_by_store_comparison(from_batch_id, to_batch_id)
+    return render(request, "membership/_store_breakdown_partial.html", {
+        "rows": rows, "grades": DISPLAY_GRADES, "from_batch": from_batch_id,
+    })
 
-    rows = get_grade_breakdown_by_store(batch_id)
-    return render(request, "membership/_store_breakdown_partial.html", {"rows": rows, "grades": DISPLAY_GRADES})
+
+def membership_movers_partial(request):
+    """
+    "Comparison" section — customers whose grade changed between the From/To
+    snapshots. Added 2026-09-01, PO feedback (this is the whole reason
+    MembershipSnapshotBatch.grade_members stores vip_id lists instead of just
+    counts). Auto-loads like the by-Store matrix — cheap: bounded by how many
+    customers actually changed grade between two existing snapshots, not by
+    total customer count (see get_grade_changes() docstring).
+    """
+    err = _ajax_perm_check(request, "membership.view")
+    if err:
+        return err
+
+    def _parse_id(raw):
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+
+    from_batch_id = _parse_id(request.GET.get("from_batch"))
+    to_batch_id = _parse_id(request.GET.get("to_batch"))
+    if not to_batch_id:
+        batches = list_batches()
+        to_batch_id = batches[0].id if batches else None
+
+    if not from_batch_id or not to_batch_id:
+        return HttpResponse('<div class="alert alert-warning m-0">Select both a "From" and "To" snapshot to see grade changes.</div>')
+
+    store = request.GET.get("store") or None
+    grade = request.GET.get("grade") or None
+    direction = request.GET.get("direction") or None
+
+    rows, total_count = get_grade_changes(from_batch_id, to_batch_id, store=store, grade=grade, direction=direction, limit=500)
+    return render(request, "membership/_movers_partial.html", {"rows": rows, "total_count": total_count})
 
 
 def membership_trend_partial(request):
@@ -155,7 +194,7 @@ def membership_delete_batch(request, batch_id):
         return redirect("membership_dashboard")
 
     snapshot_date, source_display, row_count = batch.snapshot_date, batch.get_source_display(), batch.row_count
-    batch.delete()  # cascades to MembershipSnapshot rows (on_delete=CASCADE)
+    batch.delete()  # grade_counts/grade_members JSON fields go with the row — no child model/cascade involved
     logger.info(
         "membership_delete_batch batch=%s date=%s source=%s rows=%s user=%s",
         batch_id, snapshot_date, source_display, row_count, request.user, extra={"step": "membership_snapshot"},

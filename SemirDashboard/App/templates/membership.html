@@ -160,30 +160,69 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════
-     SECTION 2B — Grade breakdown by Registration Store (To snapshot),
-     with an optional per-store From/To comparison drill-down
+     SECTION 2B — Grade breakdown by Registration Store — From/To matrix.
+     Redesigned 2026-09-01: was "To"-only with a per-store drill-down mode;
+     the drill-down is now redundant (this matrix shows From/To directly,
+     and Section 2C below shows the actual customers who moved) — removed.
      ══════════════════════════════════════════════════════════════════ -->
 <div class="section-card shadow-sm">
     <div class="section-header">
         <span class="section-title"><i class="bi bi-shop me-2"></i>Members per Grade — by Registration Store</span>
     </div>
     <div class="section-body">
+        {% if not from_batch %}
+        <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Select a "From Snapshot" above to see the From columns.</p>
+        {% endif %}
+        <div class="loading-spinner" id="storeBreakdownSpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
+        <div id="storeBreakdownResult">
+            <p class="no-data-msg text-muted">Loading…</p>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SECTION 2C — Comparison: individual customers whose grade changed
+     between the From/To snapshots. Added 2026-09-01, PO feedback.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="section-card shadow-sm">
+    <div class="section-header">
+        <span class="section-title"><i class="bi bi-people-fill me-2"></i>Comparison — Members Who Changed Grade</span>
+    </div>
+    <div class="section-body">
         <div class="shop-select-row mb-3">
             <div>
                 <label>Registration Store</label>
-                <select id="storeBreakdownSel" class="form-select form-select-sm" onchange="loadStoreBreakdown()">
+                <select id="moversStoreSel" class="form-select form-select-sm" onchange="loadMovers()">
                     <option value="">All Stores</option>
                     {% for s in snapshot_stores %}
                     <option value="{{ s }}">{{ s }}</option>
                     {% endfor %}
                 </select>
             </div>
+            <div>
+                <label>New Grade</label>
+                <select id="moversGradeSel" class="form-select form-select-sm" onchange="loadMovers()">
+                    <option value="">All Grades</option>
+                    <option value="Member">Member</option>
+                    <option value="Silver">Silver</option>
+                    <option value="Gold">Gold</option>
+                    <option value="Diamond">Diamond</option>
+                </select>
+            </div>
+            <div>
+                <label>Direction</label>
+                <select id="moversDirectionSel" class="form-select form-select-sm" onchange="loadMovers()">
+                    <option value="">All</option>
+                    <option value="upgrade">Upgraded</option>
+                    <option value="downgrade">Downgraded</option>
+                </select>
+            </div>
         </div>
-        <p class="text-muted small mb-2" id="storeBreakdownHint">
-            <i class="bi bi-info-circle me-1"></i>Grade breakdown for the "To" snapshot, one row per registration store. Pick a store above to see its From/To/Diff comparison instead.
-        </p>
-        <div class="loading-spinner" id="storeBreakdownSpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
-        <div id="storeBreakdownResult">
+        {% if not from_batch %}
+        <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Select a "From Snapshot" above to see who changed grade.</p>
+        {% endif %}
+        <div class="loading-spinner" id="moversSpinner"><i class="bi bi-arrow-repeat spin me-1"></i>Loading…</div>
+        <div id="moversResult">
             <p class="no-data-msg text-muted">Loading…</p>
         </div>
     </div>
@@ -354,25 +393,17 @@
     window.loadStoreBreakdown = function() {
         const result = document.getElementById('storeBreakdownResult');
         const spinner = document.getElementById('storeBreakdownSpinner');
-        const hint = document.getElementById('storeBreakdownHint');
         if (!result) return;
         const toBatch = "{{ to_batch|default:'' }}";
         if (!toBatch) {
             result.innerHTML = '<p class="no-data-msg text-muted">No "To" snapshot selected.</p>';
             return;
         }
-        const store = document.getElementById('storeBreakdownSel').value;
         const fromBatch = "{{ from_batch|default:'' }}";
         spinner.style.display = 'block';
         result.innerHTML = '';
         let url = "{% url 'membership_store_breakdown_partial' %}?batch=" + encodeURIComponent(toBatch);
-        if (store) {
-            url += '&store=' + encodeURIComponent(store);
-            if (fromBatch) url += '&from_batch=' + encodeURIComponent(fromBatch);
-            if (hint) hint.style.display = 'none';
-        } else if (hint) {
-            hint.style.display = '';
-        }
+        if (fromBatch) url += '&from_batch=' + encodeURIComponent(fromBatch);
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })
@@ -382,6 +413,35 @@
             });
     };
     loadStoreBreakdown();
+
+    window.loadMovers = function() {
+        const result = document.getElementById('moversResult');
+        const spinner = document.getElementById('moversSpinner');
+        if (!result) return;
+        const toBatch = "{{ to_batch|default:'' }}";
+        const fromBatch = "{{ from_batch|default:'' }}";
+        if (!toBatch || !fromBatch) {
+            result.innerHTML = '<p class="no-data-msg text-muted">Select both a "From" and "To" snapshot above.</p>';
+            return;
+        }
+        const store = document.getElementById('moversStoreSel').value;
+        const grade = document.getElementById('moversGradeSel').value;
+        const direction = document.getElementById('moversDirectionSel').value;
+        spinner.style.display = 'block';
+        result.innerHTML = '';
+        let url = "{% url 'membership_movers_partial' %}?from_batch=" + encodeURIComponent(fromBatch) + '&to_batch=' + encodeURIComponent(toBatch);
+        if (store) url += '&store=' + encodeURIComponent(store);
+        if (grade) url += '&grade=' + encodeURIComponent(grade);
+        if (direction) url += '&direction=' + encodeURIComponent(direction);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })
+            .catch(err => {
+                spinner.style.display = 'none';
+                result.innerHTML = '<div class="alert alert-danger">Network error: ' + err.message + '</div>';
+            });
+    };
+    loadMovers();
 
     window.loadTierTable = function() {
         const grade = document.getElementById('tierGradeSel').value;

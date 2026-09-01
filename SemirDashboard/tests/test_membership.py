@@ -3,14 +3,20 @@ tests/test_membership.py — Customer Membership snapshot feature tests.
 
 Covers:
   1. next_tier_info() pure-function correctness (calculations.py)
+  1B. resolve_grade() — shared grade-resolution rule
   2. compute_annual_spend_map() correctness — year window + as_of_date cutoff
-  3. create_auto_snapshot() — snapshots the entire Customer table
-  4. Auto-hook wiring into upload_customers — runs on success, never flips
-     the customer-import job to "error" if the snapshot itself fails
+  3. create_auto_snapshot() — snapshots the entire Customer table into
+     MembershipSnapshotBatch.grade_counts/grade_members (JSON — redesigned
+     2026-09-01, see App/models/membership.py docstring)
+  4. Auto-hook wiring into upload_customers
   5. create_backfill_snapshot() never touches the live Customer table
   6. compare_batches() delta calculation
-  7. get_customer_tier_table() sort order + grade/shop filters
+  7. get_live_customer_tier_table() — live Customer-table counterpart
   8. Web smoke — /membership/ permission gating
+  9-13. get_grade_breakdown_by_store(), store= filters, get_snapshot_registration_stores()
+  14. get_grade_breakdown_by_store_comparison() — From/To matrix (added 2026-09-01)
+  15. get_grade_changes() — grade-change diff feature (added 2026-09-01)
+  16. membership_movers_partial web tests (added 2026-09-01)
 
 Run:
   cd SemirDashboard && python manage.py test tests.test_membership -v 2
@@ -26,12 +32,13 @@ from django.contrib.auth.models import User
 from django.test import Client, TestCase
 
 from App.models import Customer, SalesTransaction, Role, UserProfile
-from App.models.membership import MembershipSnapshot, MembershipSnapshotBatch
+from App.models.membership import MembershipSnapshotBatch
 from App.analytics.calculations import next_tier_info, GRADE_UPGRADE_THRESHOLDS
 from App.analytics.customer_utils import resolve_grade
 from App.analytics.membership import (
-    compute_annual_spend_map, compare_batches, get_customer_tier_table,
+    compute_annual_spend_map, compare_batches,
     get_grade_breakdown, get_all_batch_grade_series, get_grade_breakdown_by_store,
+    get_grade_breakdown_by_store_comparison, get_grade_changes,
     get_live_customer_tier_table, get_snapshot_registration_stores, DISPLAY_GRADES,
 )
 from App.services.membership_snapshot import create_auto_snapshot, create_backfill_snapshot
@@ -58,6 +65,39 @@ def _customer(vip_id, phone, grade='Member', reg_date=None, points=0, store=''):
     )
 
 
+def _sale(vip_id, sales_date, amount, invoice):
+    return SalesTransaction.objects.create(
+        invoice_number=invoice, shop_id="S1", shop_name="Test Shop", country="VN",
+        sales_date=sales_date, vip_id=vip_id, vip_name=f"Cust {vip_id}",
+        quantity=1, settlement_amount=Decimal(str(amount)), sales_amount=Decimal(str(amount)),
+    )
+
+
+def _add_snapshot_member(batch, vip_id, grade, store=''):
+    """
+    Test helper — adds one customer into a MembershipSnapshotBatch's
+    grade_counts/grade_members JSON fields, mirroring exactly what
+    App/services/membership_snapshot.py::_build_rows() does. Lets tests
+    express "this batch has these customers" without needing a real
+    Customer table + create_auto_snapshot() round-trip for every fixture.
+    Mutates and saves `batch`; returns it for chaining.
+    """
+    store_key = store or '(No Store)'
+    gc = batch.grade_counts or {}
+    gm = batch.grade_members or {}
+    gc.setdefault('overall', {})
+    gc['overall'][grade] = gc['overall'].get(grade, 0) + 1
+    gc.setdefault('by_store', {}).setdefault(store_key, {})
+    gc['by_store'][store_key][grade] = gc['by_store'][store_key].get(grade, 0) + 1
+    gm.setdefault('overall', {}).setdefault(grade, []).append(vip_id)
+    gm.setdefault('by_store', {}).setdefault(store_key, {}).setdefault(grade, []).append(vip_id)
+    batch.grade_counts = gc
+    batch.grade_members = gm
+    batch.row_count = batch.row_count + 1
+    batch.save(update_fields=['grade_counts', 'grade_members', 'row_count'])
+    return batch
+
+
 class _ClearDropdownCacheMixin:
     """Any test hitting GET /membership/ populates shop_detail.py's shared
     "shop_detail_dropdowns" cache (5-min TTL, App/views/shop_detail.py
@@ -76,14 +116,6 @@ class _ClearDropdownCacheMixin:
         from django.core.cache import cache
         cache.delete("shop_detail_dropdowns")
         super().tearDown()
-
-
-def _sale(vip_id, sales_date, amount, invoice):
-    return SalesTransaction.objects.create(
-        invoice_number=invoice, shop_id="S1", shop_name="Test Shop", country="VN",
-        sales_date=sales_date, vip_id=vip_id, vip_name=f"Cust {vip_id}",
-        quantity=1, settlement_amount=Decimal(str(amount)), sales_amount=Decimal(str(amount)),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,10 +162,6 @@ class NextTierInfoTest(TestCase):
 # ---------------------------------------------------------------------------
 # 1B. resolve_grade() — shared by App/services/membership_snapshot.py
 #     (_build_rows) and App/analytics/membership.py (get_live_customer_tier_table)
-#     since 2026-08-31 (independent review finding: this exact rule was
-#     duplicated with no shared test, a silent-drift risk if only one copy
-#     were edited later). Both call sites now call this one function, so a
-#     single test here covers both.
 # ---------------------------------------------------------------------------
 
 class ResolveGradeTest(TestCase):
@@ -192,7 +220,7 @@ class ComputeAnnualSpendMapTest(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 3. create_auto_snapshot() — snapshots the entire Customer table
+# 3. create_auto_snapshot() — snapshots the entire Customer table into JSON
 # ---------------------------------------------------------------------------
 
 class CreateAutoSnapshotTest(TestCase):
@@ -205,23 +233,11 @@ class CreateAutoSnapshotTest(TestCase):
 
         self.assertEqual(batch.source, 'auto')
         self.assertEqual(batch.row_count, Customer.objects.count())
-        self.assertEqual(MembershipSnapshot.objects.filter(batch=batch).count(), 3)
-
-    def test_grade_changed_at_always_null(self):
-        _customer('C4', 'P4', grade='Diamond')
-        batch = create_auto_snapshot(as_of_date=date(2026, 6, 1))
-        rows = MembershipSnapshot.objects.filter(batch=batch)
-        self.assertTrue(rows.exists())
-        for row in rows:
-            self.assertIsNone(row.grade_changed_at)
-
-    def test_annual_spend_computed_from_sales(self):
-        _customer('C5', 'P5', grade='Member')
-        _sale('C5', date(2026, 3, 1), 7000000, 'INV-E1')
-        batch = create_auto_snapshot(as_of_date=date(2026, 6, 1))
-        row = MembershipSnapshot.objects.get(batch=batch, vip_id='C5')
-        self.assertEqual(row.annual_spend, Decimal('7000000'))
-        self.assertEqual(row.grade, 'Member')
+        overall = batch.grade_counts['overall']
+        self.assertEqual(overall.get('Silver', 0), 1)
+        self.assertEqual(overall.get('Gold', 0), 1)
+        self.assertEqual(overall.get('No Grade', 0), 1)
+        self.assertEqual(batch.grade_members['overall']['Silver'], ['C1'])
 
     def test_vip_id_zero_forced_to_no_grade_regardless_of_stored_grade(self):
         # VIP ID "0" = buyer without info, excluded from grade analytics
@@ -229,8 +245,21 @@ class CreateAutoSnapshotTest(TestCase):
         # a row must not leak into the Gold bucket.
         _customer('0', 'P6', grade='Gold')
         batch = create_auto_snapshot(as_of_date=date(2026, 6, 1))
-        row = MembershipSnapshot.objects.get(batch=batch, vip_id='0')
-        self.assertEqual(row.grade, 'No Grade')
+        self.assertEqual(batch.grade_counts['overall'].get('Gold', 0), 0)
+        self.assertEqual(batch.grade_counts['overall'].get('No Grade', 0), 1)
+        self.assertEqual(batch.grade_members['overall']['No Grade'], ['0'])
+
+    def test_grouped_by_store(self):
+        _customer('C7', 'P7', grade='Silver', store='Shop A')
+        _customer('C8', 'P8', grade='Gold', store='Shop B')
+        batch = create_auto_snapshot(as_of_date=date(2026, 6, 1))
+        self.assertEqual(batch.grade_counts['by_store']['Shop A'].get('Silver', 0), 1)
+        self.assertEqual(batch.grade_counts['by_store']['Shop B'].get('Gold', 0), 1)
+
+    def test_blank_store_bucketed_as_no_store(self):
+        _customer('C9', 'P9', grade='Gold', store='')
+        batch = create_auto_snapshot(as_of_date=date(2026, 6, 1))
+        self.assertEqual(batch.grade_counts['by_store']['(No Store)'].get('Gold', 0), 1)
 
 
 # ---------------------------------------------------------------------------
@@ -315,9 +344,8 @@ class CreateBackfillSnapshotTest(TestCase):
 
         batch = MembershipSnapshotBatch.objects.get(pk=result['batch_id'])
         self.assertEqual(batch.source, 'manual_import')
-        row = MembershipSnapshot.objects.get(batch=batch, vip_id='B1')
-        self.assertEqual(row.grade, 'Diamond')
-        self.assertEqual(row.points, 9999)
+        self.assertEqual(batch.grade_counts['overall'].get('Diamond', 0), 1)
+        self.assertEqual(batch.grade_members['overall']['Diamond'], ['B1'])
 
 
 # ---------------------------------------------------------------------------
@@ -329,9 +357,9 @@ class CompareBatchesTest(TestCase):
         b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
         b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
         for i in range(2):
-            MembershipSnapshot.objects.create(batch=b1, vip_id=f"S{i}", phone=f"P{i}", grade='Silver')
+            _add_snapshot_member(b1, f"S{i}", 'Silver')
         for i in range(3):
-            MembershipSnapshot.objects.create(batch=b2, vip_id=f"S{i}", phone=f"P{i}", grade='Silver')
+            _add_snapshot_member(b2, f"S{i}", 'Silver')
 
         rows = {r['grade']: r for r in compare_batches(b1.id, b2.id)}
         self.assertEqual(rows['Silver']['from_count'], 2)
@@ -343,21 +371,19 @@ class CompareBatchesTest(TestCase):
 
     def test_no_from_batch_treats_as_zero(self):
         b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=b2, vip_id="Z1", phone="PZ1", grade='Gold')
+        _add_snapshot_member(b2, "Z1", 'Gold')
         rows = {r['grade']: r for r in compare_batches(None, b2.id)}
         self.assertEqual(rows['Gold']['from_count'], 0)
         self.assertEqual(rows['Gold']['to_count'], 1)
 
     def test_no_grade_excluded_from_breakdown_and_comparison(self):
         # PO feedback 2026-08-14: "No Grade" is noise in the grade-level KPI
-        # view, but individual "No Grade" customers must still show up in
-        # get_customer_tier_table() (see GetCustomerTierTableTest below) —
-        # only the grade-level summary/comparison/chart excludes them.
+        # view — the grade-level summary/comparison/chart excludes it.
         b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
         b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=b1, vip_id="N1", phone="PN1", grade='No Grade')
-        MembershipSnapshot.objects.create(batch=b2, vip_id="N1", phone="PN1", grade='No Grade')
-        MembershipSnapshot.objects.create(batch=b2, vip_id="N2", phone="PN2", grade='No Grade')
+        _add_snapshot_member(b1, "N1", 'No Grade')
+        _add_snapshot_member(b2, "N1", 'No Grade')
+        _add_snapshot_member(b2, "N2", 'No Grade')
 
         breakdown = get_grade_breakdown(b2.id)
         self.assertNotIn('No Grade', breakdown)
@@ -371,82 +397,17 @@ class CompareBatchesTest(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 7. get_customer_tier_table() sort order + filters
-# ---------------------------------------------------------------------------
-
-class GetCustomerTierTableTest(TestCase):
-    def setUp(self):
-        self.batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(
-            batch=self.batch, vip_id='T1', phone='PT1', grade='Member',
-            annual_spend=Decimal('5900000'), registration_store='Shop A')  # close to Silver
-        MembershipSnapshot.objects.create(
-            batch=self.batch, vip_id='T2', phone='PT2', grade='Member',
-            annual_spend=Decimal('1000000'), registration_store='Shop B')  # far from Silver
-        MembershipSnapshot.objects.create(
-            batch=self.batch, vip_id='T3', phone='PT3', grade='Diamond',
-            annual_spend=Decimal('50000000'), registration_store='Shop A')  # no next tier
-
-    def test_sort_ascending_amount_to_next_tier_diamond_last(self):
-        rows, total_count = get_customer_tier_table(self.batch.id)
-        vip_order = [r['vip_id'] for r in rows]
-        self.assertEqual(vip_order, ['T1', 'T2', 'T3'])  # T1 closest, T3 (Diamond) last
-        self.assertEqual(total_count, 3)
-
-    def test_grade_filter(self):
-        rows, total_count = get_customer_tier_table(self.batch.id, grade_filter='Diamond')
-        self.assertEqual([r['vip_id'] for r in rows], ['T3'])
-        self.assertEqual(total_count, 1)
-
-    def test_shop_filter(self):
-        rows, total_count = get_customer_tier_table(self.batch.id, shop_filter='Shop A')
-        self.assertEqual(sorted(r['vip_id'] for r in rows), ['T1', 'T3'])
-        self.assertEqual(total_count, 2)
-
-    def test_shop_filter_is_exact_match_not_partial(self):
-        # Changed 2026-08-31 (independent review finding): the store filter
-        # is a <select> of exact DB values now, not free text — a partial
-        # string must NOT match (icontains would risk pulling in an
-        # unrelated store whose name happens to contain this substring).
-        rows, total_count = get_customer_tier_table(self.batch.id, shop_filter='shop')
-        self.assertEqual(rows, [])
-        self.assertEqual(total_count, 0)
-
-    def test_no_grade_customer_still_visible_here_unlike_grade_breakdown(self):
-        # Counterpart to CompareBatchesTest.test_no_grade_excluded_from_breakdown_and_comparison —
-        # the grade-level summary excludes "No Grade", but a real "No Grade"
-        # customer must still be reachable/filterable in the per-customer table
-        # (they have a genuine upgrade path to Silver via next_tier_info()).
-        MembershipSnapshot.objects.create(
-            batch=self.batch, vip_id='T4', phone='PT4', grade='No Grade',
-            annual_spend=Decimal('0'), registration_store='Shop A')
-        rows, total_count = get_customer_tier_table(self.batch.id, grade_filter='No Grade')
-        self.assertEqual([r['vip_id'] for r in rows], ['T4'])
-        self.assertEqual(total_count, 1)
-        self.assertEqual(rows[0]['next_grade'], 'Silver')
-
-    def test_limit_caps_rows_but_total_count_reflects_full_set(self):
-        for i in range(4, 10):  # 6 more customers beyond the 3 from setUp
-            MembershipSnapshot.objects.create(
-                batch=self.batch, vip_id=f'T{i}', phone=f'PT{i}', grade='Member',
-                annual_spend=Decimal('1000000'))
-        rows, total_count = get_customer_tier_table(self.batch.id, limit=2)
-        self.assertEqual(len(rows), 2)
-        self.assertEqual(total_count, 9)
-
-
-# ---------------------------------------------------------------------------
-# 7B. get_live_customer_tier_table() — live Customer-table counterpart, PO
-#     feedback 2026-08-31: "Customer Tier Progress" has nothing to do with
-#     snapshot. Applies the same normalize_grade()/VIP-"0" convention as
-#     App/services/membership_snapshot.py::_build_rows().
+# 7. get_live_customer_tier_table() — live Customer-table counterpart, PO
+#    feedback 2026-08-31: "Customer Tier Progress" has nothing to do with
+#    snapshot. Applies the same resolve_grade() convention as
+#    App/services/membership_snapshot.py::_build_rows().
 # ---------------------------------------------------------------------------
 
 class GetLiveCustomerTierTableTest(TestCase):
     def test_reads_from_customer_not_snapshot(self):
         _customer('L1', 'PL1', grade='Silver')
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='SNAPONLY', phone='PS1', grade='Gold')
+        _add_snapshot_member(batch, 'SNAPONLY', 'Gold')
 
         rows, total_count = get_live_customer_tier_table()
         vip_ids = [r['vip_id'] for r in rows]
@@ -480,8 +441,7 @@ class GetLiveCustomerTierTableTest(TestCase):
         self.assertEqual(total_count, 1)
 
     def test_shop_filter_is_exact_match(self):
-        # Changed 2026-08-31 (independent review finding): the store filter
-        # is a <select> of exact DB values, not free text.
+        # The store filter is a <select> of exact DB values, not free text.
         _customer('L6', 'PL6', grade='Silver', store='Bala VN Haiphong AEON MALL- Direct')
         _customer('L7', 'PL7', grade='Silver', store='BL VN North Warehouse')
         rows, total_count = get_live_customer_tier_table(shop_filter='Bala VN Haiphong AEON MALL- Direct')
@@ -527,11 +487,11 @@ class MembershipWebSmokeTest(_ClearDropdownCacheMixin, TestCase):
     def test_table_partial_reads_live_customer_table_not_snapshot(self):
         # PO feedback 2026-08-31: "Customer Tier Progress" reads Customer,
         # "không liên quan gì đến snapshot" (nothing to do with snapshot) —
-        # a customer that exists ONLY in a MembershipSnapshot (never in the
-        # live Customer table) must NOT show up here, and a live Customer
-        # with no snapshot at all must show up.
+        # a customer that exists ONLY in a snapshot batch (never in the live
+        # Customer table) must NOT show up here, and a live Customer with no
+        # snapshot at all must show up.
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='SNAPONLY', phone='PS1', grade='Gold')
+        _add_snapshot_member(batch, 'SNAPONLY', 'Gold')
         _customer('LIVEONLY', 'PL1', grade='Gold')
 
         user = User.objects.create_superuser("membadmin2", password="pw")
@@ -559,16 +519,15 @@ class MembershipWebSmokeTest(_ClearDropdownCacheMixin, TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 9. get_grade_breakdown_by_store() — PO feedback 2026-08-31: snapshot needs
-#    a grade breakdown per registration store, not just an overall total.
+# 9. get_grade_breakdown_by_store() — one-batch matrix building block
 # ---------------------------------------------------------------------------
 
 class GetGradeBreakdownByStoreTest(TestCase):
     def test_counts_grouped_by_store_and_grade(self):
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='S1', phone='P1', grade='Silver', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='S2', phone='P2', grade='Gold', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='S3', phone='P3', grade='Silver', registration_store='Shop B')
+        _add_snapshot_member(batch, 'S1', 'Silver', 'Shop A')
+        _add_snapshot_member(batch, 'S2', 'Gold', 'Shop A')
+        _add_snapshot_member(batch, 'S3', 'Silver', 'Shop B')
 
         rows = {r['store']: r for r in get_grade_breakdown_by_store(batch.id)}
         self.assertEqual(set(rows.keys()), {'Shop A', 'Shop B'})
@@ -581,21 +540,15 @@ class GetGradeBreakdownByStoreTest(TestCase):
         self.assertEqual(rows['Shop B']['total'], 1)
 
     def test_blank_store_bucketed_as_no_store(self):
-        # The dropdown that FILTERS the page excludes blank registration_store
-        # values (matches shop_detail.py's _get_dropdown_options), but this
-        # breakdown must still account for every snapshot row — a customer
-        # with no store on file must not silently vanish from the totals.
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='S4', phone='P4', grade='Gold', registration_store='')
+        _add_snapshot_member(batch, 'S4', 'Gold', '')
         rows = {r['store']: r for r in get_grade_breakdown_by_store(batch.id)}
         self.assertIn('(No Store)', rows)
         self.assertEqual(rows['(No Store)']['total'], 1)
 
     def test_no_grade_excluded_like_get_grade_breakdown(self):
-        # Consistency with get_grade_breakdown()'s exclusion of 'No Grade' —
-        # this is a per-store drill-down of the same grade-level summary.
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='S5', phone='P5', grade='No Grade', registration_store='Shop C')
+        _add_snapshot_member(batch, 'S5', 'No Grade', 'Shop C')
         rows = get_grade_breakdown_by_store(batch.id)
         self.assertEqual(rows, [])  # only row was 'No Grade' -> excluded entirely
 
@@ -610,12 +563,9 @@ class GetGradeBreakdownByStoreTest(TestCase):
 
 class MembershipDashboardRegistrationStoreDropdownTest(_ClearDropdownCacheMixin, TestCase):
     def test_dashboard_context_has_live_registration_stores_not_snapshot_scoped(self):
-        # Must reflect the LIVE Customer table (same source as
-        # shop_detail.py's _get_dropdown_options()), not be scoped to
-        # whatever store names happen to appear in a snapshot batch.
         _customer('LIVE1', 'PL1', store='Live Store Only')
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='SNAP1', phone='PS1', grade='Gold', registration_store='Snapshot-Only Store')
+        _add_snapshot_member(batch, 'SNAP1', 'Gold', 'Snapshot-Only Store')
 
         user = User.objects.create_superuser("membadmin4", password="pw")
         client = Client()
@@ -627,46 +577,14 @@ class MembershipDashboardRegistrationStoreDropdownTest(_ClearDropdownCacheMixin,
 
 
 # ---------------------------------------------------------------------------
-# 11. Web smoke — /membership/partial/store-breakdown/
-# ---------------------------------------------------------------------------
-
-class MembershipStoreBreakdownPartialWebTest(TestCase):
-    def test_store_breakdown_partial_defaults_to_latest_batch(self):
-        MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
-        newest = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=newest, vip_id='SB1', phone='PSB1', grade='Gold', registration_store='Shop X')
-
-        user = User.objects.create_superuser("membadmin5", password="pw")
-        client = Client()
-        client.force_login(user)
-        r = client.get("/membership/partial/store-breakdown/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"Shop X", r.content)
-
-    def test_store_breakdown_partial_blocked_for_anonymous(self):
-        client = Client()
-        r = client.get("/membership/partial/store-breakdown/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
-        self.assertEqual(r.status_code, 401)
-
-    def test_store_breakdown_partial_no_batches(self):
-        user = User.objects.create_superuser("membadmin6", password="pw")
-        client = Client()
-        client.force_login(user)
-        r = client.get("/membership/partial/store-breakdown/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"No snapshot", r.content)
-
-
-# ---------------------------------------------------------------------------
-# 12. membership_delete_batch — PO feedback 2026-08-31: add a way to remove a
-#     snapshot (superuser has all PERMISSION_DEFS codenames, so also covers
-#     the permission-gated path for a plain non-superuser).
+# 11. membership_delete_batch — a MembershipSnapshotBatch row IS the storage
+#     now (grade_counts/grade_members live directly on it, no child model).
 # ---------------------------------------------------------------------------
 
 class MembershipDeleteBatchTest(_ClearDropdownCacheMixin, TestCase):
-    def test_delete_batch_cascades_snapshots(self):
+    def test_delete_batch_removes_it(self):
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='DEL1', phone='PD1', grade='Gold')
+        _add_snapshot_member(batch, 'DEL1', 'Gold')
         batch_id = batch.id
 
         user = User.objects.create_superuser("delmemb1", password="pw")
@@ -676,7 +594,6 @@ class MembershipDeleteBatchTest(_ClearDropdownCacheMixin, TestCase):
 
         self.assertEqual(r.status_code, 200)
         self.assertFalse(MembershipSnapshotBatch.objects.filter(pk=batch_id).exists())
-        self.assertFalse(MembershipSnapshot.objects.filter(batch_id=batch_id).exists())
 
     def test_delete_batch_blocked_without_permission(self):
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
@@ -690,8 +607,7 @@ class MembershipDeleteBatchTest(_ClearDropdownCacheMixin, TestCase):
     def test_delete_batch_blocked_with_adjacent_permissions_but_not_delete(self):
         # Stronger version of the above — a user holding the OTHER two
         # membership permissions (view + import) but explicitly NOT
-        # membership.delete must still be blocked, proving permission
-        # granularity isn't accidentally coarser than intended.
+        # membership.delete must still be blocked.
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
         role = Role.objects.create(
             name='membership_no_delete', permissions=['membership.view', 'membership.import'], is_system=False)
@@ -720,10 +636,6 @@ class MembershipDeleteBatchTest(_ClearDropdownCacheMixin, TestCase):
         self.assertEqual(r.status_code, 200)  # redirected to dashboard, not a 500
 
     def test_manage_snapshots_ui_hidden_without_delete_permission(self):
-        # Template-level counterpart to the view-level tests above — a user
-        # who can only VIEW the dashboard (not delete) must not see the
-        # "Manage Snapshots" section or any delete-batch form at all, not
-        # just be blocked if they somehow guessed the POST URL.
         MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
         role = Role.objects.create(name='membership_view_only', permissions=['membership.view'], is_system=False)
         user = User.objects.create_user("delmemb6", password="pw")
@@ -750,18 +662,16 @@ class MembershipDeleteBatchTest(_ClearDropdownCacheMixin, TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 13. store= param on get_grade_breakdown / compare_batches / series — PO
-#     feedback 2026-08-31: "by Registration Store" section needs a
-#     comparison view, and the trend chart needs a store filter.
+# 12. store= param on get_grade_breakdown / compare_batches / series
 # ---------------------------------------------------------------------------
 
 class GradeBreakdownStoreFilterTest(TestCase):
     def setUp(self):
         self.batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=self.batch, vip_id='F1', phone='PF1', grade='Silver', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=self.batch, vip_id='F2', phone='PF2', grade='Gold', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=self.batch, vip_id='F3', phone='PF3', grade='Silver', registration_store='Shop B')
-        MembershipSnapshot.objects.create(batch=self.batch, vip_id='F4', phone='PF4', grade='Gold', registration_store='')
+        _add_snapshot_member(self.batch, 'F1', 'Silver', 'Shop A')
+        _add_snapshot_member(self.batch, 'F2', 'Gold', 'Shop A')
+        _add_snapshot_member(self.batch, 'F3', 'Silver', 'Shop B')
+        _add_snapshot_member(self.batch, 'F4', 'Gold', '')
 
     def test_no_store_filter_counts_everything(self):
         counts = get_grade_breakdown(self.batch.id)
@@ -789,9 +699,9 @@ class GradeBreakdownStoreFilterTest(TestCase):
 
     def test_compare_batches_store_filter(self):
         batch2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 7, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch2, vip_id='F1', phone='PF1', grade='Silver', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=batch2, vip_id='F5', phone='PF5', grade='Silver', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=batch2, vip_id='F3', phone='PF3', grade='Silver', registration_store='Shop B')
+        _add_snapshot_member(batch2, 'F1', 'Silver', 'Shop A')
+        _add_snapshot_member(batch2, 'F5', 'Silver', 'Shop A')
+        _add_snapshot_member(batch2, 'F3', 'Silver', 'Shop B')
 
         rows = {r['grade']: r for r in compare_batches(self.batch.id, batch2.id, store='Shop A')}
         self.assertEqual(rows['Silver']['from_count'], 1)
@@ -800,8 +710,8 @@ class GradeBreakdownStoreFilterTest(TestCase):
 
     def test_series_store_filter(self):
         batch2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 7, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch2, vip_id='F1', phone='PF1', grade='Silver', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=batch2, vip_id='F3', phone='PF3', grade='Gold', registration_store='Shop B')
+        _add_snapshot_member(batch2, 'F1', 'Silver', 'Shop A')
+        _add_snapshot_member(batch2, 'F3', 'Gold', 'Shop B')
 
         series = get_all_batch_grade_series(store='Shop A')
         by_batch = {s['batch_id']: s['counts'] for s in series}
@@ -812,35 +722,31 @@ class GradeBreakdownStoreFilterTest(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 13B. get_snapshot_registration_stores() — PO feedback 2026-08-31: the
-#      snapshot-scoped sections' store dropdown must NOT reuse the live-
-#      Customer-sourced list (a store renamed/added/removed between the live
-#      Customer table and an older snapshot silently produced an all-zero
-#      "bug-looking" result when the two lists diverged).
+# 13. get_snapshot_registration_stores() — PO feedback 2026-08-31: the
+#     snapshot-scoped sections' store dropdown must NOT reuse the live-
+#     Customer-sourced list.
 # ---------------------------------------------------------------------------
 
 class GetSnapshotRegistrationStoresTest(TestCase):
     def test_returns_distinct_stores_across_all_batches(self):
         b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
         b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=b1, vip_id='S1', phone='PS1', grade='Silver', registration_store='Old Store Name')
-        MembershipSnapshot.objects.create(batch=b2, vip_id='S2', phone='PS2', grade='Gold', registration_store='New Store Name')
+        _add_snapshot_member(b1, 'S1', 'Silver', 'Old Store Name')
+        _add_snapshot_member(b2, 'S2', 'Gold', 'New Store Name')
         stores = get_snapshot_registration_stores()
         self.assertIn('Old Store Name', stores)
         self.assertIn('New Store Name', stores)
 
     def test_blank_store_excluded(self):
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='S3', phone='PS3', grade='Gold', registration_store='')
+        _add_snapshot_member(batch, 'S3', 'Gold', '')
         stores = get_snapshot_registration_stores()
         self.assertNotIn('', stores)
+        self.assertNotIn('(No Store)', stores)
 
     def test_differs_from_live_customer_store_list(self):
-        # The exact scenario that caused the bug: a store that exists ONLY
-        # in a snapshot (e.g. renamed since) must still be selectable here,
-        # even though it's absent from the live Customer table entirely.
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='S4', phone='PS4', grade='Silver', registration_store='Renamed-Since Store')
+        _add_snapshot_member(batch, 'S4', 'Silver', 'Renamed-Since Store')
         _customer('LIVE1', 'PL1', store='Current Live Store Only')
 
         stores = get_snapshot_registration_stores()
@@ -851,7 +757,7 @@ class GetSnapshotRegistrationStoresTest(TestCase):
 class MembershipDashboardSnapshotStoresContextTest(_ClearDropdownCacheMixin, TestCase):
     def test_context_has_separate_snapshot_stores_list(self):
         batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=batch, vip_id='S5', phone='PS5', grade='Gold', registration_store='Snapshot-Only Store')
+        _add_snapshot_member(batch, 'S5', 'Gold', 'Snapshot-Only Store')
         _customer('LIVE2', 'PL2', store='Live-Only Store')
 
         user = User.objects.create_superuser("membctx1", password="pw")
@@ -866,48 +772,326 @@ class MembershipDashboardSnapshotStoresContextTest(_ClearDropdownCacheMixin, Tes
 
 
 # ---------------------------------------------------------------------------
-# 14. membership_store_breakdown_partial — store= drill-down mode
+# 14. get_grade_breakdown_by_store_comparison() + membership_store_breakdown_partial
+#     — From/To matrix (added 2026-09-01). Replaced the old single-store
+#     drill-down mode (removed — redundant now this matrix shows from/to
+#     directly, and get_grade_changes() shows the actual movers).
 # ---------------------------------------------------------------------------
 
-class MembershipStoreBreakdownComparisonWebTest(TestCase):
-    def setUp(self):
-        self.b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
-        self.b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=self.b1, vip_id='C1', phone='PC1', grade='Silver', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=self.b2, vip_id='C1', phone='PC1', grade='Silver', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=self.b2, vip_id='C2', phone='PC2', grade='Silver', registration_store='Shop A')
-        self.user = User.objects.create_superuser("storecmp1", password="pw")
-        self.client_ = Client()
-        self.client_.force_login(self.user)
+class GetGradeBreakdownByStoreComparisonTest(TestCase):
+    def test_from_to_pairs_per_store(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'C1', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'C1', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'C2', 'Silver', 'Shop A')
 
-    def test_no_store_param_returns_matrix_view(self):
-        r = self.client_.get(
-            f"/membership/partial/store-breakdown/?batch={self.b2.id}",
+        rows = {r['store']: r for r in get_grade_breakdown_by_store_comparison(b1.id, b2.id)}
+        counts = {c['grade']: c for c in rows['Shop A']['counts']}
+        self.assertEqual(counts['Silver']['from'], 1)
+        self.assertEqual(counts['Silver']['to'], 2)
+        self.assertEqual(rows['Shop A']['total_from'], 1)
+        self.assertEqual(rows['Shop A']['total_to'], 2)
+
+    def test_store_present_in_only_one_batch_still_appears(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b2, 'C3', 'Gold', 'New Store')  # only exists in b2
+
+        rows = {r['store']: r for r in get_grade_breakdown_by_store_comparison(b1.id, b2.id)}
+        self.assertIn('New Store', rows)
+        counts = {c['grade']: c for c in rows['New Store']['counts']}
+        self.assertEqual(counts['Gold']['from'], 0)
+        self.assertEqual(counts['Gold']['to'], 1)
+
+    def test_no_from_batch_treats_from_as_zero(self):
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b2, 'C4', 'Gold', 'Shop X')
+        rows = {r['store']: r for r in get_grade_breakdown_by_store_comparison(None, b2.id)}
+        self.assertEqual(rows['Shop X']['total_from'], 0)
+        self.assertEqual(rows['Shop X']['total_to'], 1)
+
+    def test_no_grade_only_store_excluded_on_both_sides(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'C5', 'No Grade', 'Shop NG')
+        _add_snapshot_member(b2, 'C5', 'No Grade', 'Shop NG')
+        rows = {r['store']: r for r in get_grade_breakdown_by_store_comparison(b1.id, b2.id)}
+        self.assertNotIn('Shop NG', rows)  # total_from == total_to == 0 -> excluded entirely
+
+
+class MembershipStoreBreakdownPartialWebTest(TestCase):
+    """membership_store_breakdown_partial — always renders the From/To
+    matrix now (PO feedback 2026-09-01)."""
+
+    def test_defaults_to_latest_batch_when_no_batch_param(self):
+        MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        newest = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(newest, 'SB1', 'Gold', 'Shop X')
+
+        user = User.objects.create_superuser("membadmin5", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get("/membership/partial/store-breakdown/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"Shop X", r.content)
+
+    def test_shows_from_and_to_columns_with_correct_counts(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'C1', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'C1', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'C2', 'Silver', 'Shop A')
+
+        user = User.objects.create_superuser("storecmp1", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/partial/store-breakdown/?batch={b2.id}&from_batch={b1.id}",
             SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(r.status_code, 200)
-        self.assertIn(b"REGISTRATION STORE", r.content.upper())
-        self.assertNotIn(b"Showing:", r.content)
+        self.assertIn(b"Shop A", r.content)
+        self.assertIn(b"From", r.content)
+        self.assertIn(b"To", r.content)
 
-    def test_store_param_returns_comparison_view(self):
-        r = self.client_.get(
-            f"/membership/partial/store-breakdown/?batch={self.b2.id}&from_batch={self.b1.id}&store=Shop+A",
-            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+    def test_blocked_for_anonymous(self):
+        client = Client()
+        r = client.get("/membership/partial/store-breakdown/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 401)
+
+    def test_no_batches_shows_warning(self):
+        user = User.objects.create_superuser("membadmin6", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get("/membership/partial/store-breakdown/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(r.status_code, 200)
-        self.assertIn(b"Showing: Shop A", r.content)
-        self.assertIn(b"Diff", r.content)
-        # Shop A went from 1 Silver to 2 -> delta +1 shown somewhere in the table
-        self.assertIn(b"+1", r.content)
+        self.assertIn(b"No snapshot", r.content)
 
 
 # ---------------------------------------------------------------------------
-# 15. membership_trend_partial — JSON endpoint for the chart's store filter
+# 15. get_grade_changes() — grade-change diff feature (added 2026-09-01, PO
+#     feedback: this is the whole reason grade_members stores vip_id lists).
+# ---------------------------------------------------------------------------
+
+class GetGradeChangesTest(TestCase):
+    def test_upgrade_detected(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'M1', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'M1', 'Silver', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(total, 1)
+        self.assertEqual(rows[0]['vip_id'], 'M1')
+        self.assertEqual(rows[0]['from_grade'], 'Member')
+        self.assertEqual(rows[0]['to_grade'], 'Silver')
+        self.assertEqual(rows[0]['direction'], 'upgrade')
+
+    def test_downgrade_detected(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'M2', 'Diamond', 'Shop A')
+        _add_snapshot_member(b2, 'M2', 'Gold', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(rows[0]['direction'], 'downgrade')
+
+    def test_unchanged_grade_excluded(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'M3', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'M3', 'Silver', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(total, 0)
+
+    def test_customer_present_in_only_one_batch_excluded(self):
+        # A "new" or "removed" customer is a different event, not a grade
+        # change — must be in BOTH snapshots to count.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'ONLY_IN_FROM', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'ONLY_IN_TO', 'Gold', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(total, 0)
+
+    def test_vip_id_zero_excluded(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, '0', 'Member', 'Shop A')
+        _add_snapshot_member(b2, '0', 'Gold', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(total, 0)
+
+    def test_no_grade_transition_excluded(self):
+        # Matches the DISPLAY_GRADES convention used by every other
+        # grade-level view on this page — 'No Grade' is noise.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'M4', 'No Grade', 'Shop A')
+        _add_snapshot_member(b2, 'M4', 'Member', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(total, 0)
+
+    def test_store_filter_scopes_both_sides(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'M5', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'M5', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'M6', 'Member', 'Shop B')
+        _add_snapshot_member(b2, 'M6', 'Silver', 'Shop B')
+
+        rows, total = get_grade_changes(b1.id, b2.id, store='Shop A')
+        self.assertEqual(total, 1)
+        self.assertEqual(rows[0]['vip_id'], 'M5')
+
+    def test_grade_filter_matches_new_grade(self):
+        # `grade` filters on the NEW (to) grade — a single filter covering
+        # both directions, e.g. grade='Silver' shows Member->Silver upgrades
+        # AND Gold->Silver downgrades.
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'UP', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'UP', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'DOWN', 'Gold', 'Shop A')
+        _add_snapshot_member(b2, 'DOWN', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'OTHER', 'Silver', 'Shop A')
+        _add_snapshot_member(b2, 'OTHER', 'Gold', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id, grade='Silver')
+        self.assertEqual(total, 2)
+        vip_ids = {r['vip_id'] for r in rows}
+        self.assertEqual(vip_ids, {'UP', 'DOWN'})
+
+    def test_direction_filter(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'UP2', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'UP2', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'DOWN2', 'Gold', 'Shop A')
+        _add_snapshot_member(b2, 'DOWN2', 'Member', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id, direction='upgrade')
+        self.assertEqual(total, 1)
+        self.assertEqual(rows[0]['vip_id'], 'UP2')
+
+    def test_total_count_reflects_full_set_not_page(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        for i in range(5):
+            _add_snapshot_member(b1, f'P{i}', 'Member', 'Shop A')
+            _add_snapshot_member(b2, f'P{i}', 'Silver', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id, limit=2)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(total, 5)
+
+    def test_name_phone_joined_from_live_customer(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _customer('M7', 'P123', grade='Silver', store='Shop A')
+        _add_snapshot_member(b1, 'M7', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'M7', 'Silver', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(rows[0]['name'], 'Cust M7')
+        self.assertEqual(rows[0]['phone'], 'P123')
+
+    def test_missing_live_customer_yields_none_name_phone_not_error(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        # No matching Customer row created for 'GHOST' — deleted since the snapshot.
+        _add_snapshot_member(b1, 'GHOST', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'GHOST', 'Silver', 'Shop A')
+
+        rows, total = get_grade_changes(b1.id, b2.id)
+        self.assertEqual(total, 1)
+        self.assertIsNone(rows[0]['name'])
+        self.assertIsNone(rows[0]['phone'])
+
+
+class MembershipMoversPartialWebTest(TestCase):
+    def test_shows_changed_members(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'MV1', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'MV1', 'Silver', 'Shop A')
+
+        user = User.objects.create_superuser("movers1", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/partial/movers/?from_batch={b1.id}&to_batch={b2.id}",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"MV1", r.content)
+        self.assertIn(b"Upgraded", r.content)
+
+    def test_requires_both_batches(self):
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        user = User.objects.create_superuser("movers2", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/partial/movers/?to_batch={b2.id}",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"Select both", r.content)
+
+    def test_store_and_grade_filters(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'MV2', 'Member', 'Shop A')
+        _add_snapshot_member(b2, 'MV2', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'MV3', 'Member', 'Shop B')
+        _add_snapshot_member(b2, 'MV3', 'Gold', 'Shop B')
+
+        user = User.objects.create_superuser("movers3", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/partial/movers/?from_batch={b1.id}&to_batch={b2.id}&store=Shop+A",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"MV2", r.content)
+        self.assertNotIn(b"MV3", r.content)
+
+    def test_blocked_for_anonymous(self):
+        client = Client()
+        r = client.get("/membership/partial/movers/", SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 401)
+
+    def test_direction_filter(self):
+        b1 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 1, 1), source='auto')
+        b2 = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
+        _add_snapshot_member(b1, 'MV4', 'Member', 'Shop A')   # upgrade
+        _add_snapshot_member(b2, 'MV4', 'Silver', 'Shop A')
+        _add_snapshot_member(b1, 'MV5', 'Gold', 'Shop A')     # downgrade
+        _add_snapshot_member(b2, 'MV5', 'Silver', 'Shop A')
+
+        user = User.objects.create_superuser("movers4", password="pw")
+        client = Client()
+        client.force_login(user)
+        r = client.get(
+            f"/membership/partial/movers/?from_batch={b1.id}&to_batch={b2.id}&direction=downgrade",
+            SERVER_NAME="localhost", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"MV5", r.content)
+        self.assertNotIn(b"MV4", r.content)
+
+
+# ---------------------------------------------------------------------------
+# 16. membership_trend_partial — JSON endpoint for the chart's store filter
 # ---------------------------------------------------------------------------
 
 class MembershipTrendPartialWebTest(TestCase):
     def setUp(self):
         self.batch = MembershipSnapshotBatch.objects.create(snapshot_date=date(2026, 6, 1), source='auto')
-        MembershipSnapshot.objects.create(batch=self.batch, vip_id='T1', phone='PT1', grade='Gold', registration_store='Shop A')
-        MembershipSnapshot.objects.create(batch=self.batch, vip_id='T2', phone='PT2', grade='Gold', registration_store='Shop B')
+        _add_snapshot_member(self.batch, 'T1', 'Gold', 'Shop A')
+        _add_snapshot_member(self.batch, 'T2', 'Gold', 'Shop B')
         self.user = User.objects.create_superuser("trend1", password="pw")
         self.client_ = Client()
         self.client_.force_login(self.user)

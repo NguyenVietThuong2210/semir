@@ -405,7 +405,7 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
         pos_only_period = list(
             pos_only_period_qs
             .values('vip_id', 'phone', 'name', 'vip_grade', 'email', 'registration_date', 'points')
-            .order_by('-registration_date')
+            .order_by('-registration_date', 'vip_id')
         )
         cnv_only_period_qs = cnv_period.exclude(phone__in=_pos_phone_qs)
         cnv_only_period_count = cnv_only_period_qs.count()
@@ -415,7 +415,7 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
                 'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
                 'email', 'cnv_created_at', 'points', 'total_points', 'used_points',
             )
-            .order_by('-cnv_created_at')
+            .order_by('-cnv_created_at', 'cnv_id')
         )
 
     return {
