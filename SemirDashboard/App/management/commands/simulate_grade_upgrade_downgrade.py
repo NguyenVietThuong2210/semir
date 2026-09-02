@@ -53,8 +53,11 @@ checkpoint, which was this command's earlier, less precise draft):
      last_grade_change_date to this exact transaction date, and (re)schedule
      the next anniversary check 365 days later.
   4. On an anniversary-check event (only relevant once current_grade is
-     above Member): count DISTINCT invoices in the 365 days immediately
-     before this exact check date. If below
+     above Member): count DISTINCT invoices in the 365 days ending at this
+     check date, INCLUSIVE of the day exactly 365 days before it (so a
+     customer's very first anniversary counts the purchase that earned them
+     the tier in the first place -- see purchases_in_trailing_365's comment
+     for the A/B evidence behind this). If below
      GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES for the CURRENT simulated grade,
      downgrade exactly one tier, set last_grade_change_date to this exact
      check date, and schedule the next anniversary 365 days later
@@ -122,8 +125,20 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None):
     ytd_spend = Decimal('0')
 
     def purchases_in_trailing_365(end_date):
+        # Window is [start, end_date] -- INCLUSIVE of the start boundary. This
+        # matters specifically for a customer's first anniversary check right
+        # after an upgrade: last_grade_change_date becomes both the window's
+        # start AND the date of the purchase that earned the tier, so an
+        # exclusive-start window would strip that customer's own qualifying
+        # purchase out of their first-year retention count. Decided by A/B
+        # test on real local data (2026-09-02): switching exclusive->inclusive
+        # start dropped simulation/live disagreement from 1727 to 1496 (-13.4%)
+        # with ZERO change to the PO's locked worked example (that example's
+        # single purchase now counts as 1 in the trailing window instead of 0,
+        # but 1 is still < Silver's min-2 threshold, so the downgrade outcome
+        # is identical either way).
         start = end_date - ONE_YEAR
-        lo = bisect.bisect_right(invoice_dates, start)  # strictly after start
+        lo = bisect.bisect_left(invoice_dates, start)
         hi = bisect.bisect_right(invoice_dates, end_date)  # up to and including end_date
         return hi - lo
 
