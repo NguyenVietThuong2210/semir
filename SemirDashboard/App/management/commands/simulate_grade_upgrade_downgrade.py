@@ -68,9 +68,15 @@ Usage (on PROD):
     docker compose exec web python manage.py simulate_grade_upgrade_downgrade
     docker compose exec web python manage.py simulate_grade_upgrade_downgrade --as-of 2026-08-31
     docker compose exec web python manage.py simulate_grade_upgrade_downgrade --vip-id 1460606   # trace one customer's full event log
+    docker compose exec web python manage.py simulate_grade_upgrade_downgrade --samples-per-bucket 5
 
-Output is aggregate statistics + a small sample of vip_id/dates/amounts only
-— no customer name or phone number is read or printed anywhere in this file.
+Output is aggregate statistics, a recency-bucketed breakdown of disagreements,
+and — per disagreement recency bucket — a handful of sample customers dumped
+with their FULL raw invoice log (date, invoice_number, settlement_amount) plus
+the simulator's own event trace, so a disagreement can be root-caused from
+actual transaction data instead of guessed from a bucket label alone. Only
+vip_id/dates/invoice_number/amounts are ever read or printed anywhere in this
+file — no customer name or phone number.
 """
 import bisect
 from collections import defaultdict
@@ -195,6 +201,7 @@ class Command(BaseCommand):
         parser.add_argument("--as-of", type=str, default=None, help="Simulate through this date (YYYY-MM-DD). Default: today.")
         parser.add_argument("--sample-size", type=int, default=15)
         parser.add_argument("--vip-id", type=str, default=None, help="Print the full event trace for just this one vip_id and exit (no aggregate stats).")
+        parser.add_argument("--samples-per-bucket", type=int, default=3, help="How many customers' full invoice log + trace to dump per recency bucket.")
 
     def handle(self, *args, **options):
         from App.models import Customer, SalesTransaction
@@ -209,6 +216,7 @@ class Command(BaseCommand):
         self.stdout.write("\nLoading SalesTransaction rows (this may take a moment)...")
         txns_by_vip = defaultdict(list)
         invoices_by_vip = defaultdict(dict)  # vip_id -> {invoice_number: earliest_date}
+        invoice_log_by_vip = defaultdict(list)  # vip_id -> [(date, invoice_number, amount)], raw rows for diagnostics
         qs = (
             SalesTransaction.objects
             .exclude(vip_id__isnull=True).exclude(vip_id='').exclude(vip_id='0')
@@ -217,29 +225,47 @@ class Command(BaseCommand):
         )
         row_count = 0
         for vip_id, sales_date, amount, invoice_number in qs.iterator():
-            txns_by_vip[vip_id].append((sales_date, amount or Decimal('0')))
+            amt = amount or Decimal('0')
+            txns_by_vip[vip_id].append((sales_date, amt))
+            invoice_log_by_vip[vip_id].append((sales_date, invoice_number, amt))
             inv_map = invoices_by_vip[vip_id]
             if invoice_number not in inv_map or sales_date < inv_map[invoice_number]:
                 inv_map[invoice_number] = sales_date
             row_count += 1
         self.stdout.write(f"  {row_count} rows loaded, covering {len(txns_by_vip)} distinct vip_ids")
 
-        if options["vip_id"]:
-            vid = options["vip_id"]
+        def _dump_customer(vid, real_grade=None):
+            """Print registration_date + full raw invoice log + simulator trace for one vip_id.
+            Customer is unique on (vip_id, phone), not vip_id alone (App/models/pos.py) -- a vip_id
+            can legitimately have >1 row (e.g. a duplicate/blank-phone record), so this uses
+            .filter().first() rather than .get() to avoid crashing mid-run on MultipleObjectsReturned."""
+            cust = Customer.objects.filter(vip_id=vid).order_by('id').first()
+            reg_date = cust.registration_date if cust else None
+            self.stdout.write(f"  registration_date={reg_date}")
+            rows = sorted(invoice_log_by_vip.get(vid, []), key=lambda r: r[0])
+            self.stdout.write(f"  raw invoices ({len(rows)} line items):")
+            for d, inv_no, amt in rows:
+                self.stdout.write(f"    {d}  invoice={inv_no!r}  amount={amt}")
             txns = sorted(txns_by_vip.get(vid, []), key=lambda t: t[0])
             invoice_dates = sorted(invoices_by_vip.get(vid, {}).values())
             trace = []
             final_grade, last_change = simulate_one_customer(txns, invoice_dates, as_of, trace=trace)
-            self.stdout.write(f"\n=== Full event trace for vip_id={vid} ===")
+            self.stdout.write("  simulator trace:")
             for line in trace:
-                self.stdout.write(f"  {line}")
-            self.stdout.write(f"\nFinal simulated grade: {final_grade}")
-            self.stdout.write(f"Last grade-change date: {last_change}")
-            try:
-                real_raw = Customer.objects.get(vip_id=vid).vip_grade
-                self.stdout.write(f"Real live grade: {resolve_grade(vid, real_raw)} (raw: {real_raw!r})")
-            except Customer.DoesNotExist:
-                self.stdout.write("(vip_id not found in live Customer table)")
+                self.stdout.write(f"    {line}")
+            self.stdout.write(f"  final simulated grade={final_grade}  last_grade_change={last_change}")
+            if real_grade is not None:
+                self.stdout.write(f"  real live grade={real_grade}")
+
+        if options["vip_id"]:
+            vid = options["vip_id"]
+            cust = Customer.objects.filter(vip_id=vid).order_by('id').first()
+            if cust:
+                real_grade = f"{resolve_grade(vid, cust.vip_grade)} (raw: {cust.vip_grade!r})"
+            else:
+                real_grade = "(vip_id not found in live Customer table)"
+            self.stdout.write(f"\n=== vip_id={vid} ===")
+            _dump_customer(vid, real_grade=real_grade)
             return
 
         self.stdout.write("\nRunning per-customer simulation...")
@@ -277,7 +303,25 @@ class Command(BaseCommand):
             "91-180 days ago": 0, "181-365 days ago": 0, "over 365 days ago": 0,
             "no simulated change (never upgraded in simulation)": 0,
         }
+        bucket_samples = defaultdict(list)  # bucket label -> [(vip_id, real_grade, simulated)], capped
+        samples_per_bucket = options["samples_per_bucket"]
         lower_count = higher_count = 0  # simulated < real vs simulated > real, by rank
+
+        def _recency_bucket(last_change):
+            if last_change is None:
+                return "no simulated change (never upgraded in simulation)"
+            days_ago = (as_of - last_change).days
+            if days_ago <= 30:
+                return "0-30 days ago"
+            if days_ago <= 60:
+                return "31-60 days ago"
+            if days_ago <= 90:
+                return "61-90 days ago"
+            if days_ago <= 180:
+                return "91-180 days ago"
+            if days_ago <= 365:
+                return "181-365 days ago"
+            return "over 365 days ago"
 
         for vip_id, raw_grade in live_rows:
             real_grade = resolve_grade(vip_id, raw_grade)
@@ -296,22 +340,10 @@ class Command(BaseCommand):
                     sample_disagree.append((vip_id, real_grade, simulated, sim_last_change.get(vip_id)))
 
                 last_change = sim_last_change.get(vip_id)
-                if last_change is None:
-                    recency_buckets["no simulated change (never upgraded in simulation)"] += 1
-                else:
-                    days_ago = (as_of - last_change).days
-                    if days_ago <= 30:
-                        recency_buckets["0-30 days ago"] += 1
-                    elif days_ago <= 60:
-                        recency_buckets["31-60 days ago"] += 1
-                    elif days_ago <= 90:
-                        recency_buckets["61-90 days ago"] += 1
-                    elif days_ago <= 180:
-                        recency_buckets["91-180 days ago"] += 1
-                    elif days_ago <= 365:
-                        recency_buckets["181-365 days ago"] += 1
-                    else:
-                        recency_buckets["over 365 days ago"] += 1
+                bucket = _recency_bucket(last_change)
+                recency_buckets[bucket] += 1
+                if len(bucket_samples[bucket]) < samples_per_bucket:
+                    bucket_samples[bucket].append((vip_id, real_grade, simulated))
                 if GRADE_RANK[simulated] < GRADE_RANK[real_grade]:
                     lower_count += 1
                 else:
@@ -352,5 +384,18 @@ class Command(BaseCommand):
         self.stdout.write(f"\nSample DISAGREEING (up to {options['sample_size']}):")
         for vid, real, sim, last_change in sample_disagree:
             self.stdout.write(f"  {vid}: real={real} simulated={sim} simulated_last_change={last_change}")
+
+        if disagree > 0:
+            self.stdout.write("\n" + "=" * 70)
+            self.stdout.write(f"DETAILED INVOICE LOG for up to {samples_per_bucket} sample customer(s) per recency bucket")
+            self.stdout.write("(raw transaction rows + simulator trace -- root-cause evidence, not a guess)")
+            self.stdout.write("=" * 70)
+            for bucket, samples in bucket_samples.items():
+                if not samples:
+                    continue
+                self.stdout.write(f"\n--- Bucket: {bucket} ({recency_buckets[bucket]} total in this bucket) ---")
+                for vid, real_grade, simulated in samples:
+                    self.stdout.write(f"\nvip_id={vid}  real={real_grade}  simulated={simulated}")
+                    _dump_customer(vid)
 
         self.stdout.write("\nDONE (read-only, nothing was written to the database)")
