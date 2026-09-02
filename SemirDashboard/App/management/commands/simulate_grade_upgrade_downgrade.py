@@ -264,6 +264,21 @@ class Command(BaseCommand):
         confusion = defaultdict(int)
         sample_agree, sample_disagree = [], []
 
+        # Recency-of-disagreement analysis (2026-09-02 follow-up): if most
+        # disagreements have a simulated_last_change very close to as_of,
+        # that's evidence of a REPORTING LAG between when the real POS
+        # system actually changes a grade and when that change shows up in
+        # the uploaded Customer file this app reads -- rather than the
+        # downgrade/upgrade RULE itself being wrong. Bucketed alongside the
+        # main agree/disagree pass (one query, not two) by how many days ago
+        # each disagreement's simulated_last_change was, relative to as_of.
+        recency_buckets = {
+            "0-30 days ago": 0, "31-60 days ago": 0, "61-90 days ago": 0,
+            "91-180 days ago": 0, "181-365 days ago": 0, "over 365 days ago": 0,
+            "no simulated change (never upgraded in simulation)": 0,
+        }
+        lower_count = higher_count = 0  # simulated < real vs simulated > real, by rank
+
         for vip_id, raw_grade in live_rows:
             real_grade = resolve_grade(vip_id, raw_grade)
             if real_grade not in GRADE_RANK:
@@ -280,6 +295,28 @@ class Command(BaseCommand):
                 if len(sample_disagree) < options["sample_size"]:
                     sample_disagree.append((vip_id, real_grade, simulated, sim_last_change.get(vip_id)))
 
+                last_change = sim_last_change.get(vip_id)
+                if last_change is None:
+                    recency_buckets["no simulated change (never upgraded in simulation)"] += 1
+                else:
+                    days_ago = (as_of - last_change).days
+                    if days_ago <= 30:
+                        recency_buckets["0-30 days ago"] += 1
+                    elif days_ago <= 60:
+                        recency_buckets["31-60 days ago"] += 1
+                    elif days_ago <= 90:
+                        recency_buckets["61-90 days ago"] += 1
+                    elif days_ago <= 180:
+                        recency_buckets["91-180 days ago"] += 1
+                    elif days_ago <= 365:
+                        recency_buckets["181-365 days ago"] += 1
+                    else:
+                        recency_buckets["over 365 days ago"] += 1
+                if GRADE_RANK[simulated] < GRADE_RANK[real_grade]:
+                    lower_count += 1
+                else:
+                    higher_count += 1
+
         self.stdout.write("\n" + "=" * 70)
         self.stdout.write("RESULTS")
         self.stdout.write("=" * 70)
@@ -290,6 +327,23 @@ class Command(BaseCommand):
         self.stdout.write("\nConfusion matrix (real -> simulated): count")
         for (real, sim), c in sorted(confusion.items(), key=lambda x: -x[1]):
             self.stdout.write(f"  {real:8s} -> {sim:8s} : {c}")
+
+        self.stdout.write("\n" + "=" * 70)
+        self.stdout.write("DISAGREEMENT RECENCY ANALYSIS (all disagreements, not just the sample)")
+        self.stdout.write("=" * 70)
+        if disagree == 0:
+            self.stdout.write("No disagreements -- nothing to analyze.")
+        else:
+            self.stdout.write(f"Direction: simulated LOWER than real (simulation downgraded ahead of real system): {lower_count} ({100*lower_count/disagree:.1f}% of disagreements)")
+            self.stdout.write(f"Direction: simulated HIGHER than real (simulation upgraded ahead of real system):  {higher_count} ({100*higher_count/disagree:.1f}% of disagreements)")
+            self.stdout.write("\nHow long ago was the simulated grade change that caused each disagreement:")
+            for label, count in recency_buckets.items():
+                self.stdout.write(f"  {label}: {count} ({100*count/disagree:.1f}% of disagreements)")
+            self.stdout.write(
+                "\nIf '0-30 days ago' + '31-60 days ago' dominate, that supports a REPORTING-LAG "
+                "explanation (the real system just hasn't caught up to a recent change yet) rather "
+                "than the downgrade/upgrade RULE itself being miscalibrated."
+            )
 
         self.stdout.write(f"\nSample AGREEING, with simulated last-grade-change date (up to {options['sample_size']}):")
         for vid, grade, last_change in sample_agree:
