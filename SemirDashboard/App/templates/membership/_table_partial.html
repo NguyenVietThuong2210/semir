@@ -11,36 +11,69 @@
 <div class="table-responsive" style="max-height:1600px;overflow-y:auto;">
 <table class="table table-sm table-hover align-middle mb-0 w-100" style="font-size:.82rem;table-layout:fixed;">
 <colgroup>
-    <col style="width:10%">  {# VIP ID #}
-    <col style="width:18%">  {# Name #}
-    <col style="width:12%">  {# Phone #}
-    <col style="width:10%">  {# Grade #}
-    <col style="width:13%">  {# Annual Spend #}
-    <col style="width:10%">  {# Annual Purchases #}
-    <col style="width:8%">   {# Points #}
-    <col style="width:9%">   {# Next Tier #}
-    <col style="width:10%">  {# Amount to Next Tier #}
+    <col style="width:7%">   {# VIP ID #}
+    <col style="width:12%">  {# Name #}
+    <col style="width:9%">   {# Phone #}
+    <col style="width:7%">   {# Grade #}
+    <col style="width:9%">   {# Annual Spend #}
+    <col style="width:7%">   {# Annual Purchases #}
+    <col style="width:6%">   {# Points #}
+    <col style="width:7%">   {# Next Tier #}
+    <col style="width:8%">   {# Amount to Next Tier #}
+    <col style="width:10%">  {# Last Grade Change Date #}
+    <col style="width:9%">   {# Next Review Date #}
+    <col style="width:9%">   {# Purchases Needed to Avoid Downgrade #}
 </colgroup>
 <thead class="sticky-thead">
 <tr>
-    <th class="tbl-hdr-primary">VIP ID</th>
-    <th class="tbl-hdr-primary">Name</th>
-    <th class="tbl-hdr-primary">Phone</th>
-    <th class="tbl-hdr-primary">Grade</th>
-    <th class="text-end tbl-hdr-primary">Annual Spend</th>
-    <th class="text-end tbl-hdr-primary">Annual Purchases</th>
-    <th class="text-end tbl-hdr-primary">Points</th>
-    <th class="tbl-hdr-primary">Next Tier</th>
-    <th class="text-end tbl-hdr-primary">Amount to Next Tier</th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('vip_id')" title="Click to sort by VIP ID">
+        VIP ID
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-vip_id" style="font-size:.7rem;"></i>
+    </th>
+    <th class="text-end tbl-hdr-primary">Name</th>
+    <th class="text-end tbl-hdr-primary">Phone</th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('grade')" title="Click to sort by grade">
+        Grade
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-grade" style="font-size:.7rem;"></i>
+    </th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('annual_spend')" title="Click to sort by annual spend">
+        Annual Spend
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-annual_spend" style="font-size:.7rem;"></i>
+    </th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('annual_purchase_count')" title="Click to sort by annual purchases">
+        Annual Purchases
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-annual_purchase_count" style="font-size:.7rem;"></i>
+    </th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('points')" title="Click to sort by points">
+        Points
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-points" style="font-size:.7rem;"></i>
+    </th>
+    <th class="text-end tbl-hdr-primary">Next Tier</th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('amount_to_next_tier')" title="Click to sort by amount to next tier">
+        Amount to Next Tier
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-amount_to_next_tier" style="font-size:.7rem;"></i>
+    </th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('last_grade_change_date')" title="Click to sort by last grade change date">
+        Last Grade Change
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-last_grade_change_date" style="font-size:.7rem;"></i>
+    </th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('next_check_date')" title="Click to sort by expected downgrade review date">
+        Next Review
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-next_check_date" style="font-size:.7rem;"></i>
+    </th>
+    <th class="text-end tbl-hdr-primary" style="cursor:pointer;" onclick="sortTierTable('purchases_needed_to_avoid_downgrade')" title="Click to sort by purchases needed to avoid downgrade">
+        Purchases Needed
+        <i class="bi bi-arrow-down-up ms-1" id="tierSortIcon-purchases_needed_to_avoid_downgrade" style="font-size:.7rem;"></i>
+    </th>
 </tr>
 </thead>
 <tbody>
 {% for r in rows %}
 <tr>
-    <td>{{ r.vip_id }}</td>
-    <td class="text-truncate" title="{{ r.name|default:'' }}">{{ r.name|default:"-" }}</td>
-    <td>{{ r.phone|default:"-" }}</td>
-    <td>
+    <td class="text-end">{{ r.vip_id }}</td>
+    <td class="text-end text-truncate" title="{{ r.name|default:'' }}">{{ r.name|default:"-" }}</td>
+    <td class="text-end">{{ r.phone|default:"-" }}</td>
+    <td class="text-end">
         {% if r.grade == "Member" %}
         <span class="badge bg-secondary">{{ r.grade }}</span>
         {% elif r.grade == "Silver" %}
@@ -56,8 +89,60 @@
     <td class="text-end amount-vnd">{{ r.annual_spend|vnd }}</td>
     <td class="text-end">{{ r.annual_purchase_count }}</td>
     <td class="text-end">{{ r.points }}</td>
-    <td>{{ r.next_grade|default:"—" }}</td>
+    <td class="text-end">{{ r.next_grade|default:"—" }}</td>
     <td class="text-end amount-vnd">{% if r.next_grade %}{{ r.amount_to_next_tier|vnd }}{% else %}—{% endif %}</td>
+    <td class="text-end">
+        {% if r.grade_progress_status == "ok" %}
+            {% if r.last_grade_change_date %}
+            {{ r.last_grade_change_date }}
+            {% if r.change_direction == "upgrade" %}
+            <i class="bi bi-arrow-up-circle-fill ms-1" style="color:var(--success);" title="Upgrade"></i>
+            {% elif r.change_direction == "downgrade" %}
+            <i class="bi bi-arrow-down-circle-fill ms-1" style="color:var(--danger);" title="Downgrade"></i>
+            {% endif %}
+            {% else %}
+            <span class="text-muted">Never changed</span>
+            {% endif %}
+        {% elif r.grade_progress_status == "mismatch" %}
+        <span title="Unavailable — purchase history doesn't match the formula">—</span>
+        {% elif r.grade_progress_status == "no_data" %}
+        <span title="No purchase history">—</span>
+        {% elif r.grade_progress_status == "not_computed" %}
+        <span class="text-muted" title="Click &quot;Calculate Grade Change Dates&quot; above to compute">Not computed</span>
+        {% else %}
+        —
+        {% endif %}
+    </td>
+    <td class="text-end">
+        {% if r.grade_progress_status == "ok" %}
+            {% if r.next_check_date %}{{ r.next_check_date }}{% else %}<span class="text-muted">—</span>{% endif %}
+        {% elif r.grade_progress_status == "mismatch" %}
+        <span title="Unavailable — purchase history doesn't match the formula">—</span>
+        {% elif r.grade_progress_status == "no_data" %}
+        <span title="No purchase history">—</span>
+        {% elif r.grade_progress_status == "not_computed" %}
+        <span class="text-muted" title="Not computed">—</span>
+        {% else %}
+        —
+        {% endif %}
+    </td>
+    <td class="text-end">
+        {% if r.purchases_needed_to_avoid_downgrade != None %}
+            {% if r.purchases_needed_to_avoid_downgrade == 0 %}
+            <span class="badge" style="background:var(--success);color:#fff;">Sufficient</span>
+            {% else %}
+            {{ r.purchases_needed_to_avoid_downgrade }}
+            {% endif %}
+        {% elif r.grade_progress_status == "mismatch" %}
+        <span title="Unavailable — purchase history doesn't match the formula">—</span>
+        {% elif r.grade_progress_status == "no_data" %}
+        <span title="No purchase history">—</span>
+        {% elif r.grade_progress_status == "not_computed" %}
+        <span class="text-muted" title="Not computed">—</span>
+        {% else %}
+        <span title="Not applicable">—</span>
+        {% endif %}
+    </td>
 </tr>
 {% endfor %}
 </tbody>

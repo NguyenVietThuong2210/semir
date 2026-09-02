@@ -101,7 +101,7 @@ class Command(BaseCommand):
             invoice_dates = sorted(invoices_by_vip.get(vid, {}).values())
             for label, window in [("CALENDAR-YEAR (locked rule)", "calendar"), ("ROLLING-365-DAY (diagnostic A/B)", "rolling")]:
                 trace = []
-                final_grade, last_change = simulate_one_customer(txns, invoice_dates, as_of, trace=trace, upgrade_window=window)
+                final_grade, last_change, _direction, _next_check = simulate_one_customer(txns, invoice_dates, as_of, trace=trace, upgrade_window=window)
                 self.stdout.write(f"  --- {label} ---")
                 for line in trace:
                     self.stdout.write(f"    {line}")
@@ -128,10 +128,10 @@ class Command(BaseCommand):
         for vid, txns in txns_by_vip.items():
             txns.sort(key=lambda t: t[0])
             invoice_dates = sorted(invoices_by_vip[vid].values())
-            grade, last_change = simulate_one_customer(txns, invoice_dates, as_of, upgrade_window='calendar')
+            grade, last_change, _direction, _next_check = simulate_one_customer(txns, invoice_dates, as_of, upgrade_window='calendar')
             sim_grade[vid] = grade
             sim_last_change[vid] = last_change
-            grade_roll, _ = simulate_one_customer(txns, invoice_dates, as_of, upgrade_window='rolling')
+            grade_roll, _, _direction_roll, _next_check_roll = simulate_one_customer(txns, invoice_dates, as_of, upgrade_window='rolling')
             sim_grade_roll[vid] = grade_roll
             processed += 1
             if processed % 10000 == 0:

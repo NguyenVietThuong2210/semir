@@ -33,6 +33,7 @@ PERMISSION_DEFS = [
     ("membership.import",   "Backfill Membership Snapshot Import", "Customer Membership"),
     ("membership.delete",   "Delete Membership Snapshot",       "Customer Membership"),
     ("membership.export",   "Export Customer Membership (Excel)", "Customer Membership"),
+    ("membership.compute",  "Compute Grade Change Dates",       "Customer Membership"),
 ]
 
 ALL_PERMISSIONS = [p[0] for p in PERMISSION_DEFS]

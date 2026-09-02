@@ -64,3 +64,75 @@ class MembershipSnapshotBatch(models.Model):
 
     def __str__(self):
         return f"{self.snapshot_date} ({self.source}) — {self.row_count} rows"
+
+
+class CustomerGradeProgress(models.Model):
+    """
+    One row per vip_id — the last-computed result of the full-DB grade
+    upgrade/downgrade DATE simulation (App/analytics/grade_simulation.py),
+    persisted so App/analytics/membership.py::get_live_customer_tier_table()
+    can display it without re-running the simulation on every page load (the
+    simulation loads ALL of SalesTransaction — expensive; the "Customer Tier
+    Progress" table page-loads by design, see that function's docstring).
+
+    Written ONLY by App/services/grade_progress_calc.py::compute_all_grade_progress()
+    (full recompute, deletes+bulk_creates every run — no incremental update).
+    Triggered manually via App/views/membership.py::compute_grade_progress()
+    (permission membership.compute), tracked as an upload_jobs.py job of type
+    "grade_progress_calc" — same async-job pattern as every other long-running
+    computation in this codebase (see App/views/upload.py::_start_thread).
+
+    status distinguishes WHY last_grade_change_date may or may not be
+    trustworthy for a given customer:
+      - 'ok': the simulation's final grade matches the customer's REAL live
+        grade (Customer.vip_grade via resolve_grade()) — last_grade_change_date
+        is shown to the user.
+      - 'mismatch': this vip_id has transaction history but the simulation's
+        final grade does NOT match the real live grade — the formula's answer
+        is not trustworthy for this customer, so the UI layer
+        (get_live_customer_tier_table()) hides last_grade_change_date/
+        change_direction even though a value is stored here (kept for
+        debugging, e.g. via the Django admin or a future diagnostic command).
+      - 'no_data': this vip_id has zero SalesTransaction rows — there is
+        nothing to simulate from.
+    """
+    vip_id = models.CharField(max_length=1000, unique=True, db_index=True)
+    last_grade_change_date = models.DateField(null=True, blank=True)
+    change_direction = models.CharField(
+        max_length=10,
+        choices=[("upgrade", "Upgrade"), ("downgrade", "Downgrade")],
+        blank=True,
+    )
+    next_check_date = models.DateField(
+        null=True, blank=True,
+        help_text=(
+            "The customer's NEXT scheduled downgrade anniversary check date "
+            "(App/analytics/grade_simulation.py's simulate_one_customer() 4th "
+            "return value, next_check_date). NULL when current_grade is "
+            "Member/No Grade (no downgrade floor to check). NOT simply "
+            "last_grade_change_date + 365 days -- a customer who has passed "
+            "one or more prior annual checks without an actual grade change "
+            "has next_check_date further out than that, since the check "
+            "recurs every 365 days from the LAST CHECK, not the last change. "
+            "Used to compute 'purchases needed to avoid downgrade' against "
+            "the customer's TRUE upcoming check window, and shown directly "
+            "in the Customer Tier Progress table as the expected downgrade "
+            "review date."
+        ),
+    )
+    simulated_grade = models.CharField(max_length=20, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[("ok", "OK"), ("mismatch", "Formula Mismatch"), ("no_data", "No Transaction Data")],
+        db_index=True,
+    )
+    computed_at = models.DateTimeField(auto_now=True)
+    as_of_date = models.DateField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.vip_id}: {self.status} ({self.simulated_grade})"

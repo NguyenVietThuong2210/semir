@@ -100,7 +100,7 @@ class Command(BaseCommand):
             for d, inv_no, amt in rows:
                 self.stdout.write(f"    {d}  invoice={inv_no!r}  amount={amt}")
             trace = []
-            final_grade, last_change = _sim(vid, to_date, trace=trace)
+            final_grade, last_change, _direction, _next_check = _sim(vid, to_date, trace=trace)
             self.stdout.write(f"  simulator trace (as_of={to_date}):")
             for line in trace:
                 self.stdout.write(f"    {line}")
@@ -113,8 +113,8 @@ class Command(BaseCommand):
             vid = row["vip_id"]
             real_from, real_to = row["from_grade"], row["to_grade"]
 
-            sim_from_grade, _ = _sim(vid, from_date)
-            sim_to_grade, sim_to_last_change = _sim(vid, to_date)
+            sim_from_grade, _, _direction_from, _next_check_from = _sim(vid, from_date)
+            sim_to_grade, sim_to_last_change, _direction_to, _next_check_to = _sim(vid, to_date)
 
             from_ok = sim_from_grade == real_from
             to_ok = sim_to_grade == real_to

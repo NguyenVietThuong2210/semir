@@ -179,6 +179,23 @@ class Meta:
 
 **Grade upgrade thresholds (locked, PO-confirmed, system-wide):** Silver ≥ 6,000,000 VND/year, Gold ≥ 12,000,000 VND/year, Diamond ≥ 20,000,000 VND/year (annual = calendar year, Jan 1 through the snapshot/as-of date).
 
+### CustomerGradeProgress
+
+Added 2026-09-02. One row per `vip_id` — the last-computed result of the full-DB grade upgrade/downgrade DATE simulation (`App/analytics/grade_simulation.py::simulate_one_customer()`, A/B-validated at 98.5% live-grade agreement / 90.5% exact-day match against real PROD snapshots). Written ONLY by `App/services/grade_progress_calc.py::compute_all_grade_progress()` — a full recompute every run (deletes + `bulk_create`s all rows, `batch_size=1000`), triggered manually via the "Compute Grade Change Dates" button on the Membership page (`POST /membership/compute-grade-progress/`, permission `membership.compute`, tracked as an `upload_jobs.py` job of type `grade_progress_calc`). Read by `App/analytics/membership.py::get_live_customer_tier_table()` to enrich the "Customer Tier Progress" table without re-running the simulation (which loads the entire `SalesTransaction` table) on every page load.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| vip_id | CharField(1000) | unique, db_index |
+| last_grade_change_date | DateField | null, blank — the simulated date of this customer's most recent grade change |
+| change_direction | CharField(10) | blank — `upgrade` / `downgrade` |
+| next_check_date | DateField | null, blank — this customer's NEXT scheduled downgrade anniversary check (`simulate_one_customer()`'s 4th return value). NOT simply `last_grade_change_date + 365` — recurs every 365 days from the last CHECK, not the last actual grade CHANGE, so a customer who has passed one or more prior annual checks without changing grade has this further out. Shown directly in the UI as "Next Review" and used to compute `purchases_needed_to_avoid_downgrade` against the customer's TRUE upcoming check window instead of a naive "365 days ending today" window. Added 2026-09-02 (code review finding). |
+| simulated_grade | CharField(20) | blank — the simulation's final grade as of `as_of_date` |
+| status | CharField(20) | db_index — `ok` (simulated grade matches live `Customer.vip_grade` — date/direction trustworthy for display) / `mismatch` (has transaction history but simulated ≠ real grade — date stored for debugging only, hidden from the UI) / `no_data` (zero `SalesTransaction` rows for this vip_id) |
+| computed_at | DateTimeField | auto_now |
+| as_of_date | DateField | the date the simulation was run through |
+
+Excludes `vip_id='0'` ("buyer without info"), same convention as every other grade-analytics function. A `vip_id` with no `CustomerGradeProgress` row at all (compute job never run) is surfaced by `get_live_customer_tier_table()` as `grade_progress_status='not_computed'`.
+
 ---
 
 ## Coupon Models — `App/models/coupon.py`

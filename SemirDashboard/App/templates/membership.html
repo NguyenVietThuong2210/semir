@@ -304,6 +304,12 @@
 </div>
 {% endif %}
 
+<!-- Async job status panel (shared include, also used on Upload pages) —
+     shows live progress for the "Calculate Grade Change Dates" job below,
+     same panel/poll mechanism as everywhere else in the app (no second AJAX
+     status mechanism introduced). -->
+{% include "upload/_upload_status.html" %}
+
 <!-- ══════════════════════════════════════════════════════════════════
      SECTION 4 — Customer tier table. Reads the LIVE Customer table, not a
      snapshot — always available regardless of whether any snapshot batch
@@ -312,10 +318,21 @@
 <div class="section-card shadow-sm">
     <div class="section-header">
         <span class="section-title"><i class="bi bi-people me-2"></i>Customer Tier Progress</span>
-        {% if can_dl_membership %}
-        <a id="tierDownloadLink" href="{% url 'export_membership_excel' %}?section=tier"
-           class="btn btn-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
-        {% endif %}
+        <div class="d-flex gap-2">
+            {% check_perm 'membership.compute' as can_compute_grade_progress %}
+            {% if can_compute_grade_progress %}
+            <form method="post" action="{% url 'membership_compute_grade_progress' %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-light btn-sm" title="Recalculate the last grade change date for every customer, based on purchase history">
+                    <i class="bi bi-calculator me-1"></i>Calculate Grade Change Dates
+                </button>
+            </form>
+            {% endif %}
+            {% if can_dl_membership %}
+            <a id="tierDownloadLink" href="{% url 'export_membership_excel' %}?section=tier"
+               class="btn btn-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+            {% endif %}
+        </div>
     </div>
     <div class="section-body">
         <div class="shop-select-row mb-3">
@@ -524,6 +541,46 @@
     };
     loadMovers();
 
+    // Sort state for the sortable Customer Tier Progress columns. No
+    // sortable-table JS pattern exists anywhere else in this codebase, so
+    // this is intentionally the simplest correct thing: a small JS variable
+    // pair tracking the active field + direction, re-sent as a single
+    // `sort=<field>_<asc|desc>` query param on every loadTierTable() call —
+    // the same fetch/AJAX mechanism already used for grade/shop filtering,
+    // not a second mechanism. Field names here must exactly match the
+    // sort keys App.analytics.membership.get_live_customer_tier_table()
+    // actually implements (see that function's docstring) — every entry
+    // below has a matching branch there.
+    let tierSortField = null;
+    let tierSortDir = 'desc';
+    const TIER_SORTABLE_FIELDS = [
+        'vip_id', 'grade', 'annual_spend', 'annual_purchase_count', 'points',
+        'amount_to_next_tier', 'last_grade_change_date', 'next_check_date',
+        'purchases_needed_to_avoid_downgrade',
+    ];
+
+    function updateTierSortIcons() {
+        TIER_SORTABLE_FIELDS.forEach(f => {
+            const icon = document.getElementById('tierSortIcon-' + f);
+            if (!icon) return;
+            if (tierSortField === f) {
+                icon.className = 'bi ' + (tierSortDir === 'desc' ? 'bi-sort-down' : 'bi-sort-up') + ' ms-1';
+            } else {
+                icon.className = 'bi bi-arrow-down-up ms-1';
+            }
+        });
+    }
+
+    window.sortTierTable = function(field) {
+        if (tierSortField === field) {
+            tierSortDir = (tierSortDir === 'desc') ? 'asc' : 'desc';
+        } else {
+            tierSortField = field;
+            tierSortDir = 'desc';
+        }
+        loadTierTable();
+    };
+
     window.loadTierTable = function() {
         const grade = document.getElementById('tierGradeSel').value;
         const shop = document.getElementById('tierShopSel').value;
@@ -534,6 +591,7 @@
         let url = "{% url 'membership_table_partial' %}?";
         if (grade) url += 'grade=' + encodeURIComponent(grade);
         if (shop) url += (url.endsWith('?') ? '' : '&') + 'shop=' + encodeURIComponent(shop);
+        if (tierSortField) url += (url.endsWith('?') ? '' : '&') + 'sort=' + encodeURIComponent(tierSortField + '_' + tierSortDir);
         let downloadUrl = "{% url 'export_membership_excel' %}?section=tier";
         if (grade) downloadUrl += '&grade=' + encodeURIComponent(grade);
         if (shop) downloadUrl += '&shop=' + encodeURIComponent(shop);
@@ -541,7 +599,7 @@
         if (tierDownloadLink) tierDownloadLink.href = downloadUrl;
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
-            .then(html => { spinner.style.display = 'none'; result.innerHTML = html; })
+            .then(html => { spinner.style.display = 'none'; result.innerHTML = html; updateTierSortIcons(); })
             .catch(err => {
                 spinner.style.display = 'none';
                 result.innerHTML = '<div class="alert alert-danger">Network error: ' + err.message + '</div>';

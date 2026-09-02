@@ -73,6 +73,7 @@ urlpatterns = [
     path("membership/partial/movers/",  views.membership_movers_partial,  name="membership_movers_partial"),
     path("membership/partial/movers-overview/", views.membership_movers_overview_partial, name="membership_movers_overview_partial"),
     path("membership/export/",          views.export_membership_excel,    name="export_membership_excel"),
+    path("membership/compute-grade-progress/", views.compute_grade_progress, name="membership_compute_grade_progress"),
 
     # ── Admin ─────────────────────────────────────────────────────────────────
     path("users/",       users.user_management, name="user_management"),

@@ -23,8 +23,9 @@ from decimal import Decimal
 
 from django.db.models import Count, Sum
 
-from App.analytics.calculations import next_tier_info
+from App.analytics.calculations import GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES, next_tier_info
 from App.analytics.customer_utils import GRADE_ORDER, _norm_vid, resolve_grade
+from App.analytics.grade_simulation import count_invoices_in_trailing_window
 
 # "No Grade" customers (blank/missing vip_grade on import) are excluded from
 # the grade breakdown/comparison/trend views — PO feedback 2026-08-14: not an
@@ -618,6 +619,22 @@ def get_grade_changes(from_batch_id, to_batch_id, store=None, grade=None, direct
     return page, total_count
 
 
+def _grade_progress_map(vip_ids):
+    """Internal helper. ONE query: CustomerGradeProgress rows for exactly the
+    given vip_ids -> dict[vip_id] -> row dict. Used by
+    get_live_customer_tier_table() both for its date-based sort modes (whole
+    filtered set) and its per-row enrichment (page only) — see that
+    function's docstring for which scope each caller passes."""
+    from App.models.membership import CustomerGradeProgress
+
+    if not vip_ids:
+        return {}
+    rows = CustomerGradeProgress.objects.filter(vip_id__in=vip_ids).values(
+        'vip_id', 'last_grade_change_date', 'change_direction', 'simulated_grade', 'status', 'next_check_date',
+    )
+    return {r['vip_id']: r for r in rows}
+
+
 def get_live_customer_tier_table(grade_filter=None, shop_filter=None, sort='amount_to_next_tier', limit=500, as_of_date=None):
     """
     Reads directly from the Customer table, not any snapshot batch. PO
@@ -638,6 +655,41 @@ def get_live_customer_tier_table(grade_filter=None, shop_filter=None, sort='amou
 
     Returns (rows, total_count). `limit` caps the returned row list (default
     500); pass limit=None for the full unfiltered set.
+
+    Each row also carries the grade-change-date feature's fields (2026-09-02,
+    App/services/grade_progress_calc.py::compute_all_grade_progress — see
+    that module for how CustomerGradeProgress is computed):
+      - grade_progress_status: 'ok' | 'mismatch' | 'no_data' | 'not_computed'
+        ('not_computed' means the compute-grade-progress job has never been
+        run for this vip_id at all — no CustomerGradeProgress row exists).
+      - last_grade_change_date / change_direction: populated ONLY when
+        grade_progress_status == 'ok' (None otherwise) — a 'mismatch' row's
+        simulated date is not trustworthy for display, per
+        CustomerGradeProgress's docstring; this function is the "caller"
+        responsible for hiding it from the UI.
+      - next_check_date: date, or None if status != 'ok' or the current grade
+        has no downgrade floor — the customer's next scheduled downgrade
+        anniversary check (CustomerGradeProgress.next_check_date; NOT simply
+        last_grade_change_date + 365, see that field's docstring), shown in
+        the UI as the expected downgrade review date.
+      - purchases_needed_to_avoid_downgrade: int, or None if status != 'ok'
+        or if the customer's current grade has no downgrade floor (Member /
+        No Grade — GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES.get(grade) is None).
+        Computed against the customer's TRUE next anniversary check window
+        (CustomerGradeProgress.next_check_date), not a naive "365 days ending
+        today" window — see that field's docstring for why the two differ.
+
+    `sort` accepts `<field>_asc` / `<field>_desc` for any of: vip_id, grade,
+    annual_spend, annual_purchase_count, points, amount_to_next_tier,
+    last_grade_change_date, next_check_date, purchases_needed_to_avoid_downgrade.
+    The bare string 'amount_to_next_tier' (no suffix) is kept as a legacy
+    alias for 'amount_to_next_tier_asc' (the original default before
+    per-column sort existed). Any other/unrecognized value falls back to
+    that same default.
+    Rows where the sort field doesn't apply (no CustomerGradeProgress yet,
+    Diamond has no next tier, current grade has no downgrade floor, etc.)
+    always sort last regardless of direction — never silently reordered to
+    the top by an arbitrary None/0 comparison.
     """
     from App.models import Customer
 
@@ -670,10 +722,165 @@ def get_live_customer_tier_table(grade_filter=None, shop_filter=None, sort='amou
             'amount_to_next_tier': amount_to_next_tier,
         })
     total_count = len(rows)
+
     if sort == 'amount_to_next_tier':
-        rows.sort(key=lambda r: (r['next_grade'] is None, r['amount_to_next_tier']))
-    elif sort == 'annual_spend_desc':
-        rows.sort(key=lambda r: r['annual_spend'], reverse=True)
+        sort = 'amount_to_next_tier_asc'  # legacy alias, see docstring
+    _progress_date_fields = ('last_grade_change_date', 'next_check_date')
+    _special_fields = _progress_date_fields + ('purchases_needed_to_avoid_downgrade', 'amount_to_next_tier')
+    field, _, direction = (sort or '').rpartition('_')
+    reverse = direction == 'desc'
+    if field not in _PLAIN_SORT_KEYS and field not in _special_fields:
+        field, reverse = 'amount_to_next_tier', False
+
+    # last_grade_change_date / next_check_date / purchases_needed_to_avoid_downgrade
+    # all need CustomerGradeProgress data (and purchases_needed additionally
+    # needs SalesTransaction invoice dates) across the WHOLE filtered set to
+    # sort correctly — not just the eventual page — since the page is
+    # whatever `limit` rows land on TOP after sorting. Every other sort field
+    # only touches values already computed above, so this fetch is skipped
+    # for those (avoids querying CustomerGradeProgress/SalesTransaction for
+    # up to ~75k customers on every page load — only when these specific
+    # sorts are actually requested).
+    needs_progress_for_sort = field in _progress_date_fields or field == 'purchases_needed_to_avoid_downgrade'
+    # amount_to_next_tier needs its own explicit branch (below), NOT a plain
+    # `rows.sort(key=..., reverse=True)`: its key is a tuple
+    # `(next_grade is None, amount)` so Diamond/no-next-tier rows always sort
+    # last on the ASCENDING default -- but Python's reverse=True flips the
+    # WHOLE tuple including that leading group flag, so under descending sort
+    # those same rows would incorrectly jump to the FRONT instead of staying
+    # last (2026-09-02 code review finding, same bug class as the original
+    # purchases_needed_to_avoid_downgrade blocker this dispatch was
+    # rewritten to fix -- must use the same manual (0/1, +/-value) scheme
+    # as the other "some rows don't apply" fields instead of reverse=True).
+    progress_map = _grade_progress_map([r['vip_id'] for r in rows]) if needs_progress_for_sort else None
+
+    if field in _progress_date_fields:
+        def _sort_key(r):
+            p = progress_map.get(r['vip_id'])
+            d = p[field] if p and p['status'] == 'ok' else None
+            if d is None:
+                return (1, 0)  # None/not-computed always sorts last, either direction
+            ordinal = d.toordinal()
+            return (0, -ordinal if reverse else ordinal)
+        rows.sort(key=_sort_key)
+    elif field == 'purchases_needed_to_avoid_downgrade':
+        # Compute the figure for the WHOLE filtered set (not just the page) —
+        # bounded to customers where it's even applicable (status='ok' AND
+        # current grade has a downgrade floor), typically a small fraction of
+        # the total (e.g. Silver/Gold/Diamond only, excluding Member/No
+        # Grade), so this stays a single grouped query, not one query per
+        # customer or a full-table scan.
+        eligible_vip_ids = [
+            r['vip_id'] for r in rows
+            if (progress_map.get(r['vip_id']) or {}).get('status') == 'ok'
+            and GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES.get(r['grade']) is not None
+        ]
+        invoice_dates_by_vip = _invoice_dates_by_vip(eligible_vip_ids)
+        needed_map = {}
+        for vid in eligible_vip_ids:
+            grade = next(r['grade'] for r in rows if r['vip_id'] == vid)
+            min_req = GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES[grade]
+            progress = progress_map.get(vid) or {}
+            check_date = progress.get('next_check_date') or as_of_date
+            cnt = count_invoices_in_trailing_window(invoice_dates_by_vip.get(vid, []), check_date)
+            needed_map[vid] = max(0, min_req - cnt)
+
+        def _sort_key(r):
+            n = needed_map.get(r['vip_id'])
+            if n is None:
+                return (1, 0)  # not applicable always sorts last, either direction
+            return (0, -n if reverse else n)
+        rows.sort(key=_sort_key)
+    elif field == 'amount_to_next_tier':
+        def _sort_key(r):
+            if r['next_grade'] is None:
+                return (1, Decimal('0'))  # Diamond/no-next-tier always sorts last, either direction
+            amt = r['amount_to_next_tier']
+            return (0, -amt if reverse else amt)
+        rows.sort(key=_sort_key)
+    else:
+        rows.sort(key=_PLAIN_SORT_KEYS[field], reverse=reverse)
+
     if limit is not None:
         rows = rows[:limit]
+
+    # Grade-progress enrichment for DISPLAY — ONE query for exactly the
+    # page's vip_ids (post-slice), per this module's convention of never
+    # running an unbounded per-row query. Reuses progress_map if a sort
+    # above already fetched it for the whole filtered set (now sliced to
+    # this same page) — cheap dict lookups, no second query in that case.
+    page_vip_ids = [r['vip_id'] for r in rows]
+    if progress_map is None:
+        progress_map = _grade_progress_map(page_vip_ids)
+
+    ok_vip_ids = [
+        vid for vid in page_vip_ids
+        if (progress_map.get(vid) or {}).get('status') == 'ok'
+    ]
+    invoice_dates_by_vip = _invoice_dates_by_vip(ok_vip_ids)
+
+    for r in rows:
+        progress = progress_map.get(r['vip_id'])
+        status = progress['status'] if progress else 'not_computed'
+        r['grade_progress_status'] = status
+        if status == 'ok':
+            r['last_grade_change_date'] = progress['last_grade_change_date']
+            r['change_direction'] = progress['change_direction'] or None
+            r['next_check_date'] = progress['next_check_date']
+            min_req = GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES.get(r['grade'])
+            if min_req is None:
+                r['purchases_needed_to_avoid_downgrade'] = None
+            else:
+                check_date = progress.get('next_check_date') or as_of_date
+                cnt = count_invoices_in_trailing_window(
+                    invoice_dates_by_vip.get(r['vip_id'], []), check_date,
+                )
+                r['purchases_needed_to_avoid_downgrade'] = max(0, min_req - cnt)
+        else:
+            r['last_grade_change_date'] = None
+            r['change_direction'] = None
+            r['next_check_date'] = None
+            r['purchases_needed_to_avoid_downgrade'] = None
+
     return rows, total_count
+
+
+_PLAIN_SORT_KEYS = {
+    'vip_id': lambda r: r['vip_id'],
+    'grade': lambda r: GRADE_ORDER.get(r['grade'], -1),
+    'annual_spend': lambda r: r['annual_spend'],
+    'annual_purchase_count': lambda r: r['annual_purchase_count'],
+    'points': lambda r: r['points'],
+}
+
+
+def _invoice_dates_by_vip(vip_ids):
+    """Internal helper. ONE grouped query: for exactly the given vip_ids,
+    return dict[vip_id] -> sorted list of DISTINCT-invoice dates (earliest
+    line-item date per invoice_number — same convention as
+    grade_simulation.load_customer_transactions()'s invoices_by_vip). Used
+    by get_live_customer_tier_table() for the live "purchases needed" figure,
+    both when sorting by it (whole filtered set) and when displaying it
+    (page only) — callers pass whichever vip_id scope they need."""
+    if not vip_ids:
+        return {}
+    from App.models import SalesTransaction
+
+    txn_rows = (
+        SalesTransaction.objects
+        .filter(vip_id__in=vip_ids)
+        .order_by()
+        .values('vip_id', 'invoice_number', 'sales_date')
+    )
+    earliest_by_invoice = {}
+    for t in txn_rows:
+        key = (t['vip_id'], t['invoice_number'])
+        d = t['sales_date']
+        if key not in earliest_by_invoice or d < earliest_by_invoice[key]:
+            earliest_by_invoice[key] = d
+    invoice_dates_by_vip = {}
+    for (vid, _inv), d in earliest_by_invoice.items():
+        invoice_dates_by_vip.setdefault(vid, []).append(d)
+    for dates in invoice_dates_by_vip.values():
+        dates.sort()
+    return invoice_dates_by_vip

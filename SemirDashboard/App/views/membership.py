@@ -318,6 +318,38 @@ def membership_backfill_import(request):
     return redirect("membership_dashboard")
 
 
+@requires_perm("membership.compute")
+def compute_grade_progress(request):
+    """Kick off a full-DB recompute of CustomerGradeProgress (the per-customer
+    grade-change DATE simulation, App/analytics/grade_simulation.py) as a
+    background job — same async-job pattern as membership_backfill_import
+    above, minus the file upload (this computes purely from existing
+    SalesTransaction + Customer data, see
+    App/services/grade_progress_calc.py::compute_all_grade_progress)."""
+    if request.method != "POST":
+        return redirect("membership_dashboard")
+
+    if is_type_running("grade_progress_calc"):
+        messages.warning(request, "A grade change date calculation is already in progress. Please wait for it to finish.")
+        return redirect("membership_dashboard")
+
+    if not acquire_type_lock("grade_progress_calc"):
+        messages.warning(request, "A grade change date calculation is already in progress. Please wait.")
+        return redirect("membership_dashboard")
+
+    job_id = create_job("grade_progress_calc", filename="")
+    logger.info(
+        "compute_grade_progress queued job=%s user=%s",
+        job_id, request.user, extra={"step": "grade_progress_calc"},
+    )
+
+    from App.services.grade_progress_calc import compute_all_grade_progress
+
+    _start_thread(job_id, compute_all_grade_progress, b"", "grade_progress_calc", None, None)
+    messages.info(request, f"Grade change date calculation started — tracking job {job_id[:8]}…")
+    return redirect("membership_dashboard")
+
+
 @requires_perm("membership.export")
 def export_membership_excel(request):
     """Export Customer Membership section data to Excel — one section per
@@ -465,17 +497,25 @@ def export_membership_excel(request):
             messages.error(request, "No customers to export for this selection.")
             return redirect("membership_dashboard")
         _hdr(ws, ["VIP ID", "Name", "Phone", "Grade", "Annual Spend", "Annual Purchase Count",
-                  "Next Grade", "Amount to Next Tier"], row=1)
+                  "Points", "Next Grade", "Amount to Next Tier",
+                  "Last Grade Change", "Direction", "Next Review Date",
+                  "Purchases Needed to Avoid Downgrade"], row=1)
         r = 2
         for row in rows:
+            is_ok = row.get('grade_progress_status') == 'ok'
             ws.cell(row=r, column=1, value=row['vip_id'])
             ws.cell(row=r, column=2, value=row.get('name') or '')
             ws.cell(row=r, column=3, value=row.get('phone') or '')
             ws.cell(row=r, column=4, value=row['grade'])
             ws.cell(row=r, column=5, value=float(row['annual_spend']))
             ws.cell(row=r, column=6, value=row['annual_purchase_count'])
-            ws.cell(row=r, column=7, value=row.get('next_grade') or 'Max Tier')
-            ws.cell(row=r, column=8, value=float(row['amount_to_next_tier']))
+            ws.cell(row=r, column=7, value=row.get('points') or 0)
+            ws.cell(row=r, column=8, value=row.get('next_grade') or 'Max Tier')
+            ws.cell(row=r, column=9, value=float(row['amount_to_next_tier']))
+            ws.cell(row=r, column=10, value=row['last_grade_change_date'].isoformat() if is_ok and row.get('last_grade_change_date') else '—')
+            ws.cell(row=r, column=11, value=row['change_direction'].capitalize() if is_ok and row.get('change_direction') else '—')
+            ws.cell(row=r, column=12, value=row['next_check_date'].isoformat() if is_ok and row.get('next_check_date') else '—')
+            ws.cell(row=r, column=13, value=row['purchases_needed_to_avoid_downgrade'] if is_ok and row.get('purchases_needed_to_avoid_downgrade') is not None else '—')
             r += 1
 
     else:

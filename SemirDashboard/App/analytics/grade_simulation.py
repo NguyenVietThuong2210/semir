@@ -82,6 +82,18 @@ RANK_TO_GRADE = {v: k for k, v in GRADE_RANK.items()}
 ONE_YEAR = timedelta(days=365)
 
 
+def count_invoices_in_trailing_window(invoice_dates, end_date):
+    """invoice_dates: sorted list of dates (one per distinct invoice_number).
+    Returns count of entries in [end_date - 365 days, end_date], inclusive of
+    both ends -- same window convention as the downgrade-anniversary check
+    inside simulate_one_customer (A/B-validated 2026-09-02, see that
+    function's purchases_in_trailing_365 docstring for the evidence)."""
+    start = end_date - ONE_YEAR
+    lo = bisect.bisect_left(invoice_dates, start)
+    hi = bisect.bisect_right(invoice_dates, end_date)
+    return hi - lo
+
+
 def _grade_for_spend(spend):
     if spend >= GRADE_UPGRADE_THRESHOLDS['Diamond']:
         return 'Diamond'
@@ -139,10 +151,27 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None, upgrade_w
         trailing 365 days ending at each transaction, never reset by the
         calendar).
 
-    Returns (final_grade, last_grade_change_date or None).
+    Returns (final_grade, last_grade_change_date or None, last_change_direction
+    or None, next_check_date or None). last_change_direction is 'upgrade' or
+    'downgrade', reflecting whichever event (txn-driven upgrade or
+    anniversary-check downgrade) most recently set last_grade_change_date --
+    None if the customer never changed grade during the simulation.
+    next_check_date is the date of this customer's NEXT scheduled downgrade
+    anniversary check (None if current_grade == 'Member', since Member has no
+    downgrade floor to check). Added 2026-09-02 so a "purchases needed to
+    avoid downgrade" UI figure can be computed against the customer's TRUE
+    upcoming check window `[next_check_date - 365, next_check_date]`, not a
+    naive "365 days ending today" window -- those differ whenever a customer
+    has passed one or more prior annual checks without last_grade_change_date
+    advancing (last_grade_change_date only moves on an actual grade change,
+    while next_check_date keeps advancing 365 days on every check, pass or
+    fail -- see process_anniversary below), so next_check_date can NOT be
+    reconstructed as last_grade_change_date + 365 after multiple passing
+    checks and must be returned explicitly.
     """
     current_grade = 'Member'
     last_change_date = None
+    last_change_direction = None
     next_anniversary = None
     ytd_year = None
     ytd_spend = Decimal('0')
@@ -172,13 +201,10 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None, upgrade_w
         # test on real local data (2026-09-02): switching exclusive->inclusive
         # start dropped simulation/live disagreement from 1727 to 1496 (-13.4%)
         # with ZERO change to the PO's locked worked example.
-        start = end_date - ONE_YEAR
-        lo = bisect.bisect_left(invoice_dates, start)
-        hi = bisect.bisect_right(invoice_dates, end_date)  # up to and including end_date
-        return hi - lo
+        return count_invoices_in_trailing_window(invoice_dates, end_date)
 
     def process_anniversary(check_date):
-        nonlocal current_grade, last_change_date, next_anniversary
+        nonlocal current_grade, last_change_date, last_change_direction, next_anniversary
         if current_grade != 'Member':
             cnt = purchases_in_trailing_365(check_date)
             min_req = GRADE_DOWNGRADE_MIN_ANNUAL_PURCHASES.get(current_grade)
@@ -186,6 +212,7 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None, upgrade_w
                 old = current_grade
                 current_grade = RANK_TO_GRADE[GRADE_RANK[current_grade] - 1]
                 last_change_date = check_date
+                last_change_direction = 'downgrade'
                 if trace is not None:
                     trace.append(f"{check_date}: ANNIVERSARY CHECK -- trailing 365d purchases={cnt} < min={min_req} -> DOWNGRADE {old} -> {current_grade}")
             elif trace is not None:
@@ -230,6 +257,7 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None, upgrade_w
             old = current_grade
             current_grade = implied
             last_change_date = txn_date
+            last_change_direction = 'upgrade'
             next_anniversary = txn_date + ONE_YEAR
             if trace is not None:
                 trace.append(f"{txn_date}: TXN +{amount} ({spend_label}) -> UPGRADE {old} -> {current_grade}")
@@ -241,4 +269,4 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None, upgrade_w
     while next_anniversary is not None and next_anniversary <= as_of_date:
         process_anniversary(next_anniversary)
 
-    return current_grade, last_change_date
+    return current_grade, last_change_date, last_change_direction, next_anniversary

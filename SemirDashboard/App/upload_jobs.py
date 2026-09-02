@@ -21,6 +21,7 @@ JOB_TYPE_LABELS = {
     "inventory":    "Inventory Snapshot",
     "sale_detail":  "Sale Detail (Line Items)",
     "membership_backfill": "Membership Backfill Snapshot",
+    "grade_progress_calc": "Grade Change Date Calculation",
 }
 
 _INDEX_KEY    = "upload_jobs_index"     # list of {"id": ..., "started_at": ...}
