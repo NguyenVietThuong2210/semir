@@ -73,13 +73,20 @@ Usage (on PROD):
     docker compose exec web python manage.py simulate_grade_upgrade_downgrade --vip-id 1460606   # trace one customer's full event log
     docker compose exec web python manage.py simulate_grade_upgrade_downgrade --samples-per-bucket 5
 
-Output is aggregate statistics, a recency-bucketed breakdown of disagreements,
-and — per disagreement recency bucket — a handful of sample customers dumped
-with their FULL raw invoice log (date, invoice_number, settlement_amount) plus
-the simulator's own event trace, so a disagreement can be root-caused from
-actual transaction data instead of guessed from a bucket label alone. Only
-vip_id/dates/invoice_number/amounts are ever read or printed anywhere in this
-file — no customer name or phone number.
+Output is aggregate statistics for the LOCKED calendar-year upgrade rule, a
+side-by-side A/B comparison against a diagnostic-only rolling-365-day upgrade
+variant (added 2026-09-02 after real PROD data showed customers whose spend
+straddles a Jan-1 boundary never crossing a calendar-year threshold despite
+having an elevated real grade -- see UPGRADE-WINDOW A/B section), a
+recency-bucketed breakdown of calendar-rule disagreements, and — per bucket —
+a handful of sample customers dumped with their FULL raw invoice log (date,
+invoice_number, settlement_amount) plus both simulators' event traces, so a
+disagreement can be root-caused from actual transaction data instead of
+guessed from a bucket label alone. The rolling variant is diagnostic evidence
+only -- it does not change the locked rule anywhere else in the app unless
+the PO explicitly approves switching it. Only vip_id/dates/invoice_number/
+amounts are ever read or printed anywhere in this file — no customer name or
+phone number.
 """
 import bisect
 from collections import defaultdict
@@ -106,7 +113,7 @@ def _grade_for_spend(spend):
     return 'Member'
 
 
-def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None):
+def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None, upgrade_window='calendar'):
     """
     txns: list of (date, Decimal amount), sorted by date.
     invoice_dates: sorted list of dates, one per DISTINCT invoice_number
@@ -115,6 +122,19 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None):
     as_of_date: simulate through this date, inclusive.
     trace: optional list -- if given, every event is appended as a string
         for debugging a single customer's full history (--vip-id flag).
+    upgrade_window: 'calendar' (LOCKED rule, App/analytics/calculations.py --
+        spend resets every Jan 1, only the current calendar year counts) or
+        'rolling' (diagnostic-only alternate: cumulative spend in the
+        trailing 365 days ending at each transaction, never reset by the
+        calendar). Added 2026-09-02 after real PROD data showed customers
+        whose spend is split across a Jan-1 boundary (e.g. registered
+        mid-year) never cross a calendar-year threshold even though their
+        real grade is elevated -- see 'no simulated change' bucket in the
+        recency analysis. 'rolling' exists to A/B-test that hypothesis
+        against the locked 'calendar' rule on the SAME data in the SAME
+        run; it does not change what's actually enforced anywhere else in
+        the app, and the locked rule remains 'calendar' unless the PO
+        explicitly approves switching it after seeing the A/B numbers.
 
     Returns (final_grade, last_grade_change_date or None).
     """
@@ -123,6 +143,21 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None):
     next_anniversary = None
     ytd_year = None
     ytd_spend = Decimal('0')
+
+    # For upgrade_window='rolling' only: prefix sums over txns (already
+    # sorted by date) so the trailing-365-day cumulative spend ending at any
+    # given transaction can be computed in O(log n) via bisect, mirroring
+    # purchases_in_trailing_365's inclusive-start convention for consistency.
+    txn_dates = [t[0] for t in txns]
+    txn_prefix = [Decimal('0')] * (len(txns) + 1)
+    for i, (_, amt) in enumerate(txns):
+        txn_prefix[i + 1] = txn_prefix[i] + amt
+
+    def rolling_spend_ending_at(idx):
+        end_date = txn_dates[idx]
+        start = end_date - ONE_YEAR
+        lo = bisect.bisect_left(txn_dates, start)
+        return txn_prefix[idx + 1] - txn_prefix[lo]
 
     def purchases_in_trailing_365(end_date):
         # Window is [start, end_date] -- INCLUSIVE of the start boundary. This
@@ -185,21 +220,27 @@ def simulate_one_customer(txns, invoice_dates, as_of_date, trace=None):
         while next_anniversary is not None and next_anniversary <= txn_date and next_anniversary <= as_of_date:
             process_anniversary(next_anniversary)
 
-        year = txn_date.year
-        if ytd_year != year:
-            ytd_year = year
-            ytd_spend = Decimal('0')
-        ytd_spend += amount
-        implied = _grade_for_spend(ytd_spend)
+        if upgrade_window == 'rolling':
+            spend_for_check = rolling_spend_ending_at(txn_idx)
+            spend_label = f"trailing365={spend_for_check}"
+        else:
+            year = txn_date.year
+            if ytd_year != year:
+                ytd_year = year
+                ytd_spend = Decimal('0')
+            ytd_spend += amount
+            spend_for_check = ytd_spend
+            spend_label = f"YTD={ytd_spend}"
+        implied = _grade_for_spend(spend_for_check)
         if GRADE_RANK[implied] > GRADE_RANK[current_grade]:
             old = current_grade
             current_grade = implied
             last_change_date = txn_date
             next_anniversary = txn_date + ONE_YEAR
             if trace is not None:
-                trace.append(f"{txn_date}: TXN +{amount} (YTD={ytd_spend}) -> UPGRADE {old} -> {current_grade}")
+                trace.append(f"{txn_date}: TXN +{amount} ({spend_label}) -> UPGRADE {old} -> {current_grade}")
         elif trace is not None:
-            trace.append(f"{txn_date}: TXN +{amount} (YTD={ytd_spend}), no change ({current_grade})")
+            trace.append(f"{txn_date}: TXN +{amount} ({spend_label}), no change ({current_grade})")
         txn_idx += 1
 
     # Drain remaining anniversary checks up to as_of_date.
@@ -250,7 +291,8 @@ class Command(BaseCommand):
         self.stdout.write(f"  {row_count} rows loaded, covering {len(txns_by_vip)} distinct vip_ids")
 
         def _dump_customer(vid, real_grade=None):
-            """Print registration_date + full raw invoice log + simulator trace for one vip_id.
+            """Print registration_date + full raw invoice log + simulator trace (both
+            upgrade_window variants, for direct comparison) for one vip_id.
             Customer is unique on (vip_id, phone), not vip_id alone (App/models/pos.py) -- a vip_id
             can legitimately have >1 row (e.g. a duplicate/blank-phone record), so this uses
             .filter().first() rather than .get() to avoid crashing mid-run on MultipleObjectsReturned."""
@@ -263,12 +305,13 @@ class Command(BaseCommand):
                 self.stdout.write(f"    {d}  invoice={inv_no!r}  amount={amt}")
             txns = sorted(txns_by_vip.get(vid, []), key=lambda t: t[0])
             invoice_dates = sorted(invoices_by_vip.get(vid, {}).values())
-            trace = []
-            final_grade, last_change = simulate_one_customer(txns, invoice_dates, as_of, trace=trace)
-            self.stdout.write("  simulator trace:")
-            for line in trace:
-                self.stdout.write(f"    {line}")
-            self.stdout.write(f"  final simulated grade={final_grade}  last_grade_change={last_change}")
+            for label, window in [("CALENDAR-YEAR (locked rule)", "calendar"), ("ROLLING-365-DAY (diagnostic A/B)", "rolling")]:
+                trace = []
+                final_grade, last_change = simulate_one_customer(txns, invoice_dates, as_of, trace=trace, upgrade_window=window)
+                self.stdout.write(f"  --- {label} ---")
+                for line in trace:
+                    self.stdout.write(f"    {line}")
+                self.stdout.write(f"  final simulated grade={final_grade}  last_grade_change={last_change}")
             if real_grade is not None:
                 self.stdout.write(f"  real live grade={real_grade}")
 
@@ -283,16 +326,19 @@ class Command(BaseCommand):
             _dump_customer(vid, real_grade=real_grade)
             return
 
-        self.stdout.write("\nRunning per-customer simulation...")
+        self.stdout.write("\nRunning per-customer simulation (calendar-year + rolling-365-day, for A/B comparison)...")
         sim_grade = {}
         sim_last_change = {}
+        sim_grade_roll = {}
         processed = 0
         for vid, txns in txns_by_vip.items():
             txns.sort(key=lambda t: t[0])
             invoice_dates = sorted(invoices_by_vip[vid].values())
-            grade, last_change = simulate_one_customer(txns, invoice_dates, as_of)
+            grade, last_change = simulate_one_customer(txns, invoice_dates, as_of, upgrade_window='calendar')
             sim_grade[vid] = grade
             sim_last_change[vid] = last_change
+            grade_roll, _ = simulate_one_customer(txns, invoice_dates, as_of, upgrade_window='rolling')
+            sim_grade_roll[vid] = grade_roll
             processed += 1
             if processed % 10000 == 0:
                 self.stdout.write(f"  ...simulated {processed}/{len(txns_by_vip)} customers")
@@ -322,6 +368,16 @@ class Command(BaseCommand):
         samples_per_bucket = options["samples_per_bucket"]
         lower_count = higher_count = 0  # simulated < real vs simulated > real, by rank
 
+        # Rolling-window (diagnostic) A/B tally, computed alongside the primary
+        # calendar-year pass so both come from the exact same customer set in
+        # one run. swing_to_agree = disagreed under calendar but agrees under
+        # rolling (evidence FOR switching); swing_to_disagree = the reverse
+        # (evidence AGAINST). Net negative swing_to_disagree with a large
+        # positive swing_to_agree is the signal the PO asked to test for.
+        roll_agree = roll_disagree = 0
+        roll_confusion = defaultdict(int)
+        swing_to_agree = swing_to_disagree = 0
+
         def _recency_bucket(last_change):
             if last_change is None:
                 return "no simulated change (never upgraded in simulation)"
@@ -345,7 +401,8 @@ class Command(BaseCommand):
             simulated = sim_grade.get(vip_id, 'Member')
             checked += 1
             confusion[(real_grade, simulated)] += 1
-            if simulated == real_grade:
+            calendar_agrees = simulated == real_grade
+            if calendar_agrees:
                 agree += 1
                 if len(sample_agree) < options["sample_size"]:
                     sample_agree.append((vip_id, real_grade, sim_last_change.get(vip_id)))
@@ -364,6 +421,18 @@ class Command(BaseCommand):
                 else:
                     higher_count += 1
 
+            simulated_roll = sim_grade_roll.get(vip_id, 'Member')
+            roll_confusion[(real_grade, simulated_roll)] += 1
+            rolling_agrees = simulated_roll == real_grade
+            if rolling_agrees:
+                roll_agree += 1
+            else:
+                roll_disagree += 1
+            if calendar_agrees and not rolling_agrees:
+                swing_to_disagree += 1
+            elif not calendar_agrees and rolling_agrees:
+                swing_to_agree += 1
+
         self.stdout.write("\n" + "=" * 70)
         self.stdout.write("RESULTS")
         self.stdout.write("=" * 70)
@@ -376,7 +445,24 @@ class Command(BaseCommand):
             self.stdout.write(f"  {real:8s} -> {sim:8s} : {c}")
 
         self.stdout.write("\n" + "=" * 70)
-        self.stdout.write("DISAGREEMENT RECENCY ANALYSIS (all disagreements, not just the sample)")
+        self.stdout.write("UPGRADE-WINDOW A/B: calendar-year (LOCKED rule) vs rolling-365-day (diagnostic)")
+        self.stdout.write("=" * 70)
+        self.stdout.write(
+            "Both computed from the exact same customers in this same run. This does NOT change "
+            "what's enforced anywhere else in the app -- it's evidence only, to inform whether the "
+            "PO wants to reconsider the locked calendar-year rule."
+        )
+        self.stdout.write(f"Calendar-year : agree={agree} ({100*agree/checked:.1f}%)  disagree={disagree} ({100*disagree/checked:.1f}%)")
+        self.stdout.write(f"Rolling-365d  : agree={roll_agree} ({100*roll_agree/checked:.1f}%)  disagree={roll_disagree} ({100*roll_disagree/checked:.1f}%)")
+        self.stdout.write(f"\nSwing FOR rolling (disagreed under calendar, agrees under rolling):    {swing_to_agree}")
+        self.stdout.write(f"Swing AGAINST rolling (agreed under calendar, disagrees under rolling): {swing_to_disagree}")
+        self.stdout.write(f"Net change if switched to rolling: {swing_to_agree - swing_to_disagree:+d} agreements")
+        self.stdout.write("\nRolling-365d confusion matrix (real -> simulated): count")
+        for (real, sim), c in sorted(roll_confusion.items(), key=lambda x: -x[1]):
+            self.stdout.write(f"  {real:8s} -> {sim:8s} : {c}")
+
+        self.stdout.write("\n" + "=" * 70)
+        self.stdout.write("DISAGREEMENT RECENCY ANALYSIS (all disagreements, not just the sample; calendar-year rule)")
         self.stdout.write("=" * 70)
         if disagree == 0:
             self.stdout.write("No disagreements -- nothing to analyze.")
