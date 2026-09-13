@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Hướng Dẫn V18 ML — Từ Số 0 Đến Chuyên Gia (Tiếng Việt)</title>
+<style>
+:root {
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-card-hover: #334155;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --accent: #3b82f6;
+  --accent-2: #8b5cf6;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --border: #334155;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  padding: 0;
+}
+.container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+.hero {
+  background: linear-gradient(135deg, #1e3a8a 0%, #6d28d9 100%);
+  padding: 80px 24px 60px;
+  text-align: center;
+  border-bottom: 3px solid var(--accent);
+}
+.hero h1 { font-size: 2.8em; font-weight: 800; margin-bottom: 12px; }
+.hero .subtitle { font-size: 1.3em; color: #c7d2fe; max-width: 800px; margin: 0 auto; }
+.hero .meta { font-size: 0.9em; color: #a5b4fc; margin-top: 16px; }
+.toc {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 40px;
+  position: sticky;
+  top: 20px;
+  z-index: 10;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.toc h3 { color: var(--accent); margin-bottom: 12px; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; }
+.toc ol { list-style: none; counter-reset: toc; }
+.toc li { counter-increment: toc; padding: 4px 0; }
+.toc li::before {
+  content: counter(toc) ". ";
+  color: var(--accent-2);
+  font-weight: 700;
+  margin-right: 8px;
+}
+.toc a { color: var(--text); text-decoration: none; }
+.toc a:hover { color: var(--accent); }
+@media (min-width: 1100px) {
+  .layout { display: grid; grid-template-columns: 260px 1fr; gap: 32px; align-items: start; }
+  .toc { position: sticky; top: 20px; }
+}
+section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 32px;
+  margin-bottom: 28px;
+}
+section h2 {
+  color: var(--accent);
+  font-size: 1.7em;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 10px;
+}
+section h3 { color: var(--accent-2); font-size: 1.25em; margin: 24px 0 12px; }
+section h4 { color: var(--success); font-size: 1.05em; margin: 18px 0 8px; }
+p { margin: 12px 0; color: var(--text); }
+ul, ol { margin: 12px 0 12px 24px; }
+ul li, ol li { margin: 8px 0; }
+code {
+  background: #0f172a;
+  color: #fbbf24;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Monaco", "Consolas", monospace;
+  font-size: 0.92em;
+}
+pre {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+pre code { background: none; padding: 0; color: #e2e8f0; font-size: 0.88em; }
+.callout {
+  border-left: 4px solid var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 16px 20px;
+  margin: 20px 0;
+  border-radius: 6px;
+}
+.callout.warning { border-color: var(--warning); background: rgba(245, 158, 11, 0.1); }
+.callout.success { border-color: var(--success); background: rgba(34, 197, 94, 0.1); }
+.callout.danger  { border-color: var(--danger);  background: rgba(239, 68, 68, 0.1); }
+.callout .title { font-weight: 700; margin-bottom: 6px; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #0f172a; color: var(--accent); font-weight: 700; }
+tr:hover td { background: rgba(59, 130, 246, 0.05); }
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.mini-card {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  padding: 18px;
+  border-radius: 10px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.mini-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+.mini-card .num {
+  color: var(--accent);
+  font-size: 2em;
+  font-weight: 800;
+  display: block;
+  line-height: 1;
+}
+.mini-card .label {
+  color: var(--text-dim);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 6px;
+}
+.mini-card .desc { font-size: 0.92em; margin-top: 8px; color: var(--text); }
+.svg-diagram {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0;
+  text-align: center;
+  overflow-x: auto;
+}
+.svg-diagram svg { max-width: 100%; height: auto; }
+.timeline { position: relative; padding-left: 30px; margin: 20px 0; }
+.timeline::before {
+  content: ""; position: absolute; left: 8px; top: 0; bottom: 0;
+  width: 2px; background: var(--border);
+}
+.timeline-item { position: relative; margin: 16px 0; padding-left: 20px; }
+.timeline-item::before {
+  content: ""; position: absolute; left: -27px; top: 8px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); border: 3px solid var(--bg-card);
+}
+.timeline-item.fail::before { background: var(--danger); }
+.timeline-item.win::before  { background: var(--success); }
+.timeline-item.epic::before { background: var(--warning); }
+.timeline-item .ver { color: var(--accent-2); font-weight: 700; font-size: 1.1em; }
+.timeline-item .skill { color: var(--text-dim); font-size: 0.85em; margin-left: 8px; }
+.lang-switch { text-align: center; padding: 16px 0; background: #0f172a; border-bottom: 1px solid var(--border); }
+.lang-switch a {
+  color: var(--accent); text-decoration: none; padding: 6px 16px;
+  border: 1px solid var(--accent); border-radius: 6px; margin: 0 8px;
+}
+.lang-switch a:hover { background: var(--accent); color: white; }
+.lang-switch a.active { background: var(--accent); color: white; }
+.glossary dt { font-weight: 700; color: var(--accent); margin-top: 16px; }
+.glossary dd { margin-left: 16px; color: var(--text); }
+.analogy {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+  border: 1px dashed var(--accent-2);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 16px 0;
+}
+.analogy::before { content: "🎯 Ví dụ dễ hiểu: "; font-weight: 700; color: var(--accent-2); }
+footer {
+  text-align: center; padding: 40px 24px; color: var(--text-dim);
+  border-top: 1px solid var(--border); margin-top: 60px;
+}
+</style>
+</head>
+<body>
+
+<div class="lang-switch">
+  <a href="v18-ml-guide-en.html">🇬🇧 English</a>
+  <a href="v18-ml-guide-vi.html" class="active">🇻🇳 Tiếng Việt</a>
+</div>
+
+<div class="hero">
+  <h1>📚 Hiểu Model V18 — Từ Số 0 Đến Chuyên Gia</h1>
+  <p class="subtitle">Hướng dẫn toàn diện cho người mới bắt đầu về cách hoạt động của model dự đoán cổ phiếu v18 — từ "ML là gì?" đến "tại sao dùng 78 features cho mỗi mã?"</p>
+  <div class="meta">Dành cho PredictStock | Cập nhật 2026-06-20 | Dành cho người mới</div>
+</div>
+
+<div class="container">
+<div class="layout">
+
+<aside>
+<div class="toc">
+  <h3>📑 Mục Lục</h3>
+  <ol>
+    <li><a href="#part1">Machine Learning là gì?</a></li>
+    <li><a href="#part2">Bài toán dự đoán cổ phiếu</a></li>
+    <li><a href="#part3">Features: Cách máy tính "nhìn" cổ phiếu</a></li>
+    <li><a href="#part4">Các Model: Từ Cây Quyết Định đến XGBoost</a></li>
+    <li><a href="#part5">Kiến trúc V18: Hệ thống 2 Tầng</a></li>
+    <li><a href="#part6">Huấn luyện thông minh: Trọng số mẫu &amp; Cross-Validation</a></li>
+    <li><a href="#part7">Calibration: Làm cho xác suất chân thật</a></li>
+    <li><a href="#part8">Composite Confidence: Kết hợp 4 tín hiệu</a></li>
+    <li><a href="#part9">Routing theo mã &amp; Production Gates</a></li>
+    <li><a href="#part10">Từ Dự đoán đến Giao dịch</a></li>
+    <li><a href="#part11">Hành trình V1→V18: 18 lần lặp học hỏi</a></li>
+    <li><a href="#part12">Thuật ngữ</a></li>
+  </ol>
+</div>
+</aside>
+
+<main>
+
+<!-- PART 1 -->
+<section id="part1">
+<h2>1. Machine Learning là gì? 🤖</h2>
+
+<p>Machine Learning (ML) là dạy máy tính <strong>tìm quy luật trong dữ liệu</strong>, thay vì lập trình cứng các quy tắc.</p>
+
+<div class="analogy">
+Tưởng tượng bạn dạy máy tính nhận diện con mèo trong ảnh. <strong>Cách cũ</strong> là viết quy tắc: "nếu có ria mép VÀ tai nhọn VÀ có lông, thì đó là mèo". Cách này dễ sai — mèo không lông thì sao? <strong>Cách ML</strong> là cho máy tính xem 10.000 ảnh mèo và 10.000 ảnh không phải mèo, rồi để nó tự tìm ra quy luật.
+</div>
+
+<h3>3 Loại Machine Learning</h3>
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">1</span>
+    <div class="label">Supervised (Có giám sát)</div>
+    <div class="desc">Bạn cho máy tính đáp án để học. <em>"Ảnh này là mèo, ảnh kia không phải."</em> — V18 dùng loại này!</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">2</span>
+    <div class="label">Unsupervised (Không giám sát)</div>
+    <div class="desc">Máy tính tự tìm pattern không cần nhãn. <em>"Nhóm các khách hàng theo cách bạn muốn."</em></div>
+  </div>
+  <div class="mini-card">
+    <span class="num">3</span>
+    <div class="label">Reinforcement (Tăng cường)</div>
+    <div class="desc">Máy tính học qua thử-sai với phần thưởng. <em>"Thắng game thì +1 điểm."</em></div>
+  </div>
+</div>
+
+<h3>2 Nhánh con của Supervised Learning</h3>
+<table>
+<tr><th>Loại</th><th>Dự đoán</th><th>Ví dụ</th><th>V18 dùng?</th></tr>
+<tr><td><strong>Classification (Phân loại)</strong></td><td>Một danh mục</td><td>Mèo / Chó / Chim</td><td>✅ CÓ (UP / DOWN / FLAT)</td></tr>
+<tr><td><strong>Regression (Hồi quy)</strong></td><td>Một con số</td><td>Giá nhà = 2,5 tỷ</td><td>❌ Không</td></tr>
+</table>
+
+<div class="callout">
+<div class="title">💡 Điểm quan trọng</div>
+V18 là bài toán <strong>phân loại 3 lớp</strong>. Chúng ta KHÔNG dự đoán "VNM sẽ tăng 2,3% ngày mai" (đó là hồi quy — quá khó). Chúng ta dự đoán "VNM sẽ TĂNG / ĐỨNG / GIẢM" — đơn giản hơn nhiều.
+</div>
+
+<h3>Pipeline ML (Cách hoạt động)</h3>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 700 180" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrvi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#3b82f6"/>
+    </marker>
+  </defs>
+  <rect x="10"  y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+  <text x="65"  y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">1. DỮ LIỆU</text>
+  <text x="65"  y="105" text-anchor="middle" fill="#94a3b8" font-size="11">Nến OHLCV</text>
+  <line x1="125" y1="90" x2="145" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrvi)"/>
+
+  <rect x="150" y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+  <text x="205" y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">2. FEATURES</text>
+  <text x="205" y="105" text-anchor="middle" fill="#94a3b8" font-size="11">RSI, MA, etc.</text>
+  <line x1="265" y1="90" x2="285" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrvi)"/>
+
+  <rect x="290" y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="345" y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">3. TRAIN</text>
+  <text x="345" y="105" text-anchor="middle" fill="#94a3b8" font-size="11">XGBoost</text>
+  <line x1="405" y1="90" x2="425" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrvi)"/>
+
+  <rect x="430" y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+  <text x="485" y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">4. DỰ ĐOÁN</text>
+  <text x="485" y="105" text-anchor="middle" fill="#94a3b8" font-size="11">UP/DOWN/FLAT</text>
+  <line x1="545" y1="90" x2="565" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrvi)"/>
+
+  <rect x="570" y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
+  <text x="625" y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">5. GIAO DỊCH</text>
+  <text x="625" y="105" text-anchor="middle" fill="#94a3b8" font-size="11">Mua / Bán</text>
+</svg>
+</div>
+</section>
+
+<!-- PART 2 -->
+<section id="part2">
+<h2>2. Bài toán dự đoán cổ phiếu 📈</h2>
+
+<h3>Tại sao dự đoán cổ phiếu khó?</h3>
+<ul>
+  <li><strong>Tín hiệu nhỏ, nhiễu lớn</strong> — Hầu hết biến động hàng ngày là ngẫu nhiên (~90% nhiễu, ~10% tín hiệu)</li>
+  <li><strong>Thay đổi chế độ thị trường</strong> — Quy luật năm 2022 không hoạt động năm 2026 (lãi suất, chiến tranh, COVID...)</li>
+  <li><strong>Không thấy được tương lai</strong> — Chỉ dùng dữ liệu quá khứ để đoán tương lai</li>
+  <li><strong>Phí giao dịch ăn mòn lợi nhuận</strong> — Phí VN: 0,20-0,55% mỗi vòng mua-bán</li>
+</ul>
+
+<div class="callout warning">
+<div class="title">⚠️ Thực tế phũ phàng</div>
+Có 2 cách đo "độ chính xác":
+<ul>
+  <li><strong>Directional accuracy</strong> (nhị phân UP-vs-DOWN khi model commit): ngẫu nhiên = 50%, lợi thế bắt đầu từ ~52%, pro ở 53-55%</li>
+  <li><strong>3-class accuracy</strong> (UP/FLAT/DOWN end-to-end): ngẫu nhiên = 33%, nhưng baseline lớp đa số ~40-45% (vì FLAT thường gặp). V18 lưu giá trị này là <code>cv_accuracy_mean</code> — thường ~0,60 với VN30</li>
+</ul>
+Quan trọng nhất là <em>skill_score</em>: cao hơn baseline bao nhiêu. 0 = không có kỹ năng, 0,05+ = có thể trade.
+</div>
+
+<h3>V18 định nghĩa bài toán thế nào</h3>
+
+<p>Với mỗi ngày giao dịch, mỗi cổ phiếu, dự đoán MỘT trong ba khả năng:</p>
+
+<div class="cards-grid">
+  <div class="mini-card" style="border-left: 4px solid #22c55e">
+    <span class="num" style="color: #22c55e">UP</span>
+    <div class="label">Tăng vượt ngưỡng ngày mai</div>
+    <div class="desc">Tín hiệu mua — giá có thể tăng</div>
+  </div>
+  <div class="mini-card" style="border-left: 4px solid #94a3b8">
+    <span class="num" style="color: #94a3b8">FLAT</span>
+    <div class="label">Dao động trong ±ngưỡng</div>
+    <div class="desc">Không rõ hướng — đừng giao dịch</div>
+  </div>
+  <div class="mini-card" style="border-left: 4px solid #ef4444">
+    <span class="num" style="color: #ef4444">DOWN</span>
+    <div class="label">Giảm vượt ngưỡng ngày mai</div>
+    <div class="desc">Tín hiệu bán — giá có thể giảm</div>
+  </div>
+</div>
+
+<div class="callout">
+<div class="title">📐 Vấn đề ngưỡng (threshold)</div>
+Bao nhiêu phần trăm thì gọi là "UP"? Ngưỡng <strong>theo từng mã, dựa trên ATR</strong> — đặt sao cho khoảng 20% biến động lịch sử rơi vào vùng FLAT. Giá trị thực từ artifact đang chạy:
+<ul>
+  <li>TIS (biến động thấp): <code>0,20%</code></li>
+  <li>VNM (trung bình): <code>0,27%</code></li>
+  <li>PDR (biến động cao hơn): <code>0,45%</code></li>
+</ul>
+Giới hạn trong khoảng 0,2% (sàn) đến 1,5% (trần), nhân √horizon cho T+3 và T+5.
+</div>
+
+<h3>3 Khung thời gian (Horizons)</h3>
+<p>Chúng ta không chỉ dự đoán ngày mai. Chúng ta dự đoán 3 thời điểm tương lai:</p>
+<table>
+<tr><th>Horizon</th><th>Dự đoán</th><th>Trọng số trong quyết định cuối</th></tr>
+<tr><td>T+1</td><td>Hướng ngày mai</td><td>50% (tiếng nói lớn nhất)</td></tr>
+<tr><td>T+3</td><td>Hướng 3 ngày sau</td><td>30%</td></tr>
+<tr><td>T+5</td><td>Hướng 1 tuần sau</td><td>20% (yếu nhất)</td></tr>
+</table>
+
+<p>3 horizons cùng "bỏ phiếu" có trọng số để ra dự đoán cuối cùng.</p>
+</section>
+
+<!-- PART 3 -->
+<section id="part3">
+<h2>3. Features: Cách máy tính "nhìn" cổ phiếu 👁️</h2>
+
+<p>Máy tính không thể "nhìn biểu đồ". Nó cần CON SỐ. Mỗi cổ phiếu vào mỗi ngày trở thành 1 hàng với ~78 con số gọi là <strong>features</strong>.</p>
+
+<div class="analogy">
+Bác sĩ không chẩn đoán bạn bằng "nhìn". Bác sĩ ĐO: nhiệt độ, huyết áp, nhịp tim, số bạch cầu, v.v. Mỗi phép đo = 1 feature. Cùng nhau chúng mô tả sức khỏe bạn. Cổ phiếu cũng vậy — RSI, MACD, tỉ lệ khối lượng, v.v.
+</div>
+
+<h3>78 Features của V18 — Nhóm lại</h3>
+
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">51</span>
+    <div class="label">Kỹ thuật cơ bản</div>
+    <div class="desc">RSI, MACD, Bollinger Bands, MA (đường trung bình), ATR, Stochastic, OBV, CCI...</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">2</span>
+    <div class="label">Chế độ VN-Index</div>
+    <div class="desc">vn30_ret_20d, vn30_vol_regime — trạng thái thị trường chung</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">9</span>
+    <div class="label">Dòng tiền</div>
+    <div class="desc">MFI, CMF, bull volume ratio, accumulation streak — nơi tổ chức đang đổ tiền</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">7</span>
+    <div class="label">Chế độ biến động</div>
+    <div class="desc">Realized vol, ATR chuẩn hóa, độ rộng Bollinger, choppiness — "thị trường yên hay loạn?"</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">2-6</span>
+    <div class="label">Cross-Asset (Liên thị trường)</div>
+    <div class="desc">SP500, VIX, dầu, USD/VND, Hang Seng — bối cảnh quốc tế</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">4</span>
+    <div class="label">Breadth + Pair</div>
+    <div class="desc">Độ rộng VN30, tương quan với cổ phiếu peer — chỉ cho 9 mã đặc biệt</div>
+  </div>
+</div>
+
+<h3>Ví dụ feature: RSI</h3>
+<p>RSI (Relative Strength Index) đo momentum trên thang 0-100:</p>
+<ul>
+  <li><strong>RSI &lt; 30</strong> = quá bán (có thể bật lên sớm)</li>
+  <li><strong>RSI 30-70</strong> = vùng trung lập</li>
+  <li><strong>RSI &gt; 70</strong> = quá mua (có thể rơi sớm)</li>
+</ul>
+
+<p>Cách tính (đơn giản):</p>
+<pre><code>RS = (mức tăng trung bình 14 ngày) / (mức giảm trung bình 14 ngày)
+RSI = 100 - (100 / (1 + RS))</code></pre>
+
+<h3>Tại sao có features "Cross-Asset"?</h3>
+<p>Cổ phiếu Việt không di chuyển độc lập. Khi SP500 sập đêm qua, VN-Index thường mở cửa giảm. Khi giá dầu tăng vọt, GAS và PLX tăng. V18 bao gồm:</p>
+
+<table>
+<tr><th>Tín hiệu</th><th>Tại sao quan trọng</th></tr>
+<tr><td>SP500</td><td>Tâm lý rủi ro toàn cầu</td></tr>
+<tr><td>VIX (chỉ số sợ hãi)</td><td>Khi VIX tăng vọt, mọi cổ phiếu giảm</td></tr>
+<tr><td>Dầu (Brent)</td><td>Yếu tố dẫn dắt nhóm năng lượng</td></tr>
+<tr><td>DXY (chỉ số USD)</td><td>USD mạnh làm tổn thương thị trường mới nổi</td></tr>
+<tr><td>Hang Seng</td><td>Lây lan khu vực</td></tr>
+<tr><td>USD/VND</td><td>Áp lực tiền tệ lên doanh nghiệp xuất khẩu</td></tr>
+</table>
+
+<div class="callout danger">
+<div class="title">🚨 Look-Ahead Bias — Tội lỗi lớn nhất</div>
+KHÔNG được dùng dữ liệu của ngày mai để dự đoán ngày mai. Mọi feature phải dùng CHỈ thông tin có trước thời điểm dự đoán. V18 dùng <code>shift(1)</code> trên tất cả features cross-asset để đảm bảo không bao giờ vô tình "nhìn trước" tương lai.
+</div>
+</section>
+
+<!-- PART 4 -->
+<section id="part4">
+<h2>4. Các Model: Từ Cây Quyết Định đến XGBoost 🌳</h2>
+
+<h3>Bắt đầu đơn giản: Cây Quyết Định</h3>
+<p>Cây quyết định chỉ là một loạt câu hỏi "nếu-thì":</p>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg">
+  <rect x="220" y="10" width="160" height="40" rx="6" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+  <text x="300" y="35" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">RSI &lt; 30?</text>
+
+  <line x1="280" y1="50" x2="160" y2="90" stroke="#3b82f6"/>
+  <text x="200" y="75" fill="#22c55e" font-size="11" font-weight="700">CÓ</text>
+
+  <rect x="80" y="90" width="160" height="40" rx="6" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+  <text x="160" y="115" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">Khối lượng &gt; 2x?</text>
+
+  <line x1="120" y1="130" x2="60" y2="170" stroke="#22c55e"/>
+  <text x="85" y="155" fill="#22c55e" font-size="11" font-weight="700">CÓ</text>
+  <rect x="10" y="170" width="100" height="40" rx="6" fill="#22c55e" stroke="#22c55e"/>
+  <text x="60" y="195" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="800">UP</text>
+
+  <line x1="200" y1="130" x2="260" y2="170" stroke="#94a3b8"/>
+  <text x="240" y="155" fill="#94a3b8" font-size="11" font-weight="700">KHÔNG</text>
+  <rect x="220" y="170" width="100" height="40" rx="6" fill="#94a3b8" stroke="#94a3b8"/>
+  <text x="270" y="195" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="800">FLAT</text>
+
+  <line x1="320" y1="50" x2="440" y2="90" stroke="#3b82f6"/>
+  <text x="400" y="75" fill="#ef4444" font-size="11" font-weight="700">KHÔNG</text>
+
+  <rect x="360" y="90" width="160" height="40" rx="6" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
+  <text x="440" y="115" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">RSI &gt; 70?</text>
+
+  <line x1="400" y1="130" x2="340" y2="170" stroke="#ef4444"/>
+  <text x="370" y="155" fill="#ef4444" font-size="11" font-weight="700">CÓ</text>
+  <rect x="340" y="170" width="100" height="40" rx="6" fill="#ef4444" stroke="#ef4444"/>
+  <text x="390" y="195" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">DOWN</text>
+
+  <line x1="480" y1="130" x2="540" y2="170" stroke="#94a3b8"/>
+  <text x="520" y="155" fill="#94a3b8" font-size="11" font-weight="700">KHÔNG</text>
+  <rect x="490" y="170" width="100" height="40" rx="6" fill="#94a3b8" stroke="#94a3b8"/>
+  <text x="540" y="195" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="800">FLAT</text>
+
+  <text x="300" y="260" text-anchor="middle" fill="#94a3b8" font-size="12">Cây quyết định đơn giản (thực tế: 100+ nhánh, sâu 5+ tầng)</text>
+</svg>
+</div>
+
+<h3>Vấn đề: Một cây thì yếu</h3>
+<p>Một cây đơn lẻ học thuộc data train nhưng không tổng quát hóa. Giải pháp: kết hợp NHIỀU cây.</p>
+
+<h3>Random Forest = Nhiều cây bỏ phiếu</h3>
+<p>Train 100 cây, mỗi cây trên một mẫu data khác nhau một chút. Dự đoán cuối = bỏ phiếu đa số.</p>
+
+<h3>Gradient Boosting = Cây sửa sai cho nhau</h3>
+<p>Train các cây theo thứ tự. Mỗi cây mới tập trung vào các ví dụ mà các cây trước đó dự đoán sai. Mạnh hơn Random Forest cho dữ liệu bảng.</p>
+
+<h3>XGBoost = Gradient Boosting tối ưu cao</h3>
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">⚡</span>
+    <div class="label">Nhanh</div>
+    <div class="desc">Train song song, lõi C++ tối ưu</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🎯</span>
+    <div class="label">Chính xác</div>
+    <div class="desc">Thắng phần lớn các cuộc thi Kaggle về dữ liệu bảng</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🛡️</span>
+    <div class="label">Regularized</div>
+    <div class="desc">L1/L2 sẵn có để chống overfitting</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🪶</span>
+    <div class="label">Xử lý thiếu</div>
+    <div class="desc">Không cần điền giá trị NaN</div>
+  </div>
+</div>
+
+<h3>LightGBM = XGBoost nhanh hơn, hơi khác</h3>
+<p>V18 dùng XGBoost + LightGBM cùng nhau. Mỗi model mắc lỗi khác nhau. Trung bình dự đoán của 2 thằng giảm variance.</p>
+
+<div class="callout success">
+<div class="title">✅ Tại sao Trees thắng Neural Networks ở đây</div>
+Với dữ liệu BẢNG có ít hơn 10.000 mẫu/mã, model tree (XGBoost, LightGBM) hầu như LUÔN thắng neural networks (deep learning). Neural nets cần dataset khổng lồ. Trees xử lý missing values, các scale khác nhau, và dataset nhỏ rất tốt.
+</div>
+</section>
+
+<!-- PART 5 -->
+<section id="part5">
+<h2>5. Kiến trúc V18: Hệ thống 2 Tầng 🏗️</h2>
+
+<h3>Vấn đề với dự đoán trực tiếp 3 lớp</h3>
+<p>Nếu dự đoán trực tiếp UP/DOWN/FLAT, model bị nhầm lẫn ở các biên:</p>
+<ul>
+  <li>+0,29% là "FLAT" hay "UP"?</li>
+  <li>-0,31% là "FLAT" hay "DOWN"?</li>
+</ul>
+<p>Các lớp lẫn vào nhau. <strong>Giải pháp: tách thành 2 câu hỏi.</strong></p>
+
+<h3>Kiến trúc 2 Tầng của V18</h3>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 700 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar2vi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <rect x="250" y="10" width="200" height="50" rx="10" fill="#0f172a" stroke="#3b82f6" stroke-width="2"/>
+  <text x="350" y="32" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">ĐẦU VÀO</text>
+  <text x="350" y="50" text-anchor="middle" fill="#94a3b8" font-size="11">78 features (RSI, MACD, vol, etc.)</text>
+
+  <line x1="350" y1="60" x2="350" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar2vi)"/>
+
+  <rect x="200" y="100" width="300" height="80" rx="10" fill="#0f172a" stroke="#22c55e" stroke-width="3"/>
+  <text x="350" y="125" text-anchor="middle" fill="#22c55e" font-size="14" font-weight="800">TẦNG 1: Có hướng hay đi ngang?</text>
+  <text x="350" y="145" text-anchor="middle" fill="#e2e8f0" font-size="12">3 model XGBoost (seeds 42, 17, 99)</text>
+  <text x="350" y="162" text-anchor="middle" fill="#94a3b8" font-size="11">Nhị phân: DIR hay FLAT?  →  P(DIR) đã calibrated</text>
+
+  <line x1="350" y1="180" x2="350" y2="210" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar2vi)"/>
+
+  <polygon points="270,210 430,210 380,260 320,260" fill="#0f172a" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="350" y="240" text-anchor="middle" fill="#8b5cf6" font-size="13" font-weight="700">P(DIR) ≥ gate?</text>
+
+  <line x1="270" y1="240" x2="120" y2="290" stroke="#94a3b8" stroke-width="2" marker-end="url(#ar2vi)"/>
+  <text x="180" y="265" fill="#94a3b8" font-size="11" font-weight="700">KHÔNG</text>
+  <rect x="50" y="290" width="140" height="60" rx="10" fill="#94a3b8" stroke="#94a3b8"/>
+  <text x="120" y="315" text-anchor="middle" fill="#0f172a" font-size="14" font-weight="800">DỰ ĐOÁN: FLAT</text>
+  <text x="120" y="335" text-anchor="middle" fill="#0f172a" font-size="11">Không giao dịch</text>
+
+  <line x1="430" y1="240" x2="540" y2="290" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar2vi)"/>
+  <text x="510" y="265" fill="#22c55e" font-size="11" font-weight="700">CÓ</text>
+
+  <rect x="430" y="290" width="240" height="80" rx="10" fill="#0f172a" stroke="#f59e0b" stroke-width="3"/>
+  <text x="550" y="315" text-anchor="middle" fill="#f59e0b" font-size="13" font-weight="800">TẦNG 2: UP hay DOWN?</text>
+  <text x="550" y="335" text-anchor="middle" fill="#e2e8f0" font-size="11">Trộn XGBoost + LightGBM (50/50)</text>
+  <text x="550" y="352" text-anchor="middle" fill="#94a3b8" font-size="10">+ Isotonic calibration cho Tầng 2</text>
+</svg>
+</div>
+
+<h4>Tại sao kiến trúc này tốt hơn</h4>
+<ul>
+  <li><strong>Tầng 1 dễ hơn</strong> — Phân biệt "có gì đó xảy ra" với "không có gì" đáng tin hơn 3-way classification</li>
+  <li><strong>Tầng 2 chỉ thấy các case rõ ràng</strong> — Khi Tầng 1 nói "DIR", Tầng 2 không lo về nhiễu FLAT</li>
+  <li><strong>Calibration tốt hơn</strong> — Mỗi tầng xử lý imbalance riêng</li>
+</ul>
+
+<h3>Khái niệm "Gate"</h3>
+<p>Sau Tầng 1, ta có xác suất như "P(DIR) = 0.62". Có nên tin không? <strong>Gate</strong> là xác suất tối thiểu để dự đoán UP/DOWN. Dưới gate → FLAT.</p>
+
+<p>V18 có HAI giá trị gate cho mỗi mã:</p>
+<ol>
+  <li><strong>Artifact gate</strong> (<code>dir_conf_gate</code>) — tìm được trong lúc train, max F1 với precision ≥ 0,72</li>
+  <li><strong>Production gate</strong> (<code>V18_PRODUCTION_GATES</code>) — đã tinh chỉnh qua backtest, dùng khi predict thực tế</li>
+</ol>
+
+<table>
+<tr><th>Mã</th><th>Artifact gate</th><th>Production gate (live)</th><th>Lý do</th></tr>
+<tr><td>VNM</td><td>0,45</td><td><strong>0,66</strong></td><td>Production tinh chỉnh thận trọng — ít false UP signal hơn</td></tr>
+<tr><td>PDR</td><td>~0,50</td><td><strong>0,43</strong></td><td>Đầu cơ — chấp nhận nhiều signal, lọc bằng composite sau</td></tr>
+<tr><td>VHM</td><td>~0,50</td><td><strong>0,64</strong></td><td>Hay over-predict FLAT — cần gate cao</td></tr>
+<tr><td>MSN</td><td>~0,50</td><td><strong>0,68</strong></td><td>Phụ thuộc vĩ mô, nhiều bất định</td></tr>
+</table>
+
+<p>Production gates lấy từ kết quả backtest walk-forward (các giá trị trong dict <code>V18_PRODUCTION_GATES</code>). Cộng thêm boost lúc runtime: +0,08 cho thanh khoản kém, +0,10 trong bear regime, +0,05 khi có event gần đây.</p>
+
+<h3>Ensemble đa seed (Tầng 1)</h3>
+<p>Thay vì train 1 model Tầng 1, V18 train 3 model với random seed khác nhau (42, 17, 99). Lúc predict, trung bình xác suất của 3 model.</p>
+
+<div class="analogy">
+Hỏi 3 bác sĩ thay vì 1 giảm khả năng một bác sĩ thiên kiến ảnh hưởng chẩn đoán. Mỗi rừng cây có "thiên kiến" hơi khác — trung bình bù trừ lẫn nhau.
+</div>
+</section>
+
+<!-- PART 6 -->
+<section id="part6">
+<h2>6. Huấn luyện thông minh: Trọng số mẫu &amp; Cross-Validation ⚖️</h2>
+
+<h3>Không phải mọi mẫu train đều bằng nhau</h3>
+<p>V18 áp 3 loại trọng số cho mỗi hàng train:</p>
+
+<h4>1. Trọng số cân bằng lớp (Class Balance)</h4>
+<p>Vấn đề: 80% ngày là FLAT, 10% UP, 10% DOWN. Model ngây thơ chỉ predict FLAT cho mọi thứ (80% accuracy nhưng 0% hữu dụng).</p>
+<p>Giải pháp: tăng trọng số UP và DOWN để model chú ý đến chúng.</p>
+<pre><code>cw = 0.5 / freq_of_class
+# Nếu FLAT là 80% data: cw = 0.625
+# Nếu UP là 10% data:   cw = 5.0</code></pre>
+
+<h4>2. Recency Decay (Half-life ~200 ngày)</h4>
+<p>Data gần đây quan trọng hơn (chế độ thị trường thay đổi). Mỗi hàng có trọng số giảm theo cấp số nhân với tuổi:</p>
+<pre><code>weight = exp(-ln(2) / half_life * days_ago)
+# Hàng 200 ngày trước: weight = 0.5
+# Hàng 400 ngày trước: weight = 0.25
+# Hàng hôm nay:        weight = 1.0</code></pre>
+
+<h4>3. Label Clarity Weighting (Trọng số nhãn rõ ràng)</h4>
+<p>Một ngày +0,29% (FLAT) và một ngày +0,31% (UP) về cơ bản giống nhau — cùng thông tin, nhãn khác. Đừng train mạnh các case ở biên.</p>
+
+<h3>Cross-Validation: Test mà không gian lận</h3>
+<p>Không thể test model trên data đã train (nó chỉ học thuộc). Cho time-series, ta dùng <strong>TimeSeriesSplit</strong>:</p>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg">
+  <text x="350" y="20" text-anchor="middle" fill="#3b82f6" font-size="14" font-weight="700">TimeSeriesSplit (5 folds, gap 5 ngày)</text>
+
+  <text x="20" y="55" fill="#94a3b8" font-size="11">Fold 1:</text>
+  <rect x="80" y="40" width="200" height="20" fill="#22c55e"/>
+  <rect x="280" y="40" width="10" height="20" fill="#f59e0b"/>
+  <rect x="290" y="40" width="50" height="20" fill="#ef4444"/>
+
+  <text x="20" y="95" fill="#94a3b8" font-size="11">Fold 2:</text>
+  <rect x="80" y="80" width="260" height="20" fill="#22c55e"/>
+  <rect x="340" y="80" width="10" height="20" fill="#f59e0b"/>
+  <rect x="350" y="80" width="50" height="20" fill="#ef4444"/>
+
+  <text x="20" y="135" fill="#94a3b8" font-size="11">Fold 3:</text>
+  <rect x="80" y="120" width="320" height="20" fill="#22c55e"/>
+  <rect x="400" y="120" width="10" height="20" fill="#f59e0b"/>
+  <rect x="410" y="120" width="50" height="20" fill="#ef4444"/>
+
+  <text x="20" y="175" fill="#94a3b8" font-size="11">Fold 4:</text>
+  <rect x="80" y="160" width="380" height="20" fill="#22c55e"/>
+  <rect x="460" y="160" width="10" height="20" fill="#f59e0b"/>
+  <rect x="470" y="160" width="50" height="20" fill="#ef4444"/>
+
+  <rect x="80" y="195" width="14" height="14" fill="#22c55e"/>
+  <text x="100" y="207" fill="#e2e8f0" font-size="11">Train</text>
+  <rect x="160" y="195" width="14" height="14" fill="#f59e0b"/>
+  <text x="180" y="207" fill="#e2e8f0" font-size="11">Gap (purge)</text>
+  <rect x="280" y="195" width="14" height="14" fill="#ef4444"/>
+  <text x="300" y="207" fill="#e2e8f0" font-size="11">Validate</text>
+</svg>
+</div>
+
+<h4>Tại sao cần Gap?</h4>
+<p>Labels dựa trên lợi nhuận TƯƠNG LAI. Hàng ngày 100 có label dựa trên giá ngày 101. Nếu train kết thúc ở ngày 99 và val bắt đầu ngày 100, chúng chia sẻ thông tin label. Gap 5 ngày ngăn <strong>label leakage</strong> này.</p>
+
+<h3>Optuna: Tự động tinh chỉnh hyperparameters</h3>
+<p>XGBoost có 10+ núm điều chỉnh (độ sâu cây, learning rate, subsample, v.v.). Thử mọi tổ hợp = hàng triệu lần train. Optuna tìm kiếm thông minh:</p>
+<ol>
+  <li>Thử tổ hợp ngẫu nhiên</li>
+  <li>Đo CV accuracy</li>
+  <li>Dùng phép màu Bayes để chọn "thử thông minh tiếp theo"</li>
+  <li>Lặp 50 lần</li>
+  <li>Trả về kết quả tốt nhất</li>
+</ol>
+<p>V18 chạy 50 Optuna trials mỗi model Tầng 1.</p>
+</section>
+
+<!-- PART 7 -->
+<section id="part7">
+<h2>7. Calibration: Làm cho xác suất chân thật 🎯</h2>
+
+<p>XGBoost nói "Tôi 80% tin cổ phiếu này tăng". Có thật không?</p>
+
+<div class="callout warning">
+<div class="title">⚠️ Vấn đề calibration</div>
+Model có thể CHÍNH XÁC nhưng KHÔNG CALIBRATED. Ví dụ: model dự đoán "80% UP" 100 lần. Nếu calibrated tốt, ~80 lần phải UP thật. Nếu chỉ 60 lần UP, model quá tự tin.
+</div>
+
+<h3>Phương pháp Calibration</h3>
+
+<h4>Platt Scaling (Logistic Regression trên xác suất)</h4>
+<p>Khớp đường sigmoid để ánh xạ xác suất thô sang tần suất thật. Tốt khi đường calibration đơn điệu.</p>
+<p><strong>V18 dùng Platt cho Tầng 1</strong> (cal1 = Logistic Regression trên out-of-fold predictions).</p>
+
+<h4>Isotonic Regression (Linh hoạt hơn)</h4>
+<p>Khớp một hàm bậc thang đơn điệu phi tham số. Linh hoạt hơn Platt — có thể xử lý đường calibration không phải sigmoid.</p>
+<p><strong>V18 dùng Isotonic cho Tầng 2</strong> (cal2_iso, MỚI trong Phase 2).</p>
+
+<h3>Tại sao calibration quan trọng cho trading</h3>
+<p>Nếu set "ngưỡng mua = 0.65", chúng ta muốn các trade ở ngưỡng này thực sự thắng 65% thời gian. Calibration kém → hoặc trade quá nhiều (lỗ) hoặc quá ít (mất cơ hội).</p>
+
+<table>
+<tr><th>Model thô nói</th><th>Sự thật (không cal)</th><th>Sau calibration</th></tr>
+<tr><td>P(UP) = 0.90</td><td>Thực tế 70% win rate</td><td>P(UP) = 0.70 ✓</td></tr>
+<tr><td>P(UP) = 0.60</td><td>Thực tế 55% win rate</td><td>P(UP) = 0.55 ✓</td></tr>
+</table>
+</section>
+
+<!-- PART 8 -->
+<section id="part8">
+<h2>8. Composite Confidence: Kết hợp 4 tín hiệu 🔮</h2>
+
+<p>Model ML cho ta "P(UP)". Nhưng ta cũng có CÁC thông tin KHÁC mà model ML không thấy hết:</p>
+
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">🧠</span>
+    <div class="label">Xác suất Model</div>
+    <div class="desc">P(UP) của XGBoost — đã calibrated</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">📊</span>
+    <div class="label">Volume Alignment</div>
+    <div class="desc">Khối lượng có xác nhận hướng không?</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🌏</span>
+    <div class="label">Khối ngoại</div>
+    <div class="desc">Khối ngoại đang mua hay bán?</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">📰</span>
+    <div class="label">News Sentiment</div>
+    <div class="desc">Tin tức gần đây tích cực hay tiêu cực?</div>
+  </div>
+</div>
+
+<h3>Công thức</h3>
+<pre><code>compositeConfidence = (
+    0.55 * model_prob +
+    0.20 * vol_alignment +
+    0.10 * foreign_alignment +
+    0.15 * news_alignment
+)</code></pre>
+
+<p>Nếu cả 4 tín hiệu đồng thuận → confidence cao → trade.</p>
+<p>Nếu xung đột → confidence thấp → bỏ qua.</p>
+
+<h3>Ví dụ: VNM hôm nay</h3>
+<table>
+<tr><th>Tín hiệu</th><th>Giá trị</th><th>Đóng góp</th></tr>
+<tr><td>Model nói DOWN với 60% conf</td><td>0.60</td><td>0.55 × 0.60 = 0.330</td></tr>
+<tr><td>Volume xác nhận DOWN (surge 2.5×)</td><td>0.75</td><td>0.20 × 0.75 = 0.150</td></tr>
+<tr><td>Khối ngoại BÁN ròng mạnh</td><td>1.00</td><td>0.10 × 1.00 = 0.100</td></tr>
+<tr><td>Tin tức trung lập</td><td>0.50</td><td>0.15 × 0.50 = 0.075</td></tr>
+<tr><th colspan="2">compositeConfidence</th><th>0.655</th></tr>
+</table>
+
+<p>Ngưỡng mua/bán thường 0.60-0.65. Tín hiệu này sẽ pass.</p>
+</section>
+
+<!-- PART 9 -->
+<section id="part9">
+<h2>9. Routing theo mã &amp; Production Gates 🔀</h2>
+
+<p>Không phải cổ phiếu nào cũng giống nhau. V18 có tối ưu <strong>theo từng mã</strong>:</p>
+
+<h3>Routing V13 vs V16</h3>
+<p>Từ backtest lịch sử, ta phát hiện:</p>
+<ul>
+  <li>Với <strong>21 mã</strong> (ACB, CTG, MWG, v.v.) → bộ feature V13 hoạt động tốt nhất</li>
+  <li>Với <strong>9 mã</strong> (BVH, GAS, HPG, STB, v.v.) → bộ feature V16 (có peer + breadth) tốt hơn</li>
+</ul>
+<p>V18 tự động route mỗi mã đến bộ feature phù hợp.</p>
+
+<h3>Production Gates theo mã</h3>
+<p>Mỗi mã có HAI gate:</p>
+<ol>
+  <li><strong>dir_conf_gate</strong> (Tầng 1) — P(DIR) tối thiểu để qua Tầng 2</li>
+  <li><strong>min_skill</strong> (MỚI trong Phase 1) — nếu kỹ năng tổng quát của model quá thấp, trả về FLAT bất kể</li>
+</ol>
+
+<h3>3 Mã chúng ta GATE (Phase 1)</h3>
+<table>
+<tr><th>Mã</th><th>CV</th><th>Skill score</th><th>Trạng thái</th></tr>
+<tr><td>TIS</td><td>0.426</td><td>+0.044</td><td>🚫 Gated (marginal)</td></tr>
+<tr><td>SBA</td><td>0.414</td><td>+0.024</td><td>🚫 Gated (marginal)</td></tr>
+<tr><td>DHG</td><td>0.404</td><td>+0.007</td><td>🚫 Gated (gần ngẫu nhiên)</td></tr>
+</table>
+
+<h3>Liquidity Gate Boost (Tăng gate cho mã thanh khoản kém)</h3>
+<p>Cho mã thanh khoản thấp (&lt; 5 tỷ VND/ngày), cộng +0.08 vào gate (khó vào, dễ ra).</p>
+
+<h3>Market Regime Gate Boost</h3>
+<p>Phát hiện bear/bull/sideways qua đường trung bình VN-Index:</p>
+<ul>
+  <li>Thị trường BEAR → +0.10 vào gate (thận trọng)</li>
+  <li>Sự kiện doanh nghiệp gần đây (volume spike 3×) → +0.05 vào gate</li>
+</ul>
+</section>
+
+<!-- PART 10 -->
+<section id="part10">
+<h2>10. Từ Dự đoán đến Giao dịch 💰</h2>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar3vi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <rect x="20"  y="20" width="120" height="50" rx="8" fill="#0f172a" stroke="#3b82f6" stroke-width="2"/>
+  <text x="80"  y="42" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">Dự đoán</text>
+  <text x="80"  y="58" text-anchor="middle" fill="#94a3b8" font-size="10">UP, conf 0.72</text>
+
+  <line x1="140" y1="45" x2="170" y2="45" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3vi)"/>
+
+  <rect x="175" y="20" width="120" height="50" rx="8" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+  <text x="235" y="42" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">Lọc điểm</text>
+  <text x="235" y="58" text-anchor="middle" fill="#94a3b8" font-size="10">≥ buy_threshold?</text>
+
+  <line x1="295" y1="45" x2="325" y2="45" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3vi)"/>
+
+  <rect x="330" y="20" width="120" height="50" rx="8" fill="#0f172a" stroke="#f59e0b" stroke-width="2"/>
+  <text x="390" y="42" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">Tính khối lượng</text>
+  <text x="390" y="58" text-anchor="middle" fill="#94a3b8" font-size="10">budget / N positions</text>
+
+  <line x1="450" y1="45" x2="480" y2="45" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3vi)"/>
+
+  <rect x="485" y="20" width="120" height="50" rx="8" fill="#0f172a" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="545" y="42" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">MUA</text>
+  <text x="545" y="58" text-anchor="middle" fill="#94a3b8" font-size="10">Lô 100 cổ</text>
+
+  <line x1="545" y1="70" x2="545" y2="100" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3vi)"/>
+
+  <rect x="425" y="100" width="240" height="60" rx="8" fill="#0f172a" stroke="#ef4444" stroke-width="2"/>
+  <text x="545" y="125" text-anchor="middle" fill="#ef4444" font-size="12" font-weight="700">Theo dõi điều kiện thoát</text>
+  <text x="545" y="143" text-anchor="middle" fill="#94a3b8" font-size="10">cắt lỗ | chốt lời | đảo chiều | thời gian</text>
+
+  <line x1="545" y1="160" x2="545" y2="190" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3vi)"/>
+
+  <rect x="425" y="190" width="240" height="50" rx="8" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+  <text x="545" y="212" text-anchor="middle" fill="#22c55e" font-size="12" font-weight="700">BÁN</text>
+  <text x="545" y="228" text-anchor="middle" fill="#94a3b8" font-size="10">T+2 settlement → tiền về sau 2 ngày</text>
+</svg>
+</div>
+
+<h3>Điều kiện thoát (check theo thứ tự — defaults từ <code>ai_trader_config</code>)</h3>
+<ol>
+  <li><strong>Cắt lỗ</strong>: P&amp;L ≤ <code>-stop_loss_pct</code> (mặc định −5%) → BÁN ngay</li>
+  <li><strong>Chốt lời</strong>: P&amp;L ≥ <code>take_profit_pct</code> (mặc định +10%) → BÁN để khóa lợi</li>
+  <li><strong>Đảo chiều tín hiệu</strong>: Model giờ nói DOWN với conf ≥ 0,65 → BÁN</li>
+  <li><strong>Distribution</strong>: Volume cho thấy tổ chức bán ra → BÁN</li>
+  <li><strong>Time-based</strong>: Đã giữ ≥ 15 ngày VÀ P&amp;L &lt; −2% → cắt lỗ</li>
+</ol>
+<p>Stop loss và take profit là user-configurable. Defaults khác: <code>buy_threshold = 0,60</code>, <code>max_positions = 5</code>, <code>initial_budget = 100 triệu VND</code>.</p>
+
+<h3>Quy tắc thị trường VN mà V18 tuân thủ</h3>
+<table>
+<tr><th>Quy tắc</th><th>Ý nghĩa</th></tr>
+<tr><td>T+2 share lock</td><td>Không thể bán cổ phiếu trong 2 ngày giao dịch sau khi mua</td></tr>
+<tr><td>T+2 cash settlement</td><td>Tiền bán về sau 2 ngày giao dịch</td></tr>
+<tr><td>Lô tối thiểu 100</td><td>Phải giao dịch bội số 100 cổ</td></tr>
+<tr><td>Ngưỡng skip ±6,8%</td><td>Bỏ qua mã có thay đổi ≥6,8% trong ngày (sát biên độ ±7% của HOSE — mất thanh khoản để khớp lệnh)</td></tr>
+<tr><td>Phí: 0,2% mua / 0,35% bán</td><td>Tổng vòng mua-bán ~0,55% — ăn mòn lợi nhuận mỏng</td></tr>
+</table>
+</section>
+
+<!-- PART 11 -->
+<section id="part11">
+<h2>11. Hành trình V1→V18: 18 lần lặp học hỏi 🚀</h2>
+
+<p>V18 không được xây dựng trong một ngày. Đây là hành trình:</p>
+
+<div class="timeline">
+  <div class="timeline-item fail">
+    <span class="ver">v1</span> <span class="skill">skill -0.33 ❌</span>
+    <p>Một XGBoost đơn, 51 features. Dự đoán FLAT 90% thời gian. Vô dụng.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v2</span> <span class="skill">skill -0.13</span>
+    <p>+ Optuna, isotonic calibration, recency decay. Cải thiện lớn nhưng vẫn âm.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v5</span> <span class="skill">skill -0.07</span>
+    <p>VIẾT LẠI: Kiến trúc 2 tầng được giới thiệu. Bug: chỉ dùng 204 hàng train.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v6-v8</span> <span class="skill">skill -0.07</span>
+    <p>Sửa 2-stage + recency. Thử 29 features (tệ hơn), khôi phục 53 (tốt hơn).</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v9</span> <span class="skill">skill -0.06</span>
+    <p>Loại bỏ feature theo từng mã dựa vào IC analysis. Mỗi mã có subset riêng.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v12</span> <span class="skill">skill -0.048</span>
+    <p>Thêm 9 feature dòng tiền (MFI, CMF, accum_streak).</p>
+  </div>
+  <div class="timeline-item win">
+    <span class="ver">v13</span> <span class="skill">skill -0.029 ✓ ĐỘT PHÁ</span>
+    <p>Thêm 7 feature vol-regime (realized_vol, ATR norm, BB width). + Luật AdaptiveContext. <strong>Phiên bản đầu tiên có 18/30 mã PASS.</strong></p>
+  </div>
+  <div class="timeline-item fail">
+    <span class="ver">v14</span> <span class="skill">skill -0.07 ❌ THẢM HỌA</span>
+    <p>Thử "tách feature theo tầng". Tầng 2 mất tín hiệu UP/DOWN quan trọng. Tụt -0.04. Dừng ở mã 8/30.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v15</span> <span class="skill">skill -0.03</span>
+    <p>Đảo lại lỗi v14. Thêm adaptive gate, khôi phục min_conf.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v16</span> <span class="skill">skill -0.06</span>
+    <p>Thêm feature breadth VN30 + peer pair. Tệ hơn trung bình nhưng TỐT HƠN cho 9 mã cụ thể.</p>
+  </div>
+  <div class="timeline-item epic">
+    <span class="ver">Hybrid-MAX</span> <span class="skill">skill -0.017 🏆</span>
+    <p>Insight: chọn V13 cho 21 mã, V16 cho 9 mã. PHIÊN BẢN ĐẦU TIÊN NET LỢI NHUẬN sau phí giao dịch (+0.006%/trade).</p>
+  </div>
+  <div class="timeline-item fail">
+    <span class="ver">v17</span> <span class="skill">skill -0.068 ❌</span>
+    <p>Over-engineered "online hybrid" với auto-routing. Thêm phức tạp, mất rõ ràng.</p>
+  </div>
+  <div class="timeline-item win">
+    <span class="ver">v18 FIXED</span> <span class="skill">skill -0.028, 19/30 PASS</span>
+    <p>Cuối cùng: routing theo mã (quyết định offline) + khôi phục các thành phần v13. Khớp số PASS của Hybrid-MAX.</p>
+  </div>
+</div>
+
+<h3>Bài học quan trọng (Critical cho bất kỳ ML practitioner)</h3>
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">📊</span>
+    <div class="label">Labels quan trọng nhất</div>
+    <div class="desc">Sửa ngưỡng label (v1→v2) là bước nhảy đơn lớn nhất (+0.20 skill).</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🌳</span>
+    <div class="label">Đừng cắt features</div>
+    <div class="desc">v7 và v14 đều tụt khi loại bỏ features. Trees xử lý dư thừa tốt.</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🧪</span>
+    <div class="label">A/B test kiến trúc</div>
+    <div class="desc">Thảm họa v14 có thể bắt ở 1 mã. Luôn pilot trước.</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">📉</span>
+    <div class="label">Variance có thật</div>
+    <div class="desc">Skill mỗi mã dao động ±0.05 giữa các lần chạy. Đừng tin một lần chạy.</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🎯</span>
+    <div class="label">Theo mã &gt; toàn cục</div>
+    <div class="desc">One-size-fits-all hiếm khi work. Routing của v18 là đột phá.</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">📐</span>
+    <div class="label">Calibration quan trọng</div>
+    <div class="desc">Không calibration, "65% confidence" không có nghĩa 65% win rate.</div>
+  </div>
+</div>
+</section>
+
+<!-- PART 12 -->
+<section id="part12">
+<h2>12. Thuật ngữ 📖</h2>
+<dl class="glossary">
+  <dt>Feature</dt>
+  <dd>Một số đầu vào đo được. Ví dụ: "RSI = 42" là một giá trị feature.</dd>
+
+  <dt>Label (Nhãn)</dt>
+  <dd>Mục tiêu mà model dự đoán. Với V18: UP, DOWN, hoặc FLAT.</dd>
+
+  <dt>Training Data (Dữ liệu train)</dt>
+  <dd>Các ví dụ lịch sử với label đã biết — model học từ đây.</dd>
+
+  <dt>Test/Validation Data (Dữ liệu kiểm tra)</dt>
+  <dd>Các ví dụ giữ riêng để đánh giá model trên data nó chưa thấy.</dd>
+
+  <dt>Overfitting (Quá khớp)</dt>
+  <dd>Khi model học thuộc data train hoàn hảo nhưng fail trên data mới.</dd>
+
+  <dt>Cross-Validation (CV)</dt>
+  <dd>Kỹ thuật test: chia data thành folds, train trên một số, test trên số khác, trung bình kết quả.</dd>
+
+  <dt>TimeSeriesSplit</dt>
+  <dd>Biến thể CV tôn trọng thứ tự thời gian — luôn train trên data cũ, test trên data mới.</dd>
+
+  <dt>XGBoost / LightGBM</dt>
+  <dd>Thư viện gradient boosting tree. Vua của ML dữ liệu bảng.</dd>
+
+  <dt>Optuna</dt>
+  <dd>Thư viện tự động tinh chỉnh hyperparameters. Thử nhiều tổ hợp một cách thông minh.</dd>
+
+  <dt>Calibration</dt>
+  <dd>Điều chỉnh xác suất để "80% confidence" thật sự nghĩa là tỷ lệ đúng 80%.</dd>
+
+  <dt>Skill Score (Điểm kỹ năng)</dt>
+  <dd>Tốt hơn baseline bao nhiêu. <code>(accuracy - baseline) / (1 - baseline)</code>. 0 = không có kỹ năng.</dd>
+
+  <dt>Look-Ahead Bias (Thiên kiến nhìn trước)</dt>
+  <dd>Vô tình dùng dữ liệu tương lai — tội lỗi lớn nhất của time-series ML.</dd>
+
+  <dt>RSI</dt>
+  <dd>Relative Strength Index. Thang 0-100 đo momentum.</dd>
+
+  <dt>MACD</dt>
+  <dd>Moving Average Convergence Divergence — chỉ báo theo xu hướng.</dd>
+
+  <dt>ATR</dt>
+  <dd>Average True Range — đo biến động (cổ phiếu thường di chuyển bao nhiêu).</dd>
+
+  <dt>OHLCV</dt>
+  <dd>Mở / Cao / Thấp / Đóng / Khối lượng — 5 điểm dữ liệu cơ bản mỗi nến.</dd>
+
+  <dt>T+2 Settlement</dt>
+  <dd>Quy tắc Việt Nam: tiền từ bán cổ phiếu có sau 2 ngày giao dịch.</dd>
+
+  <dt>Ensemble (Kết hợp)</dt>
+  <dd>Kết hợp nhiều model. V18 dùng ensemble ở nhiều tầng.</dd>
+</dl>
+</section>
+
+</main>
+</div>
+</div>
+
+<footer>
+PredictStock V18 — Từ người mới đến Production | 2026-06-20<br>
+Xây dựng với ❤️ cho người học
+</footer>
+</body>
+</html>

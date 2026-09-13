@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R6.4 · A2A — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · AI Agents · Điểm 4/8</div>
+  <h1>R6.4 · A2A (Agent2Agent)</h1>
+  <p class="subtitle">Giao thức "agent nói với agent khác tổ chức" — task bất đồng bộ, lifecycle rõ ràng, giờ đã production ở quy mô 150+ tổ chức.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+  <li>Giải thích chính xác vấn đề A2A giải quyết, khác MCP (R6.2) như thế nào.</li>
+  <li>Vẽ được task lifecycle 8 trạng thái của A2A và hiểu vì sao nó cần thiết cho tác vụ bất đồng bộ, chạy lâu.</li>
+  <li>Đánh giá đúng độ trưởng thành hệ sinh thái A2A giữa 2026 (không phóng đại, không đánh giá thấp).</li>
+  <li>Kết luận đúng đắn: <code>predictor</code> có cần A2A hay không, và tại sao.</li>
+  <li>Đọc hiểu cấu trúc thật của <strong>Agent Card</strong> — cơ chế discovery cụ thể, không chỉ nói chung chung "agent tự tìm nhau".</li>
+  <li>Biết 3 rủi ro bảo mật đặc thù của giao tiếp xuyên tổ chức (giả mạo agent, làm giả Agent Card, replay attack) và cách phòng thủ thật.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>A2A chưa có trong bất kỳ module <code>L*</code> nào của curriculum — đây là nội dung hoàn toàn mới, phản ánh đúng tính chất "giao thức mới nổi 2025-2026" của roadmap. Cross-reference gần nhất: <a href="L6_2_multiagent.html">L6_2_multiagent.html</a> dạy sâu 6 pattern kiến trúc multi-agent (Supervisor, peer-to-peer, blackboard...) nhưng đó là <strong>shared state nội bộ trong 1 framework (LangGraph)</strong> — khác hẳn A2A (giao tiếp <em>xuyên framework/tổ chức</em>, không chia sẻ state trực tiếp).</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>MCP (R6.2) giống "quy chuẩn cách 1 nhân viên truy cập tủ hồ sơ, phần mềm kế toán nội bộ" — agent nói chuyện với <em>công cụ/dữ liệu</em>. <strong>A2A giống "quy chuẩn cách nhân viên phòng Sales gọi điện, giao việc, nhận báo cáo từ nhân viên phòng Kế toán ở 1 công ty khác"</strong> — agent nói chuyện với <em>agent khác</em>, kể cả khác framework/tổ chức, kể cả không biết nội bộ bên kia code bằng gì.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Nguồn gốc và ai giữ</h3>
+<p>Google giới thiệu A2A 4/2025, chuyển giao cho <strong>Linux Foundation</strong> giữa 2025. <strong>Cập nhật governance quan trọng (đã verify 9/2026)</strong>: bối cảnh "khác MCP — vẫn do Anthropic giữ" không còn đúng — Anthropic đã donate MCP cho <strong>Agentic AI Foundation (AAIF)</strong> (1 directed fund của Linux Foundation, đồng sáng lập bởi Anthropic/Block/OpenAI) từ 9/12/2025, và chính A2A cũng chính thức gia nhập AAIF ngày 17/8/2026. Kết quả: MCP và A2A giờ cùng nằm dưới 1 foundation (AAIF), dù vẫn là 2 đặc tả kỹ thuật hoàn toàn tách biệt giải quyết 2 vấn đề khác nhau (agent↔tool vs agent↔agent) — khác hẳn số phận của ACP (bị sáp nhập/archive hoàn toàn vào A2A, không còn tồn tại độc lập). A2A định nghĩa 3 việc cốt lõi:</p>
+<ul>
+<li><strong>Discover</strong>: agent A tìm ra agent B tồn tại, biết B có khả năng gì (thông qua "Agent Card" — 1 bản mô tả năng lực chuẩn hoá).</li>
+<li><strong>Delegate</strong>: agent A giao 1 task cho agent B, kèm mô tả đầu vào cần thiết.</li>
+<li><strong>Coordinate</strong>: 2 agent theo dõi tiến độ, trao đổi kết quả qua ranh giới tổ chức/framework khác nhau.</li>
+</ul>
+
+<h3>2. Task lifecycle — điểm kỹ thuật quan trọng nhất</h3>
+<p>Khác hẳn 1 lệnh gọi tool MCP (đồng bộ — gửi request, chờ response, xong ngay), A2A thiết kế cho <strong>tác vụ bất đồng bộ, chạy lâu</strong> — có thể mất vài phút tới vài giờ. Mỗi task có lifecycle state rõ ràng:</p>
+<pre><code>Running:  submitted → working
+Paused:              working → input-required / auth-required → working (tiếp khi có đủ thông tin)
+Terminal:            working → completed / failed / canceled / rejected
+
+# submitted:       task vừa được giao, chưa bắt đầu xử lý
+# working:         agent nhận việc đang xử lý
+# input-required:  agent cần thêm THÔNG TIN từ bên giao việc trước khi tiếp tục
+# auth-required:   agent cần thêm CREDENTIAL (token/quyền) mới tiếp tục được — khác input-required
+#                   ở chỗ đây là thiếu QUYỀN, không phải thiếu DỮ LIỆU
+# completed:        xong, có kết quả
+# failed/canceled:  dừng giữa chừng do lỗi / bị huỷ chủ động
+# rejected:         task bị TỪ CHỐI trước khi bắt đầu xử lý — khác failed/canceled
+#                   (chưa từng chạy, không phải chạy rồi hỏng/bị huỷ giữa chừng)
+</code></pre>
+<p>8 trạng thái này chia làm 3 nhóm: <strong>Running</strong> (submitted, working), <strong>Paused</strong> (input-required, auth-required — task tạm dừng chờ bên ngoài), <strong>Terminal</strong> (completed, failed, canceled, rejected — không quay lại được nữa).</p>
+<p>Vì lifecycle có trạng thái trung gian rõ ràng, A2A hỗ trợ <strong>streaming</strong> — agent nhận việc có thể trả kết quả từng phần về trong lúc còn đang xử lý, thay vì bên giao việc phải chờ tới khi xong hẳn mới biết gì.</p>
+
+<h3>3. Độ trưởng thành hệ sinh thái giữa 2026</h3>
+<p>Đến mốc 1 năm (4/2026), A2A có hơn <strong>150 tổ chức</strong> hỗ trợ, tích hợp production vào Azure AI Foundry/Copilot Studio, AWS Bedrock AgentCore, Google Cloud — dùng thật trong supply chain, tài chính, bảo hiểm, IT ops. Đây không còn là 1 giao thức "thử nghiệm" — nó đã ở giai đoạn adoption đủ rộng để cân nhắc dùng cho hệ thống production thật, <em>nếu</em> bài toán thật sự cần giao tiếp xuyên tổ chức.</p>
+
+<h3>4. Agent Card — cơ chế Discover cụ thể (mục 1 chỉ nói "Agent Card", đây là cấu trúc thật)</h3>
+<p>Mục 1 nhắc "Discover: agent A tìm ra agent B qua Agent Card" — đây là cơ chế CỤ THỂ: 1 file JSON tĩnh, đặt tại đường dẫn chuẩn hoá <code>/.well-known/agent-card.json</code> trên domain của agent B. Agent A chỉ cần biết domain của B (không cần biết trước B code bằng gì) để lấy được file này qua 1 lệnh GET HTTP thường.</p>
+<pre><code>GET https://ncc-nhacungcap.example.com/.well-known/agent-card.json
+
+{
+  "name": "InventoryAgent",
+  "description": "Agent kiểm tra tồn kho theo SKU cho hệ thống nhà cung cấp",
+  "version": "1.2.0",
+  "url": "https://ncc-nhacungcap.example.com/a2a",
+  "skills": [
+    { "id": "check_inventory", "name": "Kiểm tra tồn kho",
+      "description": "Trả về số lượng tồn kho hiện tại theo mã SKU",
+      "tags": ["inventory", "supply-chain"] }
+  ],
+  "capabilities": { "streaming": true, "pushNotifications": false },
+  "securitySchemes": { "type": "mTLS" }
+}
+</code></pre>
+<p>5 trường BẮT BUỘC theo đặc tả: <code>name</code>, <code>description</code>, <code>version</code>, <code>url</code> (endpoint JSON-RPC thật để gửi task), <code>skills</code> (danh sách năng lực, mỗi skill có id/tên/mô tả — đây chính là thứ agent A đọc để biết "B có làm được <code>check_inventory</code> không" trước khi gửi task ở ví dụ mục "Ví dụ cụ thể" bên dưới). <code>capabilities</code> khai báo B có hỗ trợ streaming/push notification hay không — quyết định A có nên chờ kết quả từng phần hay chờ tới lúc "completed" mới đọc 1 lần.</p>
+
+<h3>5. Bảo mật A2A — rủi ro đặc thù khi giao tiếp XUYÊN tổ chức</h3>
+<p>MCP (R6.2 mục 4) lo về tool poisoning/confused deputy — rủi ro trong nội bộ 1 hệ thống. A2A thêm 1 lớp rủi ro khác vì giao tiếp <strong>vượt ranh giới tổ chức</strong>, nơi bên nhận không kiểm soát được hạ tầng của bên gửi:</p>
+<table>
+<tr><th>Rủi ro</th><th>Cơ chế</th><th>Phòng thủ</th></tr>
+<tr><td>Giả mạo agent (impersonation)</td><td>1 agent giả danh domain/identity của agent thật để nhận task nhạy cảm thay agent thật</td><td>mTLS + PKI-backed machine identity — xác thực bằng chứng chỉ, không chỉ tin domain name</td></tr>
+<tr><td>Làm giả Agent Card (card tampering)</td><td>Agent Card bị chỉnh sửa giữa đường (VD DNS spoofing) khiến A tin B có skill nó không thực sự có, hoặc trỏ tới 1 endpoint độc hại</td><td>Agent Card ký số (signed Agent Card) — A xác minh chữ ký trước khi tin nội dung card</td></tr>
+<tr><td>Replay attack</td><td>Kẻ tấn công bắt lại 1 request task hợp lệ đã gửi trước đó, gửi lại để kích hoạt lại hành động (VD giao dịch) ngoài ý muốn</td><td>Token có hạn dùng 1 lần/timestamp kiểm tra ngoài tầng JSON-RPC (qua header HTTP chuẩn, không tự chế trong payload)</td></tr>
+</table>
+<p>1 điểm đặc tả A2A nói rõ: xác thực identity nằm ở TẦNG HTTP header chuẩn (tương thích OAuth2/API key/mTLS), KHÔNG tự chế cơ chế auth riêng trong JSON-RPC payload — lý do: tận dụng được hạ tầng bảo mật đã kiểm chứng (reverse proxy, API gateway) thay vì mỗi agent tự viết lại auth. Về observability xuyên nhiều agent (nối <code>L6_6_observability.html</code>): khuyến nghị enterprise-ready của A2A là gắn <strong>OpenTelemetry + W3C Trace Context header</strong> vào mọi request — để 1 tác vụ đi qua nhiều agent (A→B→có thể B lại gọi C) vẫn truy vết được thành 1 trace liên tục, không "mất dấu" khi vượt ranh giới tổ chức.</p>
+
+<h3>6. Coordinate cụ thể — 2 cơ chế B báo tiến độ ngược cho A, không chỉ 1</h3>
+<p>Mục 1 gọi bước thứ 3 là "Coordinate" nhưng chưa nói CÁCH agent B thật sự đẩy cập nhật tiến độ về cho A. A2A định nghĩa 2 cơ chế khác nhau, dùng cho 2 tình huống khác nhau:</p>
+<table>
+<tr><th>Cơ chế</th><th>Hoạt động thế nào</th><th>Dùng khi nào</th></tr>
+<tr><td><strong>Streaming (SSE)</strong></td><td>A giữ 1 kết nối mở (Server-Sent Events); B đẩy cập nhật từng phần (status, artifact chunk) liên tục qua kết nối đó tới khi task về trạng thái cuối (completed/failed/canceled...)</td><td>A có thể giữ kết nối mở suốt thời gian xử lý — task không quá dài, không lo đứt kết nối giữa chừng</td></tr>
+<tr><td><strong>Push notification (webhook)</strong></td><td>A đăng ký trước 1 URL webhook (HTTPS) của chính A; B (server) TỰ GỌI NGƯỢC vào webhook đó khi có cập nhật quan trọng — A không cần giữ kết nối mở liên tục</td><td>Task chạy rất lâu (giờ/ngày), A không thể/không nên giữ 1 kết nối mở suốt thời gian đó</td></tr>
+</table>
+<pre><code>Streaming (SSE):                          Push notification (webhook):
+A ──mở 1 kết nối, GIỮ MỞ──▶ B             A ──đăng ký webhook URL trước──▶ B
+A ◀──cập nhật liên tục──── B              A                                B
+A ◀──cập nhật liên tục──── B                    (A rảnh, không giữ kết nối)
+A ◀──"completed", đóng──── B              A ◀──B TỰ GỌI NGƯỢC khi có cập nhật── B
+</code></pre>
+<p>Thực tế production thường dùng CẢ HAI kết hợp: bắt đầu bằng streaming (phản hồi nhanh, thấy tiến độ ngay), rồi rơi về push notification/polling nếu kết nối bị đứt hoặc task kéo quá dài. Rủi ro bảo mật riêng của webhook (nối mục 5): B đang GỌI NGƯỢC vào hạ tầng của A — cần xác thực chiều ngược này bằng HMAC/signed JWT/mTLS, nếu không A có thể nhận payload giả mạo qua chính webhook nó tự đăng ký.</p>
+
+<h3>7. Extensions — mở rộng A2A KHÔNG cần chờ sửa lại spec gốc</h3>
+<p>Câu hỏi thực tế: nếu 1 cặp agent cần trao đổi thêm dữ liệu/RPC method/trạng thái mà đặc tả gốc (mục 1-6) không định nghĩa sẵn — có phải chờ Linux Foundation ra bản spec mới không? A2A trả lời bằng cơ chế <strong>Extensions</strong> — đã có từ bản v0.2.x/v0.3.0 (giữa 2025), KHÔNG phải tính năng mới của v1.0.1: bất kỳ ai cũng được phép định nghĩa, công bố và implement 1 extension riêng — không cần xin phép hay chờ chuẩn hoá lại core spec.</p>
+<pre><code>// Agent Card (mở rộng ví dụ mục 4) khai báo extension nó hỗ trợ:
+"capabilities": {
+  "streaming": true,
+  "extensions": [
+    {
+      "uri": "urn:example:priority-queue/v1",
+      "description": "Cho phép client đánh dấu task 'ưu tiên cao', agent xử lý trước hàng đợi",
+      "required": false
+    }
+  ]
+}</code></pre>
+<p>3 điểm cơ chế đáng nhớ: (1) mỗi extension được định danh bằng 1 <strong>URI</strong> (không phải tên tự do, tránh trùng lặp giữa các bên định nghĩa độc lập); (2) cờ <code>required</code> phân biệt "client BẮT BUỘC hiểu extension này thì mới gọi được agent đúng cách" (true) với "extension chỉ là tính năng thêm, bỏ qua vẫn dùng được flow chuẩn" (false) — client đọc Agent Card, thấy field này TRƯỚC khi quyết định có "opt in" theo extension đó trong request hay không; (3) 1 extension được phép khai <strong>phụ thuộc</strong> vào extension khác (bắt buộc hoặc tuỳ chọn) — VD extension "priority-queue" ở trên có thể khai phụ thuộc bắt buộc vào 1 extension xác thực riêng, agent sẽ từ chối nếu client dùng priority-queue mà chưa đáp ứng extension phụ thuộc đó.</p>
+<p>So sánh nhanh với cách MCP mở rộng (<a href="R6_2_mcp.html">R6.2 mục 3</a>: bản 2026 chính thức hoá 3 extension MCP Apps/Tasks/Enterprise Managed Auth NGAY TRONG core spec, do chính nhóm giữ spec quyết định): A2A Extensions PHI TẬP TRUNG hơn — bất kỳ bên thứ 3 nào cũng tự định nghĩa được, không cần đi qua 1 hội đồng chuẩn hoá trung tâm cho MỌI extension mới, đổi lại rủi ro là hệ sinh thái có thể xuất hiện nhiều extension trùng chức năng, không tương thích nhau nếu không có URI rõ ràng.</p>
+
+<h3>8. Authenticated Extended Agent Card — discovery có 2 TẦNG, không chỉ 1 file JSON tĩnh</h3>
+<p>Mục 4 mô tả Agent Card như 1 file JSON tĩnh, lấy được qua GET không cần xác thực — đúng nhưng CHƯA ĐỦ: đó chỉ là <strong>Public Agent Card</strong>, phiên bản công khai, có thể CỐ Ý giấu bớt thông tin nhạy cảm (VD 1 skill nội bộ chỉ dành cho đối tác đã ký hợp đồng). A2A định nghĩa thêm tầng thứ 2:</p>
+<pre><code>Tầng 1 — Public Agent Card (mục 4, KHÔNG cần xác thực):
+  GET /.well-known/agent-card.json
+  → trả về bản RÚT GỌN: skill công khai, securitySchemes hỗ trợ
+
+Tầng 2 — Authenticated Extended Agent Card (CẦN xác thực trước):
+  Client tự xác thực bằng 1 scheme đã thấy khai báo ở Tầng 1 (VD mTLS/OAuth)
+       │
+       ▼
+  Gọi RPC "GetExtendedAgentCard" (đã xác thực) ──▶ trả về bản ĐẦY ĐỦ:
+    có thể thêm skill/capability/cấu hình KHÔNG xuất hiện ở bản công khai
+    (VD "check_inventory_bulk" — chỉ lộ cho đối tác đã xác thực, không công khai
+    cho bất kỳ ai gọi được domain)</code></pre>
+<p>Lý do thiết kế 2 tầng: Public Card phải đủ mở để BẤT KỲ agent lạ nào cũng discover được B tồn tại và biết cách bắt đầu xác thực (đúng vai trò "danh thiếp công khai") — nhưng KHÔNG nên lộ toàn bộ năng lực nội bộ cho người lạ chưa xác thực trước; Extended Card chỉ lộ ra SAU KHI đã xác nhận danh tính, đúng nguyên tắc least-privilege áp cho chính bước discovery, không chỉ áp cho bước gọi task.</p>
+<p><strong>Cơ chế ký số cụ thể hơn mục 5</strong> (mục 5 chỉ nói "signed Agent Card" chung chung): A2A định nghĩa field <code>AgentCardSignature</code> dùng chuẩn <strong>JWS — JSON Web Signature (RFC 7515)</strong>, tính trên 1 dạng CANONICAL HOÁ của card (chuẩn hoá thứ tự field/khoảng trắng trước khi ký, để chữ ký ổn định dù 2 hệ thống serialize JSON khác thứ tự nhau) — client xác minh chữ ký này bằng public key của bên phát hành TRƯỚC khi tin bất kỳ field nào trong card, đúng phòng thủ card-tampering đã nêu ở bảng mục 5.</p>
+
+<h3>9. Khi nào cần CẢ MCP LẪN A2A trong CÙNG 1 agent — không phải chọn 1 trong 2</h3>
+<p>Callout "Lưu ý quan trọng" (cuối trang) đã nói MCP/A2A bổ sung nhau. Mục này cụ thể hoá bằng 1 analogy kiến trúc mạng máy tính, đúng theo cách hệ sinh thái 2026 mô tả pattern production phổ biến nhất: <strong>MCP đóng vai trò như bus ngoại vi (PCIe/USB — kết nối 1 thiết bị với các phụ kiện/công cụ của CHÍNH NÓ)</strong>, còn <strong>A2A đóng vai trò như tầng liên mạng ngang hàng (TCP/IP — kết nối nhiều "máy" độc lập với nhau)</strong>. 1 agent thực tế thường cần CẢ HAI vai trò cùng lúc, không phải chọn 1:</p>
+<pre><code>                    XUYÊN TỔ CHỨC (A2A — như TCP/IP)
+Agent A (Công ty khác) ═══════════════════════════▶ Agent B (Công ty của bạn)
+                                                          │
+                                          Agent B nhận task qua A2A,
+                                          rồi TỰ XỬ LÝ nội bộ bằng MCP
+                                          (như PCIe/USB — nội bộ 1 "máy")
+                                                          │
+                                                          ▼
+                                          ┌───────────────────────────┐
+                                          │  MCP client (bên trong B)  │
+                                          └──────┬─────────┬──────────┘
+                                                 │         │
+                                          MCP tool 1   MCP tool 2
+                                        (query_database) (call_pricing_api)</code></pre>
+<p>Áp cụ thể vào ví dụ "Ví dụ cụ thể" bên dưới (agent kho hàng B): B vừa là <strong>A2A SERVER</strong> (expose Agent Card, nhận task <code>check_inventory</code> từ Agent A xuyên công ty) vừa là <strong>MCP CLIENT</strong> (tự gọi 1 MCP server nội bộ để đọc database tồn kho thật) — 2 vai trò này không xung đột, chạy trong CÙNG 1 tiến trình xử lý task. Bài học kiến trúc: câu hỏi "agent của tôi cần A2A hay MCP" thường sai ngay từ đầu — câu hỏi đúng là "ranh giới NÀO của agent này cần A2A (hướng ra ngoài, xuyên tổ chức), ranh giới NÀO cần MCP (hướng vào trong, tới tool/data của chính nó)" — 1 agent trong production thật thường cần trả lời CẢ HAI câu hỏi, không phải chỉ 1.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Ví dụ tình huống thực tế cần A2A (không phải của <code>predictor</code>, minh hoạ để hiểu use-case đúng): 1 công ty logistics có agent riêng quản lý kho; agent này cần giao task "kiểm tra tồn kho mặt hàng X" cho agent của 1 nhà cung cấp khác — 2 agent thuộc 2 công ty, 2 framework khác nhau (1 bên LangGraph, 1 bên CrewAI), không ai biết code nội bộ của bên kia.</p>
+<pre><code>1. Agent kho (Công ty A) GET https://ncc.example.com/.well-known/agent-card.json
+   → đọc field "skills" trong Agent Card (mục 4), thấy B có "check_inventory"
+   → đọc field "capabilities.streaming", thấy B hỗ trợ streaming → A quyết định
+     mở kết nối SSE thay vì đăng ký webhook (mục 6), vì việc kiểm kho dự kiến
+     xong trong vài giây, không cần push notification cho tác vụ dài.
+2. Agent A gửi A2A task tới field "url" đọc được trong Agent Card:
+   {"skill": "check_inventory", "input": {"sku": "X123"}}
+   → task chuyển trạng thái "submitted" rồi "working" bên B, A nhận cập nhật
+     qua SSE đang mở
+3. B xử lý nội bộ (có thể tự dùng MCP để query database riêng của B — đúng
+   sơ đồ "A2A giao việc, MCP tự lấy dữ liệu nội bộ" ở R6_2_mcp.html §2)
+4. B trả kết quả → task "completed", stream đóng, A nhận được số tồn kho
+</code></pre>
+<p><code>predictor</code> hiện tại <strong>không có tình huống tương tự</strong> — không có "Công ty B" nào để giao task, xem phần Ứng dụng dự án.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>MCP (R6.2)</th><th>A2A</th><th>ACP (R6.3, đã khai tử)</th></tr>
+<tr><td>Ai giữ</td><td>Agentic AI Foundation (AAIF, Linux Foundation) — Anthropic donate 12/2025, maintainer vẫn community-driven</td><td>Agentic AI Foundation (AAIF, Linux Foundation) — gia nhập từ Google, chính thức join AAIF 8/2026</td><td>Archived, migrate sang A2A</td></tr>
+<tr><td>Giải quyết gì</td><td>Agent ↔ tool/data</td><td>Agent ↔ agent (xuyên tổ chức)</td><td>Agent ↔ agent (nội bộ, ngừng phát triển)</td></tr>
+<tr><td>Giao tiếp</td><td>JSON-RPC, tool call đồng bộ</td><td>Task lifecycle bất đồng bộ, streaming</td><td>(kế thừa MCP-like, không còn duy trì)</td></tr>
+<tr><td>2026 status</td><td>Bản 2026-07-28 stateless core, ~9.6k server registry chính thức / ~15-16k theo tracker bên thứ 3 (<code>R6_2_mcp.html §5</code>, verify — số liệu biến động nhanh)</td><td>150+ org, production ở 3 cloud lớn</td><td>Archived 27/8/2025</td></tr>
+</table>
+
+<div class="callout danger">
+<div class="label">⚠️ Lưu ý quan trọng</div>
+<p>MCP và A2A <strong>bổ sung cho nhau, không cạnh tranh</strong>. Production system thực tế thường dùng cả 2: A2A định tuyến 1 task tới đúng agent chuyên trách, agent đó dùng MCP để lấy context/tools cần thiết (xem sơ đồ ở <code>R6_2_mcp.html</code> mục 2). Câu hỏi đúng không phải "chọn 1 trong 2" mà "tầng nào cần A2A, tầng nào cần MCP".</p>
+</div>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> <strong>không cần A2A</strong>. Toàn bộ "multi-agent" trong dự án là sub-agent Claude Code chạy trong CÙNG 1 phiên coordinator (xem <code>R6_6_multiagent_systems.html</code>) — không phải giao tiếp xuyên tổ chức/framework khác nhau mà A2A giải quyết. A2A chỉ đáng cân nhắc nếu tương lai <code>predictor</code> cần agent của mình giao tiếp với 1 agent bên thứ 3 do công ty/hệ thống khác vận hành (VD: agent của 1 sàn môi giới, agent của 1 nhà cung cấp dữ liệu thị trường có API dạng agent) — hiện tại chưa có nhu cầu đó.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li><strong>Nhầm A2A là "bản MCP nâng cấp"</strong> — sai, chúng giải quyết 2 tầng khác nhau, không thay thế nhau.</li>
+<li><strong>Dùng A2A cho giao tiếp nội bộ giữa các module cùng 1 codebase</strong> — over-engineering; A2A trả giá bằng độ phức tạp (discovery, lifecycle, network overhead) chỉ đáng khi thực sự cần vượt ranh giới tổ chức/framework.</li>
+<li><strong>Coi A2A vẫn là "công nghệ thử nghiệm" năm 2026</strong> — sai, đã có 150+ tổ chức + production ở 3 cloud lớn; nếu bài toán thật sự cần, không còn lý do chờ "chín muồi hơn".</li>
+<li><strong>Tin nội dung Agent Card mà không xác minh chữ ký</strong> — Agent Card là 1 file JSON tĩnh, HOÀN TOÀN có thể bị làm giả giữa đường nếu không kiểm tra signed Agent Card + mTLS (mục 5); "domain nghe quen" không phải bằng chứng xác thực.</li>
+<li><strong>Tưởng Public Agent Card (mục 4) là TOÀN BỘ năng lực của agent</strong> — sai theo mục 8; Public Card có thể CỐ Ý ẩn bớt skill/capability, chỉ lộ đầy đủ qua Authenticated Extended Agent Card sau khi đã xác thực — đọc Public Card rồi kết luận "agent này không làm được X" có thể sai nếu X chỉ lộ cho đối tác đã xác thực.</li>
+<li><strong>Tự định nghĩa 1 field tuỳ ý trong request thay vì dùng cơ chế Extensions (mục 7)</strong> — phá vỡ khả năng tương thích với client khác không hiểu field tự chế đó; nếu cần mở rộng ngoài spec gốc, khai báo qua <code>capabilities.extensions</code> với URI rõ ràng, không "nhét chui" field ngoài spec.</li>
+<li><strong>Nghĩ agent phải chọn "hoặc MCP hoặc A2A" khi thiết kế</strong> — sai theo mục 9; 1 agent thực tế thường vừa là A2A server (hướng ra ngoài) vừa là MCP client (hướng vào trong), 2 vai trò không loại trừ nhau.</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li><input type="checkbox" disabled> Vẽ được đúng 8 trạng thái task lifecycle của A2A theo 3 nhóm (Running/Paused/Terminal).</li>
+<li><input type="checkbox" disabled> Giải thích được vì sao A2A cần thiết kế bất đồng bộ (khác lệnh gọi tool MCP đồng bộ).</li>
+<li><input type="checkbox" disabled> Phân biệt được A2A với pattern multi-agent nội bộ 1 framework (<code>L6_2_multiagent.html</code>) — khác nhau ở đâu.</li>
+<li><input type="checkbox" disabled> Kết luận đúng và giải thích được lý do <code>predictor</code> hiện chưa cần A2A.</li>
+<li><input type="checkbox" disabled> Nêu đúng đường dẫn discovery chuẩn (<code>/.well-known/agent-card.json</code>) và 5 trường bắt buộc của Agent Card (mục 4).</li>
+<li><input type="checkbox" disabled> Kể đúng 3 rủi ro bảo mật đặc thù A2A (giả mạo agent, làm giả Agent Card, replay attack) và cách phòng thủ tương ứng (mục 5).</li>
+<li><input type="checkbox" disabled> Phân biệt đúng streaming (SSE) và push notification (webhook) — cơ chế nào giữ kết nối mở, cơ chế nào để B tự gọi ngược, và chọn đúng cho 1 tình huống cụ thể.</li>
+<li><input type="checkbox" disabled> Giải thích được cơ chế Extensions (mục 7) — URI định danh, cờ <code>required</code>, và vì sao nó phi tập trung hơn cách MCP chính thức hoá extension trong core spec.</li>
+<li><input type="checkbox" disabled> Phân biệt được Public Agent Card (mục 4) với Authenticated Extended Agent Card (mục 8) — biết đúng lý do thiết kế 2 tầng discovery, không phải 1.</li>
+<li><input type="checkbox" disabled> Vẽ được sơ đồ 1 agent vừa là A2A server vừa là MCP client trong cùng 1 tiến trình xử lý task (mục 9), giải thích đúng analogy PCIe/USB (MCP) vs TCP/IP (A2A).</li>
+</ul>
+</div>
+
+<div class="nav-bottom"><a href="R6_3_acp.html">← R6.3 · ACP</a><a href="R6_5_human_in_the_loop.html">R6.5 · Human-in-the-Loop →</a></div>
+
+</div>
+</body>
+</html>

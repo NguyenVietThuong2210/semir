@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Engineer Curriculum — 46 Modules + Glossary + 50 Q&A</title>
+<link rel="stylesheet" href="modules/_shared.css">
+<style>
+.level-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin: 20px 0; }
+.level-card h3 { color: var(--accent-2); font-size: 1.4em; margin-bottom: 4px; }
+.level-card .desc { color: var(--text-dim); margin-bottom: 12px; }
+.level-card ul { list-style: none; margin-left: 0; }
+.level-card ul li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(148,163,184,0.1); }
+.level-card ul li a { color: var(--text); text-decoration: none; }
+.level-card ul li a:hover { color: var(--accent); }
+.intro { background: rgba(59,130,246,0.05); border-left: 4px solid var(--accent); padding: 20px; border-radius: 6px; margin: 20px 0; }
+.progress-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 700; margin-left: 8px; }
+.hero h1 { font-size: 2.7em; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; }
+.stat { background: var(--bg-card); padding: 20px; border-radius: 10px; text-align: center; border: 1px solid var(--border); }
+.stat .number { font-size: 2.5em; font-weight: 800; color: var(--accent); }
+.stat .label { color: var(--text-dim); font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb">Trang chủ curriculum</div>
+  <h1>🎓 AI Engineer Curriculum</h1>
+  <p class="subtitle">Từ Machine Learning cơ bản → Large Language Models → Multi-Agent Orchestrator. Dạy từ A→Z bằng ví dụ thực tế từ 2 dự án bạn đã build: <strong>PredictStock</strong> (V18/V19.5/V20) + <strong>AI Orchestrator</strong> (10 agents LangGraph).</p>
+  <div class="level">8 Levels · 46 modules + Glossary + 50 Q&A · ~5-7 tuần · Vietnamese</div>
+</div>
+
+<div class="container">
+
+  <div class="stats">
+    <div class="stat"><div class="number">51</div><div class="label">Modules</div></div>
+    <div class="stat"><div class="number">9</div><div class="label">Levels</div></div>
+    <div class="stat"><div class="number">280+</div><div class="label">QA + 50 Interview Q&A</div></div>
+    <div class="stat"><div class="number">150+</div><div class="label">Glossary terms</div></div>
+  </div>
+
+  <div class="intro">
+    <h3 style="margin-top:0">🎯 Bạn sẽ học được gì?</h3>
+    <p>Curriculum này chuẩn bị bạn cho phỏng vấn <strong>AI Engineer</strong> ở các công ty tech VN + regional (Grab, Shopee, VinAI, FPT AI, VNG, Momo). Bạn sẽ có thể:</p>
+    <ul>
+      <li>Giải thích <strong>từ đầu</strong> cách ML model học từ dữ liệu (backprop, gradient descent, loss)</li>
+      <li>Nói về <strong>Transformer + Attention</strong> ở cấp độ implementation detail (không chỉ concept)</li>
+      <li>Design 1 <strong>LLM application</strong> đầy đủ: prompt → RAG → tools → eval → deploy</li>
+      <li>Debate về <strong>multi-agent</strong> architectures (ReAct vs Plan-Execute vs Supervisor)</li>
+      <li>Kể <strong>5+ câu chuyện project</strong> theo format STAR với evidence thật</li>
+    </ul>
+  </div>
+
+  <h2>📚 Roadmap 7 Levels · 40 Modules</h2>
+
+  <div class="level-card">
+    <h3>Level 1 — Foundations (ML cơ bản) · 6 modules ✅</h3>
+    <p class="desc">Học ML là gì, model học thế nào, cách áp dụng vào bài toán dự đoán chứng khoán.</p>
+    <ul>
+      <li><a href="modules/L1_1_ml_intro.html">1.1 · ML là gì? 3 loại + Pipeline</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L1_2_features.html">1.2 · Feature Engineering (RSI/MACD/BB/MA)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L1_3_trees_xgboost.html">1.3 · Trees → RF → XGBoost (progression)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L1_4_v18_architecture.html">1.4 · Kiến trúc 2-tầng V18 (Direction gate + 3-class)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L1_5_training_cv.html">1.5 · Sample weights + CV + Optuna</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L1_6_calibration.html">1.6 · Calibration + Composite Confidence</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Level 2 — Advanced ML · 6 modules ✅</h3>
+    <p class="desc">Kỹ năng debug, model interpretability, ML system design từ V19.5 → V20 case study.</p>
+    <ul>
+      <li><a href="modules/L2_1_bias_variance.html">2.1 · Bias-Variance + Overfitting patterns</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L2_2_regularization.html">2.2 · Regularization (L1/L2/dropout/BN/etc)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L2_3_imbalance.html">2.3 · Class imbalance strategies</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L2_4_timeseries_cv.html">2.4 · Time-series validation (no leak)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L2_5_interpretability.html">2.5 · Interpretability (SHAP → V20 Slice 3)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L2_6_ml_system_design.html">2.6 · ML System Design (V19.5 death case)</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Level 3 — Deep Learning · 5 modules ✅</h3>
+    <p class="desc">Neural networks, backprop, tối ưu, sequence modeling — cầu nối lên LLM.</p>
+    <ul>
+      <li><a href="modules/L3_1_nn_backprop.html">3.1 · NN: perceptron → MLP → backprop</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L3_2_optimizers.html">3.2 · Optimizers + LR schedules</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L3_3_dl_regularization.html">3.3 · DL regularization deep-dive</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L3_4_cnn.html">3.4 · CNNs (2D + 1D)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L3_5_sequence_transformer.html">3.5 · RNN → LSTM → Transformer (journey)</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Level 4 — Language Models (LLM cốt lõi) · 6 modules ✅</h3>
+    <p class="desc">Bên trong GPT/Claude/Llama: tokenization, attention, pretraining, RLHF, fine-tuning, inference.</p>
+    <ul>
+      <li><a href="modules/L4_1_tokenization.html">4.1 · Tokenization (BPE, SentencePiece)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L4_2_attention_transformer.html">4.2 · Attention + Transformer</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L4_3_pretraining.html">4.3 · Pretraining (CLM, MLM, denoising)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L4_4_alignment_rlhf.html">4.4 · Alignment: RLHF / DPO / CAI</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L4_5_finetuning_lora.html">4.5 · Fine-tuning + LoRA + QLoRA</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L4_6_inference.html">4.6 · Inference (sampling, KV cache, vLLM)</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Level 5 — LLM Application Systems · 6 modules ✅</h3>
+    <p class="desc">Cách build LLM app production-grade: prompt, RAG, tools, eval, cost, safety.</p>
+    <ul>
+      <li><a href="modules/L5_1_prompt.html">5.1 · Prompt Engineering (CoT, structured output)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L5_2_rag.html">5.2 · RAG (embed → retrieve → generate)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L5_3_tools.html">5.3 · Function Calling + Tool Use + MCP</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L5_4_llm_eval.html">5.4 · LLM Evaluation (auto, judge, benchmarks)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L5_5_cost_latency.html">5.5 · Cost + Latency optimization</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L5_6_safety.html">5.6 · LLM Safety (OWASP Top 10, injection)</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Level 6 — Agents + Orchestration · 6 modules ✅</h3>
+    <p class="desc">Multi-agent systems từ AI Orchestrator case study: 10 agents, LangGraph, HITL, checkpointing.</p>
+    <ul>
+      <li><a href="modules/L6_1_agent_patterns.html">6.1 · Agent Patterns (ReAct, Reflexion, Plan-Execute)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L6_2_multiagent.html">6.2 · Multi-Agent — AI Orchestrator Overview</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L6_3_langgraph.html">6.3 · LangGraph Deep-Dive</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L6_4_checkpointing.html">6.4 · Checkpointing + Resume (PostgresSaver)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L6_5_hitl.html">6.5 · Human-in-the-Loop patterns</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L6_6_observability.html">6.6 · Observability (LangSmith, traces)</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Level 7 — Production + Interview Prep · 6 modules ✅</h3>
+    <p class="desc">MLOps, deployment, system design mocks, coding kit, behavioral kit.</p>
+    <ul>
+      <li><a href="modules/L7_1_mlops.html">7.1 · MLOps Full Lifecycle</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L7_2_deployment.html">7.2 · Model Deployment (batch/real-time/streaming)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L7_3_sysdesign_predict.html">7.3 · System Design 1: Stock Prediction</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L7_4_sysdesign_agent.html">7.4 · System Design 2: Multi-Agent Code Assistant</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L7_5_coding_kit.html">7.5 · Coding Kit (Top-20 questions)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L7_6_behavioral_kit.html">7.6 · Behavioral Kit (5 STAR stories)</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Level 8 — AI Artifacts + Landscape · 6 modules ✅ NEW</h3>
+    <p class="desc">AI-augmented dev stack: Agents (production sense), Claude Skills, MCP deep-dive, Spec-Driven Development, AI Alignment (paperclip + Constitutional AI), Frameworks survey.</p>
+    <ul>
+      <li><a href="modules/L8_1_agents_artifact.html">8.1 · Agents as Artifact (sub-agents, hierarchy)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L8_2_skills.html">8.2 · Skills (Claude Skills, SKILL.md format)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L8_3_mcp_deep.html">8.3 · MCP Deep-Dive (Tools/Resources/Prompts/Sampling)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L8_4_spec_driven.html">8.4 · Spec-Driven Development (SpecKit, SDD)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L8_5_ai_alignment.html">8.5 · AI Alignment (paperclip, instrumental conv., CAI)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L8_6_ai_frameworks.html">8.6 · Frameworks Survey (LangChain/LlamaIndex/DSPy/…)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L8_7_multica.html">8.7 · Multica — Managed Agents Platform (multica-ai/multica)</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Level 9 — Expert Track 🔥 · 4 modules ✅ NEW</h3>
+    <p class="desc">AI Engineer → AI Expert. Advanced RAG (Contextual/Hybrid/GraphRAG), LLM Ops production discipline, Agent Evaluation frameworks, Distributed Training + Serving at Scale.</p>
+    <ul>
+      <li><a href="modules/L9_1_advanced_rag.html">9.1 · Advanced RAG (Contextual, Hybrid, Rerank, GraphRAG, Agentic)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L9_2_llm_ops.html">9.2 · LLM Ops (Canary, Shadow, Routing, Cost, Drift)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L9_3_agent_eval.html">9.3 · Agent Evaluation (4-tier, LLM judge, traces)</a><span class="badge done">DONE</span></li>
+      <li><a href="modules/L9_4_scale.html">9.4 · Distributed Training + Serving at Scale</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <div class="level-card">
+    <h3>Roadmap bổ sung — AI Engineering Learning Roadmap 🗺️ · 63 trang ✅ NEW</h3>
+    <p class="desc">Gap-fill + cập nhật 2026 + ứng dụng cụ thể vào dự án <code>predictor</code>, dựa trên roadmap "AI Engineering" (mcp.DailyDoseofDS.com). Build thêm trên Level 1-9 ở trên, không viết lại từ đầu. Mỗi bullet gốc trong roadmap = 1 trang riêng (63 trang), độ sâu ngang module <code>L1.3</code>, đi từ dễ đến khó, liên kết xuyên suốt bằng nav-bottom. 63 checklist item tự test.</p>
+    <ul>
+      <li><a href="modules/R0_overview.html">R0 · Overview — index đầy đủ 63 trang + checklist tổng hợp</a><span class="badge new">NEW</span></li>
+    </ul>
+  </div>
+
+  <h2>📖 Reference Docs</h2>
+  <div class="level-card">
+    <h3>Companion resources</h3>
+    <p class="desc">Cross-cutting docs to use alongside modules — glossary lookup + interview prep set.</p>
+    <ul>
+      <li><a href="glossary.html">📚 Glossary — 150+ AI/ML/LLM keywords (Multi-CA, paperclip, SDD, MoE, etc.)</a><span class="badge done">DONE</span></li>
+      <li><a href="interview_50_qa.html">🎯 Interview 50 Q&A — 5 sections, evidence-linked answers</a><span class="badge done">DONE</span></li>
+      <li><a href="AUDIT.md">🔍 Curriculum Audit — self-review + gap analysis</a><span class="badge done">DONE</span></li>
+    </ul>
+  </div>
+
+  <h2>🧪 Final QA Gate cho curriculum này</h2>
+  <div class="callout">
+    <div class="label">Bạn có thể trả lời 5 câu này sau khi hoàn thành 40 modules?</div>
+    <ol>
+      <li>Explain the difference between LSTM và Transformer, kể tên 3 lợi thế của attention.</li>
+      <li>How would you deploy a fine-tuned Llama-2-13B model to serve 1000 QPS with p95 < 500ms?</li>
+      <li>Design a multi-agent code review system. Vẽ graph, list nodes, define state.</li>
+      <li>Explain time-series cross-validation. Why can't you use random KFold for stock prediction?</li>
+      <li>Kể story về 1 lần bạn debug 1 production ML bug từ symptom → root cause → fix → prevention.</li>
+    </ol>
+    <p>Nếu trả lời được 5/5 với confidence + evidence = <strong>ready for interview</strong>.</p>
+  </div>
+
+  <h2>📋 Cách sử dụng curriculum</h2>
+  <ol>
+    <li><strong>Đọc từ Level 1 → Level 7</strong> tuần tự. Đừng skip.</li>
+    <li>Mỗi module có <strong>QA gate</strong> ở cuối — tự test trước khi qua module kế.</li>
+    <li>Xem <strong>Evidence box</strong> — link tới code thật, đọc + run + hiểu.</li>
+    <li>Đọc <strong>References</strong> — 1 paper + 1 blog per module.</li>
+    <li>Sau mỗi Level, tự viết 1 <strong>lab notebook</strong> implement 1 concept.</li>
+    <li>Cuối curriculum: mock interview với friend/mentor. Time your answers.</li>
+  </ol>
+
+  <h2>🎓 Certification checklist (self)</h2>
+  <ul>
+    <li>[ ] Đọc hết 40 modules</li>
+    <li>[ ] Answer 200+ QA gates với confidence</li>
+    <li>[ ] Implement 5 concepts từ scratch (attention, LoRA, RAG, checkpointing, XGBoost)</li>
+    <li>[ ] Do 2 system design mocks (7.3 + 7.4)</li>
+    <li>[ ] Rehearse 8-10 STAR stories</li>
+    <li>[ ] Read 15+ papers từ references</li>
+    <li>[ ] Watch 5 hours Karpathy Zero-to-Hero</li>
+    <li>[ ] Deploy 1 LLM app end-to-end (personal project)</li>
+  </ul>
+
+  <h2>🔗 Nguồn tham khảo chính</h2>
+  <ul>
+    <li>📖 <a href="https://d2l.ai/">Dive into Deep Learning (D2L)</a> — free textbook, có code</li>
+    <li>📖 <a href="https://web.stanford.edu/~jurafsky/slp3/">Speech and Language Processing (Jurafsky & Martin)</a> — NLP bible</li>
+    <li>🎥 <a href="https://karpathy.ai/zero-to-hero.html">Karpathy Zero-to-Hero</a> — build GPT from scratch</li>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/">LangGraph docs</a> — orchestration framework</li>
+    <li>📖 <a href="https://huggingface.co/learn">HuggingFace Learn</a> — LLM courses</li>
+    <li>📖 <a href="https://www.deeplearning.ai/short-courses/">DeepLearning.AI short courses</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need (Vaswani et al 2017)</a> — Transformer paper</li>
+    <li>📄 <a href="https://arxiv.org/abs/2005.14165">GPT-3 paper (Brown et al 2020)</a></li>
+    <li>📝 <a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a></li>
+    <li>📖 Chip Huyen — <em>Designing Machine Learning Systems</em> (2022)</li>
+  </ul>
+
+  <p style="text-align: center; margin-top: 40px; color: var(--text-dim); font-size: 0.9em;">
+    Chúc bạn thành công 🚀 · Curriculum built by AI Senior Instructor
+  </p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2.4 — Time-Series Validation</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 2 · Module 4</div>
+  <h1>2.4 · Time-Series Validation (No Leak)</h1>
+  <p class="subtitle">Walk-forward, expanding window, purged K-fold, embargo — kỹ thuật CV cho time-series. Case study V19.5 Slice 10 replay caveat.</p>
+  <div class="level">Level 2 · Advanced ML · ~30 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Vẽ 4 CV schemes cho time-series</li>
+  <li>Detect 3 loại data leak: temporal, group, feature</li>
+  <li>Implement purged K-fold + embargo bằng sklearn</li>
+  <li>Giải thích vì sao replay backtest có look-ahead bias khi model train trên toàn history</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Time-series CV bằng ngôn ngữ đời thường</div>
+<p><strong>Học sinh không được xem đề thi trước</strong>: Random KFold cho chứng khoán = xem đề thi (train trên dữ liệu 2025 để predict dữ liệu 2024) → khoe điểm ảo. Trong lớp thì được vì đề độc lập; trong stock thì SAI vì thời gian có thứ tự.</p>
+<p><strong>Walk-forward</strong>: Cho học 2021-2023 → thi 2024 Q1. Học 2021-2024 Q1 → thi 2024 Q2. Học 2021-2024 Q2 → thi 2024 Q3. Luôn train quá khứ, test tương lai — mô phỏng thực tế production.</p>
+<p><strong>Data leakage</strong> = quay cóp lén: Nếu 1 feature dùng thông tin tương lai (ví dụ: normalize theo mean cả dataset gồm cả test), model "biết đáp án" → CV score đẹp nhưng production sập.</p>
+</div>
+
+<h2>1. Walk-forward validation</h2>
+
+<pre><code>Fold 1: train [T1..T500]         test [T501..T600]
+Fold 2: train [T1..T600]         test [T601..T700]
+Fold 3: train [T1..T700]         test [T701..T800]
+...
+
+# Train set expand theo thời gian, test = tương lai gần
+# Realistic: mimicking production — retrain periodically với data mới
+</code></pre>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Time-series CV: bẫy giết startup mà tutorial không cảnh báo (giải thích chi tiết)</div>
+
+<p><strong>Câu chuyện thật</strong>: Bạn train model dự đoán chứng khoán. sklearn <code>cross_val_score</code> báo accuracy 65%. Đưa investor → họ đầu tư. Deploy production tuần thứ 4 → accuracy thực 52%. Investor tức giận, kiện. Bạn không sai — chỉ đã dùng sai CV. Đây là bẫy giết nhiều startup ML.</p>
+
+<p><strong>Bước 1 — Hiểu KFold hoạt động thế nào</strong>: Random KFold shuffle toàn bộ dataset, chia 5 phần. Train trên 4/5, test trên 1/5. Lặp 5 lần, average score. Điều này ổn cho <em>hình ảnh</em> — bức mèo hôm nay không phụ thuộc bức chó hôm qua (i.i.d.). Nhưng SAI cho time-series.</p>
+
+<p><strong>Bước 2 — Vì sao SAI cho time-series? 2 lý do</strong>:</p>
+<p><em>Lý do 1: Data KHÔNG independent</em>. Giá hôm nay = giá hôm qua + change. Autocorrelation ρ giữa neighbors ≈ 0.6-0.9. Nếu train set chứa ngày T499, test set chứa T501 → model đã "biết" gần đúng answer. Score cao ảo.</p>
+<p><em>Lý do 2: Data KHÔNG identically distributed</em>. Market 2021 (COVID crash + recovery) khác market 2024 (normal). Random shuffle trộn 2 regime → model học "trung bình" mọi regime. Khi deploy 2026 (single regime hiện tại), model không phù hợp.</p>
+
+<p><strong>Bước 3 — Con số biết nói (bias magnitude)</strong>: Với daily returns có ρ=0.6:</p>
+<ul>
+<li>Random KFold CV: 65%</li>
+<li>True out-of-sample: 52%</li>
+<li><strong>Bias +13%</strong>. Không phải "hơi lệch" — sai một cấp bậc. Model bạn nghĩ "excellent" thực tế "chỉ hơn random tí".</li>
+</ul>
+
+<p><strong>Bước 4 — Fix bằng walk-forward validation</strong>:</p>
+<pre><code>Timeline:  T1 ─── T500 ─── T1000 ─── T1500 ─── T2000
+
+Fold 1:  train [T1..T500]         test [T501..T600]
+Fold 2:  train [T1..T600]         test [T601..T700]
+Fold 3:  train [T1..T700]         test [T701..T800]
+...
+</code></pre>
+<p>Train luôn "quá khứ", test luôn "tương lai". Không leakage. Mimicking production — khi deploy, bạn train trên tất cả data đến hôm nay, predict ngày mai.</p>
+
+<p><strong>Analogy đời thực — kỳ thi trung học</strong>:</p>
+<ul>
+<li>Random KFold = học đề thi năm 2024, thi đề thi năm 2024 (đã có 40% câu trong sách bài tập cũ). Điểm cao.</li>
+<li>Walk-forward = học đề 2020-2023, thi đề 2024 chưa từng thấy. Điểm chính xác hơn.</li>
+</ul>
+<p>Điểm cao random KFold KHÔNG nghĩa là bạn giỏi — chỉ là bạn đã đọc đề trước.</p>
+
+<p><strong>Vì sao TẤT CẢ dev ML mới dính bẫy này?</strong></p>
+<ol>
+<li>sklearn <code>cross_val_score</code> DEFAULT dùng KFold (không phải TimeSeriesSplit).</li>
+<li>90% tutorial trên internet copy-paste "cross_val_score(model, X, y)" mà không đọc docs.</li>
+<li>Score cao → dev happy → deploy.</li>
+<li>Production data mới, không leakage → accuracy thấp thật.</li>
+<li>Dev đổ tại "data drift" (thực tế là CV sai từ đầu).</li>
+</ol>
+
+<p><strong>Đây là why senior ML luôn hỏi</strong>: "CV bạn dùng gì? Time-series có KFold không? Có purge gap không?" 3 câu đủ để lọc dev thật vs dev copy-paste tutorial.</p>
+
+<p><strong>Còn 1 tầng sâu hơn — Purged CV (López de Prado 2018)</strong>: Walk-forward vẫn có "vertical leakage" nhỏ:</p>
+<ul>
+<li>Label horizon 5 ngày: predict T+5 return.</li>
+<li>Train boundary: T500.</li>
+<li>Sample T499 có label = return(T499 → T504). Nhưng T500-T504 nằm trong test set!</li>
+<li>Model "nhìn thấy" price T500-T504 gián tiếp qua label của T499.</li>
+</ul>
+<p>Fix: <strong>purge</strong> — drop 5 samples quanh split boundary (T495-T499 khỏi train — sample tại t leak nếu t+5 ≥ 500, tức t ≥ 495; T500-T504 khỏi test). Đây là "vertical leakage" mà chỉ purged CV mới fix. PredictStock V19+ áp dụng.</p>
+
+<p><strong>Hậu quả thực tế nếu bỏ qua purge</strong>: CV score có bias +2-5%. Không nhiều nhưng đủ để invalid research paper (Kaggle winner đảo ngược khi audit CV). Trong finance/medical, purge là hygiene không optional.</p>
+
+<p><strong>Khi walk-forward vẫn vỡ (edge case tiết lộ độ sâu)</strong>: Regime change đột ngột (COVID 2020, war 2022). Model train pre-regime, deploy post-regime → cả walk-forward CV cũng optimistic vì train data không cover regime mới. Fix: <em>combinatorial cross-validation</em> (giải thích đầy đủ cơ chế ngay dưới, mục "CPCV") hoặc <em>stress testing</em> — deliberate hold out entire regime để test resilience.</p>
+
+<p><strong>Take-away interview</strong> — cùng 1 câu hỏi "bạn CV thế nào?", 3 cấp độ trả lời:</p>
+<ul>
+<li><strong>Junior</strong>: "Tôi dùng cross_val_score với 5-fold."</li>
+<li><strong>Mid</strong>: "Tôi dùng TimeSeriesSplit vì data time-series."</li>
+<li><strong>Senior</strong>: "Tôi dùng purged walk-forward với embargo (gap giữa train và test tương đương label horizon). ρ autocorrelation của returns ≈ 0.6 khiến random KFold bias +13%. Với market regime change, tôi còn stress test bằng combinatorial CV."</li>
+</ul>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Walk-forward diagram + Concrete look-ahead bias example (feature leak future price)</div>
+
+<h3>Walk-forward ASCII diagram (đầy đủ)</h3>
+<pre><code>Timeline (days):  ─────────────────────────────────────────────►
+                  T1       T500     T600    T700    T800    T900
+
+Fold 1:           [══════ TRAIN ══════] [gap] [═ TEST ═]
+                     T1 → T500          purge   T501 → T600
+
+Fold 2:           [═══════ TRAIN ═══════════] [gap] [═ TEST ═]
+                     T1 → T600                purge   T601 → T700
+
+Fold 3:           [════════ TRAIN ═══════════════] [gap] [═ TEST ═]
+                     T1 → T700                     purge   T701 → T800
+
+Fold 4:           [═════════ TRAIN ══════════════════] [gap] [═ TEST ═]
+                     T1 → T800                          purge   T801 → T900
+
+Legend:
+  TRAIN = expanding window (mỗi fold train dài thêm)
+  gap   = purge zone (5-10 days) — drop samples gần biên để tránh label leak
+  TEST  = future block (không bao giờ thấy trong train)
+
+Rolling window variant (fixed-size):
+Fold 1:  [══ 500d TRAIN ══] [gap] [═ TEST ═]  T1  →T500  ...  T501→T600
+Fold 2:      [══ 500d TRAIN ══] [gap] [═ TEST ═]  T101→T600  ...  T601→T700
+Fold 3:          [══ 500d TRAIN ══] [gap] [═ TEST ═]  T201→T700  ...  T701→T800
+                   ↑ train slide forward, kích thước cố định
+</code></pre>
+
+<h3>Vì sao KHÔNG dùng random K-fold cho time-series? — ví dụ CỤ THỂ về "feature leak future price"</h3>
+
+<pre><code># Feature engineering NAIVE (bug ẩn):
+df['ma_20'] = df['close'].rolling(20).mean()
+df['ret_20d_future'] = df['close'].pct_change(20).shift(-20)  # ← BUG: label as feature
+df['zscore'] = (df['close'] - df['close'].mean()) / df['close'].std()
+                                        ↑ mean/std tính trên TOÀN dataset (bao gồm tương lai)
+
+# Random K-fold split: dữ liệu ngày 2024-06-15 vào TRAIN, ngày 2024-06-16 vào TEST.
+# Điều gì xảy ra?
+
+Ngày 2024-06-15 (TRAIN):
+  close = 100
+  ma_20 = mean(close[2024-05-27 → 2024-06-15]) = 98.5     ← OK, chỉ dùng quá khứ
+  zscore = (100 - 105) / 8 = -0.625                        ← dùng mean/std toàn dataset,
+                                                            trong đó có 2024-06-16 (future!)
+Ngày 2024-06-16 (TEST):
+  close = 102
+  → Model đã "biết" trung bình cả tập bao gồm ngày này qua zscore feature.
+  → Test accuracy INFLATED.
+
+Ngoài ra rolling(20) tại t=2024-06-15 nếu window window bao gồm 2024-06-15 →
+label horizon 5-day ở t=2024-06-10 có close[2024-06-15] → LEAK gián tiếp.
+</code></pre>
+
+<p><strong>Ví dụ leak nặng hơn — feature "future price ratio"</strong> (bug thực tế đã bắt ở nhiều codebase):</p>
+<pre><code>df['price_vs_next_week'] = df['close'] / df['close'].shift(-5)
+                                              ↑ shift ÂM = lấy giá trị TƯƠNG LAI
+
+→ Feature này ở ngày t bằng close[t] / close[t+5].
+  Nhưng label của t cũng là "return t → t+5" ≈ close[t+5]/close[t] - 1.
+  → Feature ≡ 1 / (1 + label). Model học nhìn feature → suy ra label perfect.
+  Random K-fold CV: 99% accuracy. Deploy: 50% (random).
+</code></pre>
+
+<p><strong>Cách detect</strong>: grep <code>shift(-</code> trong feature engineering. Chỉ được phép <code>shift(+n)</code> (dùng data quá khứ) hoặc <code>shift(0)</code> (current). Bất kỳ <code>shift(-...)</code> nào phải nằm ở LABEL, không phải FEATURE.</p>
+
+<p><strong>Cách 2 — mask future và tính lại</strong>: với mỗi feature <code>x_t</code>, mask <code>data[t+1:]</code> thành NaN rồi tính lại; nếu <code>x_t</code> thay đổi → có leak. Đây là "audit test" nghiêm ngặt.</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy chính — "học sinh không được xem đề thi trước"</div>
+<p>Random KFold cho time-series = giáo viên đưa cả bộ đề (2020-2025) cho học sinh xem, rồi bảo học xong thi 100 câu random trong bộ đó. Điểm 90% vì đã đọc trước. Không phản ánh khả năng.</p>
+<p>Walk-forward = mỗi năm giáo viên chỉ đưa đề các năm TRƯỚC đó. 2024 thi = học 2020-2023, không được xem 2024. Điểm phản ánh khả năng thật khi ra cuộc đời (2025).</p>
+</div>
+
+<h2>2. Rolling window (fixed size)</h2>
+
+<pre><code>Fold 1: train [T1..T500]         test [T501..T600]
+Fold 2: train [T101..T600]       test [T601..T700]   ← drop old
+Fold 3: train [T201..T700]       test [T701..T800]
+
+# Train set fixed size, slide window forward
+# Best khi market regime shift — không muốn train trên data 10 năm cũ
+</code></pre>
+
+<h2>3. Purged K-fold + Embargo</h2>
+
+<p>De Prado (2018 "Advances in Financial ML"). Cho label overlap (label horizon &gt; 1):</p>
+
+<pre><code>Với label horizon h=5:
+Sample at t=100 → label uses close[100:105]
+Sample at t=104 → label uses close[104:109]
+                  ↑
+              Overlap!
+
+# Fix:
+Fold 1: train [1..90]  PURGE [91..99]  test [100..200]  EMBARGO [201..210]
+                       ─────────────                     ──────────────
+                       drop nearby past                   drop future edge
+</code></pre>
+
+<ul>
+  <li><strong>Purge</strong>: drop training samples (thường đứng TRƯỚC test) có label overlap với test</li>
+  <li><strong>Embargo</strong>: drop thêm 1 khoảng training samples đứng NGAY SAU test (buffer chống leak do autocorrelation của returns) — cắt bớt phía TRAIN, KHÔNG phải rút ngắn test set</li>
+</ul>
+
+<h3>3.5 CPCV (Combinatorial Purged Cross-Validation) — thay vì 1 đường backtest, lấy CẢ 1 PHÂN PHỐI kết quả</h3>
+
+<p><strong>Vấn đề CPCV giải quyết</strong>: Purged K-fold/walk-forward (mục 3) cho ra ĐÚNG 1 chuỗi kết quả out-of-sample (OOS — dữ liệu model chưa từng thấy lúc train) duy nhất. Nhưng 1 con số/1 đường cong duy nhất không cho biết: kết quả đó ỔN ĐỊNH hay chỉ MAY MẮN rơi đúng cách chia fold đó? <strong>CPCV</strong> (López de Prado, <em>Advances in Financial Machine Learning</em>, 2018, Ch.12) giải quyết bằng cách tạo ra NHIỀU đường backtest khác nhau từ CÙNG 1 tập dữ liệu, để nhìn được cả phân phối (distribution) kết quả, không chỉ 1 điểm.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Cơ chế CPCV — chia nhóm, tổ hợp, ráp lại thành "đường" (path)</div>
+<p><strong>Bước 1</strong>: chia toàn bộ dữ liệu theo thời gian thành <code>N</code> nhóm liên tiếp bằng nhau (VD N=6 nhóm).</p>
+<p><strong>Bước 2</strong>: chọn <code>k</code> trong số <code>N</code> nhóm đó làm TEST (giữ nguyên các nhóm còn lại làm TRAIN, áp purge+embargo — mục 3 — tại MỌI ranh giới train/test) — có <code>C(N,k)</code> (tổ hợp chập k của N — số cách chọn k phần tử từ N phần tử, không quan tâm thứ tự) cách chọn khác nhau, mỗi cách là 1 "combination" (tổ hợp) riêng biệt.</p>
+<pre><code>Ví dụ N=6 nhóm dữ liệu (A,B,C,D,E,F theo thời gian), chọn k=2 nhóm làm test:
+C(6,2) = 6!/(2!·4!) = 15 tổ hợp khác nhau, VD:
+  Tổ hợp 1: test={A,B}, train={C,D,E,F} (purge+embargo quanh A,B)
+  Tổ hợp 2: test={A,C}, train={B,D,E,F}
+  ... (tổng cộng 15 tổ hợp)</code></pre>
+<p><strong>Bước 3 — vì sao "combination" (tổ hợp) và "path" (đường) là 2 khái niệm KHÁC NHAU</strong>: mỗi tổ hợp ở trên chỉ tạo ra dự đoán OOS cho ĐÚNG k trong N nhóm (VD tổ hợp 1 chỉ có dự đoán cho A và B, không có cho C/D/E/F). Muốn có 1 "path" HOÀN CHỈNH — nghĩa là có dự đoán OOS phủ kín CẢ N nhóm liên tục theo đúng thứ tự thời gian — phải GHÉP nhiều tổ hợp lại với nhau. Tổng số "dự đoán-nhóm" tạo ra từ toàn bộ <code>C(N,k)</code> tổ hợp là <code>C(N,k)·k</code>; mỗi path tiêu thụ đúng N dự đoán-nhóm (1 cho mỗi nhóm) — nên số path hoàn chỉnh tạo được là:</p>
+<pre><code>φ[N,k] = k · C(N,k) / N
+
+Ví dụ N=6, k=2: φ[6,2] = 2 · 15 / 6 = 5 paths
+
+→ Từ 15 tổ hợp train/test, ghép lại được 5 "đường" backtest HOÀN CHỈNH khác
+  nhau — tức 5 kịch bản OOS độc lập khác nhau, thay vì chỉ 1 như walk-forward
+  thường (mục 1). Nhìn PHÂN PHỐI của 5 kết quả (VD 5 con số Sharpe ratio khác
+  nhau) cho biết model ỔN ĐỊNH hay chỉ ăn may ở 1 cách chia cụ thể.</code></pre>
+<p><strong>Insight</strong>: walk-forward trả lời "model này có 1 điểm số OOS là bao nhiêu"; CPCV trả lời câu hỏi sâu hơn "nếu chia dữ liệu theo NHIỀU CÁCH KHÁC NHAU hợp lệ, điểm số đó có ỔN ĐỊNH không, hay dao động mạnh tuỳ may rủi cách chia?" — câu hỏi thứ 2 mới thực sự trả lời được "tôi có nên TIN kết quả backtest này không".</p>
+</div>
+
+<h3>3.6 Probability of Backtest Overfitting (PBO) — đo xác suất "chiến lược tốt nhất" chỉ là may mắn</h3>
+
+<p><strong>Bối cảnh thực tế PBO nhắm tới</strong>: quy trình nghiên cứu quant/trading THẬT thường không dừng ở 1 model — người ta thử HÀNG CHỤC/HÀNG TRĂM biến thể (khác feature, khác threshold, khác hyperparameter), rồi CHỌN biến thể có kết quả backtest tốt nhất. Vấn đề: càng thử NHIỀU biến thể, xác suất có ÍT NHẤT 1 biến thể "tốt" THUẦN TUÝ VÌ MAY MẮN (khớp ngẫu nhiên với nhiễu trong dữ liệu lịch sử, không phải vì nó thực sự tốt) càng cao — đây gọi là <strong>backtest overfitting</strong> (quá khớp vào chính quá trình chọn chiến lược, không chỉ quá khớp vào dữ liệu như overfitting thường ở mục L2.1).</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Cơ chế PBO (Bailey, Borwein, López de Prado, Zhu — 2015, Journal of Computational Finance)</div>
+<p><strong>Bước 1</strong>: xếp toàn bộ lịch sử return của <code>N</code> biến thể chiến lược khác nhau thành 1 bảng (T dòng thời gian × N cột biến thể). Chia T dòng thành <code>S</code> khối bằng nhau (S là số CHẴN).</p>
+<p><strong>Bước 2</strong>: tạo tất cả tổ hợp chọn đúng <code>S/2</code> khối làm tập "IS" (In-Sample — tập dùng để CHỌN chiến lược tốt nhất, giống vai trò train), <code>S/2</code> khối còn lại làm "OOS" (Out-Of-Sample — tập dùng để KIỂM TRA chiến lược đã chọn, giống vai trò test) — có <code>C(S, S/2)</code> tổ hợp.</p>
+<p><strong>Bước 3</strong>: với MỖI tổ hợp — tìm biến thể nào XẾP HẠNG CAO NHẤT trên tập IS (gọi là <code>n*</code>, "quán quân in-sample"). Sau đó xem CHÍNH biến thể <code>n*</code> đó xếp hạng THỨ MẤY trên tập OOS. Nếu <code>n*</code> vẫn xếp hạng cao trên OOS → chiến lược thật sự tốt (không chỉ ăn may trên IS). Nếu <code>n*</code> tụt xuống DƯỚI TRUNG VỊ (median) trên OOS → dấu hiệu chiến lược đó chỉ "trúng số" trên IS, không generalize.</p>
+<pre><code>ω_c = rank_OOS(n*) / (N+1)      # rank chuẩn hoá về (0,1); rank càng cao (gần 1)
+                                 # nghĩa là n* càng vẫn tốt trên OOS
+λ_c = ln(ω_c / (1 - ω_c))       # "logit" — biến đổi rank thành 1 thang đo đối xứng
+                                 # quanh 0: λ_c > 0 nghĩa là n* trên TRUNG VỊ OOS (tốt),
+                                 # λ_c ≤ 0 nghĩa là n* rơi XUỐNG DƯỚI trung vị OOS (đáng ngờ)
+
+PBO = (số tổ hợp có λ_c ≤ 0) / (tổng số tổ hợp C(S, S/2))</code></pre>
+<p><strong>Ví dụ minh hoạ cơ chế</strong> (S=4 khối A,B,C,D → C(4,2)=6 tổ hợp: AB|CD, AC|BD, AD|BC, BC|AD, BD|AC, CD|AB — mỗi tổ hợp lần lượt đóng vai IS|OOS rồi đảo ngược): PBO = tỷ lệ trong 6 tổ hợp đó mà "quán quân IS" bị tụt hạng xuống dưới trung vị khi đánh giá lại trên OOS. Trong ví dụ số thật của chính nghiên cứu gốc (dùng S=16 khối, nhiều biến thể chiến lược giả lập để minh hoạ): 1 chiến lược THỰC SỰ overfit đo được PBO=74% (quán quân IS hầu như luôn "rớt đài" trên OOS — dấu hiệu chọn nhầm do may rủi), trong khi 1 chiến lược THẬT (không overfit) chỉ đo được PBO≈0.04% (quán quân IS hầu như luôn vẫn tốt trên OOS).</p>
+<p><strong>Insight</strong>: PBO không đánh giá "1 model có overfit dữ liệu không" (đó là câu hỏi của L2.1) — nó đánh giá "QUY TRÌNH THỬ-VÀ-CHỌN chiến lược của bạn có đang overfit vào chính quá trình backtest không". PBO cao (VD &gt;50%) là tín hiệu cảnh báo: bạn đã thử quá nhiều biến thể và chọn ra 1 cái tốt hoàn toàn do may rủi thống kê, không phải vì nó thực sự có edge (lợi thế thống kê thật).</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Deflated Sharpe Ratio (DSR) — "khấu trừ" Sharpe ratio vì đã thử nhiều lần</div>
+<p><strong>Sharpe ratio</strong> (thước đo lợi nhuận điều chỉnh theo rủi ro — return trung bình chia cho độ lệch chuẩn của return, phổ biến trong tài chính) đo được từ 1 backtest chỉ có ý nghĩa NẾU đó là LẦN THỬ DUY NHẤT. Nhưng nếu bạn đã thử N biến thể chiến lược khác nhau rồi báo cáo Sharpe ratio của biến thể TỐT NHẤT — con số đó bị "thổi phồng" so với Sharpe ratio thật, vì càng thử nhiều lần, xác suất có 1 lần "may mắn" đạt Sharpe cao càng lớn (cùng bản chất vấn đề với PBO ở trên, nhưng DSR cho ra 1 CON SỐ/XÁC SUẤT cụ thể thay vì tỷ lệ phần trăm tổ hợp).</p>
+<p><strong>Ý tưởng công thức</strong> (Bailey &amp; López de Prado, 2014): DSR cần biết <code>N</code> (số biến thể/lần thử ĐỘC LẬP đã thực hiện) để tính ra "mức Sharpe ratio kỳ vọng đạt được THUẦN TUÝ DO MAY RỦI" nếu thử N lần (dùng lý thuyết giá trị cực trị — extreme value theory, ước lượng Sharpe ratio lớn nhất trong N mẫu ngẫu nhiên NẾU không có edge thật nào cả) — rồi so sánh Sharpe ratio ĐO ĐƯỢC với mức "do may rủi" đó, cho ra 1 XÁC SUẤT (0 đến 1) rằng Sharpe ratio THẬT sự lớn hơn 0 sau khi đã "khấu trừ" hiệu ứng thử nhiều lần.</p>
+<p><strong>Ví dụ số từ chính paper gốc</strong>: N=100 biến thể đã thử, Sharpe ratio đo được của biến thể tốt nhất = 2.5 (annualized — quy đổi theo năm), T=1250 ngày dữ liệu → DSR ≈ 0.9004 (90.04%). Ngưỡng thường dùng để "chấp nhận phát hiện" là 95% — vì 90.04% &lt; 95%, kết luận đúng là <strong>KHÔNG đủ bằng chứng</strong> để tin Sharpe ratio 2.5 này phản ánh 1 edge thật, dù con số 2.5 nhìn riêng lẻ "trông rất ấn tượng".</p>
+<p><strong>Insight tổng hợp CPCV + PBO + DSR</strong>: cả 3 kỹ thuật đều nhắm vào CÙNG 1 rủi ro gốc — quy trình nghiên cứu quant hiện đại LUÔN thử nhiều biến thể trước khi chọn 1 cái để deploy, và bản thân hành động "chọn cái tốt nhất trong nhiều lần thử" TỰ NÓ đã tạo ra thiên lệch lạc quan (optimism bias) không liên quan gì tới chất lượng thật của chiến lược. CPCV cho thấy ĐỘ ỔN ĐỊNH qua nhiều cách chia dữ liệu; PBO đo trực tiếp xác suất "quán quân" chỉ là may mắn; DSR khấu trừ chỉ số Sharpe theo đúng số lần đã thử. Không kỹ thuật nào trong 3 cái là "phòng thủ" bằng lần lượt — nên áp dụng CẢ 3 nếu quy trình có thử nhiều biến thể (đúng thực tế của bất kỳ dự án quant nghiêm túc nào, không riêng gì 1 dự án cụ thể).</p>
+</div>
+
+<h2>4. 3 loại data leak phổ biến</h2>
+
+<div class="callout danger">
+<div class="label">Temporal leak</div>
+<p>K-Fold random → test set chứa data từ tương lai. Solution: TimeSeriesSplit.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">Group leak</div>
+<p>Same user/entity xuất hiện cả train và test → model học identity, không pattern. Fix: GroupKFold theo user_id.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">Feature leak</div>
+<p>Feature dùng future info (VD: <code>close.rolling(20).mean().shift(-10)</code>). Fix: chỉ shift positive (past data).</p>
+</div>
+
+<h2>5. V19.5 Slice 10 replay caveat (case real)</h2>
+
+<div class="example-box">
+<div class="title">Replay hit rate KHÔNG = production hit rate</div>
+<p>V19.5 Slice 10 plan: chạy 60-day walk-forward replay trên trained model. Nhưng model được train trên FULL history (kể cả period đang replay). Nghĩa là model đã "thấy" data thời điểm replay.</p>
+<p>→ Replay hit rate là <strong>upper bound</strong> — inflate vs true production rate.</p>
+<p>Fix đúng: retrain model tại mỗi replay point chỉ với data ≤ point đó. Cost: 60× compute. Plan pragmatic: replay làm directional signal, actual measure post-promote via live prediction_feedback.</p>
+<p>Reference: <code>v20-master-execution-plan.md</code> "Fix M2 — Replay caveat"</p>
+</div>
+
+<h2>6. Implement bằng sklearn + purge/embargo</h2>
+
+<pre><code>from sklearn.model_selection import TimeSeriesSplit
+
+class PurgedKFold:
+    def __init__(self, n_splits, label_horizon, embargo):
+        self.n_splits = n_splits
+        self.h = label_horizon
+        self.embargo = embargo
+
+    def split(self, X, y=None):
+        n = len(X)
+        fold_size = n // self.n_splits
+        for i in range(self.n_splits):
+            test_start = i * fold_size
+            test_end = test_start + fold_size
+            # Purge: drop training samples TRƯỚC test có label overlap
+            train_end_before = max(0, test_start - self.h)
+            # Embargo: drop thêm training samples NGAY SAU test (buffer,
+            # KHÔNG đụng tới test_idx — test set giữ nguyên kích thước)
+            train_start_after = min(n, test_end + self.embargo)
+            train_idx = np.concatenate([
+                np.arange(0, train_end_before),
+                np.arange(train_start_after, n),
+            ])
+            test_idx = np.arange(test_start, test_end)
+            yield train_idx, test_idx
+</code></pre>
+
+<h2>7. Detect leak trong code</h2>
+
+<div class="callout">
+<div class="label">Checklist</div>
+<ol>
+  <li>Grep <code>shift(-</code> trong feature engineering code — chỉ shift positive OK</li>
+  <li>Verify feature <code>at t</code> chỉ dùng data <code>&le; t</code>: mask future to NaN, re-compute, check equal</li>
+  <li>Check normalization: fit scaler trên train only, transform test</li>
+  <li>Check target encoding: mean encoding phải out-of-fold</li>
+  <li>Check aggregation: rolling mean trên history bao gồm target row → leak nhẹ</li>
+</ol>
+</div>
+
+<div class="callout warn">
+<div class="label">⚠️ 3 hiểu lầm phổ biến về time-series CV</div>
+<ol>
+  <li><strong>"TimeSeriesSplit của sklearn là đủ, không cần purge"</strong> — SAI cho label horizon &gt; 1. sklearn TimeSeriesSplit chỉ đảm bảo train &lt; test theo index, KHÔNG purge label overlap. Với horizon 5 ngày, sample tại T495 có label dùng close[495:500], nhưng test bắt đầu tại T500 → leak. Phải tự implement purge hoặc dùng <code>mlfinlab.PurgedKFold</code>.</li>
+  <li><strong>"Nhiều fold hơn = CV robust hơn"</strong> — SAI cho time-series. Mỗi fold consume block liên tục → nhiều fold nghĩa là block test nhỏ (noisy) hoặc train ngắn (unstable). 3-5 fold walk-forward + 1000+ test samples/fold là sweet spot. Với 10-fold + 100 samples/fold → variance CV lớn hơn signal.</li>
+  <li><strong>"CV score cao thì deploy an tâm"</strong> — SAI với regime change. CV chỉ đảm bảo model generalize <em>trong distribution đã thấy</em>. Nếu deploy vào period market thay đổi cấu trúc (COVID, war, chính sách mới), CV không nói gì. Fix: stress test bằng hold out entire regime (VD: train trước COVID, test trong COVID) — nếu skill score sụp, model quá phụ thuộc regime.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Walk-forward vs rolling window — khi nào chọn cái nào?</p>
+<p class="a">Walk-forward (expand): khi data ít + market pattern stable. Rolling (fixed): khi regime shift, muốn drop old irrelevant data (crypto, stock market 2020 vs 2024).</p>
+
+<p class="q">2. Purge và Embargo khác gì?</p>
+<p class="a">Purge: drop training samples (trước test) có label overlap với test (label horizon &gt; 1). Embargo: drop thêm training samples NGAY SAU test (không đụng test set) để chặn leak do autocorrelation lan sang fold training kế tiếp.</p>
+
+<p class="q">3. V19.5 replay hit rate 55%. Deploy dựa vào đó OK?</p>
+<p class="a">Không. Replay có look-ahead bias vì model train trên full history. Real production sẽ thấp hơn 5-15pp. Wait 14+ ngày prediction_feedback rồi measure thực.</p>
+
+<p class="q">4. Feature <code>volume_ratio = volume / volume.rolling(20).mean()</code>. Có leak không?</p>
+<p class="a">Có leak nhẹ! rolling(20).mean() ở row t bao gồm row t (window là (t-19, t]). Fix: <code>volume.rolling(20).mean().shift(1)</code> để exclude current row.</p>
+
+<p class="q">5. Cross-validation với SMOTE — thứ tự đúng?</p>
+<p class="a">Split TRƯỚC (val + train), rồi SMOTE CHỈ train fold. Nếu SMOTE trước split → synthetic samples ở val → leak → val score inflated.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>V18 CV: <code>TimeSeriesSplit(n_splits=3, gap=5)</code> trong <code>train_v18_unified.py</code></li>
+    <li>V19.5 Slice 10 gap: <code>reports/_baselines/v19_5_senior_signoff.md</code> "R1 — Live replay unmeasured"</li>
+    <li>V20 plan §7 P0 "no silent failure" — includes replay caveat</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 Marcos López de Prado — <em>Advances in Financial Machine Learning</em> (2018), Ch 7 Cross-Validation</li>
+    <li>📄 <a href="https://arxiv.org/abs/2106.11249">Cerqueira et al (2021) — Time-series Cross-Validation strategies survey</a></li>
+    <li>📖 <a href="https://scikit-learn.org/stable/modules/cross_validation.html#time-series-split">sklearn Time-Series CV</a></li>
+    <li>🎥 <a href="https://youtu.be/BgSFTNSGmzY">Kaggle winners on time-series CV</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L2_3_imbalance.html">← L2.3</a>
+  <a href="L2_5_interpretability.html">L2.5 · Interpretability →</a>
+</div>
+
+</div>
+</body>
+</html>

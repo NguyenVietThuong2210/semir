@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R1.5 · Git &amp; Version Control — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Coding Fundamentals · Điểm 5/6</div>
+  <h1>R1.5 · Git &amp; Version Control — kỷ luật thay đổi trên hệ thống sống</h1>
+  <p class="subtitle">Vì sao dự án cấm tuyệt đối <code>ALTER TABLE</code> thủ công và <code>git commit --amend</code> sau khi hook fail — 2 quy tắc sinh ra từ 1 sự cố thật, không phải sở thích cá nhân.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Viết đúng 1 commit message theo Conventional Commits format, dựa trên convention thật đang dùng trong <code>git log</code> của repo.</li>
+<li>Giải thích chính xác cơ chế <code>git commit --amend</code> và vì sao dùng nó sau khi pre-commit hook fail sẽ phá commit trước đó.</li>
+<li>Giải thích được vì sao "thay đổi không nằm trong version control thì coi như không tồn tại" — liên hệ sự cố thật đã xảy ra với <code>prediction_log</code>.</li>
+<li>Đọc hiểu cấu trúc <code>backend/db_migrations.py</code> và giải thích vì sao nó "idempotent" (chạy lại nhiều lần vẫn an toàn).</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Không có prerequisite kỹ thuật — Git là công cụ độc lập với ngôn ngữ lập trình. Có thể đọc module này ở bất kỳ thời điểm nào trong chuỗi 6 file.</p>
+<p>Độ khó: <strong>Dễ</strong> về mặt thao tác (vài lệnh cơ bản), nhưng đòi hỏi hiểu đúng <em>mô hình tư duy</em> — Git không phải "công cụ lưu file", mà là hệ thống snapshot có lịch sử không thể âm thầm sửa lại.</p>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Git giống <strong>nhật ký phẫu thuật</strong> của bệnh viện — mỗi lần "mổ" (sửa code) phải ghi lại chính xác đã làm gì, vì sao, và có thể tua lại (revert) nếu bệnh nhân (hệ thống) phản ứng xấu.</p>
+<p>Một bác sĩ không bao giờ tẩy xoá trang nhật ký của ca mổ hôm qua để "sửa lại cho gọn" — nếu ghi sai, họ thêm 1 trang mới đính chính, giữ nguyên trang cũ. <code>git commit --amend</code> giống hành động "tẩy xoá trang cũ" — chỉ an toàn khi bạn chắc chắn trang đó <em>chưa từng</em> được ai khác nhìn thấy.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>Bước 1 — Khái niệm nền: commit, staging area, branch (dễ)</h3>
+<table>
+<tr><th>Khái niệm</th><th>Ý nghĩa</th></tr>
+<tr><td>Commit</td><td>1 "ảnh chụp" (snapshot) toàn bộ trạng thái file tại 1 thời điểm, có ID duy nhất (hash)</td></tr>
+<tr><td>Staging area (<code>git add</code>)</td><td>Vùng "chuẩn bị" — chọn chính xác thay đổi nào sẽ nằm trong commit tiếp theo</td></tr>
+<tr><td>Branch</td><td>1 con trỏ di động chỉ vào 1 commit — tạo branch mới cực rẻ (không copy toàn bộ code)</td></tr>
+</table>
+<p>Thao tác an toàn cơ bản, luôn làm trước khi hành động:</p>
+<pre><code>git status                      # xem trạng thái hiện tại trước khi làm gì
+git diff                        # xem đúng nội dung sẽ commit
+git log --oneline -10           # học convention message trước khi viết mới</code></pre>
+
+<h3>Bước 2 — Conventional Commits: convention thật của dự án</h3>
+<p>Đọc trực tiếp <code>git log --oneline -15</code> của repo, thấy rõ format nhất quán:</p>
+<pre><code>docs: clarify V20 probe is a direct A/B on v22 + add expected-improvement column
+docs: final corrected AI Predict v22 numbers - 19/258 trust list
+fix(ai-predict): add releaseTag to the tier3-skip early-return path too
+feat(ai-predict): v22 release tag live on API + status script
+fix(ai-predict): 3 bugs found by independent verification (Giai đoạn 0+1)</code></pre>
+<p>Format: <code>&lt;type&gt;(&lt;scope&gt;): &lt;mô tả ngắn, thì hiện tại&gt;</code>.</p>
+<table>
+<tr><th>Type</th><th>Khi nào dùng</th></tr>
+<tr><td><code>feat</code></td><td>Thêm tính năng/khả năng mới</td></tr>
+<tr><td><code>fix</code></td><td>Sửa bug</td></tr>
+<tr><td><code>docs</code></td><td>Chỉ thay đổi tài liệu/plan, không đổi code chạy</td></tr>
+<tr><td><code>refactor</code></td><td>Đổi cấu trúc code, hành vi không đổi</td></tr>
+<tr><td><code>test</code></td><td>Thêm/sửa test</td></tr>
+<tr><td><code>chore</code></td><td>Việc lặt vặt (dependency, config) không ảnh hưởng logic chính</td></tr>
+</table>
+<p><strong>Lợi ích thực tế, không chỉ để "đẹp"</strong>: <code>git log --oneline | grep '^fix'</code> lọc ra toàn bộ bug fix trong lịch sử ngay lập tức — không thể làm vậy nếu message tự do kiểu "update stuff" hay "sửa lỗi".</p>
+
+<h3>Bước 3 — Vì sao "luôn tạo commit mới, không amend"</h3>
+<p>Đây là quy tắc bắt buộc, không phải sở thích. Để hiểu tại sao, cần hiểu đúng cơ chế <code>--amend</code>:</p>
+<table>
+<tr><th>Bước</th><th>Điều gì thực sự xảy ra</th></tr>
+<tr><td>1</td><td>Bạn chạy <code>git commit</code>, nhưng pre-commit hook (VD lint) fail.</td></tr>
+<tr><td>2</td><td>Vì hook fail, Git <strong>không tạo commit mới</strong> — commit đó chưa từng tồn tại.</td></tr>
+<tr><td>3</td><td>Bạn sửa lỗi, rồi chạy <code>git commit --amend</code> "để sửa commit vừa fail".</td></tr>
+<tr><td>4</td><td><code>--amend</code> không biết gì về ý định "sửa commit vừa fail" — nó chỉ làm đúng 1 việc: sửa <strong>commit gần nhất đã tồn tại</strong> (commit TRƯỚC ĐÓ, hợp lệ) — âm thầm ghi đè lên nó.</td></tr>
+</table>
+<p><strong>Cách đúng</strong>: khi hook fail, sửa lỗi → <code>git add</code> lại → tạo <strong>commit mới</strong>, không amend.</p>
+
+<h3>Bước 4 — "Không trong Git = không tồn tại" — bài học từ sự cố thật</h3>
+<p><code>CLAUDE.md</code> ghi rõ: <em>"Schema changes: use the idempotent migration runner (<code>backend/db_migrations.py</code>)... never a manual one-off <code>ALTER TABLE</code> — after a manual, uncaptured <code>ALTER TABLE</code> was lost in an infrastructure reset and broke <code>prediction_log</code> silently for 8+ days."</em></p>
+<p>Chuỗi sự kiện: (1) ai đó chạy <code>ALTER TABLE</code> trực tiếp trên container đang chạy → (2) thay đổi này không nằm trong bất kỳ commit/file migration nào → (3) hạ tầng bị reset (VD volume Docker bị xoá) → (4) schema quay về trạng thái cũ, không ai biết đã từng đổi gì vì <strong>không có record nào trong version control</strong> → (5) <code>prediction_log</code> hỏng thầm lặng 8+ ngày trước khi phát hiện.</p>
+<p><strong>Bài học tổng quát</strong>: nếu 1 thay đổi chỉ tồn tại dưới dạng lệnh chạy tay 1 lần, nó không thực sự "tồn tại" theo nghĩa có thể tái lập — phải nằm trong file được commit.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p><code>backend/db_migrations.py</code> — migration runner thật, đọc trực tiếp (dòng 1-40):</p>
+<pre><code>"""
+Idempotent startup schema migrations + integrity checks.
+
+Every migration is applied exactly once, tracked via `schema_migrations`.
+Unlike init.sql (which only runs on first-ever Postgres volume init), this
+runs on EVERY app startup — so a manually-applied-then-lost schema change
+... cannot silently regress after a volume reset ever again.
+"""
+
+MIGRATIONS: list[tuple[str, str]] = [
+    (
+        "2026-08-08_prediction_log_veto_columns",
+        """
+        ALTER TABLE prediction_log
+            ADD COLUMN IF NOT EXISTS veto_reason TEXT,
+            ADD COLUMN IF NOT EXISTS veto_applied_factor DOUBLE PRECISION
+        """,
+    ),
+    # ... mỗi migration có ID duy nhất, append-only — KHÔNG BAO GIỜ sửa/xoá
+    # 1 entry cũ đã ship, kể cả để sửa 1 lỗi chính tả trong SQL của nó.
+]</code></pre>
+<p>Điểm mấu chốt: mỗi migration <strong>nằm trong file, được commit, chạy lại tự động mỗi lần app khởi động</strong> (không chỉ 1 lần tay) — kể cả khi volume DB bị reset hoàn toàn, migration này tự chạy lại và khôi phục đúng schema. Đây chính là cách sự cố "8+ ngày" ở Bước 4 không thể tái diễn.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Thao tác</th><th>An toàn?</th><th>Vì sao</th></tr>
+<tr><td><code>git add backend/predict/engine.py</code></td><td>An toàn</td><td>Add đúng file cụ thể, biết chính xác thứ gì vào commit</td></tr>
+<tr><td><code>git add -A</code> / <code>git add .</code></td><td>Rủi ro</td><td>Dễ commit nhầm <code>.env</code>, <code>__pycache__/</code>, file rác chưa kiểm tra</td></tr>
+<tr><td>Tạo commit mới sau khi sửa lỗi</td><td>An toàn</td><td>Giữ nguyên lịch sử, không ghi đè commit hợp lệ trước đó</td></tr>
+<tr><td><code>git commit --amend</code> sau hook fail</td><td>Nguy hiểm</td><td>Ghi đè nhầm commit TRƯỚC ĐÓ (đã hợp lệ), không phải commit vừa fail</td></tr>
+<tr><td><code>ALTER TABLE</code> qua <code>backend/db_migrations.py</code></td><td>An toàn</td><td>Có commit, có ID, tự chạy lại mỗi lần khởi động — idempotent</td></tr>
+<tr><td><code>ALTER TABLE</code> tay trên container</td><td>Nguy hiểm</td><td>Không nằm trong version control — mất khi reset hạ tầng (đã xảy ra thật)</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Mọi thay đổi formula (<code>backend/predict/senior_score.py</code>) nếu cần đổi schema DB phải đi qua <code>backend/db_migrations.py</code> — không có ngoại lệ, kể cả khi "chỉ thêm 1 cột tạm để test". Commit theo Conventional Commits để <code>git log --oneline | grep '^fix(ai-trader)'</code> vẫn tra cứu được lịch sử fix nhiều tháng sau — pattern này đã dùng nhất quán qua hàng trăm commit thật của repo (xem <code>git log --oneline -30</code>).</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>#1 — <code>git add -A</code>/<code>git add .</code></strong>: dễ commit nhầm file bí mật (<code>.env</code>) hoặc file build rác. Luôn add file cụ thể theo tên khi không chắc chắn 100% những gì đang thay đổi.</p>
+<p><strong>#2 — <code>git commit --amend</code> sau khi pre-commit hook fail</strong>: phá commit TRƯỚC ĐÓ vì commit vừa fail chưa từng được tạo ra (xem Bước 3). Luôn sửa lỗi rồi tạo commit MỚI.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Viết đúng 1 commit message theo Conventional Commits dựa trên <code>git log</code> thật của repo.</li>
+<li>Giải thích chính xác vì sao <code>--amend</code> sau hook fail phá commit TRƯỚC ĐÓ, không phải commit vừa fail.</li>
+<li>Kể lại đúng chuỗi 5 sự kiện dẫn tới sự cố <code>prediction_log</code> hỏng 8+ ngày.</li>
+<li>Giải thích được "idempotent" nghĩa là gì trong ngữ cảnh <code>db_migrations.py</code>.</li>
+<li>Chỉ ra vì sao <code>git add -A</code> rủi ro hơn add file cụ thể theo tên.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R1_4_ds_algos.html">← R1.4 · DS &amp; Algos</a>
+  <a href="R1_6_pytest.html">R1.6 · PyTest →</a>
+</div>
+
+</div>
+</body>
+</html>

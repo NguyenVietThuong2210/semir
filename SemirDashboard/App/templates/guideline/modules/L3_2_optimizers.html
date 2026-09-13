@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L3.2 — Optimizers</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 3 · Module 2</div>
+  <h1>3.2 · Optimizers + LR Schedules</h1>
+  <p class="subtitle">SGD → Momentum → RMSprop → Adam → AdamW → Lion. Cách chọn + tune LR schedule cho Transformer training.</p>
+  <div class="level">Level 3 · Deep Learning · ~30 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Understand SGD + Momentum intuition</li>
+  <li>Derive Adam update rule from RMSprop + Momentum</li>
+  <li>Chọn LR schedule: constant, step, cosine, warmup+cosine</li>
+  <li>Debug loss curve: diverge, plateau, oscillate</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Optimizers bằng ngôn ngữ đời thường</div>
+<p><strong>Xuống núi trong sương mù</strong>: Bạn ở đỉnh, không thấy đường, chỉ cảm nhận được độ dốc dưới chân. Bước xuống hướng dốc nhất → thấp dần → tới thung lũng (loss min).</p>
+<ul>
+  <li><strong>Vanilla GD</strong>: Bước lớn, mỗi bước tính lại độ dốc. Chậm nhưng chắc.</li>
+  <li><strong>Momentum</strong>: Giữ đà — nếu 3 bước trước đều đi hướng Đông thì tiếp tục Đông, không đổi hướng vì 1 gió nhỏ (noise). Ra khỏi cái hố cạn dễ hơn.</li>
+  <li><strong>Adam</strong>: Mỗi hướng có tốc độ riêng — hướng dốc thoải bước dài, hướng dốc gấp bước ngắn. Tự động điều chỉnh, ít phải tune LR.</li>
+  <li><strong>LR schedule</strong>: Ban đầu bước dài (còn xa mục tiêu), gần đích bước ngắn (không lỡ qua). Warm-up = "đi bộ 5 phút trước khi chạy".</li>
+</ul>
+</div>
+
+<h2>1. Gradient Descent basics</h2>
+<pre><code>w_new = w - lr · grad
+</code></pre>
+
+<h3>Batch GD vs SGD vs mini-batch</h3>
+<ul>
+  <li><strong>Batch GD</strong>: compute grad trên full dataset → smooth, slow, memory-heavy</li>
+  <li><strong>SGD</strong>: 1 sample at a time → noisy, converge trong many steps</li>
+  <li><strong>Mini-batch (default)</strong>: 32-512 samples → balance noise + speed + GPU utilization</li>
+</ul>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Adam vs SGD: vì sao chọn sai = 2% accuracy = 6 tháng phí công (chi tiết dễ hiểu)</div>
+
+<p><strong>Câu hỏi thực tế</strong>: Bạn train model. Nên dùng Adam (nghe cool, hầu hết tutorial dùng) hay SGD (cổ điển, tài liệu ImageNet dùng)? Chọn sai bạn phí 2 tuần compute + kết quả tệ 2%. Đây là quyết định tưởng nhỏ nhưng khác biệt lớn.</p>
+
+<p><strong>Bước 1 — Hiểu landscape của loss function</strong>: Loss function trong deep learning không phẳng — có "ravine" (thung lũng dài). Trục X thoải (gradient nhỏ), trục Y dốc (gradient lớn). Muốn đến đáy ravine (minimum), bạn phải đi thẳng theo trục X (thoải), không zigzag theo trục Y.</p>
+
+<p><strong>Bước 2 — Vanilla SGD trong ravine</strong>: SGD dùng cùng learning rate cho mọi hướng. Trục Y dốc → gradient lớn → step lớn → nhảy sang bên kia ravine. Bước tiếp lại nhảy về. Zigzag miên man → tiến chậm về trục X.</p>
+
+<p><strong>Bước 3 — Momentum fix zigzag</strong>: Momentum = giữ "đà" theo hướng ổn định. Trục Y gradient đổi dấu liên tục (nhảy qua nhảy lại) → momentum cancel ra ~0 → không nhảy. Trục X gradient nhỏ nhưng ổn định → momentum tích lũy → tiến nhanh. Zigzag biến mất. Đây là why "SGD + momentum" thắng vanilla SGD 5-10× tốc độ.</p>
+
+<p><strong>Bước 4 — Adam đi xa hơn (adaptive LR)</strong>: Adam thêm chia cho √v = "variance của gradient". Ý tưởng: hướng nào gradient hay biến động (variance cao) → chia lớn → step NHỎ. Hướng nào ổn định (variance thấp) → chia nhỏ → step LỚN. Trong ravine: trục Y variance cao → step nhỏ (không nhảy), trục X variance thấp → step lớn (tiến nhanh). Kết quả: Adam đi thẳng đáy ravine mà không cần tune LR per layer.</p>
+
+<p><strong>Con số biết nói</strong> — Train ResNet-50 trên ImageNet:</p>
+<table>
+<tr><th>Setup</th><th>Epochs</th><th>Accuracy</th></tr>
+<tr><td>Vanilla SGD</td><td>200</td><td>74.5%</td></tr>
+<tr><td>SGD + momentum + cosine LR</td><td>90</td><td>76.5% ← chuẩn ImageNet</td></tr>
+<tr><td>Adam</td><td>30</td><td>75.8% ← nhanh hơn nhưng thấp hơn 0.7%</td></tr>
+</table>
+<p>Trong benchmarks vision, SGD+momentum thắng Adam 0.5-2% accuracy. Vì sao?</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Vì sao Adam TỆ hơn SGD cho ResNet nhưng TỐT hơn cho LLM?</strong></p>
+
+<p><strong>Bước 1 — Khái niệm "sharp vs flat minima"</strong>: Loss landscape có nhiều minima (đáy) khác nhau — 2 loại:</p>
+<ul>
+<li><em>Sharp minima</em>: đáy hẹp, dốc. Model tại đây nếu tham số dịch chuyển 1 chút → loss tăng vọt.</li>
+<li><em>Flat minima</em>: đáy rộng, phẳng. Model dịch chuyển 1 chút → loss vẫn thấp.</li>
+</ul>
+
+<p><strong>Bước 2 — Generalization gap</strong>: Test set khác train set 1 chút (distribution shift nhỏ). Trong flat minima, dịch chuyển nhỏ = loss vẫn thấp = model vẫn accurate. Trong sharp minima, dịch chuyển = loss tăng = model tệ trên test. Kết quả: <strong>flat minima generalize tốt hơn</strong> (Hochreiter 1997).</p>
+
+<p><strong>Bước 3 — Adam vs SGD tìm loại minima khác nhau</strong>: SGD có noise cao (random mini-batch) → "lắc" model, không stuck vào sharp minima → tìm flat minima. Adam adaptive LR → converge chính xác vào minima gần nhất, thường sharp → generalize kém hơn.</p>
+
+<p><strong>Bước 4 — Vì sao khác cho LLM?</strong> LLM landscape đủ smooth (nhờ scale, nhờ pretrained init) — sharp/flat gần như không tồn tại vì loss quá "phẳng đại thể". Adam converge nhanh + accuracy OK. LLM cũng cần train NHIỀU tokens (Chinchilla D=20N) → time matter → Adam thắng vì nhanh 3×.</p>
+
+<p><strong>Cheat sheet chọn optimizer</strong>:</p>
+<table>
+<tr><th>Tình huống</th><th>Chọn</th></tr>
+<tr><td>Tabular ML (XGBoost, RF)</td><td>Không cần chọn — built-in</td></tr>
+<tr><td>Small NN prototype</td><td>Adam (default) — đơn giản, work</td></tr>
+<tr><td>Vision production (ResNet, ViT, EfficientNet)</td><td>SGD + momentum 0.9 + cosine LR + weight decay 5e-4 — chậm hơn Adam 3× nhưng accuracy hơn 1-2%</td></tr>
+<tr><td>LLM (Transformer)</td><td>AdamW (Adam + weight decay tách) + warmup 2000 steps + cosine decay</td></tr>
+<tr><td>Fine-tune LoRA</td><td>Adam đủ</td></tr>
+</table>
+<p>Chọn sai = 2% accuracy = paper reject / model không competitive / 6 tháng research bị waste.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Khi Adam VỠ hoàn toàn — bug rất khó debug</strong></p>
+
+<p><strong>Symptoms</strong>: Loss = NaN sau vài steps đầu. Không hiển thị error, model chết im.</p>
+
+<p><strong>Root cause — KHÔNG phải bias correction làm step "khổng lồ" (hiểu nhầm phổ biến)</strong>: v̂ nằm ở MẪU SỐ trong bước cập nhật (<code>η·m̂/(√v̂+ε)</code>) — v̂ lớn hơn thì bước cập nhật NHỎ hơn, không phải lớn hơn.</p>
+<ul>
+<li><strong>Tính tay tại t=1</strong> (m₀=v₀=0): m̂₁ = (1-β₁)g/(1-β₁) = g và v̂₁ = (1-β₂)g²/(1-β₂) = g² (mẫu số bias-correction triệt tiêu đúng hệ số vừa scale ở tử số) → bước cập nhật ≈ η·g/(|g|+ε) ≈ η·sign(g) — 1 bước hoàn toàn bình thường, KHÔNG nổ.</li>
+<li><strong>Ngược lại nếu KHÔNG bias-correct</strong> (dùng thẳng v₁=(1-β₂)g²=0.001g²): bước sẽ là η·(1-β₁)g/√(0.001g²) ≈ η×3.16×sign(g) — còn LỚN HƠN bản có correction.</li>
+<li><strong>Kết luận</strong>: bias correction sinh ra chính là để CHẶN việc v ước lượng quá nhỏ lúc đầu làm mẫu số bé giả tạo → bước phóng đại — nó làm NHỎ bớt bước đầu, không phải làm nổ nó.</li>
+<li>NaN thật ở bước đầu (nếu có) thường tới từ nguyên nhân khác: LR full-scale chưa warmup khiến MỌI parameter di chuyển ±η cùng lúc, cộng dồn logit lớn ở downstream layer.</li>
+</ul>
+
+<p><strong>Fix — LR warmup</strong>: Bắt đầu với LR = 0, tăng dần tuyến tính lên target LR trong 500-2000 steps. Điều này cho v ổn định trước khi step lớn. Rule: LLM training <em>bắt buộc</em> warmup. Vision đôi khi optional (SGD không cần).</p>
+
+<p><strong>Hậu quả nếu không hiểu warmup</strong>: Bạn train GPT-2 mini → loss NaN sau 3 steps. Debug 1 tuần, đổi model architecture, đổi data, đổi init. Không fix. Rewind → ai đó hỏi "bạn có warmup không?" → thêm 500 steps warmup → train ngon. <em>1 dòng code, 1 tuần bị waste</em>.</p>
+
+<p><strong>Bonus — Vì sao AdamW khác Adam?</strong> Adam trộn weight decay vào gradient. AdamW (Loshchilov &amp; Hutter 2019) tách weight decay khỏi gradient, subtract trực tiếp từ params. Kết quả: weight decay giữ đúng magnitude bất kể LR schedule. Đây là default cho mọi LLM training 2020+.</p>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🧗 Optimizer progression — "vấn đề optimizer trước không giải" → "công thức fix"</div>
+
+<p>Analogy: xuống núi trong sương mù. Mỗi optimizer sửa 1 lỗi của optimizer trước.</p>
+
+<pre><code>SGD        ──► zigzag trong ravine, 1 LR chung cho mọi param
+  │ + momentum (giữ đà, cancel zigzag)
+  ▼
+Momentum   ──► hết zigzag, nhưng vẫn 1 LR chung cho mọi param
+  │ + per-param LR (chia cho √Σg²)
+  ▼
+AdaGrad    ──► LR mỗi param riêng, nhưng s cộng dồn vô hạn → LR → 0, chết
+  │ + EMA thay vì cộng dồn (s không tăng vô hạn)
+  ▼
+RMSprop    ──► LR không chết nữa, nhưng mất momentum → zigzag quay lại
+  │ + momentum trở lại + bias correction
+  ▼
+Adam       ──► có cả momentum + adaptive LR, nhưng weight decay bị lệch qua √ŝ
+  │ + tách weight decay ra khỏi adaptive LR
+  ▼
+AdamW      ──► default cho LLM training 2019+</code></pre>
+
+<h4>Step 1 — SGD (baseline)</h4>
+<pre><code>w ← w - η · g            (g = ∂L/∂w)</code></pre>
+<p><strong>Vấn đề</strong>: (1) zigzag trong ravine, (2) chậm ở plateau (g nhỏ), (3) mọi param cùng LR η.</p>
+
+<h4>Step 2 — SGD + Momentum (Polyak 1964)</h4>
+<pre><code>v ← β·v + g             (β=0.9 → nhớ ~10 grad gần)
+w ← w - η · v</code></pre>
+<p><strong>Fix</strong>: trục zigzag đổi dấu liên tục → v cancel về 0; trục ổn định → v tích luỹ. <strong>Còn thiếu</strong>: mỗi param vẫn 1 LR chung — nếu grad mỗi param khác 100× thì LR không thể vừa 2 param cùng lúc.</p>
+
+<h4>Step 3 — AdaGrad (Duchi 2011)</h4>
+<pre><code>s ← s + g²              (accumulate squared grad — không quên)
+w ← w - η · g / (√s + ε)</code></pre>
+<p><strong>Fix</strong>: mỗi param có LR riêng (η/√s_i), param grad lớn → LR nhỏ. <strong>Vấn đề mới</strong>: s tăng vô hạn → LR effective → 0 → dừng học sau vài nghìn steps. Dead cho deep learning.</p>
+
+<h4>Step 4 — RMSprop (Hinton 2012, lecture note)</h4>
+<pre><code>s ← β₂·s + (1-β₂)·g²    (moving average, β₂=0.999)
+w ← w - η · g / (√s + ε)</code></pre>
+<p><strong>Fix</strong>: exponential moving average thay tổng → s không tăng vô hạn → LR không chết. <strong>Còn thiếu</strong>: không có momentum → vẫn zigzag trong ravine.</p>
+
+<h4>Step 5 — Adam (Kingma & Ba 2015) = Momentum + RMSprop + bias correction</h4>
+<pre><code>m ← β₁·m + (1-β₁)·g               # 1st moment (momentum-like)
+s ← β₂·s + (1-β₂)·g²              # 2nd moment (RMSprop-like)
+m̂ = m / (1 - β₁^t)               # bias correction (m, s bắt đầu = 0)
+ŝ = s / (1 - β₂^t)
+w ← w - η · m̂ / (√ŝ + ε)</code></pre>
+<p><strong>Fix</strong>: có momentum + adaptive LR + không bias sớm. Default β₁=0.9, β₂=0.999, ε=1e-8, η=1e-3. <strong>Vấn đề mới</strong>: weight decay λ·w bị nhân với 1/√ŝ → param có s lớn nhận ít regularization → generalize kém.</p>
+
+<h4>Step 6 — AdamW (Loshchilov &amp; Hutter 2019)</h4>
+<pre><code>w ← w - η · m̂ / (√ŝ + ε) - η · λ · w
+                                    ↑ decoupled weight decay (không qua √ŝ)</code></pre>
+<p><strong>Fix</strong>: weight decay đúng magnitude cho mọi param. Default cho mọi LLM 2019+.</p>
+
+<h4>Ý nghĩa biến (Adam / AdamW)</h4>
+<table>
+<tr><th>Biến</th><th>Ý nghĩa</th><th>Default</th></tr>
+<tr><td>g</td><td>Gradient hiện tại ∂L/∂w</td><td>—</td></tr>
+<tr><td>m</td><td>EMA gradient (momentum, ước lượng E[g])</td><td>init 0</td></tr>
+<tr><td>s (v)</td><td>EMA gradient² (ước lượng E[g²], variance)</td><td>init 0</td></tr>
+<tr><td>β₁</td><td>Decay momentum — nhớ ~1/(1-β₁)=10 grad</td><td>0.9</td></tr>
+<tr><td>β₂</td><td>Decay variance — nhớ ~1000 grad²</td><td>0.999</td></tr>
+<tr><td>η</td><td>Learning rate (base)</td><td>1e-3 (Adam), 1e-4 (LLM)</td></tr>
+<tr><td>ε</td><td>Numerical stability (tránh chia 0)</td><td>1e-8</td></tr>
+<tr><td>λ</td><td>Weight decay coefficient</td><td>0.01 (AdamW LLM)</td></tr>
+<tr><td>t</td><td>Step count (dùng cho bias correction)</td><td>—</td></tr>
+</table>
+</div>
+
+<h2>2. Momentum</h2>
+<pre><code>v_t = β · v_{t-1} + grad
+w_t = w_{t-1} - lr · v_t
+
+# β = momentum coefficient (thường 0.9)
+# Intuition: accumulate gradient direction — như bóng lăn xuống dốc
+# Effect: smoother path, escape local minima nhỏ, converge nhanh hơn plain SGD
+</code></pre>
+
+<p>Nesterov Momentum = variant "look-ahead": compute grad at w - lr·v (peek future) → slightly better convergence.</p>
+
+<h2>3. Adaptive LR — RMSprop</h2>
+
+<p>Ý tưởng: mỗi param có LR riêng, nhỏ hơn cho params có gradient lớn tích luỹ:</p>
+
+<pre><code>s_t = β · s_{t-1} + (1-β) · grad²
+w_t = w_{t-1} - lr · grad / sqrt(s_t + ε)
+
+# Params với grad lớn → s_t lớn → chia lớn → LR effective nhỏ
+# Params với grad nhỏ → LR effective lớn → speed up learning
+</code></pre>
+
+<h2>4. Adam = Momentum + RMSprop</h2>
+
+<pre><code>m_t = β1 · m_{t-1} + (1-β1) · grad          # 1st moment (momentum)
+v_t = β2 · v_{t-1} + (1-β2) · grad²         # 2nd moment (variance)
+
+# Bias correction (m, v start from 0, biased toward 0 early):
+m_hat = m_t / (1 - β1^t)
+v_hat = v_t / (1 - β2^t)
+
+w_t = w_{t-1} - lr · m_hat / (sqrt(v_hat) + ε)
+
+# Default: β1=0.9, β2=0.999, ε=1e-8, lr=1e-3
+</code></pre>
+
+<p>Adam là default cho DL từ 2015+ vì work-well-out-of-box. Nhưng có nhược điểm cho generalization → AdamW fix.</p>
+
+<h2>5. AdamW — decoupled weight decay</h2>
+
+<pre><code># Adam + L2:
+#   w_t = w_{t-1} - lr · (m_hat / sqrt(v_hat) + λ·w)   ← L2 flows through adaptive LR — biased
+
+# AdamW:
+#   w_t = w_{t-1} - lr · m_hat / sqrt(v_hat) - lr · λ · w   ← decoupled
+
+# Loshchilov & Hutter 2019: AdamW better generalization on Transformer
+</code></pre>
+
+<p>Modern Transformer (BERT, GPT, LLaMA) đều dùng AdamW.</p>
+
+<h2>6. Lion (2023, Google)</h2>
+
+<pre><code>c_t = β1 · m_{t-1} + (1-β1) · grad
+w_t = w_{t-1} - lr · sign(c_t) - lr · λ · w
+m_t = β2 · m_{t-1} + (1-β2) · grad
+
+# Chỉ dùng sign(grad) — no adaptive scaling
+# Memory ½ Adam (chỉ momentum, không variance)
+# Empirically match or beat AdamW cho large-scale training
+</code></pre>
+
+<h2>7. Muon (2024, Keller Jordan) — hướng đi mới nhất, khác hẳn dòng Adam</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Mọi optimizer từ SGD→AdamW ở trên đều coi weight matrix là 1 ĐỐNG SỐ RỜI RẠC — mỗi con số (mỗi phần tử ma trận) được scale ĐỘC LẬP theo gradient/variance của riêng nó, không quan tâm nó nằm ở hàng/cột nào. Muon (2024) đổi góc nhìn: 1 weight matrix của layer Linear/Attention là 1 PHÉP BIẾN ĐỔI không gian (rotation + scale), không phải 1 đống số rời rạc — nên thay vì scale từng phần tử, Muon "chỉnh hướng" CẢ MA TRẬN update sao cho nó gần với 1 phép QUAY THUẦN TÚY (orthogonal — không méo, không kéo giãn theo hướng nào) trước khi áp dụng.</p>
+
+<p><strong>Vấn đề Muon giải quyết</strong>: Adam/AdamW chuẩn hóa gradient THEO TỪNG PHẦN TỬ ĐỘC LẬP (chia mỗi phần tử cho √(variance của chính nó)) — bỏ qua hoàn toàn cấu trúc 2 chiều (hàng × cột) của weight matrix trong Linear layer/Attention projection. Kết quả: nếu 1 vài "hướng" trong không gian tham số có gradient lớn hơn hẳn các hướng khác (ill-conditioned — điều kiện xấu), Adam vẫn có thể update KHÔNG ĐỀU giữa các hướng, dẫn tới hội tụ chậm hơn mức lý thuyết.</p>
+
+<pre><code>Muon update rule (cho weight matrix 2D, VD Linear/Attention W):
+  M_k = μ·M_{k-1} + G_k               # momentum KIỂU SGD (cộng dồn G_k trực tiếp, KHÔNG nhân
+                                       # (1-β) như EMA của Adam — khác cả công thức lẫn tinh
+                                       # thần: Adam ước lượng TRUNG BÌNH gradient, Muon/SGD-
+                                       # momentum tích LŨY gradient — không chia variance)
+  W_k = W_{k-1} - η · Ortho(M_k)     # trực giao hóa CẢ MA TRẬN momentum trước khi update
+
+# Ortho(M) ≈ orthogonalization của M — xấp xỉ bằng Newton-Schulz iteration
+# (lặp vài bước 1 công thức polynomial bậc 5, KHÔNG tính SVD trực tiếp vì SVD quá chậm cho ma trận lớn)
+# Kết quả Ortho(M) là ma trận "cùng hướng singular vectors với M nhưng mọi singular value = 1"
+#   → mọi "hướng" trong update đều có ĐỘ LỚN BẰNG NHAU, không hướng nào bị lấn át</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Muon KHÔNG thay thế Adam hoàn toàn trong 1 model — thực tế dùng phổ biến (kể cả benchmark gốc của Keller Jordan) là <strong>hybrid</strong>: Muon cho weight matrix 2D của hidden layers (Linear, Attention Q/K/V/O), còn AdamW vẫn giữ cho embedding, LayerNorm/RMSNorm scale, và bias — những tham số này không phải "phép biến đổi không gian" nên trực giao hóa không có ý nghĩa.</p>
+
+<table>
+<tr><th></th><th>AdamW</th><th>Muon (2024)</th></tr>
+<tr><td>Đơn vị chuẩn hóa</td><td>Từng phần tử độc lập (per-coordinate)</td><td>Cả ma trận cùng lúc (orthogonalize toàn bộ)</td></tr>
+<tr><td>Nhận biết cấu trúc 2D của weight</td><td>Không (coi weight như vector phẳng)</td><td>Có (coi weight là ma trận biến đổi)</td></tr>
+<tr><td>Memory</td><td>2× params (m, v)</td><td>1× params (chỉ momentum, không variance)</td></tr>
+<tr><td>Áp dụng cho</td><td>Mọi loại tham số</td><td>Chỉ weight matrix 2D (hidden layers)</td></tr>
+<tr><td>Bằng chứng thực nghiệm (2024-2025)</td><td>Baseline chuẩn công nghiệp</td><td>Giữ kỷ lục tốc độ NanoGPT speedrun + CIFAR-10 speedrun</td></tr>
+</table>
+
+<p><strong>Insight</strong>: Muon là ví dụ cho 1 hướng nghiên cứu optimizer 2024-2026 khác hẳn "cải tiến Adam" (AdamW, Lion đều vẫn per-coordinate) — thay vào đó khai thác CẤU TRÚC HÌNH HỌC của weight matrix. Vẫn đang là nghiên cứu đang phát triển (nhiều biến thể NorMuon, AMUSE xuất hiện 2025-2026 để cải thiện hiệu quả/scale), chưa phải "default" thay AdamW như AdamW từng thay Adam, nhưng đã được 1 số lab lớn thử nghiệm cho pretraining quy mô lớn.</p>
+</div>
+
+<h2>8. Learning rate schedule</h2>
+
+<h3>Constant (bad default)</h3>
+<pre><code>lr = 1e-3 forever
+# Không converge good — cần decay ở cuối
+</code></pre>
+
+<h3>Step decay</h3>
+<pre><code>if epoch % 30 == 0: lr *= 0.1
+# Manual, simple, work OK
+</code></pre>
+
+<h3>Cosine annealing</h3>
+<pre><code>lr(t) = lr_max/2 · (1 + cos(π · t/T))
+
+# t: current step, T: total steps
+# Smooth decay from lr_max to 0
+# Popular cho fine-tune LLM
+</code></pre>
+
+<h3>One-cycle (Smith 2018)</h3>
+<pre><code># Phase 1 (0 → 45% steps): warmup LR + giảm momentum
+#   LR: lr_min → lr_max (VD 1e-4 → 1e-2, tăng 100×)
+#   Momentum: 0.95 → 0.85 (giảm khi LR tăng, tránh diverge)
+# Phase 2 (45% → 90%): cool-down LR + tăng momentum ngược
+#   LR: lr_max → lr_min
+#   Momentum: 0.85 → 0.95
+# Phase 3 (90% → 100%): annihilate LR về 1/1000 lr_min
+# Effect: siêu-convergence — CIFAR-10 94% trong 70 epoch thay 200</code></pre>
+
+<h3>Warmup + cosine (Transformer standard)</h3>
+<pre><code># Phase 1 (warmup, ~5% total steps):
+lr = lr_max · t / warmup_steps    # linear ramp 0 → lr_max
+
+# Phase 2 (cosine decay):
+lr = lr_max/2 · (1 + cos(π · (t - warmup) / (T - warmup)))
+</code></pre>
+
+<p>Vì sao warmup? Attention model đầu training có gradient bùng nổ → cần LR nhỏ initial. Sau khi stable → LR max → decay.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📈 LR schedule — vẽ bằng chữ (giả sử lr_max=1e-4, T=10000 steps, warmup=500)</div>
+<pre><code>Constant:      ──────────────────────────  (nằm ngang tại 1e-4)
+
+Step decay:    ────┐
+                   └────┐              ÷10 mỗi 30 epoch
+                        └────┐
+                             └───────
+
+Cosine:        ╲___                    lr(t) = lr_max/2·(1+cos(πt/T))
+                   ╲___
+                       ╲___
+                            ╲___
+                                 ╲___
+
+Warmup+cos:    ╱╲___                   linear ramp 0→lr_max trong 500 steps
+              /    ╲___                rồi cosine decay
+             /         ╲___
+            /               ╲___
+
+One-cycle:    ╱────╲                   super-convergence Fastai
+             /      ╲__
+            /          ╲___
+                            ╲___↓ annihilate</code></pre>
+<p><strong>Cosine tại step t=5000 (giữa)</strong>: cos(π·0.5) = 0, → lr = 1e-4/2·(1+0) = 5e-5 (giảm 50%). <strong>Tại t=T</strong>: cos(π)=-1 → lr = 0. Smooth, không jump.</p>
+</div>
+
+<h2>9. Debug loss curve</h2>
+
+<div class="callout warn">
+<div class="label">4 patterns thường gặp</div>
+<ul>
+  <li><strong>Diverge (NaN loss)</strong>: LR quá cao. Fix: giảm LR, gradient clipping (norm &lt; 1.0, xem deep-dive ngay dưới).</li>
+  <li><strong>Plateau (stuck)</strong>: LR quá thấp, hoặc stuck ở saddle. Fix: warmup + higher LR, thử scheduler.</li>
+  <li><strong>Oscillate</strong>: LR quá cao ở fine-tune stage. Fix: cosine decay.</li>
+  <li><strong>Train ↓ Val ↑</strong>: overfit. Fix: regularization, early stop, dropout.</li>
+</ul>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Deep-dive — Gradient clipping: "clip theo norm" khác "clip theo value" như thế nào?</div>
+
+<p><strong>Vấn đề cụ thể</strong>: mục "Diverge" ở trên nói "gradient clipping (norm &lt; 1.0)" nhưng chưa giải thích 2 cách clip khác nhau — và chọn sai cách có thể làm hỏng HƯỚNG gradient thay vì chỉ giới hạn ĐỘ LỚN.</p>
+
+<p><strong>Clip theo value (đơn giản nhưng thô)</strong>: mỗi phần tử gradient bị cắt ĐỘC LẬP vào khoảng [-threshold, threshold]:</p>
+<pre><code>Ví dụ: gradient = [0.9, -1.4, 5.2], threshold = 1.0
+Clip-by-value → [0.9, -1.0, 1.0]
+  ↑ phần tử 2 và 3 bị cắt ĐỘC LẬP — tỷ lệ TƯƠNG ĐỐI giữa các phần tử bị THAY ĐỔI
+    (gốc: -1.4 : 5.2 ≈ -0.27:1 → sau clip: -1.0 : 1.0 = -1:1 → HƯỚNG gradient bị méo)</code></pre>
+
+<p><strong>Clip theo norm (chuẩn công nghiệp — <code>clip_grad_norm_</code>)</strong>: tính độ dài toàn vector gradient trước, nếu vượt ngưỡng thì NHÂN ĐỀU mọi phần tử với cùng 1 hệ số scale — giữ nguyên HƯỚNG, chỉ giảm ĐỘ LỚN:</p>
+<pre><code>‖g‖ = √(Σ gᵢ²)                          # L2 norm của toàn bộ gradient vector
+
+Nếu ‖g‖ > threshold:
+  g_clipped = g · (threshold / ‖g‖)     # nhân MỌI phần tử với CÙNG 1 hệ số
+
+Ví dụ: gradient = [0.9, -1.4, 5.2], ‖g‖ = √(0.81+1.96+27.04) = √29.81 ≈ 5.46
+threshold = 1.0 → hệ số scale = 1.0/5.46 ≈ 0.183
+g_clipped = [0.9×0.183, -1.4×0.183, 5.2×0.183] ≈ [0.165, -0.257, 0.952]
+  ↑ tỷ lệ TƯƠNG ĐỐI giữa các phần tử GIỮ NGUYÊN (-0.257:0.952 ≈ -0.27:1, khớp gốc)
+    → HƯỚNG gradient không đổi, chỉ độ dài giảm về đúng threshold</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: hình dung hình học — clip-by-value giới hạn gradient vào 1 HÌNH HỘP (hypercube) cạnh 2×threshold, còn clip-by-norm giới hạn vào 1 HÌNH CẦU (hypersphere) bán kính threshold. Hình hộp có "góc nhọn" → hướng gradient gần góc bị méo nhiều hơn hướng gần giữa cạnh; hình cầu đối xứng mọi hướng → không thiên vị hướng nào.</p>
+
+<p><strong>Insight</strong>: PyTorch mặc định + hầu hết framework dùng <code>clip_grad_norm_</code> (theo norm) làm chuẩn cho LLM/Transformer training chính vì lý do này — giữ đúng HƯỚNG đi xuống dốc nhất (steepest descent direction) quan trọng hơn việc giới hạn từng phần tử riêng lẻ. Clip-by-value vẫn có chỗ dùng (VD RNN/LSTM cũ, hoặc khi biết chắc 1 vài phần tử cụ thể hay outlier), nhưng không phải lựa chọn mặc định cho deep learning hiện đại.</p>
+</div>
+
+<h2>10. Tuning cheat sheet</h2>
+<table>
+<tr><th>Task</th><th>Optimizer</th><th>LR</th><th>Schedule</th></tr>
+<tr><td>Train Transformer from scratch</td><td>AdamW</td><td>1e-4 to 5e-4</td><td>Warmup + cosine</td></tr>
+<tr><td>Fine-tune LLM (SFT)</td><td>AdamW</td><td>1e-5 to 5e-5</td><td>Constant với warmup</td></tr>
+<tr><td>Fine-tune LoRA</td><td>AdamW</td><td>1e-4 to 3e-4</td><td>Cosine</td></tr>
+<tr><td>Vision CNN</td><td>SGD momentum</td><td>0.1 (batch 256)</td><td>Step decay</td></tr>
+<tr><td>RL policy</td><td>Adam</td><td>3e-4</td><td>Constant</td></tr>
+</table>
+
+<div class="callout danger">
+<div class="label">🐛 Common bugs / gotchas — optimizer</div>
+<ol>
+  <li><strong>Quên <code>optimizer.zero_grad()</code></strong>: gradient accumulate → step khổng lồ → NaN. Ngoại lệ có ý: gradient accumulation (chia batch to lớn hơn GPU) — chỉ zero mỗi N micro-batch.</li>
+  <li><strong>weight_decay trên bias / LayerNorm γ,β</strong>: bias/norm không nên decay (kill norm scale). Trong PyTorch phân group: <code>[{'params': decay_params, 'wd': 0.01}, {'params': no_decay, 'wd': 0}]</code>.</li>
+  <li><strong>LR warmup thiếu ở Transformer</strong>: NaN loss step 3-10. Không error explicit, chỉ loss = NaN.</li>
+  <li><strong>Adam với LR quá lớn (>1e-2)</strong>: β₂ bias correction × step lớn ban đầu → NaN. Fix warmup.</li>
+  <li><strong>Scheduler.step() gọi sai vị trí</strong>: gọi trước optimizer.step() → PyTorch warning + LR sai 1 step. Đúng: sau optimizer.step().</li>
+  <li><strong>Mixed precision không có GradScaler</strong>: FP16 gradient underflow → 0. Fix: <code>scaler.scale(loss).backward(); scaler.step(opt); scaler.update()</code>.</li>
+  <li><strong>Restart training mất optimizer state</strong>: chỉ save model.state_dict, không save optimizer.state_dict → m, s bắt đầu lại từ 0 → bias correction dùng t cũ → step khổng lồ. Luôn save cả 2.</li>
+  <li><strong>LR schedule dùng epoch nhưng step per batch</strong>: cosine decay khớp T=steps hay T=epochs? Chọn sai → decay sớm 1000× hoặc muộn.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate + Interview Q&A</h3>
+
+<p class="q">1. Momentum β=0.9 effect intuitive?</p>
+<p class="a">Accumulate 10 last gradients (1/(1-0.9) = 10 effective steps). Smoother direction, escape shallow local minima, converge nhanh hơn plain SGD.</p>
+
+<p class="q">2. Adam vs SGD momentum — khi nào SGD win?</p>
+<p class="a">Vision tasks với BatchNorm + SGD + momentum thường generalize tốt hơn Adam (Wilson 2017). Language + Transformer: AdamW win. Rule: try AdamW first, revert SGD nếu overfit sớm.</p>
+
+<p class="q">3. Vì sao Transformer cần warmup?</p>
+<p class="a">Early training attention weights random → some heads attend all/nothing → gradient explode. LR nhỏ initial cho model settle. Sau warmup, LR max → learn nhanh. Empirical: skip warmup → NaN loss.</p>
+
+<p class="q">4. Loss = NaN. 3 fix ưu tiên?</p>
+<p class="a">(1) Gradient clipping (torch.nn.utils.clip_grad_norm_ 1.0). (2) LR nhỏ hơn (÷10). (3) Warmup steps. Rarely: mixed precision unstable (fp16 → bf16).</p>
+
+<p class="q">5. AdamW vs Adam — 1 dòng khác biệt là gì?</p>
+<p class="a">Weight decay decoupled from adaptive LR. Adam: <code>w -= lr·(grad/sqrt(v) + λ·w)</code>. AdamW: <code>w -= lr·grad/sqrt(v) + lr·λ·w</code>. Effect: L2 not distorted bởi adaptive scaling → better generalization.</p>
+
+<p class="q">6. [Interview] Weight decay vs L2 regularization — có phải cùng 1 thứ không?</p>
+<p class="a">Với vanilla SGD: gần như giống nhau, chỉ khác bậc 2 trở lên. L2 penalty λ/2·||w||² → ∂/∂w = λ·w → thêm vào gradient → step ĐỒNG THỜI: w -= η·(g + λw) = w(1-ηλ) - ηg. Weight decay kiểu tuần tự: w -= η·g rồi w ·= (1-ηλ) → khai triển: (w-ηg)(1-ηλ) = w(1-ηλ) - ηg(1-ηλ) = w(1-ηλ) - ηg + η²λg — dư ra số hạng bậc 2 (+η²λg) so với L2, nên "bằng nhau" chỉ đúng gần đúng bậc nhất theo η (η nhỏ thì số hạng này không đáng kể), không phải bằng tuyệt đối về đại số. Với Adam khác biệt còn lớn hơn nhiều: L2 chạy qua √ŝ (biased), weight decay không → AdamW đúng "decoupled". Đây là subtle difference paper Loshchilov &amp; Hutter 2019 chỉ ra.</p>
+
+<p class="q">7. [Interview] Effective # gradients momentum β=0.9 nhớ là bao nhiêu? Chứng minh?</p>
+<p class="a">1/(1-β) = 10. Chứng minh: v_t = Σ β^k · g_{t-k}. Với β=0.9, weight của g_{t-10} = 0.9^10 ≈ 0.35. Tổng geometric series Σβ^k = 1/(1-β). β=0.99 → nhớ 100. β=0.999 (Adam β₂) → nhớ 1000. Đây là why β₂ lớn hơn β₁ trong Adam — variance cần smooth lâu hơn.</p>
+
+<p class="q">8. [Interview] Linear scaling rule cho batch size là gì? Khi nào fail?</p>
+<p class="a">Goyal 2017: khi tăng batch k×, tăng LR k× để giữ variance của SGD noise. Batch 256 lr 0.1 → batch 8192 lr 3.2. Fail khi batch quá lớn (&gt;32k) — landscape approximation kém, cần LARS/LAMB layer-wise adaptive LR. LLM batch 4M dùng AdamW + sqrt scaling thay linear.</p>
+
+<p class="q">9. [Interview] Tại sao Adam β₂=0.999 (rất gần 1) mà không phải 0.9?</p>
+<p class="a">Variance E[g²] cần ước lượng ổn định — noise từ mini-batch làm g² fluctuate mạnh. β₂ lớn = smooth window ~1000 steps → √ŝ stable → adaptive LR không jitter. β₁=0.9 (momentum) nhỏ hơn vì cần react nhanh khi gradient direction đổi thật. Empirically 0.999 chọn từ paper, robust cho hầu hết task; RL policy có khi dùng 0.99 để react nhanh với reward change.</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1412.6980">Kingma & Ba (2015) — Adam paper</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1711.05101">Loshchilov & Hutter (2019) — AdamW</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2302.06675">Chen et al (2023) — Lion optimizer</a></li>
+    <li>📝 <a href="https://kellerjordan.github.io/posts/muon/">Keller Jordan (2024) — Muon: An optimizer for hidden layers in neural networks</a></li>
+    <li>📖 <a href="https://d2l.ai/chapter_optimization/index.html">D2L — Optimization chapter</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L3_1_nn_backprop.html">← L3.1</a>
+  <a href="L3_3_dl_regularization.html">L3.3 · DL Regularization →</a>
+</div>
+
+</div>
+</body>
+</html>

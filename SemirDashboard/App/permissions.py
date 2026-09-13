@@ -28,6 +28,7 @@ PERMISSION_DEFS = [
     ("inventory.export",    "Export Inventory Dead Stock (CSV)", "Inventory Analytics"),
     ("data.upload",         "Upload Data",                      "Data Management"),
     ("data.formulas",       "View Formulas",                    "Data Management"),
+    ("data.guideline",      "View Guideline",                   "Data Management"),
     ("admin.users",         "Manage Users",                     "Admin"),
     ("membership.view",     "View Customer Membership",         "Customer Membership"),
     ("membership.import",   "Backfill Membership Snapshot Import", "Customer Membership"),

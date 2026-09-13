@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R9.7 · Voice and Vision Agents — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Advanced Steps · Điểm 7/8</div>
+  <h1>R9.7 · Voice and Vision Agents</h1>
+  <p class="subtitle">2 hướng kiến trúc voice agent 2026 (native multimodal vs cascaded stack) + Vision Agents — dự án không có voice agent, nhưng CÓ 1 ví dụ vision thật trong luồng viết thesis.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>[Dễ]</strong> Phân biệt 2 hướng kiến trúc voice agent: native multimodal vs cascaded stack.</li>
+<li><strong>[Trung bình]</strong> Định nghĩa Vision Agent, phân biệt với vision-language model thuần.</li>
+<li><strong>[Dễ]</strong> Nhận diện đúng ví dụ vision thật trong <code>predictor</code>: LLM writer đọc ảnh chart (<code>capture_ticker_chart.py</code>) để viết thesis theo <code>SKILL.md</code> §15.C — và ranh giới vì sao việc này vẫn an toàn (dữ liệu thô, chỉ sinh văn bản định tính).</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Module ngắn, kiến thức thị trường. Không có module nào trong 51 module cũ dạy riêng về voice/vision agent — khoảng trắng được lấp bởi module này.</p>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p><strong>Native multimodal</strong> giống 1 người phiên dịch song ngữ thực thụ — nghe tiếng Anh, trả lời tiếng Việt ngay trong đầu, không cần dịch ra giấy trung gian (nhanh, nhưng đôi khi diễn đạt chưa tự nhiên). <strong>Cascaded stack</strong> giống 1 dây chuyền 3 người: người nghe ghi lại thành văn bản → người dịch đọc văn bản dịch nghĩa → người thứ 3 đọc to bản dịch (chậm hơn 1 chút vì qua nhiều khâu, nhưng mỗi khâu có thể tối ưu riêng, chất lượng giọng đọc cuối có thể tốt hơn).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] Voice Agents — 2 hướng kiến trúc 2026</h3>
+<div class="callout"><div class="label">📖 Giải thích sâu — Voice Agents 2026</div>
+<p><strong>Native multimodal</strong> (VD OpenAI Realtime API) — giữ audio trong 1 pipeline duy nhất, giảm độ trễ (native speech-to-speech, không qua bước chuyển văn bản trung gian) — nhanh hơn cascaded khoảng 100-200ms nhờ bỏ bước chuyển văn bản trung gian, nhưng khoá cứng vào 1 model duy nhất. Giá hiện tại (2026, sau nhiều lần giảm từ giá ra mắt 10/2024 — LƯU Ý nếu tra cứu: nhiều tài liệu 2024 còn ghi giá ra mắt cũ $0.06/$0.24, đã lỗi thời): audio input ~$0.019/phút ($32/1M token), audio output ~$0.077/phút ($64/1M token) — 1 phút hội thoại 2 chiều điển hình tốn khoảng <strong>~$0.10/phút trước khi cache</strong> (cache prompt đầu vào giảm chi phí phần input đó khoảng 80 lần — $32→$0.40/1M — đây là đòn bẩy chi phí quan trọng nhất khi vận hành thật). Nhược điểm: chất lượng giọng nói "tốt nhưng chưa xuất sắc", thiếu sự tự nhiên của TTS chuyên dụng.</p>
+<p><strong>Cascaded stack</strong> (STT → LLM → TTS rời rạc, VD kết hợp với ElevenLabs Flash v2.5 — độ trễ ~75ms, hỗ trợ 32 ngôn ngữ) — đánh đổi độ trễ thêm 1 chút để lấy chất lượng giọng nói tốt hơn hẳn + tính module hoá (đổi từng thành phần độc lập, tự chọn STT/LLM/TTS tốt nhất cho từng khâu thay vì khoá vào 1 model). ElevenLabs còn có gói "ElevenAgents" đóng gói sẵn TTS + turn-taking + function calling + RAG; giá TTS/STT/ElevenAgents đã giảm mạnh (khoảng -55%/-45%/-20%) từ đợt cắt giá 5/2026.</p>
+</div>
+<p>Xu hướng 2026: hội thoại giọng nói tự nhiên, phát hiện cảm xúc, chuyển ngôn ngữ giữa câu, độ trễ phản hồi dưới 500ms.</p>
+
+<h3>2. [Trung bình] Vision Agents — khác vision-language model thuần ở đâu</h3>
+<div class="callout"><div class="label">📖 Giải thích sâu — Vision Agents</div>
+<p>Agent kết hợp thị giác máy tính (nhận diện, phân tích ảnh/video) với khả năng hành động — khác "vision-language model" thuần chỉ mô tả ảnh, Vision Agent còn ra quyết định/hành động dựa trên thứ nó "nhìn thấy". Framework mã nguồn mở 2026 cho phép ghép bất kỳ STT + LLM + TTS provider nào, dựng 1 agent hoạt động chỉ trong ~18 dòng Python — hạ thấp đáng kể rào cản kỹ thuật so với vài năm trước.</p>
+</div>
+
+<h3>3. Turn-taking — vì sao "biết khi nào ngừng nghe" khó hơn tưởng tượng</h3>
+<p>Cả 2 kiến trúc mục 1 đều phải giải 1 bài toán chung không tồn tại ở agent văn bản: <strong>xác định khi nào người dùng đã nói xong</strong> (turn-taking/end-of-turn detection) — văn bản có ký tự xuống dòng/nút Enter rõ ràng để biết "hết lượt", giọng nói thì không có tín hiệu tương đương tự nhiên.</p>
+<table>
+<tr><th>Cơ chế</th><th>Cách hoạt động</th><th>Rủi ro nếu sai</th></tr>
+<tr><td>VAD (Voice Activity Detection) đơn giản</td><td>Phát hiện im lặng kéo dài X mili-giây → coi là hết lượt</td><td>Cắt ngang người dùng đang dừng để suy nghĩ (false positive) — trải nghiệm khó chịu, hay gặp nhất ở hệ thống rẻ</td></tr>
+<tr><td>Turn-taking dựa ngữ nghĩa (semantic, model hiện đại)</td><td>Model đồng thời nghe NGỮ ĐIỆU + NỘI DUNG câu đang nói dở để đoán "câu đã hoàn chỉnh về nghĩa chưa", không chỉ dựa độ dài im lặng</td><td>Vẫn có thể sai với câu phức tạp, nhưng giảm đáng kể tình trạng cắt ngang so với VAD đơn giản</td></tr>
+<tr><td>Barge-in (người dùng ngắt lời agent đang nói)</td><td>Agent phải dừng TTS ngay lập tức khi phát hiện người dùng bắt đầu nói đè lên, không đợi agent nói hết câu</td><td>Không hỗ trợ barge-in → hội thoại cảm giác "cứng", giống gọi tổng đài tự động cũ, không giống hội thoại người thật</td></tr>
+</table>
+<p>Đây là lý do "độ trễ phản hồi dưới 500ms" (đã nhắc ở mục 1) không phải chỉ số DUY NHẤT đáng quan tâm — 1 hệ thống trả lời nhanh nhưng turn-taking tệ (hay cắt ngang, không hỗ trợ barge-in) vẫn cảm giác "máy móc" hơn hệ thống chậm hơn 1 chút nhưng turn-taking tự nhiên.</p>
+
+<h3>4. Worked example — chi phí 1 phiên voice agent thật, dùng đúng giá đã dẫn ở mục 1</h3>
+<pre><code>Giá native multimodal (đã dẫn ở mục 1): audio input ~$0.019/phút, audio output ~$0.077/phút
+
+1 cuộc gọi hỗ trợ khách hàng điển hình — 5 phút, tỷ lệ nói 50/50 (agent nói
+2.5 phút, khách nói 2.5 phút — audio input tính cả 2 chiều nếu server phải
+xử lý audio liên tục, ở đây đơn giản hoá tính theo audio THỰC agent tạo ra
+là output, audio khách nói là input mà server phải xử lý):
+
+  Input (audio khách nói, server xử lý):   5 phút × $0.019 = $0.095
+  Output (audio agent trả lời tổng hợp):   2.5 phút × $0.077 = $0.1925
+  TỔNG 1 cuộc gọi (trước cache):            $0.095 + $0.1925 ≈ $0.29
+
+Với cache prompt đầu vào (system prompt/instruction lặp lại mỗi cuộc gọi,
+giảm khoảng 80 lần theo đã dẫn ở mục 1 — áp dụng cho phần TEXT instruction
+cố định, không áp dụng cho audio input của khách vì mỗi câu nói là mới):
+  Không đổi nhiều cho phần audio thô — cache chủ yếu cứu phần chi phí
+  KHÔNG PHẢI audio (system prompt dạng text đứng đầu context) — minh hoạ
+  đây KHÔNG phải "giảm giá đều -80% cho cả cuộc gọi", chỉ giảm phần
+  instruction cố định lặp lại, đúng nguyên tắc không suy diễn 1 con số
+  giảm giá áp dụng đều cho MỌI thành phần chi phí (tương tự bài học BUG-2
+  ở nhiều trang khác trong track — tách rõ 2 loại chi phí, không gộp chung).
+
+100 cuộc gọi/ngày × $0.29 ≈ $29/ngày — đây là lý do voice agent production
+scale luôn cần theo dõi phút audio thực tế, không chỉ theo dõi token như
+agent văn bản thuần.</code></pre>
+
+<h3>5. GUI Agent benchmark thật 2026 — số đo cụ thể cho "Vision Agent ra quyết định"</h3>
+<p>Mục 2 định nghĩa Vision Agent là "ra quyết định/hành động dựa trên thứ nhìn thấy", khác vision-language model thuần chỉ mô tả ảnh. Cụ thể hoá bằng số đo thật — nhóm benchmark <strong>GUI Agent</strong> (thao tác giao diện máy tính/điện thoại dựa trên ảnh màn hình, họ hàng gần với Computer Use đã học ở <code>R9_3</code>):</p>
+<table>
+<tr><th>Benchmark/Model</th><th>Đo gì</th><th>Kết quả 2026</th></tr>
+<tr><td>ScreenSpot-V2</td><td>Độ chính xác định vị (grounding) — model có click ĐÚNG toạ độ/element mục tiêu trên màn hình không</td><td>Model tốt nhất đạt <strong>96.3%</strong></td></tr>
+<tr><td>AndroidControl</td><td>Tỷ lệ hoàn thành ĐÚNG từng bước (step success rate) khi thao tác app Android thật</td><td>Model tốt nhất đạt <strong>79.1%</strong></td></tr>
+<tr><td>GUI Knowledge Benchmark</td><td>3 khía cạnh: nhận thức giao diện (Interface Perception), dự đoán tương tác (Interaction Prediction), hiểu chỉ dẫn (Instruction Understanding)</td><td>Model GUI chuyên biệt tốt nhất ~75.45 điểm — VƯỢT cả model đa dụng mạnh (o3 ~73.30, Gemini 2.5 Pro ~71.69)</td></tr>
+</table>
+<p>Điểm đáng chú ý (verify 2026): model GUI CHUYÊN BIỆT vượt qua model đa dụng tổng quát mạnh nhất trên chính benchmark GUI — khác hẳn xu hướng "model đa dụng lớn thường thắng model chuyên biệt nhỏ" hay thấy ở nhiều lĩnh vực khác; cho thấy grounding chính xác trên giao diện (biết đúng toạ độ/element) vẫn là 1 kỹ năng cần train chuyên biệt, không tự động "ăn theo" từ khả năng ngôn ngữ tổng quát mạnh.</p>
+<p><strong>Ranh giới rõ với ví dụ <code>capture_ticker_chart.py</code> (mục "Ứng dụng dự án" bên dưới)</strong>: benchmark ScreenSpot-V2/AndroidControl đo khả năng CLICK ĐÚNG toạ độ/element — writer LLM của <code>predictor</code> không làm việc này, nó chỉ "đọc" ảnh chart rồi viết văn bản, không thao tác gì lên giao diện. Vì vậy dù cả 2 đều "dùng vision", chúng không đo cùng 1 năng lực và không nên gộp chung khi so sánh.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<table>
+<tr><th></th><th>Native multimodal</th><th>Cascaded stack</th></tr>
+<tr><td>Pipeline</td><td>1 model duy nhất (speech-to-speech)</td><td>STT → LLM → TTS (3 thành phần rời rạc)</td></tr>
+<tr><td>Độ trễ</td><td>Thấp nhất</td><td>Cao hơn 1 chút</td></tr>
+<tr><td>Chất lượng giọng nói</td><td>Tốt nhưng chưa xuất sắc</td><td>Tốt hơn hẳn (TTS chuyên dụng)</td></tr>
+<tr><td>Tính module hoá</td><td>Thấp (1 khối)</td><td>Cao — đổi từng thành phần độc lập</td></tr>
+<tr><td>Ví dụ</td><td>OpenAI Realtime API</td><td>STT + LLM + ElevenLabs Flash v2.5</td></tr>
+</table>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Vision-Language Model thuần</th><th>Vision Agent</th></tr>
+<tr><td>Output</td><td>Mô tả/phân tích ảnh bằng văn bản</td><td>Quyết định/hành động dựa trên thứ nhìn thấy</td></tr>
+<tr><td>Ví dụ</td><td>"Ảnh này có 1 con mèo"</td><td>Nhìn biểu đồ giá → quyết định gọi tool tiếp theo</td></tr>
+<tr><td>Ví dụ benchmark đo (mục 5)</td><td>Mô tả ảnh đúng/sai (VQA-style)</td><td>ScreenSpot-V2 (grounding), AndroidControl (step success) — đo được có CLICK ĐÚNG hay không</td></tr>
+<tr><td>Đúng loại của <code>capture_ticker_chart.py</code> + writer LLM?</td><td>Không — writer LLM KHÔNG tự click/hành động gì trên ảnh</td><td>Không hẳn — writer chỉ SINH VĂN BẢN dựa trên ảnh, không "hành động" theo nghĩa GUI Agent; nằm giữa 2 cột, gần cột trái hơn (đọc mô tả, không thao tác)</td></tr>
+</table>
+
+<div class="callout danger"><div class="label">⚠️ Không liên quan trực tiếp <code>predictor</code> — ngoại trừ 1 ví dụ thật</div>
+<p>Dự án không có giao diện giọng nói. Về vision thì có 1 ví dụ thật, không chỉ "ngoại lệ nhỏ để loại trừ": <code>.claude/skills/daily-investor-report/scripts/capture_ticker_chart.py</code> chụp ảnh biểu đồ nến (khung ngày + khung tuần) bằng Playwright, và theo đúng docstring của script lẫn <code>SKILL.md</code> §15.C, <strong>Claude (writer LLM) phải LOOK vào ảnh chart đó trước khi viết thesis</strong> — mục "Khung ngày"/"Khung tuần" của thesis bắt buộc trích dẫn bằng chứng cụ thể thấy được từ ảnh (nến, volume, MA, RSI), không được lấy lại output của công thức <code>analyse_timeframes</code>. Đây thực chất LÀ 1 dạng vision-agent-nhẹ: input ảnh thật → LLM tự "đọc" → sinh nội dung. Ranh giới an toàn: ảnh chart là <strong>dữ liệu thị trường thô</strong> (giá/volume/indicator hiển thị), không phải derivative đã qua tính toán của hệ thống (score, verdict) — đúng nguyên tắc <code>feedback_llm_independence.md</code> (LLM chỉ nhận dữ liệu thô, không nhận derivative do hệ thống tính sẵn); và output của việc "nhìn ảnh" này chỉ là <strong>đoạn văn thesis định tính</strong>, không tự động trở thành 1 lệnh mua/bán hay 1 trọng số runtime.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Coi <code>capture_ticker_chart.py</code> + luồng thesis-writing chỉ là "tạo ảnh cho báo cáo"</strong> — thực chất theo <code>SKILL.md</code> §15.C, LLM writer có đọc ảnh chart để viết thesis, đây LÀ 1 dạng dùng vision thật, không phải hoàn toàn không liên quan. Ngược lại, đừng thổi phồng nó thành "vision agent tự quyết định trade" — nó chỉ sinh văn bản thesis định tính, đọc dữ liệu thô (ảnh chart), không đọc derivative hệ thống và không tự đặt lệnh.</p>
+<p><strong>2. Chọn native multimodal khi cần chất lượng giọng nói cao nhất</strong> — cascaded stack với TTS chuyên dụng vẫn thắng về chất lượng, dù chậm hơn 1 chút.</p>
+<p><strong>3. Chỉ đo voice agent bằng độ trễ, bỏ qua turn-taking</strong> — mục 3 cho thấy 1 hệ thống nhanh nhưng hay cắt ngang người dùng (VAD đơn giản, không hỗ trợ barge-in) vẫn cảm giác kém tự nhiên hơn hệ thống chậm hơn nhưng turn-taking mượt.</p>
+<p><strong>4. Áp dụng con số "cache giảm ~80%" cho TOÀN BỘ chi phí 1 cuộc gọi voice</strong> — sai theo worked example mục 4: cache chỉ giúp phần instruction/text cố định lặp lại, KHÔNG áp dụng cho phần audio thô của mỗi câu nói mới (luôn khác nhau, không cache được).</p>
+<p><strong>5. Mặc định model đa dụng mạnh nhất luôn thắng model chuyên biệt</strong> — mục 5 cho thấy điều ngược lại trên benchmark GUI: model GUI chuyên biệt (~75.45) vượt qua cả o3 (~73.30) và Gemini 2.5 Pro (~71.69) — grounding chính xác trên giao diện vẫn cần train chuyên biệt.</p>
+</div>
+
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Phân biệt đúng native multimodal và cascaded stack, kèm trade-off của mỗi loại.</li>
+<li>Giải thích được vì sao Vision Agent khác vision-language model thuần.</li>
+<li>Giải thích đúng ví dụ vision thật trong <code>predictor</code> (<code>capture_ticker_chart.py</code> + <code>SKILL.md</code> §15.C) và vì sao nó vẫn an toàn dù có dùng vision (dữ liệu thô, chỉ sinh thesis định tính, không tự đặt lệnh).</li>
+<li>Giải thích được bài toán turn-taking (mục 3) và phân biệt được VAD đơn giản/turn-taking ngữ nghĩa/barge-in.</li>
+<li>Tính lại được worked example chi phí 1 cuộc gọi voice (mục 4), chỉ ra đúng phần chi phí nào cache giúp được và phần nào không.</li>
+<li>Kể đúng ít nhất 2/3 số liệu benchmark GUI Agent (ScreenSpot-V2, AndroidControl, GUI Knowledge Benchmark) và giải thích được vì sao model chuyên biệt thắng model đa dụng ở đây.</li>
+<li>Giải thích được vì sao <code>capture_ticker_chart.py</code> + writer LLM KHÔNG phải ví dụ của GUI Agent theo đúng nghĩa benchmark ScreenSpot-V2/AndroidControl đo (không click/thao tác giao diện, chỉ đọc ảnh rồi viết văn bản).</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R9_6_robotic_agents.html">← R9.6 · Robotic Agents</a>
+  <a href="R9_8_automated_prompt_engineering.html">R9.8 · Automated Prompt Engineering →</a>
+</div>
+
+</div>
+</body>
+</html>

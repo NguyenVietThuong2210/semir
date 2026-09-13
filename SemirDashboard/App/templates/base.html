@@ -450,6 +450,14 @@
                             <li>
                                 <h6 class="dropdown-header">Additional Tools</h6>
                             </li>
+                            {% check_perm 'data.guideline' as can_guideline %}
+                            {% if can_guideline %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'guideline' %}">
+                                    <i class="bi bi-mortarboard"></i> Guideline
+                                </a>
+                            </li>
+                            {% endif %}
                             {% check_perm 'data.formulas' as can_formulas %}
                             {% if can_formulas %}
                             <li>

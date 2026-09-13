@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2.3 — Class Imbalance</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 2 · Module 3</div>
+  <h1>2.3 · Class Imbalance</h1>
+  <p class="subtitle">Dataset 99% negative 1% positive (fraud, cancer, stock breakout). Tại sao accuracy misleading + 5 techniques.</p>
+  <div class="level">Level 2 · Advanced ML · ~25 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Explain why accuracy = misleading với imbalanced data</li>
+  <li>Chọn đúng metric: precision, recall, F1, PR-AUC, ROC-AUC</li>
+  <li>5 techniques: class weight, SMOTE, undersample, focal loss, threshold tuning</li>
+  <li>Áp dụng vào V18 (FLAT majority)</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Class imbalance bằng ngôn ngữ đời thường</div>
+<p><strong>Bệnh viện tầm soát ung thư</strong>: 1000 người khám, 10 người thật sự bị ung thư. Bác sĩ lười chẩn đoán "ai cũng khỏe" — accuracy 99%! Nhưng miss 10/10 bệnh nhân → chết người. Đây là <em>accuracy paradox</em>.</p>
+<p><strong>Metric đúng</strong>: Recall (bắt được bao nhiêu % ung thư thật) + Precision (bao nhiêu % nghi ngờ là ung thư thật). Trade-off: cảnh báo nhiều = precision thấp; cảnh báo ít = recall thấp.</p>
+<p><strong>Fix imbalance</strong>: (1) SMOTE = "tạo bệnh nhân giả gần giống bệnh nhân thật" để cân class; (2) Class weight = "phạt gấp 100× nếu bỏ sót ung thư"; (3) Threshold tuning = "hạ ngưỡng chẩn đoán" (từ p=0.5 xuống p=0.2).</p>
+</div>
+
+<h2>1. Vì sao accuracy misleading?</h2>
+
+<div class="callout danger">
+<div class="label">Ví dụ classic — fraud detection</div>
+<p>Dataset: 1000 transactions, 990 legit, 10 fraud. Model dumb luôn predict "legit" → accuracy 99%. Nhưng recall fraud = 0 → miss all fraud → business fail.</p>
+</div>
+
+<h2>2. Metric đúng</h2>
+
+<table>
+<tr><th>Metric</th><th>Formula</th><th>Best khi</th></tr>
+<tr><td>Precision</td><td>TP / (TP+FP)</td><td>Cost false positive cao (spam classifier)</td></tr>
+<tr><td>Recall</td><td>TP / (TP+FN)</td><td>Cost false negative cao (cancer, fraud)</td></tr>
+<tr><td>F1</td><td>2·P·R/(P+R)</td><td>Balance cần</td></tr>
+<tr><td>PR-AUC</td><td>Area precision-recall curve</td><td>Imbalanced (better than ROC-AUC)</td></tr>
+<tr><td>ROC-AUC</td><td>Area TPR-FPR curve</td><td>Balanced hoặc benchmark cross-dataset</td></tr>
+<tr><td>Matthews Correlation (MCC)</td><td>xem công thức + ví dụ ngay dưới</td><td>Robust với imbalance, single number</td></tr>
+</table>
+
+<div class="callout warn">
+<div class="label">ROC-AUC pitfall với imbalanced</div>
+<p>ROC-AUC dùng FPR = FP/N. Với N huge (negative class dominant), FPR tăng chậm → curve trông đẹp dù precision thấp. PR-AUC = better metric cho imbalanced.</p>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Matthews Correlation Coefficient (MCC) — công thức + vì sao nó "khó lừa" hơn F1</div>
+<p><strong>Vấn đề F1 không giải quyết được</strong>: nhìn lại công thức F1 ở bảng trên — nó được tính từ Precision và Recall, mà cả 2 chỉ dùng TP (True Positive — model đoán đúng lớp dương), FP (False Positive — model đoán nhầm thành dương), FN (False Negative — model bỏ sót). <strong>TN (True Negative — model đoán đúng lớp âm) KHÔNG BAO GIỜ xuất hiện trong công thức F1</strong> — nghĩa là F1 hoàn toàn "mù" trước việc model dự đoán lớp âm (majority) tốt hay tệ.</p>
+<pre><code>MCC = (TP·TN - FP·FN) / √[(TP+FP)·(TP+FN)·(TN+FP)·(TN+FN)]
+
+# Giải thích ký hiệu: TP/TN/FP/FN như đã học ở bảng Precision/Recall phía trên.
+# MCC nằm trong khoảng [-1, +1]:
+#   MCC = +1  → dự đoán HOÀN HẢO (khớp 100% nhãn thật)
+#   MCC =  0  → không tốt hơn ĐOÁN NGẪU NHIÊN (random guessing)
+#   MCC = -1  → dự đoán NGƯỢC HOÀN TOÀN (sai mọi trường hợp có hệ thống)
+# Về bản chất, MCC chính là hệ số tương quan Pearson (Pearson correlation —
+# đo mức độ 2 biến "đi cùng nhau") giữa nhãn dự đoán và nhãn thật.</code></pre>
+<p><strong>Ví dụ số cụ thể — MCC "vạch trần" model mà F1 khen tốt</strong>: model chấm điểm 100 mẫu (92 dương thật, 8 âm thật): TP=90, FN=2, TN=5, FP=3 (tức là trong 8 mẫu âm thật, model đoán sai 3 mẫu thành dương).</p>
+<pre><code>Precision = 90/(90+3) = 0.968
+Recall    = 90/(90+2) = 0.978
+F1 = 2·0.968·0.978/(0.968+0.978) = 1.894/1.946 = 0.973   ← NHÌN RẤT TỐT
+
+MCC = (90·5 - 3·2) / √[(90+3)(90+2)(5+3)(5+2)]
+    = (450 - 6) / √(93 · 92 · 8 · 7)
+    = 444 / √479,136
+    = 444 / 692.2
+    = 0.641   ← chỉ Ở MỨC TRUNG BÌNH, không "rất tốt" như F1 gợi ý
+
+Kiểm tra riêng specificity (TN/(TN+FP), "recall của lớp âm") = 5/8 = 0.625
+→ model chỉ đoán đúng 62.5% lớp âm — khá TỆ, nhưng F1 hoàn toàn không phản ánh
+  điều này vì F1 không có TN trong công thức, còn MCC thì có.</code></pre>
+<p><strong>Insight</strong>: dùng MCC khi bạn cần 1 con số DUY NHẤT phản ánh trung thực CẢ 4 ô của confusion matrix, không chỉ 3 ô như F1 — đặc biệt quan trọng khi bạn CŨNG quan tâm tới việc model có đoán đúng lớp âm (majority) hay không, không chỉ riêng lớp dương (minority).</p>
+</div>
+
+<h2>3. Technique 1: Class weight</h2>
+
+<pre><code># sklearn:
+from sklearn.utils.class_weight import compute_class_weight
+weights = compute_class_weight('balanced', classes=[0, 1], y=y_train)
+# weights = [0.505, 50.0]   (nếu 990:10 ratio)
+
+clf.fit(X, y, sample_weight=[weights[yi] for yi in y_train])
+</code></pre>
+
+<p>Loss contribution của mỗi class cân bằng. Simple + không thay đổi data.</p>
+
+<h2>4. Technique 2: SMOTE (oversampling)</h2>
+
+<pre><code># SMOTE: Synthetic Minority Oversampling Technique (Chawla 2002)
+# Cho mỗi minority sample x:
+#   1. Chọn K nearest neighbors (cùng class minority)
+#   2. Pick 1 neighbor random
+#   3. Tạo synthetic sample: x_new = x + rand · (neighbor - x)
+#   4. Repeat cho đến khi cân bằng
+from imblearn.over_sampling import SMOTE
+X_bal, y_bal = SMOTE(k_neighbors=5).fit_resample(X, y)
+</code></pre>
+
+<p>Ưu: model thấy nhiều minority pattern. Nhược: synthetic samples có thể không realistic → overfit.</p>
+
+<h2>5. Technique 3: Undersample majority</h2>
+
+<pre><code>from imblearn.under_sampling import RandomUnderSampler
+X_bal, y_bal = RandomUnderSampler().fit_resample(X, y)   # keep only 10 legit + 10 fraud
+</code></pre>
+
+<p>Ưu: nhanh train. Nhược: throw away data → info loss. OK khi data cực lớn.</p>
+
+<h2>6. Technique 4: Focal loss</h2>
+
+<p>Lin et al (2017, RetinaNet). Modify cross-entropy để focus hard examples:</p>
+
+<pre><code>FL(p_t) = -(1 - p_t)^γ · log(p_t)
+
+# γ = focusing param (thường 2)
+# p_t = model confidence ở correct class
+# Nếu p_t high (easy example) → (1-p_t)^γ nhỏ → loss nhỏ → không waste attention
+# Nếu p_t low (hard) → loss lớn → model focus fix
+</code></pre>
+
+<h2>7. Technique 5: Threshold tuning</h2>
+
+<p>Default classification threshold 0.5 — không tối ưu cho imbalanced.</p>
+
+<pre><code># Compute PR curve on val set:
+from sklearn.metrics import precision_recall_curve
+p, r, thresholds = precision_recall_curve(y_val, p_val)
+
+# Chọn threshold maximize F1:
+f1_scores = 2 * p * r / (p + r + 1e-9)
+best_idx = np.argmax(f1_scores)
+best_threshold = thresholds[best_idx]
+
+# Deploy:
+y_pred = (p_test > best_threshold).astype(int)
+</code></pre>
+
+<p>Không thay đổi model, chỉ shift decision boundary. Simple + effective.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Deep-dive — Toán học đứng sau 3 kỹ thuật chính (class_weight, SMOTE, focal loss) — đọc SAU khi đã hiểu 5 techniques cơ bản ở mục 3-7 ở trên</div>
+
+<p><strong>Ký hiệu chung</strong>: <code>N₀</code> = số sample class 0 (majority), <code>N₁</code> = số sample class 1 (minority), <code>N = N₀ + N₁</code>, <code>K</code> = số class, <code>p_t</code> = xác suất model gán cho class ĐÚNG.</p>
+
+<h3>1. Class weight — công thức "balanced" của sklearn</h3>
+<pre><code>weight_class_c = N / (K · N_c)
+
+Ví dụ K=2, N₀=990, N₁=10, N=1000:
+  weight_0 = 1000 / (2 · 990)  = 0.505
+  weight_1 = 1000 / (2 · 10)   = 50.0
+                                  ↑ minority nhận weight LỚN gấp ~100 lần
+
+Loss weighted:
+  L = -1/N · Σᵢ  weight[yᵢ] · [yᵢ·log(p̂ᵢ) + (1-yᵢ)·log(1-p̂ᵢ)]
+                  ↑ sai 1 fraud bị phạt gấp 100× sai 1 legit
+</code></pre>
+<p><strong>Ý nghĩa</strong>: Cân bằng "tổng đóng góp loss" của mỗi class. Class 1 chỉ có 10 sample nhưng mỗi sample nặng 50, tổng = 500. Class 0 có 990 sample × 0.505 = 500. Cân.</p>
+<p><strong>Cẩn thận</strong>: Ép weight quá cao (VD manual weight_1 = 1000) → model over-predict positive → precision sụp. "balanced" là điểm khởi đầu tốt, KHÔNG phải luôn tối ưu.</p>
+
+<h3>2. SMOTE — thuật toán từng bước (Chawla 2002)</h3>
+<pre><code>INPUT: X_minor (m samples of minority class), k (số neighbors, default 5), N_target
+OUTPUT: X_synthetic (N_target - m samples mới)
+
+FOR mỗi sample x_i trong X_minor:
+    1. Tìm k nearest neighbors CÙNG CLASS của x_i (dùng Euclidean distance
+       trong feature space đã được scale). Gọi là {n_1, ..., n_k}.
+    2. Quyết định cần tạo bao nhiêu synthetic từ x_i (ví dụ ⌈(N_target-m)/m⌉).
+    3. FOR mỗi synthetic cần tạo:
+         a. Chọn random 1 neighbor n_j từ {n_1,...,n_k}.
+         b. Sinh λ ~ Uniform(0, 1)  ← số ngẫu nhiên trong [0,1]
+         c. x_new = x_i + λ · (n_j - x_i)
+                    ↑ điểm nằm trên đoạn thẳng nối x_i và n_j
+         d. Gán label = minority class.
+         e. Thêm x_new vào X_synthetic.
+
+RETURN X_minor ∪ X_synthetic
+</code></pre>
+
+<p><strong>Hình dung cơ chế interpolation</strong> (bước 3a-3c ở trên) — mỗi synthetic point luôn nằm TRÊN đoạn thẳng nối sample gốc và 1 neighbor cùng class, không bao giờ ra ngoài:</p>
+<pre><code>x_i ●───────────────────────────● n_j        (2 điểm minority CÓ THẬT)
+    │                           │
+    │◄────── λ·(n_j - x_i) ─────┤
+    │                           │
+    x_new = x_i + λ·(n_j - x_i)  ← điểm SYNTHETIC, luôn nằm trên đoạn x_i—n_j
+
+  λ = 0    → x_new trùng x_i (điểm gốc)
+  λ = 1    → x_new trùng n_j (điểm neighbor)
+  λ = 0.5  → x_new nằm CHÍNH GIỮA x_i và n_j
+  λ ~ Uniform(0,1)  → mỗi lần sinh, x_new rơi ngẫu nhiên ở 1 vị trí khác nhau trên đoạn thẳng
+
+  → Đây là lý do SMOTE không bao giờ "bịa" 1 điểm cách xa 2 sample gốc —
+    khác hẳn nhiễu ngẫu nhiên (random noise), synthetic point bị RÀNG BUỘC
+    nằm trong "vùng lồi" (convex hull) của các sample minority đã có.</code></pre>
+
+<p><strong>Ví dụ 2D cụ thể</strong>: minority chỉ có 3 sample: <code>x₁=(1,2)</code>, <code>x₂=(2,3)</code>, <code>x₃=(1.5,2.5)</code>. Cần tạo 3 synthetic.</p>
+<pre><code>Cho x₁=(1,2), k=2 neighbors: x₂ và x₃.
+Pick x₂. λ=0.4. → x_new = (1,2) + 0.4·((2,3)-(1,2)) = (1.4, 2.4). ✓
+Pick x₃. λ=0.7. → x_new = (1,2) + 0.7·((1.5,2.5)-(1,2)) = (1.35, 2.35). ✓
+...
+</code></pre>
+
+<p><strong>Tại sao KHÔNG chỉ copy-paste minority?</strong> Duplicate = model chỉ học 3 điểm cứng → overfit. SMOTE interpolate → tạo "vùng" trong feature space → decision boundary mượt hơn.</p>
+
+<p><strong>Cạm bẫy quan trọng</strong>: SMOTE giả định "giữa 2 sample minority là một sample minority hợp lệ". SAI khi feature space có "vùng cấm" (VD: categorical encoded, hoặc minority tách rời thành cluster). Variant <em>SMOTE-NC</em> (Nominal + Continuous) xử lý categorical; <em>BorderlineSMOTE</em> chỉ synthesize gần biên.</p>
+
+<h3>3. Focal Loss — vì sao lũy thừa γ? (Lin 2017)</h3>
+
+<pre><code>Cross-entropy chuẩn (CE):    L_CE  = -log(p_t)
+Focal loss:                   L_FL  = -(1 - p_t)^γ · log(p_t)
+                                       └──── modulator ────┘
+
+Với γ ≥ 0 là "focusing parameter" (thường γ=2).
+</code></pre>
+
+<p><strong>Trực giác từng phần</strong>:</p>
+<ul>
+  <li>Với sample DỄ (model đã confident, <code>p_t = 0.9</code>): <code>(1-0.9)^2 = 0.01</code> → loss bị nhân 0.01 → gần như bỏ qua.</li>
+  <li>Với sample KHÓ (model uncertain, <code>p_t = 0.3</code>): <code>(1-0.3)^2 = 0.49</code> → loss gần như giữ nguyên → model focus vào đây.</li>
+</ul>
+
+<p><strong>Bảng minh họa hiệu ứng γ</strong>:</p>
+<pre><code>p_t     | CE loss  | FL loss γ=1 | FL loss γ=2 | FL loss γ=5
+─────────────────────────────────────────────────────────────
+0.9     | 0.105    | 0.011       | 0.001       | 0.0000010     ← easy: bị dập
+0.5     | 0.693    | 0.347       | 0.173       | 0.0217        ← medium: giảm nhẹ
+0.1     | 2.303    | 2.072       | 1.865       | 1.360         ← hard: giữ gần đủ
+</code></pre>
+
+<p><strong>Vì sao chọn γ = 2 (mặc định RetinaNet)?</strong> Empirical: γ=0 = CE thuần (không focus), γ=1 hơi mềm, γ≥3 quá dập easy samples → model bỏ qua data có thể học được. γ=2 là "sweet spot" trong nhiều task classification imbalanced. Phải tune như hyperparameter.</p>
+
+<p><strong>Extended focal loss (α-balanced)</strong>:</p>
+<pre><code>L_FL = -α_t · (1 - p_t)^γ · log(p_t)
+        ↑ weight per class (như class_weight)
+</code></pre>
+<p>Kết hợp cả 2 kỹ thuật: α cân class-level (như class_weight), γ cân sample-level (khó vs dễ).</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 2 kỹ thuật hiện đại hơn SMOTE/class-weight cổ điển (đọc SAU deep-dive toán học ở trên)</div>
+<p><strong>ADASYN (He et al. 2008)</strong> — cải tiến trực tiếp của SMOTE (mục "Technique 2" ở trên): SMOTE tạo SỐ LƯỢNG synthetic BẰNG NHAU cho mọi sample minority, bất kể sample đó "dễ" hay "khó". ADASYN thông minh hơn: nó đếm, với mỗi sample minority <code>x_i</code>, có BAO NHIÊU trong K-nearest-neighbor của nó thuộc lớp MAJORITY (gọi tỷ lệ này là <code>r_i</code>) — sample nào có <code>r_i</code> cao (nghĩa là nó "lạc" giữa vùng toàn sample majority, gần ranh giới quyết định, khó phân loại) sẽ được ưu tiên tạo NHIỀU synthetic hơn hẳn; sample nào đã nằm an toàn giữa các sample minority khác (<code>r_i</code> thấp) thì gần như không cần thêm synthetic. Nói ngắn gọn: <strong>SMOTE rải đều, ADASYN rải tập trung vào vùng khó</strong>.</p>
+<p><strong>Class-Balanced Loss qua "effective number of samples"</strong> (Cui et al. 2019, CVPR) — vấn đề nó giải quyết: <code>class_weight</code> cổ điển (mục "Technique 1" ở trên) tính trọng số TỶ LỆ NGHỊCH với số lượng mẫu thô — nhưng thực tế, 1000 mẫu của cùng 1 class thường KHÔNG mang lượng thông tin gấp 1000 lần so với 1 mẫu, vì nhiều mẫu bị TRÙNG LẶP THÔNG TIN (overlap) với nhau. Cui et al. đề xuất "effective number" (số lượng hiệu dụng) để đo lượng thông tin THẬT SỰ mới, không phải đếm thô:</p>
+<pre><code>E_n = (1 - β^n) / (1 - β)      # n = số mẫu thô của class, β ∈ [0,1) gần 1 (VD β=0.99)
+
+Ví dụ so sánh n=10 (minority) vs n=1000 (majority), β=0.99:
+  E_10   = (1 - 0.99^10)  / (1-0.99) = (1-0.904)/0.01  ≈ 9.56
+  E_1000 = (1 - 0.99^1000)/ (1-0.99) = (1-0.0000432)/0.01 ≈ 100.0
+
+Trọng số ∝ 1/E_n → tỷ lệ trọng số minority:majority = (1/9.56)/(1/100.0) ≈ 10.5:1
+So với class_weight thô (tỷ lệ nghịch trực tiếp số mẫu) = 1000/10 = 100:1
+
+→ Effective-number weighting chỉ "đẩy" minority lên MẠNH GẤP ~10.5 lần majority,
+  KHÔNG MẠNH BẰNG 100 lần như cách tính class_weight thô — vì nó nhận ra 1000
+  mẫu majority không thực sự mang lượng thông tin gấp 100 lần so với 10 mẫu
+  minority, chỉ khoảng 10 lần thôi (do trùng lặp thông tin giữa các mẫu).</code></pre>
+<p><strong>Insight</strong>: cả 2 kỹ thuật đều đi theo tinh thần chung "đừng đối xử với mọi sample/mọi class như nhau một cách MÁY MÓC" — ADASYN phân biệt sample DỄ/KHÓ trong cùng 1 class, Class-Balanced Loss phân biệt "số lượng thô" với "lượng thông tin thật". Cả 2 đều là hướng phát triển tự nhiên sau khi đã hiểu rõ SMOTE/class_weight cổ điển ở mục 3-4 và deep-dive toán học ở trên.</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 5 kỹ thuật fix class imbalance (đọc SAU khi đã hiểu 5 techniques ở mục 3-7)</div>
+
+<p><strong>Câu hỏi thực tế</strong>: Class imbalance 1:100 (99% negative, 1% positive). Có 5 fix chính. Chọn cái nào? Đây là bảng compare với case cụ thể.</p>
+
+<h4>Bảng so sánh 5 techniques</h4>
+
+<table>
+<tr><th>Technique</th><th>Cơ chế</th><th>Data sau xử lý</th><th>Ưu</th><th>Nhược</th><th>Best for</th></tr>
+<tr>
+  <td><strong>1. Oversampling (SMOTE)</strong></td>
+  <td>Tạo synthetic positive samples nearby existing</td>
+  <td>50/50 balanced</td>
+  <td>Không mất positive info; work với tabular data</td>
+  <td>Synthetic samples có thể unrealistic → model học pattern giả</td>
+  <td>Small dataset, positive class rare tự nhiên</td>
+</tr>
+<tr>
+  <td><strong>2. Undersampling</strong></td>
+  <td>Bỏ bớt negative samples random</td>
+  <td>50/50 balanced (nhưng nhỏ hơn)</td>
+  <td>Train nhanh, model không thấy noise</td>
+  <td>Mất info negative — model không học đủ pattern negative</td>
+  <td>Data quá lớn (millions), positive nhiều nhưng vẫn imbalanced</td>
+</tr>
+<tr>
+  <td><strong>3. Class weight</strong></td>
+  <td>Model penalize sai positive gấp N lần</td>
+  <td>Data giữ nguyên</td>
+  <td>Không đụng data. Đơn giản.</td>
+  <td>Weight quá cao → over-predict positive → precision drop</td>
+  <td>XGBoost/sklearn built-in support. Default cho tabular.</td>
+</tr>
+<tr>
+  <td><strong>4. Threshold tuning</strong></td>
+  <td>Giảm threshold quyết định positive (0.5 → 0.2)</td>
+  <td>Data giữ nguyên, train giữ nguyên</td>
+  <td>Rẻ nhất, dễ tune post-hoc</td>
+  <td>Chỉ trade precision/recall, không giải quyết gốc</td>
+  <td>Đã có model tốt, chỉ cần adjust operating point</td>
+</tr>
+<tr>
+  <td><strong>5. Focal loss</strong></td>
+  <td>Loss weight cao cho hard examples (uncertain)</td>
+  <td>Data giữ nguyên</td>
+  <td>Model focus hard cases automatically</td>
+  <td>Cần deep learning, không work cho tree-based</td>
+  <td>Object detection, medical NN</td>
+</tr>
+</table>
+
+<h4>3 case cụ thể — kỹ thuật nào win?</h4>
+
+<pre><code>=== Case 1: Fraud detection (bank transactions) ===
+Data: 10M transactions, 0.1% fraud (10k positive)
+Imbalance: 1:1000
+
+Techniques evaluated:
+1. SMOTE oversampling: create 5M synthetic fraud → recall 88%, precision 25%
+   ❌ Precision thấp — 75% flagged là false positive, bank không xử lý được
+2. Undersampling: chọn 10k fraud + 10k normal → recall 82%, precision 68%
+   ❌ Model chỉ thấy 20k samples, không đủ pattern normal
+3. Class weight (weight_positive=1000): recall 90%, precision 71%
+   ✅ Best balance, work với XGBoost
+4. Threshold=0.2 với class weight: recall 95%, precision 65%
+   ✅ Trade precision cho recall — bank chọn dựa vào cost analysis
+
+WINNER: Class weight + Threshold tuning (fine-grained control)
+
+=== Case 2: Ung thư tầm soát (medical) ===
+Data: 100k patients, 1% có ung thư (1k positive)
+Cost analysis: miss 1 ung thư = death, false positive = extra test $200
+
+Techniques evaluated:
+1. Threshold=0.15 (thấp): recall 98%, precision 25%
+   ✅ Miss chỉ 20 ca, spend $600k extra test — acceptable
+2. Class weight + threshold=0.3: recall 95%, precision 45%
+   Cost hiệu quả hơn nhưng miss 50 ca — không acceptable trong medical
+
+WINNER: Threshold tuning ultra-low (recall > precision khi cost of miss cao)
+
+=== Case 3: Stock prediction UP class hiếm ===
+V18 3-class: UP 25%, DOWN 25%, FLAT 50%
+Imbalance nhẹ 1:2
+
+Techniques evaluated:
+1. SMOTE trên UP class: no gain, adds noise
+2. Class weight balanced: CV +1% improvement
+3. Threshold tuning: 0.4 cho UP → precision drop 5%
+4. 2-stage architecture (Stage 1 gate FLAT): CV +8% ⭐
+
+WINNER: Architecture fix (2-stage) thay vì class weight hack
+
+RULE: Imbalance nhẹ (1:2 to 1:5) → thay đổi architecture đôi khi tốt hơn.
+      Imbalance nặng (1:100+) → cần class weight + threshold tuning.
+</code></pre>
+
+<h4>Metric compare — accuracy misleading, dùng gì?</h4>
+
+<table>
+<tr><th>Metric</th><th>Công thức</th><th>Khi dùng</th><th>Cạm bẫy</th></tr>
+<tr>
+  <td>Accuracy</td>
+  <td>(TP+TN)/all</td>
+  <td>Class balanced tự nhiên</td>
+  <td>❌ 99% với imbalanced (chỉ đoán majority)</td>
+</tr>
+<tr>
+  <td>Precision</td>
+  <td>TP/(TP+FP)</td>
+  <td>False positive costly (spam, ad)</td>
+  <td>Cao khi rất strict → miss real positive</td>
+</tr>
+<tr>
+  <td>Recall</td>
+  <td>TP/(TP+FN)</td>
+  <td>Miss positive costly (fraud, ung thư)</td>
+  <td>Cao khi loose → nhiều false positive</td>
+</tr>
+<tr>
+  <td>F1</td>
+  <td>2·P·R/(P+R)</td>
+  <td>Balance precision + recall</td>
+  <td>Không phân biệt được cost khác nhau</td>
+</tr>
+<tr>
+  <td>PR-AUC</td>
+  <td>Diện tích dưới precision-recall curve</td>
+  <td>Imbalanced classification</td>
+  <td>⭐ Best metric cho imbalanced</td>
+</tr>
+<tr>
+  <td>ROC-AUC</td>
+  <td>Diện tích dưới TPR-FPR curve</td>
+  <td>Balanced classification</td>
+  <td>Misleading khi imbalanced (luôn cao)</td>
+</tr>
+</table>
+
+<h4>Insight quan trọng — thứ tự try</h4>
+
+<ol>
+  <li><strong>Bước 1</strong>: Test class weight (không đụng data, cheap)</li>
+  <li><strong>Bước 2</strong>: Nếu vẫn tệ, tune threshold post-hoc</li>
+  <li><strong>Bước 3</strong>: Nếu vẫn tệ, SMOTE với care (validate synthetic samples realistic)</li>
+  <li><strong>Bước 4</strong>: Xem xét kiến trúc lại (2-stage, filter negative trước)</li>
+  <li><strong>Bước 5</strong>: Nếu deep learning, thử focal loss</li>
+</ol>
+
+<p><strong>Rule</strong>: Bắt đầu với technique rẻ nhất (class weight, threshold), chỉ dùng SMOTE khi cần.</p>
+</div>
+
+<h2>8. V18 case — FLAT majority</h2>
+
+<div class="example-box">
+<div class="title">V18 áp dụng 3 techniques kết hợp</div>
+<ol>
+  <li><strong>Class weight</strong>: FLAT weight 0.5, UP/DOWN weight 1.5 (V18 sample_weight formula)</li>
+  <li><strong>2-stage cascade</strong>: stage 1 gate binary balanced hơn 3-class, stage 2 train on subset (đã filter FLAT)</li>
+  <li><strong>Threshold tuning</strong>: <code>dir_conf_gate</code> tune trên val set để maximize skill score (không hard-code 0.5)</li>
+</ol>
+</div>
+
+<div class="callout warn">
+<div class="label">⚠️ 3 hiểu lầm phổ biến về class imbalance</div>
+<ol>
+  <li><strong>"Class imbalance = phải luôn resample data"</strong> — SAI. Nếu metric bạn tối ưu (VD: log-loss, PR-AUC) đã đúng cho imbalance, model TỰ HỌC được. Resample chỉ cần khi model dùng threshold cứng 0.5 + metric = accuracy. Nhiều Kaggle winner không dùng SMOTE, chỉ dùng class_weight + threshold tuning.</li>
+  <li><strong>"SMOTE trước khi split train/val"</strong> — SAI KINH ĐIỂN (đã ghi ở L2.4). Sinh synthetic từ toàn bộ data → synthetic của val nằm gần training samples → val score inflated (leak). LUÔN split trước, SMOTE chỉ trên train fold.</li>
+  <li><strong>"Accuracy 99% thì model tốt"</strong> — SAI khi imbalance nặng. Với 1:99, dumb model predict all-majority đã có 99%. Metric đúng: PR-AUC, F1 (nếu care cả 2), Recall@fixed-precision (nếu care recall dưới constraint precision). Accuracy nên bị "ban" khỏi imbalanced classification report.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Vì sao accuracy misleading trên 99:1 imbalanced?</p>
+<p class="a">Dumb model predict majority luôn → 99% accuracy. Recall minority = 0 → business fail. Dùng precision + recall + F1 + PR-AUC.</p>
+
+<p class="q">2. ROC-AUC vs PR-AUC — cái nào cho imbalanced?</p>
+<p class="a">PR-AUC. ROC-AUC dùng FPR = FP/N; với N huge, FPR tăng chậm → curve deceptive. PR-AUC tập trung minority class precision — reflect actual value.</p>
+
+<p class="q">3. SMOTE pitfall gì?</p>
+<p class="a">Synthetic samples có thể unrealistic (interpolate 2 minority samples ra pattern impossible). Cross-validation phải split BEFORE SMOTE, không AFTER (leak vào val).</p>
+
+<p class="q">4. Focal loss γ=0 vs γ=2. Effect?</p>
+<p class="a">γ=0: reduce về cross-entropy standard. γ=2: hard examples được weighted up. Easy examples (confidence &gt; 0.7) contribute rất ít loss → model focus hard cases → better cho long-tailed distributions.</p>
+
+<p class="q">5. Threshold tuning trên train set — sai gì?</p>
+<p class="a">Overfit. Threshold phải tune trên val set (hoặc CV) để honest. Test set final chỉ evaluate.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>V18 sample weight: <code>backend/train_v18_unified.py::_compute_sample_weights_v18()</code></li>
+    <li>V18 gate tuning: <code>tune_gate_threshold()</code> maximize skill on val</li>
+    <li>Skill score formula: <code>skill = (cv_acc - baseline) / (1 - baseline)</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1106.1813">Chawla et al (2002) — SMOTE paper</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1708.02002">Lin et al (2017) — Focal Loss (RetinaNet)</a></li>
+    <li>📄 He et al (2008) — ADASYN: Adaptive Synthetic Sampling Approach for Imbalanced Learning (IEEE IJCNN 2008)</li>
+    <li>📄 <a href="https://arxiv.org/abs/1901.05555">Cui et al (2019) — Class-Balanced Loss Based on Effective Number of Samples (CVPR)</a></li>
+    <li>📖 <a href="https://imbalanced-learn.org/stable/">imbalanced-learn library</a></li>
+    <li>📝 <a href="https://machinelearningmastery.com/tour-of-evaluation-metrics-for-imbalanced-classification/">MLM — Evaluation metrics for imbalanced classification</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L2_2_regularization.html">← L2.2</a>
+  <a href="L2_4_timeseries_cv.html">L2.4 · Time-series CV →</a>
+</div>
+
+</div>
+</body>
+</html>

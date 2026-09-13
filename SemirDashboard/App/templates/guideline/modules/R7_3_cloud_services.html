@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R7.3 · Cloud Services — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Infrastructure · Điểm 3/6</div>
+  <h1>R7.3 · Cloud AI Services</h1>
+  <p class="subtitle">So sánh 3 nền tảng AI cloud lớn 2026 (Bedrock/Vertex/Azure OpenAI) — và vì sao <code>predictor</code> đang không dùng nền tảng nào trong số đó, hợp lý ở quy mô hiện tại.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+  <li><strong>(Dễ)</strong> Biết tên và định vị 3 cloud AI platform lớn: AWS Bedrock, Google Vertex AI (nay: Gemini Enterprise Agent Platform), Azure OpenAI Service.</li>
+  <li><strong>(Dễ→Trung bình)</strong> Hiểu "cloud AI platform" nghĩa là gì — 1 API quản lý, gọi model LLM đã host sẵn, khác với tự host model của mình.</li>
+  <li><strong>(Trung bình)</strong> So sánh đúng 3 nền tảng theo các trục thật sự quan trọng năm 2026: compliance, data residency, tích hợp RAG — không chỉ "model nào giỏi hơn".</li>
+  <li><strong>(Trung bình→Khó)</strong> Hiểu insight cốt lõi 2026: khoảng cách chất lượng giữa các model đã thu hẹp (5-15%), quyết định thật nằm ở hạ tầng xung quanh.</li>
+  <li><strong>(Khó)</strong> Đánh giá đúng vì sao <code>predictor</code> không cần bất kỳ nền tảng nào trong 3 cái trên ở quy mô hiện tại, và platform nào sẽ tự nhiên nhất NẾU tương lai cần.</li>
+  <li><strong>(Trung bình→Khó)</strong> Phân biệt được platform hyperscaler (Bedrock/Vertex/Azure OpenAI, phục vụ model closed-weight) với nhóm serverless GPU/inference-as-a-service (Together/Fireworks/Modal/Baseten, phục vụ model open-weight) — không lẫn lộn khi so sánh giá.</li>
+  <li><strong>(Khó)</strong> Nhận diện được 2 loại chi phí ẩn (data egress, vendor lock-in tích hợp RAG) khi lập ngân sách chọn platform.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Module ngắn và dễ nhất trong 6 module — không có concept kỹ thuật sâu, chủ yếu là kiến thức thị trường/so sánh nền tảng. Không có module nào trong curriculum hiện tại (51 module gốc) từng so sánh trực tiếp 3 cloud AI platform này — đây là khoảng trắng hoàn toàn được lấp bởi module này.</p>
+<p>Liên hệ với <a href="../modules/L9_2_llm_ops.html"><code>L9_2_llm_ops.html</code></a> (đã dạy cost accounting, prompt versioning cho LLM) — cloud AI platform là 1 lựa chọn hạ tầng ảnh hưởng trực tiếp đến cách tính chi phí/quản lý version đó, nhưng module đó không đi sâu vào so sánh nền tảng cụ thể.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Dùng cloud AI platform giống <strong>thuê xe taxi công nghệ (Grab/Be)</strong> thay vì tự mua xe: bạn không cần lo bảo trì, không cần biết sửa máy, chỉ cần gọi xe và trả tiền theo chuyến. Đổi lại: bạn không kiểm soát được xe (model) chạy như thế nào bên trong, và trả phí mỗi lần dùng.</p>
+<p><strong>Tự host model</strong> (như <code>predictor</code> đang làm với XGBoost) giống <strong>tự mua và lái xe riêng</strong>: tốn công bảo trì ban đầu, nhưng chi phí biên mỗi chuyến gần như 0, và bạn hiểu rõ từng bộ phận. Với 1 model nhỏ (XGBoost, không phải GPT-size), "tự lái" rẻ và đơn giản hơn "gọi taxi" mỗi lần.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Cloud AI platform là gì — khái niệm nền</h3>
+<p>Cloud AI platform (Bedrock/Vertex/Azure OpenAI) là 1 lớp API trung gian: bạn gọi 1 endpoint HTTP, platform lo việc host model (GPU, scaling, uptime), bạn chỉ trả tiền theo token/request. Khác với việc tự tải model open-source về, tự cài lên máy chủ của mình, tự lo GPU và scaling.</p>
+
+<h3>2. 3 nền tảng lớn 2026 — điểm mạnh, data residency, RAG, compliance</h3>
+<div class="callout"><div class="label">📖 FedRAMP/IL5 nghĩa là gì — đọc trước khi so bảng dưới đây</div>
+<p>2 chứng nhận này hay bị coi là "nhãn mác" mà không hiểu cơ chế: <strong>FedRAMP</strong> (Federal Risk and Authorization Management Program) là khung đánh giá bảo mật CHUẨN HOÁ cho dịch vụ cloud bán cho chính phủ Mỹ — "High" là mức cao nhất, yêu cầu kiểm soát nghiêm ngặt nhất (mã hoá, audit log, kiểm soát truy cập) trong 3 mức Low/Moderate/High. <strong>IL5</strong> (Impact Level 5, theo chuẩn DoD Cloud Computing SRG) là 1 nấc CAO HƠN FedRAMP High — dành riêng cho dữ liệu quốc phòng nhạy cảm (Controlled Unclassified Information cấp cao), yêu cầu hạ tầng vật lý tách biệt hoàn toàn khỏi khách hàng thương mại thường. Đây là lý do bảng dưới đây ghi Azure OpenAI Government đạt IL5 còn Vertex AI Generative AI chỉ nêu FedRAMP High — 2 mức khác nhau, không phải cùng 1 chứng nhận đổi tên.</p>
+</div>
+<table>
+<tr><th></th><th>AWS Bedrock</th><th>Google Vertex AI (nay: Gemini Enterprise Agent Platform)</th><th>Azure OpenAI Service</th></tr>
+<tr><td><strong>Điểm mạnh chính</strong></td><td>Đa nhà cung cấp model (Claude, Llama, Mistral, Cohere, Nova) trong 1 API — đổi model không cần re-architect</td><td>Context 1M-token (Gemini 1.5 Pro), tích hợp chặt BigQuery, Gemini 1.5 Flash giá rẻ ($0.075/1M input token)</td><td>Độ sâu model OpenAI (GPT/o-series sớm nhất), tuân thủ hệ sinh thái Microsoft (Entra ID)</td></tr>
+<tr><td><strong>Data residency</strong></td><td>Model deploy theo region đã chọn</td><td>Data-first, gắn chặt GCP</td><td>Deploy vào Azure subscription/region của bạn — lợi thế data-residency</td></tr>
+<tr><td><strong>RAG tích hợp</strong></td><td>Amazon Knowledge Bases</td><td>Cloud Storage + BigQuery</td><td>Azure AI Search</td></tr>
+<tr><td><strong>Compliance</strong></td><td>FedRAMP High</td><td>FedRAMP High (Generative AI on Vertex AI đạt chứng nhận từ 3/2025; các dịch vụ liên quan như Agentspace, Vector Search, Looker tiếp tục đạt thêm trong 2026) — nhưng Azure OpenAI Government vẫn là platform IL5 mặc định cho chương trình DoD 2026, mức cao hơn FedRAMP High</td><td>FedRAMP High + IL5 (Azure OpenAI Government, DoD)</td></tr>
+<tr><td><strong>Best fit</strong></td><td>Fleet đa-model</td><td>Công việc agentic dài hơi, gắn BigQuery</td><td>Stack Microsoft-native</td></tr>
+<tr><td><strong>Giá tham khảo (input/output mỗi 1M token, model flagship — verify 2026-09)</strong></td><td>Claude Sonnet qua Bedrock: $3/$15 (giá chuẩn sau khuyến mãi)</td><td>Gemini 2.5 Pro: $1.25/$10 (≤200K context); Gemini 2.5 Flash rẻ hơn nhiều: $0.30/$2.50</td><td>Theo giá niêm yết OpenAI gốc: dao động $0.20-5 input tuỳ tier model, output ~6× input ở dòng GPT-5.6</td></tr>
+</table>
+<p><strong>Đọc bảng giá đúng cách</strong>: đừng so sánh cột này như "nền tảng nào rẻ nhất" — mỗi cột là 1 HỌ model khác nhau (Claude/Gemini/GPT), không phải 3 platform bán CÙNG 1 model với giá khác nhau. Đúng tinh thần insight mục 3: khoảng cách model chỉ 5-15%, nên quyết định thật vẫn nằm ở compliance/tích hợp, giá chỉ là 1 trong nhiều tiêu chí — không phải tiêu chí duy nhất hay quan trọng nhất.</p>
+
+<h3>3. Vì sao "model nào giỏi hơn" không còn là câu hỏi trọng tâm 2026</h3>
+<div class="callout">
+<div class="label">📖 Insight quan trọng 2026</div>
+<p><em>"Platform choice matters more than model choice in 2026 – model gaps are small (5–15%); compliance, data residency, pricing, and integration drive real enterprise impact"</em> — nghĩa là khoảng cách chất lượng giữa các model hàng đầu đã thu hẹp xuống 5-15%, không còn là chênh lệch quyết định như vài năm trước. Quyết định thật sự nằm ở những thứ ít "hào nhoáng" hơn: hợp đồng compliance công ty đã ký, dữ liệu phải lưu ở region nào theo luật, chi phí ẩn (data egress, support tier), và mức độ tích hợp sẵn với hệ thống hiện có (BigQuery/Entra ID/Knowledge Bases).</p>
+</div>
+<p>Hệ quả thực tế: 1 team chọn Azure OpenAI không phải vì GPT "giỏi hơn" Claude 15%, mà vì công ty đã dùng Microsoft 365/Entra ID sẵn, và việc tích hợp identity/compliance đó tiết kiệm hàng tuần công sức so với lợi ích nhỏ (nếu có) từ 1 model "giỏi hơn" chút ít.</p>
+
+<h3>4. Lớp thứ 2 của thị trường 2026 — serverless GPU / inference-as-a-service (khác hẳn 3 platform hyperscaler ở mục 2)</h3>
+<p>Bedrock/Vertex/Azure OpenAI (mục 2) là platform của 3 hyperscaler lớn, đi kèm toàn bộ hệ sinh thái cloud (IAM, networking, compliance chứng nhận sẵn). Song song đó, 1 lớp nền tảng khác nổi lên mạnh 2025-2026: <strong>serverless GPU / inference-as-a-service</strong> — chuyên phục vụ model open-weight (Llama, Qwen, DeepSeek...) theo API, không cần tự quản GPU, nhưng KHÔNG đi kèm hệ sinh thái compliance đầy đủ như hyperscaler:</p>
+<table>
+<tr><th>Nền tảng</th><th>Mô hình tính giá</th><th>Đặc điểm</th></tr>
+<tr><td><strong>Together AI / Fireworks AI</strong></td><td>Theo token, model &lt;4B ≈ $0.10/1M token, model 4B-16B (VD Llama 3.1 8B) ≈ $0.20/1M token</td><td>Model open-weight có sẵn trong catalog, gọi API ngay — không cần bước "deploy"</td></tr>
+<tr><td><strong>Modal</strong></td><td>Theo giây sử dụng GPU thực tế (không phải theo token) — H100 ≈ $3.95/giờ quy đổi, A100 80GB ≈ $2.50/giờ, L4 ≈ $0.80/giờ <em>(verify 2026-09, giá GPU cloud biến động theo thời gian)</em></td><td>Phù hợp khi tự deploy model tuỳ chỉnh (không có sẵn trong catalog nhà cung cấp khác)</td></tr>
+<tr><td><strong>Baseten</strong></td><td>Tính theo phút, quy đổi ≈ $6.50/giờ H100 <em>(verify 2026-09)</em></td><td>Đắt hơn Modal ở cùng loại GPU trong khảo sát 2026, đổi lại tooling triển khai model tuỳ chỉnh dễ hơn</td></tr>
+<tr><td><strong>Replicate</strong></td><td>Theo API call/model, catalog công khai lớn</td><td>Dễ thử nghiệm nhanh 1 model lạ qua API mà không cam kết hạ tầng dài hạn</td></tr>
+</table>
+<p><strong>Vì sao đây là 1 trục quyết định khác, không phải "rẻ hơn nên luôn chọn"</strong>: nhóm này tối ưu cho việc phục vụ model <em>open-weight</em> — nếu cần đúng Claude/GPT/Gemini (closed-weight), vẫn phải qua kênh chính hãng (API trực tiếp Anthropic/OpenAI/Google, hoặc qua Bedrock/Vertex/Azure OpenAI ở mục 2). Nhóm serverless GPU không thay thế được 3 platform hyperscaler cho closed-weight model — chúng giải bài toán khác: "muốn tự chọn 1 model open-weight cụ thể, không muốn tự quản GPU".</p>
+
+<h3>5. Bẫy chi phí ẩn — data egress và vendor lock-in</h3>
+<p>Bảng giá công khai của cả 3 hyperscaler (mục 2) và nhóm serverless GPU (mục 4) đều KHÔNG hiển thị nổi bật 1 khoản phí thực tế hay bị bỏ sót khi lập ngân sách: <strong>data egress</strong> — phí chuyển dữ liệu RA KHỎI cloud (không phải phí gọi API model). Nếu pipeline RAG lưu embedding/document trong cùng cloud với model platform (VD BigQuery + Vertex AI), egress gần như bằng 0. Nếu dữ liệu nằm ở 1 cloud, gọi model platform ở cloud khác — mỗi lần truyền context dài (VD 1M-token Gemini) qua lại giữa 2 cloud cộng dồn phí egress, có thể vượt cả phí token model ở khối lượng lớn.</p>
+<p><strong>Vendor lock-in</strong> không nằm ở giá — nằm ở tích hợp: Amazon Knowledge Bases / Cloud Storage+BigQuery / Azure AI Search (bảng mục 2, dòng "RAG tích hợp") mỗi cái có API/schema riêng. Chuyển từ Bedrock Knowledge Bases sang Vertex AI sau 1 năm vận hành không chỉ là đổi endpoint gọi model — phải viết lại toàn bộ tầng RAG tích hợp đó. Đây là lý do quyết định chọn platform ở mục 2 nên cân nhắc ĐỘ SÂU tích hợp dự kiến dùng, không chỉ giá token hiện tại.</p>
+<pre><code>Minh hoạ egress bằng số (giá egress AWS tier tiêu chuẩn ~$0.09/GB — verify 2026-09,
+mức giá thay đổi theo tier lượng dùng, đây chỉ là mức đại diện phổ biến):
+
+1 lần gọi context 1M-token (Gemini) ước lượng ~4MB text thô
+  → nếu phải TRUYỀN dữ liệu nguồn từ 1 cloud khác sang GCP mỗi lần gọi:
+  4MB × $0.09/GB ≈ 4/1024 × $0.09 ≈ $0.00035/lần gọi — NHỎ ở 1 lần
+
+Nhưng ở quy mô 86 ticker × vài lần gọi/ngày × 250 ngày giao dịch/năm:
+  86 × 3 × 250 = 64,500 lần gọi/năm × $0.00035 ≈ $22.6/năm CHỈ RIÊNG egress
+  — nhỏ ở quy mô này, nhưng tăng TUYẾN TÍNH theo cả số ticker lẫn kích thước
+  context mỗi lần gọi; ở quy mô context lớn hơn nhiều (nhiều MB/lần, nhiều
+  hệ thống multi-cloud thật) đây là khoản dễ bị bỏ sót khi so sánh bảng giá
+  token thuần túy của mục 2.</code></pre>
+
+<h3>6. Khung quyết định — chọn platform nào cho 1 tình huống cụ thể</h3>
+<pre><code>Cần gọi ĐÚNG 1 model closed-weight cụ thể (Claude/GPT/Gemini)?
+  ├── CÓ, và công ty đã có hạ tầng 1 trong 3 hyperscaler sẵn
+  │     → Chọn platform tương ứng hạ tầng đã có (Bedrock nếu AWS-native,
+  │       Vertex nếu GCP-native, Azure OpenAI nếu Microsoft-native)
+  │       — tiết kiệm chi phí tích hợp identity/networking/compliance
+  │
+  ├── CÓ, nhưng CHƯA gắn hạ tầng cloud nào cụ thể
+  │     → Cân nhắc 4 trục mục 2 (data residency, RAG tích hợp, compliance,
+  │       best-fit) — KHÔNG mặc định chọn theo "model nào giỏi hơn"
+  │
+  └── KHÔNG — chấp nhận model open-weight (Llama/Qwen/DeepSeek...)
+        → Nhóm serverless GPU (mục 4): Together/Fireworks nếu chỉ cần gọi
+          API theo token; Modal/Baseten nếu cần tự deploy model tuỳ chỉnh
+          không có sẵn trong catalog nhà cung cấp khác
+
+Ở MỌI nhánh: kiểm tra data egress (mục 5) nếu kiến trúc là multi-cloud,
+và xác nhận LLM không phải feature runtime của AI Trader (ràng buộc CLAUDE.md)
+trước khi chốt bất kỳ tích hợp nào.</code></pre>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Xác nhận trực tiếp từ codebase — <code>predictor</code> <strong>không gọi bất kỳ cloud AI platform nào ở trên</strong> trong runtime sản phẩm. 2 điểm xác nhận:</p>
+<ul>
+<li><strong>Model dự đoán chứng khoán (XGBoost)</strong>: tự train, tự lưu artifact trong <code>backend/models/</code>, tự host và serve ngay trong container <code>api</code> (xem <code>backend/Dockerfile</code>, <code>docker-compose.yml</code>) — không gọi ra ngoài bất kỳ API cloud AI nào để predict.</li>
+<li><strong>LLM (Claude)</strong>: chỉ chạy trong workflow phát triển/report qua Claude Code (ví dụ skill <code>daily-investor-report</code> tạo báo cáo HTML) — <strong>không phải 1 API call runtime bên trong sản phẩm</strong> mà end-user chạm vào khi dùng app. Đây là ranh giới quan trọng: dùng Claude để hỗ trợ viết code/báo cáo khác hoàn toàn với việc sản phẩm tự gọi 1 cloud AI platform mỗi lần user request.</li>
+</ul>
+
+<h3>Ví dụ mở rộng — nếu <code>daily-investor-report</code> (86 ticker) phải trở thành 1 API call runtime thật, chi phí khác nhau thế nào giữa 3 nhóm nền tảng</h3>
+<p>Kịch bản giả định (KHÔNG phải nhu cầu thật hiện tại — chỉ để so sánh cơ chế tính giá), mỗi ticker cần ~3800 token input (system prompt, đúng số đã dùng ở <code>R2_1_kv_caching.html</code>) + ~400 token output (đã áp Structured Output, đúng số ở <code>R2_8_cost_performance.html</code>):</p>
+<pre><code>Qua Bedrock (Claude Sonnet, $3/$15 mỗi 1M input/output — verify 2026-09):
+  86 × (3800 × $3/1M + 400 × $15/1M) = 86 × ($0.0114 + $0.006) = 86 × $0.0174 ≈ $1.50/lần chạy
+
+Qua Together AI (model open-weight nhỏ hơn nhiều, VD Llama 3.1 8B, $0.20/1M cả 2 chiều — verify 2026-09):
+  86 × (3800 + 400) × $0.20/1M = 86 × 4200 × $0.0000002 ≈ $0.072/lần chạy
+  (RẺ hơn nhiều — NHƯNG đây là model nhỏ hơn hẳn, chất lượng viết thesis tài chính
+   khác hẳn Claude Sonnet, không phải phép so sánh ngang hàng)
+
+Qua Modal (tự deploy model mở, tính theo giờ GPU không theo token):
+  Chi phí không phụ thuộc số ticker trong ngưỡng 1 GPU xử lý hết trong vài giây —
+  gần cố định ở mức thuê GPU/giờ, có lợi khi VOLUME đủ lớn để lấp đầy GPU
+  (đúng logic break-even self-host đã học ở L5_5_cost_latency.html §1)</code></pre>
+<p><strong>Bài học</strong>: không có "nền tảng rẻ nhất tuyệt đối" — Together AI rẻ hơn ~20× ở ví dụ trên vì SO SÁNH KHÁC MODEL (nhỏ hơn hẳn Claude), không phải vì "nền tảng tốt hơn". So sánh giá đúng cách phải giữ NGUYÊN chất lượng model, chỉ đổi platform — nếu đổi cả model lẫn platform cùng lúc, không thể tách được phần tiết kiệm đến từ đâu.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Cloud AI platform (Bedrock/Vertex/Azure OpenAI)</th><th>Tự host (predictor hiện tại)</th></tr>
+<tr><td><strong>Chi phí biên mỗi request</strong></td><td>Trả theo token/request, luôn tồn tại</td><td>~0 sau khi train xong (chỉ tốn compute serving, đã có sẵn)</td></tr>
+<tr><td><strong>Cần GPU riêng?</strong></td><td>Không — platform lo</td><td>Không cần (XGBoost chạy CPU) — nhưng nếu là LLM lớn thì có, và đây là chi phí/độ phức tạp lớn</td></tr>
+<tr><td><strong>Kiểm soát version model</strong></td><td>Phụ thuộc platform (model có thể bị deprecate)</td><td>Toàn quyền, tự quyết định khi nào đổi</td></tr>
+<tr><td><strong>Độ trễ phát triển ban đầu</strong></td><td>Nhanh — gọi API là chạy được</td><td>Chậm hơn — phải tự train, tự host, tự maintain</td></tr>
+<tr><td><strong>Phù hợp bài toán</strong></td><td>Cần LLM mạnh, generative, không muốn tự lo hạ tầng GPU</td><td>Model nhỏ, đã train sẵn, đủ hiểu domain để tự tối ưu (đúng trường hợp XGBoost 86 ticker)</td></tr>
+</table>
+
+<h2>🎯 Ứng dụng vào dự án hiện tại</h2>
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> không dùng bất kỳ cloud AI platform nào ở trên — model XGBoost tự train + tự host trong container <code>api</code> (<code>backend/models/</code>), LLM (Claude qua Claude Code) chỉ chạy trong workflow phát triển/report, không phải 1 API call runtime trong sản phẩm. Đây là lựa chọn hợp lý ở quy mô hiện tại — 86 ticker, model nhỏ, không cần GPU serving.</p>
+<p>Nếu tương lai cần 1 API LLM runtime thật <strong>(KHÔNG phải cho AI Trader — xem quy tắc "LLM sẽ không phải là 1 feature" trong <code>CLAUDE.md</code>, LLM chỉ có vai trò nghiên cứu/hỗ trợ)</strong>, Bedrock là lựa chọn tự nhiên nhất vì team đã quen Claude/Anthropic ecosystem — chuyển từ Claude Code sang Claude qua Bedrock không đổi model, chỉ đổi kênh gọi API.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ol>
+<li><strong>Chọn cloud AI platform theo "model nào giỏi hơn"</strong> — sai trọng tâm 2026, chênh lệch model chỉ 5-15%, quyết định thật nằm ở compliance/tích hợp/chi phí ẩn.</li>
+<li><strong>Nhầm "dùng Claude Code để viết code" với "sản phẩm gọi cloud AI platform runtime"</strong> — 2 việc hoàn toàn khác nhau; nhầm lẫn này dẫn đến đánh giá sai kiến trúc hệ thống hiện tại.</li>
+<li><strong>Thêm 1 cloud AI platform "cho chắc, phòng khi cần"</strong> khi chưa có nhu cầu LLM runtime thật trong sản phẩm — thêm chi phí tích hợp/bảo trì không cần thiết.</li>
+<li><strong>Quên rằng LLM không được phép là 1 feature runtime của AI Trader</strong> (quy tắc đã chốt trong <code>CLAUDE.md</code>) — bất kỳ đề xuất tích hợp cloud AI platform nào cho AI Trader/AI Predict cần re-check quy tắc này trước.</li>
+<li><strong>So sánh giá giữa hyperscaler và serverless GPU mà đổi cả model lẫn platform cùng lúc</strong> — như ví dụ mục "Ví dụ mở rộng", Together AI rẻ hơn Bedrock ~20× trong phép tính minh hoạ chỉ vì dùng model NHỎ HƠN HẲN, không phải vì bản thân platform rẻ hơn ở CÙNG model.</li>
+<li><strong>Bỏ qua phí data egress khi ước tính ngân sách platform</strong> — đặc biệt nguy hiểm với kiến trúc multi-cloud (data 1 nơi, model platform 1 nơi khác) và context dài (VD tận dụng 1M-token Gemini nhưng dữ liệu nằm ngoài GCP).</li>
+</ol>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Kể đúng tên 3 cloud AI platform lớn và điểm mạnh chính của từng nền tảng.</li>
+<li>So sánh đúng 3 nền tảng theo trục compliance/data residency thay vì chỉ "model nào giỏi hơn".</li>
+<li>Giải thích được vì sao insight "platform choice matters more than model choice" đúng năm 2026.</li>
+<li>Xác nhận đúng <code>predictor</code> hiện tại không gọi cloud AI platform nào trong runtime sản phẩm, và phân biệt được với việc dùng Claude Code ở lớp phát triển/report.</li>
+<li>Chọn đúng Bedrock là lựa chọn tự nhiên nhất nếu tương lai cần API LLM runtime, kèm lý do (đã quen Claude ecosystem) — không quên ràng buộc "LLM không phải feature" của AI Trader.</li>
+<li>Phân biệt đúng 2 lớp thị trường 2026 (hyperscaler closed-weight vs serverless GPU open-weight) và chọn đúng nhóm cho 1 tình huống cụ thể.</li>
+<li>Tính lại được ví dụ so sánh chi phí 86-ticker giữa Bedrock/Together AI/Modal, và giải thích đúng vì sao chênh lệch lớn không có nghĩa "1 platform rẻ hơn tuyệt đối".</li>
+<li>Kể đúng 2 loại chi phí ẩn (data egress, vendor lock-in tích hợp) khi lập ngân sách chọn platform.</li>
+<li>Áp dụng đúng khung quyết định 3 nhánh (đã gắn hạ tầng sẵn / chưa gắn / chấp nhận open-weight) cho 1 tình huống chọn platform cho trước.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R7_2_kubernetes.html">← R7.2 · Kubernetes</a>
+  <a href="R7_4_model_routing.html">R7.4 · Model Routing →</a>
+</div>
+
+</div>
+</body>
+</html>

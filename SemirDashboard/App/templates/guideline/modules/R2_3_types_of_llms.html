@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2.3 · Types of LLMs — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM APIs · Điểm 3/8</div>
+  <h1>R2.3 · Types of LLMs</h1>
+  <p class="subtitle">"LLM" không phải 1 loại sản phẩm — 4 trục phân loại quyết định bạn nên chọn model nào cho việc gì, và vì sao chọn sai loại vừa lãng phí tiền vừa thất bại nhiệm vụ.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Phân loại được 1 LLM cho trước theo đúng 4 trục: giai đoạn huấn luyện sau-cùng, kiến trúc tính toán, kích thước/latency tier, open vs closed weight.</li>
+<li>Giải thích được vì sao "reasoning model" đắt hơn nhiều so với con số hiển thị bề ngoài (hidden reasoning tokens) — với số liệu benchmark cụ thể (5-50× token ẩn, 10-100× chi phí/query), không chỉ nói chung chung "đắt hơn".</li>
+<li>Chọn đúng loại model cho 1 tác vụ cụ thể thay vì mặc định dùng model "xịn nhất" cho mọi việc.</li>
+<li>Giải thích được xu hướng 2026 "distillation" giữa dense và MoE — vì sao phần lớn model production vẫn là dense dù MoE là kiến trúc mạnh nhất cho model flagship.</li>
+<li>Phân biệt được ≥3 phương pháp alignment cụ thể (RLHF cổ điển, DPO, RLAIF, Constitutional AI) thay vì gộp chung "model được RLHF" — biết phương pháp nào cần reward model riêng, phương pháp nào không.</li>
+<li>Phân biệt được SLM (edge/on-device) với "tier nhỏ trong 1 họ cloud" (trục c) — đây là 2 khái niệm "nhỏ" khác nhau, không được gộp làm 1.</li>
+<li>Giải thích được vì sao context window quảng cáo và "effective context" (dùng được thật) là 2 con số khác nhau, và không chọn model chỉ dựa vào số token tối đa quảng cáo.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Đây là <strong>gap thật 100%</strong> — trước bài này, curriculum chưa có chỗ nào phân loại LLM 1 cách hệ thống. Các module liên quan chỉ chạm từng mảnh riêng lẻ: <code>../modules/L4_4_alignment_rlhf.html</code> (giải thích SFT/RLHF — nền tảng cho trục "giai đoạn huấn luyện"), <code>../modules/L5_5_cost_latency.html §4</code> (bảng model routing theo tier giá — nền tảng cho trục "kích thước/tier"). Bài này là chỗ ráp lại thành 1 khung phân loại đầy đủ.</p>
+<p><strong>Prerequisite</strong>: không bắt buộc, nhưng đọc trước R2.2 (System Prompts) sẽ hiểu rõ hơn vì sao "instruct model" nghe theo system prompt còn "base model" thì không.</p>
+<div class="callout"><div class="label">📖 Liên hệ ngược — cùng 1 loại nhầm lẫn đã từng xảy ra THẬT trong chính dự án này</div>
+<p><code>CLAUDE.md</code> của dự án ghi rõ (mục "Before assuming anything about current AI Predict state"): từng có nhầm lẫn kéo dài giữa "v18", "v19.5", "v20", "v21" — tưởng nhiều "version" đang chạy song song, thực tế chỉ v18 (+ 1 config training) từng thật sự live, còn lại là thử nghiệm bị rollback hoặc tên gọi của 1 cuộc điều tra, không phải model. Bài học rút ra ("đừng suy luận từ tài liệu cũ, chạy script status để biết trạng thái THẬT hiện tại") áp dụng y hệt cho việc phân loại LLM bên ngoài: tên gọi model thương mại (Sonnet 4.5, Opus 4.7, GPT-5.4...) đổi rất nhanh, 1 tài liệu/bài viết vài tháng trước có thể đã mô tả sai model đang thật sự live. Luôn verify qua docs chính chủ tại thời điểm build, đừng suy luận "version nào đang dùng" từ trí nhớ hoặc bài viết cũ — đúng kỷ luật mà dự án này đã phải học qua 1 sự cố thật.</p>
+</div>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Hỏi "LLM là gì" giống hỏi "xe là gì" — có xe máy (nhỏ, nhanh, rẻ, đi đường ngắn), xe tải (to, chậm, chở nặng), xe đua (chuyên biệt 1 việc, đắt, không dùng để đi chợ). Không có "1 loại LLM chuẩn" — chọn sai loại xe cho việc là lãng phí tiền xăng hoặc không chở nổi hàng.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+<p><strong>[TRAIN-KNOWLEDGE]</strong> — 4 trục dưới đây là kiến thức phân loại nền tảng, ổn định theo thời gian, không phải tin tức thay đổi theo năm.</p>
+
+<h3>Trục a) Theo giai đoạn huấn luyện sau-cùng (post-training stage)</h3>
+<table>
+<tr><th>Loại</th><th>Đặc điểm</th><th>Dùng khi nào</th></tr>
+<tr><td><strong>Base model</strong></td><td>Chỉ pretrain (next-token prediction trên corpus khổng lồ), chưa được "dạy nghe lời"</td><td>Nghiên cứu, làm nền cho fine-tune riêng — hiếm khi dùng trực tiếp production</td></tr>
+<tr><td><strong>Instruct model</strong></td><td>Base + SFT (supervised fine-tune trên cặp instruction-response) + RLHF/DPO</td><td>95% use case production — trả lời theo yêu cầu, tuân system prompt (xem <code>../modules/L4_4_alignment_rlhf.html</code>)</td></tr>
+<tr><td><strong>Reasoning model</strong></td><td>Instruct + train thêm để sinh "chuỗi suy nghĩ ẩn" (hidden reasoning tokens) trước câu trả lời cuối</td><td>Task cần multi-step logic (toán, planning) — cost thật có thể gấp nhiều lần nominal output vì bill cả reasoning tokens ẩn</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Vì sao base model "không nghe lời"?</div>
+<p>Base model chỉ học "đoán từ tiếp theo hợp lý nhất" từ văn bản internet — nó không hề được dạy khái niệm "trả lời câu hỏi của user". Nếu bạn hỏi base model "Thủ đô Việt Nam là gì?", nó có thể tiếp tục bằng 1 câu hỏi khác thay vì trả lời, vì trong dữ liệu huấn luyện, câu hỏi đó có thể xuất hiện trong 1 bài kiểm tra liệt kê nhiều câu hỏi liền nhau. SFT + RLHF là bước "dạy" model rằng khi thấy dạng input này, output nên là 1 câu trả lời trực tiếp, hữu ích — đây cũng chính là cơ chế khiến model tuân theo <code>system</code> hơn <code>user</code> đã nói ở R2.2.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Số liệu thật (2026) — "đắt hơn" cụ thể là bao nhiêu</div>
+<p>Benchmark 2026 lượng hoá rõ chi phí ẩn của reasoning model, không chỉ nói chung chung "đắt hơn": chi phí mỗi query có thể cao hơn <strong>10-100×</strong> so với non-reasoning cho cùng 1 câu hỏi, latency cao hơn tới <strong>10×</strong>. Nguyên nhân gốc: hầu hết provider chỉ trả về bản tóm tắt/không trả nguyên văn "chuỗi suy nghĩ" (reasoning trace), nhưng vẫn tính tiền cho <strong>toàn bộ</strong> token đã sinh ra trong lúc "suy nghĩ" — token ẩn này có thể chiếm <strong>5-50×</strong> khối lượng so với phần output nhìn thấy được. Hiện tượng "overthinking" khiến vấn đề tệ hơn: có model reasoning tốn hơn 900 token chỉ để trả lời "2+3=?" — nghĩa là chi phí phụ trội không tỷ lệ với độ khó thật của câu hỏi, mà đôi khi xảy ra ngay cả với câu hỏi tầm thường.</p>
+</div>
+
+<table>
+<tr><th>Tiêu chí</th><th>Non-reasoning (instruct thường)</th><th>Reasoning model</th></tr>
+<tr><td>Cách sinh câu trả lời</td><td>Sinh trực tiếp token trả lời</td><td>Sinh 1 chuỗi "suy nghĩ" ẩn trước, rồi mới sinh câu trả lời cuối</td></tr>
+<tr><td>Token bị tính phí</td><td>= token output nhìn thấy</td><td>= token output nhìn thấy + token suy nghĩ ẩn (5-50× phần nhìn thấy)</td></tr>
+<tr><td>Chi phí/query so với non-reasoning</td><td>Baseline (1×)</td><td>10-100× (tuỳ độ khó task và model)</td></tr>
+<tr><td>Latency</td><td>Baseline</td><td>Tới 10× chậm hơn</td></tr>
+<tr><td>Error rate task multi-step (toán, planning)</td><td>Cao hơn rõ rệt</td><td>Thấp hơn rõ rệt — đây là lý do nó tồn tại</td></tr>
+<tr><td>Error rate task đơn giản (tổng hợp, format, phân loại)</td><td>Đã đủ tốt</td><td>Không cải thiện đáng kể, nhưng vẫn bị tính phí như trên</td></tr>
+<tr><td>Rủi ro "overthinking"</td><td>Không có khái niệm này</td><td>Có — tốn token cho cả câu hỏi tầm thường (VD &gt;900 token cho "2+3=?")</td></tr>
+</table>
+
+<h3>Trục b) Theo kiến trúc tính toán</h3>
+<ul>
+<li><strong>Dense model</strong>: mọi tham số được kích hoạt cho mọi token (VD GPT-3, Llama truyền thống). Đơn giản, dự đoán chi phí dễ — số tham số = số tính toán mỗi token.</li>
+<li><strong>Mixture-of-Experts (MoE)</strong>: model có N "expert" (mạng con), mỗi token chỉ route qua k &lt;&lt; N expert (VD Mixtral 8×7B chỉ dùng 2/8 expert mỗi token). Lợi ích: tổng tham số lớn (nhiều "kiến thức" lưu trữ) nhưng compute mỗi token thấp hơn dense model tương đương chất lượng.</li>
+</ul>
+<table>
+<tr><th></th><th>Dense</th><th>Mixture-of-Experts (MoE)</th></tr>
+<tr><td>Compute mỗi token</td><td>= toàn bộ tham số</td><td>chỉ = k/N tham số (thấp hơn)</td></tr>
+<tr><td>VRAM cần</td><td>= toàn bộ tham số</td><td>= toàn bộ tham số (phải load hết dù không dùng hết mỗi token)</td></tr>
+<tr><td>Độ phức tạp vận hành</td><td>Thấp</td><td>Cao hơn — cần routing logic, cân bằng tải giữa expert</td></tr>
+<tr><td>Trade-off</td><td>Đơn giản, dễ dự đoán chi phí</td><td>Compute rẻ hơn / chất lượng, nhưng tốn VRAM lưu toàn bộ expert</td></tr>
+</table>
+
+<div class="callout"><div class="label">📖 Cập nhật 2026 — không phải "MoE thắng thế hoàn toàn", mà là 2 vai trò song song</div>
+<ul>
+<li><strong>MoE thống trị model flagship</strong> (mạnh nhất trong 1 họ): tách rời được "tổng dung lượng kiến thức" (số tham số) khỏi "chi phí tính mỗi token" — cho phép scale model lớn hơn nhiều mà vẫn phục vụ được với tốc độ chấp nhận được.</li>
+<li><strong>Nhưng phần lớn model production tier nhỏ/vừa vẫn là dense</strong>, vì 3 lý do thực tế:
+  <ol>
+  <li>Train MoE từ đầu tốn kém và khó ổn định hơn dense.</li>
+  <li>MoE cần hạ tầng serving có khả năng phân phối expert + route batch token hiệu quả — không phải ai cũng có sẵn.</li>
+  <li>MoE luôn cần load <em>toàn bộ</em> expert vào VRAM dù mỗi token chỉ dùng 1 phần nhỏ — bất lợi rõ rệt khi bộ nhớ là ràng buộc cứng (VD chạy trên 1 GPU tiêu dùng).</li>
+  </ol>
+</li>
+<li><strong>Xu hướng nghiên cứu 2026 (distillation MoE→dense)</strong> — "pruning and distilling Mixture-of-Experts into dense language models": dùng model MoE lớn làm "giáo viên" để chưng cất kiến thức vào 1 model dense nhỏ hơn, thường hiệu quả hơn dùng model dense làm giáo viên cho model dense khác. Model dense đã chưng cất đó vẫn là dense khi serve, không phải MoE.</li>
+<li><strong>Kết luận</strong>: đây không phải cuộc đua "kiến trúc nào thắng" — dense và MoE phục vụ 2 điểm khác nhau trên cùng 1 đường cong chi phí/dung lượng, và ngay cả các nhà cung cấp lớn vẫn phát hành song song cả 2 loại.</li>
+</ul>
+</div>
+
+<h3>Trục c) Theo kích thước / latency tier</h3>
+<p>Đây chính là bảng "model routing" đã có ở <code>../modules/L5_5_cost_latency.html §4</code> — tier nhỏ (VD Haiku) cho task đơn giản (phân loại, trích xuất, format lại text), tier lớn (VD Opus) cho task cần suy luận sâu. Chênh lệch giá giữa tier nhỏ nhất và lớn nhất trong 1 họ model có thể tới 60×, nên chọn sai tier cho 1 workload khối lượng lớn (VD chạy hàng nghìn request/ngày) là sai lầm chi phí nghiêm trọng, không phải chi tiết nhỏ.</p>
+
+<h3>Trục d) Theo open weight vs closed weight</h3>
+<table>
+<tr><th></th><th>Closed-weight (API-only)</th><th>Open-weight (self-host được)</th></tr>
+<tr><td>Ví dụ</td><td>Claude, GPT</td><td>Llama, Mistral, Qwen, DeepSeek</td></tr>
+<tr><td>Kiểm soát</td><td>Không sửa được weight, chỉ prompt/tool</td><td>Fine-tune toàn quyền, self-host</td></tr>
+<tr><td>Chi phí</td><td>Pay-per-token, không lo hạ tầng</td><td>Trả GPU cố định, cần ops team (<code>../modules/L9_4_scale.html</code>)</td></tr>
+<tr><td>Compliance</td><td>Data đi qua network provider</td><td>Data ở lại hạ tầng riêng — quan trọng nếu ràng buộc pháp lý dữ liệu tài chính VN</td></tr>
+</table>
+
+<h3>Trục e) Theo quy mô tuyệt đối — SLM (Small Language Model) vs LLM, KHÔNG giống trục c)</h3>
+<p>Trục c) nói về tier <em>trong cùng 1 họ model</em> của 1 provider (Haiku nhỏ hơn Opus, nhưng cả 2 vẫn là model cloud, hàng chục-hàng trăm tỷ tham số). Trục e) là 1 phân loại khác hẳn về LOẠI: <strong>SLM</strong> (Small Language Model, thường 100M-5B tham số) là 1 hạng mục model khác về bản chất — đủ nhỏ để chạy trực tiếp trên thiết bị (điện thoại, laptop, edge device), không cần gọi API qua mạng:</p>
+<table>
+<tr><th>Tiêu chí</th><th>SLM (100M-5B tham số)</th><th>LLM cloud (hàng trăm tỷ - hàng nghìn tỷ tham số)</th></tr>
+<tr><td>Nơi chạy</td><td>Trên thiết bị (on-device) — điện thoại, laptop, embedded system</td><td>Cloud, cụm GPU của provider</td></tr>
+<tr><td>Latency</td><td>Rất thấp — không có round-trip mạng</td><td>150-250ms là bình thường (round-trip + queue + generate)</td></tr>
+<tr><td>Năng lượng/chi phí vận hành</td><td>Thấp hơn 10-100× so với gọi LLM cloud cho cùng tác vụ</td><td>Cao hơn nhiều — GPU cloud tốn 20-200W/request</td></tr>
+<tr><td>Privacy</td><td>Dữ liệu không rời thiết bị — tốt cho dữ liệu nhạy cảm</td><td>Dữ liệu đi qua network provider (trừ khi self-host — xem trục d)</td></tr>
+<tr><td>Chất lượng tổng quát (general-purpose)</td><td>Kém hơn rõ rệt — ít tham số, ít "kiến thức" lưu trữ</td><td>Tốt hơn nhiều cho task đa dạng, cần kiến thức rộng</td></tr>
+<tr><td>Chất lượng SAU KHI fine-tune cho 1 domain hẹp</td><td>Có thể VƯỢT model lớn tổng quát trên đúng domain đó — vì fine-tune tốn ít compute hơn hẳn, dễ lặp lại nhiều vòng</td><td>Fine-tune tốn kém hơn nhiều, ít linh hoạt lặp vòng nhanh</td></tr>
+<tr><td>Phù hợp nhất khi</td><td>Cần latency cực thấp, offline, riêng tư, hoặc đã fine-tune sâu cho 1 tác vụ hẹp lặp lại nhiều</td><td>Cần suy luận rộng, kiến thức tổng quát, task đa dạng không lường trước</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Không phải "SLM yếu hơn nên chỉ dùng khi bắt buộc"</div>
+<p>Đây tiếp tục là 1 trục đánh đổi, không phải thang chất lượng tuyệt đối: nghiên cứu 2026 về "collaborative mechanisms between large and small language models" chỉ ra SLM đã fine-tune kỹ cho 1 domain hẹp có thể thắng LLM tổng quát trên đúng domain đó, dù thua toàn diện ở phạm vi rộng. Quyết định đúng phụ thuộc: task có đủ hẹp và lặp lại đủ nhiều để việc fine-tune 1 SLM riêng "đáng" chi phí đầu tư hay không — với task hiếm gặp, đa dạng (đúng đặc điểm của "research source" LLM trong dự án), LLM cloud tổng quát vẫn là lựa chọn hợp lý hơn.</p>
+</div>
+
+<h3>Trục f) Context window — "đã quảng cáo" khác "dùng được thật", đừng chọn model chỉ vì số to</h3>
+<p>Trục c)/d) đã nói về tier và open/closed weight — context window (số token tối đa 1 lần gọi) là 1 trục lựa chọn khác, dễ bị đánh giá sai vì chỉ nhìn con số quảng cáo:</p>
+<table>
+<tr><th>Model (2026)</th><th>Context quảng cáo</th><th>Ghi chú thực tế</th></tr>
+<tr><td>Llama 4 Scout, Gemini 3 Pro</td><td>Tới 10 triệu token</td><td>Con số lớn nhất thị trường tại thời điểm khảo sát, nhưng CHƯA có benchmark công khai nào cho thấy chất lượng giữ được gần mức 10M token đó</td></tr>
+<tr><td>Claude Opus 4.7/4.8, GPT-5.4/5.5, Gemini 3.1 Pro, DeepSeek V4...</td><td>256K - 2M token (13 model hosted đạt mốc 1M+ tính tới giữa 2026)</td><td>Nhóm frontier chủ đạo — differ rõ giữa các hãng, KHÔNG có 1 "chuẩn chung"</td></tr>
+<tr><td>Giá cho ĐẦY 1 cửa sổ 1M token</td><td>Từ $0.14 (DeepSeek V4 Flash) đến $10.00 (model đắt nhất)</td><td>Chênh lệch tới ~71× cho CÙNG 1 kích thước cửa sổ — số token tối đa không nói lên gì về giá</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ "Effective context" thường chỉ 60-70% con số quảng cáo — đây không phải lỗi, mà là giới hạn thật cần tính trước</div>
+<ul>
+<li><strong>Khảo sát 22 model hàng đầu (2026)</strong>: "effective context" (model vẫn nhớ chính xác, không bỏ sót thông tin ở giữa văn bản dài — hiện tượng "lost in the middle") thường chỉ đạt <strong>60-70%</strong> con số quảng cáo.</li>
+<li><strong>Ví dụ cụ thể</strong>: model quảng cáo 200,000 token có thể bắt đầu kém tin cậy từ khoảng 130,000 token trở đi.</li>
+<li><strong>Không phải "quảng cáo sai"</strong> theo nghĩa gian lận: con số quảng cáo là giới hạn kỹ thuật cứng (model KHÔNG NHẬN input dài hơn); "effective context" là 1 phép đo chất lượng riêng, khác hẳn.</li>
+<li><strong>Hệ quả thiết kế</strong>: đừng chọn model chỉ vì context window quảng cáo to nhất — với tài liệu dài cần độ chính xác cao xuyên suốt (VD đối chiếu số liệu đầu và cuối 1 báo cáo tài chính dài), test thực tế ở đúng độ dài dự kiến dùng, không suy diễn từ con số quảng cáo.</li>
+</ul>
+</div>
+
+<h3>Đào sâu trục a) — "RLHF/DPO" gộp chung che mất sự khác biệt thật giữa các phương pháp alignment</h3>
+<p>Trục a) đã nói "Instruct = SFT + RLHF/DPO" — nhưng "RLHF/DPO" gộp chung như vậy che mất 1 sự thật: có nhiều phương pháp alignment khác nhau, ra đời để giải quyết đúng nhược điểm của phương pháp trước, không phải "tất cả các hãng đều làm giống hệt nhau":</p>
+<table>
+<tr><th>Phương pháp</th><th>Cơ chế cốt lõi</th><th>Cần model reward riêng?</th><th>Nhược điểm chính nó khắc phục / còn lại</th></tr>
+<tr><td><strong>RLHF</strong> (Reinforcement Learning from Human Feedback)</td><td>Train 1 reward model từ label ưu tiên của con người, rồi dùng RL (PPO) tối ưu policy theo reward model đó</td><td>Có — cần train + maintain 1 reward model riêng</td><td>Đắt (2 vòng train), RL dễ không ổn định (reward hacking) — nhưng là phương pháp đầu tiên chứng minh "dạy được" model nghe lời</td></tr>
+<tr><td><strong>DPO</strong> (Direct Preference Optimization)</td><td>Tối ưu trực tiếp trên cặp (chosen, rejected) bằng 1 hàm loss closed-form — không cần vòng RL riêng, không cần reward model tách rời</td><td>Không — gộp thẳng vào 1 bước fine-tune</td><td>Đơn giản/rẻ hơn RLHF đáng kể, ổn định huấn luyện hơn; đánh đổi: kém linh hoạt hơn khi cần tối ưu theo nhiều tiêu chí cùng lúc</td></tr>
+<tr><td><strong>RLAIF</strong> (RL from AI Feedback)</td><td>Thay label người bằng label do chính 1 LLM khác (hoặc cùng model) chấm — giảm phụ thuộc lao động con người dán nhãn</td><td>Có (reward từ AI, không phải người)</td><td>Rẻ hơn RLHF ở khâu label, nhưng rủi ro "AI dạy AI" khuếch đại lỗi hệ thống nếu model chấm điểm cũng có thiên lệch</td></tr>
+<tr><td><strong>Constitutional AI</strong> (Anthropic)</td><td>Model tự phê bình/sửa output của chính nó dựa trên 1 bộ nguyên tắc viết tường minh ("hiến pháp"), rồi dùng dữ liệu tự sinh đó để fine-tune — không chỉ dựa vào ví dụ ưu/nhược đơn thuần mà dạy qua giải thích lý do (reason-based)</td><td>Một phần — vẫn có bước RL nhưng feedback đến từ chính model theo hiến pháp, không phải người dán nhãn từng cặp</td><td>Minh bạch hơn (nguyên tắc viết thành văn bản đọc được — "Claude's Constitution" 84 trang, xem R2.2), nhưng phụ thuộc chất lượng bộ nguyên tắc gốc</td></tr>
+</table>
+<p>Ý nghĩa cho việc phân loại: khi ai đó nói "model X được RLHF" — câu đó đúng nhưng không đủ. Hỏi thêm "bằng cơ chế cụ thể nào (RLHF cổ điển/DPO/RLAIF/Constitutional)" cho biết nhiều hơn về hành vi thật của model, đặc biệt là mức độ nó tuân theo nguyên tắc tường minh (Constitutional AI) hay chỉ học ngầm qua ví dụ ưu/nhược (RLHF/DPO thuần).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Phân loại 1 model cụ thể theo đủ 4 trục — bài tập mẫu cho Claude (dòng model dự án đang dùng qua Claude Code):</p>
+<pre><code>Trục a — Giai đoạn huấn luyện: Instruct model (không phải reasoning model theo mặc định)
+Trục b — Kiến trúc: không công bố chi tiết (closed-weight) — coi là "hộp đen" khi thiết kế hệ thống
+Trục c — Tier: có nhiều tier trong họ (VD Haiku/Sonnet/Opus) — chọn theo độ khó tác vụ, không mặc định tier cao nhất
+Trục d — Open/closed: Closed-weight, API-only
+Trục e — SLM/LLM: LLM cloud (không phải SLM edge) — phù hợp vì cần kiến thức tổng quát, task đa dạng (research
+   source), không phải 1 tác vụ hẹp lặp lại đủ nhiều để đáng đầu tư fine-tune 1 SLM riêng
+Trục f — Context window: cần verify effective context thật (không chỉ số quảng cáo) nếu tương lai gửi
+   tài liệu dài (VD BCTC nhiều trang) và cần độ chính xác cao xuyên suốt toàn văn bản
+
+=> Kết luận thiết kế: vì closed-weight, hệ thống KHÔNG thể fine-tune trực tiếp weight của Claude —
+   đây là 1 lý do củng cố quyết định của CLAUDE.md: Claude đóng vai "research source" (prompt-based),
+   không phải "closed-loop scoring feature" cần train được weight (việc đó do XGBoost trong senior_score.py đảm nhiệm).</code></pre>
+
+<p><strong>Ví dụ số riêng cho trục e</strong> — ước lượng khi nào đầu tư fine-tune 1 SLM cho tác vụ "phân loại tin tức liên quan ticker" (giả định, tiếp nối ví dụ ở "Ứng dụng dự án") mới "đáng":</p>
+<pre><code>Giả định: 1,000 tin tức/ngày cần phân loại, mỗi tin ~500 token input, output 1 nhãn ngắn
+
+Phương án A — luôn gọi LLM cloud (tier rẻ, VD Haiku-class):
+  Chi phí biến đổi: 1,000 × 500 token × giá_input, mỗi ngày, MÃI MÃI khi còn dùng
+  Không tốn chi phí đầu tư ban đầu, nhưng chi phí vận hành lặp lại vô thời hạn
+
+Phương án B — fine-tune 1 SLM riêng cho domain "tin tức chứng khoán VN":
+  Chi phí đầu tư 1 LẦN: thu thập dữ liệu gán nhãn + compute fine-tune
+    (rẻ hơn nhiều so với train 1 LLM từ đầu — đây chính là lợi thế cốt lõi của SLM)
+  Chi phí vận hành sau đó: gần như chỉ còn điện/compute chạy local, không trả theo token nữa
+
+=> Điểm hoà vốn phụ thuộc: khối lượng request/ngày (càng cao, càng nhanh hoà vốn)
+   VÀ độ ổn định của domain (nếu tiêu chí "liên quan ticker" thường xuyên đổi,
+   phải fine-tune lại nhiều lần, làm giảm lợi thế chi phí 1 lần của phương án B)
+   Kết luận thực dụng: KHÔNG suy diễn con số cụ thể ở đây — đây là ví dụ minh hoạ
+   CÁCH đặt câu hỏi (khối lượng × tần suất thay đổi domain), số thật cần đo bằng
+   dữ liệu usage log thật trước khi quyết định đầu tư.</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Câu hỏi cần trả lời</th><th>Trục liên quan</th><th>Quyết định sai phổ biến</th></tr>
+<tr><td>Model có nghe theo system prompt không?</td><td>a) Giai đoạn huấn luyện</td><td>Dùng nhầm base model rồi thắc mắc sao model "không chịu nghe lời"</td></tr>
+<tr><td>Task có cần suy luận nhiều bước không?</td><td>a) Giai đoạn huấn luyện (reasoning vs instruct)</td><td>Bật reasoning mode cho task chỉ cần tổng hợp/viết văn → đốt tiền vô ích</td></tr>
+<tr><td>Chi phí compute mỗi token dự đoán thế nào?</td><td>b) Kiến trúc (dense vs MoE)</td><td>So sánh giá theo "số tham số" mà không biết model là MoE (compute thật thấp hơn số tham số gợi ý)</td></tr>
+<tr><td>Task đơn giản hay phức tạp?</td><td>c) Tier</td><td>Mặc định dùng tier cao nhất cho mọi việc kể cả phân loại đơn giản</td></tr>
+<tr><td>Có cần self-host vì lý do compliance/chi phí dài hạn?</td><td>d) Open/closed weight</td><td>Cam kết closed-weight cho use case cần fine-tune sâu hoặc dữ liệu không được rời hạ tầng riêng</td></tr>
+<tr><td>Cần chạy offline/latency cực thấp trên thiết bị?</td><td>e) SLM vs LLM cloud</td><td>Cố ép LLM cloud "nhẹ hoá" cho use case thực chất cần on-device — nên xét SLM đã fine-tune thay vì gọi API mọi lúc</td></tr>
+<tr><td>Tài liệu cần xử lý dài bao nhiêu, có cần chính xác xuyên suốt?</td><td>f) Context window (quảng cáo vs effective)</td><td>Chọn model theo số token quảng cáo lớn nhất mà không test thật ở độ dài dự kiến dùng</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Dự án dùng Claude (closed-weight, instruct — không kích hoạt reasoning mode) qua Claude Code cho skill <code>daily-investor-report</code>. Đây là lựa chọn nhất quán với CLAUDE.md: LLM đóng vai "research source" (ý kiến định tính), không phải "closed-loop scoring feature" — việc chấm điểm sống vẫn là <code>backend/predict/senior_score.py</code> (dense, nhỏ, tối ưu latency, không phải reasoning sâu). Không có lý do dùng reasoning-mode Claude cho report hàng ngày, vì task chủ yếu là tổng hợp + viết văn (theo đúng phân loại trục a ở trên) — không phải multi-step logic cần "suy nghĩ ẩn" tốn tiền.</p>
+<p><strong>Áp trục e (SLM) vào 1 tình huống giả định</strong> — nếu dự án sau này cần 1 bộ phân loại "tin tức có liên quan trực tiếp tới ticker hay không" chạy hàng nghìn lần/ngày (tương tự ví dụ cascading đã tính ở R2.8), đây đúng là ứng viên cân nhắc SLM đã fine-tune thay vì luôn gọi Claude qua API: task đủ HẸP (nhị phân: liên quan/không liên quan), đủ LẶP LẠI (hàng nghìn lần/ngày) để việc đầu tư fine-tune 1 SLM riêng cho đúng domain "tin tức chứng khoán VN" có thể đáng chi phí — đổi lại latency thấp hơn, không tốn API token cho tác vụ đơn giản. Đây CHỈ là hướng đáng cân nhắc, không phải khuyến nghị triển khai ngay — cần đo thực tế khối lượng + độ chính xác cần thiết trước khi đầu tư, đúng tinh thần "không suy diễn, phải đo" đã lặp lại xuyên suốt 8 bài.</p>
+<p><strong>Áp trục f (context window) vào rủi ro thật</strong>: nếu 1 tính năng tương lai gửi nguyên văn báo cáo tài chính (BCTC) dài hàng chục trang cho Claude để phân tích, không nên tin tưởng model "nhớ đều" toàn bộ tài liệu chỉ vì context window quảng cáo đủ lớn để chứa hết — theo mục Trục f, hiệu năng thực tế có thể giảm rõ rệt ở phần giữa tài liệu dài. Nếu triển khai thật, nên tự test với đúng loại tài liệu và độ dài dự kiến (VD hỏi lại 1 con số cụ thể ở giữa BCTC 40 trang, xem model có trả đúng không) trước khi tin tưởng kết quả cho toàn bộ pipeline.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>0. Coi mọi model "được RLHF" là dùng chung 1 cơ chế</strong> — gộp chung RLHF cổ điển, DPO, RLAIF, Constitutional AI vào 1 nhãn "RLHF" che mất khác biệt thật (có cần reward model riêng không, feedback từ người hay từ AI, có dựa trên nguyên tắc tường minh hay không) — khác biệt này ảnh hưởng trực tiếp đến việc model tuân theo rule tường minh tốt đến đâu (xem R2.2, Constitutional AI).</p>
+<p><strong>1. Coi "reasoning model" là "model tốt hơn" nói chung</strong> — thực tế nó chỉ tốt hơn cho task multi-step logic, còn đắt hơn đáng kể (10-100× theo benchmark 2026) cho mọi loại task khác vì hidden reasoning tokens (5-50× phần nhìn thấy) vẫn bị tính tiền, kể cả khi model "overthink" 1 câu hỏi tầm thường.</p>
+<p><strong>2. Nhầm "nhiều tham số" với "chi phí compute cao"</strong> — với MoE, tổng tham số lớn không đồng nghĩa compute mỗi token cao, vì chỉ 1 phần nhỏ expert được kích hoạt.</p>
+<p><strong>3. Dùng tier cao nhất mặc định "cho chắc"</strong> — với workload lớn (hàng nghìn request), chênh lệch tier có thể là chênh lệch hàng chục lần chi phí vận hành, trong khi chất lượng đầu ra cho task đơn giản không khác biệt đáng kể.</p>
+<p><strong>4. Coi MoE là "kiến trúc thắng tuyệt đối", dense là "lỗi thời"</strong> — dense vẫn là lựa chọn hợp lý (thậm chí duy nhất khả thi) khi VRAM là ràng buộc cứng hoặc hạ tầng serving không hỗ trợ routing hiệu quả; nhiều nhà cung cấp lớn vẫn phát hành song song model dense cỡ nhỏ bên cạnh flagship MoE, không phải MoE "thay thế" dense hoàn toàn.</p>
+<p><strong>5. Gộp chung "SLM" với "tier nhỏ của 1 họ cloud"</strong> — Haiku vẫn là model cloud hàng chục tỷ tham số trở lên, hoàn toàn khác loại với SLM edge/on-device (100M-5B tham số, chạy trực tiếp trên thiết bị không cần mạng); nhầm 2 khái niệm "nhỏ" này dẫn tới kỳ vọng sai (VD tưởng Haiku chạy được offline trên điện thoại).</p>
+<p><strong>6. Chọn model chỉ vì context window quảng cáo lớn nhất thị trường</strong> — model quảng cáo 10 triệu token chưa có benchmark công khai nào chứng minh giữ chất lượng gần mức đó; "effective context" thực tế thường chỉ 60-70% con số quảng cáo. Với tác vụ cần độ chính xác cao xuyên suốt văn bản dài, phải tự test ở đúng độ dài dự kiến, không suy diễn từ con số quảng cáo.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Phân loại đúng 1 LLM cho trước theo cả 4 trục (giai đoạn huấn luyện / kiến trúc / tier / open-closed weight).</li>
+<li>Giải thích được vì sao base model "không nghe lời" còn instruct model thì có.</li>
+<li>Giải thích được vì sao reasoning model có thể đắt gấp nhiều lần nominal output cho cùng 1 task — nêu được đúng độ lớn (10-100× chi phí/query, 5-50× token ẩn), không chỉ nói "đắt hơn" mơ hồ.</li>
+<li>Với 1 use case cho trước (VD "phân loại sentiment 10,000 bình luận/ngày"), chọn đúng tier và giải thích lý do không cần tier cao nhất.</li>
+<li>Giải thích được vì sao xu hướng 2026 vẫn giữ song song cả dense lẫn MoE thay vì MoE "thắng tuyệt đối" — nêu được ≥2 lý do thực tế (VRAM, độ phức tạp serving).</li>
+<li>Phân biệt được RLHF cổ điển, DPO, RLAIF, và Constitutional AI — chỉ ra đúng phương pháp nào cần reward model riêng, phương pháp nào tối ưu trực tiếp không qua RL.</li>
+<li>Phân biệt được SLM (edge/on-device, 100M-5B) và tier nhỏ của LLM cloud (trục c) — giải thích đúng khi nào 1 SLM đã fine-tune có thể thắng LLM tổng quát.</li>
+<li>Giải thích được khoảng cách giữa context window quảng cáo và "effective context" thực tế (60-70%), và nêu được ví dụ số cụ thể (200K quảng cáo → ~130K dùng tin cậy được).</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R2_2_system_prompts.html">← R2.2 · System Prompts</a>
+  <a href="R2_4_prompt_caching.html">R2.4 · Prompt Caching →</a>
+</div>
+
+</div>
+</body>
+</html>

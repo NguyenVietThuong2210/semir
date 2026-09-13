@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R9.1 · CLI Agents — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Advanced Steps · Điểm 1/8</div>
+  <h1>R9.1 · CLI Agents</h1>
+  <p class="subtitle">Agent chạy ngay trên máy bạn, tự đọc file — tự chạy lệnh — tự sửa code. Bạn đang tương tác với 1 CLI Agent thật (Claude Code) ngay lúc đọc trang này.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Phân biệt được CLI Agent với web agent và API-only agent — 3 loại kiến trúc khác nhau, không phải cùng 1 thứ gọi tên khác nhau.</li>
+<li>Kể tên đúng 5 thành phần kiến trúc của 1 CLI Agent hiện đại: memory, hooks, skills, subagents, MCP — và chỉ ra ví dụ thật của từng thành phần trong <code>.claude/</code> của <code>predictor</code>.</li>
+<li>Giải thích chính xác cơ chế sub-agent: instance mới, context riêng, chỉ trả về bản tóm tắt — không phải "nhánh" của cùng 1 tiến trình.</li>
+<li>Nhận diện được 3 pattern dùng sub-agent (song song, pipeline tuần tự, cặp đối kháng) qua ví dụ thật trong skill <code>daily-investor-report</code> và <code>predictor-qa-review</code>.</li>
+<li>Tránh được sai lầm phổ biến nhất: tưởng sub-agent "thấy" được quá trình làm việc của sub-agent khác, hoặc tưởng 1 script Python tự spawn được sub-agent.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Đây là mục <strong>dễ nhất trong 8 khái niệm</strong> của Advanced Steps, xếp đầu tiên vì bạn đã có sẵn "phòng thí nghiệm sống" — không cần tưởng tượng, chỉ cần nhìn đúng vào cấu trúc <code>.claude/</code> đang chạy dưới chân bạn. Trang này là nền tảng để hiểu 2 trang tiếp theo (Slack Agents, Computer Use) — cả 2 đều là "agent" theo nghĩa rộng nhưng chạy trên bề mặt khác (kênh chat, màn hình desktop) thay vì CLI.</p>
+<table>
+<tr><th>Module đã có</th><th>Đã cover gì</th><th>Trang này bổ sung gì</th></tr>
+<tr><td><a href="../modules/L8_1_agents_artifact.html"><code>L8_1_agents_artifact.html</code></a></td><td>Claude Code Task tool, cơ chế cô lập sub-agent</td><td>Đóng khung lại CLI Agent như 1 category kiến trúc riêng biệt (so với web agent/API agent), không chỉ là 1 tool trong Claude Code</td></tr>
+<tr><td><a href="../modules/L8_2_skills.html"><code>L8_2_skills.html</code></a></td><td>Cấu trúc file <code>SKILL.md</code></td><td>Skill là 1 trong 5 lớp kiến trúc CLI Agent — đặt đúng vị trí trong bức tranh tổng thể</td></tr>
+<tr><td>Không có module nào trước đây</td><td>—</td><td>Bảng so sánh CLI Agent vs Web Agent vs API-only agent + 3 pattern sub-agent với ví dụ định lượng</td></tr>
+</table>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Web agent (ChatGPT mở trên trình duyệt) giống 1 nhân viên tư vấn ngồi bên kia bàn — bạn hỏi, họ trả lời bằng lời, không ai chạm vào máy tính của bạn. Muốn làm gì thì chính bạn phải gõ.</p>
+<p><strong>CLI Agent</strong> (Claude Code) giống 1 kỹ sư ngồi <em>cùng bàn phím với bạn</em>, có quyền tự đọc file, tự chạy lệnh terminal, tự sửa code ngay trên máy bạn — bạn giám sát và duyệt, chứ không gõ hộ nó nữa. Sự khác biệt không phải "hỏi đáp thông minh hơn" — mà là <strong>có tay để làm việc</strong> (filesystem, shell, git) thay vì chỉ có miệng để trả lời.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Ba loại agent theo bề mặt chạy (dễ nhầm nhất)</h3>
+<p>Trước khi vào kiến trúc, cần phân biệt rõ 3 loại agent theo <em>nơi nó chạy</em> — nhầm lẫn phổ biến nhất là coi "agent" là 1 khái niệm đồng nhất:</p>
+<table>
+<tr><th>Loại</th><th>Chạy ở đâu</th><th>Cách tương tác</th><th>Ví dụ</th></tr>
+<tr><td>Web Agent</td><td>Trình duyệt, sandbox của nhà cung cấp</td><td>Chat qua giao diện web, không chạm máy người dùng</td><td>ChatGPT web, Claude.ai chat thường</td></tr>
+<tr><td><strong>CLI Agent</strong></td><td>Máy của chính người dùng (terminal)</td><td>Đọc/ghi file thật, chạy lệnh thật, có quyền filesystem/shell</td><td><strong>Claude Code</strong> (đang chạy trang này), Cursor CLI, Aider</td></tr>
+<tr><td>API-only Agent</td><td>Server/backend, không có UI riêng</td><td>Gọi qua HTTP, tích hợp vào hệ thống khác</td><td>1 microservice gọi Claude API để classify text</td></tr>
+</table>
+<p>Điểm khác biệt cốt lõi của CLI Agent: nó có <strong>quyền truy cập trực tiếp vào môi trường thật</strong> (file, git, Docker, DB) của người dùng — không phải môi trường sandbox tách biệt như web agent. Đây vừa là sức mạnh, vừa là lý do vì sao "sandboxing" (xem thêm ở chủ đề bảo mật, R10) là vấn đề sống còn với loại agent này.</p>
+
+<h3>2. Kiến trúc 5 lớp của CLI Agent hiện đại (2026)</h3>
+<p>Claude Code không phải 1 hộp đen — nó là 1 hệ thống agentic nhiều lớp, mỗi lớp giải quyết 1 vấn đề riêng:</p>
+<table>
+<tr><th>Lớp</th><th>Vấn đề nó giải quyết</th><th>Ví dụ thật trong <code>predictor</code></th></tr>
+<tr><td><strong>Memory</strong></td><td>Agent "quên" hết khi phiên kết thúc — cần ghi nhớ quyết định kiến trúc, sửa lỗi đã học được</td><td><code>CLAUDE.md</code> (đọc tự động đầu phiên) + file <code>feedback_*.md</code>/<code>project_*.md</code> trong thư mục memory của user</td></tr>
+<tr><td><strong>Hooks</strong></td><td>Cần chạy hành động tự động trước/sau 1 sự kiện, không phụ thuộc agent "nhớ" phải làm</td><td>Cấu hình qua <code>settings.json</code> — VD chặn 1 lệnh nguy hiểm trước khi thực thi</td></tr>
+<tr><td><strong>Skills</strong></td><td>Hướng dẫn theo tình huống, quá dài để nhét vào context mặc định — chỉ load khi cần</td><td><code>.claude/skills/daily-investor-report/SKILL.md</code>, <code>.claude/skills/predictor-qa-review/</code></td></tr>
+<tr><td><strong>Subagents</strong></td><td>Tác vụ cần context sạch riêng, hoặc cần chạy song song mà không phình context chính</td><td>Sub-agent deep-read do <code>postmortem_runner.py</code> chuẩn bị manifest, do phiên Claude Code spawn</td></tr>
+<tr><td><strong>MCP / Plugins</strong></td><td>Kết nối tool hoặc nguồn dữ liệu bên ngoài hệ sinh thái gốc</td><td>Không phải trọng tâm của <code>predictor</code> hiện tại — dự án chủ yếu dùng Bash/PowerShell tool trực tiếp</td></tr>
+</table>
+<p>Vòng lặp cốt lõi phía dưới 5 lớp này luôn là: <strong>đọc file → suy luận → chạy lệnh/sửa code → quan sát kết quả → lặp lại</strong> — 1 agentic loop, về bản chất giống ReAct đã học ở <a href="../modules/L6_1_agent_patterns.html"><code>L6_1</code></a>, chỉ khác là "Action" ở đây là thao tác thật trên filesystem/shell, không phải gọi 1 API trừu tượng.</p>
+
+<h3>3. Cơ chế sub-agent — chi tiết từng bước</h3>
+<p>Đây là phần hay bị hiểu sai nhất. Khi agent chính (gọi là "lead" hoặc "coordinator") spawn 1 sub-agent, chuyện gì thực sự xảy ra:</p>
+<ol>
+<li><strong>Bước 1</strong>: Lead soạn 1 "prompt tự chứa" (self-contained) — mọi context sub-agent cần phải nằm trong đó, vì sub-agent <em>không nhìn thấy</em> lịch sử hội thoại của lead.</li>
+<li><strong>Bước 2</strong>: Hệ thống khởi tạo 1 <strong>instance Claude hoàn toàn mới</strong> — context window riêng (trống, chỉ có prompt vừa soạn), tool riêng (có thể bị giới hạn hơn lead), thậm chí model riêng (sub-agent có thể chạy model rẻ hơn/nhanh hơn lead).</li>
+<li><strong>Bước 3</strong>: Sub-agent tự chạy vòng lặp agentic riêng của nó — đọc file, chạy lệnh, suy luận — hoàn toàn độc lập, lead không "nhìn thấy" từng bước nó làm.</li>
+<li><strong>Bước 4</strong>: Khi xong, sub-agent trả về <strong>1 bản tóm tắt cuối cùng</strong> (không phải toàn bộ transcript) cho lead.</li>
+<li><strong>Bước 5</strong>: Lead đọc bản tóm tắt đó, coi như 1 "quan sát" (observation) trong vòng lặp của chính nó, quyết định bước tiếp theo.</li>
+</ol>
+<div class="callout danger">
+<div class="label">⚠️ Hệ quả quan trọng — dễ hiểu sai</div>
+<p>Vì lead chỉ nhận bản tóm tắt, không nhận toàn bộ transcript, nên: (1) nếu sub-agent hiểu sai nhiệm vụ, lead khó phát hiện trừ khi tóm tắt có mâu thuẫn rõ ràng — đây là lý do phải "trust but verify" (đọc lại code/kết quả thật của sub-agent, không chỉ tin báo cáo); (2) nhiều sub-agent chạy song song <strong>hoàn toàn không biết nhau tồn tại</strong> trừ khi được thiết kế đặc biệt (VD "Agent Teams", nhắc ở trang Agent Swarms) — mỗi sub-agent hoạt động như 1 "hòn đảo" riêng.</p>
+</div>
+
+<h3>4. Ba pattern dùng sub-agent</h3>
+<table>
+<tr><th>Pattern</th><th>Cách hoạt động</th><th>Khi dùng</th></tr>
+<tr><td><strong>Fan-out song song</strong></td><td>Spawn N sub-agent cùng lúc, mỗi cái nhận 1 phần việc độc lập, gộp kết quả ở cuối</td><td>Việc chia nhỏ được rõ ràng, không phụ thuộc lẫn nhau — VD audit N file khác nhau</td></tr>
+<tr><td><strong>Pipeline tuần tự</strong></td><td>Sub-agent A xong mới tới B, output của A là input của B</td><td>Các bước phụ thuộc thứ tự — VD spec → implement → test → review</td></tr>
+<tr><td><strong>Cặp đối kháng</strong></td><td>1 sub-agent làm, 1 sub-agent khác review độc lập (không đọc code của nhau trước khi tự làm)</td><td>Cần góc nhìn thứ 2 không bị nhiễu bởi cách làm của người thứ nhất — self-review 1 mình dễ bỏ sót lỗi của chính mình</td></tr>
+</table>
+
+<h3>5. Headless mode — CLI Agent chạy KHÔNG cần người ngồi gõ phím</h3>
+<p>Mục 1-4 giả định ngầm 1 điều: có người ngồi tương tác trực tiếp (REPL — đọc, đánh giá, gõ tiếp). Nhưng CLI Agent còn 1 chế độ vận hành khác hẳn, chỉ tồn tại được vì nó chạy trên terminal — <strong>headless mode</strong> (cờ <code>-p</code>/<code>--print</code>): nhận 1 task qua flag, chạy trọn vòng lặp agentic <em>không cần bàn phím người</em>, in kết quả có cấu trúc rồi thoát — không có UI tương tác nào cả.</p>
+<table>
+<tr><th>Tiêu chí</th><th>Interactive REPL (mục 1-4)</th><th>Headless mode (<code>-p</code>)</th></tr>
+<tr><td>Ai khởi động mỗi lượt</td><td>Người gõ lệnh tiếp theo</td><td>Script/cron/CI pipeline gọi 1 lần</td></tr>
+<tr><td>Output</td><td>Text hiển thị trên terminal, người đọc</td><td><code>--output-format json</code>/<code>stream-json</code> — máy đọc tiếp được</td></tr>
+<tr><td>Input</td><td>Gõ tay</td><td>Đọc từ <code>stdin</code> (pipe được), hoặc flag task cố định</td></tr>
+<tr><td>Giới hạn an toàn</td><td>Người tự dừng khi thấy sai hướng</td><td><strong>Bắt buộc</strong> <code>--max-turns N</code> — không có người giám sát real-time để tự ngắt</td></tr>
+<tr><td>Use case điển hình</td><td>Làm việc tương tác (chính phiên đang đọc trang này)</td><td>GitHub Actions, cron job, 1 bước trong pipeline lớn hơn</td></tr>
+</table>
+<div class="callout danger">
+<div class="label">⚠️ Không nhầm với "sub-agent" — 2 khái niệm "spawn agent" khác hẳn nhau</div>
+<p>Mục 4 (Sai lầm #2) đã nói: 1 script Python thuần <strong>không tự spawn được sub-agent</strong> qua Task tool (đó là cơ chế nội bộ của 1 phiên Claude Code đang chạy). Headless mode là chuyện HOÀN TOÀN KHÁC: 1 script/CI pipeline BÊN NGOÀI hoàn toàn có thể gọi <code>claude -p "task..."</code> như 1 tiến trình con (subprocess) — đây không phải "spawn sub-agent trong phiên", mà là <strong>khởi động 1 phiên CLI Agent mới, độc lập, cấp cao nhất</strong> từ đầu, không có lead nào "chờ" nó cả. 2 cơ chế phục vụ 2 mục đích khác nhau: Task tool (mục 3-4) cho phối hợp TRONG 1 phiên đang tương tác; headless mode cho tự động hoá KHÔNG có phiên tương tác nào.</p>
+</div>
+
+<h3>6. Session resume — trạng thái "sống" giữa các lần gọi terminal riêng biệt</h3>
+<p>Web Agent (mục 1) giữ trạng thái hội thoại tự nhiên vì toàn bộ phiên nằm trong 1 tab trình duyệt liên tục. CLI Agent thì khác — mỗi lần gõ <code>claude</code> là 1 tiến trình mới, terminal có thể đã đóng từ lâu. Cơ chế giải quyết: mỗi phiên có 1 <strong>session ID</strong> lưu cục bộ (local), cho phép khôi phục đúng transcript cũ:</p>
+<pre><code># Lượt 1 (headless, lưu lại session ID từ output JSON)
+$ claude -p "Đọc db_migrations.py, liệt kê 3 rủi ro" --output-format json > out1.json
+$ session_id=$(jq -r '.session_id' out1.json)
+
+# Lượt 2 — resume ĐÚNG session cũ, agent "nhớ" toàn bộ ngữ cảnh lượt 1
+# (không phải bắt đầu lại từ context rỗng như 1 lời gọi API stateless thông thường)
+$ claude -p --resume "$session_id" "Giờ đề xuất fix cho rủi ro #2"
+
+# Hoặc đơn giản hơn nếu chỉ cần phiên GẦN NHẤT, không cần tự lưu ID:
+$ claude --continue "Tiếp tục việc đang làm"</code></pre>
+<p>Đây là điểm khác biệt CLI-specific thật sự (không phải web agent hay API-only agent nào có sẵn tương đương đơn giản): trạng thái hội thoại không sống trong bộ nhớ của 1 tiến trình đang chạy liên tục, mà được <strong>ghi ra đĩa</strong> giữa các lần gọi — cho phép 1 pipeline tự động hoá chia 1 tác vụ dài thành nhiều bước riêng biệt (VD: bước 1 phân tích, bước 2 — chạy sau, có thể vài giờ sau — mới đề xuất fix dựa trên bước 1), mà vẫn giữ nguyên ngữ cảnh đã tích luỹ.</p>
+
+<h3>7. Ví dụ pipeline tự động hoá thật — ghép headless + session resume + max-turns</h3>
+<p>Hình dung 1 pipeline CI giả định cho <code>predictor</code> (minh hoạ cơ chế, không phải tính năng đang chạy thật trong dự án — dự án hiện vận hành bằng phiên Claude Code tương tác, không có cron gọi headless mode):</p>
+<pre><code>cron (2h sáng, không có người)
+   │
+   ▼
+claude -p "Kiểm tra prediction_log 24h qua có anomaly không"
+   --max-turns 8 --output-format json --allowedTools "Read,Bash(psql:*)"
+   │
+   ▼
+JSON output ──► script parse "anomaly_found: true/false"
+   │
+   ├─ false → ghi log, kết thúc
+   │
+   └─ true → claude -p --resume "$session_id" "Viết báo cáo chi tiết + đề xuất fix"
+                (tái dùng đúng ngữ cảnh đã điều tra ở bước trước, không cần
+                 diễn giải lại toàn bộ tình huống anomaly từ đầu)
+             → gửi báo cáo qua kênh thông báo nội bộ (KHÔNG tự động apply fix —
+                giữ đúng nguyên tắc human-in-the-loop cho thay đổi ảnh hưởng dữ liệu)</code></pre>
+<p><code>--max-turns 8</code> ở đây đóng đúng vai trò "guardrail" đã nhắc ở mục 3-4: không có người ngồi canh để tự ngắt nếu agent loop sai hướng, nên giới hạn cứng là bắt buộc, không phải tuỳ chọn — khác hẳn phiên tương tác (mục 1-4) nơi người dùng tự nhận ra và dừng bằng tay.</p>
+
+<h3>8. Triết lý Unix pipe — "có tay để làm việc" nghĩa là gì cụ thể so với API-only agent</h3>
+<p>Analogy đầu trang nói CLI Agent "có tay" thay vì chỉ "có miệng". Cụ thể hoá bằng 1 khác biệt kỹ thuật thật: CLI Agent kế thừa được toàn bộ triết lý Unix — <em>pipe</em> (nối output lệnh này thành input lệnh khác) — theo cách 1 API-only Agent (mục 1) không có sẵn:</p>
+<pre><code># CLI Agent — pipe trực tiếp output 1 lệnh Unix vào context của agent
+$ git diff HEAD~1 | claude -p "Review diff này, chỉ ra rủi ro null-safety. JSON output."
+
+# API-only Agent — MUỐN làm việc tương tự phải tự viết code:
+diff_text = subprocess.run(["git", "diff", "HEAD~1"], capture_output=True).stdout
+response = anthropic_client.messages.create(
+    model="claude-...", messages=[{"role": "user", "content": f"Review: {diff_text}"}]
+)
+# → CLI Agent: 1 dòng lệnh tận dụng pipe có sẵn của OS.
+#   API-only Agent: phải tự viết code gọi subprocess + build request — không sai,
+#   chỉ là KHÔNG tận dụng được hạ tầng OS đã có sẵn hàng chục năm.</code></pre>
+<p>Đây không phải khác biệt "CLI mạnh hơn API" một cách tuyệt đối (false dichotomy) — API-only Agent (mục 1) vẫn đúng công cụ khi cần nhúng vào 1 service backend không có terminal. Điểm khác biệt thật là: CLI Agent <strong>thừa hưởng miễn phí</strong> toàn bộ hệ sinh thái dòng lệnh (pipe, redirect, exit code, cron) đã tồn tại lâu hơn cả bản thân khái niệm "AI agent" — đây là lý do CLI Agent phù hợp tự nhiên cho tự động hoá hạ tầng (mục 5-7), còn API-only Agent phù hợp tự nhiên cho tích hợp vào 1 sản phẩm khác.</p>
+
+<h3>9. Ngân sách chi phí headless automation — worked example</h3>
+<p>Áp giá thật (đã dẫn ở <code>L5_1_prompt.html §6.5</code>) vào kịch bản pipeline mục 7 — 1 cron job headless chạy 2 lần/ngày, mỗi lần ước lượng 4.000 input token (log + prompt) + 600 output token, dùng Haiku 4 (đủ cho tác vụ "phát hiện anomaly" đơn giản, không cần Opus):</p>
+<pre><code>Giá Haiku 4 (đã có ở L5_1 §6.5): input $0.25/1M, output $1.25/1M
+
+1 lượt gọi: 4.000 × $0.25/1M + 600 × $1.25/1M
+          = $0.001 + $0.00075 = $0.00175
+
+2 lượt/ngày × 30 ngày = 60 lượt/tháng
+Chi phí/tháng ≈ 60 × $0.00175 = $0.105/tháng
+
+So sánh: 1 phiên tương tác Sonnet 4.5 điều tra sâu tương tự (giả sử 15.000 input +
+3.000 output, khi anomaly=true, tần suất hiếm — ước lượng 2 lần/tháng theo nhánh
+"true" của pipeline mục 7):
+  2 × (15.000 × $3/1M + 3.000 × $15/1M) = 2 × ($0.045 + $0.045) = $0.18/tháng
+
+Tổng ước lượng: $0.105 + $0.18 ≈ $0.285/tháng — RẺ hơn nhiều so với chi phí
+kỹ sư tự kiểm tra thủ công mỗi sáng, nhưng con số nhỏ này chỉ đúng NẾU nhánh
+"anomaly=true" thực sự hiếm (đúng giả định ban đầu) — nếu anomaly xảy ra
+mỗi ngày, nhánh Sonnet chiếm phần lớn chi phí, không còn là chi phí "phụ".</code></pre>
+<p>Bài học: headless automation rẻ ở tầng kiểm tra định kỳ (Haiku, tần suất cao, việc đơn giản) — nhưng bất kỳ pipeline nào escalate lên model mạnh hơn khi phát hiện vấn đề cần audit kỹ tần suất thực tế của nhánh escalate đó trước khi kết luận "rẻ", đúng nguyên tắc không suy diễn 1 con số minh hoạ thành cam kết chi phí thật không kiểm chứng.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Case study sống — chính <code>predictor</code>:</p>
+<div class="callout">
+<p><strong>Fan-out song song</strong>: thay vì đọc tuần tự 12 file để audit, coordinator spawn 12 sub-agent cùng lúc, mỗi agent audit 1 file — thời gian audit giảm từ khoảng 12 phút (tuần tự) xuống khoảng 90 giây (song song). Bản chất: thời gian tổng ≈ thời gian của agent chậm nhất, không phải tổng thời gian của cả 12 agent.</p>
+</div>
+<div class="callout">
+<p><strong>Pipeline chuyên biệt hoá</strong>: <code>.claude/skills/daily-investor-report/scripts/postmortem_runner.py</code> quét các phiên chạy trước, tự nó <strong>không</strong> gọi được sub-agent (1 tiến trình Python thuần không có quyền spawn 1 Claude instance mới) — nó chỉ chuẩn bị 1 manifest (danh sách phiên đủ điều kiện phân tích), rồi khuyến nghị bước tiếp theo do <em>phiên Claude Code</em> (không phải chính script) spawn 1 sub-agent deep-read cho mỗi phiên đủ điều kiện. Đây là ranh giới quan trọng cần nhớ chính xác: <strong>script Python không tự spawn sub-agent</strong>, nó chỉ chuẩn bị dữ liệu cho bước sau.</p>
+</div>
+<div class="callout">
+<p><strong>Cặp đối kháng</strong>: skill <code>predictor-qa-review</code> chạy 4 bước tách biệt — (1) code audit, (2) chụp Playwright + kiểm tra số liệu, (3) review từ góc nhìn nhà đầu tư chuyên nghiệp, (4) viết lại backlog. Mỗi bước là 1 góc nhìn kiểm tra độc lập, không bước nào chỉ tự tin vào việc bước trước đã làm đúng.</p>
+</div>
+<div class="callout">
+<p><strong>Memory layer thật</strong>: <code>CLAUDE.md</code> ghi rule "LLM sẽ không phải là 1 feature" — mọi phiên Claude Code mới trong repo này đều tự động đọc lại rule này, không cần ai nhắc lại bằng tay mỗi lần bắt đầu phiên.</p>
+</div>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>1 agent duy nhất làm hết</th><th>Fan-out N sub-agent song song</th><th>Pipeline tuần tự</th></tr>
+<tr><td>Tốc độ với việc chia nhỏ được</td><td>Chậm (tuần tự từng phần)</td><td>Nhanh nhất (≈ thời gian phần chậm nhất)</td><td>Trung bình (tổng thời gian từng bước)</td></tr>
+<tr><td>Phù hợp khi các phần phụ thuộc nhau?</td><td>Có (đơn giản, dễ theo dõi)</td><td>Không — sub-agent không biết nhau, không chia sẻ tiến độ giữa chừng</td><td>Có — chính vì mục đích là để 1 bước phụ thuộc bước trước</td></tr>
+<tr><td>Chi phí context</td><td>Context chính phình to dần</td><td>Context chính gọn — chỉ nhận N bản tóm tắt cuối</td><td>Context chính gọn tương tự fan-out</td></tr>
+<tr><td>Rủi ro chính</td><td>Agent tự tin sai mà không ai kiểm tra chéo</td><td>Sub-agent hiểu sai nhiệm vụ, lead không phát hiện kịp vì chỉ thấy tóm tắt</td><td>Lỗi ở bước đầu lan sang mọi bước sau</td></tr>
+</table>
+<p>Bảng thứ 2 — headless mode (mục 5-9) không nằm trong 3 cột trên vì nó là 1 <em>trục khác</em> (có người giám sát hay không), độc lập với việc có dùng sub-agent hay không:</p>
+<table>
+<tr><th>Tiêu chí</th><th>Interactive REPL (mục 1-4)</th><th>Headless automation (mục 5-9)</th></tr>
+<tr><td>Cơ chế dừng khi sai hướng</td><td>Người tự nhận ra, gõ Ctrl+C</td><td>Chỉ có <code>--max-turns</code> — không có lớp phòng thủ thứ 2 nào khác nếu quên đặt cờ này</td></tr>
+<tr><td>Có thể kết hợp sub-agent (mục 3-4) không?</td><td>Có — Task tool hoạt động bình thường</td><td>Có — 1 phiên headless vẫn tự spawn sub-agent nội bộ được nếu cần, độc lập với việc chính nó được khởi động ở chế độ nào</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> hiện đã LÀ 1 case study CLI Agent hoàn chỉnh — không cần "thêm" gì về mặt kiến trúc, mà cần <strong>nhận diện đúng</strong> 5 lớp khi viết tài liệu/trả lời phỏng vấn: memory = <code>CLAUDE.md</code> + memory file; skills = <code>.claude/skills/daily-investor-report/SKILL.md</code>, <code>.claude/skills/predictor-qa-review/</code>; subagents = pattern fan-out/pipeline/đối kháng đã dùng trong audit và trong <code>postmortem_runner.py</code> + sub-agent deep-read. Việc cần làm thực tế duy nhất: khi viết 1 skill mới, luôn hỏi "phần nào nên là hook (tự động, không cần nhớ), phần nào nên là skill (load theo tình huống), phần nào cần 1 sub-agent riêng (context sạch/song song)" — thay vì nhét hết vào 1 luồng tuần tự duy nhất.</p>
+<p><strong>Về headless mode (mục 5-9)</strong>: dự án hiện tại KHÔNG chạy bất kỳ pipeline headless nào — mọi skill (<code>daily-investor-report</code>, <code>predictor-qa-review</code>) khởi động từ 1 phiên Claude Code tương tác do người gõ lệnh trực tiếp, không có cron/CI gọi <code>claude -p</code>. Đây không phải thiếu sót — dự án hiện là 1-người-vận-hành (đúng nguyên tắc đã ghi ở <code>CLAUDE.md</code>/memory cho AI Trader), nên lợi ích tự động hoá không có người giám sát (headless) chưa vượt qua rủi ro thêm 1 lớp guardrail phải thiết kế đúng (<code>--max-turns</code>, kiểm soát tool được phép) cho 1 hệ thống ảnh hưởng quyết định tài chính thật. Nếu tương lai cần kiểm tra định kỳ không người trực (VD: quét <code>prediction_log</code> mỗi đêm), pipeline mục 7 + ngân sách mục 9 là khung tham khảo hợp lý — miễn là nhánh phát hiện vấn đề chỉ dừng ở BÁO CÁO, không tự động sửa/deploy.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Tưởng sub-agent "thấy" được sub-agent khác</strong> — mặc định, các sub-agent fan-out chạy độc lập hoàn toàn, không biết nhau tồn tại trừ khi có thiết kế đặc biệt (Agent Teams, xem trang Agent Swarms). Đừng viết prompt kiểu "phối hợp với sub-agent kia" nếu không có cơ chế giao tiếp thật.</p>
+<p><strong>2. Tưởng 1 script Python thuần tự spawn được sub-agent</strong> — như đã thấy ở <code>postmortem_runner.py</code>, 1 tiến trình ngoài Claude Code không có quyền khởi tạo 1 Claude instance mới; nó chỉ chuẩn bị dữ liệu, việc spawn phải do phiên Claude Code làm.</p>
+<p><strong>3. Tự tin vào báo cáo tóm tắt của sub-agent mà không verify</strong> — vì lead chỉ nhận tóm tắt, không nhận toàn bộ transcript, luôn cần kiểm tra chéo (đọc code thật, chạy lại test thật) trước khi coi kết quả sub-agent là sự thật cuối cùng — đúng tinh thần "trust but verify".</p>
+<p><strong>4. Chạy headless mode (<code>-p</code>) mà quên <code>--max-turns</code></strong> — không có người ngồi canh để tự ngắt như phiên tương tác; thiếu giới hạn cứng này, 1 agent loop lệch hướng trong pipeline tự động có thể chạy tới khi hết ngân sách/timeout hạ tầng thay vì dừng sớm.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Phân biệt được CLI Agent / Web Agent / API-only Agent bằng đúng tiêu chí "bề mặt chạy + quyền truy cập môi trường".</li>
+<li>Kể đúng 5 lớp kiến trúc (memory/hooks/skills/subagents/MCP) kèm ví dụ thật từ <code>.claude/</code> của <code>predictor</code>.</li>
+<li>Giải thích đúng cơ chế sub-agent: instance mới, context riêng, chỉ trả về tóm tắt — không phải "nhánh" chia sẻ bộ nhớ.</li>
+<li>Chỉ ra đúng 3 pattern (fan-out/pipeline/đối kháng) với ví dụ cụ thể từ dự án, không nhầm lẫn giữa chúng.</li>
+<li>Giải thích được vì sao <code>postmortem_runner.py</code> KHÔNG tự spawn sub-agent — chỉ chuẩn bị manifest.</li>
+<li>Phân biệt đúng 2 cơ chế "spawn agent" khác hẳn nhau: Task tool sub-agent (trong 1 phiên đang tương tác) vs headless mode <code>claude -p</code> (khởi động 1 phiên CLI Agent cấp cao nhất mới, từ script/CI bên ngoài).</li>
+<li>Giải thích được vì sao <code>--max-turns</code> là bắt buộc (không tuỳ chọn) cho mọi lời gọi headless mode, và vì sao session resume (<code>--resume</code>/<code>--continue</code>) là nhu cầu đặc thù của CLI Agent, không tự nhiên có sẵn như hội thoại web liên tục.</li>
+<li>Tính được ngân sách chi phí ước lượng cho 1 pipeline headless đơn giản (model rẻ, tần suất cao, escalate hiếm) và biết chỉ ra giả định nào (tần suất nhánh escalate) làm con số đó thay đổi mạnh nếu sai.</li>
+<li>Giải thích được vì sao <code>predictor</code> hiện tại chưa cần headless automation, và điều kiện nào (nếu có) sẽ khiến nó đáng cân nhắc trong tương lai.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R8_6_agent_instrumentation.html">← R8.6 · Agent Instrumentation</a>
+  <a href="R9_2_slack_agents.html">R9.2 · Slack Agents →</a>
+</div>
+
+</div>
+</body>
+</html>

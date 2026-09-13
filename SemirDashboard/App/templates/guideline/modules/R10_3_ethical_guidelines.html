@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R10.3 · Ethical Guidelines — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Security · Điểm 3/4</div>
+  <h1>R10.3 · Ethical Guidelines</h1>
+  <p class="subtitle">4 khung governance/ethics AI 2026 — phân biệt luật có hiệu lực cưỡng chế (EU AI Act) với framework tự nguyện (NIST RMF), tiêu chuẩn chứng nhận được (ISO 42001) và nguyên tắc định hướng (OECD).</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Phân biệt được 4 loại văn bản governance AI theo <strong>mức độ ràng buộc pháp lý</strong>: luật cưỡng chế, tiêu chuẩn tự nguyện, tiêu chuẩn chứng nhận được, nguyên tắc định hướng — không đánh đồng "ethical guideline" với "văn bản chỉ để đọc tham khảo".</li>
+<li>Nắm được cấu trúc phân tầng rủi ro (risk-tiered) của EU AI Act và mốc thời gian hiệu lực thật.</li>
+<li>Học thuộc + giải thích được 4 hàm liên tục của NIST AI RMF: Govern → Map → Measure → Manage, và vì sao nó chạy lặp lại chứ không làm 1 lần rồi xong.</li>
+<li>Biết ISO/IEC 42001 khác 2 khung kia ở điểm nào (có thể audit + cấp chứng chỉ, giống mô hình ISO 27001 cho bảo mật).</li>
+<li>Áp dụng được khung NIST RMF để tự đánh giá 1 dự án cụ thể (case study <code>predictor</code>) mà không cần chờ luật bắt buộc.</li>
+<li>Biết được các thước đo (metric) bias/fairness cụ thể (Demographic Parity, Equal Opportunity, Equalized Odds) và định lý bất khả thi — vì sao 3 tiêu chí này KHÔNG THỂ đồng thời thoả mãn khi base rate khác nhau giữa các nhóm.</li>
+<li>Phân biệt được 3 triết lý quản trị AI toàn cầu 2026 (EU thận trọng-cưỡng chế, Mỹ ưu tiên đổi mới-phi tập trung, Trung Quốc kiểm soát theo từng use case cụ thể) — không coi EU AI Act là đại diện duy nhất cho "quản trị AI".</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Đây là mảng <strong>hoàn toàn trắng</strong> trong curriculum — 2 module an toàn/alignment đã dạy trước đó tập trung kỹ thuật, không phải khung pháp lý/quản trị:</p>
+<table>
+<tr><th>Module liên quan</th><th>Tập trung vào</th><th>Khác trang này ở đâu</th></tr>
+<tr><td><a href="../modules/L8_5_ai_alignment.html"><code>L8_5_ai_alignment.html</code></a></td><td>Alignment kỹ thuật: paperclip maximizer, Constitutional AI, RLHF, corrigibility</td><td>Đó là câu hỏi "làm sao model cư xử đúng"; trang này là câu hỏi "ai kiểm tra, ai chịu trách nhiệm, phạt thế nào nếu sai" — governance, không phải kỹ thuật</td></tr>
+<tr><td><a href="../modules/L5_6_safety.html"><code>L5_6_safety.html</code></a></td><td>Safety kỹ thuật: OWASP Top 10, red-teaming</td><td>Đó là "phòng thủ kỹ thuật"; trang này là "khung pháp lý/tiêu chuẩn tổ chức" áp dụng lên trên toàn bộ hệ thống</td></tr>
+<tr><td><a href="R6_5_human_in_the_loop.html"><code>R6_5_human_in_the_loop.html</code></a></td><td>EU AI Act human-oversight (mục 5) — đã có mốc Digital Omnibus VII đúng như trang này dùng lại</td><td>Trang đó áp EU AI Act vào 1 GÓC hẹp (giám sát con người cho hard gate); trang này dạy TOÀN BỘ cấu trúc EU AI Act + 3 khung khác + so sánh toàn cầu — mốc thời gian 2 trang PHẢI khớp nhau (đã đối chiếu, không lặp lại số cũ)</td></tr>
+</table>
+<p>Độ khó: <strong>Dễ</strong> — không cần nền tảng kỹ thuật, chủ yếu là ghi nhớ đúng phân loại và không nhầm lẫn giữa 4 khung.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy — luật giao thông vs sổ tay lái xe an toàn vs giấy chứng nhận</div>
+<p>Hãy tưởng tượng 4 văn bản khác nhau liên quan tới việc lái xe:</p>
+<ul>
+<li><strong>Luật giao thông (EU AI Act)</strong> — có hiệu lực cưỡng chế thật. Vượt đèn đỏ bị phạt tiền, có mức phạt cụ thể ghi trong luật. Không tuân thủ = vi phạm pháp luật, bất kể bạn có đồng ý với luật hay không.</li>
+<li><strong>Sổ tay "7 thói quen lái xe an toàn" (NIST AI RMF)</strong> — không ai phạt bạn nếu không đọc, nhưng nếu làm theo, xe bạn vận hành tốt hơn, ít tai nạn hơn. Đây là công cụ <em>tự đánh giá</em>, không phải luật.</li>
+<li><strong>Giấy chứng nhận trung tâm bảo dưỡng đạt chuẩn (ISO/IEC 42001)</strong> — giống biển "đạt chuẩn ISO" treo trên tường 1 gara ô tô: bạn có thể xin audit, đạt chuẩn thì được cấp chứng chỉ để chứng minh với khách hàng/đối tác, nhưng không bắt buộc phải có.</li>
+<li><strong>Khuyến nghị an toàn giao thông toàn cầu của 1 tổ chức quốc tế (OECD AI Principles)</strong> — nguyên tắc nền tảng nhiều quốc gia tham khảo khi TỰ soạn luật riêng của mình, bản thân nó không cưỡng chế ai.</li>
+</ul>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vì sao phải phân biệt 4 loại văn bản này</h3>
+<p>Cụm từ "ethical guidelines" (hướng dẫn đạo đức) nghe có vẻ giống nhau ở mọi văn bản, nhưng hậu quả pháp lý của việc không tuân thủ khác nhau hoàn toàn — từ "không sao cả" đến "phạt hàng chục triệu euro". Nhầm lẫn 1 luật cưỡng chế với 1 nguyên tắc tự nguyện là sai lầm nghiêm trọng nếu sản phẩm phục vụ thị trường liên quan.</p>
+
+<h3>2. EU AI Act — luật, có hiệu lực cưỡng chế</h3>
+<h4>2.1 Cấu trúc phân tầng rủi ro (risk-tiered)</h4>
+<p>EU AI Act không áp 1 bộ luật chung cho mọi hệ thống AI — nó phân loại theo mức rủi ro, nghĩa vụ tăng dần theo tầng:</p>
+<table>
+<tr><th>Tầng rủi ro</th><th>Ví dụ hệ thống</th><th>Nghĩa vụ</th></tr>
+<tr><td><strong>Unacceptable (bị cấm)</strong></td><td>Social scoring của chính phủ, thao túng hành vi tinh vi</td><td>Cấm hoàn toàn tại EU</td></tr>
+<tr><td><strong>High risk (rủi ro cao)</strong></td><td>Tuyển dụng, tín dụng, y tế, hạ tầng trọng yếu</td><td>Đánh giá rủi ro có tài liệu, giám sát liên tục, chuỗi trách nhiệm rõ ràng — mốc hiệu lực đã bị <strong>hoãn</strong>, xem cập nhật 2.1bis ngay dưới đây (KHÔNG còn là 8/2026 như dự kiến ban đầu)</td></tr>
+<tr><td><strong>Limited risk</strong></td><td>Chatbot, deepfake</td><td>Nghĩa vụ minh bạch (Article 50 — phải thông báo đang tương tác với AI, gắn nhãn nội dung AI-generated) — mốc này KHÔNG bị hoãn, vẫn hiệu lực đúng hạn <strong>2/8/2026</strong></td></tr>
+<tr><td><strong>Minimal risk</strong></td><td>Spam filter, game AI</td><td>Gần như không có nghĩa vụ đặc biệt</td></tr>
+</table>
+<div class="callout danger">
+<div class="label">⚠️ Cập nhật quan trọng (phát hiện qua research 9/2026) — mốc 8/2026 cho hệ thống rủi ro cao đã bị HOÃN</div>
+<p>Ngày <strong>29/6/2026</strong>, Hội đồng Châu Âu (Council) chính thức thông qua bước cuối cùng của <strong>"Digital Omnibus on AI" (gói Omnibus VII)</strong> — Nghị viện đã thông qua trước đó ngày 16/6/2026. Nghị định này hoãn mốc hiệu lực nghĩa vụ hệ thống rủi ro cao: hệ thống độc lập theo Annex III dời sang <strong>2/12/2027</strong>, hệ thống AI gắn trong sản phẩm đã quản lý theo Annex I dời sang <strong>2/8/2028</strong>. Đây KHÔNG phải đề xuất còn treo — đã được thông qua chính thức và có hiệu lực pháp lý. <strong>Ngoại lệ quan trọng</strong>: nghĩa vụ minh bạch Article 50 (thông báo đang tương tác với AI, gắn nhãn deepfake/nội dung AI-generated) KHÔNG nằm trong diện hoãn — vẫn giữ nguyên mốc 2/8/2026 và đã có hiệu lực đúng hạn. Mức phạt (Article 99) không đổi bởi Omnibus này.</p>
+</div>
+<h4>2.2 Mức phạt — con số cụ thể, không phải lời cảnh báo suông</h4>
+<pre><code>Hành vi bị cấm (unacceptable):     tới €35 triệu HOẶC 7% doanh thu toàn cầu
+                                    (lấy mức nào CAO HƠN)
+Hệ thống rủi ro cao vi phạm nghĩa vụ: tới €15 triệu HOẶC 3% doanh thu toàn cầu
+
+# "Lấy mức cao hơn" nghĩa là: với 1 tập đoàn doanh thu hàng tỷ USD,
+# 7% doanh thu toàn cầu sẽ LỚN HƠN NHIỀU €35 triệu — mức phạt neo
+# theo quy mô công ty, không phải 1 con số cố định nhỏ.
+# (Mức phạt này KHÔNG bị thay đổi bởi Digital Omnibus VII (6/2026) —
+#  chỉ mốc hiệu lực nghĩa vụ rủi ro cao bị hoãn, xem callout ở mục 2.1.)
+</code></pre>
+
+<h3>3. NIST AI RMF — tiêu chuẩn tự nguyện (Mỹ)</h3>
+<h4>3.1 7 đặc tính của AI "đáng tin cậy"</h4>
+<p>NIST định nghĩa AI đáng tin cậy (trustworthy) qua 7 đặc tính: <strong>valid &amp; reliable</strong> (hoạt động đúng, ổn định), <strong>safe</strong> (an toàn), <strong>fair &amp; unbiased</strong> (công bằng, không thiên lệch), <strong>secure &amp; resilient</strong> (bảo mật, chống chịu tấn công), <strong>accountable &amp; transparent</strong> (có trách nhiệm giải trình, minh bạch), <strong>explainable &amp; interpretable</strong> (giải thích được), <strong>privacy-enhanced</strong> (tăng cường bảo vệ riêng tư).</p>
+<h4>3.2 4 hàm liên tục — Govern → Map → Measure → Manage</h4>
+<p>Điểm quan trọng nhất của NIST RMF: đây KHÔNG phải quy trình làm 1 lần rồi xong, mà là <strong>vòng lặp chạy liên tục</strong> xuyên suốt vòng đời hệ thống:</p>
+<pre><code>┌─────────┐     ┌─────────┐     ┌──────────┐     ┌─────────┐
+│ GOVERN  │ ──▶ │   MAP   │ ──▶ │ MEASURE  │ ──▶ │ MANAGE  │
+│ Đặt quy │     │ Xác định│     │ Đo bằng  │     │ Xử lý + │
+│ tắc/vai │     │ rủi ro  │     │ dữ liệu  │     │ re-verify│
+│ trò     │     │ cụ thể  │     │ thật     │     │ + report│
+└─────────┘     └─────────┘     └──────────┘     └────┬────┘
+     ▲                                                  │
+     └──────────────────── lặp lại ─────────────────────┘
+</code></pre>
+<ul>
+<li><strong>Govern</strong>: thiết lập văn hoá, quy tắc, vai trò trách nhiệm cho toàn tổ chức trước khi làm bất cứ điều gì khác.</li>
+<li><strong>Map</strong>: xác định bối cảnh cụ thể — hệ thống này dùng để làm gì, rủi ro cụ thể nào có thể xảy ra.</li>
+<li><strong>Measure</strong>: đo lường rủi ro đó bằng phương pháp/dữ liệu thật, không chỉ đánh giá định tính.</li>
+<li><strong>Manage</strong>: phân bổ nguồn lực xử lý rủi ro đã đo được, rồi quay lại Govern để cập nhật quy tắc — vòng lặp không dừng.</li>
+</ul>
+
+<h3>4. ISO/IEC 42001 — tiêu chuẩn quốc tế có thể chứng nhận</h3>
+<p>Chuẩn quốc tế đầu tiên cho "hệ thống quản lý AI" (AI management system, viết tắt AIMS) có thể audit + cấp chứng chỉ — mô hình giống hệt <strong>ISO 27001</strong> (chuẩn quản lý bảo mật thông tin đã quen thuộc) nhưng áp dụng cho AI. Khác NIST RMF ở điểm: NIST là tài liệu hướng dẫn tự đánh giá, còn ISO 42001 có 1 quy trình audit độc lập bởi bên thứ 3, kết quả là 1 chứng chỉ có thể trưng ra với khách hàng/đối tác/cơ quan quản lý.</p>
+
+<h3>5. OECD AI Principles — nguyên tắc, không cưỡng chế</h3>
+<p>Khung nguyên tắc nền tảng, được nhiều quốc gia tham chiếu khi soạn luật riêng của họ (bao gồm cả tinh thần đằng sau EU AI Act). Bản thân OECD AI Principles không có cơ chế phạt hay audit — vai trò của nó giống "kim chỉ nam" hơn là "luật".</p>
+
+<h3>6. Đo lường bias/fairness — không chỉ nguyên tắc suông, có thước đo cụ thể</h3>
+<p>Mục 3 (7 đặc tính NIST) liệt kê "fair &amp; unbiased" như 1 nguyên tắc — nhưng "công bằng" đo bằng CÁCH NÀO? Đây là khoảng trống thật: cả EU AI Act (mục 2), NIST RMF (mục 3), ISO 42001 (mục 4) đều YÊU CẦU đánh giá bias có tài liệu, nhưng không tự thân định nghĩa công thức đo. Ngành có 1 bộ thước đo cụ thể, mỗi thước đo trả lời 1 câu hỏi khác nhau:</p>
+<table>
+<tr><th>Thước đo</th><th>Câu hỏi trả lời</th><th>Phù hợp khi nào</th></tr>
+<tr><td><strong>Demographic Parity</strong></td><td>Tỷ lệ được chấp nhận (VD được duyệt vay, được mời phỏng vấn) có BẰNG NHAU giữa các nhóm không?</td><td>Bối cảnh khó có ground-truth đáng tin cậy, kết quả dương tính là thứ ai cũng muốn (tuyển dụng, tín dụng, tư pháp hình sự)</td></tr>
+<tr><td><strong>Equal Opportunity</strong></td><td>Trong số người THỰC SỰ đủ điều kiện, tỷ lệ được chấp nhận có bằng nhau giữa các nhóm không?</td><td>Bối cảnh mà bỏ lọt người đủ điều kiện (false negative) là hậu quả nghiêm trọng nhất</td></tr>
+<tr><td><strong>Equalized Odds</strong></td><td>Cả tỷ lệ chấp nhận nhầm (false positive) LẪN tỷ lệ bỏ lọt nhầm (false negative) có bằng nhau giữa các nhóm không?</td><td>Cần cân bằng cả 2 loại lỗi, không chỉ 1 chiều</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Định lý bất khả thi (impossibility result) — không thể có "công bằng hoàn hảo" theo mọi tiêu chí cùng lúc</div>
+<p>Khi <strong>base rate</strong> (tỷ lệ thực sự đủ điều kiện) khác nhau giữa các nhóm — điều gần như LUÔN xảy ra trong dữ liệu thật — thì Demographic Parity, Equalized Odds, và <em>calibration</em> (xác suất dự đoán khớp đúng tỷ lệ thực tế) <strong>không thể cùng đúng một lúc</strong>, trừ trường hợp đặc biệt hiếm (base rate 2 nhóm bằng nhau tuyệt đối, hoặc model dự đoán hoàn hảo 100%). Đây KHÔNG phải lỗi kỹ thuật có thể fix bằng model tốt hơn — đây là 1 định lý toán học. Hệ quả thực dụng: chọn thước đo fairness nào để tối ưu LÀ 1 quyết định GIÁ TRỊ (value judgment) — cần nêu rõ VÌ SAO chọn thước đo này thay vì thước đo khác cho đúng bối cảnh, không có lựa chọn "trung lập tuyệt đối".</p>
+</div>
+<p>Công cụ đo thật 2026:</p>
+<table>
+<tr><th>Công cụ</th><th>Trọng tâm</th><th>Vai trò</th></tr>
+<tr><td><strong>IBM AIF360</strong></td><td>Đo lường — open-source, hơn 70 metric fairness khác nhau theo tài liệu công bố</td><td>Chủ yếu ĐO, phát hiện bias đã tồn tại</td></tr>
+<tr><td><strong>Microsoft Fairlearn</strong></td><td>Mitigation có ràng buộc (constraint-based)</td><td>Không chỉ đo mà còn tự động điều chỉnh model để đạt ngưỡng công bằng đã chọn</td></tr>
+</table>
+<p>Tới 2026, dưới nghĩa vụ rủi ro cao EU AI Act (dù đã hoãn — mục 2.1) và audit ISO 42001 (mục 4), việc CHỌN + GHI LẠI công thức đo bias đã trở thành yêu cầu tài liệu hoá bắt buộc, không còn là "nice-to-have" cho riêng nhóm nghiên cứu học thuật.</p>
+<p><strong>Worked example — tự tay dựng lại định lý bất khả thi bằng 1 bộ số nhỏ (hand-checkable)</strong>, minh hoạ vì sao Demographic Parity và Equalized Odds xung đột khi base rate khác nhau:</p>
+<pre><code>Nhóm A: 100 hồ sơ, THỰC SỰ đủ điều kiện = 60 (base rate 60%)
+Nhóm B: 100 hồ sơ, THỰC SỰ đủ điều kiện = 30 (base rate 30%)
+
+Mục tiêu: đạt Demographic Parity — chọn ĐÚNG 50% mỗi nhóm (50 hồ sơ/nhóm), vì đây
+là con số "công bằng" theo định nghĩa demographic parity.
+
+Nhóm A — chọn 50/100, trong khi có sẵn 60 người đủ điều kiện thật:
+  → Có thể chọn toàn bộ 50 người trong số 60 đủ điều kiện (không cần chọn nhầm ai)
+  → True Positive Rate (TPR) = 50/60 ≈ 83%,  False Positive Rate (FPR) = 0/40 = 0%
+
+Nhóm B — chọn 50/100, nhưng chỉ có 30 người đủ điều kiện thật:
+  → Chọn hết 30 người đủ điều kiện VẪN THIẾU 20 chỉ tiêu → buộc chọn thêm 20 người
+    KHÔNG đủ điều kiện để đạt đúng 50 (đúng yêu cầu demographic parity)
+  → True Positive Rate (TPR) = 30/30 = 100%,  False Positive Rate (FPR) = 20/70 ≈ 29%
+
+So sánh 2 nhóm SAU KHI đã đạt demographic parity (50=50):
+  TPR: Nhóm A 83% ≠ Nhóm B 100%   |   FPR: Nhóm A 0% ≠ Nhóm B 29%
+  → VI PHẠM Equalized Odds ngay lập tức — TPR và FPR đều lệch nhau giữa 2 nhóm,
+    dù vừa mới đạt đúng Demographic Parity ở bước trên.</code></pre>
+<p>Đây chính là định lý bất khả thi bằng con số cụ thể, không còn trừu tượng: ép buộc tỷ lệ CHỌN bằng nhau (demographic parity) giữa 2 nhóm có base rate thật khác nhau (60% vs 30%) tất yếu tạo ra chênh lệch tỷ lệ lỗi (equalized odds) giữa 2 nhóm — không phải do model "tệ", mà do RÀNG BUỘC TOÁN HỌC của chính 2 định nghĩa fairness khi áp cùng lúc lên 1 phân bố dữ liệu có base rate lệch nhau.</p>
+
+<h3>7. Bức tranh toàn cầu phân mảnh 2026 — EU AI Act không phải đại diện duy nhất</h3>
+<p>Mục 2 đã dạy sâu EU AI Act — nhưng đây chỉ là 1 trong 3 triết lý quản trị AI lớn đang cùng tồn tại 2026, phân kỳ mạnh về CÁCH tiếp cận dù có thể hội tụ ở nguyên tắc chung chung:</p>
+<table>
+<tr><th>Khối</th><th>Triết lý</th><th>Cách vận hành</th></tr>
+<tr><td><strong>EU</strong> (mục 2)</td><td>Precautionary — phòng ngừa trước, phân tầng rủi ro, luật thống nhất cho toàn khối</td><td>1 luật lớn (AI Act) áp cho mọi hệ thống AI, phân loại theo mức rủi ro</td></tr>
+<tr><td><strong>Mỹ</strong></td><td>Deregulatory, ưu tiên cạnh tranh — coi quản trị AI là công cụ cạnh tranh địa chính trị (chủ yếu với Trung Quốc), không phải rào chắn</td><td>Không có 1 luật liên bang toàn diện; Executive Order 14179 "Removing Barriers to American Leadership in Artificial Intelligence" (ký 23/1/2025) chủ động THÁO GỠ yêu cầu an toàn AI từ chính quyền trước; các bang tự ban hành luật riêng nhanh hơn liên bang (verify 2026-09 — chính sách Mỹ thay đổi nhanh theo chính quyền)</td></tr>
+<tr><td><strong>Trung Quốc</strong></td><td>Kiểm soát nhà nước theo từng use case cụ thể, không phải 1 luật khung chung</td><td>Nhiều quy định RIÊNG cho từng công nghệ/tình huống (thuật toán đề xuất nội dung, deep synthesis/deepfake, nhận diện khuôn mặt, và từ 2026 thêm dịch vụ AI có tính "nhân cách hoá") — tập trung kiểm soát nội dung + lợi ích quốc gia hơn là khung rủi ro-nghĩa vụ kiểu EU</td></tr>
+</table>
+<p>Hệ quả thực dụng cho 1 sản phẩm AI phục vụ nhiều thị trường: <strong>không có 1 checklist compliance DUY NHẤT áp được cho cả 3 khối</strong> — 1 sản phẩm tuân thủ đúng chuẩn EU AI Act (risk-tiering, human oversight) không tự động tuân thủ yêu cầu kiểm soát nội dung cụ thể của Trung Quốc, và ngược lại tuân thủ tại Mỹ hiện tại đòi hỏi ít nghĩa vụ liên bang hơn nhưng lại phải theo dõi luật TỪNG BANG đang ban hành nhanh. Điểm hội tụ hiếm hoi giữa 3 khối: đều publicly commit các <strong>nguyên tắc chung chung</strong> (an toàn, minh bạch, trách nhiệm giải trình) gần giống tinh thần OECD AI Principles (mục 5) — nhưng phân kỳ mạnh khi chuyển nguyên tắc đó thành LUẬT/QUY ĐỊNH cụ thể.</p>
+
+<h3>8. Quyền được giải thích (right to explanation) — từ nguyên tắc "explainable" (mục 3) tới nghĩa vụ pháp lý cụ thể</h3>
+<p>Mục 3.1 liệt kê "explainable &amp; interpretable" là 1 trong 7 đặc tính NIST — nhưng đây không chỉ là khuyến nghị kỹ thuật, nó đã có nền pháp lý cụ thể từ trước cả EU AI Act:</p>
+<ul>
+<li><strong>GDPR Article 22</strong> (có hiệu lực từ 2018, vẫn là nền tảng pháp lý sống 2026): cho phép cá nhân <strong>từ chối bị áp dụng 1 quyết định HOÀN TOÀN tự động</strong> có ảnh hưởng pháp lý/đáng kể tới họ (VD từ chối khoản vay chỉ dựa vào thuật toán, không có con người xem xét), cộng quyền yêu cầu con người can thiệp/nêu quan điểm/phản đối quyết định đó. Nghĩa vụ cụ thể "cung cấp thông tin có ý nghĩa về logic đứng sau quyết định" — thứ hay bị gọi tắt là "right to explanation" — thực ra nằm ở Article 13(2)(f)/14(2)(g)/15(1)(h) (nghĩa vụ minh bạch/quyền truy cập), áp dụng TRONG BỐI CẢNH xử lý theo Article 22, không phải điều khoản Article 22 tự nó chứa.</li>
+<li><strong>EU AI Act</strong> (mục 2): hệ thống rủi ro cao (Annex III, dù mốc đã hoãn sang 2/12/2027 — mục 2.1) phải đảm bảo <strong>đủ minh bạch để người triển khai giải thích được</strong> quyết định của hệ thống cho người bị ảnh hưởng — không yêu cầu giải thích tuyệt đối từng trọng số neural network, nhưng yêu cầu mức độ giải thích đủ để human oversight (đã học ở <code>R6_5_human_in_the_loop.html</code>) thực hiện được đúng nghĩa, không phải hình thức.</li>
+</ul>
+<p>Điểm khác biệt hay bị nhầm: "explainable" ở mục 3 (NIST, tự nguyện) chỉ là 1 ĐẶC TÍNH khuyến nghị; "right to explanation" ở đây là 1 QUYỀN PHÁP LÝ cụ thể của cá nhân bị ảnh hưởng — vi phạm quyền này (nếu áp dụng, VD sản phẩm phục vụ người dùng EU) có thể bị xử lý theo đúng cơ chế phạt của GDPR/EU AI Act (mục 2.2), không chỉ là "thiếu best practice".</p>
+<p>Tài liệu hoá explainability thường cần trả lời tối thiểu 3 câu hỏi (không cần công thức toán chính xác từng trọng số, nhưng cần đủ để người bị ảnh hưởng hiểu được):</p>
+<ul>
+<li>Những YẾU TỐ ĐẦU VÀO nào ảnh hưởng nhiều nhất tới quyết định này? (VD: feature importance, không cần công khai toàn bộ kiến trúc model)</li>
+<li>Nếu 1 yếu tố đầu vào thay đổi, quyết định có thể đổi theo hướng nào? (giải thích kiểu "counterfactual" — đơn giản, dễ hiểu với người không chuyên)</li>
+<li>Ai là người CÓ THỂ xem xét lại quyết định này nếu cá nhân phản đối? (đúng tinh thần human oversight đã học ở <code>R6_5</code>)</li>
+</ul>
+
+<h3>9. Case study thật — vì sao "không đưa thuộc tính nhạy cảm vào model" KHÔNG đủ để tránh bias</h3>
+<p>Sai lầm phổ biến khi mới học fairness (mục 6): nghĩ chỉ cần XOÁ thuộc tính nhạy cảm (giới tính, chủng tộc) khỏi tập feature là model tự động công bằng. 1 case study thật (Amazon, công cụ tuyển dụng nội bộ, dừng sử dụng năm 2018 — sự kiện lịch sử, không phải 2026, nhưng vẫn là bài học nền tảng cho mọi hệ thống chấm điểm/xếp hạng tự động tới nay) chứng minh điều ngược lại:</p>
+<pre><code>Bối cảnh: Amazon xây model AI chấm điểm CV ứng viên, huấn luyện trên 10 năm
+          CV đã nộp trước đó (đa số ứng viên ngành công nghệ trong tập dữ liệu là nam).
+
+Thiết kế: Model KHÔNG được cho biết giới tính ứng viên — thuộc tính "giới tính"
+          bị loại khỏi tập feature ngay từ đầu (đúng trực giác "xoá thuộc tính nhạy cảm
+          = tránh được bias" mà nhiều người vẫn tin).
+
+Kết quả THẬT: Model tự học cách trừ điểm CV chứa cụm từ "women's" (VD "women's chess
+          club captain" — đội trưởng CLB cờ vua nữ) và hạ điểm ứng viên tốt nghiệp
+          từ các trường đại học chỉ dành cho nữ — dù KHÔNG hề có feature "giới tính"
+          nào trong input.
+
+Cơ chế: model học được PROXY (đại diện gián tiếp) cho giới tính từ chính các từ ngữ/
+        pattern tương quan cao với giới tính trong dữ liệu lịch sử — dữ liệu training
+        vốn đã lệch (đa số CV thành công trong quá khứ là nam), model chỉ đang PHẢN
+        ÁNH LẠI đúng pattern lịch sử đó, dù "mù" trước thuộc tính giới tính trực tiếp.</code></pre>
+<p><strong>Bài học liên hệ ngược mục 6</strong>: đây chính là lý do các thước đo fairness (Demographic Parity/Equal Opportunity/Equalized Odds) phải đo TRÊN KẾT QUẢ ĐẦU RA theo nhóm thật, không thể chỉ kiểm tra "input có chứa thuộc tính nhạy cảm hay không" rồi coi là đã an toàn — bias có thể xâm nhập qua vô số proxy feature (từ ngữ, trường học, hoạt động ngoại khoá...) mà không cần thuộc tính gốc. Amazon phát hiện vấn đề này qua chính nội bộ audit và ngừng dùng công cụ từ đầu 2017 trước khi triển khai rộng — sự việc chỉ được công khai qua báo cáo Reuters năm 2018 (đừng nhầm ngày công khai với ngày thực sự ngừng dùng) — 1 ví dụ hiếm hoi về Measure (NIST RMF, mục 3.2) hoạt động đúng: đo được vấn đề TRƯỚC khi gây hậu quả thật ở quy mô lớn.</p>
+
+<h3>10. Khung quyết định thực dụng — phục vụ thị trường nào thì cần tuân thủ gì</h3>
+<p>Ráp lại mục 2 (EU AI Act chi tiết) và mục 7 (3 triết lý toàn cầu) thành 1 bảng tra cứu nhanh — trả lời đúng câu hỏi kỹ sư thường hỏi: "sản phẩm của tôi phục vụ thị trường X, tôi cần lo gì?"</p>
+<table>
+<tr><th>Thị trường phục vụ</th><th>Nghĩa vụ chính cần biết</th><th>Có cưỡng chế không?</th></tr>
+<tr><td>Người dùng tại EU (kể cả khi công ty đặt trụ sở ngoài EU)</td><td>EU AI Act risk-tiering (mục 2) + GDPR Article 22 right-to-explanation (mục 8) nếu có quyết định tự động ảnh hưởng cá nhân</td><td>Có — phạt cụ thể tới €35M/7% doanh thu (mục 2.2)</td></tr>
+<tr><td>Người dùng tại Mỹ</td><td>Không có nghĩa vụ liên bang toàn diện; cần theo dõi luật TỪNG BANG (đang ban hành nhanh, verify 2026-09 theo bang cụ thể)</td><td>Phân mảnh — tuỳ bang, không đồng nhất</td></tr>
+<tr><td>Người dùng tại Trung Quốc</td><td>Quy định riêng theo use case (thuật toán đề xuất, deep synthesis, nhận diện khuôn mặt, dịch vụ AI nhân cách hoá)</td><td>Có, nhưng phạm vi hẹp theo từng công nghệ cụ thể, không phải 1 luật khung</td></tr>
+<tr><td>Chỉ thị trường Việt Nam (như <code>predictor</code>)</td><td>Không nghĩa vụ cưỡng chế trực tiếp từ 3 khối trên — nhưng NIST RMF/ISO 42001 (mục 3-4) vẫn đáng dùng làm kỷ luật tự nguyện, đúng thực hành đã ghi ở <code>CLAUDE.md</code></td><td>Không — tự nguyện hoàn toàn ở thời điểm hiện tại (verify 2026-09, luật VN về AI đang phát triển)</td></tr>
+</table>
+<p>Điểm mấu chốt của bảng: nghĩa vụ pháp lý bám theo <strong>NƠI NGƯỜI DÙNG Ở</strong>, không phải nơi công ty đặt trụ sở — 1 sản phẩm Việt Nam có user thật tại EU vẫn có thể rơi vào phạm vi EU AI Act/GDPR, dù đội ngũ phát triển chưa từng đặt chân tới châu Âu.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Áp dụng 4 hàm NIST RMF vào 1 sản phẩm AI dự đoán chứng khoán giả định, từng bước cụ thể:</p>
+<pre><code>GOVERN: Viết quy tắc "mọi thay đổi công thức tính điểm phải qua validate
+         dữ liệu thật trước khi deploy, không được chỉ dựa vào backtest
+         nội bộ chưa kiểm chứng độc lập."
+
+MAP:    Xác định rủi ro cụ thể của HỆ THỐNG NÀY (không phải rủi ro AI
+         chung chung): "công thức tính điểm hiện tại vẫn còn phần hand-picked,
+         chưa có vòng lặp học từ kết quả giao dịch thật."
+
+MEASURE: Đo rủi ro đó bằng dữ liệu thật — chạy backtest trên dữ liệu
+         lịch sử thật (không phải giả định), so sánh với kết quả
+         nếu dùng công thức cũ, ghi nhận cả kết quả nhỏ/null trung thực
+         (không chỉ báo cáo khi kết quả đẹp).
+
+MANAGE:  Dựa trên kết quả đo, quyết định: fix phần nào trước, launch lại
+         khi nào, rồi QUAY LẠI Govern để cập nhật quy tắc nếu phát hiện
+         gap mới trong quá trình Measure.
+</code></pre>
+<p><strong>Insight</strong>: không có bước nào trong 4 bước này là "làm 1 lần rồi thôi" — Manage luôn dẫn ngược lại Govern, tạo thành vòng lặp liên tục suốt vòng đời sản phẩm.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Khung</th><th>Loại</th><th>Phạm vi áp dụng</th><th>Hình thức tuân thủ</th><th>Hậu quả không tuân thủ</th></tr>
+<tr><td><strong>EU AI Act</strong></td><td>Luật, có hiệu lực cưỡng chế</td><td>Hệ thống AI phục vụ/ảnh hưởng thị trường EU</td><td>Bắt buộc theo tầng rủi ro — mốc rủi ro cao đã hoãn sang 2027/2028 (Omnibus VII, 6/2026), riêng minh bạch Article 50 vẫn đúng hạn 2/8/2026</td><td>Phạt tiền cụ thể (không đổi bởi Omnibus): tới €35M/7% doanh thu (cấm), €15M/3% (rủi ro cao)</td></tr>
+<tr><td><strong>NIST AI RMF</strong></td><td>Tiêu chuẩn tự nguyện (Mỹ)</td><td>Bất kỳ tổ chức nào muốn tự đánh giá</td><td>Tự nguyện, không audit bên ngoài bắt buộc</td><td>Không có — nhưng thiếu kỷ luật này thường lộ ra khi có sự cố</td></tr>
+<tr><td><strong>ISO/IEC 42001</strong></td><td>Tiêu chuẩn quốc tế có thể chứng nhận</td><td>Tổ chức muốn chứng minh AIMS đạt chuẩn với bên ngoài</td><td>Audit bởi bên thứ 3, cấp chứng chỉ</td><td>Không bắt buộc, nhưng thiếu chứng chỉ có thể mất lợi thế cạnh tranh/đấu thầu</td></tr>
+<tr><td><strong>OECD AI Principles</strong></td><td>Nguyên tắc, không cưỡng chế</td><td>Toàn cầu, dùng làm nền tham chiếu</td><td>Không có cơ chế tuân thủ trực tiếp</td><td>Không có — vai trò định hướng chính sách quốc gia</td></tr>
+</table>
+<p>Bảng phụ — đối chiếu 3 triết lý toàn cầu (mục 7) trên đúng 1 khung tiêu chí, để thấy EU AI Act (đã học sâu ở mục 2) chỉ là 1 điểm trong không gian lựa chọn rộng hơn:</p>
+<table>
+<tr><th>Tiêu chí</th><th>EU</th><th>Mỹ</th><th>Trung Quốc</th></tr>
+<tr><td>Có 1 luật khung chung không?</td><td>Có (AI Act)</td><td>Không — bang tự ban hành</td><td>Không — quy định theo từng công nghệ</td></tr>
+<tr><td>Trọng tâm</td><td>Quản lý rủi ro theo tầng</td><td>Cạnh tranh/dẫn đầu công nghệ</td><td>Kiểm soát nội dung + lợi ích quốc gia</td></tr>
+<tr><td>Xu hướng 2026</td><td>Hoãn 1 phần nghĩa vụ (Omnibus VII)</td><td>Tháo gỡ rào cản (EO 14179)</td><td>Mở rộng thêm use case cụ thể (AI nhân cách hoá)</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> phục vụ thị trường chứng khoán Việt Nam, <strong>không trực tiếp chịu EU AI Act</strong> — không có nghĩa vụ pháp lý cưỡng chế nào từ khung này áp dụng ngay lập tức. Nhưng nguyên tắc NIST RMF (Govern → Map → Measure → Manage, chạy lặp liên tục) mô tả ĐÚNG kỷ luật đã có sẵn trong <code>CLAUDE.md</code> của dự án, dù văn bản đó chưa bao giờ gọi tên chính thức "NIST RMF":</p>
+<ul>
+<li><strong>Govern</strong> = quy tắc trong <code>CLAUDE.md</code>/memory: "Score formula single source of truth" (chỉ <code>backend/predict/senior_score.py</code>), "mọi quant fix phải validate trước khi ship và report trung thực kể cả kết quả nhỏ/null".</li>
+<li><strong>Map</strong> = xác định rủi ro cụ thể đã ghi trong <code>CLAUDE.md</code>: "AI Trader P&amp;L loop chưa closed — validation vẫn chạy trên <code>fwd5_net</code> (counterfactual), không phải P&amp;L thật từ <code>ai_trader_trades</code>".</li>
+<li><strong>Measure</strong> = đo bằng dữ liệu thật, có tài liệu — ví dụ đã ghi nhận: 1 sub-score decomposition phát hiện <code>ta_score</code> (không phải <code>flow_score</code> như giả định ban đầu) là thành phần sai dấu, sau đó 1 pass QA độc lập thứ 2 phát hiện lần đo đầu bị nhiễu noise và kết quả đúng khác với báo cáo lần đầu.</li>
+<li><strong>Manage</strong> = fix + re-verify + report trung thực — đúng kỷ luật "hai-pass" (implement → độc lập re-derive, không chỉ đọc lại code → fix gap thật tìm được → redeploy) mà <code>CLAUDE.md</code> quy định là chuẩn mực bắt buộc, không phải rigor đặc biệt cho dịp hiếm.</li>
+</ul>
+<p>Đây là bằng chứng dự án đã vận hành đúng tinh thần NIST RMF trước khi gọi tên chính thức — dùng khung này làm tài liệu tham chiếu khi viết báo cáo quản trị nội bộ giúp trình bày kỷ luật đã có theo 1 cấu trúc chuẩn quốc tế, dễ đối chiếu hơn.</p>
+<p><strong>Áp mục 6 (bias/fairness) vào <code>predictor</code> — nói thẳng khi KHÔNG áp dụng được, tránh gượng ép</strong>: Demographic Parity/Equal Opportunity/Equalized Odds (mục 6) đo công bằng GIỮA CÁC NHÓM NGƯỜI (chủng tộc, giới tính, tuổi...) trong các quyết định ảnh hưởng con người (tuyển dụng, tín dụng, tư pháp) — AI Predict/AI Trader của <code>predictor</code> chấm điểm <strong>MÃ CỔ PHIẾU</strong>, không phân loại/chấm điểm con người theo nhóm nhân khẩu học, nên 3 thước đo fairness ở mục 6 <strong>không áp dụng trực tiếp</strong> theo đúng định nghĩa gốc của chúng. Điều CÓ liên quan thật: khái niệm "thiên lệch hệ thống" vẫn tồn tại ở dạng khác — VD model thiên vị 1 nhóm ngành/vốn hoá nhất định (méo theo sector/market-cap) nếu dữ liệu huấn luyện mất cân bằng — nhưng đây là bài toán "class imbalance" kỹ thuật ML thông thường, không phải bài toán fairness liên quan quyền con người mà EU AI Act/NIST RMF nhắm tới; gọi nhầm 2 khái niệm này làm một sẽ là lỗi khái niệm, không phải chỉ lỗi diễn đạt.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<ol>
+<li><strong>Coi "ethical guidelines" là văn bản mang tính tham khảo, bỏ qua được</strong> — sai nghiêm trọng với EU AI Act: đây là luật có hiệu lực cưỡng chế thật, mức phạt cụ thể; riêng mốc "hệ thống rủi ro cao hiệu lực từ 8/2026" đã bị Digital Omnibus VII (thông qua 29/6/2026) hoãn sang 2/12/2027 (Annex III độc lập)/2/8/2028 (gắn trong sản phẩm Annex I) — chỉ nghĩa vụ minh bạch Article 50 vẫn đúng hạn 2/8/2026.</li>
+<li><strong>Vẫn nhắc lại "8/2026" như mốc hiệu lực đầy đủ cho hệ thống rủi ro cao mà không kiểm tra tin tức mới</strong> — đây là lỗi thời điểm viết tài liệu này (curriculum viết trước khi Omnibus VII được thông qua); luôn kiểm tra lại quy định đang thay đổi nhanh, đừng coi mốc luật là cố định vĩnh viễn.</li>
+<li><strong>Nhầm NIST RMF là bắt buộc như luật</strong> — thực chất là tiêu chuẩn tự nguyện; áp dụng vì kỷ luật tốt, không phải vì bị ép.</li>
+<li><strong>Coi ISO/IEC 42001 giống EU AI Act</strong> — 1 cái là chứng nhận tự nguyện (không đạt cũng không sao), 1 cái là luật (không tuân thủ bị phạt).</li>
+<li><strong>Áp dụng NIST RMF như quy trình 1 lần "làm xong rồi thôi"</strong> — bỏ lỡ đúng bản chất "4 hàm chạy lặp liên tục" là điểm cốt lõi của khung này.</li>
+<li><strong>Cho rằng dự án không phục vụ thị trường EU thì không cần quan tâm bất kỳ khung governance nào</strong> — bỏ lỡ giá trị thật của NIST RMF/ISO 42001 như công cụ tự kỷ luật nội bộ, độc lập với việc có bị luật ép hay không.</li>
+<li><strong>Nghĩ có thể tối ưu đồng thời Demographic Parity, Equalized Odds, và calibration để đạt "công bằng hoàn hảo"</strong> — sai theo định lý bất khả thi (mục 6): khi base rate khác nhau giữa nhóm, 3 tiêu chí này về mặt toán học không thể cùng đúng; phải CHỌN có ý thức, không có lựa chọn "an toàn tuyệt đối".</li>
+<li><strong>Coi EU AI Act là chuẩn compliance AI toàn cầu duy nhất cần biết</strong> — Mỹ và Trung Quốc (mục 7) vận hành theo triết lý khác hẳn; 1 sản phẩm tuân thủ EU không tự động tuân thủ 2 khối còn lại.</li>
+<li><strong>Áp fairness metric (Demographic Parity...) cho model chấm điểm cổ phiếu như thể đang chấm điểm con người</strong> — nhầm lẫn khái niệm; AI Predict/AI Trader không phân loại theo nhóm nhân khẩu học, "thiên lệch" ở đây (nếu có) là bài toán class imbalance kỹ thuật, khác hẳn fairness liên quan quyền con người.</li>
+<li><strong>Tin rằng xoá thuộc tính nhạy cảm khỏi input là đủ để tránh bias</strong> — case study Amazon (mục 9) chứng minh model vẫn học được proxy gián tiếp (từ ngữ, trường học...) dù không có feature giới tính trực tiếp; phải đo fairness trên OUTPUT theo nhóm thật, không chỉ kiểm tra input.</li>
+<li><strong>Nghĩ nghĩa vụ pháp lý AI bám theo nơi công ty đặt trụ sở, không phải nơi người dùng ở</strong> (mục 10) — 1 startup Việt Nam có user thật tại EU vẫn rơi vào phạm vi EU AI Act/GDPR dù chưa từng "hoạt động tại EU" theo nghĩa đặt văn phòng.</li>
+<li><strong>Nghĩ "right to explanation" (mục 8) đòi hỏi công khai toàn bộ trọng số/kiến trúc model</strong> — sai; tài liệu hoá đủ dùng chỉ cần trả lời 3 câu hỏi thực dụng (yếu tố ảnh hưởng nhiều nhất, hướng thay đổi nếu input đổi, ai xem xét lại được), không cần "mở hộp đen" tuyệt đối.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Xếp đúng thứ tự mức độ ràng buộc: EU AI Act (cưỡng chế) > ISO 42001 (chứng nhận, tự nguyện) > NIST RMF (tự nguyện, không audit) > OECD (nguyên tắc, không cơ chế).</li>
+<li>Nêu đúng mốc hiệu lực HIỆN TẠI (sau Digital Omnibus VII, thông qua 29/6/2026) của EU AI Act cho hệ thống rủi ro cao: 2/12/2027 (Annex III độc lập) / 2/8/2028 (gắn trong sản phẩm Annex I) — KHÔNG còn là "8/2026" như kế hoạch ban đầu; riêng minh bạch Article 50 vẫn đúng hạn 2/8/2026. Nêu đúng mức phạt cụ thể (tới €35M/7% hoặc €15M/3% doanh thu, không đổi bởi Omnibus).</li>
+<li>Vẽ lại được vòng lặp 4 hàm NIST RMF (Govern → Map → Measure → Manage → quay lại Govern) và giải thích vì sao nó không phải quy trình 1 lần.</li>
+<li>Ánh xạ đúng 1 ví dụ thật trong <code>CLAUDE.md</code> của <code>predictor</code> vào từng hàm trong 4 hàm NIST RMF.</li>
+<li>Kể đúng 3 thước đo fairness (Demographic Parity, Equal Opportunity, Equalized Odds) và giải thích được định lý bất khả thi bằng chính từ ngữ của mình, không chép nguyên văn.</li>
+<li>Phân biệt đúng 3 triết lý quản trị AI toàn cầu 2026 (EU/Mỹ/Trung Quốc, mục 7) theo tiêu chí "có luật khung chung không" và "trọng tâm là gì".</li>
+<li>Giải thích được vì sao fairness metric (mục 6) không áp dụng trực tiếp cho AI Predict/AI Trader của <code>predictor</code>, và phân biệt đúng với bài toán class imbalance kỹ thuật.</li>
+<li>Kể lại đúng cơ chế case study Amazon (mục 9) — vì sao xoá thuộc tính nhạy cảm không đủ, giải thích được khái niệm "proxy feature".</li>
+<li>Phân biệt được "explainable" như đặc tính khuyến nghị (NIST, mục 3) với "right to explanation" như quyền pháp lý cụ thể (GDPR Article 22/EU AI Act, mục 8).</li>
+<li>Dùng đúng khung quyết định mục 10 để trả lời "phục vụ thị trường X thì cần tuân thủ gì" — nêu đúng nguyên tắc nghĩa vụ bám theo nơi NGƯỜI DÙNG ở, không phải nơi công ty đặt trụ sở.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R10_2_sandboxing.html">← R10.2 · Sandboxing</a>
+  <a href="R10_4_prompt_injection_defenses.html">R10.4 · Prompt Injection Defenses →</a>
+</div>
+
+</div>
+</body>
+</html>

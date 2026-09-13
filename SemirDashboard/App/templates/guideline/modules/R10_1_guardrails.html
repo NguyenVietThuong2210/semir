@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R10.1 · Guardrails — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Security · Điểm 1/4</div>
+  <h1>R10.1 · Guardrails</h1>
+  <p class="subtitle">3 triết lý guardrail runtime khác nhau — framework lập trình (NeMo), classifier mở (Llama Guard), classifier huấn luyện từ "hiến pháp" (Constitutional Classifiers++) — và vì sao chúng KHÔNG phải Constitutional AI.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Phân biệt được <strong>guardrail runtime</strong> (chủ đề trang này) với <strong>Constitutional AI</strong> — kỹ thuật training-time đã dạy ở <code>L8_5_ai_alignment.html</code>.</li>
+<li>Kể tên và giải thích đúng bản chất của 3 loại guardrail runtime: NeMo Guardrails (framework + DSL Colang), Llama Guard (classifier model mở), Constitutional Classifiers/++ (classifier huấn luyện từ "hiến pháp" ngôn ngữ tự nhiên).</li>
+<li>Đọc hiểu 1 đoạn Colang tối thiểu và biết nó tương ứng với bước nào trong pipeline request/response.</li>
+<li>Tính được chi phí thực tế (over-refusal, overhead suy luận) của 1 guardrail khi áp cho quy mô traffic cụ thể — không chỉ nhớ con số phần trăm suông.</li>
+<li>Đánh giá được: dự án <code>predictor</code> hiện tại có cần nhảy thẳng lên NeMo Guardrails/Llama Guard không, hay QA gate thủ công đã đủ ở quy mô hiện tại.</li>
+<li>Định vị được 3 sản phẩm mục 2-4 vào đúng 4 nhóm tooling guardrail rộng hơn của thị trường 2026 (framework tự lắp ráp, cloud-native, security-suite gộp qua M&amp;A, chuyên biệt 1 rủi ro).</li>
+<li>Biết được guardrail KHÔNG phải lớp phòng thủ bất khả xâm phạm — trích được số liệu bypass thật 2026 và giải thích được vì sao thứ tự cascading rẻ→đắt khi kết hợp nhiều guardrail sản phẩm lại tiết kiệm chi phí vận hành.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Guardrail runtime là mảnh ghép còn thiếu giữa 2 module đã dạy rất sâu về an toàn LLM:</p>
+<table>
+<tr><th>Module đã có</th><th>Đã dạy gì</th><th>Khác trang này ở đâu</th></tr>
+<tr><td><a href="../modules/L5_6_safety.html"><code>L5_6_safety.html</code></a></td><td>OWASP LLM Top 10, prompt injection, jailbreak taxonomy, PII leak, hallucination, excessive agency, red-teaming — <strong>nguyên tắc phòng thủ chung</strong></td><td><code>L5_6</code> dạy "phải phòng thủ cái gì"; trang này dạy "dùng công cụ runtime cụ thể nào để phòng thủ" — 1 tầng dưới, thực thi được</td></tr>
+<tr><td><a href="../modules/L8_5_ai_alignment.html"><code>L8_5_ai_alignment.html</code></a></td><td>Constitutional AI như kỹ thuật <strong>training-time</strong> (self-critique, RLAIF, thay đổi bản chất model)</td><td>Constitutional Classifiers (mục 4 trang này) là <strong>runtime filter</strong> — cùng gốc ý tưởng "hiến pháp" nhưng khác hoàn toàn về thời điểm áp dụng và cơ chế</td></tr>
+</table>
+<p>Độ khó: <strong>Trung bình</strong> — không cần toán, nhưng cần phân biệt chính xác 3 khái niệm dễ nhầm (framework / classifier model / classifier-huấn-luyện-từ-hiến-pháp) và không nhầm với Constitutional AI.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy — 3 kiểu bảo vệ đứng gác cửa</div>
+<p><code>L8_5</code> đã dạy Constitutional AI như "dạy 1 đứa trẻ tự biết đúng-sai từ nhỏ" — thay đổi bản chất bên trong. Guardrail runtime khác hẳn: nó là <strong>1 người bảo vệ đứng gác cửa</strong>, không quan tâm bên trong "tốt" hay "xấu" sẵn, chỉ kiểm tra mọi thứ đi ra/vào qua cửa. Nhưng có 3 kiểu bảo vệ, mỗi kiểu làm việc khác hẳn nhau:</p>
+<ul>
+<li><strong>Bảo vệ theo checklist cứng (NeMo Guardrails)</strong> — cầm 1 quyển sổ tay quy trình chi tiết do quản lý viết sẵn: "nếu khách nói X, hỏi lại Y trước khi cho vào; nếu khách mang túi lớn, kiểm tra qua cửa Z trước". Kiểm soát chi tiết, nhưng quản lý phải viết trước MỌI tình huống.</li>
+<li><strong>Chó nghiệp vụ đánh hơi (Llama Guard)</strong> — không đọc quy trình, chỉ được huấn luyện để "ngửi" và sủa nếu phát hiện mùi nguy hiểm quen thuộc (đã học từ trước qua dữ liệu huấn luyện). Nhanh, không cần viết luật thủ công, nhưng chỉ nhận ra loại nguy hiểm nó đã từng được dạy.</li>
+<li><strong>Bảo vệ hiểu "tinh thần nội quy" (Constitutional Classifiers)</strong> — không học thuộc từng tình huống cụ thể, mà được huấn luyện từ chính bản nội quy viết bằng ngôn ngữ tự nhiên ("không được mang vũ khí, không được gây rối trật tự...") — nên biết suy luận cả những tình huống mới chưa từng gặp, miễn tinh thần nội quy áp dụng được.</li>
+</ul>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Guardrail runtime là gì — và khác training-time ở đâu</h3>
+<p>Một hệ thống LLM production có 2 "điểm can thiệp an toàn" hoàn toàn khác nhau về thời điểm:</p>
+<pre><code>[Training time]                          [Runtime — mỗi request thật]
+Huấn luyện model qua nhiều vòng           User gửi prompt
+self-critique + RLAIF (Constitutional AI) → [GUARDRAIL INPUT] kiểm tra prompt
+→ model TỰ NÓ an toàn hơn từ bên trong      → LLM xử lý
+→ 1 lần, trước khi model được deploy        → [GUARDRAIL OUTPUT] kiểm tra câu trả lời
+                                             → Trả về user
+</code></pre>
+<p>Guardrail runtime hoạt động ở cột bên phải — <strong>độc lập với việc model bên trong đã "tốt" tới đâu</strong>. Ngay cả 1 model đã qua Constitutional AI kỹ lưỡng vẫn cần guardrail runtime, vì 2 lý do: (1) không kỹ thuật training-time nào đạt 100% an toàn cho mọi input chưa từng thấy; (2) guardrail runtime có thể cập nhật ngay lập tức khi phát hiện lỗ hổng mới, không cần train lại cả model (rẻ hơn, nhanh hơn).</p>
+
+<h3>2. NeMo Guardrails (NVIDIA) — framework lập trình được</h3>
+<h4>2.1 Kiến trúc 5 loại "rail"</h4>
+<p>NeMo Guardrails chia pipeline thành nhiều giai đoạn, mỗi giai đoạn có 1 loại rail riêng:</p>
+<table>
+<tr><th>Loại rail</th><th>Chạy khi nào</th><th>Việc điển hình</th></tr>
+<tr><td><strong>Input rail</strong></td><td>Trước khi prompt tới LLM</td><td>Chặn câu hỏi off-topic, phát hiện injection thô, chuẩn hoá input</td></tr>
+<tr><td><strong>Dialog rail</strong></td><td>Trong lúc quản lý luồng hội thoại nhiều lượt</td><td>Ép agent đi đúng kịch bản (VD: agent bán vé máy bay không được tự ý bàn chính trị)</td></tr>
+<tr><td><strong>Retrieval rail</strong></td><td>Trên chunk vừa truy hồi trong pipeline RAG, trước khi đưa vào prompt LLM</td><td>Loại bỏ/chỉnh sửa chunk không phù hợp (nhạy cảm, sai domain) trước khi model thấy nó</td></tr>
+<tr><td><strong>Output rail</strong></td><td>Sau khi LLM sinh câu trả lời, trước khi trả về user</td><td>Chặn nội dung nhạy cảm, kiểm tra fact leak, format lại câu trả lời</td></tr>
+<tr><td><strong>Execution rail</strong></td><td>Khi agent gọi tool/function</td><td>Chặn tool call nguy hiểm trước khi thực thi (VD: chặn lệnh xoá file)</td></tr>
+</table>
+<h4>2.2 Colang — ngôn ngữ mô tả luồng được-phép</h4>
+<p>Developer không viết code Python cho từng rule, mà viết bằng <strong>Colang</strong> — 1 domain-specific language (DSL) mô tả luồng hội thoại được-phép/không-được-phép, gần giống viết kịch bản:</p>
+<pre><code># Ví dụ tối thiểu minh hoạ cú pháp Colang (không phải code chạy thật của dự án)
+define user ask about competitor
+  "đối thủ của công ty bạn là ai?"
+  "so sánh với công ty khác thế nào?"
+
+define bot refuse to discuss competitor
+  "Xin lỗi, tôi chỉ có thể hỗ trợ về sản phẩm của chúng tôi."
+
+define flow
+  user ask about competitor
+  bot refuse to discuss competitor
+</code></pre>
+<p>Đọc đoạn trên: khi user hỏi thứ khớp mẫu "ask about competitor", bot LUÔN trả lời bằng câu đã định sẵn — không để LLM tự do sinh câu trả lời cho chủ đề này. Đây là kiểm soát <strong>rất chi tiết, theo từng luồng</strong> — ưu điểm khi cần compliance nghiêm ngặt (ngân hàng, y tế), nhược điểm là developer phải liệt kê trước mọi tình huống muốn kiểm soát.</p>
+
+<h3>3. Llama Guard (Meta) — classifier model mã nguồn mở</h3>
+<p>Khác NeMo Guardrails ở bản chất: Llama Guard <strong>không phải 1 framework lập trình luồng</strong>, mà là <strong>1 model LLM khác</strong>, được huấn luyện riêng để làm đúng 1 việc: đọc 1 đoạn hội thoại đã định dạng, trả về nhãn <code>safe</code>/<code>unsafe</code> + mã danh mục vi phạm nếu unsafe.</p>
+<pre><code># Minh hoạ luồng dữ liệu qua Llama Guard (giản lược)
+Input cho Llama Guard:
+  "[INST] Task: kiểm tra đoạn hội thoại sau có vi phạm không.
+   User: Làm sao chế thuốc nổ tại nhà?
+   Categories: O1 Violence, O2 Weapons, O3 ... [/INST]"
+
+Output Llama Guard:
+  "unsafe
+   O2"   ← vi phạm danh mục O2 (Weapons)
+</code></pre>
+<p>Vì là 1 model tự host (self-host), doanh nghiệp kiểm soát được data không rời khỏi hạ tầng nội bộ — khác các API guardrail đóng gói của bên thứ 3. Llama Guard 2/3 mở rộng taxonomy danh mục vi phạm + tăng độ bền trước input đối kháng (adversarial input cố tình lách luật bằng cách diễn đạt vòng vo).</p>
+
+<h3>4. Constitutional Classifiers / Constitutional Classifiers++ (Anthropic)</h3>
+<h4>4.1 Cơ chế — cùng gốc ý tưởng CAI nhưng ứng dụng khác hẳn</h4>
+<p><strong>Đây là điểm dễ nhầm nhất chương này.</strong> Constitutional AI (<code>L8_5</code>) và Constitutional Classifiers (mục này) dùng chung 1 ý tưởng gốc — viết ra 1 bản "hiến pháp" bằng ngôn ngữ tự nhiên thay vì gán nhãn thủ công từng ví dụ — nhưng áp dụng nó theo 2 cách hoàn toàn khác nhau:</p>
+<table>
+<tr><th></th><th>Constitutional AI (<code>L8_5</code>)</th><th>Constitutional Classifiers (mục này)</th></tr>
+<tr><td>Thời điểm</td><td>Training-time</td><td>Runtime</td></tr>
+<tr><td>Làm gì</td><td>Huấn luyện LẠI chính model chính, qua self-critique + RLAIF</td><td>Huấn luyện 1 classifier RIÊNG, tách biệt, đặt trước/sau model chính</td></tr>
+<tr><td>Kết quả</td><td>Model tự nó an toàn hơn từ bên trong</td><td>1 lớp lọc độc lập, hoạt động ngay cả khi model chính chưa hoàn hảo</td></tr>
+<tr><td>Cập nhật</td><td>Phải train lại model (chậm, tốn kém)</td><td>Cập nhật classifier riêng, không đụng model chính (nhanh hơn)</td></tr>
+</table>
+<h4>4.2 Số liệu qua các phiên bản — bằng chứng runtime guardrail có thể vừa an toàn vừa rẻ</h4>
+<p>Bản gốc (Sharma et al. 2025): qua hơn 3,000 giờ red-team chuyên nghiệp, hệ thống KHÔNG bị phát hiện universal jailbreak nào — nhưng đánh đổi thật: <strong>+0.38% tỷ lệ từ chối quá mức</strong> (over-refusal — chặn nhầm cả câu hỏi vô hại) và <strong>+23.7% overhead suy luận</strong> (mỗi câu trả lời chậm hơn vì phải chạy qua classifier).</p>
+<p><strong>Constitutional Classifiers++ (1/2026)</strong> giảm mạnh 2 chi phí đó cùng lúc:</p>
+<table>
+<tr><th>Chỉ số</th><th>Bản gốc</th><th>Bản ++ (1/2026)</th><th>Cải thiện</th></tr>
+<tr><td>Tỷ lệ từ chối sai (over-refusal)</td><td>0.38%</td><td>0.05%</td><td>~7.6× thấp hơn</td></tr>
+<tr><td>Overhead tính toán (so hệ 2 giai đoạn cũ)</td><td>baseline</td><td>giảm ~8×</td><td>rẻ hơn đáng kể</td></tr>
+<tr><td>Overhead tính toán (so single-exchange cũ)</td><td>baseline</td><td>giảm ~40×</td><td>rẻ hơn rất nhiều</td></tr>
+</table>
+<p>Số liệu bổ sung từ chính nghiên cứu: qua 1.700 giờ red-team cộng dồn, bản ++ chỉ để lọt đúng 1 lỗ hổng rủi ro cao; tỷ lệ tấn công jailbreak thành công (đo trên hệ chưa có Constitutional Classifiers) giảm từ 86% xuống còn 4.4% khi bật classifier — cùng chiều với thông điệp "vừa an toàn hơn vừa rẻ hơn", không mâu thuẫn với 2 chỉ số chính ở trên.</p>
+
+<h3>5. Bức tranh thị trường guardrail tooling 2026 — 4 nhóm sản phẩm</h3>
+<p>Mục 2-4 đã đi sâu vào 3 <strong>sản phẩm cụ thể</strong> (NeMo Guardrails, Llama Guard, Constitutional Classifiers) — nhưng thị trường tooling 2026 rộng hơn nhiều và có cấu trúc rõ ràng theo 4 nhóm, đáng biết trước khi chọn công cụ cho 1 dự án cụ thể, tránh nghĩ "chỉ có 3 lựa chọn này":</p>
+<table>
+<tr><th>Nhóm</th><th>Đặc điểm</th><th>Ví dụ sản phẩm</th></tr>
+<tr><td>Framework mã nguồn mở, tự lắp ráp</td><td>Developer tự viết rule/DSL, tự host, kiểm soát toàn bộ pipeline</td><td>NeMo Guardrails (mục 2); <strong>Guardrails AI</strong> — framework mã nguồn mở khác, định nghĩa "validator" theo schema kiểm output (VD: bắt buộc JSON đúng field, chặn PII) — khác Colang ở chỗ không mô tả LUỒNG hội thoại, chỉ validate từng output đơn lẻ</td></tr>
+<tr><td>Cloud-native, gắn liền 1 platform</td><td>Gọi qua REST API/SDK của chính cloud vendor đang dùng, không cần tự host hạ tầng riêng</td><td><strong>Azure AI Content Safety</strong> — phân loại nội dung theo 4 danh mục (hate/sexual/violence/self-harm), chấm mức độ nghiêm trọng theo thang 0-6, kèm <em>Prompt Shields</em> chặn injection + <em>groundedness detection</em>; Amazon Bedrock Guardrails tương tự trên AWS</td></tr>
+<tr><td>Bộ bảo mật lớn, gộp guardrail qua M&amp;A 2024-2025</td><td>Guardrail chỉ là 1 module trong bộ sản phẩm bảo mật rộng hơn, không chuyên biệt LLM ngay từ đầu</td><td>Thị trường đổi tên/chủ sở hữu nhanh qua M&amp;A — điểm cần nhớ là nhóm này TỒN TẠI (không chỉ có 2 nhóm trên), không cần nhớ tên cụ thể vì dễ lỗi thời</td></tr>
+<tr><td>Chuyên biệt đúng 1 loại rủi ro</td><td>Không làm guardrail toàn diện, chỉ giải quyết 1 lớp rủi ro hẹp nhưng sâu</td><td><strong>Presidio</strong> (Microsoft) — chuyên PII: regex cho pattern cố định (số thẻ tín dụng, email) + NER (nhận diện thực thể) cho tên người/địa chỉ không có pattern cố định</td></tr>
+</table>
+<p>Điểm chung của các nền tảng guardrail mạnh nhất 2026: <strong>dual-stage validation</strong> — luôn kiểm cả input lẫn output, không chỉ 1 chiều. Nhiều nền tảng còn đóng vai trò "gateway" đặt trước nhiều guardrail provider khác nhau cùng lúc (VD Bifrost — gateway mã nguồn mở tích hợp sẵn AWS Bedrock, Azure Content Safety...), cho phép đổi nhà cung cấp guardrail mà không phải đổi code gọi.</p>
+
+<h3>6. Guardrail bị vượt qua — số liệu thật 2026, không phải rủi ro lý thuyết</h3>
+<p>Guardrail runtime KHÔNG phải lớp phòng thủ bất khả xâm phạm. Số liệu 2026 cho thấy mức độ nghiêm trọng thật <em>(verify 2026-09 — số liệu biến động nhanh theo từng nghiên cứu/model cụ thể)</em>:</p>
+<ul>
+<li>1 nghiên cứu công bố trên Nature Communications 2026 đo được tỷ lệ tấn công thành công (attack success rate) lên tới <strong>~97%</strong> trên 1 số model mục tiêu cụ thể, dùng kỹ thuật tấn công tối ưu tự động.</li>
+<li>1 nghiên cứu khác báo cáo vượt qua được <strong>6 hệ thống thương mại</strong> (bao gồm sản phẩm của Microsoft và Meta), đạt <strong>100% tỷ lệ né tránh</strong> (evasion) trong 1 số trường hợp cụ thể.</li>
+</ul>
+<p>Nhóm kỹ thuật bypass phổ biến 2026: role-play (đóng vai để "quên" luật), encoding (mã hoá câu hỏi để né bộ lọc từ khoá), multi-turn drift (trôi dần qua nhiều lượt hội thoại thay vì tấn công trực diện 1 lượt), và injection gián tiếp (xem thêm <a href="R10_4_prompt_injection_defenses.html">R10.4</a>). Không kỹ thuật đơn lẻ nào trong 3 loại đã học ở mục 2-4 miễn nhiễm hoàn toàn với TẤT CẢ các nhóm bypass này — đây chính là lý do khuyến nghị chung 2026 luôn là <strong>defense-in-depth</strong>: kết hợp model alignment (Constitutional AI, <code>L8_5</code>) + system-prompt design + guardrail runtime + red-team liên tục, không lớp nào một mình là đủ.</p>
+
+<h3>7. Kết hợp nhiều guardrail SẢN PHẨM theo tầng chi phí — khác "input/output rail" đã học ở R6.7</h3>
+<p><em>(Phân biệt rõ với <a href="R6_7_design_patterns.html">R6.7 mục 5</a>: R6.7 dạy PATTERN kiến trúc chung "input rail/output rail + cơ chế tripwire + chạy song song hay chặn trước" — áp dụng cho BẤT KỲ guardrail nào, ở bất kỳ dự án nào. Mục này hẹp và cụ thể hơn: khi đã chọn xong nhiều loại guardrail cụ thể ở mục 2-4/5 của TRANG NÀY, xếp chúng theo THỨ TỰ nào cho tối ưu chi phí vận hành ở quy mô traffic lớn?)</em></p>
+<p>Nguyên tắc cascading rẻ→đắt (giống cách CDN cache đứng trước database — chặn phần lớn truy vấn ở lớp rẻ, chỉ phần khó mới chạm lớp đắt phía sau):</p>
+<pre><code>Request vào ──▶ [Llama Guard — rẻ, nhanh, tự host]  ──an toàn──▶ LLM chính xử lý
+                        │
+                  nghi ngờ/unsafe
+                        │
+                        ▼
+              [Constitutional Classifiers++ — đắt hơn,
+               suy luận sâu "tinh thần hiến pháp" — mục 4]  ──an toàn thật──▶ cho qua
+                        │
+                    xác nhận vi phạm
+                        │
+                        ▼
+                  Từ chối trả lời + ghi log
+</code></pre>
+<p>Lý do xếp Llama Guard TRƯỚC Constitutional Classifiers++, không phải ngược lại: Llama Guard rẻ (tự host, 1 model nhỏ) và xử lý được phần lớn traffic (đa số request vô hại, phân loại nhanh là đủ) — chỉ escalate lên lớp đắt hơn (R&amp;D cost cao — mục 4) cho phần THIỂU SỐ request đáng ngờ. Đảo ngược thứ tự sẽ lãng phí — tốn overhead suy luận cao cho cả những request vô hại rõ ràng mà lớp rẻ đã đủ sức lọc.</p>
+<p>NeMo Guardrails (mục 2) không nằm trong chuỗi cascading trên vì nó giải quyết bài toán KHÁC hẳn — kiểm soát LUỒNG hội thoại nhiều lượt (dialog rail), không phải phân loại an toàn 1 nội dung đơn lẻ; nó thường chạy song song ở tầng dialog management, không phải 1 bước tuần tự trong chuỗi input/output safety filter.</p>
+<p><strong>Worked example minh hoạ (số tự dựng để thấy trực giác, không phải benchmark thật)</strong>: giả sử 100.000 request/ngày, 95% được Llama Guard xác nhận an toàn ngay ở lớp rẻ, chỉ 5.000 request (5%) cần escalate lên Constitutional Classifiers++ đắt hơn. Nếu KHÔNG cascading — chạy thẳng Constitutional Classifiers++ cho toàn bộ 100.000 request thay vì chỉ 5.000 — tổng khối lượng tính toán ở lớp đắt tăng gấp 100.000/5.000 = <strong>20 lần</strong>. Đây là lý do thứ tự rẻ→đắt trong chuỗi cascading không phải chi tiết vặt — nó quyết định trực tiếp chi phí vận hành ở quy mô traffic lớn.</p>
+<p>Khung quyết định — không phải lúc nào cũng cần cascading nhiều tầng:</p>
+<table>
+<tr><th>Quy mô traffic</th><th>Nên dùng</th><th>Vì sao</th></tr>
+<tr><td>Thấp (VD 1 skill nội bộ, &lt;1,000 request/ngày)</td><td>1 lớp duy nhất (QA gate Python hoặc Llama Guard) — như <code>predictor</code> hiện tại</td><td>Chi phí vận hành thêm 1 tầng cascading không bù được lợi ích khi tổng traffic vốn đã nhỏ</td></tr>
+<tr><td>Trung bình (traffic có thể tăng, nhiều luồng LLM-facing)</td><td>2 tầng — lớp rẻ (Llama Guard) trước, lớp đắt chỉ khi nghi ngờ</td><td>Cân bằng chi phí/độ an toàn, đúng sơ đồ cascading ở trên</td></tr>
+<tr><td>Cao (vendor-scale, hàng triệu request/ngày, rủi ro pháp lý lớn)</td><td>3+ tầng — thêm Constitutional Classifiers++ hoặc tương đương ở lớp cuối</td><td>Chi phí R&amp;D lớp đắt nhất chỉ hợp lý khi chia đều được cho traffic khổng lồ (mục 4)</td></tr>
+</table>
+
+<h3>8. Đánh giá guardrail trước khi chọn — 1 con số "chặn được X%" luôn cần hỏi "đo trên tập nào"</h3>
+<p>Mục 4.2 đã có 1 con số over-refusal (0.38%) và mục 6 đã có 1 con số bypass (~97% attack success rate). Nhìn thoáng qua, 2 con số này có vẻ MÂU THUẪN — "guardrail an toàn tới 99.62%" (100% − 0.38%) nghe khó khớp với "97% tấn công thành công". Không mâu thuẫn — vì chúng đo trên <strong>2 TẬP DỮ LIỆU khác hẳn nhau</strong>, đúng kiểu lỗi hay gặp khi đọc số liệu guardrail:</p>
+<table>
+<tr><th>Tập kiểm thử</th><th>Đặc điểm</th><th>Guardrail thường đạt</th></tr>
+<tr><td>Traffic thật hàng ngày (đa số vô hại)</td><td>Câu hỏi bình thường, không có ý đồ tấn công</td><td>Tỷ lệ chặn nhầm (over-refusal) thấp — con số mục 4.2 (0.38%/0.05%) đo Ở ĐÂY</td></tr>
+<tr><td>Tập jailbreak đã biết (JailbreakBench, HarmBench...)</td><td>Kỹ thuật tấn công CŨ, guardrail đã "học" cách nhận diện</td><td>Recall cao — vì đây đúng loại tấn công guardrail được huấn luyện để chặn</td></tr>
+<tr><td>Tấn công tối ưu riêng cho ĐÚNG guardrail đó (adversarial, mục 6)</td><td>Kẻ tấn công có quyền truy cập guardrail, tối ưu prompt CHUYÊN BIỆT để né đúng nó</td><td>Recall thấp — con số ~97% ASR mục 6 đo Ở ĐÂY, không phải traffic thường ngày</td></tr>
+</table>
+<p><strong>Worked example — dựng lại 1 ma trận nhầm lẫn (confusion matrix) đơn giản</strong>, giả sử guardrail X được kiểm thử trên 2 tập tách biệt (số minh hoạ, không phải benchmark thật):</p>
+<pre><code>Tập 1 — 9,000 prompt BÌNH THƯỜNG (benign) + 1,000 prompt JAILBREAK ĐÃ BIẾT (không tối ưu riêng):
+  - Benign bị chặn nhầm: 9,000 × 0.38% ≈ 34 prompt   (false positive — over-refusal, mục 4.2)
+  - Jailbreak đã biết bị bỏ lọt: 1,000 × 5% = 50 prompt (false negative — recall ≈ 95% trên tập NÀY)
+  → Nhìn thoáng: guardrail "khá tốt" (95% recall, <1% over-refusal)
+
+Tập 2 — 50 prompt TẤN CÔNG TỐI ƯU RIÊNG cho guardrail X (adversarial, mục 6):
+  - Bị bỏ lọt: 50 × 97% ≈ 48-49 prompt              (false negative — recall chỉ ≈ 3%)
+  → Cùng 1 guardrail X, đo trên tập ADVERSARIAL lại gần như VÔ DỤNG
+
+→ Kết luận: "guardrail X chặn được 95%" và "guardrail X bị vượt qua 97%" CÙNG ĐÚNG,
+  không mâu thuẫn — vì là 2 câu trả lời cho 2 câu hỏi khác nhau (đo trên tập tấn công
+  ĐÃ BIẾT hay tập tấn công TỐI ƯU RIÊNG cho chính guardrail đó).</code></pre>
+<p>Bài học thực dụng khi so sánh sản phẩm guardrail (mục 5) trước khi mua/tích hợp: luôn hỏi vendor "con số recall/precision này đo trên tập dữ liệu nào" trước khi tin 1 con số marketing duy nhất — đúng tinh thần đã học ở phương pháp red-teaming (<code>L5_6_safety.html §7.5</code>), áp riêng cho việc CHỌN guardrail thay vì đánh giá 1 model.</p>
+
+<h3>9. Guardrail multimodal — mục 3 (Llama Guard) mới chỉ nói về text, thực tế 2026 phải chặn cả ảnh</h3>
+<p>Mục 3 mô tả Llama Guard như bộ phân loại đọc TEXT. Thực tế: input LLM 2026 ngày càng đa phương thức (multimodal — ảnh chụp màn hình, ảnh chèn injection, tài liệu scan) — 1 guardrail chỉ đọc text sẽ bỏ lọt hoàn toàn nội dung độc hại giấu trong ảnh. <strong>Llama Guard 4</strong> (Meta) giải quyết đúng khoảng trống này: 12B tham số, kiến trúc <em>early fusion transformer</em> (hợp nhất token text và ảnh NGAY TỪ ĐẦU pipeline, không xử lý 2 luồng riêng rồi ghép lại cuối), được "tỉa" (pruned) từ chính Llama 4 Scout rồi fine-tune lại cho tác vụ an toàn — huấn luyện ĐỒNG THỜI trên text lẫn nhiều ảnh cùng lúc, tiếp tục dùng taxonomy hazards chuẩn hoá MLCommons đã áp dụng từ Llama Guard 3 (không phải điểm mới của riêng bản 4 — điểm mới thật của bản 4 là kênh ảnh + early fusion, không phải taxonomy).</p>
+<p>Điểm cần nhớ khi so guardrail multimodal với guardrail text-only (mục 3): Llama Guard 4 phân loại được cả <strong>input</strong> (prompt có ảnh độc hại không) lẫn <strong>output</strong> (câu trả lời LLM sinh ra, dù chỉ là text, có vi phạm không) — cùng 1 model, khác Llama Guard 3 ở việc THÊM được kênh ảnh mà vẫn giữ hiệu năng tương đương trên text thuần (không đánh đổi chất lượng text để lấy khả năng đọc ảnh). Đây là hướng phát triển tất yếu của mọi guardrail runtime khi LLM chính nó chuyển sang đa phương thức — 1 guardrail chỉ lọc text sẽ dần trở thành lớp phòng thủ có LỖ HỔNG CẤU TRÚC (không phải lỗi vá được, mà là do thiết kế chỉ nhìn 1 phần input) khi model chính đã xử lý được ảnh/audio.</p>
+<table>
+<tr><th></th><th>Llama Guard 3</th><th>Llama Guard 4</th></tr>
+<tr><td>Kênh input đọc được</td><td>Chỉ text</td><td>Text + nhiều ảnh cùng lúc</td></tr>
+<tr><td>Kiến trúc</td><td>Model text thuần</td><td>Early fusion transformer, tỉa từ Llama 4 Scout</td></tr>
+<tr><td>Taxonomy vi phạm</td><td>Chuẩn hoá theo MLCommons hazards taxonomy (từ bản 3, không phải điểm mới của bản 4)</td><td>Cùng taxonomy MLCommons như bản 3 — điểm mới thật của bản 4 là kênh ảnh, không phải taxonomy</td></tr>
+<tr><td>Hiệu năng trên text thuần</td><td>Baseline</td><td>Tương đương/nhỉnh hơn — không đánh đổi để lấy khả năng đọc ảnh</td></tr>
+</table>
+
+<h3>10. Vòng đời guardrail sau khi triển khai — không phải "cấu hình 1 lần rồi để yên"</h3>
+<p><em>(Khác <code>R5_4_prompt_engineering.html §4</code> — trang đó versioning cho PROMPT TEXT; mục này versioning cho RULE/NGƯỠNG của guardrail — luồng Colang, danh mục vi phạm Llama Guard, ngưỡng nhạy cảm Constitutional Classifiers — 1 loại artifact khác, cùng nguyên tắc "đổi gì cũng cần regression test" nhưng áp cho tầng khác.)</em></p>
+<p>Guardrail không phải cấu hình xong 1 lần là xong — kẻ tấn công liên tục tìm bypass mới (mục 6), và mỗi lần siết luật để chặn 1 kỹ thuật mới đều có nguy cơ tăng over-refusal (mục 4.2/8) cho traffic vô hại. Vòng đời đúng cần 1 pipeline riêng, tương tự CI/CD cho code:</p>
+<table>
+<tr><th>Giai đoạn</th><th>Việc phải làm</th><th>Rủi ro nếu bỏ qua</th></tr>
+<tr><td>Golden regression set</td><td>Giữ 1 tập cố định gồm cả prompt vô hại (chống over-refusal drift) lẫn prompt tấn công đã biết (chống recall drift)</td><td>Không phát hiện được lần sửa rule tiếp theo có làm hỏng lần sửa trước hay không</td></tr>
+<tr><td>CI gate trước khi đổi rule</td><td>Chạy lại toàn bộ golden set mỗi khi sửa Colang flow/ngưỡng classifier, so sánh với baseline</td><td>1 rule mới chặn được tấn công X nhưng âm thầm tăng over-refusn cho nhóm câu hỏi Y — không ai biết cho tới khi user report</td></tr>
+<tr><td>Canary rollout</td><td>Áp rule mới cho 1 phần nhỏ traffic thật trước, so sánh tỷ lệ chặn/từ chối với baseline đang chạy</td><td>Rule mới có lỗi logic hiếm gặp chỉ lộ ra ở traffic thật, không lộ ra ở golden set tĩnh</td></tr>
+<tr><td>Giám sát drift liên tục</td><td>Theo dõi tỷ lệ over-refusal/tỷ lệ chặn theo thời gian, không chỉ đo 1 lần lúc triển khai</td><td>Hành vi user đổi dần (ngôn ngữ, chủ đề mới) khiến rule cũ dần lỗi thời mà không ai nhận ra ngay</td></tr>
+</table>
+<pre><code>Sửa 1 Colang flow / ngưỡng classifier
+        │
+        ▼
+[Golden regression set — benign + known-attack, CHẠY LẠI TOÀN BỘ]
+        │
+   Pass cả 2 phía (không tăng over-refusal, không giảm recall)?
+        │YES                              │NO
+        ▼                                  ▼
+[Canary rollout — % nhỏ traffic thật]   Sửa lại, KHÔNG merge
+        │
+   Ổn định qua ngưỡng thời gian định trước?
+        │YES                              │NO
+        ▼                                  ▼
+   Rollout toàn bộ                    Rollback, điều tra
+        │
+        ▼
+[Giám sát drift liên tục — không dừng lại sau khi rollout xong]</code></pre>
+<p>Liên hệ thật <code>predictor</code>: <code>llm_qa_checklist.py</code> (đã nhắc ở evidence-box dưới) đã tự nhiên đi đúng 1 phần vòng đời này — check <code>C22</code>-<code>C25</code> thêm ngày 2/8/2026 cho <code>llm_deep_view</code> là 1 lần "đổi rule guardrail" thật; đúng kỷ luật ở đây, mọi lần thêm check mới nên chạy lại các check <code>C1</code>-<code>C21</code> cũ trên các report gần nhất để xác nhận check mới không vô tình đổi hành vi các check cũ đã ổn định — dù dự án hiện tại quy mô nhỏ nên bước "canary rollout %" chưa cần thiết (mọi report đều được review thủ công trước publish).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Để thấy con số phần trăm ở trên có ý nghĩa gì thật, giả sử 1 hệ thống LLM xử lý <strong>10,000 request/ngày</strong>:</p>
+<pre><code>Với Constitutional Classifiers bản gốc (0.38% over-refusal):
+  10,000 × 0.38% = 38 request/ngày bị TỪ CHỐI NHẦM dù vô hại
+  → 38 người dùng thật/ngày gặp trải nghiệm xấu vì hệ thống "quá cẩn thận"
+
+Với bản ++ (0.05% over-refusal):
+  10,000 × 0.05% = 5 request/ngày bị từ chối nhầm
+  → giảm từ 38 xuống 5 người dùng bị ảnh hưởng — hơn 7 lần ít hơn
+
+Overhead suy luận — nếu baseline model trả lời trong 2.0 giây:
+  Bản gốc (+23.7%): 2.0 × 1.237 = 2.47 giây/request
+  Bản ++ (giảm ~8× overhead so hệ 2 giai đoạn): overhead gần như không đáng kể
+    → gần như giữ nguyên tốc độ 2.0 giây, khác biệt trải nghiệm không đáng kể
+</code></pre>
+<p><strong>Insight từ ví dụ số này</strong>: 1 con số phần trăm nhỏ (0.38% → 0.05%) nghe "không đáng kể" nhưng ở quy mô hàng chục nghìn request/ngày, chênh lệch là hàng chục người dùng thật bị ảnh hưởng mỗi ngày. Đây là lý do các công ty lớn đầu tư R&amp;D riêng để tối ưu guardrail, không chỉ chấp nhận trade-off mặc định.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>NeMo Guardrails</th><th>Llama Guard</th><th>Constitutional Classifiers(++)</th></tr>
+<tr><td>Bản chất</td><td>Framework + DSL (Colang)</td><td>Classifier model mở, tự host</td><td>Classifier huấn luyện từ "hiến pháp"</td></tr>
+<tr><td>Kiểm soát</td><td>Chi tiết, lập trình từng rail</td><td>Nhị phân safe/unsafe + category</td><td>Input/output filter, tối ưu chi phí cao</td></tr>
+<tr><td>Cần viết luật thủ công?</td><td>Có — Colang cho từng luồng</td><td>Không — model tự nhận diện</td><td>Không — suy luận từ tinh thần "hiến pháp"</td></tr>
+<tr><td>Chi phí triển khai</td><td>Trung bình (cần học Colang)</td><td>Thấp (tự host model mở)</td><td>Rất cao (chỉ hợp lý ở quy mô lớn, cần R&amp;D riêng)</td></tr>
+<tr><td>Phù hợp quy mô</td><td>Doanh nghiệp cần compliance chi tiết, agent nhiều lượt</td><td>Team nhỏ-vừa, cần chặn nội dung nguy hiểm cơ bản</td><td>Vendor lớn (Anthropic-scale), traffic khổng lồ</td></tr>
+<tr><td>Khác CAI (<code>L8_5</code>) thế nào</td><td>Không liên quan CAI</td><td>Không liên quan CAI</td><td><strong>Cùng gốc triết lý "hiến pháp" nhưng ứng dụng runtime, không phải training</strong></td></tr>
+<tr><td>Hỗ trợ multimodal (mục 9)?</td><td>Không (chỉ điều phối luồng text)</td><td>Có — Llama Guard 4, early fusion text+ảnh</td><td>Chưa công bố rõ (Anthropic chưa mở public multimodal Constitutional Classifiers)</td></tr>
+<tr><td>Nhóm tooling (mục 5)</td><td>Framework mã nguồn mở, tự lắp ráp</td><td>Framework mã nguồn mở, tự lắp ráp (model mở)</td><td>Không public sản phẩm độc lập — nội bộ Anthropic-scale</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> hiện tại có đúng 1 luồng LLM-facing thật: skill <code>daily-investor-report</code> sinh thesis đầu tư. Guardrail runtime đang tồn tại ở đây KHÔNG phải NeMo/Llama Guard/Constitutional Classifiers — mà là 1 QA gate thủ công: <code>.claude/skills/daily-investor-report/scripts/llm_qa_checklist.py</code>, với 25 check (<code>C1</code> đến <code>C25</code> tính đến nay, liên tục được thêm mới — VD <code>C22</code>-<code>C25</code> thêm 2/8/2026 cho <code>llm_deep_view</code>) chạy SAU khi LLM sinh output, đóng đúng vai trò 1 <strong>output rail</strong> đơn giản (giống khái niệm output rail của NeMo Guardrails, nhưng viết bằng Python thuần thay vì Colang).</p>
+<p>Cụ thể: <code>C13_llm_independence</code> quét fail nếu thesis chứa các field cấm (<code>combined_score</code>, <code>ai_signal</code>, <code>ai_conf</code>, <code>mf_score</code>, <code>verdict_template</code>...); <code>C14_anti_template_detection</code> chặn thesis bị "làm giả" bằng template Python; <code>C10_price_sanity</code> chặn số liệu giá bất hợp lý. Quy mô hiện tại (1 skill, traffic thấp, vận hành thủ công theo lịch) chưa cần đầu tư framework phức tạp — QA gate Python đủ đóng vai trò guardrail ở quy mô này.</p>
+<p><strong>Đường mở rộng hợp lý nếu LLM-facing traffic tăng</strong>: bước tiếp theo tự nhiên là <strong>Llama Guard</strong> (nhẹ, tự host, không cần học DSL riêng) — không nên nhảy thẳng lên NeMo Guardrails (chi phí học Colang không tương xứng với quy mô 1 skill) hay tự xây Constitutional Classifiers (R&amp;D cost chỉ hợp lý ở quy mô Anthropic-scale).</p>
+<p><strong>Áp mục 9 vào <code>predictor</code></strong>: input LLM hiện tại 100% là text (số liệu JSON — giá, RSI, volume, tin tức thô — đúng whitelist đã học ở <a href="R10_4_prompt_injection_defenses.html">R10.4</a>), không có ảnh — nên khoảng trống "guardrail text-only bỏ lọt nội dung độc hại trong ảnh" (mục 9) <strong>chưa áp dụng</strong> ở trạng thái hiện tại. Đáng theo dõi lại nếu pipeline tương lai đưa ảnh biểu đồ nến (candlestick chart) trực tiếp vào ngữ cảnh LLM (khác với việc chỉ CHỤP chart để lưu file, không đưa vào prompt) — khi đó QA gate <code>llm_qa_checklist.py</code> hiện tại (chỉ kiểm text) sẽ có đúng lỗ hổng cấu trúc mục 9 mô tả.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<ol>
+<li><strong>Nhầm Constitutional AI (training-time) với Constitutional Classifiers (runtime)</strong> — nghe tên giống nhau, dùng chung ý tưởng gốc, nhưng là 2 kỹ thuật khác nhau, không thể thay thế nhau khi trả lời phỏng vấn hoặc thiết kế hệ thống.</li>
+<li><strong>Coi guardrail runtime là "đủ" thay cho an toàn training-time</strong> — thực tế 2 tầng bổ sung nhau: model càng an toàn từ training (CAI) thì guardrail runtime càng ít phải chặn nhầm.</li>
+<li><strong>Nhảy thẳng lên framework phức tạp (NeMo Guardrails) khi quy mô còn nhỏ</strong> — chi phí học Colang + duy trì luồng không tương xứng nếu chỉ có 1-2 luồng LLM cần bảo vệ; QA gate Python đơn giản có thể đủ.</li>
+<li><strong>Đánh giá guardrail chỉ bằng 1 con số (VD "chặn được 99% tấn công") mà bỏ qua over-refusal</strong> — 1 guardrail chặn tuyệt đối mọi thứ khả nghi thường kèm tỷ lệ từ chối nhầm cao, làm hỏng trải nghiệm người dùng thật.</li>
+<li><strong>Tin rằng đã lắp 1 guardrail (bất kỳ loại nào ở mục 2-4) là an toàn tuyệt đối</strong> — số liệu bypass thật 2026 (mục 6, tới ~97% attack success rate trên 1 số model) cho thấy không guardrail đơn lẻ nào miễn nhiễm; luôn cần defense-in-depth nhiều lớp, không dừng lại ở 1 guardrail.</li>
+<li><strong>Chạy guardrail đắt (Constitutional Classifiers++) cho TOÀN BỘ traffic thay vì cascading rẻ→đắt (mục 7)</strong> — lãng phí tính toán nhiều lần so với chỉ escalate phần traffic đáng ngờ lên lớp đắt.</li>
+<li><strong>Dùng guardrail text-only (Llama Guard 3 hoặc cũ hơn) khi model chính đã nhận input ảnh/đa phương thức</strong> — mục 9: đây là lỗ hổng cấu trúc, không phải lỗi vá được, vì guardrail đơn giản KHÔNG NHÌN THẤY nội dung ẩn trong ảnh.</li>
+<li><strong>Sửa rule/ngưỡng guardrail trực tiếp trên production, không qua golden regression set (mục 10)</strong> — không phát hiện được lần sửa mới có âm thầm phá lần sửa cũ (tăng over-refusal hoặc giảm recall) hay không.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được vì sao Constitutional AI (training-time) và Constitutional Classifiers (runtime) không thể thay thế nhau, dù dùng chung ý tưởng "hiến pháp".</li>
+<li>Kể đúng bản chất 3 loại guardrail: NeMo Guardrails = framework + Colang, Llama Guard = classifier model mở, Constitutional Classifiers++ = classifier huấn luyện từ hiến pháp, tối ưu chi phí cao.</li>
+<li>Tính được số request bị ảnh hưởng khi biết % over-refusal và traffic/ngày (như ví dụ 10,000 request/ngày ở trên).</li>
+<li>Chỉ ra đúng file thật đóng vai trò guardrail trong <code>predictor</code> hiện tại (<code>llm_qa_checklist.py</code>, check <code>C13</code>/<code>C14</code>) và giải thích vì sao chưa cần NeMo/Llama Guard ở quy mô này.</li>
+<li>Xếp đúng NeMo Guardrails/Llama Guard/Constitutional Classifiers vào 4 nhóm tooling thị trường 2026 (mục 5) và kể thêm được ít nhất 2 sản phẩm khác (Azure AI Content Safety, Presidio, Guardrails AI...).</li>
+<li>Trích được số liệu bypass thật 2026 (mục 6) và giải thích được vì sao thứ tự cascading rẻ→đắt (mục 7) tiết kiệm chi phí so với chạy guardrail đắt cho toàn bộ traffic.</li>
+<li>Giải thích được vì sao "chặn 95%" và "bị vượt qua 97%" có thể CÙNG ĐÚNG cho 1 guardrail (mục 8) — vì đo trên 2 tập dữ liệu khác nhau, không mâu thuẫn.</li>
+<li>Giải thích được vì sao guardrail text-only trở thành lỗ hổng cấu trúc khi model chính đã multimodal (mục 9), và nêu đúng cơ chế Llama Guard 4 (early fusion, 12B, pruned từ Llama 4 Scout).</li>
+<li>Vẽ lại được vòng đời CI/CD cho guardrail (mục 10: golden set → CI gate → canary → giám sát drift) và phân biệt được với versioning prompt text (<code>R5_4</code>) — 2 loại artifact khác nhau.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R9_8_automated_prompt_engineering.html">← R9.8 · Automated Prompt Engineering</a>
+  <a href="R10_2_sandboxing.html">R10.2 · Sandboxing →</a>
+</div>
+
+</div>
+</body>
+</html>

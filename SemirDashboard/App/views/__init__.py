@@ -1,4 +1,5 @@
 from .home import home, formulas_page
+from .guideline import guideline_view
 from .upload import (
     upload_customers, upload_sales, upload_coupons, upload_used_points,
     upload_sale_detail, upload_inventory,
@@ -27,6 +28,7 @@ from . import auth, users
 __all__ = [
     "home",
     "formulas_page",
+    "guideline_view",
     "upload_customers",
     "upload_sales",
     "upload_coupons",

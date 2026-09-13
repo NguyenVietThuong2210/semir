@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R1.2 · Bash — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Coding Fundamentals · Điểm 2/6</div>
+  <h1>R1.2 · Bash — lớp keo (glue layer) vận hành hệ thống</h1>
+  <p class="subtitle">Không tính toán gì phức tạp, nhưng là công cụ đầu tiên bạn chạm vào khi debug production và khi CI quyết định pass/fail 1 PR.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Chạy đúng lệnh <code>docker exec</code> để lấy trạng thái hệ thống hiện tại, theo đúng pattern <code>CLAUDE.md</code> yêu cầu.</li>
+<li>Giải thích được vì sao Bash so sánh số phải dùng <code>-gt</code>/<code>-lt</code> chứ không dùng <code>&gt;</code>/<code>&lt;</code>.</li>
+<li>Đọc hiểu 1 step trong <code>.github/workflows/ci.yml</code> và nói được nó pass/fail dựa vào cái gì (exit code).</li>
+<li>Viết được 1 điều kiện kiểm tra file/số trong Bash không mắc lỗi quoting.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Không cần biết Python trước để học phần này, nhưng hiểu Python (R1.1) giúp thấy rõ hơn sự khác biệt "ngôn ngữ tính toán" (Python) vs "ngôn ngữ ra lệnh" (Bash).</p>
+<p>Độ khó: <strong>Dễ</strong>. Bash không có khái niệm phức tạp như GIL hay Big-O — cái khó duy nhất là <em>mọi thứ đều là chuỗi ký tự (string)</em>, dẫn đến vài "bẫy" cú pháp cần nhớ.</p>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Nếu Python là "não" của hệ thống (tính toán), Bash là "tay chân" — nó không nghĩ, chỉ ra lệnh: khởi động container nào, chạy script nào, kiểm tra log ở đâu.</p>
+<p>Dự án này chạy trên Docker + Windows/PowerShell ở máy phát triển, nên phần lớn "Bash" thực tế là lệnh gọi <em>vào bên trong</em> 1 container Linux đã build sẵn, qua <code>docker exec</code> — giống như bạn đứng ngoài cửa gọi điện thoại vào trong nhà máy, thay vì tự tay vặn từng con ốc.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>Bước 1 — Khái niệm nền: shell, pipe, exit code (dễ)</h3>
+<p>Bash là 1 <strong>shell</strong> — chương trình nhận lệnh gõ vào, chạy chương trình khác, trả kết quả ra màn hình. 3 khái niệm nền cần nhớ trước khi đọc bất kỳ script nào:</p>
+<table>
+<tr><th>Khái niệm</th><th>Ý nghĩa</th><th>Ví dụ</th></tr>
+<tr><td>Pipe <code>|</code></td><td>Nối output của lệnh trước làm input lệnh sau</td><td><code>docker logs api --tail 200 | grep -i error</code></td></tr>
+<tr><td>Redirect <code>&gt;</code></td><td>Ghi output ra file thay vì màn hình</td><td><code>python script.py &gt; out.log</code></td></tr>
+<tr><td>Exit code</td><td>Số nguyên 0-255 mỗi lệnh trả về khi kết thúc — <strong>0 = thành công</strong>, khác 0 = lỗi</td><td><code>$?</code> chứa exit code của lệnh vừa chạy</td></tr>
+</table>
+<p>Exit code là khái niệm sống còn: toàn bộ CI/CD (GitHub Actions) không "đọc hiểu" log — nó chỉ nhìn exit code của mỗi step. Step nào trả về khác 0, cả job fail ngay, các step sau (mặc định) không chạy.</p>
+
+<h3>Bước 2 — Bẫy cú pháp: mọi thứ là string</h3>
+<p>Bash không có kiểu số nguyên/chuỗi tách biệt như Python — biến luôn là chuỗi ký tự cho tới khi 1 lệnh cụ thể diễn giải nó thành số.</p>
+<pre><code># SAI — dùng > để so sánh số, Bash hiểu đây là REDIRECT, không phải so sánh!
+if [ "$SIZE" > 10 ]; then echo "quá lớn"; fi
+# Lệnh trên thực ra tạo (hoặc ghi đè) 1 file tên "10" — không so sánh gì cả.
+
+# ĐÚNG — dùng -gt (greater than) cho so sánh SỐ trong POSIX test
+if [ "$SIZE" -gt 10 ]; then echo "quá lớn"; fi</code></pre>
+<p>Bảng toán tử so sánh số trong <code>[ ]</code> (POSIX <code>test</code>):</p>
+<table>
+<tr><th>Toán tử</th><th>Ý nghĩa</th></tr>
+<tr><td><code>-eq</code> / <code>-ne</code></td><td>bằng / khác</td></tr>
+<tr><td><code>-gt</code> / <code>-lt</code></td><td>lớn hơn / nhỏ hơn</td></tr>
+<tr><td><code>-ge</code> / <code>-le</code></td><td>lớn hơn hoặc bằng / nhỏ hơn hoặc bằng</td></tr>
+</table>
+
+<h3>Bước 3 — Quoting: vì sao luôn cần <code>"$VAR"</code></h3>
+<p>Nếu biến chứa khoảng trắng và bạn không đặt trong dấu ngoặc kép, Bash tách nó thành nhiều "từ" riêng (word splitting) — rất dễ gây lỗi khó hiểu.</p>
+<pre><code>FILE="report final.html"
+
+# SAI — không quote, Bash coi đây là 2 tham số riêng: "report" và "final.html"
+rm $FILE          # cố xoá file tên "report" VÀ file tên "final.html" — cả 2 đều không tồn tại!
+
+# ĐÚNG — quote giữ nguyên biến là 1 chuỗi duy nhất
+rm "$FILE"        # xoá đúng 1 file "report final.html"</code></pre>
+<p><strong>Quy tắc thực dụng</strong>: luôn bọc biến trong <code>"..."</code> trừ khi bạn cố tình muốn word-splitting (hiếm khi cần).</p>
+
+<h3>Bước 4 — Idiom production thật của dự án: status script</h3>
+<p><code>CLAUDE.md</code> quy định: <em>"Before assuming anything about current AI Trader state, run <code>docker exec predictor-api-1 python scripts/ai_trader_status.py</code>"</em> — tương tự với <code>ai_predict_status.py</code>. Đây là idiom production-grade: <strong>1 lệnh, 1 nguồn sự thật</strong>, thay vì tự suy luận từ đọc code cũ (code cũ trôi/lỗi thời rất nhanh).</p>
+<pre><code># Idiom thật đang dùng — chạy 1 script Python BÊN TRONG container đã build,
+# thay vì cài lại toàn bộ dependency trên máy host Windows
+docker exec predictor-api-1 python scripts/ai_predict_status.py
+
+# Vì sao không chạy trực tiếp trên host?
+# → Container đã có đúng Python 3.12, đúng connection string nội bộ
+#   Docker network (postgres:5432, KHÔNG PHẢI localhost), đúng
+#   dependency đã pin trong requirements.txt. Chạy ngoài host dễ lệch version.</code></pre>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Đoạn Bash thật trong <code>.github/workflows/ci.yml</code> (dòng 80-86) — kiểm tra kích thước bundle frontend sau build:</p>
+<pre><code>- name: Check bundle size
+  run: |
+    SIZE=$(du -sm dist/ | cut -f1)
+    echo "Bundle size: ${SIZE}MB"
+    if [ "$SIZE" -gt 10 ]; then
+      echo "::warning::Bundle exceeds 10MB — consider code splitting"
+    fi</code></pre>
+<p>Đọc từng dòng: <code>du -sm dist/</code> đo dung lượng thư mục <code>dist/</code> (đơn vị MB) → <code>cut -f1</code> lấy cột số → gán vào biến <code>SIZE</code> qua <code>$(...)</code> (command substitution) → so sánh bằng <code>-gt</code> đúng chuẩn số → nếu vượt 10MB, in cảnh báo (không fail build, chỉ warning).</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Idiom</th><th>Ví dụ</th><th>Vì sao quan trọng</th></tr>
+<tr><td>Pipe + filter log</td><td><code>docker logs predictor-api-1 --tail 200 | grep -i error</code></td><td>Debug production không có debugger gắn trực tiếp — log là công cụ chính</td></tr>
+<tr><td>Exit code check</td><td><code>python scripts/check.py; if [ $? -ne 0 ]; then echo "FAIL"; fi</code></td><td>CI/CD sống chết bằng exit code, không phải "trông có vẻ ổn"</td></tr>
+<tr><td>Command substitution</td><td><code>SIZE=$(du -sm dist/ | cut -f1)</code></td><td>Lưu output 1 lệnh vào biến để dùng tiếp</td></tr>
+<tr><td>Quote biến</td><td><code>rm "$FILE"</code> thay vì <code>rm $FILE</code></td><td>Tránh word-splitting khi giá trị có khoảng trắng</td></tr>
+<tr><td>Idempotent script</td><td><code>backend/db_migrations.py</code> chạy qua runner, không phải <code>ALTER TABLE</code> tay</td><td>1 lần <code>ALTER TABLE</code> thủ công từng làm hỏng <code>prediction_log</code> 8+ ngày (xem R1.5 · Git)</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>.github/workflows/ci.yml</code> dòng 82-86 là ví dụ Bash thật, ngắn, chạy trong CI mỗi lần có PR — không phải bài tập lý thuyết. Toàn bộ backend job (dòng 10-50) cũng là chuỗi lệnh Bash tuần tự: <code>ruff check .</code> → <code>mypy predict/</code> → <code>pytest tests/</code> → <code>python scripts/check_per_file_coverage.py</code> → <code>python scripts/promotion_gate_check.py --skip-db-checks</code>. Mỗi dòng là 1 "gate": nếu exit code khác 0 ở bất kỳ bước nào, các bước sau không chạy, PR bị đánh dấu fail.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>#1 — Dùng <code>&gt;</code>/<code>&lt;</code> để so sánh số</strong>: như minh hoạ ở Bước 2, <code>&gt;</code> trong <code>[ ]</code> luôn là redirect file, không phải so sánh — lỗi này thường không báo lỗi ngay mà âm thầm tạo 1 file rác tên là con số đó.</p>
+<p><strong>#2 — Không quote biến</strong>: biến chứa khoảng trắng hoặc rỗng mà không quote dễ gây lỗi "quá nhiều/quá ít tham số" ở lệnh phía sau, đặc biệt nguy hiểm với <code>rm $VAR</code> nếu <code>$VAR</code> rỗng — có thể vô tình chạy <code>rm -rf</code> trên thư mục hiện tại.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được vì sao <code>if [ "$SIZE" > 10 ]</code> là sai, và sửa đúng bằng <code>-gt</code>.</li>
+<li>Đọc <code>ci.yml</code> dòng 82-86 và nói được từng bước làm gì (đo size → cắt cột → so sánh → cảnh báo).</li>
+<li>Giải thích được exit code là gì và vì sao CI/CD phụ thuộc hoàn toàn vào nó.</li>
+<li>Viết đúng lệnh <code>docker exec predictor-api-1 python scripts/ai_predict_status.py</code> và giải thích vì sao không chạy trực tiếp trên host.</li>
+<li>Chỉ ra được vì sao <code>rm $FILE</code> (không quote) nguy hiểm hơn <code>rm "$FILE"</code>.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R1_1_python.html">← R1.1 · Python</a>
+  <a href="R1_3_typescript.html">R1.3 · TypeScript →</a>
+</div>
+
+</div>
+</body>
+</html>

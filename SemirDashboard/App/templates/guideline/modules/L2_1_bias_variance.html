@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2.1 — Bias-Variance Tradeoff</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 2 · Module 1</div>
+  <h1>2.1 · Bias-Variance Tradeoff + Overfitting Patterns</h1>
+  <p class="subtitle">Framework diagnostic quan trọng nhất trong ML. Học cách "chẩn đoán" model chỉ nhìn learning curves.</p>
+  <div class="level">Level 2 · Advanced ML · ~30 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Định nghĩa được bias và variance bằng ví dụ physical (target shooting)</li>
+  <li>Phân biệt underfitting vs overfitting bằng learning curves</li>
+  <li>Biết 5 cách giảm bias và 5 cách giảm variance</li>
+  <li>Trả lời câu phỏng vấn: "Model tôi train 95% test 55% — sao?"</li>
+</ul>
+
+<h2>1. Decomposition mathematically</h2>
+
+<p>Với 1 point (x, y), expected squared error của model f được decompose:</p>
+
+<pre><code>E[(y - f̂(x))²]  =  Bias²(f̂(x))  +  Var(f̂(x))  +  σ²
+                    ────────────    ────────────    ──
+                    Bias term      Variance term   Irreducible noise
+</code></pre>
+
+<ul>
+  <li><strong>Bias</strong> = |average prediction - true value|. Model quá đơn giản → miss pattern → high bias.</li>
+  <li><strong>Variance</strong> = spread predictions across different training sets. Model quá phức tạp → nhạy với data noise → high variance.</li>
+  <li><strong>σ²</strong> = noise inherent in data. Ngay cả perfect model không thể beat.</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy chính — 2 loại thợ săn (bias vs variance)</div>
+<p><strong>Thợ săn A — "chệch hoài" (high bias)</strong>: Ống ngắm bị lệch sang trái 20cm. Mỗi phát bắn viên đạn bay rất chụm (variance thấp) nhưng luôn <em>lệch trái mục tiêu 20cm</em>. Dù có bắn 1000 phát, tâm cụm đạn vẫn không nằm ở mục tiêu — đó là <em>systematic error</em> = bias.</p>
+<p><strong>Thợ săn B — "run tay" (high variance)</strong>: Ống ngắm đúng nhưng tay run vì cà phê. Trung bình 1000 phát cộng lại thì tâm rơi đúng mục tiêu (bias = 0), nhưng mỗi phát riêng lẻ bay lung tung — đó là <em>random error</em> = variance.</p>
+<p><strong>Thợ săn C — hoàn hảo</strong>: Ống ngắm đúng + tay vững. Từng phát trúng bulls-eye. Low bias + low variance. Đích ML.</p>
+<p><strong>Điểm mấu chốt</strong>: Fix thợ săn A bằng "tập bắn nhiều hơn" (thêm data) là <em>vô ích</em> — ống ngắm vẫn lệch. Phải chỉnh ống ngắm (dùng model to hơn). Ngược lại, fix thợ săn B bằng "chỉnh ống ngắm" cũng vô ích — cần luyện tay vững (thêm data, regularize).</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Ví dụ đời thực — Đầu bếp học nấu phở</div>
+<p><strong>Bias cao (đầu bếp cứng đầu)</strong>: Một anh nấu phở luôn dùng 1 công thức duy nhất bất kể khách khen chê. Trung bình phở anh nấu <em>lệch xa</em> khẩu vị đa số. → Model quá đơn giản, không học được pattern.</p>
+<p><strong>Variance cao (đầu bếp bất ổn)</strong>: Anh khác thay công thức mỗi ngày dựa trên feedback của 1-2 khách lẻ. Hôm ngon xuất sắc, hôm dở tệ. → Model quá nhạy với noise, học cả bất thường.</p>
+<p><strong>Sweet spot (đầu bếp giỏi)</strong>: Có công thức nền vững, chỉ tinh chỉnh theo feedback trung bình 100 khách. → Low bias + low variance.</p>
+<p><strong>Noise σ² (không thể tránh)</strong>: Cùng bát phở, khách A vừa ăn tiệc no nên chê nhạt, khách B đói nên khen ngon. → Không đầu bếp nào giải quyết được.</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Ví dụ ML thực tế — Predict giá cổ phiếu VNM</div>
+<p><strong>Bias cao</strong>: Dùng linear regression 1 feature (chỉ giá hôm qua) → luôn predict "giá mai = giá nay + 0.1%". Miss các pattern volume/RSI/foreign flow. Train acc 45%, test acc 44% — cả 2 đều thấp.</p>
+<p><strong>Variance cao</strong>: Dùng XGBoost 5000 trees, depth 20, không regularization. Train acc 95% (nhớ từng ngày), test acc 51% (không generalize). Model học cả nhiễu ngẫu nhiên như "thứ 3 tuần 42 năm 2023 tăng vì fluke".</p>
+<p><strong>Fix bias</strong>: thêm feature (V18 dùng 88 features), tăng model complexity.</p>
+<p><strong>Fix variance</strong>: giảm depth, tăng min_child_weight, early stopping, thêm data.</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Bias vs Variance chi tiết: chẩn đoán đúng, fix đúng (giải thích từng bước)</div>
+
+<p><strong>Câu hỏi thực tế</strong>: Bạn train model, val accuracy 55%. Tệ. Bạn nên làm gì? Add data? Add features? Thay model to hơn? Regularize? <strong>4 hướng khác nhau, chọn sai = phí 1 tuần</strong>. Bias-variance framework CHÍNH XÁC nói bạn phải chọn hướng nào.</p>
+
+<p><strong>Bước 1 — Đầu tiên nhìn learning curve</strong> (plot train_acc và val_acc theo thời gian train):</p>
+<pre><code>Trường hợp A (HIGH BIAS = underfit):
+  train_acc: 60%  ─────────  plateau
+  val_acc:   58%  ─────────  gần sát train, cùng plateau
+  Gap: nhỏ.  Cả 2 thấp.
+
+Trường hợp B (HIGH VARIANCE = overfit):
+  train_acc: 95%  ↗↗↗↗  cao ngất
+  val_acc:   55%  ─────  đứng yên thấp
+  Gap: LỚN (95-55 = 40%).
+
+Trường hợp C (ideal):
+  train_acc: 75%  ↗
+  val_acc:   72%  ↗
+  Cả 2 cao, gap nhỏ.
+</code></pre>
+
+<p><strong>Bước 2 — Đọc chẩn đoán</strong>:</p>
+<ul>
+  <li>Trường hợp A: model "quá đơn giản" — không đủ capacity để học pattern trong data. Giống học sinh IQ thấp làm đề khó — trên train dữ liệu quen thì cũng chỉ 60%, val cũng 58%.</li>
+  <li>Trường hợp B: model "học tủ" — nhớ nguyên train set 95% nhưng không hiểu bản chất, val mới 55%. Giống học sinh nhớ vẹt 100 đề mẫu, gặp đề mới ngơ ngác.</li>
+  <li>Trường hợp C: model "học giỏi" — hiểu bản chất, generalize tốt.</li>
+</ul>
+
+<p><strong>Bước 3 — Fix ĐÚNG hướng</strong> (chỗ user hay sai):</p>
+
+<table>
+<tr><th>Nếu bạn ở case</th><th>Fix ĐÚNG</th><th>Fix SAI (thường làm nhầm)</th></tr>
+<tr><td>A (HIGH BIAS)</td><td>Model to hơn (deeper tree, more layers), thêm features, giảm regularization, train lâu hơn</td><td>❌ Add data — vô ích, model không đủ capacity để tận dụng</td></tr>
+<tr><td>B (HIGH VARIANCE)</td><td>Add data, regularize (L2, dropout), giảm complexity, early stopping</td><td>❌ Add features — làm variance TỆ HƠN, model có nhiều đường để overfit hơn</td></tr>
+<tr><td>C (ideal)</td><td>Deploy, đủ rồi</td><td>❌ Cứ tune thêm — waste time, có thể làm tệ đi</td></tr>
+</table>
+
+<p><strong>Con số cụ thể để nhớ</strong>: Rule of thumb — nếu gap (train_acc - val_acc) &gt; 10% → overfit rõ. Nếu train_acc &lt; expected baseline → underfit. Nếu val_acc chỉ hơn random 5% → check data quality trước (không phải model).</p>
+
+<p><strong>Vì sao decomposition này QUAN TRỌNG?</strong> Vì có công thức toán chứng minh: <em>tổng error = bias² + variance + noise không tránh được</em>. Nghĩa là:</p>
+<ol>
+  <li>Không có "1 kỹ thuật fix mọi thứ" — mỗi kỹ thuật chỉ giảm 1 phần.</li>
+  <li>Có giới hạn Bayesian (noise floor) — nếu ngay cả oracle không đạt 100% thì đừng cố.</li>
+  <li>Trade-off là thật — giảm bias thường tăng variance (thêm capacity thì risk overfit tăng). Phải chọn sweet spot.</li>
+</ol>
+
+<p><strong>Ví dụ PredictStock V18</strong>: Model 1 (simple linear regression, 5 features) → cv_acc 45%, train_acc 46%. Đây là HIGH BIAS — model thiếu capacity. Fix bằng "add data" sẽ không giúp. Team làm đúng: chuyển sang XGBoost + 88 features (tăng capacity) → cv_acc 60%. Nếu team làm sai (add data từ 300 rows lên 3000 rows nhưng giữ linear model) → vẫn 45%. Đây là why <em>diagnose trước fix</em>.</p>
+
+<p><strong>Twist quan trọng — mô hình "overparametrize" phá vỡ trực giác bias-variance cổ điển</strong> (Belkin et al. 2019, hiện tượng gọi là <strong>double descent</strong> — giải thích đầy đủ cơ chế + ví dụ số ở mục 5.1 bên dưới, đây chỉ là preview nhanh):</p>
+<ul>
+  <li>"Overparametrize" (quá tham số hoá) = model có SỐ THAM SỐ (params) LỚN HƠN HẲN số lượng mẫu dữ liệu training (VD: model có 1 tỷ tham số nhưng chỉ train trên 1 triệu dòng dữ liệu) — ngược hẳn trực giác cổ điển "quá nhiều tham số so với dữ liệu = chắc chắn overfit".</li>
+  <li>Với neural network overparametrize kiểu này, variance KHÔNG tăng vô hạn như XGBoost tăng số cây mãi sẽ overfit — vượt qua 1 ngưỡng nhất định, variance lại GIẢM khi tăng thêm tham số (nghịch lý — xem cơ chế thật ở mục 5.1).</li>
+  <li>GPT-4 được đồn đoán ~1.7 nghìn tỷ params (OpenAI không công bố chính thức con số này) trên vài nghìn tỷ tokens — theo bias-variance cổ điển sẽ overfit khủng khiếp, nhưng thực tế generalize rất tốt.</li>
+  <li>Lý do (tóm tắt, chi tiết ở mục 5.1): <strong>SGD implicit regularization</strong> — SGD (Stochastic Gradient Descent, thuật toán tối ưu học từng batch nhỏ dữ liệu một, đã học ở <a href="L3_1_nn_backprop.html">L3.1</a>) có xu hướng TỰ NHIÊN hội tụ về nghiệm "đơn giản/mượt" (low-norm) trong số rất nhiều nghiệm khả dĩ khi không gian tham số quá rộng (<strong>high-dim geometry</strong> — hình học không gian nhiều chiều: khi số chiều/tham số cực lớn, số lượng nghiệm fit đúng dữ liệu training tăng theo cấp số nhân, và đa số nghiệm đó lại "mượt", không nhớ noise) — không cần ai lập trình regularization tường minh, SGD tự làm việc đó.</li>
+  <li>Hệ quả: "just make it bigger" (cứ làm model to hơn) WORK cho LLM (Chinchilla, Llama-3 400B) nhưng KHÔNG work cho tabular XGBoost (10.000 trees vẫn overfit trên Iris dataset) — 2 loại model, 2 cơ chế khác hẳn nhau, không nên suy diễn từ cái này sang cái kia.</li>
+</ul>
+
+<p><strong>Hậu quả nếu không hiểu insight này</strong> — so sánh 2 cách tiếp cận cùng 1 model tệ:</p>
+<table>
+<tr><th>Không hiểu bias-variance (dò mù)</th><th>Hiểu bias-variance (chẩn đoán trước)</th></tr>
+<tr><td>Thấy model tệ → mặc định "chắc underfit, thêm features"</td><td rowspan="5">Plot learning curve (30 phút) → biết chính xác đang ở case A/B/C → fix đúng hướng ngay → <strong>xong trong 2 ngày</strong></td></tr>
+<tr><td>2 tuần sau còn tệ hơn (thực ra là overfit, đoán sai hướng)</td></tr>
+<tr><td>Thử regularize → đỡ hơn tí, chưa rõ vì sao</td></tr>
+<tr><td>Thử data augment → không cải thiện</td></tr>
+<tr><td>→ <strong>2 tháng đi trong bóng tối</strong>, không có cách biết khi nào đúng hướng</td></tr>
+</table>
+<p><em>Đây là kỹ năng senior vs junior: không phải biết nhiều kỹ thuật fix hơn, mà là chẩn đoán đúng hướng TRƯỚC khi thử.</em></p>
+</div>
+
+<h2>1b. Chứng minh công thức decomposition (step-by-step)</h2>
+
+<p>Nhiều tutorial "hand-wave" — chỉ ghi công thức. Ở đây ta <strong>chứng minh</strong> từ đầu, mọi ký hiệu đều có gloss tiếng Việt.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Ký hiệu (đọc kỹ trước khi vào chứng minh)</div>
+<ul>
+  <li><code>x</code> = input (VD: vector 88 features của VNM ngày hôm nay)</li>
+  <li><code>y</code> = giá trị thật (true label — VD: return thực của VNM 5 ngày sau)</li>
+  <li><code>f(x)</code> = hàm true không ai biết (nếu biết thì đã không cần ML) — có tính chất <code>y = f(x) + ε</code> với <code>ε</code> là nhiễu, <code>E[ε]=0</code>, <code>Var(ε)=σ²</code></li>
+  <li><code>f̂(x; D)</code> = model được train trên tập <code>D</code> (mỗi lần train trên 1 <strong>bootstrap</strong> khác sẽ ra model khác — xem giải thích "bootstrap là gì" ngay dưới)</li>
+  <li><code>E_D[·]</code> = kỳ vọng (expectation) khi thay đổi tập training <code>D</code> — hình dung: nếu ta train lại 1000 lần trên 1000 tập bootstrap, ta lấy trung bình</li>
+  <li><code>f̄(x) = E_D[f̂(x; D)]</code> = "model trung bình" (average model across all trainings) — không phải model bạn thực sự có, mà là ideal</li>
+</ul>
+</div>
+
+<div class="callout" style="background: rgba(234,179,8,0.08); border-left-color: #eab308">
+<div class="label">📖 "Bootstrap" là gì — thuật ngữ dùng xuyên suốt phần chứng minh bên dưới</div>
+<p><strong>Bootstrap (Efron, 1979)</strong> = kỹ thuật lấy mẫu lại CÓ HOÀN LẠI (resampling with replacement) từ chính tập dữ liệu gốc để tạo ra nhiều tập dữ liệu "giả lập" có cùng kích thước, dùng để ước lượng model sẽ dao động thế nào nếu ta có nhiều tập dữ liệu khác nhau — trong khi thực tế ta chỉ có ĐÚNG 1 tập dữ liệu thật.</p>
+<p><strong>Ví dụ cụ thể</strong>: giả sử có 5 ngày dữ liệu VNM gốc: <code>[T2, T3, T4, T5, T6]</code>. 1 bootstrap sample rút ngẫu nhiên 5 lần, CÓ HOÀN LẠI (nghĩa là rút xong bỏ lại, có thể rút trùng), từ 5 ngày đó — VD ra <code>[T3, T3, T5, T2, T6]</code> (T3 xuất hiện 2 lần, T4 không xuất hiện lần nào). Đây là 1 tập "giả lập" hợp lệ, cùng kích thước 5, nhưng khác tập gốc.</p>
+<p><strong>Vì sao cần bootstrap thay vì thu thập thêm dữ liệu thật</strong>: thu thập thêm dữ liệu thật (VD thêm 1000 ngày giao dịch mới) tốn thời gian/tiền, và với thị trường chứng khoán thì đơn giản là KHÔNG THỂ — quá khứ chỉ xảy ra 1 lần. Bootstrap cho phép mô phỏng câu hỏi "nếu ta có 1 tập dữ liệu HƠI KHÁC (nhưng cùng nguồn gốc), model sẽ ra kết quả khác bao nhiêu?" mà không cần dữ liệu mới — đây chính xác là câu hỏi variance đang muốn đo.</p>
+<p><strong>Insight</strong>: bootstrap không tạo ra thông tin MỚI (không có ngày nào chưa từng thấy) — nó chỉ giúp ước lượng ĐỘ KHÔNG CHẮC CHẮN (uncertainty) của model bằng cách xem model phản ứng thế nào với các biến thể nhỏ của cùng 1 tập dữ liệu. Đây cũng chính là cơ chế nền của Bagging (mục 5.4 bên dưới) — "Bagging" = viết tắt của <strong>B</strong>ootstrap <strong>Agg</strong>regat<strong>ing</strong>.</p>
+</div>
+
+<p><strong>Chứng minh</strong> (mục tiêu: cho 1 điểm <code>x</code> cố định, decompose <code>E[(y - f̂(x))²]</code>):</p>
+
+<pre><code>E_{D,ε}[(y - f̂(x))²]
+  = E[(f(x) + ε - f̂(x))²]                       # thay y = f(x) + ε
+  = E[((f(x) - f̂(x)) + ε)²]                     # gom lại
+  = E[(f(x) - f̂(x))²] + 2·E[(f(x) - f̂(x))·ε] + E[ε²]
+                                                  # khai triển (a+b)²
+  = E[(f(x) - f̂(x))²] + 0 + σ²                   # vì ε độc lập với D và E[ε]=0
+                                                  # nên cross-term = 0; E[ε²] = σ²
+
+Bây giờ tách phần đầu bằng cách "cộng và trừ" f̄(x):
+E[(f(x) - f̂(x))²]
+  = E[(f(x) - f̄(x) + f̄(x) - f̂(x))²]
+  = (f(x) - f̄(x))²  +  2·(f(x) - f̄(x))·E[f̄(x) - f̂(x)]  +  E[(f̄(x) - f̂(x))²]
+  = Bias²(f̂(x))  +  0  +  Var(f̂(x))
+      ↑                        ↑
+   (f - f̄)²             spread quanh average model
+
+Ghép lại:
+E[(y - f̂(x))²]  =  Bias²(f̂(x))  +  Var(f̂(x))  +  σ²
+</code></pre>
+
+<p><strong>Ý nghĩa từng số hạng bằng lời</strong>:</p>
+<ul>
+  <li><code>Bias²</code> = "khoảng cách hệ thống" (systematic distance) giữa model trung bình và sự thật. Nếu bạn train vô hạn lần, kết quả trung bình vẫn lệch — đó là bias.</li>
+  <li><code>Variance</code> = "độ dao động" (spread) giữa các lần train khác nhau. Model càng phức tạp → mỗi bootstrap sample cho ra 1 model khác nhau nhiều → variance cao.</li>
+  <li><code>σ²</code> = nhiễu không thể loại (irreducible). Ví dụ: cùng 1 setup market, giá VNM ngày mai vẫn phụ thuộc 1 tin đột xuất (M&A rumor) — không feature nào catch được.</li>
+</ul>
+
+<h3>Ví dụ số cụ thể — dự đoán return VNM</h3>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">🧮 Numeric walk-through (train 3 model trên 3 bootstrap của VNM history)</div>
+
+<p>Giả sử với 1 ngày cụ thể (VNM 2026-06-30), <code>y = f(x) + ε = 2.0% + ε</code>, nhiễu <code>σ = 0.5%</code> (σ² = 0.25).</p>
+
+<p>Train 3 model trên 3 bootstrap khác nhau, mỗi model predict:</p>
+<pre><code>Model A (bootstrap 1): f̂_A(x) = 1.2%
+Model B (bootstrap 2): f̂_B(x) = 1.6%
+Model C (bootstrap 3): f̂_C(x) = 1.0%
+
+Model trung bình: f̄(x) = (1.2 + 1.6 + 1.0)/3 = 1.267%
+
+Bias² = (f(x) - f̄(x))² = (2.0 - 1.267)² = 0.537 (%²)
+                                          ↑ model trung bình dưới thực tế 0.73pp → high bias
+
+Variance = E_D[(f̂ - f̄)²]
+         = [(1.2-1.267)² + (1.6-1.267)² + (1.0-1.267)²] / 3
+         = [0.0045 + 0.111 + 0.0712] / 3
+         = 0.0622 (%²)
+                          ↑ 3 model gần nhau → variance thấp
+
+Irreducible noise: σ² = 0.25 (%²)
+
+TỔNG expected MSE = 0.537 + 0.062 + 0.25 = 0.849 (%²)
+                    ────    ────    ────
+                    63%     7%      30%     ← phần trăm đóng góp
+
+→ Chẩn đoán: high bias dominant. Fix = tăng capacity (thêm features, deeper trees),
+   KHÔNG PHẢI regularize thêm (sẽ tệ hơn — bias đã cao rồi).
+</code></pre>
+
+<p><strong>Điểm quan trọng</strong>: nếu 3 model output rải rộng (VD: 0.5%, 2.5%, 3.5%), variance sẽ dominant → chẩn đoán khác → fix khác. Cùng 1 công thức, khác data → khác chiến lược.</p>
+</div>
+
+<h2>2. Ví dụ trực quan — target shooting</h2>
+
+<pre><code>       LOW VARIANCE                HIGH VARIANCE
+       ────────────                ─────────────
+
+LOW    ●●●●●                        ● ● ● ● ●
+BIAS   ●●●●● bulls-eye              ●   ●   ●    scatter around bulls-eye
+       ●●●●●                          ●●●●●
+
+HIGH   ● ● ● (all cluster           ●   ● ● (scatter around wrong spot)
+BIAS   ● ● ●  but off target)         ● ●
+       ● ● ●                        ● ●   ●
+</code></pre>
+
+<p>Mục tiêu: low bias + low variance (top-left). Nhưng thường phải tradeoff — giảm bias tăng variance và ngược lại.</p>
+
+<h2>3. Learning curves — diagnostic tool</h2>
+
+<p>Plot 2 curves: training accuracy vs validation accuracy, theo epoch (hoặc n_samples).</p>
+
+<h3>Pattern 1: UNDERFITTING (high bias)</h3>
+<pre><code>Train acc: 60% (plateau)
+Val acc:   58% (plateau, gần train)
+Gap:       nhỏ
+
+→ Model quá đơn giản. Cả 2 đều thấp.
+</code></pre>
+
+<div class="callout">
+  <div class="label">Fix underfitting</div>
+  <ul>
+    <li>Tăng model complexity (deeper tree, more layers)</li>
+    <li>Thêm features (feature engineering)</li>
+    <li>Giảm regularization</li>
+    <li>Train lâu hơn</li>
+    <li>Chọn architecture mạnh hơn (từ linear → tree → deep)</li>
+  </ul>
+</div>
+
+<h3>Pattern 2: OVERFITTING (high variance)</h3>
+<pre><code>Train acc: 95% (rất cao)
+Val acc:   55% (thấp, xa train)
+Gap:       LỚN (40pp)
+
+→ Model memorize training. Không generalize.
+</code></pre>
+
+<div class="callout warn">
+  <div class="label">Fix overfitting</div>
+  <ul>
+    <li>More training data (nếu có thể)</li>
+    <li>Regularization (L1/L2, dropout, weight decay)</li>
+    <li>Reduce model complexity (nhỏ hơn, ít layer hơn)</li>
+    <li>Early stopping (train ít epoch hơn)</li>
+    <li>Data augmentation</li>
+    <li>Ensemble (bagging giảm variance)</li>
+    <li>Feature selection (drop noise features)</li>
+  </ul>
+</div>
+
+<h3>Pattern 3: GOOD FIT</h3>
+<pre><code>Train acc: 68%
+Val acc:   65%
+Gap:       nhỏ (3pp), cả 2 cao hơn baseline
+
+→ Model học được pattern, generalize tốt. Deploy!
+</code></pre>
+
+<h2>4. Case study V19.5 — pattern overfit hidden</h2>
+
+<div class="example-box">
+<div class="title">🔍 Ví dụ real: V19.5 Phase 7 retrain</div>
+<p>Log cho thấy cv_acc mean 61.14% (V18 baseline 60.53%). Delta +0.61pp — có vẻ improvement.</p>
+<p>Nhưng phân tích deeper (Slice 3 SHAP):</p>
+<ul>
+  <li>6 calendar features: 0% adoption trong top-50</li>
+  <li>4 sector features: 0% adoption</li>
+  <li>3 cross-sectional + 3 correlation: 0% adoption</li>
+</ul>
+<p>→ Model có 98 features nhưng 16/98 = constant (dead), model chỉ dùng 82 effective (98−16). Tăng cv +0.61pp thực chất do NHIỄU — không có new signal từ V20 groups.</p>
+<p><strong>Bài học</strong>: cv aggregate KHÔNG đủ để đánh giá model quality. Phải check feature adoption, calibration, và <strong>fail-loud on silent failures</strong> (V19.5 chết vì 14 blue-chips silent fallback v1 legacy).</p>
+</div>
+
+<h2>5. Concept quan trọng nâng cao</h2>
+
+<h3>5.1 Double descent — khi trực giác bias-variance cổ điển "gãy"</h3>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy — thợ may đo ni</div>
+<p>Tưởng tượng bạn thuê thợ may đo 1 bộ vest. <strong>Thợ tệ, ít kinh nghiệm</strong> (model nhỏ): may không vừa, chỗ nào cũng lỏng — giống <em>underfitting</em>. <strong>Thợ trung bình, tự tin thái quá</strong> (model vừa đủ tham số để "khớp" số đo, không hơn): cố may CHÍNH XÁC ĐÚNG từng centimet đã đo — nhưng vì con số đo có sai số nhỏ (tay đo run, thước co giãn), bộ vest bị "khớp cứng" theo cả những sai số đó → mặc vào rất kỳ, đây là đỉnh điểm tệ nhất (giống overfitting nặng nhất). <strong>Thợ bậc thầy</strong> (model cực lớn, học từ hàng nghìn bộ vest khác): không cố khớp CHÍNH XÁC số đo của riêng bạn nữa — họ NHẬN RA số đo có nhiễu, và may theo "dáng người" tổng quát học được từ kinh nghiệm rất lớn, bỏ qua phần nhiễu nhỏ lẻ → vừa vặn tự nhiên trở lại, tốt hơn cả thợ trung bình.</p>
+</div>
+
+<p><strong>Vấn đề cụ thể double descent giải quyết</strong>: theo bias-variance cổ điển (mục 1-4 ở trên), tăng số tham số quá số lượng mẫu dữ liệu ("overparametrize" — đã gloss ở trên) LUÔN LUÔN làm variance tăng vọt → test error phải tăng theo. Nhưng thực nghiệm với neural network hiện đại (và cả 1 số mô hình khác, xem bảng phạm vi áp dụng bên dưới) cho thấy: test error tăng tới 1 đỉnh RỒI GIẢM TRỞ LẠI khi tiếp tục tăng tham số — đây là hiện tượng KHÔNG được dự đoán bởi công thức mục 1, và mất nhiều năm để giới nghiên cứu giải thích đúng cơ chế.</p>
+
+<pre><code>Test error
+    │
+    │      ╱╲
+    │     ╱  ╲
+    │    ╱    ╲___
+    │   ╱          ╲___
+    │  ╱                ╲________
+    │ ╱                          (giảm tiếp, "second descent")
+    └──────────┬─────────────────────────▶ Số tham số (params)
+               │
+       "Interpolation threshold"
+       (điểm params ≈ số mẫu training —
+        model VỪA ĐỦ khả năng khớp 100%
+        dữ liệu training, kể cả nhiễu)
+
+Vùng 1 (trái đỉnh): classical regime — giống bias-variance cổ điển mục 1-4
+Đỉnh: TỆ NHẤT — model bị ép khớp cứng theo cả nhiễu
+Vùng 2 (phải đỉnh): "modern"/over-parameterized regime — mô hình hiện đại (LLM,
+                     deep NN) hoạt động ở đây</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Vì sao đỉnh lại tệ nhất — cơ chế "interpolation threshold" (giải thích từng bước)</div>
+<p><strong>Bước 1 — "Interpolation" nghĩa là gì?</strong> Interpolate (nội suy/khớp hoàn toàn) = model đạt train error = 0%, tức là dự đoán ĐÚNG TUYỆT ĐỐI mọi điểm trong tập training, kể cả những điểm bị nhiễu (noise) — không còn sai số nào trên tập train.</p>
+<p><strong>Bước 2 — Tại "interpolation threshold" (điểm params ≈ số mẫu), có bao nhiêu nghiệm khớp được?</strong> ĐÚNG 1 (hoặc rất ít). Với đúng số tham số bằng số điểm dữ liệu, thường chỉ có 1 hàm số duy nhất đi qua hết tất cả các điểm — hàm số đó BẮT BUỘC phải "vặn vẹo" qua từng điểm nhiễu, không có lựa chọn nào khác để né. Đây chính là lý do variance cực đại tại đúng điểm này — hàm buộc phải nhớ hết, kể cả rác.</p>
+<p><strong>Bước 3 — Tại sao thêm tham số NỮA (vượt qua threshold) lại tốt hơn?</strong> Khi params &gt;&gt; số mẫu, có RẤT NHIỀU hàm số khác nhau đều khớp hoàn hảo 100% dữ liệu training (không chỉ 1 nghiệm duy nhất nữa) — bài toán trở thành "trong hàng triệu nghiệm đều đúng trên tập train, chọn nghiệm nào?". Thuật toán tối ưu (SGD) có xu hướng tự nhiên chọn nghiệm "đơn giản/mượt nhất" trong số đó (implicit bias của SGD, xem giải thích ở "Twist quan trọng" phía trên) — và nghiệm mượt nhất thường KHÔNG nhớ nhiễu, chỉ nắm bắt pattern thật.</p>
+<p><strong>Insight</strong>: đỉnh của đường cong không phải "càng nhiều tham số càng tệ" — nó là điểm ĐẶC BIỆT XUI XẺO nơi model bị ép chọn ĐÚNG 1 nghiệm (nghiệm đó tình cờ phải khớp cả nhiễu). Đi tiếp qua khỏi điểm đó, model có QUYỀN CHỌN trong số rất nhiều nghiệm, và SGD chọn nghiệm tốt.</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">🧮 Ví dụ thực nghiệm thật — Belkin et al. 2019 (PNAS)</div>
+<p>Thí nghiệm gốc dùng <strong>Random Fourier Features</strong> (1 kỹ thuật biến đổi dữ liệu đầu vào thành 1 không gian đặc trưng ngẫu nhiên — không cần hiểu chi tiết kỹ thuật này, chỉ cần biết nó cho phép TĂNG/GIẢM số "đặc trưng" N một cách có kiểm soát) trên tập con của MNIST (ảnh chữ số viết tay), rút gọn thành bài toán phân loại 2 lớp (chữ số 4 vs chữu số 9), với <strong>n = 4.000 mẫu training</strong>. Họ tăng dần số đặc trưng ngẫu nhiên N từ rất nhỏ tới N ≈ 40.000 (gấp 10 lần số mẫu):</p>
+<pre><code>N (số đặc trưng)   Train error   Test error (risk)
+N nhỏ (N &lt;&lt; 4000)      cao          cao          ← underfitting cổ điển
+N ≈ 4000 (≈ n)         ≈0%          ĐỈNH — tệ nhất  ← interpolation threshold
+N &gt;&gt; 4000 (VD 40000)   ≈0%          THẤP hơn đỉnh  ← "second descent"
+</code></pre>
+<p><strong>Insight</strong>: đúng như cơ chế mục 5.1 dự đoán — ngay tại N ≈ n (số đặc trưng ≈ số mẫu), test error đạt đỉnh XẤU NHẤT, rồi giảm trở lại khi N tiếp tục tăng xa hơn nữa. Đây không phải hiện tượng lý thuyết suông — số liệu đo được thật trên MNIST.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Phạm vi áp dụng thật — double descent KHÔNG xảy ra như nhau ở mọi loại model</div>
+<table>
+<tr><th>Loại model</th><th>Double descent có xảy ra không?</th><th>Ghi chú</th></tr>
+<tr><td>Neural network (đặc biệt deep NN)</td><td>CÓ, đã đo nhiều lần</td><td>Nakkiran et al. 2019 đo trên ResNet18/CIFAR-10 (thêm 15% label noise để hiện tượng rõ hơn) — CÒN đo được cả "epoch-wise double descent" (cùng 1 model, tăng SỐ LƯỢT TRAIN thay vì tăng tham số, vẫn ra hình dạng tương tự)</td></tr>
+<tr><td>Linear/kernel regression, Random Fourier Features</td><td>CÓ</td><td>Chính là thí nghiệm gốc của Belkin et al. — không cần deep learning mới có hiện tượng này</td></tr>
+<tr><td>Gradient-boosted trees (XGBoost/LightGBM/CatBoost)</td><td>CÓ, nhưng cần điều kiện cụ thể</td><td>Nghiên cứu 2026 đo được double descent thật khi tăng "ngân sách ứng viên chia nhánh" (split-candidate budget) của cây — không phải mọi cách tăng độ phức tạp GBT đều gây double descent</td></tr>
+<tr><td>Random Forest</td><td><strong>GÂY TRANH CÃI</strong> — chưa có kết luận thống nhất</td><td>1 nghiên cứu (2021) lập luận hiện tượng "double descent" quan sát được ở Random Forest thực ra là ẢO GIÁC do cách đo "độ phức tạp" chưa chuẩn, không phải double descent thật — <strong>đừng khẳng định chắc nịch Random Forest có double descent</strong>, đây vẫn là câu hỏi mở trong nghiên cứu.</td></tr>
+</table>
+</div>
+
+<p><strong>Kết luận thực dụng cho công việc hàng ngày</strong>: double descent KHÔNG có nghĩa "cứ làm model to hơn luôn luôn tốt hơn" một cách vô điều kiện — nó có nghĩa là ĐỪNG hoảng khi thấy model "vừa đủ tham số để khớp gần hết train set" (vùng gần interpolation threshold) đang cho kết quả TỆ hơn cả model nhỏ hơn NÓ — đây có thể chính là vùng đỉnh của double descent, và giải pháp có thể là tăng THÊM tham số (không phải giảm) nếu bài toán/kiến trúc thuộc nhóm dễ xảy ra hiện tượng này (deep NN, kernel method) — còn với tabular model (XGBoost trên dữ liệu ít feature như PredictStock), vùng an toàn nhất vẫn là tránh xa cả 2 cực, theo đúng early-stopping/regularization cổ điển ở mục 6.</p>
+
+<h3>5.2 Bias-variance ở classification — 0-1 loss phá vỡ tính cộng dồn đơn giản</h3>
+
+<p>Toàn bộ công thức chứng minh ở mục 1b (<code>E[loss] = Bias² + Variance + σ²</code>) chỉ đúng cho <strong>squared loss</strong> (sai số bình phương — dùng cho bài toán regression, dự đoán 1 con số liên tục như % return). Với bài toán <strong>classification</strong> (phân loại rời rạc — UP/DOWN/FLAT), loss thường dùng là <strong>0-1 loss</strong> (0 nếu đoán đúng nhãn, 1 nếu đoán sai — không có khái niệm "sai gần" hay "sai xa", chỉ có đúng/sai). Domingos (2000) chứng minh: với 0-1 loss, phép decompose KHÔNG còn đơn giản cộng dồn <code>Bias + Variance</code> như trước.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Công thức tổng quát Domingos (2000) + giải thích ký hiệu</div>
+<pre><code>E[Loss]  =  c1 · Noise  +  Bias  +  c2 · Variance
+
+# Với squared loss (regression): c1 = c2 = 1 luôn luôn
+#   → đúng công thức quen thuộc mục 1: Noise + Bias² + Variance
+
+# Với 0-1 loss (classification): c2 KHÔNG cố định bằng 1 nữa —
+#   c2 = +1  NẾU dự đoán "chính" (main prediction — dự đoán phổ biến nhất
+#            nếu train lại model nhiều lần) trùng với nhãn đúng (Bayes-optimal)
+#   c2 = -1  (hoặc 1 số âm theo xác suất) NẾU dự đoán "chính" đã SAI ngay từ đầu</code></pre>
+</div>
+
+<p><strong>Ý nghĩa bằng lời — vì sao dấu trừ lại xuất hiện (đây là chỗ phản trực giác nhất của cả trang này)</strong>: nếu model của bạn ĐÃ CÓ BIAS (dự đoán "chính" của nó sai ngay từ đầu), thì THÊM VARIANCE (thêm nhiễu ngẫu nhiên vào dự đoán) đôi khi lại làm giảm error tổng thể — vì thêm ngẫu nhiên cho model 1 cơ hội "tình cờ đoán trúng" đáp án đúng, thay vì chắc chắn 100% đoán sai theo đúng bias hệ thống của nó. Với squared loss thì KHÔNG có chuyện này — thêm variance vào 1 dự đoán regression luôn luôn làm error kỳ vọng tăng, không bao giờ giảm.</p>
+
+<div class="callout danger">
+<div class="label">⚠️ Chỗ dễ nhầm nhất — đừng suy diễn "vậy variance đôi khi TỐT cho classification"</div>
+<p>Kết luận đúng KHÔNG PHẢI "hãy cố tình thêm variance cho model phân loại". Cơ chế trên chỉ xảy ra trong ĐÚNG 1 tình huống hẹp: model đã bias nặng VÀ đang ở gần ranh giới quyết định (decision boundary) nơi 1 chút nhiễu có thể đẩy dự đoán sang phía đúng. Trong đại đa số trường hợp thực tế, bias cao vẫn là bias cao — vẫn cần fix bằng tăng capacity (mục 3), không phải "thêm variance cho may rủi". Nguyên tắc chẩn đoán ở mục "Deep-dive" phía trên vẫn áp dụng nguyên vẹn cho classification.</p>
+</div>
+
+<p><strong>Insight</strong>: đây là lý do vì sao đôi khi 1 model classification "tệ và bất ổn" (cả bias lẫn variance đều cao) lại có accuracy nhỉnh hơn 1 chút so với 1 model "tệ nhưng ổn định" (chỉ bias cao, variance thấp) — hiện tượng này KHÔNG xảy ra nếu đổi sang đo bằng regression/squared loss trên cùng bài toán đó.</p>
+
+<h3>5.3 High bias + high variance cùng lúc?</h3>
+<p>Có! Ví dụ: linear model trên data non-linear cực noisy. Bias cao (không fit được curve) + variance cao (mỗi bootstrap sample cho line khác nhau vì noise).</p>
+
+<h3>5.4 Vì sao Bagging giảm variance, Boosting giảm bias — cơ chế thật, không chỉ ghi nhớ suông</h3>
+
+<p><strong>Vấn đề</strong>: mục "3 hiểu lầm phổ biến" ở cuối trang này đã NÊU rằng Bagging (Random Forest) là "variance-reduction" còn Boosting (XGBoost) là "bias-reduction" — nhưng TẠI SAO lại như vậy? Đây là câu hỏi phỏng vấn senior rất hay gặp mà nhiều người chỉ thuộc lòng kết luận, không giải thích được cơ chế.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Cơ chế Bagging — công thức phương sai của trung bình cộng nhiều model</div>
+<pre><code>Var(trung bình của B cây)  =  ρ·σ²  +  ((1-ρ)/B)·σ²
+                               ──────   ─────────────
+                               "sàn"    phần giảm được
+                                        khi tăng B
+
+# ρ (rho) = hệ số tương quan (correlation) trung bình GIỮA CÁC CÂY —
+#           2 cây "giống nhau" (ρ gần 1) hay "khác nhau" (ρ gần 0)?
+# σ²      = variance của 1 cây ĐƠN LẺ (chưa lấy trung bình)
+# B       = số lượng cây trong ensemble (rừng)</code></pre>
+</div>
+
+<p><strong>Đọc công thức bằng lời</strong>: khi B (số cây) tăng lên vô hạn, số hạng thứ 2 <code>(1-ρ)/B · σ²</code> tiến về 0 — NHƯNG số hạng thứ nhất <code>ρ·σ²</code> KHÔNG đổi, dù có bao nhiêu cây đi nữa. Đây chính là lý do Random Forest không thể giảm variance về 0 chỉu bằng cách "thêm cây mãi" — có 1 "sàn" (floor) variance quyết định bởi <strong>ρ</strong>, mức độ giống nhau giữa các cây.</p>
+
+<p><strong>Vì sao Random Forest CHỌN NGẪU NHIÊN 1 tập con feature ở mỗi lần chia nhánh</strong> (thường √p feature trong tổng số p feature, thay vì xét hết p feature như cây quyết định thường): đây KHÔNG phải để tăng tốc độ tính toán (dù nó có lợi ích phụ đó) — mục đích CHÍNH là ép các cây trở nên KHÁC NHAU hơn (giảm ρ), vì nếu để mọi cây tự do chọn feature mạnh nhất ở mọi bước, hầu hết các cây bootstrap khác nhau vẫn sẽ chọn ra cấu trúc rất giống nhau (ρ cao) → floor variance cao → bagging không có nhiều tác dụng. Giảm ρ bằng cách ép ngẫu nhiên hoá feature là cơ chế CHÍNH giúp Random Forest giảm variance mạnh hơn Bagging cây quyết định thường (Bagging thường chỉ random hoá DỮ LIỆU qua bootstrap, không random hoá FEATURE).</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Cơ chế Boosting — vì sao nhắm vào bias, không phải variance</div>
+<p>Boosting (AdaBoost, Gradient Boosting/XGBoost) hoạt động hoàn toàn khác Bagging về cấu trúc: thay vì train B cây ĐỘC LẬP song song rồi lấy trung bình (Bagging), Boosting train cây TUẦN TỰ — mỗi cây MỚI được train để sửa đúng phần lỗi (residual — phần chênh lệch còn lại giữa dự đoán hiện tại và giá trị thật) mà các cây TRƯỚC ĐÓ chưa sửa được. Về mặt toán học, đây chính là <strong>gradient descent</strong> (đã học ở L3.2) nhưng thực hiện trong không gian HÀM SỐ thay vì không gian THAM SỐ — mỗi cây mới là 1 "bước đi" theo hướng gradient âm của loss function.</p>
+<p><strong>Vì sao đây là bias-reduction, không phải variance-reduction</strong>: mỗi cây con trong Boosting thường CỐ Ý làm rất NÔNG (shallow — VD depth 3-6, không phải depth 20) → bản thân từng cây có variance THẤP (cây nông, ít khả năng "học tủ" 1 vài điểm nhiễu). Cái mà Boosting tấn công không phải variance (đã thấp sẵn ở từng cây con) — mà là <strong>phần lỗi CÓ HỆ THỐNG</strong> (bias) mà 1 cây nông đơn lẻ không đủ khả năng biểu diễn: cây đầu bắt được pattern lớn nhất, cây 2 bắt phần còn sót, cây 3 bắt phần còn sót nữa... Tổng nhiều cây nông CỘNG LẠI tạo ra 1 hàm số phức tạp hơn hẳn 1 cây nông đơn lẻ có thể biểu diễn — đây chính xác là giảm bias (tăng khả năng biểu diễn/capacity), không phải giảm variance.</p>
+</div>
+
+<table>
+<tr><th>Tiêu chí</th><th>Bagging (Random Forest)</th><th>Boosting (XGBoost/AdaBoost)</th></tr>
+<tr><td>Cấu trúc train</td><td>B cây ĐỘC LẬP, song song</td><td>Cây TUẦN TỰ, cây sau sửa lỗi cây trước</td></tr>
+<tr><td>Từng cây con</td><td>Sâu, phức tạp (variance cao TỪNG CÂY)</td><td>Nông, đơn giản (variance thấp TỪNG CÂY, bias cao TỪNG CÂY)</td></tr>
+<tr><td>Cơ chế giảm error</td><td>Lấy trung bình → giảm variance theo công thức ρσ²+((1-ρ)/B)σ²</td><td>Cộng dồn nhiều cây nông → tăng capacity tổng thể → giảm bias</td></tr>
+<tr><td>Rủi ro nếu lạm dụng</td><td>Tăng B vô hạn: an toàn, chỉ tiệm cận floor ρσ², hiếm khi tệ hơn</td><td>Tăng số vòng lặp (n_estimators) vô hạn: SẼ overfit — sau khi bias đã giảm đủ, thêm cây chỉ còn tăng variance (đúng lý do cần early_stopping_rounds đã nêu ở hiểu lầm #3 cuối trang)</td></tr>
+</table>
+
+<p><strong>Insight tổng hợp</strong>: câu "Bagging giảm variance, Boosting giảm bias" không phải quy ước cần học thuộc — nó là HỆ QUẢ TẤT YẾU của 2 cấu trúc khác nhau: Bagging = nhiều model MẠNH, ĐỘC LẬP, lấy trung bình (trung bình luôn làm mượt = giảm variance); Boosting = nhiều model YẾU, PHỤ THUỘC NHAU, cộng dồn khả năng biểu diễn (cộng dồn làm tăng capacity = giảm bias). Hiểu đúng cơ chế này giúp trả lời được câu hỏi khó hơn: "vậy có thể Boost các cây SÂU không?" — Có thể, nhưng mất hết lợi ích kiểm soát bias/variance tách biệt, dễ overfit nhanh hơn nhiều (vì mỗi cây con đã tự mang variance cao, cộng dồn thêm nữa thì variance tổng cũng tăng theo).</p>
+
+<h2>6. Regularization = giảm variance tại cost tăng bias</h2>
+
+<p>Đây là fundamental tradeoff (đánh đổi nền tảng). <strong>Regularization</strong> (điều chuẩn hoá — kỹ thuật "phạt" model nếu nó trở nên quá phức tạp) ép weights (trọng số) nhỏ lại → model đơn giản hơn → bias tăng chút, variance giảm nhiều.</p>
+
+<pre><code># Ridge regression (còn gọi L2 regularization):
+minimize:  Σ(y_i - ŷ_i)²  +  λ Σ w_j²
+                             ─────────
+                             regularizer (số hạng phạt)
+
+# Giải thích ký hiệu:
+#   y_i, ŷ_i = giá trị thật và giá trị model dự đoán cho điểm dữ liệu thứ i
+#   w_j      = trọng số (weight) thứ j của model — số càng lớn nghĩa là model
+#              càng "tin tưởng"/phụ thuộc nhiều vào feature thứ j đó
+#   λ        = hệ số điều chỉnh độ mạnh của phạt (siêu tham số, tự chọn qua CV)
+#
+# λ = 0     → không phạt gì, model tự do khớp mọi weight → variance cao (nếu p > n,
+#             tức số feature p nhiều hơn số mẫu n, bài toán "thiếu ràng buộc")
+# λ = ∞     → phạt vô cùng lớn buộc mọi w_j → 0 → model dự đoán hằng số → toàn bộ là bias
+# λ = tuned → điểm cân bằng tối ưu, chọn qua cross-validation (đã học ở L2.4)
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 "Effective degrees of freedom" — đo CHÍNH XÁC λ đang cho model bao nhiêu "tự do"</div>
+<p><strong>Vấn đề</strong>: nói "λ lớn hơn thì model đơn giản hơn" là đúng nhưng mơ hồ — đơn giản hơn CHÍNH XÁC bao nhiêu? <strong>Effective degrees of freedom</strong> (bậc tự do hiệu dụng, viết tắt df) là 1 con số đo được, lượng hoá chính xác "model đang có bao nhiêu bậc tự do thực sự" tại 1 giá trị λ cho trước — không phải đếm số tham số thô (VD "100 feature = 100 bậc tự do"), vì regularization đã "trói bớt" 1 phần tự do đó lại.</p>
+<pre><code>df(λ) = Σ dⱼ² / (dⱼ² + λ)
+
+# dⱼ = "singular value" thứ j của ma trận dữ liệu X (1 khái niệm từ đại số tuyến
+#      tính — Singular Value Decomposition/SVD — đo "độ mạnh" của hướng dữ liệu
+#      thứ j; không cần hiểu sâu SVD để dùng công thức này, chỉ cần biết dⱼ càng
+#      lớn nghĩa là hướng dữ liệu đó càng "quan trọng"/mang nhiều thông tin)
+# λ  = hệ số phạt như ở công thức Ridge phía trên
+
+# Với mỗi hướng dữ liệu j: tỷ lệ dⱼ²/(dⱼ²+λ) nằm trong khoảng (0, 1] —
+#   hướng "mạnh" (dⱼ lớn) gần như KHÔNG bị co lại (tỷ lệ gần 1)
+#   hướng "yếu" (dⱼ nhỏ, dễ là nhiễu) bị co MẠNH về 0 (tỷ lệ gần 0)
+# Cộng tất cả tỷ lệ lại = tổng "bậc tự do" model THỰC SỰ đang dùng</code></pre>
+<p><strong>Ví dụ số cụ thể</strong>: giả sử dữ liệu có 3 hướng chính với singular value <code>d₁=10, d₂=3, d₃=0.5</code> (hướng 1 rất mạnh, hướng 3 rất yếu — có thể là nhiễu). Với λ=1:</p>
+<pre><code>df(λ=1) = 10²/(10²+1) + 3²/(3²+1) + 0.5²/(0.5²+1)
+        = 100/101 + 9/10 + 0.25/1.25
+        = 0.990 + 0.900 + 0.200
+        = 2.09 bậc tự do (thay vì 3 bậc tự do "thô" nếu không regularize)
+
+→ Model gần như GIỮ NGUYÊN toàn bộ khả năng dùng hướng 1 (0.990 ≈ 1, hướng
+  mạnh, đáng tin), giữ phần lớn hướng 2 (0.900), nhưng GẦN NHƯ BỎ hướng 3
+  (0.200, hướng yếu — λ=1 đã đủ để "nghi ngờ" hướng này chủ yếu là nhiễu).</code></pre>
+<p><strong>Insight</strong>: đây chính là cơ chế TOÁN HỌC đằng sau trực giác "λ tăng → variance giảm" — λ không co đều tất cả các hướng dữ liệu như nhau, nó co MẠNH các hướng yếu (nhiều khả năng là nhiễu → nguồn variance) và HẦU NHƯ KHÔNG ĐỘNG tới các hướng mạnh (tín hiệu thật). Đây là lý do Ridge regression thường không làm bias tăng nhiều dù variance giảm mạnh — nó "cắt tỉa" đúng chỗ ít giá trị nhất.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Chỗ dễ nhầm nhất — Ridge (L2) và Lasso (L1) KHÔNG chỉ khác "số mũ", mà khác cơ chế hoàn toàn</div>
+<p>Nhiều người nghĩ Ridge (phạt <code>Σw_j²</code>, số mũ 2) và Lasso (phạt <code>Σ|w_j|</code>, trị tuyệt đối) chỉ là "1 biến thể nhỏ của nhau". Thực ra 2 kỹ thuật cho ra kết quả CHẤT LƯỢNG khác hẳn: Ridge co MỌI weight về gần 0 nhưng KHÔNG BAO GIỜ co về ĐÚNG 0 (trừ trường hợp λ=∞) — mọi feature vẫn còn 1 chút ảnh hưởng. Lasso, nhờ hình dạng hình học của trị tuyệt đối (đường phạt có "góc nhọn" tại 0, khác đường cong tròn mượt của bình phương), thường co MỘT SỐ weight về ĐÚNG BẰNG 0 — tức là Lasso tự động LOẠI BỎ hẳn 1 số feature (feature selection tự động), Ridge thì không bao giờ loại bỏ hẳn feature nào.</p>
+<table>
+<tr><th>Tiêu chí</th><th>Ridge (L2)</th><th>Lasso (L1)</th></tr>
+<tr><td>Công thức phạt</td><td><code>λΣw_j²</code></td><td><code>λΣ|w_j|</code></td></tr>
+<tr><td>Weight về đúng 0?</td><td>Không bao giờ (chỉ tiệm cận)</td><td>Có — tự động loại feature</td></tr>
+<tr><td>Khi nào chọn</td><td>Tin rằng NHIỀU feature đều có đóng góp nhỏ, muốn giữ hết nhưng làm mượt</td><td>Nghi ngờ CHỈ 1 số ít feature thực sự quan trọng, muốn tự động lọc bớt</td></tr>
+<tr><td>Elastic Net</td><td colspan="2">Kết hợp cả 2: <code>λ₁Σ|w_j| + λ₂Σw_j²</code> — vừa loại được feature (từ L1) vừa ổn định hơn khi các feature tương quan cao với nhau (từ L2, Lasso một mình có thể chọn ngẫu nhiên 1 trong nhóm feature tương quan cao, Elastic Net ổn định hơn)</td></tr>
+</table>
+</div>
+
+<h2>7. Câu phỏng vấn kinh điển</h2>
+
+<div class="callout warn">
+<div class="label">Q: "Train accuracy 95%, test 55%. Chẩn đoán và fix?"</div>
+<p>Chẩn đoán: <strong>overfitting nặng</strong> (gap 40pp). Steps:</p>
+<ol>
+  <li>Check data leak trước (nếu test set chứa training samples, giả accuracy). Với time-series: check gap validation không dùng future.</li>
+  <li>Regularize: L2, dropout (NN), max_depth giảm, min_child_weight tăng (XGBoost).</li>
+  <li>More data: nếu có source thêm, thu thập.</li>
+  <li>Simpler model: từ XGBoost → linear, hoặc giảm hidden layers.</li>
+  <li>Early stopping: chọn n_estimators tại val loss minimum.</li>
+  <li>Feature selection: drop features noise (SHAP importance thấp).</li>
+</ol>
+</div>
+
+<div class="callout">
+<div class="label">Q: "Train 60%, test 58%. Đủ deploy chưa?"</div>
+<p>Depends on baseline + business ROI:</p>
+<ul>
+  <li>Random baseline nào (2-class = 50%, 3-class = 33-42%)?</li>
+  <li>V18 baseline 60.5% với random 42% → skill score = 32%. Đủ deploy nếu ROI trade dương.</li>
+  <li>Ceteris paribus, gap 2pp là healthy — không overfit.</li>
+  <li>Nếu underfitting: thử feature engineering trước (không tăng complexity mù quáng).</li>
+</ul>
+</div>
+
+<div class="callout warn">
+<div class="label">⚠️ 3 hiểu lầm phổ biến về bias-variance</div>
+<ol>
+  <li><strong>"Overfit = model tệ, underfit cũng tệ, nên vừa vừa là ok"</strong> — SAI. Chỉ nhìn train/val gap, KHÔNG nhìn <em>mức tuyệt đối</em>. Model train 55%, val 54% (gap nhỏ) vẫn tệ (underfit). Gap nhỏ chỉ nghĩa là "không overfit", không phải "tốt". Phải so với baseline (random, majority class).</li>
+  <li><strong>"Thêm data luôn giảm variance"</strong> — SAI có điều kiện. Đúng khi data mới cùng distribution với data cũ. Nếu data mới đến từ regime khác (COVID period, market crash) → có thể làm bias tăng (model học pattern mâu thuẫn) mà variance không giảm bao nhiêu. Data quality &gt; data quantity.</li>
+  <li><strong>"XGBoost càng nhiều tree càng ít bias"</strong> — SAI. Boosting là <em>bias-reduction ensemble</em> ở giai đoạn đầu, nhưng sau khi hit interpolation threshold, thêm tree chỉ tăng variance (overfit). Fix bằng <code>early_stopping_rounds</code>, không phải cứ tăng <code>n_estimators</code>. Ngược lại: Bagging (Random Forest) là <em>variance-reduction</em> — thêm tree hầu như luôn tốt (đến plateau).</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Định nghĩa bias và variance bằng target shooting analogy.</p>
+<p class="a">Bias = distance from bulls-eye. Variance = spread of shots. Low-bias low-var = tất cả trúng target. High-var = tán loạn. High-bias = cụm sai chỗ.</p>
+
+<p class="q">2. Model có train 95%, val 55%. Chẩn đoán? 5 fix?</p>
+<p class="a">Overfitting. Fix: regularize (L1/L2/dropout), more data, simpler model, early stopping, feature selection.</p>
+
+<p class="q">3. Deep learning "double descent" là gì?</p>
+<p class="a">Test error curve: xuống → LÊN (peak tại interpolation threshold, model complexity = n samples) → XUỐNG lại (over-parameterized regime). Modern giant NN hoạt động ở regime 2.</p>
+
+<p class="q">4. Regularization làm gì với bias và variance?</p>
+<p class="a">Giảm variance (model đơn giản hơn) tại cost tăng bias 1 chút. Chọn λ optimal qua cross-validation.</p>
+
+<p class="q">5. V19.5 cv +0.61pp vs V18 nhưng deploy fail. Vì sao? Bài học?</p>
+<p class="a">Cv aggregate không đủ. Phải check feature adoption (V19.5 có 16 constant features). Cần build fail-loud monitoring (V20 Slice 5 consistency cron). Bài học: đánh giá model qua nhiều lens — cv + calibration + feature analysis + production drift.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>V19.5 case study: <code>reports/_baselines/v19_5_senior_signoff.md</code></li>
+    <li>V20 Slice 3 prune (bias/variance rebalance): <code>reports/_baselines/v20_slice_3_signoff.json</code></li>
+    <li>Multi-seed spread = variance estimate: xem <code>multi_seed_spread</code> trong artifact</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://homes.cs.washington.edu/~pedrod/papers/mlc00a.pdf">Domingos (2000) — Unified Bias-Variance Decomposition</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1912.02292">Nakkiran et al (2019) — Deep Double Descent</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1812.11118">Belkin, Hsu, Ma, Mandal (2019) — Reconciling modern machine-learning practice and the classical bias-variance trade-off (PNAS)</a></li>
+    <li>📖 Trevor Hastie et al — <em>Elements of Statistical Learning</em>, Ch 7 (free PDF từ Stanford)</li>
+    <li>🎥 <a href="https://youtu.be/EuBBz3bI-aA">StatQuest — Bias/Variance visualized</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L1_3_trees_xgboost.html">← L1.3</a>
+  <a href="L3_1_nn_backprop.html">L3.1 · Neural Networks →</a>
+</div>
+
+</div>
+</body>
+</html>

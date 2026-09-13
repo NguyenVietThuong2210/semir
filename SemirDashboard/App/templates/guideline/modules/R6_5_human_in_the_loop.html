@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R6.5 · Human-in-the-Loop — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · AI Agents · Điểm 5/8</div>
+  <h1>R6.5 · Human-in-the-Loop (HITL) — Soft Gate vs Hard Gate</h1>
+  <p class="subtitle">4 pattern HITL đã học đủ ở L6.5 — điều còn thiếu là phân biệt rạch ròi quyết định nào được phép "giao cho agent tự quyết" và quyết định nào thì không, dù đã delegate rõ ràng.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+  <li>Ôn nhanh 3 pattern HITL (Approve/Reject, Edit, Redirect) + auto-approve fallback — không học lại chi tiết, chỉ nhắc để dùng cho phần mới.</li>
+  <li>Phân biệt rõ 2 loại approval gate: <strong>soft gate</strong> (có thể delegate) vs <strong>hard gate</strong> (không thể delegate dù đã có "uỷ quyền").</li>
+  <li>Hiểu vì sao permission classifier của 1 hệ thống production thật (Claude Code) tự nó implement đúng khái niệm hard gate.</li>
+  <li>Áp dụng đúng: nhận diện 1 quyết định trong <code>predictor</code> thuộc loại nào trước khi tự tin "giao cho agent quyết luôn".</li>
+  <li>Biết khung <strong>risk-tiering 3 bậc</strong> ngành tài chính thật (không chỉ 2 loại soft/hard) và quy định pháp lý cụ thể (EU AI Act) đang buộc hard gate trở thành YÊU CẦU, không chỉ best practice.</li>
+  <li>Phân biệt <strong>kill switch</strong> (con người can thiệp thủ công) với <strong>circuit breaker</strong> (kiến trúc tự chặn trước khi hành động xảy ra) — 2 cơ chế khác nhau, hay bị gộp làm một.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p><a href="L6_5_hitl.html">L6_5_hitl.html</a> đã dạy đủ và chi tiết 4 pattern approval (Approve/Edit/Redirect) + cơ chế auto-approve fallback + audit trail — không lặp lại ở đây. Trang này bổ sung phần <code>L6_5</code> chưa có: <strong>ranh giới giữa "được phép tự động hoá quyết định" và "không bao giờ được phép"</strong> trong production 2026, minh hoạ bằng 1 case study thật của chính dự án.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Một trợ lý được sếp giao toàn quyền quyết định việc văn phòng: mua bút, sắp lịch họp, chọn quán ăn trưa cho team — sếp không cần ký duyệt từng việc (soft gate, đã <em>delegate</em>). Nhưng khi trợ lý cần <strong>ký séc rút tiền công ty</strong>, dù sếp có nói "em cứ tự quyết cho anh" bằng miệng, ngân hàng vẫn yêu cầu chữ ký thật của sếp trên giấy tờ — không có "uỷ quyền bằng lời" nào thay thế được chữ ký cho hành động không thể đảo ngược liên quan tới tiền thật (hard gate). Hệ thống ngân hàng không tin vào lời "tôi đã giao quyền" — nó đòi bằng chứng xác thực trực tiếp.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Nhắc nhanh 3 pattern + auto-approve fallback (chi tiết đầy đủ ở L6.5)</h3>
+<table>
+<tr><th>Pattern</th><th>Cơ chế 1 câu</th></tr>
+<tr><td>Approve/Reject</td><td>Người xác nhận có/không cho 1 hành động agent đề xuất</td></tr>
+<tr><td>Edit</td><td>Người sửa trực tiếp output agent trước khi chấp nhận</td></tr>
+<tr><td>Redirect</td><td>Người thay đổi hướng đi của agent giữa chừng (không chỉ sửa output cuối)</td></tr>
+<tr><td>Auto-approve fallback</td><td>Nếu người không phản hồi sau ngưỡng thời gian, hệ thống tự quyết theo rule định trước — có audit trail đầy đủ</td></tr>
+</table>
+
+<h3>2. Soft gate vs Hard gate — định nghĩa chính xác</h3>
+<p><strong>Soft gate</strong>: quyết định kỹ thuật thông thường, có thể sai và sửa lại được với chi phí thấp — "có nên fix bug này không, fix theo cách nào". Loại này <strong>có thể</strong> giao cho 1 sub-agent đóng vai "senior leader" tự phân tích và quyết, không cần hỏi lại người dùng cho từng quyết định nhỏ.</p>
+<p><strong>Hard gate</strong>: hành động <strong>consequential</strong> (hậu quả thật) và <strong>khó/không thể đảo ngược</strong> — ghi dữ liệu tài chính thật, xoá dữ liệu production, mutate ledger (sổ cái giao dịch). Loại này <strong>không bao giờ</strong> được tự động hoá hoàn toàn, dù người dùng đã "delegate quyết định" bằng lời cho agent từ trước.</p>
+
+<table>
+<tr><th>Tiêu chí</th><th>Soft gate</th><th>Hard gate</th></tr>
+<tr><td>Ví dụ</td><td>Chọn cách fix 1 bug, refactor code</td><td>Ghi ledger tài chính, xoá dữ liệu production</td></tr>
+<tr><td>Có thể đảo ngược?</td><td>Có, chi phí sửa thấp (revert commit)</td><td>Khó/không — tiền đã chuyển, dữ liệu đã mất</td></tr>
+<tr><td>Bypass được bằng "agent persona tự tin"?</td><td>Có — sub-agent "senior leader" tự quyết là đủ</td><td>Không — permission classifier vẫn chặn dù đã uỷ quyền trước</td></tr>
+<tr><td>Cơ chế đúng</td><td>Trigger sub-agent phân tích + quyết định, thực thi luôn</td><td>Agent tính toán/đề xuất cụ thể (SQL, con số) → người xác nhận trực tiếp trên đúng hành động đó</td></tr>
+</table>
+
+<h3>3. Vì sao "đã delegate" không đủ cho hard gate</h3>
+<p>Trực giác sai phổ biến: "user đã nói tôi cứ tự quyết, vậy tôi có quyền làm bất cứ gì cần thiết". Vấn đề: lời uỷ quyền ("cứ tự quyết đi") thường được nói cho 1 lớp quyết định <em>kỹ thuật thông thường</em> tại thời điểm nói, không phải 1 tấm séc trắng (blank check) cho mọi hành động về sau — kể cả hành động mà chính người nói cũng chưa hình dung hết hậu quả cụ thể lúc đó. Hệ thống permission tốt không dựa vào "ý định được suy luận" — nó đòi <strong>xác nhận trực tiếp trên đúng hành động cụ thể</strong> tại đúng thời điểm thực thi.</p>
+
+<h3>4. Risk-tiering 3 bậc — soft/hard gate ở mục 2 là bản đơn giản hoá của khung ngành tài chính thật</h3>
+<p>Mục 2 chia 2 loại (soft/hard). Ngành tài chính (nơi hậu quả sai của agent là tiền thật) đã hình thành 1 khung <strong>3 bậc</strong> cụ thể hơn, đáng biết vì <code>predictor</code> (AI Trader) đúng thuộc lĩnh vực này:</p>
+<table>
+<tr><th>Tier</th><th>Định nghĩa</th><th>Yêu cầu bắt buộc</th><th>Ví dụ</th></tr>
+<tr><td><strong>Tier-1 (critical impact)</strong></td><td>Agent TRỰC TIẾP kích hoạt hành động pháp lý/tài chính/quy định (VD tự nộp báo cáo giao dịch đáng ngờ — SAR)</td><td>Không được tự động hoàn toàn — con người phải duyệt TRƯỚC khi hành động xảy ra</td><td>≈ "hard gate" mục 2 — ghi ledger giao dịch thật, deploy thẳng công thức score mới</td></tr>
+<tr><td><strong>Tier-2 (moderate impact)</strong></td><td>Agent HỖ TRỢ ra quyết định nhưng không tự hành động — output ảnh hưởng quyết định của người, không tự thực thi</td><td>Bắt buộc giải thích được (explainability) + review có người tham gia, nhưng agent được phép tự tính toán/đề xuất</td><td>Sinh báo cáo phân tích, đề xuất backtest — người vẫn là bên bấm nút cuối cùng</td></tr>
+<tr><td><strong>Tier-3 (low impact)</strong></td><td>Chức năng nội bộ hỗ trợ, không ảnh hưởng quyết định tài chính trực tiếp</td><td>Không cần review — đúng "soft gate" mục 2</td><td>Tìm kiếm tri thức nội bộ, soạn draft báo cáo</td></tr>
+</table>
+<p>Khác biệt quan trọng so với mục 2: khung 3 bậc tách rõ Tier-2 ra khỏi Tier-1 — 1 agent có thể được TỰ DO tính toán/đề xuất (không cần hỏi từng bước, giống soft gate) nhưng KHÔNG được tự thực thi hành động cuối, dù chính bản thân việc "đề xuất" đó không hề chậm hay bị chặn. Đây là điểm bảng 2-cột mục 2 gộp chung vào 1 dòng "hard gate" dễ gây hiểu lầm là MỌI thứ liên quan tới hành động đó đều bị chặn — thực ra chỉ bước THỰC THI cuối cùng mới cần hard gate, các bước tính toán/phân tích trước đó vẫn chạy tự do.</p>
+
+<h3>5. Quy định pháp lý thật — hard gate không còn là "nên làm", mà là "phải làm" (2026)</h3>
+<p>Với hệ thống tài chính, kỷ luật hard gate ở mục 2-3 không còn chỉ là lựa chọn kiến trúc tốt — nó đang trở thành <strong>yêu cầu pháp lý</strong>:</p>
+<ul>
+<li><strong>EU AI Act</strong>: hạn tuân thủ GỐC cho hệ thống AI "rủi ro cao" (high-risk, gồm cả giám sát con người — human oversight) là 2/8/2026, nhưng gói "Digital Omnibus" (Hội đồng EU thông qua 29/6/2026) đã <strong>dời hạn này sang 2/12/2027</strong> — chỉ nghĩa vụ minh bạch hẹp hơn (Article 50, công bố tương tác với AI) còn hiệu lực đúng ngày gốc 2/8/2026. Với lĩnh vực tài chính, giám sát con người (human oversight) vẫn LÀ điều kiện tuân thủ bắt buộc theo luật — chỉ khác ở MỐC THỜI GIAN bắt buộc, không phải khác về việc có bắt buộc hay không.</li>
+<li><strong>FINRA Báo cáo giám sát 2026</strong> (Mỹ): liệt kê rõ các "risk vector" cụ thể của agent tài chính — agent hành động mà KHÔNG có xác thực của con người, phạm vi/quyền hạn vượt quá ý định người dùng, khó truy vết trong suy luận nhiều bước, và nguy cơ lạm dụng dữ liệu nhạy cảm — 4 rủi ro này khớp gần như 1:1 với đúng lý do hard gate tồn tại ở mục 2-3 trang này.</li>
+</ul>
+<p>Áp dụng vào <code>predictor</code>: dù AI Trader hiện tại chưa thuộc phạm vi quản lý trực tiếp của EU AI Act (không hoạt động ở EU), <strong>bộ 4 risk-vector của FINRA vẫn là 1 checklist thực dụng đáng tự áp dụng nội bộ</strong> trước khi nới bất kỳ hard gate nào — không cần chờ luật bắt buộc mới làm đúng.</p>
+
+<h3>6. Kill switch vs Circuit breaker — 2 cơ chế khác nhau, hay bị coi là một</h3>
+<table>
+<tr><th>Cơ chế</th><th>Ai/cái gì hành động</th><th>Thời điểm can thiệp</th></tr>
+<tr><td><strong>Kill switch</strong></td><td>Con người — thấy có gì bất thường, chủ động dừng agent</td><td>SAU khi vấn đề đã bắt đầu xảy ra (phản ứng, reactive)</td></tr>
+<tr><td><strong>Circuit breaker</strong></td><td>Kiến trúc — 1 lớp chặn (callback/gateway) đứng giữa agent và hành động, tự động chặn TRƯỚC khi hành động không được phép chạm tới hệ thống thật</td><td>TRƯỚC khi hành động xảy ra (chủ động, proactive) — không cần con người phát hiện kịp</td></tr>
+</table>
+<p>Nguyên tắc kiến trúc thực dụng cho circuit breaker (khác nguyên tắc chung chung "cẩn thận với hành động nguy hiểm"): <strong>pre-authorize CHỈ những containment action có thể đảo ngược</strong> — VD tự động dừng 1 session, tự động cô lập 1 host — được phép chạy TỰ ĐỘNG không cần hỏi; còn hành động <strong>xoá dữ liệu thì KHÔNG BAO GIỜ</strong> được nằm trong danh sách tự động, dù là để "containment" khẩn cấp. Cơ chế thực thi thật không nằm ở lời nhắc trong prompt ("hãy cẩn thận") — nó nằm ở <strong>tầng callback/gateway chặn request trước khi chạm tool</strong>, làm cho hành động bị cấm trở nên <em>không thể thực hiện được về mặt kiến trúc</em>, không chỉ "được khuyên là không nên".</p>
+<pre><code>Sai (chỉ dựa vào prompt — KHÔNG phải circuit breaker thật):
+  Agent ──"system prompt: hãy cẩn thận khi xoá dữ liệu"──▶ [gọi thẳng tool xoá]
+  → Không có gì ép buộc thật — agent VẪN CÓ THỂ gọi tool nếu suy luận sai/bị injection.
+
+Đúng (circuit breaker kiến trúc — chặn TRƯỚC khi chạm hệ thống thật):
+  Agent ──gọi tool "delete_production_row"──▶ [Callback/Gateway layer]
+                                                    │
+                                        Có trong danh sách containment
+                                        ĐẢO NGƯỢC ĐƯỢC (session/host)?
+                                          │YES              │NO (delete = không đảo ngược)
+                                          ▼                  ▼
+                                    Cho chạy tự động     CHẶN CỨNG — bắt buộc
+                                                          người xác nhận trước
+</code></pre>
+<p><strong>Bằng chứng vì sao không thể chỉ tin "agent test chạy tốt"</strong>: 1 khảo sát production 2026 ghi nhận 698 trường hợp hệ thống AI triển khai thật hành động lệch khỏi ý định người dùng hoặc thực hiện hành động "che giấu" (covert) — tăng <strong>4.9 lần</strong> so với 6 tháng trước đó. Đây chính là lý do hard gate/circuit breaker không phải sự thận trọng thừa — nó là phản ứng với 1 xu hướng thực tế đang tăng, không phải rủi ro lý thuyết.</p>
+
+<h3>7. Worked example — thiết kế 1 HITL gate cụ thể cho quy trình kiểu <code>ai_orchestrator</code></h3>
+<p>Mục 2-6 đã dạy lý thuyết (soft/hard, Tier 1-3, kill switch/circuit breaker). Mục này ráp lại thành 1 THIẾT KẾ CỤ THỂ: <code>ai_orchestrator</code> của <code>predictor</code> có <strong>11 agent</strong> (pm, analyser, spec_analyze, task_decompose, qa_verify, engineer, reviewer, security, qa, deploy, retrospective — đúng theo code thực tế <code>orchestrator/graph.py</code>; <code>CLAUDE.md</code> của dự án đó ghi "10 agent" nhưng đã lỗi thời, chưa cập nhật <code>qa_verify</code> — agent được thêm sau cho vòng lặp Sprint per-task). Câu hỏi thiết kế thật: <strong>agent nào trong 11 agent này cần 1 HITL gate đồng bộ, và gate đó thiết kế thế nào cho đúng</strong>?</p>
+<p><strong>Bước 1 — xếp Tier cho agent <code>deploy</code></strong> (áp khung mục 4): bước <code>deploy</code> đẩy code lên môi trường thật → khớp <strong>Tier-1 (critical impact)</strong>, giống dòng "đổi trọng số rồi deploy" ở bảng mục 4-5. 10 agent còn lại (pm, analyser, spec_analyze...) chỉ soạn/phân tích/viết code trên nhánh làm việc, chưa chạm production → Tier-3, chạy tự do, không cần gate đồng bộ.</p>
+<p><strong>Bước 2 — định nghĩa state cho task chờ duyệt</strong> (nối working memory, <code>R6_1_memory.html §2.2</code>):</p>
+<pre><code>{
+  "step": "deploy",
+  "status": "pending_approval",        // submitted → pending_approval → approved/rejected/timed_out
+  "diff_summary": "3 file thay đổi, +42/-11 dòng, không đụng senior_score.py",
+  "target": "production (predictor-api-1)",
+  "requested_at": "2026-09-07T09:00:00+07:00",
+  "requested_by_agent": "deploy"
+}</code></pre>
+<p><strong>Bước 3 — thiết kế UI duyệt</strong> (tối giản, không cần dashboard riêng): hiển thị đúng <code>diff_summary</code> + 2 lựa chọn rõ ràng ("duyệt" / "từ chối") ngay trong phiên Claude Code đang chạy — đúng mô hình đã hoạt động thật ở case study mục "Ví dụ cụ thể" (permission classifier chặn, hỏi lại trực tiếp). KHÔNG dùng agent persona ("sub-agent senior leader tự tin") để bypass bước hỏi này, đúng nguyên tắc mục 3.</p>
+<p><strong>Bước 4 — chính sách timeout, quyết định SẢN PHẨM chứ không phải mặc định kỹ thuật</strong> (nối nghiên cứu thực dụng 2026: "1 gate chờ mãi mãi là 1 quy trình hỏng — mọi gate cần hạn chót VÀ 1 fallback rõ ràng, và bản thân lựa chọn timeout LÀ 1 quyết định sản phẩm, không phải giá trị mặc định tuỳ tiện"):</p>
+<table>
+<tr><th>Lựa chọn timeout</th><th>Hành vi khi hết hạn</th><th>Có hợp cho <code>deploy</code> (Tier-1) không?</th></tr>
+<tr><td>Default-approve (tự động chạy nếu không ai trả lời)</td><td>Task tự chuyển "approved" sau ngưỡng thời gian</td><td><strong>KHÔNG</strong> — "1 approval hết hạn rồi TỰ CHẠY" tương đương gate không hề tồn tại, vi phạm trực tiếp định nghĩa hard gate ở mục 2</td></tr>
+<tr><td>Default-deny (từ chối nếu không ai trả lời)</td><td>Task tự chuyển "timed_out", KHÔNG chạy, dừng an toàn</td><td><strong>CÓ</strong> — đúng nguyên tắc "an toàn hơn khi nghi ngờ", đánh đổi bằng việc deploy có thể trễ tới khi có người duyệt</td></tr>
+</table>
+<p><strong>Bước 5 — escalation, và lý do <code>predictor</code> KHÔNG cần bước này</strong>: best practice production 2026 khuyến nghị 1 đường escalation (báo cho người duyệt phụ, đưa vào hàng đợi review theo ca trực) khi người duyệt chính không phản hồi kịp. <code>predictor</code> là hệ thống <strong>1 người vận hành</strong> (đúng bối cảnh đã nêu ở <code>R6_1_memory.html §10</code>) — không có "người duyệt phụ" để escalate tới. Thiết kế đúng cho ngữ cảnh này: <code>timed_out</code> → task quay lại hàng đợi, chờ session Claude Code TIẾP THEO của chính người vận hành, không tự tạo ra 1 cơ chế escalation cho 1 đội ngũ chưa tồn tại (đúng "start simple", tránh over-engineering).</p>
+<pre><code>State machine đầy đủ cho gate "deploy" (Tier-1, default-deny khi timeout):
+
+  submitted ──deploy agent tạo diff xong──▶ pending_approval
+                                                   │
+                        ┌──────────────────────────┼──────────────────────────┐
+                        │ người duyệt "approve"     │ hết hạn (VD 4 giờ,        │ người duyệt "reject"
+                        │ trong hạn                 │ chưa ai phản hồi)         │ trong hạn
+                        ▼                           ▼                           ▼
+                    approved                    timed_out                   rejected
+                        │                    (default-deny,               (agent dừng,
+                        ▼                     KHÔNG tự chạy)                báo lý do)
+                deploy thật sự chạy               │
+                                          quay lại hàng đợi, chờ
+                                          session tiếp theo của
+                                          người vận hành</code></pre>
+<p><strong>Bước 6 — tránh "approver fatigue" (mục nghiên cứu 2026: gate trigger quá thường xuyên khiến người duyệt ngừng đọc kỹ, chỉ bấm duyệt theo quán tính)</strong>: đây chính là lý do KHÔNG áp gate đồng bộ cho cả 11 agent — nếu mọi bước trong 11 agent đều dừng lại chờ duyệt, người vận hành sẽ bị "ngợp" bởi số lượng approval, dẫn tới rủi ro bấm duyệt không đọc kỹ (làm mất tác dụng của chính hard gate). Thiết kế đúng theo Tier (bước 1): chỉ 1/11 agent (<code>deploy</code>) cần gate đồng bộ — 10 agent còn lại chạy tự do, giữ đúng tỷ lệ "gate hiếm khi kích hoạt, mỗi lần kích hoạt đều đáng chú ý thật sự" mà nghiên cứu khuyến nghị.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Case study thật — 2 memory file trong session Claude Code của chính dự án <code>predictor</code> (2026-08-22/23, sự cố ledger AI Trader):</p>
+<pre><code>Bối cảnh: user đã có standing preference — "khi cần quyết định kỹ thuật, trigger 1
+sub-agent 'AI senior leader' để tự phân tích + quyết thay vì hỏi lại tôi".
+
+Áp dụng cho soft gate: hoạt động tốt.
+  → "Có nên fix bug X không, fix thế nào?" → sub-agent phân tích → quyết → thực thi.
+  → Không cần hỏi lại user cho từng bug nhỏ.
+
+Áp dụng cho hard gate: BỊ CHẶN, đúng như thiết kế.
+  → Sub-agent cố ghi dữ liệu ledger tài chính đã sửa (corrected financial-ledger data)
+  → Permission classifier CHẶN, dù user đã "delegate quyết định" từ trước cho agent
+  → Nguyên văn ghi nhận: "a sub-agent attempting a consequential, hard-to-undo write
+     ... was still blocked even when the user had explicitly delegated that decision"
+
+Fallback đúng cho hard gate: tự làm phân tích/tính toán, trình bày đề xuất CỤ THỂ
+  (đúng câu SQL, đúng con số) cho user, xin xác nhận trực tiếp trên đúng hành động đó
+  trước khi thực thi — không dùng agent persona để thay thế bước này.
+</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<p>Bảng phân loại nhanh — áp cho các loại hành động phổ biến trong 1 hệ thống ML production:</p>
+<table>
+<tr><th>Hành động</th><th>Loại gate</th><th>Lý do</th></tr>
+<tr><td>Sửa 1 hàm tính feature trong code</td><td>Soft</td><td>Revert commit dễ dàng nếu sai</td></tr>
+<tr><td>Chạy lại backtest với tham số mới</td><td>Soft</td><td>Không mutate dữ liệu thật, chỉ đọc + tính toán</td></tr>
+<tr><td>Ghi/sửa bản ghi giao dịch thật (<code>ai_trader_trades</code>)</td><td>Hard</td><td>Ảnh hưởng tiền/số liệu thật, khó đảo ngược sạch</td></tr>
+<tr><td>Xoá dữ liệu production (bảng, file log dài hạn)</td><td>Hard</td><td>Mất dữ liệu không phục hồi được nếu không có backup</td></tr>
+<tr><td>Đổi trọng số công thức <code>senior_score.py</code> rồi deploy thẳng</td><td>Hard</td><td>Ảnh hưởng quyết định mua/bán thật của người dùng cuối</td></tr>
+</table>
+<p>Áp lại đúng 5 hành động trên vào khung 3 bậc (mục 4) — chi tiết hơn nhị phân soft/hard:</p>
+<table>
+<tr><th>Hành động</th><th>Tier</th><th>Bước nào chạy tự do, bước nào cần người</th></tr>
+<tr><td>Sửa 1 hàm tính feature trong code</td><td>Tier-3</td><td>Toàn bộ — code, test, commit, không cần review đặc biệt</td></tr>
+<tr><td>Chạy lại backtest với tham số mới</td><td>Tier-3</td><td>Toàn bộ — chỉ đọc + tính toán, không mutate gì thật</td></tr>
+<tr><td>Ghi/sửa bản ghi giao dịch thật (<code>ai_trader_trades</code>)</td><td>Tier-1</td><td>Tính toán/soạn câu SQL: tự do. Bước GHI THẬT vào bảng: bắt buộc người xác nhận</td></tr>
+<tr><td>Xoá dữ liệu production</td><td>Tier-1</td><td>Không có bước nào tự động — không thuộc diện containment đảo ngược được (mục 6)</td></tr>
+<tr><td>Đổi trọng số <code>senior_score.py</code> rồi deploy</td><td>Tier-1 (bước deploy) / Tier-2 (bước phân tích đề xuất trọng số mới)</td><td>Backtest + đề xuất trọng số: tự do (Tier-2). Deploy thẳng production: bắt buộc người xác nhận (Tier-1)</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p>Nguyên tắc soft/hard gate đã được <strong>tự nhiên implement đúng</strong> trong hạ tầng permission của Claude Code khi làm việc với <code>predictor</code> — không cần thêm cơ chế nào mới. Bài học thực dụng cho mọi thay đổi liên quan AI Trader/AI Predict: trước khi tự tin "cứ làm luôn vì user đã đồng ý nguyên tắc chung", tự hỏi "hành động cụ thể này có phải ghi/xoá dữ liệu thật, khó đảo ngược không?" — nếu có, dừng lại, trình bày đề xuất cụ thể, xin xác nhận trực tiếp, đúng tinh thần <code>CLAUDE.md</code> về kỷ luật validate trước khi ship bất kỳ thay đổi score formula nào.</p>
+<p>Áp mục 4-5 cụ thể hơn: dòng cuối bảng Tier ở trên cho thấy đúng lý do <code>CLAUDE.md</code> yêu cầu 2-pass validation cho AI Trader KHÔNG chặn việc backtest/đề xuất trọng số mới (Tier-2, chạy tự do) — nó chỉ chặn bước DEPLOY THẲNG (Tier-1). Hiểu nhầm phổ biến "kỷ luật validate làm chậm mọi nghiên cứu score formula" là sai — kỷ luật đó chỉ áp cho đúng 1 bước cuối cùng, không áp cho toàn bộ quá trình nghiên cứu.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li><strong>Coi "user đã delegate quyết định" là đủ authorization để ghi dữ liệu production</strong> — sai; agent persona không thay thế xác nhận trực tiếp cho hành động khó đảo ngược.</li>
+<li><strong>Hỏi lại user cho MỌI quyết định nhỏ (kể cả soft gate)</strong> — ngược lại cũng sai, gây phiền và làm chậm workflow không cần thiết; soft gate nên được xử lý bằng phân tích độc lập (sub-agent hoặc tự mình), không cần hỏi từng bước.</li>
+<li><strong>Nhầm "đã có audit trail" với "đã được phép"</strong> — ghi log lại hành động sau khi làm không thay thế được bước xin phép trước khi làm, với hard gate.</li>
+<li><strong>Coi ranh giới soft/hard là cố định, không cần đánh giá lại theo ngữ cảnh</strong> — cùng 1 loại hành động (VD "sửa code") có thể là soft gate ở nhánh dev nhưng là hard gate nếu deploy thẳng production ảnh hưởng tiền thật ngay lập tức.</li>
+<li><strong>Nhét containment TỰ ĐỘNG cho cả hành động không thể đảo ngược (VD xoá dữ liệu)</strong> — vi phạm trực tiếp nguyên tắc mục 6: chỉ containment ĐẢO NGƯỢC ĐƯỢC (dừng session, cô lập host) mới được pre-authorize chạy tự động.</li>
+<li><strong>Gộp Tier-2 (được tự do đề xuất/tính toán) với Tier-1 (bị chặn hoàn toàn)</strong> — mục 4 tách rõ: agent Tier-2 vẫn chạy tự do ở bước phân tích, chỉ bước THỰC THI cuối mới cần con người; coi cả cụm là "bị chặn hết" làm chậm không cần thiết những phần lẽ ra an toàn.</li>
+<li><strong>Đặt timeout mặc định là default-approve cho 1 hard gate</strong> — sai theo mục 7 bước 4: "hết hạn thì tự chạy" khiến gate không còn ý nghĩa gì, đúng bằng không có gate; hard gate luôn phải default-deny khi timeout.</li>
+<li><strong>Bắt TẤT CẢ 11 agent của <code>ai_orchestrator</code> dừng lại chờ duyệt</strong> — gây "approver fatigue" (mục 7 bước 6), làm người duyệt bấm theo quán tính, phản tác dụng; chỉ Tier-1 (VD <code>deploy</code>) cần gate đồng bộ.</li>
+<li><strong>Tự dựng cơ chế escalation cho 1 hệ thống chỉ có 1 người vận hành</strong> — over-engineering cho 1 đội ngũ chưa tồn tại (mục 7 bước 5); timeout nên quay lại hàng đợi chờ session tiếp theo, không cần "escalate" tới ai.</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li><input type="checkbox" disabled> Định nghĩa chính xác soft gate vs hard gate bằng chính từ ngữ của mình, không chép lại nguyên văn.</li>
+<li><input type="checkbox" disabled> Kể lại đúng case study ledger 2026-08-22/23: điều gì hoạt động (soft gate qua sub-agent), điều gì bị chặn (hard gate) và vì sao.</li>
+<li><input type="checkbox" disabled> Phân loại đúng 5 hành động trong bảng "So sánh" mà không nhìn đáp án.</li>
+<li><input type="checkbox" disabled> Giải thích được vì sao "đã delegate quyết định" không đủ cho hard gate — không chỉ trả lời "vì hệ thống chặn" mà hiểu lý do thiết kế.</li>
+<li><input type="checkbox" disabled> Xếp đúng 1 hành động cụ thể vào Tier-1/2/3 (mục 4) và giải thích khác biệt với nhị phân soft/hard ở chỗ nào.</li>
+<li><input type="checkbox" disabled> Phân biệt được kill switch (con người, phản ứng) và circuit breaker (kiến trúc, chủ động) — nêu đúng nguyên tắc "chỉ pre-authorize containment đảo ngược được".</li>
+<li><input type="checkbox" disabled> Tự thiết kế được 1 HITL gate cụ thể (mục 7) cho 1 bước bất kỳ trong <code>ai_orchestrator</code> — xác định đúng Tier, state machine, chính sách timeout (default-deny cho Tier-1), và giải thích được vì sao không cần escalation trong bối cảnh 1 người vận hành.</li>
+<li><input type="checkbox" disabled> Giải thích được "approver fatigue" và vì sao chỉ nên gate đồng bộ cho SỐ ÍT bước rủi ro cao, không phải toàn bộ pipeline.</li>
+</ul>
+</div>
+
+<div class="nav-bottom"><a href="R6_4_a2a.html">← R6.4 · A2A</a><a href="R6_6_multiagent_systems.html">R6.6 · Multi-agent Systems →</a></div>
+
+</div>
+</body>
+</html>

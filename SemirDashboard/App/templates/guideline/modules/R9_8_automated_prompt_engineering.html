@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R9.8 · Automated Prompt Engineering — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Advanced Steps · Điểm 8/8</div>
+  <h1>R9.8 · Automated Prompt Engineering</h1>
+  <p class="subtitle">Bài cuối của Advanced Steps — GEPA (ICLR 2026 Oral, gradient-free, reflection ngôn ngữ) và ranh giới cứng: chỉ tối ưu content-quality, tuyệt đối không đụng decision-weight.</p>
+  <div class="level">Độ khó: Khó · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>[Dễ]</strong> Định vị Automated Prompt Engineering: tự động hoá việc tối ưu prompt thay vì sửa tay qua nhiều lần thử-sai.</li>
+<li><strong>[Trung bình]</strong> Hiểu cơ chế GEPA: gradient-free, reflection ngôn ngữ, Pareto frontier.</li>
+<li><strong>[Trung bình]</strong> Kể tên 4 optimizer DSPy chính và khi nào dùng cái nào.</li>
+<li><strong>[Khó]</strong> Áp dụng đúng ranh giới cứng khi đề xuất cho <code>predictor</code>: chỉ content-quality, không bao giờ decision-weight.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Đã có ở module cũ</div>
+<p><a href="L8_6_ai_frameworks.html"><code>L8_6_ai_frameworks.html</code></a> hiện chỉ liệt kê DSPy ngắn gọn — trang này bổ sung GEPA (mới, ICLR 2026) và 4 optimizer DSPy chi tiết hơn.</p>
+</div>
+<div class="callout danger"><div class="label">⚠️ Đọc kỹ trước khi áp dụng cho dự án này</div>
+<p>Owner đã từ chối rõ ràng đưa LLM vào làm live scoring feature trong AI Trader (<code>CLAUDE.md</code>: <em>"LLM sẽ không phải là 1 feature"</em>). Automated Prompt Engineering rất dễ vô tình vi phạm rule này nếu áp dụng sai chỗ — đọc kỹ ràng buộc ở mục "Ứng dụng dự án" trước khi đề xuất bất kỳ điều gì.</p>
+</div>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Tự tay viết + sửa prompt qua nhiều lần thử-sai giống việc tự nêm nếm 1 nồi phở bằng vị giác — chậm, phụ thuộc kinh nghiệm người nấu. Automated Prompt Engineering (GEPA/DSPy) giống việc có 1 hệ thống đo pH/độ mặn tự động, tự đề xuất "thêm 5g muối" dựa trên số đo, thay vì đoán.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Trung bình] GEPA (Genetic-Pareto optimizer, ICLR 2026 Oral, xây trên DSPy)</h3>
+<div class="callout"><div class="label">📖 Giải thích sâu</div>
+<p>GEPA là optimizer <strong>không cần gradient</strong> (gradient-free), dùng <strong>phản hồi ngôn ngữ tự nhiên</strong> (reflection bằng văn bản) để thích nghi prompt, thay vì policy gradient như RL truyền thống (VD GRPO). Cơ chế 4 bước:</p>
+<ol>
+<li>Lấy mẫu toàn bộ trajectory (không chỉ câu trả lời cuối — bao gồm cả tool call, phản hồi trung gian).</li>
+<li>Dùng model "reflector" để phê bình bằng ngôn ngữ tự nhiên các trajectory đó — model reflector nhận cả điểm số (reward) VÀ phản hồi dạng text.</li>
+<li>Duy trì 1 <strong>Pareto frontier</strong> các prompt bổ trợ nhau (không chỉ giữ 1 prompt "tốt nhất", giữ nhiều prompt mạnh ở các khía cạnh khác nhau).</li>
+<li>Kết hợp các bài học bổ trợ giữa các node trên frontier qua "crossover" (lấy cảm hứng từ giải thuật di truyền — đây là lý do tên gọi "Genetic-Pareto").</li>
+</ol>
+</div>
+
+<h3>2. [Khó] Kết quả đo được — vì sao GEPA đáng chú ý</h3>
+<div class="callout"><div class="label">📖 Kết quả đo được</div>
+<p>GEPA đạt cải thiện tuyệt đối tới <strong>20% so với GRPO</strong> (1 thuật toán RL) trong khi dùng <strong>ít hơn 35 lần</strong> số lượt chạy (rollout) — trên 6 tác vụ benchmark. Vượt MIPROv2 (optimizer DSPy khác) hơn 10%. Kết luận ngành: reflective prompt evolution (tối ưu prompt bằng phản hồi ngôn ngữ) là 1 phương án <strong>tiết kiệm mẫu (sample-efficient)</strong> thay thế fine-tuning bằng RL.</p>
+</div>
+
+<h3>3. [Trung bình] 4 optimizer DSPy đáng biết 2026</h3>
+<table>
+<tr><th>Optimizer</th><th>Cơ chế</th></tr>
+<tr><td><strong>BootstrapFewShot</strong></td><td>Chọn ví dụ few-shot tốt từ tập train</td></tr>
+<tr><td><strong>MIPROv2</strong></td><td>Tối ưu đồng thời instruction + few-shot example bằng Bayesian search</td></tr>
+<tr><td><strong>COPRO</strong></td><td>Tối ưu instruction bằng coordinate ascent</td></tr>
+<tr><td><strong>GEPA</strong></td><td>Mạnh nhất, tốn compute nhất trong 4 loại, dùng reflection</td></tr>
+</table>
+
+<h3>4. APE (Automatic Prompt Engineer, 2022) — tiền thân, cơ chế "tìm kiếm trong 1 tập ứng viên" khác hẳn GEPA</h3>
+<p>Trước GEPA (mục 1-2) và trước cả OPRO (mục 5), APE là 1 trong những phương pháp tự động hoá prompt sớm nhất. Cơ chế đúng của nó — cần phân biệt rõ với GEPA để không gán nhầm (đúng kỷ luật BUG-8, tránh mô tả 1 phương pháp bằng cơ chế của phương pháp khác):</p>
+<ol>
+<li>Coi 1 chỉ dẫn (instruction) như 1 "chương trình" cần tối ưu.</li>
+<li>Dùng LLM SINH RA 1 <strong>tập ứng viên</strong> instruction khác nhau (thường ~32-64 ứng viên mỗi vòng) cho cùng 1 nhiệm vụ.</li>
+<li>Chấm điểm từng ứng viên bằng 1 hàm điểm (score function) cụ thể theo tác vụ.</li>
+<li>Giữ lại ứng viên điểm cao, loại ứng viên điểm thấp — lặp lại việc sinh biến thể mới từ những ứng viên tốt.</li>
+</ol>
+<p>Về bản chất, đây là 1 dạng thuật toán tiến hoá (evolutionary): sinh biến thể → chọn lọc → lặp lại — <strong>không có bước "reflection" bằng ngôn ngữ tự nhiên</strong> như GEPA (mục 1, model reflector phê bình bằng văn bản), cũng <strong>không duy trì Pareto frontier</strong> nhiều prompt bổ trợ nhau — chỉ giữ/loại theo điểm số đơn thuần.</p>
+
+<h3>5. OPRO (Optimization by PROmpting, DeepMind 2023) — đào sâu hơn bảng tóm tắt đã có ở <code>R3_6</code></h3>
+<div class="callout">
+<div class="label">📖 Không lặp lại <code>R3_6</code>, chỉ đào sâu hơn</div>
+<p><code>R3_6_orchestration_frameworks.html §1.3</code> đã mô tả đúng OPRO ở mức tóm tắt: "LLM đọc lại lịch sử (instruction đã thử, điểm số tương ứng) ngay trong context, rồi tự đề xuất instruction mới tốt hơn — KHÔNG train model riêng nào". Mục này đào sâu thêm CƠ CHẾ cụ thể, không lặp lại nguyên văn.</p>
+</div>
+<p>Điểm mấu chốt của OPRO: <strong>meta-prompt</strong> đưa cho LLM-optimizer chứa không chỉ mô tả tác vụ + ví dụ, mà còn CẢ <strong>quỹ đạo tối ưu hoá</strong> (optimization trajectory) — danh sách các instruction đã thử TRƯỚC ĐÓ kèm điểm số tương ứng của từng cái. LLM-optimizer đọc quỹ đạo này để tự nhận ra "instruction dạng nào đang có xu hướng điểm cao, dạng nào điểm thấp", rồi đề xuất instruction mới dựa trên PATTERN đó — không phải đột biến ngẫu nhiên như APE.</p>
+<table>
+<tr><th>Tiêu chí</th><th>APE (mục 4)</th><th>OPRO (mục này)</th></tr>
+<tr><td>Cách sinh ứng viên mới</td><td>LLM sinh biến thể tương đối độc lập, chọn theo điểm số (gần giống random search)</td><td>LLM đọc TOÀN BỘ lịch sử điểm số trước đó, suy luận pattern rồi đề xuất có định hướng (gần giống Bayesian search — dùng lịch sử để thu hẹp vùng tìm kiếm)</td></tr>
+<tr><td>Có cần giữ nguyên ràng buộc ngữ nghĩa với prompt gốc?</td><td>Có xu hướng giữ (semantic-preserving mutation)</td><td>Không bắt buộc — có thể đề xuất instruction khác hẳn cấu trúc cũ nếu quỹ đạo gợi ý vậy</td></tr>
+<tr><td>Chất lượng đo được</td><td>Cơ sở tham chiếu (baseline) cho các phương pháp sau</td><td>Tìm được instruction PHỨC TẠP HƠN, điểm cao hơn APE trên cùng benchmark</td></tr>
+</table>
+
+<h3>6. Bảng chi phí thật — so sánh 5 optimizer bằng số đo cùng đơn vị (USD/dataset)</h3>
+<p>Khác các bảng mục 1-3 chỉ so sánh CƠ CHẾ, bảng này so sánh CHI PHÍ THẬT (verify qua khảo sát kỹ thuật 2026, đơn vị USD cho 1 lượt tối ưu hoàn chỉnh trên 1 dataset chuẩn — không phải chi phí sản xuất, chỉ là chi phí NGHIÊN CỨU/BENCHMARK để đối chiếu độ tiết kiệm tương đối giữa các phương pháp):</p>
+<table>
+<tr><th>Optimizer</th><th>Chi phí ước lượng (USD/dataset)</th><th>Ghi chú</th></tr>
+<tr><td>SPO</td><td>~$0.15</td><td>Rẻ nhất trong nhóm đã khảo sát — self-supervised, không cần dữ liệu gán nhãn nhiều</td></tr>
+<tr><td>OPRO (mục 5)</td><td>~$4.51</td><td>Đắt hơn SPO ~30 lần — mỗi vòng cần LLM đọc lại toàn bộ quỹ đạo lịch sử, tốn token tích luỹ theo số vòng</td></tr>
+<tr><td>PromptBreeder</td><td>~$4.82</td><td>Tiến hoá ĐỒNG THỜI cả prompt lẫn chiến lược đột biến (mutation strategy) — 2 tầng tối ưu cùng lúc, tốn hơn OPRO 1 chút</td></tr>
+<tr><td>APE (mục 4)</td><td>~$9.07</td><td>Đắt nhất trong nhóm — cần sinh VÀ chấm điểm 1 tập ứng viên lớn (32-64+) mỗi vòng, không tận dụng được lịch sử có định hướng như OPRO</td></tr>
+<tr><td>GEPA (mục 1-2)</td><td>Không cùng đơn vị đo trực tiếp — nhưng đã dẫn: <strong>ít hơn 35 lần rollout</strong> so với GRPO (1 thuật toán RL, không phải optimizer prompt) để đạt cải thiện tương đương</td><td>So sánh GEPA với 4 optimizer trên cần thận trọng — GEPA công bố hệ số tiết kiệm SO VỚI RL fine-tuning, không phải USD/dataset cùng thang đo với SPO/OPRO/PromptBreeder/APE</td></tr>
+</table>
+<div class="callout danger">
+<div class="label">⚠️ Đọc đúng bảng — không gộp nhầm 2 cách đo</div>
+<p>Cột "USD/dataset" (SPO/OPRO/PromptBreeder/APE) và "hệ số lần rollout so với GRPO" (GEPA) là <strong>2 đơn vị đo khác nhau</strong>, không trực tiếp so sánh được số với số. Không kết luận "GEPA rẻ hơn hay đắt hơn APE bao nhiêu lần" chỉ từ 2 con số này — bảng chỉ cho thấy ĐỘ LỆCH chi phí RẤT LỚN giữa các phương pháp gradient-free (SPO rẻ hơn APE ~60 lần), và tách riêng GEPA vì nó được đo trên 1 trục khác (so với RL, không so với optimizer gradient-free khác).</p>
+</div>
+
+<h3>Worked example — vì sao OPRO "hội tụ" nhanh hơn APE trên cùng ngân sách vòng lặp</h3>
+<pre><code>Giả sử cả 2 optimizer được cho ngân sách 5 vòng, mỗi vòng sinh/chấm điểm
+1 số ứng viên, tác vụ: tối ưu 1 câu instruction cho độ chính xác phân loại.
+
+APE (mục 4) — mỗi vòng sinh ~40 ứng viên MỚI, gần độc lập với vòng trước:
+  Vòng 1: 40 ứng viên, điểm cao nhất = 62%   (chọn ngẫu nhiên trong không
+  Vòng 2: 40 ứng viên MỚI, điểm cao nhất = 65%  gian rộng, có cải thiện
+  Vòng 3: 40 ứng viên MỚI, điểm cao nhất = 68%  nhưng CHẬM vì mỗi vòng
+  Vòng 4: 40 ứng viên MỚI, điểm cao nhất = 69%  gần như "thử lại từ đầu",
+  Vòng 5: 40 ứng viên MỚI, điểm cao nhất = 70%  không tận dụng bài học
+  → Tổng 200 ứng viên đã thử, đạt 70%           vòng trước có hệ thống
+
+OPRO (mục 5) — mỗi vòng chỉ sinh ~8 ứng viên, nhưng CÓ ĐỊNH HƯỚNG từ quỹ đạo:
+  Vòng 1: 8 ứng viên (chưa có lịch sử), điểm cao nhất = 60%
+  Vòng 2: 8 ứng viên, LLM đọc lịch sử vòng 1 → điểm cao nhất = 67%
+  Vòng 3: 8 ứng viên, đọc lịch sử 2 vòng → điểm cao nhất = 72%
+  Vòng 4: 8 ứng viên, đọc lịch sử 3 vòng → điểm cao nhất = 75%
+  Vòng 5: 8 ứng viên, đọc lịch sử 4 vòng → điểm cao nhất = 76%
+  → Tổng 40 ứng viên đã thử (200/40 = 5× ÍT HƠN APE), đạt 76% (CAO HƠN APE)
+
+Đây là số minh hoạ (không phải kết quả benchmark thật của 1 dataset cụ thể),
+nhưng đúng CƠ CHẾ đã dẫn ở mục 5: ít ứng viên hơn nhưng điểm cuối cao hơn,
+vì mỗi vòng OPRO "học" được từ quỹ đạo, còn APE gần như thử lại ngẫu nhiên
+mỗi vòng — khớp đúng kết luận nguồn đã dẫn "OPRO tìm được instruction phức
+tạp hơn, điểm cao hơn APE".</code></pre>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<pre><code>Quy trình sửa prompt THỦ CÔNG (dự án hiện tại):
+  v1: viết prompt → chạy thử → đọc output → thấy lỗi → sửa tay → v2 → lặp lại
+  (chậm, phụ thuộc kinh nghiệm người viết, khó đo lường cải thiện định lượng)
+
+Quy trình GEPA/DSPy (tự động):
+  1. Định nghĩa metric đo chất lượng output (VD: độ đầy đủ thesis, đúng format)
+  2. Chạy GEPA: tự sinh nhiều biến thể prompt, tự chấm điểm, tự "reflect" bằng
+     ngôn ngữ để cải thiện qua nhiều vòng
+  3. Kết quả: 1 tập Pareto frontier các prompt mạnh ở các khía cạnh khác nhau
+     — người dùng chọn prompt phù hợp nhất, có SỐ ĐO cụ thể để so sánh</code></pre>
+
+<h3>7. Dòng thời gian — từ APE (2022) tới GEPA (2026), mỗi bước giải quyết đúng giới hạn của bước trước</h3>
+<pre><code>2022  APE          "Sinh 1 tập ứng viên, chọn theo điểm" — cơ sở tham chiếu,
+                    không tận dụng lịch sử các lần thử trước (mục 4)
+                         │
+                         ▼ giới hạn: không học được PATTERN từ lịch sử,
+                           mỗi vòng gần như bắt đầu lại
+2023  OPRO          Thêm quỹ đạo lịch sử (instruction+điểm) vào meta-prompt
+      PromptBreeder → LLM đề xuất có định hướng, không ngẫu nhiên thuần (mục 5)
+                    PromptBreeder: tiến hoá CẢ prompt LẪN chiến lược đột biến
+                    cùng lúc — thêm 1 tầng tối ưu so với OPRO
+                         │
+                         ▼ giới hạn: vẫn chỉ giữ 1 "hướng tốt nhất" tại 1
+                           thời điểm, dễ bỏ lỡ prompt mạnh ở khía cạnh KHÁC
+2025-26  GEPA       Giữ CẢ TẬP prompt mạnh ở nhiều khía cạnh khác nhau (Pareto
+      (ICLR Oral)   frontier, mục 1) + phản hồi bằng NGÔN NGỮ tự nhiên (không
+                    chỉ điểm số) + lấy trajectory ĐẦY ĐỦ (cả tool call, không
+                    chỉ câu trả lời cuối) — đạt +20% so GRPO, ít hơn 35× rollout</code></pre>
+<p>Đọc đúng dòng thời gian: mỗi phương pháp mới không "thay thế hoàn toàn" phương pháp cũ theo nghĩa phủ định — GEPA vẫn xây trên nền tảng DSPy đã có APE-style search từ đầu (mục 3). Điều thay đổi qua từng bước là LƯỢNG THÔNG TIN được tận dụng từ các lần thử trước: từ "không dùng gì" (APE) → "dùng điểm số lịch sử" (OPRO) → "dùng cả điểm số lẫn phản hồi ngôn ngữ, giữ nhiều hướng cùng lúc" (GEPA).</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Sửa prompt thủ công</th><th>Automated (GEPA/DSPy)</th></tr>
+<tr><td>Tốc độ lặp</td><td>Chậm, phụ thuộc người</td><td>Nhanh, tự động nhiều vòng</td></tr>
+<tr><td>Đo lường cải thiện</td><td>Chủ quan, khó định lượng</td><td>Có metric rõ ràng, so sánh được</td></tr>
+<tr><td>Chi phí compute</td><td>Thấp (chỉ người suy nghĩ)</td><td>Cao hơn (nhiều rollout tự động) — dao động rộng theo optimizer, xem bảng chi phí mục 6 (~$0.15-$9.07/dataset tuỳ phương pháp)</td></tr>
+<tr><td>Phù hợp khi nào</td><td>Thay đổi nhỏ, ít lặp lại</td><td>Cần tối ưu liên tục, có metric rõ</td></tr>
+<tr><td>Tận dụng lịch sử các lần thử trước?</td><td>Chỉ trong đầu người viết (không hệ thống hoá)</td><td>Khác nhau theo optimizer — APE gần như không, OPRO/GEPA có (mục 7)</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>daily-investor-report</code> skill hiện có prompt/instruction viết tay trong <code>SKILL.md</code> (~2070 dòng) + script <code>author_llm_thesis.py</code> — đây là ứng viên hợp lý để thử GEPA/DSPy <strong>NẾU</strong> muốn tối ưu prompt tự động thay vì tay sửa qua nhiều lần lặp thủ công (dự án hiện đã làm rất nhiều lần "sửa tay" prompt qua các version, thấy rõ ở lịch sử <code>render_report_v2.py</code>/<code>render_report.py</code>).</p>
+<p><strong>Ràng buộc bắt buộc khi áp dụng</strong>: optimizer chỉ được tối ưu <strong>cách trình bày/instruction</strong> của LLM overlay (thesis, verdict_override) — tuyệt đối không dùng optimizer để tối ưu ngược lại <strong>trọng số công thức <code>senior_score.py</code></strong> hay bất kỳ phần nào của AI Trader execution path, vì đó lại quay về vi phạm "LLM không phải feature". Optimizer prompt cho content-quality (văn phong, độ đầy đủ thesis) là an toàn; optimizer cho decision-weight là không.</p>
+<p><strong>Nếu chọn optimizer nào (áp mục 4-7)</strong>: bài toán "sửa prompt tránh regression parse JSON" (worked example đã có ở <code>R5_4_prompt_engineering.html §4</code> — golden dataset chặn merge) chính là loại metric CẦN CÓ trước khi chạy bất kỳ optimizer nào ở đây — không có golden dataset đo đúng "output có đúng hợp đồng parse không", optimizer (dù APE, OPRO hay GEPA) sẽ tối ưu theo 1 metric không phản ánh đúng thứ dự án thực sự cần, đúng rủi ro đã cảnh báo ở mục Sai lầm #2. Giữa 4 optimizer DSPy (mục 3) + APE/OPRO (mục 4-5), GEPA vẫn là lựa chọn hợp lý nhất để thử trước theo đúng kết luận ngành (mục 2: sample-efficient nhất, ít rollout nhất) — không cần thử APE/OPRO trước rồi mới "nâng cấp" lên GEPA, vì dòng thời gian mục 7 cho thấy GEPA đã kế thừa ưu điểm của cả 2 phương pháp trước.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Dùng Automated Prompt Engineering để tối ưu trọng số công thức quyết định thay vì chỉ tối ưu prompt trình bày</strong> — nhầm ranh giới sẽ vi phạm trực tiếp rule "LLM không phải feature".</p>
+<p><strong>2. Chạy GEPA mà không có metric đo chất lượng rõ ràng</strong> — optimizer chỉ tốt bằng metric nó được cho, metric mơ hồ → kết quả tối ưu vô nghĩa.</p>
+<p><strong>3. Coi GEPA là "thay thế hoàn toàn" việc con người review prompt</strong> — vẫn cần người xác nhận prompt cuối cùng phù hợp trước khi deploy, đặc biệt cho content ảnh hưởng quyết định tài chính.</p>
+<p><strong>4. Mô tả cơ chế OPRO bằng đúng câu chữ "sinh 1 tập ứng viên rồi chọn theo điểm" (mục 4, đó là APE)</strong> — đúng dạng lỗi BUG-8 điển hình của chủ đề này: OPRO khác APE ở việc TẬN DỤNG quỹ đạo lịch sử có định hướng (mục 5), không phải tìm kiếm gần-ngẫu-nhiên trên 1 tập ứng viên độc lập mỗi vòng.</p>
+<p><strong>5. So sánh trực tiếp số USD/dataset của SPO/OPRO/PromptBreeder/APE với "35× fewer rollout" của GEPA như thể cùng 1 thang đo</strong> — sai theo callout mục 6: 2 cách đo khác nhau (USD/dataset vs hệ số rollout so với RL), không quy đổi trực tiếp được.</p>
+<p><strong>6. Nghĩ optimizer mới hơn (GEPA) luôn "thay thế" optimizer cũ (APE/OPRO/PromptBreeder)</strong> — dòng thời gian mục 7 cho thấy mỗi phương pháp tận dụng THÊM thông tin so với phương pháp trước, không phải phương pháp cũ "sai" — APE vẫn là cơ sở tham chiếu hữu ích để hiểu vì sao các bước sau ra đời.</p>
+</div>
+
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích GEPA khác GRPO/RL truyền thống thế nào (gradient-free, reflection ngôn ngữ, Pareto frontier).</li>
+<li>Kể đúng 4 optimizer DSPy và điểm khác biệt cơ chế của mỗi loại.</li>
+<li>Áp dụng đúng ví dụ tối ưu prompt cho <code>daily-investor-report</code>.</li>
+<li><strong>Tự confirm: đề xuất Automated Prompt Engineering chỉ áp dụng cho content-quality, không cho decision-weight.</strong></li>
+<li>Phân biệt đúng cơ chế APE (tìm kiếm trên tập ứng viên, không dùng lịch sử) và OPRO (dùng quỹ đạo lịch sử có định hướng) — không mô tả nhầm cơ chế 1 phương pháp bằng cơ chế phương pháp kia.</li>
+<li>Đọc đúng bảng chi phí mục 6 — không so sánh trực tiếp USD/dataset của 4 optimizer gradient-free với hệ số rollout của GEPA (2 thang đo khác nhau).</li>
+<li>Vẽ lại được dòng thời gian mục 7 (APE → OPRO/PromptBreeder → GEPA), nêu đúng LƯỢNG THÔNG TIN mỗi bước tận dụng thêm từ các lần thử trước.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R9_7_voice_vision_agents.html">← R9.7 · Voice and Vision Agents</a>
+  <a href="R10_1_guardrails.html">R10.1 · Security — Guardrails →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2.5 · Structured Outputs — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM APIs · Điểm 5/8</div>
+  <h1>R2.5 · Structured Outputs</h1>
+  <p class="subtitle">Từ "hy vọng model trả JSON đúng định dạng" đến "provider tự ép đúng 100%" — và vì sao schema tốt không chỉ đúng kiểu dữ liệu mà còn phải thu hẹp không gian lỗi logic.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Giải thích được vì sao function calling/tool schema tăng tỷ lệ parse hợp lệ từ ~30% (prompt tự do) lên ~99%.</li>
+<li>Phân biệt "khai báo schema rồi hy vọng model tuân theo" với chế độ strict enforcement do provider thực hiện.</li>
+<li>Viết được 1 JSON schema "chặt" (dùng <code>enum</code>/<code>minimum</code>/<code>maximum</code>) thay vì schema "yếu" chỉ khai kiểu dữ liệu.</li>
+<li>Nhận diện được rủi ro khi tin tưởng tuyệt đối vào 1 beta feature có tên header cụ thể.</li>
+<li>Giải thích được cơ chế thật bên dưới "strict mode" — constrained decoding che token không hợp lệ tại từng bước sinh token, không phải "model tự giác tuân theo tốt hơn".</li>
+<li>So sánh được cách 3 provider lớn (OpenAI, Anthropic, Gemini) hiện thực hoá structured output khác nhau — biết đúng use case nào hợp với provider nào, thay vì mặc định "provider đang dùng luôn là lựa chọn tốt nhất cho mọi trường hợp".</li>
+<li>Phân biệt được "đúng schema" (structural correctness) với "đúng nội dung" (semantic correctness) — structured output chỉ đảm bảo vế đầu.</li>
+<li>Thiết kế được 1 vòng retry-with-error-context (khác retry mù ở R2.7) cho trường hợp không có constrained decoding, và biết đây là lớp bổ trợ, không phải thay thế constrained decoding.</li>
+<li>So sánh được Instructor / Pydantic AI / gọi native API trực tiếp — chọn đúng công cụ theo nhu cầu multi-provider và độ phức tạp dự án.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Cơ chế cốt lõi (function calling ép JSON hợp lệ) đã có ở <code>../modules/L5_1_prompt.html §4</code>. Bài này bổ sung cập nhật 2026 về Structured Outputs/strict mode (đã verify lại qua WebSearch 9/2026 — tính năng đã chuyển từ beta sang GA, xem callout ✅ ở Bước 2) và mở rộng phần thiết kế schema — mảng module gốc chưa nhấn mạnh đủ sâu.</p>
+<p><strong>Prerequisite</strong>: hiểu sơ bộ khái niệm tool/function calling. Nếu chưa quen, đọc trước <code>../modules/L5_3_tools.html</code>.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Prompt tự do ("trả lời bằng JSON nhé") giống việc nhờ 1 người bạn viết địa chỉ lên giấy tự do — có người viết "Số 5 Ngõ 10", có người viết "Ngõ 10, số nhà 5", có người quên số nhà. Structured output giống đưa 1 mẫu đơn có ô sẵn: "Số nhà: ___ Ngõ: ___ Phường: ___" — không ai viết sai định dạng, chỉ có thể điền sai giá trị (mà giá trị sai còn kiểm được bằng ràng buộc ô, xem phần schema chặt bên dưới).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vấn đề của "prompt tự do" — parse rate thấp</h3>
+<div class="callout"><div class="label">📖 Cơ chế cốt lõi (đã có ở L5_1_prompt.html §4)</div>
+<p>Nếu chỉ yêu cầu bằng lời ("hãy trả lời dạng JSON với field verdict và confidence"), model có thể: thêm giải thích trước/sau JSON, dùng dấu nháy đơn thay vì kép, quên đóng ngoặc, hoặc trả JSON hợp lệ nhưng field tên khác 1 chút. Tỷ lệ parse thành công bằng cách này thường chỉ khoảng 30% trên thực tế. Function calling (khai báo tool schema, model buộc phải điền theo cấu trúc đó) nâng tỷ lệ này lên khoảng 99%.</p>
+</div>
+
+<h3>2. Cập nhật 2026 — Structured Outputs: từ beta lên GA, khác biệt so với function calling thông thường</h3>
+<table>
+<tr><th>Cách làm</th><th>Cơ chế</th><th>Tỷ lệ khớp schema</th></tr>
+<tr><td>Function calling thông thường</td><td>Model được <em>train</em> để tuân theo tool schema đã khai báo</td><td>~99% — vẫn có % nhỏ lệch schema</td></tr>
+<tr><td>Structured Outputs / Strict tool use (<code>strict: true</code>, hoặc tham số <code>output_format</code>)</td><td>Provider tự <em>enforce</em> đầu ra khớp 100% schema bằng cách compile schema thành 1 "grammar" ràng buộc từng token sinh ra (constrained decoding), không chỉ dựa vào việc model "được train để tuân theo"</td><td>100% khi bật — đây là cam kết cứng của provider, không còn là "gần đúng"</td></tr>
+</table>
+<div class="callout success"><div class="label">✅ Cập nhật đã verify (WebSearch) — tính năng này đã GA, không còn beta header</div>
+<p>Tại thời điểm bài gốc viết, tính năng này (tên chính thức: <strong>Structured Outputs</strong> trên Claude Developer Platform) còn ở beta, cần header <code>anthropic-beta: structured-outputs-2025-11-13</code>. Verify lại (9/2026): tính năng đã <strong>ra khỏi beta (GA)</strong> cho Claude Sonnet 4.5, Opus 4.5, Haiku 4.5 — không cần beta header nữa, dùng thẳng tham số <code>output_format</code> (cho JSON schema tự do) hoặc <code>strict: true</code> trong tool definition (cho strict tool use, ép tham số gọi tool khớp đúng input schema). Bài học tổng quát vẫn giữ nguyên giá trị dù case cụ thể này đã ngã ngũ: <strong>luôn tự kiểm tra docs chính chủ tại thời điểm build</strong> — beta feature graduate lên GA (hoặc bị thay thế/đổi tên) là chuyện xảy ra thường xuyên trong vòng vài tháng, không phải vài năm.</p>
+</div>
+
+<h3>3. Bài học quan trọng hơn cú pháp: thiết kế schema thu hẹp lỗi logic</h3>
+<p>Schema tốt không chỉ "đúng kiểu dữ liệu" (string, number) — nó phải <strong>thu hẹp không gian lỗi logic</strong>, biến 1 lớp lỗi từ "có thể xảy ra ở runtime" thành "không thể xảy ra ở tầng API".</p>
+
+<h3>4. Cơ chế thật bên dưới "100% khớp schema" — constrained decoding, không phải "model giỏi hơn"</h3>
+<p>Structured Outputs/strict mode không đạt 100% nhờ model "được train tốt hơn" — nó đạt 100% nhờ 1 cơ chế ở tầng <em>giải mã</em> (decoding), hoàn toàn tách biệt khỏi việc model "hiểu" gì:</p>
+<pre><code>[1] JSON Schema (enum / minimum / maximum...)
+       │  compile
+       ▼
+[2] Automaton / grammar hình thức
+    biết CHÍNH XÁC ký tự nào hợp lệ tại TỪNG vị trí
+    (VD sau `{"verdict": "` chỉ cho phép "BUY"/"SELL"/"HOLD" nếu có enum)
+       │  áp dụng lại tại MỖI bước sinh token
+       ▼
+[3] Mask logits — token KHÔNG hợp lệ bị gán xác suất 0
+       │
+       ▼
+[4] Model CHỈ có thể chọn trong tập token còn hợp lệ
+       → 100% khớp schema — ràng buộc CỨNG ở tầng giải mã,
+         không phải xác suất "học được" như function calling thường (~99%)</code></pre>
+<div class="callout"><div class="label">📖 Ai làm việc này, và công cụ nào phổ biến</div>
+<p>Kỹ thuật này gọi chung là <strong>grammar-constrained decoding</strong>. Ở phía tự host, các thư viện như <strong>Outlines</strong>, <strong>Guidance</strong>, <strong>XGrammar</strong>, hay grammar module của <strong>llama.cpp</strong> triển khai đúng cơ chế 3 bước trên — hiện tại (2026) <strong>XGrammar</strong> là backend structured-generation mặc định của cả vLLM, SGLang, TensorRT-LLM, đạt overhead dưới 40 microsecond/token nhờ cache automaton hiệu quả. Ở phía API-only (Claude/GPT/Gemini), provider tự chạy cơ chế này phía sau — bạn chỉ thấy kết quả "100% khớp schema", không thấy automaton hay bước mask logits.</p>
+</div>
+<div class="callout danger"><div class="label">⚠️ Giới hạn thật của constrained decoding — không giải quyết được lỗi "đúng cú pháp, sai nội dung"</div>
+<p>Nghiên cứu 2026 chỉ ra rõ: constrained decoding loại bỏ hoàn toàn lỗi <em>cấu trúc</em> (model không thể sinh JSON sai định dạng, không thể chọn giá trị ngoài <code>enum</code>) — nhưng <strong>không loại bỏ được lỗi "chọn sai giá trị hợp lệ"</strong> (VD model ép buộc phải chọn 1 trong 3 verdict hợp lệ BUY/SELL/HOLD nhưng vẫn có thể chọn SAI verdict so với dữ liệu thực tế). Có nghiên cứu ("FR-CoT") cho thấy kết hợp reasoning + function calling cho độ chính xác NỘI DUNG cao hơn hẳn constrained decoding thuần (+19.5 điểm phần trăm ở model 7B) — vì constrained decoding chỉ đảm bảo <em>hình thức</em>, hoàn toàn không giúp model "chọn đúng" giữa các lựa chọn hợp lệ. Đây là ranh giới quan trọng: <strong>đúng schema ≠ đúng nội dung</strong> — 2 loại đảm bảo khác nhau, và structured output chỉ giải quyết loại đầu.</p>
+</div>
+
+<h3>5. Khi KHÔNG có constrained decoding (provider không hỗ trợ) — retry-with-error-context, không phải "chịu thua"</h3>
+<p>Constrained decoding (mục 4) là giải pháp mạnh nhất nhưng đòi hỏi provider/serving stack hỗ trợ trực tiếp. Với model/provider KHÔNG có cơ chế này (hoặc dùng JSON mode "yếu" hơn strict mode), cách tiếp cận thực tế production 2026 là <strong>retry với error context</strong> — khác hẳn "cứ retry mù" đã học ở R2.7:</p>
+<ol>
+<li>Gọi model, nhận output, thử parse/validate theo schema (VD bằng Pydantic).</li>
+<li>Nếu validate FAIL, không chỉ "thử lại y hệt" — gửi LẠI cho model chính THÔNG BÁO LỖI cụ thể (VD "field 'confidence' = 1.5 vượt quá maximum=1, hãy sửa lại") kèm output cũ.</li>
+<li>Model dùng chính lỗi đó để tự sửa — đo được: 1 lần retry kèm error context giải quyết được PHẦN LỚN lỗi; 3 lần retry kèm error context kéo tỷ lệ lỗi hiệu dụng của function calling xuống dưới 0.1% trong đa số workload production.</li>
+</ol>
+<table>
+<tr><th></th><th>Constrained decoding (mục 4)</th><th>Retry-with-error-context (mục này)</th></tr>
+<tr><td>Đảm bảo</td><td>Cứng — 100% khớp schema ngay lần đầu</td><td>Xác suất — hội tụ dần về gần 100% qua vài lần retry, không đảm bảo tuyệt đối ngay lần 1</td></tr>
+<tr><td>Yêu cầu hạ tầng</td><td>Provider/serving stack phải hỗ trợ trực tiếp (không phải lúc nào cũng có)</td><td>Hoạt động với BẤT KỲ model/provider nào có thể nhận text — không phụ thuộc tính năng đặc biệt</td></tr>
+<tr><td>Chi phí</td><td>Gần như 0 overhead thêm (1 lần gọi)</td><td>Tốn thêm token + latency cho mỗi lần retry (tối đa 2-3 lần thực tế)</td></tr>
+<tr><td>Khi nào dùng</td><td>Provider hỗ trợ + cần đảm bảo cứng ngay lập tức</td><td>Provider không hỗ trợ, hoặc cần schema quá phức tạp (ràng buộc chéo-field) mà constrained decoding không diễn đạt được</td></tr>
+</table>
+<p><strong>Đây KHÔNG phải "2 cách cạnh tranh, chọn 1"</strong> — production nghiêm túc dùng CẢ HAI xếp chồng: constrained decoding (nếu có) để giảm tối đa lỗi cấu trúc ngay từ đầu, CỘNG thêm 1 lớp retry-with-error-context để bắt nốt phần còn lại (đặc biệt là ràng buộc chéo-field mà JSON Schema chuẩn không diễn đạt được — đã nói ở mục 3 và "Bài tập mở rộng" bên dưới).</p>
+<ul>
+<li>Nghiên cứu 2026 về "self-healing" (vòng lặp đầy đủ monitor→detect→diagnose→recover→verify): tỷ lệ thành công <strong>98.8%</strong>.</li>
+<li>Chỉ retry đơn thuần (không có ngữ cảnh lỗi cụ thể): <strong>94.5%</strong>.</li>
+<li>"Replanning" toàn bộ từ đầu mỗi lần lỗi: <strong>93.8%</strong>.</li>
+<li>→ Retry có NGỮ CẢNH LỖI cụ thể hiệu quả hơn hẳn retry mù hoặc làm lại từ đầu.</li>
+</ul>
+
+<h3>6. Thư viện wrapper — Instructor, Pydantic AI, và tự gọi native API trực tiếp</h3>
+<p>Không phải lúc nào cũng viết code gọi trực tiếp API của từng provider — hệ sinh thái Python có vài lựa chọn phổ biến để "khai 1 lần, chạy nhiều provider":</p>
+<table>
+<tr><th>Cách tiếp cận</th><th>Đặc điểm</th><th>Độ phổ biến (2026)</th><th>Phù hợp nhất khi</th></tr>
+<tr><td><strong>Gọi native API trực tiếp</strong> (Anthropic strict tool use / OpenAI Structured Outputs)</td><td>Không qua lớp trừu tượng nào — code gắn chặt với 1 provider cụ thể</td><td>Phổ biến khi chỉ dùng 1 provider cố định</td><td>Chỉ dùng 1 provider, schema đơn giản, không cần đổi provider sau này</td></tr>
+<tr><td><strong>Instructor</strong></td><td>Khai 1 Pydantic model, thư viện tự ánh xạ sang cơ chế structured-output tốt nhất của provider đang dùng (native structured output trên OpenAI, tool calling trên Anthropic, JSON mode/prompt injection cho provider không hỗ trợ gì) — tự động retry kèm error context (mục 5) sẵn có</td><td>Phổ biến nhất — 11K+ sao GitHub, 3 triệu+ lượt tải/tháng</td><td>Lựa chọn mặc định an toàn cho hầu hết dự án mới — learning curve thấp, phủ được "80% trường hợp thường gặp"</td></tr>
+<tr><td><strong>Pydantic AI</strong></td><td>1 framework agent đầy đủ (không chỉ structured output) của chính đội Pydantic — structured output là 1 tính năng có sẵn, không phải trọng tâm duy nhất</td><td>Đang lên, gắn liền hệ sinh thái Pydantic</td><td>Khi đã/sẽ xây dựng agent phức tạp hơn, không chỉ cần trích xuất dữ liệu đơn thuần</td></tr>
+</table>
+<p>Với dự án hiện tại (gọi Claude qua Claude Code cho <code>daily-investor-report</code>, không tự viết code gọi API Anthropic trực tiếp trong pipeline này), lớp wrapper như Instructor chưa cần thiết — nhưng nếu dự án sau này tự viết code gọi API Anthropic trực tiếp (VD 1 service nội bộ khác), đây là kiến thức quyết định "có nên tự viết retry-with-error-context từ đầu, hay dùng thư viện đã có sẵn logic đó".</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<pre><code># Schema yếu — model có thể trả confidence = 1.5 (vô nghĩa), hoặc verdict = "MAYBE" (ngoài ý muốn)
+{"verdict": {"type": "string"}, "confidence": {"type": "number"}}
+
+# Schema chặt — ép đúng miền giá trị hợp lệ
+{
+  "verdict": {"enum": ["BUY", "SELL", "HOLD"]},
+  "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+  "rationale": {"type": "string", "maxLength": 500}
+}</code></pre>
+<p>Với schema chặt, nếu model cố trả <code>confidence: 1.5</code>, request sẽ bị từ chối hoặc tự động điều chỉnh ở tầng API — lập trình viên không cần viết thêm code kiểm tra "confidence có nằm trong [0,1] không" ở tầng application, vì lỗi này đã bị chặn sớm hơn.</p>
+<p><strong>Bài tập mở rộng</strong> — thử tự viết schema chặt cho 1 use case khác của dự án: thesis LLM cần trả về <code>entry_price</code>, <code>stop_loss</code>, <code>target_price</code> — 3 field số này có ràng buộc logic lẫn nhau (VD với lệnh mua: <code>stop_loss &lt; entry_price &lt; target_price</code>). JSON Schema chuẩn không tự diễn đạt được ràng buộc "so sánh giữa nhiều field" — đây là giới hạn thật của structured output, vẫn cần 1 lớp validate riêng (VD Pydantic validator) ở tầng application cho loại ràng buộc chéo-field này.</p>
+
+<p><strong>Ví dụ nối tiếp — áp retry-with-error-context (mục 5) đúng cho ràng buộc chéo-field ở trên</strong>, thứ mà bản thân schema JSON không tự chặn được:</p>
+<pre><code># Lần gọi 1 — model trả về VI PHẠM ràng buộc chéo-field (đúng kiểu dữ liệu, sai logic):
+response_1 = {"entry_price": 28.5, "stop_loss": 29.0, "target_price": 30.0}
+# stop_loss (29.0) > entry_price (28.5) — vô lý cho lệnh MUA, nhưng JSON Schema
+# thuần không tự phát hiện được (đây đúng là giới hạn đã nói ở "Bài tập mở rộng")
+
+# Validate ở tầng application (Pydantic) bắt được lỗi:
+validation_error = "stop_loss (29.0) must be < entry_price (28.5) for a BUY order"
+
+# Retry LẦN 2 — gửi LẠI cho model, kèm chính output cũ + thông báo lỗi cụ thể:
+retry_prompt = f"""
+Kết quả trước của bạn vi phạm ràng buộc: {validation_error}
+Output cũ: {response_1}
+Hãy sửa lại đúng ràng buộc: stop_loss < entry_price < target_price.
+"""
+response_2 = {"entry_price": 28.5, "stop_loss": 27.8, "target_price": 30.0}
+# Validate lại: PASS — stop_loss < entry_price < target_price đúng logic
+
+# Nếu vẫn fail sau 2-3 lần retry: KHÔNG retry vô hạn (đúng nguyên tắc R2.7) —
+# log lại, dùng giá trị mặc định an toàn hoặc loại ticker đó khỏi report,
+# không để 1 output sai logic lọt ra ngoài chỉ vì "đã cố hết sức retry".</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Cách ép định dạng output</th><th>Độ tin cậy parse</th><th>Ép được giá trị hợp lệ (không chỉ đúng kiểu)?</th><th>Chi phí thêm</th></tr>
+<tr><td>Prompt tự do ("trả JSON nhé")</td><td>~30%</td><td>Không</td><td>Không</td></tr>
+<tr><td>Function calling / tool schema thường</td><td>~99%</td><td>Có, nếu dùng <code>enum</code>/<code>min</code>/<code>max</code></td><td>Không đáng kể</td></tr>
+<tr><td>Structured Outputs / Strict tool use (GA từ 2026, Sonnet/Opus/Haiku 4.5+)</td><td>100% (cam kết cứng, không cần beta header nữa)</td><td>Có</td><td>Giới hạn ở model 4.5 trở lên; schema compile lần đầu tốn thêm latency nhỏ, được cache 24h</td></tr>
+<tr><td>Validate thêm ở tầng application (VD Pydantic)</td><td>Bổ trợ, không thay thế</td><td>Có — kể cả ràng buộc chéo-field mà JSON Schema không diễn đạt được</td><td>Code thêm, nhưng cần thiết cho logic phức tạp</td></tr>
+</table>
+
+<p>Bảng thứ 2 — so sánh cách 3 provider lớn hiện thực hoá structured output, theo khảo sát 2026 — đây là trade-off theo use case, không phải "provider nào tốt nhất tuyệt đối":</p>
+<table>
+<tr><th>Tiêu chí</th><th>OpenAI (Structured Outputs)</th><th>Anthropic (strict tool use)</th><th>Gemini (response schema)</th></tr>
+<tr><td>Cách expose</td><td>Property riêng của response — API-native, không cần "giả vờ" gọi tool</td><td>Route qua 1 forced tool call — mượn cơ chế function calling sẵn có</td><td>Response schema trong generation config</td></tr>
+<tr><td>Tỷ lệ lỗi đo được</td><td>Thấp nhất — &lt;0.1%</td><td>Gần bằng — đứng thứ 2</td><td>Tỷ lệ tin cậy/chi phí tốt nhất trong 3, dù ít test hơn 2 provider trên</td></tr>
+<tr><td>Độ biểu cảm ràng buộc</td><td>Enforce nhiều constraint keyword nhất, nhưng CẤM 1 số pattern phức tạp (VD discriminated union) mà codebase có type mạnh hay dùng</td><td>Ràng buộc CẤU TRÚC chặt, nhưng đẩy hẳn việc enforce khoảng giá trị (min/max) cho code của bạn</td><td>Ở giữa — hỗ trợ 1 tập con hợp lý, tài liệu về giới hạn ít rõ ràng hơn 2 provider kia</td></tr>
+<tr><td>Streaming / parse tăng dần theo field</td><td>Hỗ trợ tốt</td><td>KHÔNG — trả nguyên khối ở cuối stream, không parse được từng field khi đang chạy</td><td>Hỗ trợ được</td></tr>
+<tr><td>Phù hợp nhất khi</td><td>Input có tính đối kháng (cần ép chặt nhất), cần Pydantic native</td><td>Prompt vốn đã "tự do có cấu trúc nhẹ", đã quen pattern tool-calling</td><td>Task extraction đơn giản, ưu tiên chi phí</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Bảng so sánh trong <code>../modules/L5_1_prompt.html</code> (mục Production JSON output) đã khuyến nghị "Structured output + Pydantic schema" — đúng tinh thần bài này: dùng tool schema để ép định dạng, dùng Pydantic (thư viện Python khai báo schema bằng class, tự validate JSON đúng kiểu dữ liệu) để bắt cả những ràng buộc chéo-field mà JSON Schema chuẩn không diễn đạt được. Với các field như <code>verdict</code>/<code>confidence</code> trong pipeline LLM của dự án, áp dụng <code>enum</code> cho verdict và <code>minimum</code>/<code>maximum</code> cho confidence là cải thiện cụ thể, đo được, không đụng đến vai trò "research source" của LLM theo CLAUDE.md.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Chỉ khai kiểu dữ liệu, không ràng buộc miền giá trị</strong> — <code>{"confidence": {"type": "number"}}</code> hợp lệ về cú pháp nhưng không ngăn được giá trị vô nghĩa như 1.5 hay -3.</p>
+<p><strong>2. Tin schema JSON diễn đạt được mọi ràng buộc logic</strong> — ràng buộc so sánh giữa nhiều field (VD <code>stop_loss &lt; entry_price</code>) cần 1 lớp validate riêng ở tầng application, không thể ép hoàn toàn ở tầng schema khai báo.</p>
+<p><strong>3. Build phụ thuộc cứng vào tên 1 beta header cụ thể mà không tự verify</strong> — case cụ thể này đã xảy ra thật với chính tính năng đang học: Structured Outputs từng cần header <code>anthropic-beta: structured-outputs-2025-11-13</code>, nay đã GA và bỏ hẳn beta header. Code cũ hardcode header đó không lỗi ngay, nhưng đang mang theo 1 dependency đã lỗi thời — luôn kiểm tra docs chính chủ tại thời điểm build, không copy tên header từ 1 bài viết cũ.</p>
+<p><strong>4. Tin "100% khớp schema" nghĩa là "nội dung luôn đúng"</strong> — constrained decoding chỉ đảm bảo cấu trúc, không đảm bảo model chọn đúng giá trị hợp lệ trong số các lựa chọn (VD ép đúng 1 trong 3 verdict hợp lệ, nhưng verdict đó vẫn có thể sai so với dữ liệu thật). Đây là 1 dạng false-sense-of-security nếu nhầm "đúng định dạng" với "đáng tin nội dung".</p>
+<p><strong>5. Chọn cách tiếp cận structured output theo "provider đang dùng sẵn" thay vì theo đặc điểm task</strong> — VD cần streaming field-by-field cho UI thời gian thực mà lại dùng Anthropic tool-use (trả nguyên khối cuối stream) là chọn sai công cụ cho đúng bài toán, dù bản thân tool-use của Anthropic không "kém" — chỉ là không phù hợp yêu cầu streaming.</p>
+<p><strong>6. Coi retry-with-error-context và constrained decoding là 2 lựa chọn cạnh tranh</strong> — thực tế production nghiêm túc dùng cả 2 xếp chồng (constrained decoding giảm lỗi cấu trúc ngay từ đầu nếu có, retry bắt nốt phần còn lại/ràng buộc phức tạp); coi đây là "chọn 1" bỏ lỡ lợi ích cộng dồn đã đo được (98.8% self-healing vs 94.5% chỉ retry).</p>
+<p><strong>7. Tự viết lại logic retry-with-error-context từ đầu khi đã có thư viện</strong> — Instructor đã tự động hoá đúng pattern này (map sang cơ chế tốt nhất theo provider + tự retry kèm lỗi), tự viết lại từ đầu là công sức trùng lặp không cần thiết cho phần lớn use case, trừ khi có nhu cầu rất đặc thù mà thư viện không đáp ứng.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được vì sao function calling nâng tỷ lệ parse từ ~30% lên ~99% so với prompt tự do.</li>
+<li>Phân biệt được function calling thông thường và strict mode — chỉ ra khác biệt nằm ở "được train để tuân theo" hay "bị enforce".</li>
+<li>Viết được 1 schema chặt (dùng <code>enum</code>/<code>minimum</code>/<code>maximum</code>) cho 1 field cho trước, giải thích lỗi logic nào bị chặn.</li>
+<li>Chỉ ra được 1 loại ràng buộc mà JSON Schema chuẩn không diễn đạt được, và đề xuất cách bù đắp ở tầng application.</li>
+<li>Giải thích được cơ chế 3 bước của constrained decoding (compile schema → automaton, mask logits, chọn trong tập hợp lệ) — tại sao nó đạt đúng 100% chứ không phải "gần đúng".</li>
+<li>Phân biệt được "đúng schema" và "đúng nội dung" — giải thích vì sao constrained decoding không giúp model chọn đúng giá trị giữa các lựa chọn hợp lệ.</li>
+<li>So sánh đúng 3 cách tiếp cận (OpenAI/Anthropic/Gemini) theo ≥3 tiêu chí (độ tin cậy, độ biểu cảm ràng buộc, hỗ trợ streaming) và chọn đúng công cụ cho 1 use case cho trước.</li>
+<li>Thiết kế được vòng lặp retry-with-error-context (khác retry mù), giải thích vì sao nó bổ trợ chứ không thay thế constrained decoding.</li>
+<li>Chọn đúng giữa Instructor/Pydantic AI/native API cho 1 tình huống cho trước (số provider cần hỗ trợ, độ phức tạp schema).</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R2_4_prompt_caching.html">← R2.4 · Prompt Caching</a>
+  <a href="R2_6_multimodal_models.html">R2.6 · Multi-modal →</a>
+</div>
+
+</div>
+</body>
+</html>

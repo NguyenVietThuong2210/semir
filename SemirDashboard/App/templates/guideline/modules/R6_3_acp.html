@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R6.3 · ACP — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · AI Agents · Điểm 3/8</div>
+  <h1>R6.3 · ACP (Agent Communication Protocol) và bài học lịch sử</h1>
+  <p class="subtitle">1 giao thức từng được kỳ vọng, nhưng "chết" chỉ sau hơn 1 năm — bài học thực dụng: đừng implement công nghệ đang trên đường bị thay thế.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+  <li>Biết ACP là gì, ai tạo ra, giải quyết vấn đề gì lúc ra đời.</li>
+  <li>Biết chính xác <strong>khi nào và vì sao</strong> ACP bị khai tử — timeline cụ thể, không mơ hồ.</li>
+  <li>Rút ra bài học tổng quát: cách nhận diện 1 công nghệ/giao thức đang "chết" trước khi đầu tư công sức implement nó.</li>
+  <li>Biết đích migrate đúng nếu gặp tài liệu cũ nhắc tới ACP.</li>
+  <li>Biết được ACP khác A2A cụ thể ở ĐIỂM KỸ THUẬT nào (không chỉ "ai thắng ai thua"), và biết còn giao thức nào khác (ANP, AGORA) ngoài 3 cái đã học trong R6.2-R6.4.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Đây là mục <strong>ngắn nhất</strong> trong 8 trang, vì nội dung thực chất là 1 bài học lịch sử hơn là 1 kỹ thuật cần luyện tập sâu. Không có module <code>L*</code> nào dạy ACP trước đó (nó chưa từng đủ quan trọng để đưa vào curriculum) — nội dung ở đây là bổ sung hoàn toàn mới.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Tưởng tượng năm 2010 có 2 chuẩn sạc điện thoại cùng ra mắt: micro-USB (được nhiều hãng lớn dùng) và 1 chuẩn độc quyền X của riêng 1 công ty nhỏ. Vài năm sau, chuẩn X ngừng phát triển, công ty khuyên khách hàng "chuyển sang micro-USB đi". Nếu bạn vừa mua 1 lô cáp sạc chuẩn X ngay trước khi tin đó công bố — bạn đã đầu tư nhầm chỗ. ACP đúng là câu chuyện đó trong thế giới giao thức agent.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. ACP là gì, ra đời để làm gì</h3>
+<p>ACP (Agent Communication Protocol) do <strong>IBM Research</strong> phát triển cho dự án thử nghiệm <strong>BeeAI</strong>. Lấy cảm hứng ban đầu từ MCP (cùng dùng ý tưởng "chuẩn hoá giao tiếp"), nhưng nhắm vào 1 vấn đề khác: <strong>orchestration đa-agent cục bộ</strong> (local-first, ít phụ thuộc cloud). Mục tiêu ban đầu: cung cấp discovery (agent tìm nhau), task delegation (giao việc), và observability (theo dõi) giữa các agent chạy trong <em>cùng 1 team/hạ tầng nội bộ</em> — khác A2A (nhắm xuyên tổ chức, sẽ học ở R6.4).</p>
+
+<h3>2. Timeline khai tử — cụ thể, không mơ hồ</h3>
+<table>
+<tr><th>Thời điểm</th><th>Sự kiện</th></tr>
+<tr><td>Trước 8/2025</td><td>ACP phát triển song song với A2A, phục vụ BeeAI (IBM Research)</td></tr>
+<tr><td>8/2025</td><td>Team ACP tuyên bố <strong>sáp nhập vào A2A</strong> dưới Linux Foundation</td></tr>
+<tr><td>27/8/2025</td><td>Repo ACP chính thức <strong>archive (chỉ đọc)</strong>, kèm migration guide sang A2A</td></tr>
+<tr><td>2026</td><td>BeeAI (nền tảng ACP được xây cho ban đầu) giờ chạy trên A2A; repo ACP vẫn ở trạng thái archived/chỉ đọc, không có phát triển mới — không có nguồn đáng tin cậy nào track "% thị phần" cho 1 giao thức đã archived, số liệu dạng này (nếu gặp ở nơi khác) nên nghi ngờ độ chính xác</td></tr>
+</table>
+
+<h3>3. Vì sao ACP thua, không phải vấn đề kỹ thuật</h3>
+<p>ACP không "thua" vì thiết kế kỹ thuật tệ — nó thua vì <strong>hiệu ứng mạng (network effect)</strong>. A2A có Google đứng sau ban đầu, chuyển giao Linux Foundation, kéo theo hàng loạt cloud lớn (Azure, AWS, Google Cloud) tích hợp production. Khi phần lớn hệ sinh thái hội tụ về 1 chuẩn, chuẩn còn lại — dù kỹ thuật không tệ — mất lý do tồn tại độc lập. Bài học tổng quát cho kỹ sư: <strong>chọn công nghệ theo hệ sinh thái/độ trưởng thành cộng đồng, không chỉ theo thiết kế kỹ thuật thuần túy</strong>.</p>
+<p><strong>Cập nhật governance 9/2026</strong>: quá trình hội tụ hệ sinh thái không dừng ở ACP→A2A. MCP (Anthropic) đã donate cho <strong>Agentic AI Foundation (AAIF)</strong> — 1 directed fund của Linux Foundation — từ 12/2025, và chính A2A cũng gia nhập AAIF ngày 17/8/2026 (xem <code>R6_4_a2a.html §1</code>). Khác với số phận ACP (bị archive, sáp nhập hoàn toàn), MCP và A2A vẫn là 2 đặc tả kỹ thuật độc lập — chỉ cùng chung 1 foundation quản trị, không hợp nhất thành 1 giao thức.</p>
+
+<h3>4. Khác biệt kỹ thuật cụ thể ACP vs A2A — không chỉ "khác tên, cùng ý tưởng"</h3>
+<p>Mục Sai lầm thường gặp cảnh báo "ACP API/khái niệm khá tương đồng A2A" — đúng ở mức Ý TƯỞNG (cùng giải quyết task delegation giữa agent), nhưng có 1 khác biệt thiết kế CỤ THỂ đáng nhớ, vì nó là chính lý do BeeAI chọn ACP lúc đầu:</p>
+<table>
+<tr><th>Tiêu chí thiết kế</th><th>ACP (đã khai tử)</th><th>A2A (thắng)</th></tr>
+<tr><td>Kiểu giao thức nền</td><td><strong>REST thuần</strong> — gọi được bằng cURL, Postman, bất kỳ HTTP client nào, KHÔNG cần SDK riêng</td><td>JSON-RPC 2.0 + task lifecycle bất đồng bộ (mục 2, R6.4) — cần hiểu state machine 6 trạng thái</td></tr>
+<tr><td>Triết lý thiết kế</td><td>Tối giản, dễ thử nghiệm cục bộ (local-first) — ưu tiên "cắm vào là chạy được ngay"</td><td>Đầy đủ hơn cho tác vụ chạy lâu, streaming, xuyên tổ chức — trả giá bằng độ phức tạp cao hơn REST thuần</td></tr>
+<tr><td>Phạm vi thiết kế ban đầu</td><td>Hợp nhất môi trường multi-agent NỘI BỘ của chính BeeAI</td><td>Cầu nối agent xuyên framework/vendor KHÁC NHAU hoàn toàn</td></tr>
+</table>
+<p>Bài học kỹ thuật rút ra (không chỉ bài học "chọn công nghệ theo hệ sinh thái" ở mục 3): ACP thua không phải vì REST thuần là ý tưởng tệ — ngược lại, "dễ thử bằng cURL" là 1 ưu điểm kỹ thuật thật. Nó thua vì phạm vi thiết kế (nội bộ 1 team) hẹp hơn nhu cầu thị trường thực tế (cần cầu nối XUYÊN tổ chức) mà A2A giải quyết đúng hơn. Migration thực tế: BeeAI cung cấp adapter 2 chiều — <code>A2AServer</code> (expose agent BeeAI ra ngoài theo chuẩn A2A) và <code>A2AAgent</code> (gọi vào 1 agent A2A bên ngoài từ trong BeeAI) — không phải viết lại từ đầu.</p>
+
+<h3>5. Bức tranh rộng hơn — ACP không phải giao thức duy nhất "thua"</h3>
+<p>Ngoài MCP/A2A/ACP đã học ở R6.2-R6.4, hệ sinh thái 2026 còn nhắc tới thêm 2 giao thức khác, hữu ích để biết KHÔNG nhầm lẫn khi đọc tài liệu bên ngoài:</p>
+<table>
+<tr><th>Giao thức</th><th>Định vị</th><th>Trạng thái 2026</th></tr>
+<tr><td><strong>ANP</strong> (Agent Network Protocol)</td><td>Đặt cược dài hạn vào mô hình <strong>phi tập trung</strong> (decentralized) — agent tự khám phá nhau qua giao thức mở, không qua 1 registry trung tâm</td><td>Còn early-stage, các dự báo triển khai production nghiêm túc dời tới khoảng 2027 <em>(verify, dự báo có thể đổi)</em> — chưa cạnh tranh trực tiếp với A2A ở quy mô enterprise 2026</td></tr>
+<tr><td><strong>AGORA / UCP</strong> (giao thức hướng thương mại/giao dịch giữa agent)</td><td>Nhắm riêng vào tầng <strong>giao dịch/thương mại</strong> giữa agent (VD agent mua bán hộ), khác trọng tâm "điều phối task" của A2A</td><td>Ngách hẹp hơn, không thay thế A2A mà bổ sung cho 1 lớp nhu cầu riêng (thanh toán/hợp đồng giữa agent)</td></tr>
+</table>
+<p>Đọc đúng cách: "hội tụ hệ sinh thái" không có nghĩa "chỉ còn đúng 1 giao thức duy nhất cho mọi việc" — nó có nghĩa <strong>mỗi tầng vấn đề (tool-access, agent-coordination, agent-commerce) hội tụ về 1-2 giao thức thắng thế RIÊNG cho tầng đó</strong>, giống cách MCP thắng ở tầng agent↔tool trong khi A2A thắng ở tầng agent↔agent điều phối — 2 tầng khác nhau, không cạnh tranh nhau (đã học ở <code>R6_2_mcp.html §2</code>).</p>
+
+<h3>6. Cảnh báo tên gọi — "ACP" không phải 1 cái tên, mà NHIỀU giao thức trùng tên hoàn toàn không liên quan</h3>
+<p>Bẫy thực tế khi đọc tài liệu 2026: gặp chữ viết tắt "ACP" KHÔNG đảm bảo đang nói về đúng giao thức đã học ở mục 1-5 (IBM/BeeAI). Đã xác nhận qua nguồn chính thức (kho mã nguồn + trang đặc tả riêng): có ít nhất <strong>1 giao thức khác, hoàn toàn không liên quan</strong>, cũng dùng đúng tên viết tắt "ACP":</p>
+<table>
+<tr><th>Tiêu chí</th><th>Agent Communication Protocol (đã học, mục 1-5)</th><th>Agent Client Protocol (tên trùng, KHÁC hẳn)</th></tr>
+<tr><td>Ai giữ</td><td>IBM Research, cho dự án BeeAI</td><td>Zed (hãng làm code editor) + cộng đồng mở, kho riêng <code>agentclientprotocol/agent-client-protocol</code></td></tr>
+<tr><td>Giải quyết gì</td><td>Agent ↔ agent (giao task, discovery, orchestration đa-agent)</td><td>EDITOR ↔ coding agent — chuẩn hoá cách 1 trình soạn thảo code (VD Zed, hoặc bất kỳ IDE nào tích hợp) nói chuyện với 1 coding agent chạy generative AI để tự sửa code</td></tr>
+<tr><td>Quan hệ với ACP (IBM)</td><td>—</td><td><strong>KHÔNG có kế thừa/liên hệ lịch sử nào</strong> — nguồn xác nhận rõ "trùng tên là ngẫu nhiên" (coincidental), 2 dự án ra đời độc lập</td></tr>
+<tr><td>Trạng thái 2026</td><td>Archived, migrate sang A2A (mục 2)</td><td>Đang phát triển tích cực, KHÔNG liên quan gì tới việc ACP (IBM) bị khai tử</td></tr>
+</table>
+<p>Điểm dễ gây nhầm lẫn thêm: nhiều package/thư viện đặt tên có chữ "ACP" (VD 1 gói .NET tên <code>Acp.Net</code>) hoá ra lại đang implement <strong>Agent Client Protocol của Zed</strong>, không phải giao thức IBM đã học ở trang này — tên gói/tên biến KHÔNG phải bằng chứng đủ để suy luận đang nói về giao thức nào.</p>
+<pre><code>Cách nhận diện đúng khi gặp "ACP" trong tài liệu bất kỳ — đặt câu hỏi:
+  "Bài viết này đang mô tả EDITOR nói chuyện với coding agent (VD IDE plugin,
+   tích hợp trợ lý code)?"
+     → CÓ  → đang nói về Agent Client Protocol (Zed) — KHÔNG liên quan trang này.
+     → KHÔNG, đang nói về 1 agent GIAO TASK cho 1 agent khác (kiểu B2B/nội bộ team)
+       → đang nói về Agent Communication Protocol (IBM/BeeAI, mục 1-5) — đã khai tử,
+         migrate sang A2A theo đúng hướng dẫn mục 2-4 trang này.</code></pre>
+<p>Bài học tổng quát rút ra (khác bài học "hội tụ hệ sinh thái" ở mục 3-5): hệ sinh thái giao thức agent phát triển nhanh tới mức <strong>tên viết tắt bị tái sử dụng độc lập bởi nhiều nhóm khác nhau</strong> — không phải dấu hiệu 1 bên "nhái" bên kia, chỉ là hệ quả tự nhiên của 1 lĩnh vực còn quá mới, chưa có cơ quan trung tâm cấp phát tên. Luôn xác minh NGỮ CẢNH (agent↔agent hay editor↔agent) trước khi tra cứu sâu hơn về "ACP", đừng giả định.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Cách nhận diện thực tế nếu gặp 1 tài liệu (blog, plan doc cũ, thư viện) nhắc tới ACP hôm nay:</p>
+<pre><code>Nếu thấy: "hệ thống dùng ACP để agent A giao task cho agent B"
+  → Đây là tài liệu VIẾT TRƯỚC 8/2025, hoặc tác giả chưa cập nhật.
+  → Hành động đúng: không implement ACP mới.
+  → Tra migration guide chính thức, chuyển thẳng sang A2A (R6.4)
+    vì API/khái niệm 2 giao thức khá tương đồng (cùng gốc ý tưởng
+    "task delegation giữa agent"), effort migrate không lớn.
+</code></pre>
+<p>Minh hoạ cụ thể hơn — cùng 1 việc "giao task cho agent B", viết theo ACP (REST thuần) và A2A (JSON-RPC), để thấy đúng mức độ khác biệt kỹ thuật ở mục 4 (không lớn về Ý TƯỞNG, nhưng khác cú pháp/transport):</p>
+<pre><code># ACP (REST thuần — gọi được bằng curl, không cần SDK)
+POST /runs
+{ "agent_name": "invoice_checker", "input": [{"role": "user", "content": "Kiểm tra công nợ Q3"}] }
+→ Response đồng bộ hoặc poll GET /runs/{run_id} tới khi xong.
+
+# A2A tương đương (JSON-RPC 2.0 — cần hiểu task lifecycle, R6.4 mục 2)
+POST / (JSON-RPC endpoint)
+{ "jsonrpc": "2.0", "method": "tasks/send",
+  "params": { "id": "task-1", "message": {"role": "user", "parts": [{"text": "Kiểm tra công nợ Q3"}]} } }
+→ Response trả về task ở trạng thái "submitted" → client poll/subscribe tới khi
+  "completed" (6 trạng thái lifecycle, không phải chỉ "xong hay chưa xong" như ACP).</code></pre>
+<p>Khác biệt cú pháp nhỏ, nhưng khác biệt MÔ HÌNH lớn hơn: ACP coi 1 lần gọi là "chạy rồi chờ xong" (đơn giản, gần giống gọi hàm REST bình thường); A2A coi 1 lần gọi là "khởi tạo 1 task có vòng đời riêng" (phức tạp hơn, nhưng mô tả đúng bản chất tác vụ dài/streaming mà ACP không thiết kế sẵn cho).</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>ACP</th><th>A2A (thắng, xem R6.4)</th></tr>
+<tr><td>Người đỡ đầu ban đầu</td><td>IBM Research (BeeAI)</td><td>Google → Linux Foundation</td></tr>
+<tr><td>Phạm vi thiết kế</td><td>Local-first, nội bộ team/hạ tầng</td><td>Xuyên tổ chức, cloud-scale</td></tr>
+<tr><td>Trạng thái 2026</td><td>Archived, chỉ đọc, không phát triển mới, không có nguồn đáng tin cậy track % thị phần cho giao thức đã archived</td><td>150+ tổ chức hỗ trợ, production 3 cloud lớn</td></tr>
+<tr><td>Việc cần làm nếu gặp trong code cũ</td><td>Migrate sang A2A theo guide chính thức</td><td>—</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> không có nhu cầu ACP hay bất kỳ giao thức liên-agent chính thức nào — mọi "multi-agent" trong dự án hiện tại là sub-agent Claude Code chạy trong <strong>cùng 1 phiên coordinator</strong> (xem <code>R6_6_multiagent_systems.html</code>), không phải giao tiếp xuyên tổ chức/framework khác nhau cần 1 giao thức chuẩn hoá riêng. Không có action item nào cần làm ở đây ngoài việc <strong>ghi nhớ để không nhầm lẫn</strong> nếu đọc tài liệu cũ nhắc tới ACP.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li><strong>Implement ACP cho dự án mới năm 2026</strong> — đã archived từ 8/2025, không còn được duy trì, không nên đầu tư công sức mới vào đây.</li>
+<li><strong>Đọc tài liệu cũ nhắc ACP mà tưởng đó là hướng dẫn hiện hành</strong> — luôn kiểm tra ngày viết tài liệu; nếu trước 8/2025 và nói về ACP, hiểu đó là lịch sử.</li>
+<li><strong>Rút bài học sai</strong>: "vậy cứ chọn công nghệ có công ty lớn đứng sau là an toàn" — không hoàn toàn đúng; bài học chính xác hơn là <em>theo dõi tín hiệu hội tụ hệ sinh thái</em> (bao nhiêu tổ chức khác hỗ trợ, xu hướng adoption) trước khi cam kết dài hạn với 1 giao thức, dù ai đứng sau.</li>
+<li><strong>Kết luận ACP thua vì thiết kế REST thuần "kém" A2A</strong> — sai theo mục 4; REST thuần là 1 ưu điểm kỹ thuật thật (dễ thử bằng cURL), ACP thua vì phạm vi thiết kế hẹp hơn nhu cầu thị trường, không phải vì kỹ thuật REST tệ.</li>
+<li><strong>Thấy chữ "ACP" ở đâu cũng mặc định đang nói về IBM Agent Communication Protocol</strong> — sai theo mục 6; Agent Client Protocol (Zed, editor↔agent) dùng CHUNG tên viết tắt nhưng là 1 dự án hoàn toàn khác, đang phát triển tích cực, không liên quan gì tới việc IBM ACP bị khai tử.</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li><input type="checkbox" disabled> Nói được ACP do ai tạo, cho dự án gì, giải quyết vấn đề gì lúc ra đời.</li>
+<li><input type="checkbox" disabled> Nói đúng ngày archive (27/8/2025) và ai "thắng" (A2A, dưới Linux Foundation).</li>
+<li><input type="checkbox" disabled> Giải thích được lý do ACP thua là hiệu ứng mạng/hệ sinh thái, không phải thiết kế kỹ thuật kém.</li>
+<li><input type="checkbox" disabled> Biết hành động đúng nếu gặp ACP trong tài liệu cũ: migrate sang A2A, không implement mới.</li>
+<li><input type="checkbox" disabled> Nêu đúng khác biệt kỹ thuật cụ thể ACP (REST thuần, không SDK) vs A2A (JSON-RPC + task lifecycle) — không chỉ nói chung chung "tương tự nhau".</li>
+<li><input type="checkbox" disabled> Kể được ít nhất 1 giao thức khác ngoài MCP/A2A/ACP (ANP hoặc AGORA/UCP) và định vị đúng nó giải quyết tầng vấn đề nào.</li>
+<li><input type="checkbox" disabled> Nhận diện đúng "ACP" nào đang được nói tới khi gặp trong tài liệu bất kỳ (mục 6) — phân biệt Agent Communication Protocol (IBM, agent↔agent, đã khai tử) với Agent Client Protocol (Zed, editor↔agent, đang phát triển) bằng đúng câu hỏi ngữ cảnh, không suy đoán từ tên gói/tên biến.</li>
+</ul>
+</div>
+
+<div class="nav-bottom"><a href="R6_2_mcp.html">← R6.2 · MCP</a><a href="R6_4_a2a.html">R6.4 · A2A →</a></div>
+
+</div>
+</body>
+</html>

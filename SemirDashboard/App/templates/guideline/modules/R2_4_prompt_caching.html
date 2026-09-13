@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2.4 · Prompt Caching — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM APIs · Điểm 4/8</div>
+  <h1>R2.4 · Prompt Caching</h1>
+  <p class="subtitle">Tính năng API-level xây trên nền KV cache (R2.1) — cho phép tái sử dụng phần prompt tĩnh xuyên nhiều request, đây thường là đòn bẩy tiết kiệm chi phí lớn nhất và bị bỏ qua nhiều nhất.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Giải thích cơ chế <code>cache_control</code> breakpoint và vì sao nó khác KV cache (R2.1) dù tên gần giống nhau.</li>
+<li>Tính được số tiền tiết kiệm thật cho 1 workload cụ thể của dự án khi bật Prompt Caching.</li>
+<li>Biết 3 ràng buộc kỹ thuật hay bị bỏ sót: ngưỡng token tối thiểu, lựa chọn TTL, nhiều breakpoint trong 1 request.</li>
+<li>Kiểm tra được 1 pipeline thật (skill có sẵn trong dự án) có đang tận dụng Prompt Caching hay không.</li>
+<li>So sánh được cách 3 provider lớn (Anthropic, OpenAI, Gemini) hiện thực hoá caching khác nhau thế nào (manual breakpoint vs automatic vs 2 cơ chế song song) — hiểu đây là 3 điểm khác nhau trên cùng 1 trục đánh đổi "kiểm soát chính xác" so với "không cần sửa code", không phải "nhà cung cấp nào làm đúng hơn".</li>
+<li>Phân biệt được Prompt Caching (vẫn gọi model, giảm giá phần trùng lặp) với Semantic Caching (có thể bỏ qua gọi model hoàn toàn nếu câu hỏi "đủ giống về ý nghĩa") — và nhận diện được rủi ro trả lời sai-sự-thật của semantic caching cho dữ liệu nhạy cảm thời gian.</li>
+<li>Thiết kế được ≥2 cơ chế cache invalidation ngoài TTL (versioned key, manual purge) và giải thích vì sao "cache cũ" nguy hiểm hơn "cache miss" cho dữ liệu LLM.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Cơ chế cốt lõi + ví dụ code + số tiền tiết kiệm thật của PredictStock đã có ở <code>../modules/L5_1_prompt.html §6.3</code> và <code>../modules/L5_5_cost_latency.html §2</code>. Bài này bổ sung 3 điểm 2 module đó chưa có (nguồn: WebSearch 2026, xem <code>../roadmap_ai_engineering/_research_evidence_track1.md</code> — độ tin cậy trung bình, có blog thứ 3 lẫn vào, khuyến nghị verify lại doc chính chủ trước khi build phụ thuộc vào số liệu chính xác).</p>
+<p><strong>Prerequisite</strong>: đọc R2.1 (KV Caching) trước — Prompt Caching chỉ có nghĩa khi đã hiểu KV cache là gì và vì sao nó "chết" theo từng request.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Bạn đọc xong 1 cuốn sách 500 trang và làm 1 bản tóm tắt (bookmark). Lần tới, nếu ai đó hỏi lại đúng nội dung trong 500 trang đó, bạn không đọc lại từ đầu — bạn lấy bản tóm tắt ra dùng ngay. Prompt Caching chính là "bản tóm tắt" (KV cache của prefix) được lưu lại ở phía server, để lần gọi sau tái dùng thay vì tính lại từ đầu — miễn 500 trang đó (system prompt) giống hệt nhau.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Prompt Caching là gì, chính xác</h3>
+<p>KV cache (R2.1) mặc định chỉ sống trong 1 request. Prompt Caching là tính năng do provider (Anthropic) cung cấp, cho phép <strong>lưu lại</strong> KV cache của 1 đoạn <em>prefix cố định</em> (system prompt, few-shot, KB tĩnh) và <strong>tái sử dụng nó xuyên nhiều request khác nhau</strong>, miễn prefix giống hệt nhau byte-by-byte, trong 1 khoảng thời gian (TTL).</p>
+<pre><code>KHÔNG có Prompt Caching — mỗi request build lại KV cache prefix từ đầu:
+
+  Request 1 (ticker A): [build KV cache: system 3800 tok] → [gọi model] → cache MẤT khi xong
+  Request 2 (ticker B): [build KV cache: system 3800 tok] → [gọi model] → cache MẤT khi xong
+  Request 3 (ticker C): [build KV cache: system 3800 tok] → [gọi model] → cache MẤT khi xong
+  ...                    (system prompt Y HỆT NHAU mỗi lần — vẫn build lại 100% mỗi request)
+
+CÓ Prompt Caching (TTL 5 phút) — build 1 lần, TÁI DÙNG cho các request sau trong TTL:
+
+  Request 1 (ticker A): [build KV cache: system 3800 tok] → LƯU LẠI (cache write, giá 1.25×)
+  Request 2 (ticker B):  ................................. → TÁI DÙNG (cache hit, giá 0.10×)
+  Request 3 (ticker C):  ................................. → TÁI DÙNG (cache hit, giá 0.10×)
+  ...                    (miễn còn trong TTL 5 phút VÀ prefix giống hệt byte-by-byte)</code></pre>
+<pre><code>messages = [{
+  "role": "system",
+  "content": [
+    {"type": "text", "text": SYSTEM_PROMPT_5K_TOKENS,
+     "cache_control": {"type": "ephemeral"}},   # ← cache marker
+  ]},
+  {"role": "user", "content": user_question_500_tokens},
+]
+
+# Lần 1 (cache write): 5000 × $3/1M × 1.25 (write surcharge) = $0.01875
+# Lần 2-N (cache hit, TTL 5 phút): 5000 × $3/1M × 0.10 = $0.0015 (-90%)
+# 100 requests/giờ: uncached 100 × $0.015 = $1.50
+# Cached (1 lần ghi + 99 lần đọc): $0.01875 + 99 × $0.0015 = $0.16725 ≈ $0.167
+# → tiết kiệm ≈ $1.33/giờ (~89%)</code></pre>
+<p>Ví dụ trên đã có nguyên bản ở <code>L5_1_prompt.html §6.3</code> — dẫn lại để làm nền cho 3 điểm mới bên dưới.</p>
+
+<h3>2. Điểm mới #1 — ngưỡng tối thiểu, khác nhau theo model</h3>
+<p>Block được đánh <code>cache_control</code> phải đạt ngưỡng tối thiểu thì mới thực sự được cache — đánh marker lên 1 đoạn dưới ngưỡng sẽ bị bỏ qua âm thầm (không cache, cũng không báo lỗi, khiến việc debug "sao không thấy tiết kiệm gì" rất khó nhận ra). Ngưỡng này <strong>không giống nhau cho mọi model</strong>: <strong>1,024 token</strong> cho dòng Sonnet/Opus, nhưng <strong>2,048 token</strong> cho dòng Haiku — dùng nhầm ngưỡng của Sonnet để tính cho Haiku là 1 lỗi giả định phổ biến.</p>
+<div class="callout"><div class="label">📖 Hệ quả thiết kế</div>
+<p>Nếu system prompt của bạn chỉ 500 token, gộp thêm few-shot examples vào <em>cùng 1 block</em> cacheable để vượt ngưỡng 1,024, thay vì tách rời chúng ra 2 block nhỏ (mỗi block dưới ngưỡng sẽ không được cache dù có đánh marker).</p>
+</div>
+
+<h3>3. Điểm mới #2 — 2 lựa chọn TTL</h3>
+<table>
+<tr><th>TTL</th><th>Chi phí write</th><th>Phù hợp khi nào</th></tr>
+<tr><td>5 phút (mặc định)</td><td>1.25× giá input thường</td><td>Workload đọc lại nhiều lần trong vài phút (VD batch report chạy liên tục)</td></tr>
+<tr><td>1 giờ (premium)</td><td>2× giá input thường</td><td>Chỉ đáng dùng khi 1 cache entry được đọc lại ≥ 5-7 lần trong giờ đó</td></tr>
+</table>
+<p>Với batch report chạy nhiều ticker liên tiếp trong dưới 1 phút, TTL 5 phút là quá đủ — không cần trả thêm cho TTL 1 giờ.</p>
+
+<h3>4. Điểm mới #3 — nhiều breakpoint trong 1 request</h3>
+<p>Có thể đặt <code>cache_control</code> ở nhiều điểm, không chỉ 1 block system duy nhất — để phần <em>ít thay đổi hơn</em> (system cố định) có TTL/reuse rate khác phần <em>thay đổi vừa</em> (few-shot có thể đổi theo A/B test).</p>
+<pre><code># Cache 2 tầng — tĩnh nhất trước, ít tĩnh hơn sau
+messages = [{
+    "role": "system",
+    "content": [
+        {"type": "text", "text": HARD_RULES_R1_R5,           # gần như bất biến
+         "cache_control": {"type": "ephemeral"}},              # breakpoint 1
+        {"type": "text", "text": FEW_SHOT_EXAMPLES,            # đổi khi A/B test prompt
+         "cache_control": {"type": "ephemeral"}},              # breakpoint 2
+    ]},
+    {"role": "user", "content": ticker_specific_data},          # luôn động, KHÔNG cache
+]</code></pre>
+
+<h3>5. Điểm mới #4 — 3 provider lớn hiện thực hoá caching theo 3 triết lý khác nhau, không phải "1 chuẩn chung"</h3>
+<p>Prompt Caching không phải khái niệm riêng của Anthropic — cả 3 provider lớn đều có, nhưng chọn 3 điểm khác nhau trên trục "ai kiểm soát breakpoint":</p>
+<table>
+<tr><th>Provider</th><th>Cơ chế</th><th>Ai đánh dấu điểm cache</th><th>Discount cache hit</th><th>Chi phí ghi cache</th></tr>
+<tr><td><strong>Anthropic (Claude)</strong></td><td>Manual — <code>cache_control</code> breakpoint tường minh</td><td>Lập trình viên, chính xác từng byte</td><td>90% (đọc chỉ 10% giá gốc)</td><td>Có surcharge: 1.25× (TTL 5 phút) hoặc 2× (TTL 1 giờ)</td></tr>
+<tr><td><strong>OpenAI (GPT)</strong></td><td>Automatic — tự khớp prefix dài nhất trùng khớp, không cần sửa code</td><td>Hệ thống tự quyết định, lập trình viên không kiểm soát trực tiếp</td><td>~50-90% tuỳ dòng model (GPT-5.x họ mới đạt mức 90% từ 2026)</td><td>Miễn phí — không có surcharge ghi cache</td></tr>
+<tr><td><strong>Gemini</strong></td><td>2 cơ chế song song: explicit context caching (tạo cache object có tên, tự quản lý) + implicit caching (tự động, zero-config, thêm cho Gemini 2.5+ từ 2026)</td><td>Cả 2: lập trình viên (explicit) hoặc hệ thống (implicit)</td><td>~90% cho cache hit (2.5+)</td><td>Explicit cache tính phí lưu trữ theo thời gian giữ (storage-billed), khác hẳn mô hình "phí ghi 1 lần" của Anthropic</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Đây là trade-off, không phải "ai đúng ai sai"</div>
+<ul>
+<li><strong>Manual (Anthropic)</strong>: kiểm soát chính xác nhất — biết chắc đoạn nào cacheable, không phụ thuộc suy đoán hệ thống. Đánh đổi: code phải chủ động đánh dấu, mất lợi ích nếu quên/đặt sai vị trí (đúng bài học mục 2-3 ở trên).</li>
+<li><strong>Automatic (OpenAI, và implicit của Gemini)</strong>: không cần sửa 1 dòng code nào để có cache — phù hợp khi prompt đổi cấu trúc thường xuyên, không có 1 "prefix cố định" rõ ràng để đánh dấu thủ công. Đánh đổi: không kiểm soát được chính xác cache hit xảy ra ở đâu, khó debug khi "tưởng đang cache mà không thấy giảm giá".</li>
+<li><strong>Không có lựa chọn nào "tốt hơn" tuyệt đối</strong>: traffic ổn định + prompt lớn cố định → Anthropic-style thắng rõ; traffic thất thường + prompt đổi cấu trúc liên tục → automatic-style đỡ tốn công bảo trì hơn.</li>
+</ul>
+</div>
+<div class="callout danger"><div class="label">⚠️ Ngưỡng tối thiểu tiếp tục thay đổi — luôn verify lại, đừng hardcode con số cũ</div>
+<p>Mục 2 ở trên đã nêu ngưỡng 1,024 token (Sonnet/Opus) và 2,048 token (Haiku) — đây là con số tại 1 thời điểm, không phải hằng số vĩnh viễn. Theo tìm kiếm 9/2026, dòng Opus 5 đã hạ ngưỡng cache tối thiểu xuống còn <strong>512 token</strong>, giúp cache được cả những đoạn system prompt ngắn hơn trước. Bài học lặp lại đúng tinh thần R2.5 (Structured Outputs): con số ngưỡng cụ thể là thứ thay đổi theo từng thế hệ model — code/tài liệu nội bộ không nên hardcode 1 con số duy nhất mà không ghi rõ ngày verify và model áp dụng.</p>
+</div>
+
+<h3>6. Semantic Caching — 1 tầng KHÁC HẲN Prompt Caching, dễ nhầm chỉ vì cùng chữ "caching"</h3>
+<p>Đây là điểm hay bị gộp nhầm nhất trong toàn bộ chủ đề caching: Prompt Caching (mục 1-5) vẫn <strong>luôn gọi model</strong> — chỉ là phần prefix trùng lặp được tính rẻ hơn. <strong>Semantic Caching</strong> là 1 tầng hoàn toàn khác, đứng TRƯỚC cả việc gọi model: nó **có thể bỏ qua việc gọi model hoàn toàn** nếu tìm thấy 1 câu hỏi "đủ giống về ý nghĩa" đã được trả lời trước đó.</p>
+<table>
+<tr><th></th><th>Prompt Caching (mục 1-5)</th><th>Semantic Caching</th></tr>
+<tr><td>Tầng hoạt động</td><td>Bên trong lời gọi model — vẫn LUÔN gọi model</td><td>Đứng TRƯỚC lời gọi model — có thể bỏ qua gọi model hoàn toàn</td></tr>
+<tr><td>Điều kiện khớp</td><td>Prefix giống hệt NHAU byte-by-byte</td><td>Câu hỏi mới có embedding đủ "gần" (cosine similarity, thường ngưỡng 0.92-0.97) với 1 câu hỏi đã cache trước đó — KHÔNG cần giống hệt chữ</td></tr>
+<tr><td>Cơ chế kỹ thuật</td><td>Server lưu lại KV cache đã build cho đúng đoạn prefix đó (xem R2.1)</td><td>Client-side: encode câu hỏi mới thành vector, tìm trong vector store (VD Redis, FAISS) câu hỏi cũ gần nhất, trả thẳng response cũ nếu đủ gần ngưỡng</td></tr>
+<tr><td>Mức tiết kiệm tối đa</td><td>90% chi phí phần được cache (vẫn trả 10% + toàn bộ phần không cache)</td><td>100% — không tốn token nào cho request đó nếu cache hit (không gọi model)</td></tr>
+<tr><td>Rủi ro lớn nhất</td><td>Thấp — chỉ "cache miss âm thầm" nếu thiết kế sai (mục 2, R2.2)</td><td><strong>Cao</strong> — trả lời "giống về ý nghĩa" nhưng SAI về sự thật nếu 2 câu hỏi chỉ khác nhau ở 1 chi tiết quan trọng (VD ticker khác, ngày khác, giá khác) mà vẫn vượt ngưỡng similarity</td></tr>
+<tr><td>Công cụ phổ biến</td><td>Tích hợp sẵn trong API (Anthropic/OpenAI/Gemini)</td><td>GPTCache (thư viện MIT gốc, bọc quanh client, tự lo embedding + vector search + lưu response), Redis Vector Cache</td></tr>
+<tr><td>Hit rate thực tế đo được (2026)</td><td>Phụ thuộc thiết kế prefix — có thể tới 85/86 lần cho workload lặp system prompt (xem ví dụ dưới)</td><td>20-45% traffic nói chung; 40-70% cho "template-heavy agent inner loop"; chỉ 10-25% cho hội thoại đuôi dài (long-tail) — hit rate PHỤ THUỘC RẤT NHIỀU vào tính lặp lại thật của câu hỏi</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Vì sao đây là rủi ro thật cho 1 hệ thống tài chính — không phải lý thuyết</div>
+<p>Semantic caching đặc biệt nguy hiểm cho use case như <code>daily-investor-report</code> nếu áp dụng không cẩn thận: câu hỏi "phân tích HPG hôm nay" và "phân tích HPG hôm qua" có embedding CỰC KỲ gần nhau về mặt ngữ nghĩa (cùng ticker, cùng loại yêu cầu) — nhưng giá, khối lượng, tin tức có thể đã đổi hoàn toàn giữa 2 ngày. Nếu ngưỡng similarity đặt không đủ chặt, hệ thống có thể trả lại phân tích CŨ dưới lớp vỏ "trả lời câu hỏi mới" — đây không phải lỗi hiếm gặp, mà là rủi ro CỐ HỮU của chính cơ chế (so khớp theo ý nghĩa, không so khớp theo sự kiện/thời gian). Đây là lý do semantic caching phù hợp hơn cho câu hỏi ít nhạy cảm với thời gian (FAQ, hướng dẫn sử dụng) hơn là dữ liệu thị trường thay đổi hàng ngày.</p>
+</div>
+
+<h3>7. Cache invalidation — cache "cũ" nguy hiểm hơn cache "miss"</h3>
+<p>Toàn bộ mục 1-6 tập trung vào "làm sao để cache hit nhiều hơn" — nhưng câu hỏi ngược lại quan trọng không kém: "làm sao biết khi nào PHẢI bỏ cache đi". TTL 5 phút/1 giờ (mục 3) là 1 dạng invalidation đơn giản (hết giờ tự xoá), nhưng production nghiêm túc cần thêm 2 cơ chế:</p>
+<table>
+<tr><th>Chiến lược invalidation</th><th>Cơ chế</th><th>Khi nào cần</th></tr>
+<tr><td>TTL-based (đã có ở mục 3)</td><td>Tự hết hạn sau 1 khoảng thời gian cố định (5 phút / 1 giờ)</td><td>Baseline — luôn có, nhưng KHÔNG đủ nếu dữ liệu gốc đổi nhanh hơn TTL</td></tr>
+<tr><td>Versioned cache key</td><td>Cache key gắn thêm version của system prompt/model — đổi system prompt hoặc model là tự động tính "prefix khác", không cần chờ TTL hết hạn</td><td>Khi thay đổi system prompt hoặc nâng cấp model — tránh trường hợp cache cũ "sống sót" qua 1 bản cập nhật logic quan trọng</td></tr>
+<tr><td>Manual purge endpoint</td><td>1 API/lệnh riêng để xoá cache ngay lập tức trong tình huống khẩn cấp</td><td>Khi phát hiện dữ liệu gốc sai/lỗi đã lỡ được cache — cần xoá ngay, không đợi TTL</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Điểm dễ bị bỏ sót nhất — "cached" không có nghĩa là "vẫn đúng"</div>
+<p>Với cache dữ liệu thông thường (VD cache giá sản phẩm), rủi ro dễ hình dung: giá cũ hiển thị sai. Với cache CÂU TRẢ LỜI của LLM, rủi ro tinh vi hơn: <strong>response có thể trở nên sai về sự kiện dù CHÍNH câu hỏi không đổi</strong> — VD system prompt cache 5 phút cho hard rule R1-R15 là an toàn (rule không đổi trong 5 phút), nhưng nếu lỡ cache luôn cả 1 phần dữ liệu thị trường vào chung 1 block cacheable, "đúng cú pháp" nhưng SAI về mặt thời gian (giá đã đổi, nhưng cache chưa hết hạn) — đây chính là lý do nguyên tắc R2.2 "không nhét dữ liệu động vào phần cacheable" không chỉ là tối ưu cache hit, mà còn là 1 lớp phòng ngừa staleness.</p>
+</div>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Tính % tiết kiệm thật cho pipeline <code>daily-investor-report</code> mode <code>all</code> — 86 ticker (<code>HIGHLIGHT_GROUP</code>), system prompt ~3800 token (persona + hard rules R1-R15), theo đúng tỷ lệ write/read đã dẫn ở trên:</p>
+<pre><code>Không có Prompt Caching:
+  86 lần gọi × 3800 token × $3/1M = $0.9804 (mọi lần đều tính giá input thường)
+
+Có Prompt Caching (5 phút TTL, 86 lần gọi trong ~60 giây — cùng 1 cửa sổ TTL):
+  Lần 1 (cache write): 3800 × $3/1M × 1.25 = $0.01425
+  Lần 2-86 (cache hit): 85 × 3800 × $3/1M × 0.10 = 85 × $0.00114 = $0.0969
+  Tổng: $0.01425 + $0.0969 ≈ $0.1112
+
+Tiết kiệm: ($0.9804 - $0.1112) / $0.9804 ≈ 88.7% chi phí phần system prompt riêng lần chạy này
+(khớp đúng con số $0.98/report run đã ghi ở L5_1_prompt.html §6.3 — số liệu ở đây tính lại
+ chi tiết theo tỷ lệ write 1.25× / read 0.10× để show rõ TỪNG bước, không chỉ trích dẫn kết quả)</code></pre>
+
+<p><strong>Ví dụ nối tiếp — cùng workload đó, nếu tính theo mô hình "automatic, ghi miễn phí" (kiểu OpenAI) thay vì "manual, ghi có surcharge" (Anthropic)</strong>, để thấy rõ mục "Sai lầm #4" ở dưới không phải lý thuyết suông:</p>
+<pre><code>Giả định discount đọc GIỐNG NHAU (90%) giữa 2 mô hình, chỉ khác chi phí ghi:
+
+Mô hình Anthropic-style (ghi 1.25×, đọc 0.10×) — 86 lần gọi, đã tính ở trên:
+  Tổng ≈ $0.1112  (1 lần ghi đắt hơn input thường, 85 lần đọc rẻ)
+
+Mô hình "ghi miễn phí" giả định (đọc 0.10×, ghi 1.0× — không surcharge):
+  Lần 1 (ghi, giá bình thường): 3800 × $3/1M × 1.0 = $0.0114
+  Lần 2-86 (đọc, 90% off):      85 × 3800 × $3/1M × 0.10 = $0.0969
+  Tổng ≈ $0.1083  → RẺ HƠN 1 chút so với Anthropic-style cho ĐÚNG workload này
+  (vì workload này có tỷ lệ cache-hit rất cao — 85/86 lần là hit — nên phần
+   surcharge ghi 1 lần duy nhất gần như không đáng kể trong tổng thể)
+
+NHƯNG nếu workload có tỷ lệ hit THẤP (VD prompt đổi cấu trúc liên tục, chỉ
+20% số lần trùng đúng prefix — 17 hit / 86 lần, còn lại 69 lần đều phải "ghi mới"):
+  Anthropic-style: 69 lần ghi × $0.01425 + 17 lần đọc × $0.00114 ≈ $0.98325 + $0.0194 ≈ $1.003
+  Ghi-miễn-phí:    69 lần ghi × $0.0114  + 17 lần đọc × $0.00114 ≈ $0.7866 + $0.0194 ≈ $0.806
+
+  → Chênh lệch RÕ RỆT hơn khi tỷ lệ hit thấp — mô hình có surcharge ghi (Anthropic)
+    thiệt hại nhiều hơn mỗi lần phải ghi lại, đúng như mục "Sai lầm #4" cảnh báo.</code></pre>
+<p><strong>Kết luận thực dụng</strong>: câu hỏi "provider nào caching rẻ hơn" không có câu trả lời cố định — nó phụ thuộc tỷ lệ cache-hit thật của workload. Với <code>daily-investor-report</code> (system prompt cố định, gọi lặp lại nhiều ticker liên tiếp trong 1 cửa sổ TTL — tỷ lệ hit rất cao), mô hình có surcharge ghi như Anthropic gần như không thiệt gì đáng kể; đây KHÔNG phải kết luận tổng quát cho mọi workload khác.</p>
+<p><strong>Đọc con số này thế nào</strong>: phần tiết kiệm chỉ tính cho system prompt — phần dữ liệu động (giá, ticker, tin tức mỗi request) vẫn tính giá đầy đủ vì không cacheable. Nhưng vì system prompt (3800 token) thường lớn hơn nhiều phần dữ liệu động mỗi ticker, đây vẫn là khoản tiết kiệm đáng kể trên tổng chi phí cả lần chạy.</p>
+
+<h3>Ví dụ minh hoạ rủi ro semantic caching (mục 6) — vì sao KHÔNG áp dụng cho dữ liệu thị trường</h3>
+<p>Kịch bản giả định: 1 tính năng tương lai cho phép user hỏi tự do "phân tích cổ phiếu X" và hệ thống dùng semantic caching để tiết kiệm chi phí (không phải thiết kế hiện tại của <code>daily-investor-report</code> — đây là ví dụ CẢNH BÁO, không phải khuyến nghị triển khai):</p>
+<pre><code>Ngày T:   User hỏi "Phân tích HPG hôm nay, có nên mua không?"
+          → Hệ thống gọi LLM thật, trả lời dựa trên giá/tin tức NGÀY T, lưu vào semantic cache
+          → Embedding câu hỏi được lưu kèm response
+
+Ngày T+3: User khác hỏi "HPG có đáng mua không, phân tích giúp tôi"
+          → Encode câu hỏi mới → cosine similarity với câu hỏi ngày T: giả sử đo được 0.95
+            (2 câu hỏi RẤT giống nhau về Ý NGHĨA — cùng ticker, cùng loại yêu cầu)
+          → Nếu ngưỡng hệ thống đặt là 0.92: đây là CACHE HIT
+          → Trả thẳng response của ngày T — dựa trên giá/tin tức đã CŨ 3 NGÀY,
+            không hề gọi lại LLM, không hề biết giá đã đổi bao nhiêu % trong 3 ngày đó
+
+Hậu quả: user ngày T+3 nhận 1 phân tích "đọc hoàn toàn hợp lý, đúng ngữ pháp,
+đúng cấu trúc" nhưng SAI về sự kiện — không có lỗi hệ thống nào được ghi log,
+vì về mặt kỹ thuật, cache "hoạt động đúng như thiết kế" (tìm thấy câu hỏi
+tương tự, trả lời nhanh, tiết kiệm chi phí) — chỉ là thiết kế đó không phù hợp
+với bản chất dữ liệu (thị trường đổi hàng ngày, câu hỏi thì không đổi cấu trúc).
+
+=> Bài học: ngưỡng cosine similarity cao (0.95) không bảo vệ được khỏi rủi ro này,
+   vì 2 câu hỏi về CÙNG 1 ticker luôn có similarity cao dù cách nhau bao lâu.
+   Muốn dùng semantic caching an toàn cho use case này, cần thêm điều kiện
+   THỜI GIAN vào key cache (VD chỉ coi là "hit" nếu cùng ngày giao dịch)
+   — nhưng làm vậy gần như quay lại đúng bài toán mà Prompt Caching (TTL-based)
+   đã giải quyết gọn hơn, ít rủi ro hơn.</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Yếu tố</th><th>Không cache</th><th>Có Prompt Caching</th></tr>
+<tr><td>Giá phần system mỗi lần gọi lại</td><td>100% giá input thường</td><td>10% giá input thường (cache hit)</td></tr>
+<tr><td>Latency prefill phần cached</td><td>Phải tính lại toàn bộ</td><td>Skip — chỉ tính phần mới</td></tr>
+<tr><td>Điều kiện áp dụng</td><td>Không cần</td><td>Prefix ≥ 1,024 token, giống hệt byte-by-byte, còn hạn TTL</td></tr>
+<tr><td>Rủi ro nếu thiết kế sai</td><td>Không có (không dùng tính năng)</td><td>Cache miss âm thầm nếu dữ liệu động chen vào đầu prefix</td></tr>
+</table>
+
+<p>Bảng thứ 2 — mở rộng thêm cột Semantic Caching để thấy rõ 3 lựa chọn cạnh nhau (không phải chỉ 2):</p>
+<table>
+<tr><th>Yếu tố</th><th>Không cache</th><th>Prompt Caching</th><th>Semantic Caching</th></tr>
+<tr><td>Có luôn gọi model không?</td><td>Có, luôn</td><td>Có, luôn (chỉ rẻ hơn phần trùng)</td><td>KHÔNG — có thể bỏ qua hoàn toàn nếu hit</td></tr>
+<tr><td>Tiết kiệm tối đa/request hit</td><td>0%</td><td>~90% (phần được cache)</td><td>~100% (toàn bộ request)</td></tr>
+<tr><td>Rủi ro sai sự thật khi hit</td><td>Không có</td><td>Rất thấp (chỉ tái dùng prefix TĨNH đã xác nhận không đổi)</td><td>Cao với dữ liệu nhạy cảm thời gian — response cũ vẫn "khớp ngữ nghĩa" dù sự kiện đã đổi</td></tr>
+<tr><td>Phù hợp với <code>daily-investor-report</code>?</td><td>Baseline hiện tại (nếu chưa bật Prompt Caching)</td><td>Rất phù hợp — system prompt tĩnh, dữ liệu động tách riêng đúng thiết kế</td><td>KHÔNG khuyến nghị cho phần phân tích thị trường — chỉ nên cân nhắc cho phần KHÔNG đổi theo thời gian (VD FAQ giải thích thuật ngữ, không phải phân tích ticker)</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án — ước tính impact cụ thể</div>
+<p>Skill <code>daily-investor-report</code> (<code>.claude/skills/daily-investor-report/SKILL.md</code>) build persona + hard rules cho <strong>mọi</strong> ticker trong 1 lần chạy report — với mode <code>all</code> (nhiều ticker liên tiếp trong dưới 1 phút), đây đúng là kịch bản giáo khoa "1 system prompt cố định gọi lại N lần liên tiếp" mà ví dụ số ở trên đã tính. <strong>Đã kiểm tra thật (2026-09, không còn là giả định)</strong>: grep toàn bộ <code>.claude/skills/daily-investor-report/</code> và <code>backend/</code> cho <code>cache_control</code>/lệnh gọi Anthropic API trực tiếp — <strong>không có kết quả nào</strong>. Lý do: kiến trúc hiện tại không có 1 script Python nào tự gọi Anthropic API để viết thesis — <code>author_llm_thesis.py</code> chỉ build 1 "pack" dữ liệu cho mỗi ticker, rồi <strong>chính phiên Claude Code đang chạy</strong> đọc lần lượt các pack đó và tự viết thesis (<code>SKILL.md</code> §22.1 Step 2-3) — không qua request API nào mà skill code kiểm soát được để tự tay đánh <code>cache_control</code>. Vì cả 86 lượt đọc/viết pack diễn ra trong CÙNG 1 phiên hội thoại liên tục, prompt caching (nếu có) là hành vi <strong>mặc định ở tầng harness Claude Code</strong> áp dụng tự động cho context lặp lại giữa các lượt gọi API nội bộ của chính CLI — không phải 1 optimization skill code có thể tự bật/tắt hay đo trực tiếp bằng cách sửa <code>SKILL.md</code>.</p>
+<p><strong>Về invalidation (mục 7)</strong>: nếu áp Prompt Caching, nên gắn version vào cache key theo <em>ngày</em> hard rules R1-R15 hoặc system prompt persona thay đổi — không chỉ dựa vào TTL 5 phút mặc định — để tránh trường hợp hiếm nhưng thật: sửa 1 rule trong <code>SKILL.md</code> giữa lúc report đang chạy dở, phần ticker chạy sau vẫn vô tình dùng cache của rule CŨ nếu TTL chưa hết (rủi ro thấp với batch chạy vài chục giây, nhưng đáng ghi nhận là 1 edge case có thật, không phải lý thuyết suông).</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Đánh <code>cache_control</code> lên block quá ngắn</strong> — dưới 1,024 token sẽ bị bỏ qua âm thầm, không có lỗi hiển thị, khiến dev tưởng đang tiết kiệm nhưng thực ra không có gì được cache.</p>
+<p><strong>2. Nhét dữ liệu động (timestamp, giá) vào đầu prefix cacheable</strong> — 1 byte đổi ở phần đầu khiến toàn bộ phần sau bị coi là "prefix khác", mất hết lợi ích dù cú pháp <code>cache_control</code> hoàn toàn đúng (liên hệ trực tiếp nguyên tắc R2.2 "tĩnh trước, động sau").</p>
+<p><strong>3. Trả thêm tiền cho TTL 1 giờ khi không cần</strong> — nếu workload chỉ đọc lại cache vài lần trong vài chục giây, TTL 5 phút mặc định đã đủ; TTL 1 giờ chỉ đáng khi tái sử dụng ≥ 5-7 lần/giờ.</p>
+<p><strong>4. So sánh "chi phí caching" giữa 2 provider chỉ bằng % discount mà bỏ qua chi phí ghi</strong> — Anthropic có surcharge ghi cache (1.25×/2×) còn OpenAI ghi miễn phí; nếu workload có tỷ lệ cache-hit thấp (prompt đổi liên tục, ít khi lặp lại đúng prefix), surcharge ghi của Anthropic có thể ăn hết phần lợi từ discount đọc — cần tính cả 2 chiều, không chỉ nhìn con số "90% discount" rồi kết luận vội.</p>
+<p><strong>5. Hardcode ngưỡng token tối thiểu như 1 hằng số vĩnh viễn</strong> — ngưỡng này đã thay đổi giữa các thế hệ model (1,024/2,048 → 512 với Opus 5); code/doc nội bộ nên ghi rõ ngày verify, không copy số cũ vô thời hạn.</p>
+<p><strong>6. Áp semantic caching cho dữ liệu nhạy cảm thời gian mà không kiểm soát ngưỡng similarity chặt</strong> — với dữ liệu thị trường thay đổi hàng ngày (giá, tin tức), 2 câu hỏi "giống ý nghĩa" (cùng ticker, khác ngày) có thể bị trả lời bằng response cũ nếu ngưỡng cosine similarity đặt quá lỏng — đây là lỗi khó phát hiện vì response "đọc vẫn hợp lý", chỉ sai về THỜI ĐIỂM.</p>
+<p><strong>7. Chỉ dùng TTL, không có versioned key hay manual purge</strong> — khi đổi system prompt hoặc nâng cấp model, cache cũ (dựa trên nội dung/model cũ) có thể "sống sót" tới hết TTL, phục vụ response dựa trên logic đã lỗi thời mà không ai nhận ra ngay vì không có lỗi hiển thị.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Vẽ được sơ đồ phân biệt KV cache (R2.1, tầng transformer) và Prompt Caching (tầng API) — chỉ ra tầng nào xây trên tầng nào.</li>
+<li>Với 1 system prompt cho trước, chỉ ra nên đặt <code>cache_control</code> breakpoint ở đâu, và tính được % tiết kiệm nếu gọi N lần liên tiếp trong cùng TTL.</li>
+<li>Giải thích được vì sao 1 block 500 token đánh <code>cache_control</code> vẫn không được cache.</li>
+<li>Chọn đúng TTL (5 phút hay 1 giờ) cho 1 workload cho trước, dựa trên tần suất đọc lại ước tính.</li>
+<li>Kiểm tra được (đọc code/config thật) xem 1 pipeline cụ thể có đang bật Prompt Caching hay không.</li>
+<li>So sánh đúng 3 triết lý caching (manual breakpoint / automatic / explicit+implicit song song) của Anthropic/OpenAI/Gemini và giải thích khi nào mỗi cách phù hợp hơn — không kết luận "1 cách luôn tốt hơn".</li>
+<li>Phân biệt đúng Prompt Caching và Semantic Caching theo ≥3 tiêu chí (tầng hoạt động, điều kiện khớp, rủi ro) và giải thích vì sao semantic caching rủi ro hơn cho dữ liệu nhạy cảm thời gian.</li>
+<li>Thiết kế được 1 chiến lược invalidation đầy đủ (TTL + versioned key + manual purge) cho 1 pipeline cho trước, giải thích vì sao chỉ TTL là không đủ.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R2_3_types_of_llms.html">← R2.3 · Types of LLMs</a>
+  <a href="R2_5_structured_outputs.html">R2.5 · Structured Outputs →</a>
+</div>
+
+</div>
+</body>
+</html>

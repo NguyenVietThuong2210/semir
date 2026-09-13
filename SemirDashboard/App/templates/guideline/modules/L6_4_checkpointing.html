@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L6.4 — Checkpointing + Resume</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 6 · Module 4</div>
+  <h1>6.4 · Checkpointing + Resume</h1>
+  <p class="subtitle">Persistence for long-running agents. PostgresSaver, resume patterns, thread management. Production HA requirement.</p>
+  <div class="level">Level 6 · Agents · ~25 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Vì sao agents cần checkpointing</li>
+  <li>PostgresSaver setup + schema</li>
+  <li>Resume after crash / HITL / rollback</li>
+  <li>Thread + checkpoint versioning</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Checkpointing bằng ngôn ngữ đời thường</div>
+<p><strong>Chơi RPG 40 giờ không save</strong>: Chết ở boss cuối → phải chơi lại từ đầu. Đau lòng. Đó là lý do có nút Save/Load.</p>
+<p><strong>Agent 20 phút chạy 8 nodes</strong>: LLM API rớt ở phút 15 (node 6) → không có checkpoint → phải chạy lại 6 nodes → tốn thêm 15 phút LLM cost + user chờ.</p>
+<p><strong>PostgresSaver</strong>: Sau mỗi node, LangGraph tự lưu state vào Postgres. Khi resume, load state từ node cuối → tiếp tục node 7. Giống save game — không mất progress.</p>
+<p><strong>Bonus</strong>: Checkpoint cho phép <em>time travel</em> — user muốn quay lại node 3 để đổi input → load state lúc node 3 → chạy tiếp với input mới. Debug + human-in-loop cực dễ.</p>
+</div>
+
+<div class="callout warn">
+<div class="label">⚠️ Common confusion — Checkpoint vs Cache</div>
+<p>Hai khái niệm nghe giống ("lưu dữ liệu để dùng lại") nhưng <strong>mục đích ngược nhau</strong>:</p>
+<ul>
+  <li><strong>Cache</strong> = lưu <em>kết quả tính toán</em> để tránh tính lại (tối ưu tốc độ/tiền). Mất cache → vẫn đúng, chỉ chậm hơn (tính lại từ đầu). Cache <em>không phải nguồn sự thật</em> — có thể xoá bất cứ lúc nào mà hệ thống vẫn hoạt động đúng.</li>
+  <li><strong>Checkpoint</strong> = lưu <em>tiến trình đang dang dở</em> để không phải làm lại. Mất checkpoint → mất progress thật sự, phải chạy lại từ đầu (tốn tiền + thời gian, không chỉ chậm). Checkpoint <em>là nguồn sự thật</em> về "agent đang ở đâu".</li>
+</ul>
+<p>Ví dụ: prompt caching (cơ chế đầy đủ ở <code>L5_1_prompt.html §6.3</code>) lưu lại prefix token đã encode để rẻ hơn — xoá cache thì vẫn ra đúng câu trả lời, chỉ tốn thêm tiền. (L6.6 chỉ nhắc tới việc theo dõi cache hit rate như 1 metric giám sát, không dạy lại cơ chế.) Checkpoint ở module này lưu <code>ProjectContext</code> sau mỗi node — xoá checkpoint giữa chừng thì job coi như mất trắng, phải chạy lại từ node 1.</p>
+</div>
+
+<h2>1. Vì sao?</h2>
+
+<ul>
+  <li>Agent chạy long (30 min - 2h cho feature pipeline)</li>
+  <li>Container restart / crash → mất progress → user re-run từ đầu</li>
+  <li>HITL: pause chờ user approve — có thể hours later</li>
+  <li>Audit: compliance requires replay of decisions</li>
+  <li>Debug: reproduce state at any point</li>
+</ul>
+
+<h2>2. LangGraph checkpointers</h2>
+
+<table>
+<tr><th>Saver</th><th>Storage</th><th>Best cho</th></tr>
+<tr><td>MemorySaver</td><td>In-process dict</td><td>Dev/test, no persistence</td></tr>
+<tr><td>SqliteSaver</td><td>Local .db file</td><td>Single-machine app</td></tr>
+<tr><td><strong>AsyncPostgresSaver</strong></td><td>Postgres</td><td>Production, multi-instance</td></tr>
+<tr><td>RedisSaver</td><td>Redis</td><td>Fast + TTL cho short-lived</td></tr>
+</table>
+
+<h2>3. Schema (Postgres)</h2>
+
+<pre><code>-- Simplified LangGraph checkpoint schema:
+
+CREATE TABLE checkpoints (
+    thread_id       TEXT NOT NULL,
+    checkpoint_id   TEXT NOT NULL,    -- e.g. v001, v002 (ordered)
+    parent_id       TEXT,             -- link to previous checkpoint
+    state           JSONB NOT NULL,   -- full ProjectContext serialized
+    metadata        JSONB,            -- source, task_id, agent
+    PRIMARY KEY (thread_id, checkpoint_id)
+);
+
+CREATE INDEX idx_thread_recent ON checkpoints(thread_id, checkpoint_id DESC);
+</code></pre>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 4 LangGraph checkpointer types (đọc SAU section 2)</div>
+
+<table>
+<tr><th></th><th>MemorySaver</th><th>SqliteSaver</th><th>PostgresSaver</th><th>Redis (custom)</th></tr>
+<tr><td><strong>Storage</strong></td><td>Process RAM</td><td>SQLite file</td><td>Postgres DB</td><td>Redis (in-mem)</td></tr>
+<tr><td><strong>Persistence</strong></td><td>❌ Mất khi process restart</td><td>✅ File-based</td><td>✅ Enterprise DB</td><td>Có TTL (thường 24h)</td></tr>
+<tr><td><strong>Concurrency</strong></td><td>Single process</td><td>Single writer</td><td>⭐ Multi-writer + connection pool</td><td>⭐ Multi-writer</td></tr>
+<tr><td><strong>Setup</strong></td><td>1 line code</td><td>1 line + path</td><td>Postgres server + connection string</td><td>Redis + custom code</td></tr>
+<tr><td><strong>Scale</strong></td><td>1 worker</td><td>~100 threads/day</td><td>100k+ threads/day</td><td>Very high (in-mem)</td></tr>
+<tr><td><strong>Time travel</strong></td><td>Trong session</td><td>✅</td><td>✅</td><td>Limited (TTL)</td></tr>
+<tr><td><strong>Best for</strong></td><td>Dev, testing</td><td>Small prod, single machine</td><td>⭐ Production multi-tenant</td><td>Session-based (chat)</td></tr>
+<tr><td><strong>Cost</strong></td><td>Free</td><td>Free (file)</td><td>Postgres cost</td><td>Redis cost</td></tr>
+<tr><td><strong>Backup</strong></td><td>N/A</td><td>Copy file</td><td>PG backup</td><td>Snapshot RDB/AOF</td></tr>
+</table>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Situation</th><th>Chọn</th></tr>
+<tr><td>Dev iteration + tests</td><td>MemorySaver</td></tr>
+<tr><td>Notebook prototype</td><td>MemorySaver / SqliteSaver</td></tr>
+<tr><td>Single-machine production</td><td>SqliteSaver</td></tr>
+<tr><td>Enterprise multi-tenant</td><td>⭐ PostgresSaver</td></tr>
+<tr><td>High-throughput ephemeral (chat)</td><td>Redis custom</td></tr>
+<tr><td>Compliance (audit trail)</td><td>PostgresSaver với backup</td></tr>
+</table>
+
+<p><strong>Insight</strong>: Bắt đầu MemorySaver cho dev, chuyển SqliteSaver khi cần persistence, upgrade PostgresSaver khi scale. Đừng skip trực tiếp lên Postgres — 3 steps giúp catch bugs early.</p>
+</div>
+
+<h2>4. Setup + usage</h2>
+
+<pre><code>from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
+
+pool = AsyncConnectionPool(
+    conninfo=f"postgres://user:pass@host:5432/orch",
+    max_size=20,
+)
+saver = AsyncPostgresSaver(pool)
+await saver.setup()   # create tables idempotent
+
+app = graph.compile(
+    checkpointer=saver,
+    interrupt_before=["human_gate"],
+)
+
+# Start new job
+config = {"configurable": {"thread_id": "job_abc123"}}
+result = await app.ainvoke({"initial_request": "..."}, config=config)
+</code></pre>
+
+<h2>5. Resume patterns</h2>
+
+<h3>5.1 After crash</h3>
+<pre><code># On restart:
+config = {"configurable": {"thread_id": "job_abc123"}}
+state = await app.aget_state(config)
+print(state.next)   # ["engineer"] — biết đang ở đâu
+
+# Continue from last checkpoint
+await app.ainvoke(None, config=config)   # None = pick up from state
+</code></pre>
+
+<h3>5.2 HITL approval</h3>
+<pre><code># Runtime pauses at human_gate. State has next=["human_gate"]
+# User reviews in UI, approves.
+
+from langgraph.types import Command
+await app.ainvoke(
+    Command(resume={"approved": True, "feedback": "LGTM"}),
+    config=config,
+)
+</code></pre>
+
+<h3>5.3 Rollback to earlier state</h3>
+<pre><code># Get history:
+history = [c async for c in app.aget_state_history(config)]
+# Rollback to checkpoint 3 back:
+rollback_config = history[3].config
+await app.ainvoke(new_input, config=rollback_config)
+# Creates new branch from checkpoint 3
+</code></pre>
+
+<p><strong>"New branch" nghĩa là gì?</strong> Nhớ lại schema section 3: mỗi checkpoint có <code>parent_id</code> trỏ về checkpoint trước nó — giống commit Git trỏ về parent commit. Bình thường chuỗi checkpoint đi thẳng (v1 → v2 → v3 → v4 → v5). Khi bạn rollback về v3 rồi <code>ainvoke</code> với input mới, LangGraph <strong>không xoá v4/v5</strong> — nó tạo v3' mới có <code>parent_id = v3</code>, tạo thành nhánh rẽ:</p>
+<pre><code>v1 → v2 → v3 → v4 → v5          (nhánh cũ, vẫn còn nguyên — dùng để so sánh/audit)
+              └──► v3' → v4'    (nhánh mới, từ input đã sửa)
+</code></pre>
+<p>Đây chính xác là cơ chế "time travel" nhắc ở đầu bài: bạn không mất lịch sử cũ, chỉ tạo một dòng thời gian song song. Hữu ích khi debug ("thử input khác xem có sửa được bug không") mà không phá dữ liệu gốc để audit.</p>
+
+<h2>6. Thread lifecycle</h2>
+
+<pre><code># Each thread_id = 1 job/conversation
+# Multiple threads run parallel (multi-tenancy)
+
+# Naming convention:
+thread_id = f"{user_id}:{job_type}:{uuid4()}"
+# e.g., "u123:feature:abc-def"
+
+# Cleanup old threads:
+DELETE FROM checkpoints WHERE thread_id IN (
+    SELECT thread_id FROM checkpoints
+    GROUP BY thread_id
+    HAVING MAX(created_at) < NOW() - INTERVAL '30 days'
+);
+</code></pre>
+
+<h2>7. Async postgres performance tips</h2>
+
+<ul>
+  <li>Connection pool sized 2× workers</li>
+  <li>JSONB not JSON (indexed, faster query)</li>
+  <li>Batch multi-node writes trong transaction</li>
+  <li>Index thread_id + checkpoint_id DESC cho fast latest lookup</li>
+  <li>Compress large state (gzip trước INSERT) nếu &gt;1MB</li>
+  <li>TTL for old checkpoints (7-30 days retention)</li>
+</ul>
+
+<h2>8. Debugging with checkpoint</h2>
+
+<pre><code># Time-travel debugging:
+history = [c async for c in app.aget_state_history(config)]
+
+for i, ckpt in enumerate(history):
+    print(f"#{i} at {ckpt.metadata['step']}: next={ckpt.next}, agent={ckpt.metadata.get('source')}")
+    # Inspect state, tokens_used, errors
+
+# Rollback + re-run with modified prompt to test fix
+</code></pre>
+
+<h2>9. Idempotency — nền tảng để resume an toàn</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Idempotent nghĩa là gì? (định nghĩa đơn giản)</div>
+<p><strong>Một thao tác là "idempotent" nếu chạy nó 1 lần hay N lần đều cho ra CÙNG một kết quả cuối, không tạo thêm side-effect trùng lặp.</strong></p>
+<p><strong>Đời thường</strong>: Bấm nút "Save" trong Word 5 lần liên tiếp — file vẫn chỉ có 1 phiên bản đã lưu, không có gì tệ hơn. Đó là idempotent. Nhưng bấm nút "Chuyển 500k cho Nam" 5 lần liên tiếp (vì mạng lag, tưởng chưa bấm) — nếu hệ thống không cẩn thận, Nam nhận 2.5 triệu thay vì 500k. Đó là <strong>KHÔNG</strong> idempotent — mỗi lần gọi tạo thêm 1 side-effect mới.</p>
+</div>
+
+<p><strong>Tại sao checkpointing bắt buộc idempotency?</strong> Vì resume-after-crash về bản chất là "gọi lại 1 node có thể đã chạy một phần". Timeline cụ thể:</p>
+
+<pre><code>Node "send_confirmation_email" chạy:
+  1. Gọi email_api.send(user, "Order confirmed")   ← EMAIL ĐÃ GỬI THẬT
+  2. Return {"email_sent": True}
+  3. LangGraph ghi checkpoint state mới vào Postgres  ← 💥 CRASH NGAY TRƯỚC BƯỚC NÀY
+
+Restart: state.next vẫn = ["send_confirmation_email"] (vì checkpoint bước 3 chưa kịp ghi)
+  → LangGraph resume → chạy LẠI node send_confirmation_email
+  → Nếu node không check gì cả → gửi email LẦN 2 → user nhận 2 email trùng
+</code></pre>
+
+<p><strong>Fix — idempotency key</strong>: trước khi làm side-effect, kiểm tra xem "task này đã hoàn thành chưa" bằng 1 khoá duy nhất (thường = task_id hoặc job_id + step_name). Nếu đã done → skip, không làm lại.</p>
+
+<pre><code>async def send_confirmation_email_node(state):
+    idempotency_key = f"{state['job_id']}:send_email"
+
+    # 1. Check: đã làm side-effect này chưa?
+    if await db.exists("completed_operations", key=idempotency_key):
+        return {"email_sent": True}   # skip — đã gửi rồi, không gửi lại
+
+    # 2. Làm side-effect thật
+    await email_api.send(state["user"], "Order confirmed")
+
+    # 3. Ghi lại "đã hoàn thành" TRƯỚC KHI return (atomic với side-effect nếu có thể)
+    await db.insert("completed_operations", key=idempotency_key)
+
+    return {"email_sent": True}
+</code></pre>
+
+<p><strong>Node nào cần lo, node nào không?</strong> Node chỉ đọc dữ liệu hoặc tính toán thuần (LLM call trả text, query database SELECT) — chạy lại vô hại, tự động idempotent. Node có <em>side-effect ra thế giới bên ngoài</em> (gửi email, trừ tiền, gọi webhook, ghi file) — luôn cần idempotency key. Đây chính xác là lý do LLM call bản thân nó thường an toàn để retry (section "ReAct loop" ở L6.1 dùng exponential backoff retry) nhưng node <em>gọi tool có side-effect</em> thì không được retry vô tư.</p>
+
+<h2>10. HA considerations</h2>
+
+<div class="callout">
+<div class="label">Multi-instance safety</div>
+<ul>
+  <li>Postgres row locks on thread_id → 1 worker per job at a time</li>
+  <li>Worker crashes mid-node → checkpoint chưa written → resume từ prev checkpoint</li>
+  <li>Idempotent nodes (retry safe) — critical! Xem section 9. Nếu node side-effect (write file, send email), track completion bằng idempotency key trước khi làm side-effect</li>
+  <li>Distributed tracing (LangSmith, OpenTelemetry) — correlate across restarts</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Vì sao MemorySaver không production-ready?</p>
+<p class="a">In-process dict → container restart → mất tất cả state. Multi-instance không share. Chỉ OK cho dev/test.</p>
+
+<p class="q">2. Postgres schema — 2 key fields.</p>
+<p class="a">(thread_id, checkpoint_id) primary key. state JSONB, parent_id link chain. Metadata (source agent, timestamps).</p>
+
+<p class="q">3. HITL flow bắt LLM crash mid-execution. Resume?</p>
+<p class="a">Load latest checkpoint (before crash). If state.next=[human_gate] → wait user approval. Else → resume execution với ainvoke(None). Postgres row-lock ensure 1 worker.</p>
+
+<p class="q">4. Idempotent node — vì sao critical với checkpointing?</p>
+<p class="a">Nếu node có side effect (send email, write DB) rồi crash trước checkpoint write → restart lại → send email lần 2. Fix: check idempotency key (đã done cho task_id X?) trước side effect.</p>
+
+<p class="q">5. Debug production bug — checkpoint history dùng thế nào?</p>
+<p class="a">Load history, find checkpoint before bug manifest. Inspect state, reproduce condition. Modify prompt/code, re-run từ checkpoint đó với new_input. Compare outcome. Fast iteration mà không cần rerun full pipeline.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>ai_orchestrator: <code>orchestrator/graph.py</code> — uses AsyncPostgresSaver</li>
+    <li>Compile: <code>app = graph.compile(checkpointer=saver, interrupt_before=["human_gate"])</code></li>
+    <li>Runner: <code>orchestrator/runner.py</code> - job creation + resume logic</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/how-tos/persistence/">LangGraph persistence guide</a></li>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/how-tos/persistence_postgres/">Postgres persistence tutorial</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L6_3_langgraph.html">← L6.3</a>
+  <a href="L6_5_hitl.html">L6.5 · Human-in-the-Loop →</a>
+</div>
+
+</div>
+</body>
+</html>

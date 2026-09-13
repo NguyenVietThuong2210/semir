@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2.1 · KV Caching — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM APIs · Điểm 1/8</div>
+  <h1>R2.1 · KV Caching</h1>
+  <p class="subtitle">Vì sao 1 transformer không phải "đọc lại từ đầu" mỗi khi sinh thêm 1 token — cơ chế nền tảng giúp toàn bộ ngành LLM API tồn tại được về mặt chi phí.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Giải thích được vì sao generate không có KV cache tốn <code>O(T³)</code> tổng cộng, còn có KV cache chỉ tốn <code>O(T²)</code>.</li>
+<li>Tính được kích thước KV cache thật (GB) cho 1 model cụ thể, hiểu vì sao nó là nút thắt bộ nhớ số 1 khi serve LLM.</li>
+<li>Phân biệt rạch ròi KV cache (tầng transformer, trong 1 request) với Prompt Caching (tầng API, xuyên nhiều request — xem R2.4) — đây là 2 khái niệm tên giống nhau nhưng khác tầng, dễ nhầm nhất trong cả 8 bài.</li>
+<li>Biết tên ≥4 kỹ thuật production giải quyết lãng phí bộ nhớ KV cache (PagedAttention, continuous batching, quantization, eviction/StreamingLLM) và phân biệt được kỹ thuật nào "miễn phí" (không đổi chất lượng) và kỹ thuật nào là đánh đổi (lossy).</li>
+<li>Giải thích được vì sao MQA/GQA/MLA không phải "bản nâng cấp thay thế" MHA mà là 1 trục đánh đổi riêng (bộ nhớ cache so với chất lượng), độc lập với PagedAttention/quantization.</li>
+<li>Giải thích được vì sao PD disaggregation biến "cache nằm ở đâu" thành bài toán băng thông mạng, và vì sao speculative decoding là kỹ thuật tăng tốc lossless (không đánh đổi chất lượng) dùng 2 KV cache riêng biệt.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Đây là bài <strong>nền tảng nhất</strong> trong 8 bài — nên đọc trước, vì Prompt Caching (R2.4) chỉ có nghĩa khi đã hiểu KV cache. Toán học đầy đủ + code giả lập đã có sẵn, sâu hơn bài này, tại <code>../modules/L4_6_inference.html §2 "KV cache — the biggest win"</code>. Bài này diễn giải lại theo hướng dễ vào hơn (analogy, ví dụ số dựng lại từng bước) và bổ sung liên kết với Prompt Caching mà module gốc không có.</p>
+<p><strong>Prerequisite</strong>: hiểu sơ bộ cơ chế self-attention (Q, K, V) — nếu chưa chắc, đọc <code>../modules/L4_2_attention_transformer.html</code> trước.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Bạn đọc 1 cuốn tiểu thuyết trinh thám 500 trang để đoán hung thủ. Đến trang 501, bạn không lật lại đọc từ trang 1 — não bạn đã "nhớ" ai nói gì, ai ở đâu lúc nào (não bạn giữ 1 bản tóm tắt ngầm). Bạn chỉ cần đọc thêm trang mới, đối chiếu với trí nhớ cũ.</p>
+<p>Transformer không có "trí nhớ" theo nghĩa sinh học — nhưng nó có 1 mẹo tương đương: lưu lại các phép tính Key/Value đã làm cho từng token đã đọc, để không phải tính lại khi sinh token tiếp theo. Đó là <strong>KV cache</strong>.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vì sao cần cache — vấn đề của "generate ngây thơ"</h3>
+<p>Trước khi vào công thức, cần tách rõ 2 việc rất khác nhau mà gộp chung là nguồn gốc của mọi hiểu lầm về KV cache:</p>
+<ol>
+<li><strong>Tính Key (K) và Value (V) cho 1 token</strong> — chỉ cần đúng 1 mình token đó (nhân với 2 ma trận trọng số cố định <code>W_K</code>, <code>W_V</code>) — <strong>không cần "nhìn" token nào khác</strong>. Đây là phép tính rẻ, làm 1 lần cho mỗi token là xong, giá trị không bao giờ đổi sau đó.</li>
+<li><strong>Tính attention output</strong> — đây mới là chỗ thực sự cần "nhìn lại": lấy Query (Q) của token hiện tại, so khớp (dot product) với Key của <em>mọi</em> token đã có trong ngữ cảnh (kể cả token cũ lẫn token vừa tính ở bước 1), rồi lấy tổng có trọng số của các Value tương ứng.</li>
+</ol>
+<p>Vấn đề của "generate ngây thơ" (không cache gì) <strong>không nằm ở việc (1)</strong> — mỗi token vẫn chỉ cần tính K/V của chính nó đúng 1 lần dù có cache hay không. Vấn đề là: nếu không lưu kết quả (1) lại, thì mỗi lần sinh thêm 1 token, code phải <strong>tính lại từ đầu K/V của TẤT CẢ token cũ</strong> (dù giá trị của chúng không hề đổi) rồi mới làm bước (2) — lãng phí thuần túy, không phải yêu cầu bắt buộc của thuật toán.</p>
+
+<div class="callout danger"><div class="label">⚠️ Chỗ dễ nhầm nhất</div>
+<ul>
+<li>(1) Tính K/V và (2) Tính Attention tăng chi phí theo <strong>2 quy luật khác nhau</strong> — gộp chung thành 1 con số là lỗi phổ biến nhất khi tự học KV cache.</li>
+<li>Attention có tính <strong>nhân quả (causal)</strong>: token nào cũng chỉ so khớp với Key của chính nó và các token ĐỨNG TRƯỚC — không bao giờ với token tương lai.</li>
+<li>→ Số phép so khớp mỗi bước xếp thành 1 <strong>hình tam giác</strong> (<code>1+2+...+t</code>) — KHÔNG phải hình vuông đầy (<code>t×t</code>). Xem hình vẽ ngay dưới đây.</li>
+</ul>
+</div>
+
+<p><strong>Hình dung trực tiếp — sinh 4 token, so sánh 2 cách làm:</strong></p>
+<pre><code>KHÔNG CACHE — mỗi bước phải dựng lại TOÀN BỘ tam giác từ đầu:
+
+  Bước 1:   Q1→K1
+  Bước 2:   Q1→K1   Q2→K1K2
+  Bước 3:   Q1→K1   Q2→K1K2   Q3→K1K2K3
+  Bước 4:   Q1→K1   Q2→K1K2   Q3→K1K2K3   Q4→K1K2K3K4
+
+  Số phép so khớp mỗi bước:     1      1+2=3      1+2+3=6      1+2+3+4=10
+  Tổng 4 bước:  1 + 3 + 6 + 10 = 20 phép
+  (phần lớn là LÀM LẠI y hệt bước trước — không sinh thêm thông tin gì mới)
+
+CÓ CACHE — mỗi bước chỉ thêm ĐÚNG 1 hàng mới, không dựng lại hàng cũ:
+
+  Bước 1:   Q1→K1
+  Bước 2:                      Q2→K1K2
+  Bước 3:                                 Q3→K1K2K3
+  Bước 4:                                            Q4→K1K2K3K4
+            (Q1, Q2, Q3 ở các cột bên trái đã tính xong từ trước — lấy thẳng từ cache)
+
+  Số phép so khớp MỚI mỗi bước:   1       +2         +3           +4
+  Tổng 4 bước:  1 + 2 + 3 + 4 = 10 phép
+  (không phép nào bị làm lại)</code></pre>
+
+<p>Đếm đầy đủ cả 2 loại chi phí (K/V và Attention) trên cùng ví dụ 4 token này:</p>
+<table>
+<tr><th>Bước (độ dài ngữ cảnh)</th><th>K/V — không cache (số token phải tính lại)</th><th>K/V — có cache (số token MỚI)</th><th>Attention — không cache (tam giác nhân quả, LÀM LẠI TOÀN BỘ)</th><th>Attention — có cache (số phép so khớp MỚI)</th></tr>
+<tr><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td></tr>
+<tr><td>2</td><td>2</td><td>1</td><td>1+2 = 3</td><td>+2</td></tr>
+<tr><td>3</td><td>3</td><td>1</td><td>1+2+3 = 6</td><td>+3</td></tr>
+<tr><td>4</td><td>4</td><td>1</td><td>1+2+3+4 = 10</td><td>+4</td></tr>
+<tr><td><strong>Tổng (4 bước)</strong></td><td><strong>10</strong></td><td><strong>4</strong></td><td><strong>20</strong></td><td><strong>10</strong></td></tr>
+</table>
+
+<p><strong>Tổng quát hoá theo Big-O</strong> (cộng dồn qua T bước, thay vì chỉ 4):</p>
+<ul>
+<li>K/V không cache: <code>1+2+...+T</code> → <code>O(T²)</code></li>
+<li>K/V có cache: <code>T</code> đơn vị (đúng 1 mỗi bước) → <code>O(T)</code></li>
+<li>Attention không cache: tổng T tam giác cộng dồn (<code>Σ t(t+1)/2</code>, t chạy 1..T) → <code>O(T³)</code></li>
+<li>Attention có cache: <code>1+2+...+T</code> → <code>O(T²)</code></li>
+</ul>
+
+<table>
+<tr><th></th><th>Không cache</th><th>Có cache</th></tr>
+<tr><td>Tính K/V (tổng)</td><td><code>O(T²)</code></td><td><code>O(T)</code></td></tr>
+<tr><td>Tính Attention (tổng)</td><td><code>O(T³)</code></td><td><code>O(T²)</code></td></tr>
+<tr><td><strong>Tổng cộng cả 2</strong></td><td><code>O(T³)</code> <em>(bậc cao hơn quyết định kết quả cuối)</em></td><td><code>O(T²)</code></td></tr>
+</table>
+<ul>
+<li>Nhiều tài liệu chỉ nói tắt "O(T³) so với O(T²)" mà không tách 2 loại chi phí — con số cuối không sai, nhưng dễ khiến người đọc tưởng đó là chi phí K/V (thực ra nhẹ hơn nhiều, chỉ O(T²)/O(T)).</li>
+<li>Phần chi phí áp đảo thực sự tới từ <strong>Attention</strong> (bậc 3) — không phải K/V (bậc 2).</li>
+<li>Với chuỗi dài (hàng nghìn token — báo cáo tài chính, system prompt lớn): khoảng cách bậc giữa 2 cột giãn rất nhanh, <code>O(T³)</code> so với <code>O(T²)</code> trở thành khác biệt giữa "chạy được" và "không chạy nổi trong thời gian hợp lý".</li>
+</ul>
+
+<h4>1.1 Trọng số thật của từng Value — ví dụ số cụ thể (phần hay bị nói lướt qua)</h4>
+<ul>
+<li>Phần trên chỉ đếm SỐ LẦN phải tính toán/so khớp — chưa cho thấy so khớp đó tạo ra CÁI GÌ.</li>
+<li>Attention output KHÔNG phải "so khớp rồi thôi" — nó là 1 <strong>trung bình có trọng số (weighted average) của các Value</strong>.</li>
+<li>Trọng số đó đến từ chính phép so khớp Q·K. Ví dụ cụ thể dưới đây: sinh token thứ 3, ngữ cảnh 3 token, <code>d_head = 2</code> cho dễ tính tay.</li>
+</ul>
+<pre><code>Q3 = [1, 0]                     (Query của token đang sinh)
+K1 = [1, 0]   V1 = [2, 0]       (đã nằm sẵn trong cache từ bước trước)
+K2 = [0, 1]   V2 = [0, 2]       (đã nằm sẵn trong cache từ bước trước)
+K3 = [1, 1]   V3 = [1, 1]       (vừa tính ở bước này — thêm vào cache)
+
+Bước A — so khớp (dot product), chưa chia gì:
+  Q3·K1 = 1×1 + 0×0 = 1
+  Q3·K2 = 1×0 + 0×1 = 0
+  Q3·K3 = 1×1 + 0×1 = 1
+
+Bước B — chia cho sqrt(d_head) = sqrt(2) ≈ 1.41 (chống điểm số phình to):
+  1/1.41 ≈ 0.71        0/1.41 = 0        1/1.41 ≈ 0.71
+
+Bước C — softmax (đổi 3 điểm số thành 3 trọng số CỘNG LẠI = 1):
+  exp(0.71)≈2.03   exp(0)=1   exp(0.71)≈2.03   →  tổng ≈ 5.06
+  weight1 ≈ 2.03/5.06 ≈ 0.40
+  weight2 ≈ 1.00/5.06 ≈ 0.20
+  weight3 ≈ 2.03/5.06 ≈ 0.40
+  (K1 và K3 "giống hướng" Q3 hơn K2 → được trọng số cao hơn: 0.40 so với 0.20)
+
+Bước D — attention output = TRUNG BÌNH CÓ TRỌNG SỐ của V, dùng đúng 3 weight vừa tính:
+  output = 0.40×V1 + 0.20×V2 + 0.40×V3
+         = 0.40×[2,0] + 0.20×[0,2] + 0.40×[1,1]
+         = [0.8, 0] + [0, 0.4] + [0.4, 0.4]
+         = [1.2, 0.8]</code></pre>
+<ul>
+<li>KV cache giúp lấy lại K1, K2, V1, V2 mà KHÔNG cần tính lại — đây là chi phí K/V ở bảng trên.</li>
+<li>Nhưng Bước A-D (so khớp → chia tỉ lệ → softmax → trung bình có trọng số của Value) vẫn phải chạy lại ĐẦY ĐỦ cho Query mới ở MỌI bước — cache không tránh được phần này. Đây chính là chi phí Attention ở bảng trên, nguồn gốc thật của O(T³)/O(T²).</li>
+<li>Nói ngắn gọn: cache giúp không phải "nấu lại nguyên liệu" (K/V) — nhưng "cân trọng số rồi trộn nguyên liệu" (attention weight × V) vẫn phải làm mới hoàn toàn mỗi khi có Query mới.</li>
+</ul>
+
+<h3>2. Cơ chế — cache cái gì, ở đâu</h3>
+<p>Ở mỗi lớp attention, mỗi token đã xử lý để lại 2 tensor: Key và Value — tính 1 lần từ hidden state của chính token đó (đúng điểm (1) ở mục 1: không cần nhìn token khác). KV cache đơn giản là <strong>giữ lại 2 tensor này cho mọi token đã sinh</strong>, để không phải tính lại 1 giá trị vốn dĩ không hề đổi.</p>
+<pre><code># Không có KV cache — sinh token thứ (step+1), ngữ cảnh dài dần mỗi vòng
+for step in range(T):
+    # compute_KV ở đây tính LẠI TỪ ĐẦU cho mọi token 0..step — kể cả những
+    # token mà K,V của nó đã được tính y hệt ở (các) vòng lặp trước.
+    K_all, V_all = compute_KV(tokens[0:step+1])
+    attn = softmax(Q[step] @ K_all.T / sqrt(d_head)) @ V_all   # so khớp toàn bộ
+
+# Có KV cache — sinh token thứ (step+1)
+K_cache, V_cache = [], []
+for step in range(T):
+    k_new, v_new = compute_KV(tokens[step])           # CHỈ tính đúng 1 token MỚI
+    K_cache.append(k_new); V_cache.append(v_new)       # ghi thêm, KHÔNG tính lại phần cũ
+    attn = softmax(Q[step] @ K_cache.T / sqrt(d_head)) @ V_cache  # so khớp query mới với TOÀN BỘ cache
+</code></pre>
+<p><strong>Đọc kỹ khác biệt DUY NHẤT giữa 2 đoạn code</strong>: <code>compute_KV(tokens[0:step+1])</code> (tính lại từ token 0) so với <code>compute_KV(tokens[step])</code> (chỉ tính 1 token mới) — toàn bộ "phép màu" của KV cache nằm gọn trong khác biệt này, không có gì phức tạp hơn. Phần <code>softmax(... / sqrt(d_head))</code> — chia cho căn bậc 2 số chiều mỗi head, để điểm số attention không phình to bất thường khi <code>d_head</code> lớn — <strong>giống hệt nhau ở cả 2 cách</strong>: KV cache không đổi công thức attention, chỉ đổi việc K/V được LẤY TỪ ĐÂU (tính mới toàn bộ, hay lấy lại từ cache + tính thêm đúng 1 token mới).</p>
+<p>Bản chất: KV cache đổi <em>compute</em> (tính toán lặp lại) lấy <em>memory</em> (giữ tensor trong VRAM). Đây là trade-off kinh điển trong toàn ngành hệ thống — và cũng chính là lý do KV cache "đắt" theo nghĩa khác: nó ăn VRAM (xem mục 3).</p>
+
+<h3>3. Cache to cỡ nào? — Bài toán bộ nhớ thật</h3>
+<p>Công thức đầy đủ (đã có ở <code>L4_6_inference.html §"KV cache size"</code>):</p>
+<pre><code>cache_size = 2 (K và V) × n_layers × n_heads × d_head × seq_len × 2 bytes (fp16)</code></pre>
+<p>Diễn giải từng phần: <code>2</code> vì có cả K lẫn V; <code>n_layers × n_heads × d_head</code> là tổng số "chiều" cần lưu ở mỗi token (kiến trúc model quyết định); <code>seq_len</code> là số token đã sinh (càng dài hội thoại, cache càng phình); <code>2 bytes</code> vì lưu ở độ chính xác fp16.</p>
+<p><strong>Hệ quả trực tiếp cho engineer</strong>: cache không cố định — nó lớn dần theo độ dài hội thoại, và lớn theo cấp số nhân với kích thước model (nhiều layer, nhiều head hơn). Đây là lý do phục vụ nhiều user cùng lúc với context dài là bài toán hạ tầng khó, không phải bài toán thuật toán.</p>
+
+<h3>4. Ranh giới quan trọng nhất — KV cache dừng lại ở đâu</h3>
+<div class="callout"><div class="label">📖 Điểm hay bị hiểu nhầm</div>
+<p>KV cache mặc định chỉ tồn tại <strong>trong 1 lần generate</strong> — từ token đầu đến token cuối của <em>1 request</em>. Khi request đó kết thúc, cache bị giải phóng. Request tiếp theo, dù gửi lại y hệt system prompt, vẫn phải build cache từ đầu — <strong>trừ khi</strong> có 1 lớp khác đứng ra lưu và tái sử dụng nó xuyên nhiều request. Lớp đó gọi là <strong>Prompt Caching</strong> (tính năng API, xem R2.4) — không phải cùng 1 thứ với KV cache, dù tên rất giống nhau.</p>
+</div>
+<pre><code>KV cache (tầng transformer):   [request 1: token 1..500] → tái dùng cho token 501..520 CÙNG 1 request
+Prompt Caching (tầng API):     [request 1: system 3000 tok] → LƯU LẠI → request 2..N tái dùng luôn
+                                 (chỉ khi 3000 token đầu giống hệt, còn hạn TTL)</code></pre>
+
+<div class="callout"><div class="label">📖 Case study thật — vì sao PagedAttention ra đời (không chỉ lý thuyết)</div>
+<p>Trước PagedAttention (vLLM, 2023), hầu hết engine serving cấp phát 1 vùng nhớ liên tục (contiguous) cho KV cache của mỗi request, kích thước bằng <code>max_output_length</code> khai báo trước — kể cả khi request thực tế chỉ sinh ra vài chục token. Vùng nhớ dư thừa đó không dùng được cho request khác (giống phân mảnh bộ nhớ ngoài kinh điển trong hệ điều hành). Đo thực nghiệm cho thấy cách cấp phát cũ lãng phí <strong>60-80% VRAM dành cho KV cache</strong>. PagedAttention chia cache thành các "trang" (block) cố định kích thước, cấp phát theo nhu cầu thực tế — giống hệt cách OS quản lý virtual memory — kéo tỷ lệ lãng phí xuống <strong>dưới 4%</strong>, và nhờ đó phục vụ được nhiều request đồng thời hơn, đo được mức tăng thông lượng <strong>2-4×</strong> so với cấp phát tĩnh. Đây là lý do PagedAttention gần như là mặc định bắt buộc (không phải "tuỳ chọn nâng cao") trong mọi serving stack hiện đại (vLLM, TensorRT-LLM, SGLang đều có biến thể riêng của ý tưởng này).</p>
+</div>
+
+<div class="callout"><div class="label">📖 Edge case hay bị bỏ sót — hội thoại nhiều lượt (multi-turn) và KV cache</div>
+<p>Một câu hỏi thực tế: chatbot hỏi-đáp 5 lượt liên tiếp, mỗi lượt client gửi lại <em>toàn bộ lịch sử hội thoại</em> (đúng chuẩn API stateless của Claude/GPT — server không tự giữ state giữa các lượt gọi). Vậy lượt 5 có phải tính lại KV cache cho cả 4 lượt trước từ đầu không? <strong>Câu trả lời phụ thuộc hoàn toàn vào tầng Prompt Caching (R2.4), không phải KV cache runtime</strong>: nếu 4 lượt đầu + phần mở đầu lượt 5 tạo thành 1 <em>prefix giống hệt byte-by-byte</em> so với lần gọi trước, và có đánh <code>cache_control</code>, provider sẽ tái dùng KV cache đã lưu cho phần prefix đó — chỉ tính lại phần thật sự mới (câu hỏi lượt 5). Nếu KHÔNG bật Prompt Caching, mỗi lượt gọi là 1 request generate hoàn toàn độc lập theo đúng định nghĩa ở mục 4 — toàn bộ lịch sử bị tính lại từ token đầu tiên, dù nội dung y hệt lượt trước. Đây chính là lý do chatbot nhiều lượt là use case tự nhiên nhất, dễ đo lợi ích nhất của Prompt Caching trong thực tế — không phải batch report 1 lần/ngày như <code>daily-investor-report</code> (vốn không có hội thoại nhiều lượt, chỉ có nhiều ticker độc lập dùng chung 1 system prompt).</p>
+</div>
+
+<h3>5. Không phải "cache hay không" — 4 biến thể attention giảm kích thước cache từ gốc kiến trúc</h3>
+<p>Công thức ở mục 3 có 1 giả định ẩn: <code>n_heads</code> Key/Value riêng biệt cho mỗi head Query. Đây chính là <strong>Multi-Head Attention (MHA)</strong> nguyên bản — và cũng là chỗ 3 biến thể kiến trúc sau tấn công trực tiếp để giảm cache <em>trước khi</em> đụng tới PagedAttention/quantization ở mục 6:</p>
+<table>
+<tr><th>Biến thể</th><th>Cơ chế</th><th>Giảm cache so với MHA</th><th>Đánh đổi chất lượng</th><th>Model dùng</th></tr>
+<tr><td><strong>MHA</strong> (gốc)</td><td>Mỗi Query head có K/V riêng — không chia sẻ</td><td>Baseline (1×)</td><td>Không đánh đổi — chất lượng tham chiếu</td><td>GPT-2/3, model cũ</td></tr>
+<tr><td><strong>MQA</strong> (Multi-Query)</td><td>TẤT CẢ Query head dùng chung 1 cặp K/V duy nhất</td><td>Giảm mạnh nhất (~<code>n_heads</code>×, VD 32×)</td><td>Lớn nhất trong 4 loại — dễ mất chất lượng nếu không train lại kỹ</td><td>PaLM, ít phổ biến ở model mới nhất</td></tr>
+<tr><td><strong>GQA</strong> (Grouped-Query)</td><td>Chia Query head thành <em>nhóm</em>, mỗi nhóm chia sẻ 1 cặp K/V (nhóm 4-8 head/cặp)</td><td>Vừa phải (4-8×, tuỳ nhóm)</td><td>Nhỏ — điểm cân bằng được đa số model production 2024-2026 chọn</td><td>Llama 3, Mistral, phần lớn model mở hiện nay</td></tr>
+<tr><td><strong>MLA</strong> (Multi-Head Latent)</td><td>Nén K/V thành 1 vector latent hạng thấp (low-rank), giải nén lại lúc cần dùng</td><td>Rất mạnh (tương đương/hơn GQA, kèm decoupled-RoPE)</td><td>Nhỏ, nhưng kiến trúc phức tạp hơn để implement/serve đúng</td><td>DeepSeek-V2/V3</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Vì sao đây KHÔNG phải "GQA tốt hơn MHA" nói chung</div>
+<p>Đây là 1 trục đánh đổi kích thước-cache-so-với-độ-đa-dạng-biểu-diễn, không phải thang "cũ sai, mới đúng": chia sẻ K/V giữa nhiều Query head làm giảm khả năng mỗi head "nhìn" dữ liệu theo 1 góc độc lập hoàn toàn — MHA vẫn cho chất lượng tham chiếu cao nhất ở cùng số tham số, chỉ là cache quá đắt để serve ở ngữ cảnh dài/nhiều user. GQA thắng thế trong thực tế vì đo thực nghiệm cho thấy mất mát chất lượng nhỏ trong khi tiết kiệm cache lớn — không phải vì MHA "sai". Việc chọn biến thể nào là quyết định của bên train model gốc (bạn không tự đổi giữa chừng khi gọi API Claude/GPT) — nhưng hiểu trục này giúp đọc đúng lý do vì sao 2 model cùng "kích thước tham số" có thể phục vụ context dài với chi phí VRAM rất khác nhau.</p>
+</div>
+
+<h3>6. Cache đầy rồi thì sao — quantization và eviction (2 chiến lược khác tầng, không cạnh tranh nhau)</h3>
+<p>Sau khi kiến trúc đã cố định (mục 5) và đã dùng PagedAttention để hết lãng phí do cấp phát dư (mục 3-4), vẫn còn 2 hướng tối ưu độc lập, thường dùng <strong>cùng lúc</strong>, không phải chọn 1 trong 2:</p>
+<table>
+<tr><th>Kỹ thuật</th><th>Cơ chế</th><th>Có mất thông tin không?</th><th>Chi phí/rủi ro thật</th><th>Framework hỗ trợ</th></tr>
+<tr><td><strong>Quantization (FP8/INT8)</strong></td><td>Lưu K/V ở độ chính xác thấp hơn fp16 (VD FP8 E4M3) thay vì cắt bớt token nào</td><td>Có, nhưng nhỏ — FP8: &lt;1% sụt độ chính xác retrieval dài; INT8: 1.5-3 điểm trên benchmark context dài</td><td>FP8 thường không tăng throughput trên vLLM (đôi khi còn giảm nhẹ ở prefill-heavy) nhưng TensorRT-LLM đo được +1.09× (prefill) / +1.45× (decode) — khác biệt do overhead dequantize</td><td>vLLM (FP8 E4M3/E5M2, KHÔNG hỗ trợ INT8), TensorRT-LLM (cả FP8 lẫn INT8)</td></tr>
+<tr><td><strong>Eviction (H2O, StreamingLLM, SnapKV)</strong></td><td>XOÁ HẲN 1 phần token khỏi cache dựa trên tiêu chí (attention sink + token gần nhất cho StreamingLLM; điểm attention tích luỹ cho H2O)</td><td>Có — token bị evict biến mất khỏi "trí nhớ" model, không phải nén mà là bỏ hẳn</td><td>Không tăng được context window thật — model chỉ "giả vờ" nhớ toàn bộ, thực tế chỉ còn attention sink + cửa sổ gần nhất; rủi ro cho task cần hiểu toàn văn (retrieval xa, đối chiếu số liệu đầu-cuối tài liệu dài)</td><td>Nghiên cứu/serving tự host (không phải tính năng bật/tắt qua API Claude/GPT)</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Ranh giới hay bị mờ — "nén" khác "xoá"</div>
+<p>Quantization là <strong>nén có tổn thất nhỏ nhưng vẫn giữ thông tin của mọi token</strong> (giảm số bit biểu diễn mỗi số, không giảm số lượng token). Eviction là <strong>bỏ hẳn 1 số token</strong> — đây là đánh đổi mạnh tay hơn nhiều, chỉ hợp lý khi ứng dụng chấp nhận "quên" phần giữa hội thoại dài (VD chatbot streaming vô hạn) để đổi lấy cache không phình vô hạn. Không nên coi 2 kỹ thuật này là "cùng loại tối ưu bộ nhớ nên chọn 1 cái mạnh nhất" — chúng giải 2 bài toán khác nhau và thường được dùng <em>cùng lúc</em> trong 1 hệ thống serving thật (VD: GQA ở tầng kiến trúc + PagedAttention để không lãng phí cấp phát + FP8 quantization cho phần cache còn lại).</p>
+</div>
+
+<h3>7. Prefill-Decode disaggregation — KV cache còn phải "di chuyển" giữa 2 cụm máy khác nhau</h3>
+<p>Mục 1-6 giả định ngầm 1 điều: toàn bộ vòng đời generate (prefill — xử lý prompt đầu vào, và decode — sinh từng token) chạy trên <em>cùng 1 GPU/node</em>. Thực tế serving quy mô lớn 2026 đã tách hẳn 2 giai đoạn này ra 2 cụm máy riêng biệt — đây là kiến trúc <strong>Prefill-Decode (PD) disaggregation</strong>, nay là chuẩn công nghiệp (hỗ trợ bởi vLLM, SGLang, TensorRT-LLM, LMDeploy, NVIDIA Dynamo; dùng ở quy mô production bởi DeepSeek, Gemini):</p>
+<table>
+<tr><th></th><th>Serving gộp (monolithic — 1 node làm cả 2)</th><th>PD disaggregation (2 cụm tách riêng)</th></tr>
+<tr><td>Prefill và decode chạy ở đâu</td><td>Cùng 1 GPU/node</td><td>2 cụm GPU riêng biệt — prefill node xử lý prompt, tạo KV cache, rồi TRUYỀN QUA MẠNG sang decode node</td></tr>
+<tr><td>Vấn đề bị giải quyết</td><td>N/A</td><td>Prefill (compute-bound, xử lý nhiều token cùng lúc) và decode (memory-bound, xử lý 1 token/bước) có đặc tính tải rất khác nhau — gộp chung 1 node khiến batch decode bị "giật" mỗi khi có request mới prefill chen vào</td></tr>
+<tr><td>Công nghệ truyền KV cache</td><td>Không cần — cache ở ngay trong VRAM node đó</td><td>NIXL (NVIDIA Inference Xfer Library) — truyền tensor KV cache qua RDMA/TCP giữa 2 cụm</td></tr>
+<tr><td>Lợi ích đo được</td><td>Baseline</td><td>Tới ~2× throughput theo 1 số benchmark 2026, nhờ decode không còn bị prefill "chen ngang"</td></tr>
+<tr><td>Giới hạn mới phát sinh</td><td>Không có (không tách gì)</td><td>Độ trễ truyền KV cache qua mạng trở thành nút thắt MỚI — dense-attention model (KV cache lớn) buộc phải giữ 2 cụm trong cùng 1 miền mạng băng thông cao; chỉ kiến trúc "hybrid-attention" (cache đã nhỏ, xem mục 5) mới khả thi để tách 2 cụm ra khác datacenter hẳn</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Vì sao đây vẫn là 1 hình thức "cache dừng ở đâu" — nối lại mục 4</div>
+<p>PD disaggregation không thay đổi bản chất đã nói ở mục 4 (KV cache vẫn "chết" theo 1 lần generate) — nó chỉ thay đổi <em>KV cache đó vật lý nằm ở đâu trong lúc sống</em>: từ "cùng 1 chip" thành "phải bay qua dây mạng giữa 2 cụm máy". Đây là lý do kỹ sư serving thật sự phải quan tâm tới kích thước cache (mục 3) không chỉ vì VRAM, mà còn vì <em>băng thông mạng cần để chuyển nó đúng lúc</em> — 1 chiều đánh đổi mà bài toán "single node" ở mục 1-6 không cần tính tới.</p>
+</div>
+
+<h3>8. Speculative decoding — 2 KV cache riêng biệt (draft + target) chạy song song</h3>
+<p>1 kỹ thuật tăng tốc khác, ĐỘC LẬP với 6 kỹ thuật ở mục 5-6 (có thể dùng cùng lúc, không cạnh tranh): dùng 1 model "nháp" (draft) rất nhỏ/rẻ để đoán trước vài token, rồi model chính (target) xác minh toàn bộ 1 lần thay vì tự sinh từng token 1:</p>
+<ol>
+<li>Draft model tự sinh 1 chuỗi vài token tiếp theo (dùng KV cache RIÊNG của chính nó, rẻ vì model nhỏ).</li>
+<li>Target model verify TOÀN BỘ chuỗi đó trong 1 lần forward pass (chứ không phải từng token 1) — mở rộng KV cache CỦA NÓ thêm các token đã được chấp nhận.</li>
+<li>Token nào draft đoán đúng (thường 60-80% số token, theo benchmark 2026) được giữ; token đầu tiên đoán sai thì target tự sinh lại từ đó — không có gì bị "mất" độ chính xác so với việc target tự sinh 100% (đây là kỹ thuật lossless, khác hẳn eviction ở mục 6 vốn lossy).</li>
+</ol>
+<p><strong>Điểm liên hệ với KV cache</strong>: 2 model có 2 cache độc lập, kích thước khác nhau hẳn (model nhỏ, cache nhỏ hơn nhiều). Nghiên cứu 2026 (VD QuantSpec) đẩy xa hơn: cho draft model dùng chung <em>kiến trúc</em> với target nhưng nén cache bằng 4-bit quantization — kết hợp CẢ speculative decoding LẪN kỹ thuật quantization đã nói ở mục 6, đúng tinh thần "các kỹ thuật tối ưu cache cộng dồn được với nhau", không phải chọn 1.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Giả sử model có 32 layer, 32 head, d_head = 128 (tương đương cỡ LLaMA-7B) — số liệu tái dùng từ <code>L4_6_inference.html</code> để không bịa số:</p>
+<pre><code>Số "chiều" cần lưu / token = n_layers × n_heads × d_head = 32 × 32 × 128 = 131,072
+
+Với context 4,096 token (~4K), batch = 1:
+cache_size = 131,072 × 4,096 × 2 (K+V) × 2 bytes ≈ 2.15 GB / sample
+
+Với batch = 4 (phục vụ 4 user cùng lúc, mỗi người 4k context):
+cache_size ≈ 2.15 GB × 4 = 8.6 GB CHỈ RIÊNG cho KV cache
+  (chưa tính trọng số model, activation, hay overhead khác)</code></pre>
+<p><strong>Đọc con số này thế nào</strong>: 8.6 GB chỉ để giữ "trí nhớ ngắn hạn" của 4 cuộc hội thoại — lớn hơn cả VRAM của nhiều GPU tiêu dùng. Đây chính là động lực ra đời PagedAttention (quản lý cache như OS quản lý virtual memory, chia block, không cấp phát dư — đã có ở <code>L4_6_inference.html §3</code>) và continuous batching (§4 cùng file) — 2 kỹ thuật serving bạn sẽ gặp lại khi đọc về vLLM hay hạ tầng serving LLM tự host.</p>
+
+<h3>Ví dụ mở rộng — cùng con số đó, áp thêm GQA + quantization, thấy rõ 2 trục đánh đổi cộng dồn thế nào</h3>
+<p>Lấy lại đúng con số 8.6 GB ở trên (batch=4, context 4K, model 32 layer/32 head/d_head=128, MHA + fp16) và áp lần lượt 2 kỹ thuật ở mục 5-6 phía trên để thấy chúng độc lập, cộng dồn được với nhau — không phải chọn 1 trong 2:</p>
+<pre><code>Baseline — MHA, fp16:                         8.6 GB  (mục 3, không đổi gì)
+
++ Đổi kiến trúc sang GQA, nhóm 8 head/cặp K-V (giảm ~8× số K/V phải lưu):
+  8.6 GB / 8 ≈ 1.08 GB
+  (đây là quyết định của bên train model — Llama 3 dùng đúng kiểu nhóm này;
+   không phải thứ dự án tự bật/tắt khi gọi API)
+
++ Từ 1.08 GB (đã GQA), áp thêm FP8 quantization (2 bytes → 1 byte/giá trị):
+  1.08 GB / 2 ≈ 0.54 GB
+  (giảm thêm 2× vì FP8 chỉ tốn 1 byte/số thay vì 2 byte của fp16,
+   đánh đổi <1% điểm chính xác retrieval theo benchmark 2026 đã dẫn ở mục 6)
+
+=> Từ 8.6 GB (MHA, fp16, không tối ưu gì) xuống ~0.54 GB (GQA + FP8)
+   — giảm ~16× tổng cộng, đến từ 2 quyết định ĐỘC LẬP cộng dồn,
+   không phải 1 kỹ thuật "thần kỳ" duy nhất.
+   PagedAttention + eviction (nếu áp dụng) còn cắt giảm thêm nữa
+   nhưng theo cơ chế khác (chống lãng phí cấp phát / chấp nhận quên bớt),
+   không tính gộp vào phép nhân trên vì chúng tác động vào 2 loại lãng phí khác nhau.</code></pre>
+<p><strong>Bài học rút ra</strong>: khi đọc "model X hỗ trợ context 1 triệu token với chi phí hợp lý", câu trả lời gần như chắc chắn không đến từ 1 kỹ thuật đơn lẻ — mà là kết quả cộng dồn của nhiều quyết định độc lập ở nhiều tầng (kiến trúc, cấp phát bộ nhớ, độ chính xác lưu trữ, có chấp nhận quên hay không). Đây là lý do câu hỏi "framework/kỹ thuật nào tốt nhất cho KV cache" thường là câu hỏi sai — câu hỏi đúng là "tầng nào đang là nút thắt, và kỹ thuật nào của tầng đó phù hợp với ràng buộc chất lượng của tôi".</p>
+
+<h3>Ví dụ mở rộng #2 — tốc độ sinh token với speculative decoding (mục 8), tính bằng số chấp nhận thực tế</h3>
+<p>Giả sử target model sinh 1 token mất 20ms (giới hạn bởi băng thông đọc VRAM — decode luôn memory-bound), và draft model (nhỏ hơn ~10×) sinh 1 token chỉ mất 2ms. Draft đề xuất 4 token liên tiếp mỗi vòng, tỷ lệ chấp nhận trung bình 70% (đúng khoảng 60-80% đã dẫn ở mục 8):</p>
+<pre><code>KHÔNG có speculative decoding — target tự sinh từng token:
+  4 token × 20ms = 80ms cho 4 token
+
+CÓ speculative decoding — 1 vòng: draft sinh 4 token nháp + target verify 1 lần:
+  Draft sinh 4 token nháp: 4 × 2ms = 8ms
+  Target verify CẢ 4 token trong 1 lần forward pass (không phải 4 lần): ≈ 20ms
+    (verify song song rẻ hơn sinh tuần tự, vì đây là 1 phép forward duy nhất
+     nhìn toàn bộ 4 token nháp cùng lúc, giống prefill hơn là decode)
+  Tổng: 8ms + 20ms = 28ms cho ĐỦ 4 vị trí được kiểm tra
+
+  Với tỷ lệ chấp nhận 70%: trung bình ~2.8/4 token được giữ mỗi vòng
+  → Thời gian thực tế cho mỗi token "hữu ích": 28ms / 2.8 ≈ 10ms/token
+  → So với 20ms/token khi không có speculative decoding: nhanh hơn ~2×
+
+Lưu ý: đây là kỹ thuật LOSSLESS — token bị "từ chối" (30% còn lại) không làm
+giảm chất lượng, target vẫn tự sinh lại đúng token mà nó sẽ chọn nếu tự làm
+từ đầu — khác hẳn eviction (mục 6), vốn chấp nhận mất thông tin thật.</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>KV Cache</th><th>Prompt Caching (xem R2.4)</th></tr>
+<tr><td>Tầng</td><td>Transformer / runtime nội bộ</td><td>API — tính năng do provider (Anthropic) cung cấp</td></tr>
+<tr><td>Phạm vi sống</td><td>Trong 1 request generate</td><td>Xuyên nhiều request, có TTL (5 phút / 1 giờ)</td></tr>
+<tr><td>Ai kiểm soát</td><td>Runtime của model (bạn không thấy, không cấu hình)</td><td>Bạn tự đánh dấu <code>cache_control</code> trong request</td></tr>
+<tr><td>Lợi ích chính</td><td>Giảm complexity sinh token từ O(T³) → O(T²)</td><td>Giảm tiền + latency khi gọi lại cùng 1 prefix nhiều lần</td></tr>
+<tr><td>Đơn vị đo lợi ích</td><td>FLOPs / thời gian tính</td><td>Token bill / USD</td></tr>
+</table>
+
+<p>Bảng thứ 2 — ráp lại toàn bộ "cây quyết định" tối ưu KV cache theo đúng thứ tự 1 kỹ sư serving thật sẽ áp dụng (từ chọn kiến trúc đến vận hành runtime), tổng hợp từ mục 5-6 ở trên:</p>
+<table>
+<tr><th>Tầng quyết định</th><th>Kỹ thuật</th><th>Khi nào áp dụng</th><th>Ai là người quyết định</th></tr>
+<tr><td>1. Kiến trúc model (cố định khi train)</td><td>MHA → GQA/MLA</td><td>Ngay từ lúc thiết kế model — không đổi được sau khi model đã train xong</td><td>Bên train model gốc (Anthropic/Meta/DeepSeek...) — bạn chỉ chọn được model nào để gọi, không tự chỉnh kiến trúc</td></tr>
+<tr><td>2. Quản lý cấp phát bộ nhớ (runtime serving)</td><td>PagedAttention, continuous batching</td><td>Luôn nên bật khi tự host — gần như không có lý do để tắt</td><td>Bên vận hành hạ tầng serving (vLLM/TensorRT-LLM/SGLang) — với API-only (Claude/GPT) đây là việc provider tự làm, bạn không thấy/không cấu hình</td></tr>
+<tr><td>3. Độ chính xác lưu trữ cache</td><td>Quantization FP8/INT8</td><td>Khi VRAM là nút thắt cứng, chấp nhận đánh đổi &lt;1-3 điểm chất lượng đo được</td><td>Bên vận hành hạ tầng — cấu hình per-deployment</td></tr>
+<tr><td>4. Có chấp nhận "quên" hay không</td><td>Eviction (StreamingLLM/H2O/SnapKV)</td><td>Chỉ khi ứng dụng chấp nhận mất thông tin phần giữa hội thoại rất dài (chatbot streaming), KHÔNG dùng cho task cần đối chiếu toàn văn</td><td>Bên thiết kế ứng dụng — quyết định nghiệp vụ, không phải quyết định thuần kỹ thuật</td></tr>
+<tr><td>5. Vị trí vật lý của cache lúc phục vụ (mục 7)</td><td>PD disaggregation + NIXL transfer</td><td>Khi throughput là ưu tiên số 1 ở quy mô lớn, chấp nhận độ phức tạp vận hành 2 cụm máy</td><td>Bên vận hành hạ tầng serving quy mô lớn (không áp dụng cho self-host quy mô nhỏ, 1 node)</td></tr>
+<tr><td>6. Tốc độ sinh token (mục 8)</td><td>Speculative decoding (draft + target, 2 cache riêng)</td><td>Khi có sẵn 1 model nhỏ cùng "họ" để làm draft — lossless, không đánh đổi chất lượng</td><td>Bên vận hành hạ tầng — hoàn toàn trong suốt với người gọi API, không ảnh hưởng chất lượng output</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Pipeline <code>daily-investor-report</code> (<code>.claude/skills/daily-investor-report/SKILL.md</code>) gọi Claude cho tối đa 86 ticker (<code>HIGHLIGHT_GROUP</code>, mode <code>all</code> — verify bằng <code>len(HIGHLIGHT_GROUP)</code> trong <code>backend/data/groups.py</code>; mô tả ngắn ở đầu <code>SKILL.md</code> ghi "82" nhưng đó là số cũ, đã lệch so với <code>HIGHLIGHT_GROUP</code> thật hiện tại) trong 1 lần chạy. Mỗi lần gọi là 1 request generate riêng biệt — KV cache của request ticker A biến mất hoàn toàn khi request đó xong, không tự động giúp gì cho request ticker B, dù cả 2 dùng chung 1 system prompt ~3800 token (hard rules R1-R15). Đây chính xác là lý do dự án cần Prompt Caching ở tầng API (R2.4) — KV cache tự nó không giải quyết được bài toán "86 lần lặp lại việc build cache cho cùng 1 đoạn text".</p>
+<p><strong>Vì sao 4 kỹ thuật ở mục 5-6 (GQA/MLA, PagedAttention, quantization, eviction) không trực tiếp "cấu hình được" trong dự án này</strong>: dự án gọi Claude qua API (closed-weight, xem R2.3) — toàn bộ tầng 1-3 ở bảng trên là việc Anthropic tự vận hành phía sau API, không lộ ra tham số nào để dự án chỉnh. Hiểu đúng các kỹ thuật này vẫn có giá trị thực tế: (a) giải thích tại sao các model cùng "họ" (Haiku/Sonnet/Opus) có context window và giá khác nhau — 1 phần đến từ kiến trúc cache khác nhau phía sau; (b) nếu dự án sau này cân nhắc self-host 1 model mở (VD cho tác vụ nội bộ không cần Claude), đây chính là bộ tiêu chí chọn serving stack (vLLM/TensorRT-LLM/SGLang) và cấu hình quantization/eviction phù hợp — không phải kiến thức "chỉ để biết" mà là input cho quyết định hạ tầng thật nếu kịch bản đó xảy ra.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Nhầm KV cache với Prompt Caching</strong> — nghĩ rằng "model tự động nhớ" system prompt giữa các request khác nhau vì nó có KV cache. Sai: KV cache chết theo request, không có tính năng API thì mỗi request build lại từ đầu.</p>
+<p><strong>2. Tưởng KV cache miễn phí</strong> — vì nó "chỉ là tối ưu tốc độ", nhiều người quên tính chi phí VRAM. Khi serve nhiều user đồng thời với context dài, KV cache có thể là phần chiếm VRAM lớn hơn cả trọng số model — đây là nguyên nhân phổ biến khiến 1 GPU "đủ để load model" vẫn out-of-memory khi có nhiều user cùng lúc.</p>
+<p><strong>3. Coi GQA/MQA/MLA là "bản thay thế tốt hơn" MHA một cách tuyệt đối</strong> — đây là trục đánh đổi cache-so-với-chất lượng biểu diễn, không phải "phiên bản mới luôn thắng phiên bản cũ". MHA vẫn là lựa chọn đúng khi ngữ cảnh ngắn và VRAM dư dả, chất lượng tham chiếu tối đa mới là ưu tiên.</p>
+<p><strong>4. Coi quantization và eviction là 2 lựa chọn cạnh tranh, chọn 1 trong 2</strong> — thực tế đây là 2 lớp tối ưu độc lập, hệ thống serving thật thường bật cả 2 cùng lúc (cộng thêm GQA/MLA ở tầng kiến trúc và PagedAttention ở tầng cấp phát) — nhầm coi đây là "chọn 1 cái mạnh nhất" bỏ lỡ phần lớn lợi ích cộng dồn.</p>
+<p><strong>5. Tin FP8 quantization luôn tăng throughput</strong> — benchmark thật (SqueezeBits, 2026) cho thấy FP8 KV cache trên vLLM có thể KHÔNG cải thiện, thậm chí giảm nhẹ throughput ở kịch bản prefill-heavy, trong khi trên TensorRT-LLM lại tăng rõ rệt — kết quả phụ thuộc implementation cụ thể của từng serving engine, không phải thuộc tính "tự nhiên" của bản thân kỹ thuật FP8.</p>
+<p><strong>6. Nghĩ PD disaggregation là "miễn phí" chỉ vì nó tăng throughput</strong> — tách prefill/decode ra 2 cụm máy tạo ra 1 nút thắt MỚI (băng thông mạng truyền KV cache) không tồn tại trong serving gộp 1 node; với model có KV cache lớn (dense attention, MHA), 2 cụm buộc phải ở cùng miền mạng băng thông cao — không phải cứ tách ra là luôn lợi, cần đúng quy mô traffic để bù lại độ phức tạp vận hành tăng thêm.</p>
+<p><strong>7. Coi speculative decoding là "đánh đổi chất lượng lấy tốc độ"</strong> — đây là hiểu sai phổ biến vì tên gọi dễ gây nhầm ("đoán/nháp" nghe có vẻ không chắc chắn); thực tế đây là kỹ thuật lossless — token bị từ chối luôn được target tự sinh lại đúng như khi nó tự làm từ đầu, không có "phiên bản rẻ hơn nhưng kém hơn" của output cuối cùng.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được vì sao generate không cache tốn O(T³), có cache chỉ O(T²) — VÀ tách được đúng 2 thành phần cấu thành con số đó: chi phí tính K/V (O(T²)→O(T)) và chi phí tính Attention (O(T³)→O(T²)), không gộp chung thành 1 con số duy nhất.</li>
+<li>Tính tay được ví dụ số cụ thể của phép attention (dot product → chia sqrt(d_head) → softmax → trung bình có trọng số của Value) và giải thích được vì sao bước này vẫn phải chạy lại đầy đủ cho Query mới dù đã có KV cache.</li>
+<li>Tính được kích thước KV cache (GB) cho 1 model + context length + batch size cho trước, theo đúng công thức.</li>
+<li>Chỉ ra được KV cache "chết" ở đâu — vì sao request 2 không tự động hưởng lợi từ KV cache của request 1 nếu không có thêm 1 lớp khác.</li>
+<li>Kể tên đúng ≥4 kỹ thuật production giải quyết lãng phí bộ nhớ KV cache (PagedAttention, continuous batching, quantization, eviction) và mô tả ngắn gọn ý tưởng mỗi cái.</li>
+<li>Xếp đúng 4 kỹ thuật (GQA/MLA, PagedAttention, quantization, eviction) vào đúng "tầng quyết định" (kiến trúc / cấp phát bộ nhớ / độ chính xác / chấp nhận quên) và biết ai là người ra quyết định ở mỗi tầng.</li>
+<li>Giải thích được vì sao quantization là "nén giữ thông tin" còn eviction là "xoá hẳn thông tin" — 2 loại đánh đổi khác nhau về bản chất, không xếp chung 1 nhóm.</li>
+<li>Giải thích được vì sao PD disaggregation biến "vị trí vật lý của KV cache" thành 1 bài toán hạ tầng mới (băng thông mạng), không chỉ bài toán VRAM 1 node như mục 1-6 giả định.</li>
+<li>Mô tả được cơ chế speculative decoding (draft đề xuất, target verify song song) và giải thích vì sao đây là kỹ thuật lossless, khác về bản chất so với eviction (lossy).</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R1_6_pytest.html">← R1.6 · PyTest</a>
+  <a href="R2_2_system_prompts.html">R2.2 · System Prompts →</a>
+</div>
+
+</div>
+</body>
+</html>

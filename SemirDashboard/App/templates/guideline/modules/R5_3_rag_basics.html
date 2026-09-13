@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R5.3 · Basics of RAG — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM Augmentation · Điểm 3/5</div>
+  <h1>R5.3 · Basics of RAG</h1>
+  <p class="subtitle">Không dạy lại RAG từ đầu (đã có ở R3/R4 + L5.2/L9.1) — bài này định vị RAG trong bức tranh 5 kỹ thuật augmentation, làm rõ ranh giới với Fine-tuning và Tool Use, 3 khái niệm sinh viên hay lẫn nhất.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<p>Dễ → khó:</p>
+<ul>
+<li><strong>[Dễ]</strong> Định nghĩa RAG bằng 1 câu: tra cứu tri thức tĩnh đã index sẵn, đưa vào context lúc chạy.</li>
+<li><strong>[Trung bình]</strong> Phân biệt rạch ròi 3 câu hỏi ví dụ để chọn đúng 1 trong 3 kỹ thuật: RAG, Tool Use, Fine-tuning.</li>
+<li><strong>[Khó]</strong> Nhận ra 1 hệ thống thật (<code>daily-investor-report</code>) đang dùng CẢ Tool Use LẪN RAG cùng lúc, không loại trừ nhau.</li>
+<li><strong>[Trung bình]</strong> Tính tay được precision@k và recall@k cho 1 bộ kết quả retrieval cho trước, giải thích đúng 2 con số này đo 2 loại thất bại khác nhau.</li>
+<li><strong>[Khó]</strong> Giải thích được vì sao chunk size là đánh đổi TẦNG PIPELINE (không chỉ tầng cắt văn bản) và nhận diện được failure mode "đúng thuật ngữ, sai đối tượng" của dense-only retrieval.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Cách đọc trang này</div>
+<p>RAG đã được dạy sâu xuyên suốt <a href="R3_1_mcp.html"><code>R3 (RAG)</code></a> và <a href="R4_1_vector_databases.html"><code>R4 (Retrieval Techniques)</code></a>, cộng <code>../modules/L5_2_rag.html</code> + <code>../modules/L9_1_advanced_rag.html</code>. Trang này <strong>không lặp lại nội dung RAG</strong> — chỉ định vị RAG trong bức tranh tổng của 5 kỹ thuật augmentation (Tool Use, Fine-tuning, RAG, Prompt Engineering, Context Engineering), và làm rõ ranh giới RAG vs Fine-tuning vs Tool Use.</p>
+</div>
+<p><strong>Prerequisite</strong>: nên đọc R5.1 (Tool Use) và R5.2 (Fine-tuning) trước — trang này là bài "phân biệt" dựa trên 2 khái niệm đó.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy — 3 cách trả lời câu hỏi</div>
+<p>Hỏi 1 nhân viên tư vấn 3 câu khác nhau: "Giá vàng hôm nay bao nhiêu?" (nhân viên phải GỌI ĐIỆN hỏi phòng giao dịch — Tool Use, dữ liệu động). "Lãi suất tiết kiệm kỳ hạn 6 tháng là gì?" (nhân viên TRA CỨU brochure có sẵn trên bàn — RAG, kiến thức tĩnh đã có sẵn). "Luôn tư vấn bằng giọng điềm tĩnh, không bao giờ hứa hẹn lợi nhuận chắc chắn" (nhân viên đã được ĐÀO TẠO NỘI BỘ để phản xạ vậy — Fine-tuning, hành vi ngấm vào cách phản ứng).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] RAG là gì, nhắc gọn 1 câu</h3>
+<p>RAG (Retrieval-Augmented Generation) = tra cứu tri thức <strong>tĩnh</strong>, đã index sẵn từ trước, rồi đưa kết quả tra cứu vào context của LLM tại thời điểm gọi (runtime) để LLM trả lời dựa trên tri thức đó thay vì chỉ dựa vào những gì đã "nhớ" từ lúc pretrain.</p>
+
+<h3>2. [Trung bình] Bảng phân biệt nhanh — 3 câu hỏi, 3 kỹ thuật khác nhau</h3>
+<p>Đây là bảng tổng hợp — không phải nội dung mới, dùng để "chốt" hiểu biết trước khi sang Prompt/Context Engineering (R5.4, R5.5):</p>
+<table>
+<tr><th>Câu hỏi cần trả lời</th><th>Kỹ thuật đúng</th><th>Vì sao không dùng cái khác</th></tr>
+<tr><td>"Giá VNM hôm nay bao nhiêu?" (dữ liệu real-time, không nằm trong training data)</td><td><strong>Tool Use</strong> (gọi API giá)</td><td>RAG/Fine-tune đều tĩnh — không có dữ liệu real-time</td></tr>
+<tr><td>"MACD là gì, tính thế nào?" (kiến thức tĩnh, đã biết trước)</td><td><strong>RAG</strong> (tra <code>technical_indicators.md</code>)</td><td>Không cần real-time; fine-tune quá tốn kém cho kiến thức tra cứu được bằng file tĩnh</td></tr>
+<tr><td>"Luôn trả lời theo đúng format JSON 5 field, giọng văn nhất quán"</td><td><strong>Fine-tuning</strong> (nếu ổn định lâu dài) hoặc <strong>Prompt Engineering</strong> (nếu đủ, rẻ hơn)</td><td>RAG không kiểm soát style; Tool Use không liên quan tới style</td></tr>
+<tr><td>"Từ đầu hội thoại tới giờ, model có đang 'quên' rule không?"</td><td><strong>Context Engineering</strong> (R5.5)</td><td>Không phải THIẾU kiến thức (RAG) hay THIẾU hành vi cố định (fine-tune) — là NGÂN SÁCH CONTEXT bị tràn</td></tr>
+</table>
+
+<h3>3. [Khó] Vì sao 1 hệ thống thật thường dùng NHIỀU kỹ thuật cùng lúc, không phải chọn 1</h3>
+<p>Sai lầm phổ biến của người mới học: nghĩ phải chọn ĐÚNG 1 trong 5 kỹ thuật cho 1 hệ thống. Thực tế, hầu hết hệ thống LLM production phối hợp nhiều kỹ thuật cho các phần việc khác nhau trong CÙNG 1 luồng xử lý.</p>
+
+<h3>4. [Trung bình] Chunking ở TẦNG PIPELINE — đánh đổi kích thước chunk, khác góc nhìn "cắt thế nào" của R4.6</h3>
+<div class="callout"><div class="label">📖 Phân biệt với R4.6</div>
+<p><code>R4_6_chunking_embedding.html</code> dạy CƠ CHẾ cắt (3 loại chunking cơ bản, late chunking, semantic chunking breakpoint theo ngưỡng percentile) — góc nhìn TẦNG EMBEDDING: "cắt ở đâu cho đúng ranh giới ngữ nghĩa". Mục này KHÔNG lặp lại cơ chế đó — chỉ trả lời câu hỏi TẦNG PIPELINE: "chunk to hay nhỏ ảnh hưởng gì tới toàn bộ hệ thống RAG, không chỉ 1 lần cắt".</p>
+</div>
+<p>Chunk nhỏ và chunk to kéo theo đánh đổi lan toả khắp pipeline, không chỉ ảnh hưởng bước retrieval:</p>
+<table>
+<tr><th>Trục</th><th>Chunk nhỏ (VD 64-128 token)</th><th>Chunk to (VD 512-1024 token)</th></tr>
+<tr><td>Độ chính xác truy vấn fact cụ thể</td><td>Tốt hơn — 1 vector đại diện đúng 1 ý hẹp, ít "loãng" tín hiệu (research 2026: giảm chunk 1024→64 token cải thiện recall@1 <strong>+10-15 điểm %</strong> trên dataset nhiều entity, verify 2026-09)</td><td>Kém hơn cho fact cụ thể — 1 vector phải đại diện nhiều ý, dễ "loãng"</td></tr>
+<tr><td>Giữ ngữ cảnh cho câu hỏi cần bối cảnh rộng (narrative)</td><td>Kém — mất mạch văn xung quanh</td><td>Tốt hơn — giữ được đoạn liền mạch</td></tr>
+<tr><td>Số lượng vector cần lưu + chi phí embed</td><td>Nhiều hơn (1 doc → nhiều chunk hơn)</td><td>Ít hơn</td></tr>
+<tr><td>Ngân sách context khi nhồi top-k vào prompt</td><td>Rẻ hơn/chunk, nhưng cần k lớn hơn để đủ ngữ cảnh</td><td>Đắt hơn/chunk, k nhỏ vẫn đủ ngữ cảnh — nhưng dễ chạm ngưỡng suy giảm chất lượng sinh câu trả lời (research: quá <strong>~2500 token</strong> nhồi vào context, chất lượng sinh câu trả lời có thể bắt đầu giảm — đây là hiện tượng KHÁC lost-in-the-middle, xem <code>L9_1 §1</code>)</td></tr>
+</table>
+<pre><code>Trade-off không có "đáp án đúng tuyệt đối" — phụ thuộc loại câu hỏi:
+
+  Chunk nhỏ  ◄──────────────────────────────────►  Chunk to
+  "Giá đóng cửa FPT           "So sánh diễn biến
+   ngày 15/8 là bao nhiêu?"    FPT quý 3 so với
+   → cần 1 fact hẹp,           quý 2 thế nào?"
+   chunk nhỏ khớp đúng         → cần đoạn dài,
+   hơn, ít nhiễu               chunk to giữ mạch
+
+Giải pháp phổ biến 2026:
+hierarchical/parent-child chunking — INDEX chunk nhỏ để retrieval
+chính xác, nhưng khi trả lời thì LẤY CẢ đoạn to (parent) chứa nó.</code></pre>
+
+<h3>5. [Trung bình] Đánh giá retrieval cơ bản — recall@k / precision@k, đọc TRƯỚC khi học RAGAS ở L9</h3>
+<p><code>L9_1_advanced_rag.html §8</code> đã có bảng RAGAS (faithfulness, answer relevance, context precision, context recall — đo bằng LLM-judge). Mục này dạy ĐỊNH NGHĨA CỔ ĐIỂN mà các metric đó dựa trên — cần hiểu trước khi học RAGAS, không phải phiên bản khác của RAGAS.</p>
+<table>
+<tr><th>Metric</th><th>Công thức</th><th>Trả lời câu hỏi gì?</th></tr>
+<tr><td>Precision@k</td><td>(số chunk liên quan trong top-k) / k</td><td>Trong những gì tôi LẤY RA, bao nhiêu % thực sự hữu ích?</td></tr>
+<tr><td>Recall@k</td><td>(số chunk liên quan trong top-k) / (tổng số chunk liên quan có trong corpus)</td><td>Trong TẤT CẢ chunk hữu ích đang có, tôi đã lấy được bao nhiêu %?</td></tr>
+</table>
+<p><strong>Worked example</strong> — corpus có đúng 4 chunk liên quan tới câu hỏi "rủi ro ngành Ngân hàng quý này", hệ thống retrieval trả về top-5:</p>
+<pre><code>Top-5 trả về:  [Chunk A ✅] [Chunk B ❌] [Chunk C ✅] [Chunk D ❌] [Chunk E ✅]
+Ground truth (4 chunk liên quan thật có trong corpus): A, C, E, F
+                                                                 └─ KHÔNG nằm trong top-5
+
+Precision@5 = 3 chunk liên quan (A, C, E) / 5 lấy ra       = 3/5 = 0.60 (60%)
+Recall@5    = 3 chunk liên quan lấy được / 4 chunk liên quan thật = 3/4 = 0.75 (75%)</code></pre>
+<p><strong>Đọc kết quả</strong>: 60% những gì trả về là hữu ích (40% "rác" — chunk B, D không liên quan chiếm chỗ), và hệ thống đã tìm được 75% tổng lượng thông tin liên quan đang có (thiếu chunk F). 2 con số đo 2 THẤT BẠI khác nhau: precision thấp = quá nhiều nhiễu; recall thấp = bỏ sót thông tin quan trọng — cải thiện 1 trong 2 không tự động cải thiện cái còn lại (VD tăng k lên 10 có thể kéo recall lên nhưng precision giảm vì lấy thêm nhiều chunk không liên quan).</p>
+
+<h3>6. [Khó] Naive RAG thất bại thế nào — worked example before/after với đúng domain dự án</h3>
+<p>Bảng "5 failure modes" đã có ở <code>L9_1_advanced_rag.html §1</code> (mức tổng quan). Đây là 1 worked example CỤ THỂ, đúng domain cổ phiếu, cho thấy 1 trong các failure mode đó xảy ra NHƯ THẾ NÀO ở mức chunk-by-chunk:</p>
+<pre><code>Câu hỏi: "MACD của FPT có tín hiệu bán không?"
+
+TRƯỚC (naive RAG — chỉ dense embedding, lấy top-3 semantic gần nhất):
+  #1: "...MACD của VNM cắt xuống đường signal, tín hiệu bán..."  ❌ SAI TICKER
+      (embedding gần vì cùng cụm từ "MACD", "tín hiệu bán" — model
+       không phân biệt được VNM/FPT chỉ bằng độ gần semantic)
+  #2: "...RSI của FPT đang ở vùng 65..."                          ⚠️ đúng ticker,
+                                                                     sai chỉ báo
+  #3: "...MACD là chỉ báo động lượng, tính bằng EMA12-EMA26..."   ⚠️ đúng khái
+                                                                     niệm, không
+                                                                     phải dữ liệu
+                                                                     FPT hôm nay
+  → Chunk THẬT chứa "MACD của FPT cắt xuống, tín hiệu bán" bị xếp
+    HẠNG 4, ngoài top-3 → LLM không thấy được, có thể trả lời dựa
+    nhầm vào chunk #1 (dữ liệu VNM) hoặc từ chối trả lời vì thiếu data
+
+SAU (hybrid BM25 + dense + rerank, đúng pattern L9_1 §3-4):
+  BM25 bắt được từ khoá CHÍNH XÁC "FPT" + "MACD" cùng xuất hiện
+  → chunk thật được đẩy lên #1, chunk VNM (sai ticker) bị loại vì
+    không khớp từ khoá "FPT" dù semantic vẫn gần</code></pre>
+<p><strong>Điểm mấu chốt</strong>: đây chính xác là lý do Tool Use (R5.1) không thể thay bằng RAG cho dữ liệu MACD "hôm nay" (dữ liệu tính toán động), nhưng khi RAG được dùng cho tri thức tĩnh có nhiều ticker cùng thuật ngữ kỹ thuật, rủi ro "đúng thuật ngữ, sai đối tượng" (sai ticker) là failure mode thực tế cần hybrid retrieval để giảm, không chỉ lý thuyết.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Kiểm tra thật: skill <code>daily-investor-report</code> dùng bao nhiêu kỹ thuật trong 5 kỹ thuật augmentation?</p>
+<pre><code>Câu hỏi                          → Kỹ thuật             → Bằng chứng trong repo
+─────────────────────────────────────────────────────────────────────────
+"Giá/volume/dự đoán ticker X?"   → Tool Use             → gọi /api/predict/*,
+                                                            /api/stocks/*, /api/market/*
+                                                            (SKILL.md Section 2)
+"Bài học quá khứ về pattern Y?"  → RAG (dạng exact-match) → kb_loader.py đọc
+                                                            lessons_learned_patterns.json
+"Luôn viết đúng 15 hard rules"   → Prompt Engineering    → persona + rules trong
+                                                            system prompt (SKILL.md)
+</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Kỹ thuật</th><th>Dữ liệu động hay tĩnh?</th><th>Đụng weight model?</th><th>Chi phí triển khai</th></tr>
+<tr><td>Tool Use (R5.1)</td><td>Động (real-time)</td><td>Không</td><td>Thấp — viết tool + validate output</td></tr>
+<tr><td>RAG (R5.3, R3, R4)</td><td>Tĩnh (đã index)</td><td>Không</td><td>Trung bình — cần chunking/embedding/retrieval pipeline</td></tr>
+<tr><td>Fine-tuning (R5.2)</td><td>Tĩnh (đã train)</td><td><strong>Có</strong></td><td>Cao — cần dataset, compute, hạ tầng train</td></tr>
+<tr><td>Prompt Engineering (R5.4)</td><td>N/A</td><td>Không</td><td>Rất thấp — chỉ sửa text</td></tr>
+<tr><td>Context Engineering (R5.5)</td><td>N/A</td><td>Không</td><td>Trung bình — cần kỷ luật quản lý context xuyên suốt</td></tr>
+</table>
+<p><strong>Bảng bổ sung — chunk size ảnh hưởng gì tới 4 trục ở bảng trên (nối §4)</strong>:</p>
+<table>
+<tr><th>Chunk size</th><th>Precision@k</th><th>Recall@k</th><th>Chi phí embed/lưu trữ</th></tr>
+<tr><td>Nhỏ (64-128 token)</td><td>Cao hơn cho fact hẹp</td><td>Cần k lớn hơn để đạt cùng mức recall</td><td>Cao hơn — nhiều chunk hơn</td></tr>
+<tr><td>To (512-1024 token)</td><td>Thấp hơn cho fact hẹp (nhiễu)</td><td>Đạt recall tốt với k nhỏ</td><td>Thấp hơn — ít chunk hơn</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>daily-investor-report</code> dùng <strong>cả Tool Use</strong> (gọi <code>/api/predict/*</code>, <code>/api/stocks/*</code>, <code>/api/market/*</code> — xem <code>SKILL.md</code> Section 2) <strong>và RAG-như</strong> (<code>kb_loader.py</code>, xem R3.3) trong cùng 1 skill — đây là ví dụ thực tế cho thấy 5 kỹ thuật augmentation không loại trừ nhau, thường phối hợp trong 1 hệ thống thật.</p>
+<p>Rủi ro "đúng thuật ngữ, sai ticker" ở §6 áp dụng trực tiếp cho <code>kb/chart_patterns.md</code>/<code>kb/sector_playbooks.md</code> nếu KB mở rộng lên hàng trăm file (đúng "Scale-up path" đã nêu ở <code>L9_1 §7</code>): càng nhiều ticker/sector dùng chung thuật ngữ kỹ thuật (MACD, RSI, Double Top...), rủi ro dense-only retrieval lấy nhầm chunk ĐÚNG THUẬT NGỮ nhưng SAI ĐỐI TƯỢNG càng cao — đây là lý do hybrid BM25+dense không phải "tối ưu sớm", mà là yêu cầu thật khi KB scale lên.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Nhầm RAG với Tool Use</strong> khi cả 2 đều "lấy thêm dữ liệu" — phân biệt bằng: RAG là tra cứu tri thức TĨNH đã index sẵn, Tool Use là gọi ra ngoài lấy dữ liệu ĐỘNG/real-time hoặc thực thi hành động.</p>
+<p><strong>2. Nghĩ phải chọn đúng 1 kỹ thuật cho cả hệ thống</strong> — thực tế hầu hết hệ thống thật phối hợp nhiều kỹ thuật cho các phần việc khác nhau (xem ví dụ §3).</p>
+<p><strong>3. Dùng RAG cho dữ liệu cần real-time</strong> (VD giá cổ phiếu) — RAG chỉ tốt cho tri thức tĩnh, ít đổi; dữ liệu thay đổi liên tục cần Tool Use.</p>
+<p><strong>4. Nghĩ "chunk càng nhỏ càng chính xác" là quy tắc tuyệt đối</strong> — đúng cho fact hẹp (§4), nhưng làm mất ngữ cảnh cho câu hỏi cần bối cảnh rộng; không có kích thước chunk "tốt nhất" chung cho mọi loại câu hỏi.</p>
+<p><strong>5. Chỉ nhìn 1 trong 2 số recall@k/precision@k rồi kết luận "retrieval tốt"</strong> — 1 hệ thống có thể precision cao nhưng recall thấp (lấy đúng nhưng thiếu) hoặc ngược lại; luôn báo cáo CẢ HAI, không chỉ 1 con số đẹp hơn.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Với 4 câu hỏi ví dụ ở bảng §2, chọn đúng kỹ thuật cho từng câu và giải thích vì sao không dùng kỹ thuật khác.</li>
+<li>Chỉ ra được <code>daily-investor-report</code> dùng ít nhất 2 kỹ thuật augmentation khác nhau, kèm bằng chứng cụ thể trong repo.</li>
+<li>Giải thích được vì sao RAG không phù hợp cho dữ liệu real-time.</li>
+<li>Tính đúng precision@k và recall@k cho 1 bộ dữ liệu retrieval cho trước (tự nghĩ ra top-k và ground truth), giải thích được vì sao 2 số này có thể lệch nhau.</li>
+<li>Giải thích được vì sao chunk nhỏ và chunk to là đánh đổi TẦNG PIPELINE (precision/recall/chi phí/ngân sách context), không phải 1 lựa chọn "tốt hơn tuyệt đối".</li>
+<li>Dùng đúng worked example §6 để giải thích vì sao dense-only retrieval có thể lấy nhầm chunk "đúng thuật ngữ, sai ticker", và vì sao hybrid BM25+dense giảm được rủi ro này.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R5_2_fine_tuning.html">← R5.2 · Fine-tuning</a>
+  <a href="R5_4_prompt_engineering.html">R5.4 · Prompt Engineering →</a>
+</div>
+
+</div>
+</body>
+</html>

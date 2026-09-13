@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R4.1 · Vector Databases — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Retrieval Techniques · Điểm 1/6</div>
+  <h1>R4.1 · Vector Databases</h1>
+  <p class="subtitle">Nhà kho lưu "vân tay số" của hàng triệu tài liệu — và vì sao tìm đúng cái gần nhất trong đó lại là cả 1 bài toán kỹ thuật, không chỉ là "SQL với 1 cột thêm".</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>Dễ</strong>: giải thích được vector DB khác database SQL truyền thống ở điểm nào — tìm "gần giống" thay vì tìm "khớp chính xác".</li>
+<li><strong>Dễ</strong>: kể tên 3 việc mọi vector DB đều phải làm (lưu trữ, index xấp xỉ, filter kết hợp).</li>
+<li><strong>Trung bình</strong>: đọc hiểu 1 query similarity search thật diễn ra qua các bước nào (embed → index lookup → rerank tuỳ chọn → trả kết quả).</li>
+<li><strong>Trung bình</strong>: so sánh được pgvector/Pinecone/Qdrant/Weaviate theo đúng trục quyết định (hạ tầng sẵn có, quy mô dữ liệu, ngân sách vận hành) — không phải "cái nào có benchmark cao nhất".</li>
+<li><strong>Khó</strong>: giải thích vì sao pgvector là lựa chọn tự nhiên nếu dự án <code>predictor</code> từng cần vector search, và biết chính xác dự án hiện đang ở trạng thái nào (đã dùng hay chưa).</li>
+<li><strong>Khó</strong>: tính được bằng tay mức độ recall sụp đổ của post-filter khi filter chọn lọc mạnh, và giải thích được ACORN giải quyết vấn đề đó bằng cơ chế gì (không phải "lọc thông minh hơn" chung chung).</li>
+<li><strong>Khó</strong>: phân biệt 3 kiến trúc multi-tenancy (tenant_id + filter / namespace / index riêng theo tenant) và chọn đúng cho 1 tình huống quy mô tenant cho trước.</li>
+<li><strong>Khó</strong>: giải thích được vì sao sharding 1 vector DB khác hẳn sharding 1 bảng SQL (fan-out BẮT BUỘC tới mọi shard, không route được về đúng 1 shard như hash theo khoá chính), và tính tay được thời gian rebuild khi thêm shard.</li>
+<li><strong>Khó</strong>: thiết kế được 3 lớp backup/disaster-recovery cho 1 vector DB (snapshot index, WAL/change-log, nguồn dữ liệu gốc để re-embed) và giải thích vì sao "cứ re-embed lại từ đầu" không phải 1 chiến lược DR chấp nhận được ở quy mô lớn.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Đây là khái niệm <strong>nền tảng nhất</strong> trong 6 khái niệm của chủ đề Retrieval Techniques — nên đọc trước 5 trang còn lại. Nó overlap với <code>../modules/L5_2_rag.html §3.3</code> (đã giới thiệu khái niệm vector DB ở tầm tổng quan) và <code>§4.5</code> (đã có bảng Flat/HNSW/IVF-PQ/ScaNN-DiskANN theo đặc tính recall/speed/RAM). Trang này <strong>không lặp lại</strong> — nó đào sâu 2 việc mà module cũ chưa làm: (1) so sánh 4 sản phẩm vector DB cụ thể theo trục ra quyết định thực tế, (2) mô tả pipeline vận hành bên trong 1 vector DB ở mức đủ để tự thiết kế hệ thống, không chỉ liệt kê tên.</p>
+<p>Độ khó: <strong>Dễ</strong> — không cần hiểu trước HNSW/IVF (đó là trang R4.5, xem sau) để đọc trang này; ngược lại, trang này tạo nền cho R4.5 bằng cách trả lời "vì sao cần 1 loại index đặc biệt" trước khi đi vào "index đó hoạt động thế nào".</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy — nhà kho vân tay số</div><p>Tưởng tượng 1 nhà kho khổng lồ lưu <strong>hàng triệu vân tay</strong> (mỗi vân tay là 1 embedding — 1 dãy vài trăm tới vài nghìn con số đại diện cho "ý nghĩa" của 1 đoạn văn bản/ảnh). Cảnh sát mang tới 1 vân tay mới thu được tại hiện trường (query) và hỏi: "vân tay nào trong kho GIỐNG cái này nhất?" — không phải "vân tay nào TRÙNG KHỚP 100%" (đó là việc so khớp chính xác, dễ, database SQL làm tốt), mà là "giống nhất theo 1 độ đo khoảng cách nào đó", trong hàng triệu ứng viên, và phải trả lời trong vài chục mili-giây. Đó chính xác là bài toán mà 1 vector database được sinh ra để giải.</p></div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vì sao SQL truyền thống không giải được bài toán này</h3>
+<p>Database SQL (Postgres, MySQL) cực giỏi ở 2 việc: <strong>khớp chính xác</strong> (<code>WHERE ticker = 'VNM'</code>) và <strong>sắp xếp theo thứ tự có cấu trúc</strong> (B-Tree index cho <code>ORDER BY price</code>). Cả 2 việc này dựa trên 1 giả định: dữ liệu có thể so sánh bằng <code>=</code>, <code>&lt;</code>, <code>&gt;</code> theo nghĩa toán học đơn giản.</p>
+<p>Embedding thì khác — nó là 1 điểm trong không gian nhiều chiều (VD 768 chiều). "Gần" ở đây nghĩa là <strong>khoảng cách hình học</strong> (cosine similarity hoặc Euclidean distance) giữa 2 điểm 768 chiều, không phải so sánh từng con số một. B-Tree index không giúp được gì ở bài toán này vì nó chỉ tối ưu cho so sánh 1 chiều.</p>
+
+<div class="callout"><div class="label">📖 Brute-force trước, rồi mới cần vector DB</div><p>Cách "ngây thơ" nhất để tìm K vector gần nhất: tính khoảng cách từ query tới <strong>TẤT CẢ</strong> N vector trong kho, sắp xếp, lấy top-K. Đây gọi là <strong>Flat index</strong> hay <strong>exact k-NN</strong> — luôn đúng 100% (recall = 100%) nhưng độ phức tạp O(N) cho MỖI query. Với N = 10,000 vector, việc này vẫn nhanh (vài mili-giây). Với N = 10 triệu vector, brute-force trở nên quá chậm cho ứng dụng real-time (hàng trăm mili-giây tới vài giây). Đây chính là lý do tồn tại của <strong>Approximate Nearest Neighbor (ANN) index</strong> — đánh đổi 1 chút recall (thường 95-99% thay vì 100%) để lấy tốc độ nhanh hơn 100-1000 lần. Cơ chế ANN cụ thể (HNSW, IVF) được giải thích chi tiết ở <a href="R4_5_hnsw_ivf.html">R4.5 · HNSW/IVF</a> — trang này chỉ cần bạn hiểu <strong>vì sao</strong> nó tồn tại.</p></div>
+
+<h3>2. Ba việc mọi vector DB đều phải làm</h3>
+<p><strong>[TRAIN-KNOWLEDGE, ổn định]</strong> Bất kể là pgvector, Pinecone, Qdrant hay Weaviate, dưới lớp vỏ marketing khác nhau, mọi vector DB đều thực hiện đúng 3 việc:</p>
+<table>
+<tr><th>#</th><th>Việc</th><th>Vì sao cần</th></tr>
+<tr><td>1</td><td>Lưu vector + metadata đi kèm</td><td>Mỗi vector cần gắn với 1 tài liệu gốc (ID, ticker, ngày, nội dung) để trả kết quả có ý nghĩa, không chỉ trả về "điểm số 0.87" trơ trọi.</td></tr>
+<tr><td>2</td><td>Build 1 approximate nearest neighbor (ANN) index</td><td>Tránh so sánh brute-force với toàn bộ N vector mỗi query (xem mục 1 ở trên).</td></tr>
+<tr><td>3</td><td>Hỗ trợ filter kết hợp (filtered search)</td><td>Truy vấn thực tế hiếm khi thuần "tìm gần nhất" — thường là "tìm gần nhất NHƯNG chỉ trong <code>ticker='VNM'</code>" hoặc "chỉ trong 30 ngày gần nhất".</td></tr>
+</table>
+<p>Điểm khác biệt lớn nhất giữa các sản phẩm thường nằm ở <strong>việc 3</strong> — cách filter phối hợp với ANN index: <strong>pre-filter</strong> (lọc trước rồi mới search trong tập đã lọc) làm chậm graph traversal vì phá vỡ cấu trúc index đã build; <strong>post-filter</strong> (search trước rồi lọc kết quả sau) nhanh hơn nhưng có thể trả về ít hơn K kết quả mong muốn nếu filter loại quá nhiều candidate trong top-K thô.</p>
+
+<h3>3. Pipeline vận hành bên trong 1 vector DB — từ ingest tới trả kết quả</h3>
+<pre><code>═══ INGEST TIME (build 1 lần, cập nhật khi có data mới) ═══
+Tài liệu thô (VD 1 đoạn KB tài chính)
+  │
+  ▼ (embedding model — VD BGE-M3, Voyage, OpenAI)
+Vector 768-1536 chiều + metadata (doc_id, ticker, ngày, ...)
+  │
+  ▼ (insert vào vector DB)
+Build/update ANN index (HNSW hoặc IVF — xem R4.5)
+
+═══ QUERY TIME (mỗi lần user hỏi) ═══
+Câu hỏi user ("cổ phiếu nào có ROE cải thiện mạnh?")
+  │
+  ▼ (embedding model — CÙNG model dùng lúc ingest, bắt buộc)
+Query vector 768-1536 chiều
+  │
+  ▼ (ANN search trong index)
+Top-K candidate gần nhất (K thường 20-100, không phải K cuối cùng)
+  │
+  ▼ (filter theo metadata, nếu có điều kiện)
+Top-K đã lọc
+  │
+  ▼ (tuỳ chọn: rerank — xem R4.4)
+Top-5 cuối cùng trả về ứng dụng</code></pre>
+<div class="callout danger"><div class="label">⚠️ Lỗi ingest hay gặp nhất</div><p>Dùng <strong>2 embedding model khác nhau</strong> lúc ingest và lúc query (VD ingest bằng OpenAI <code>text-embedding-3-large</code>, sau đó đổi sang BGE-M3 cho query mà quên re-index toàn bộ dữ liệu cũ) — 2 model khác nhau sinh ra không gian vector khác nhau hoàn toàn, "khoảng cách gần" của model A vô nghĩa khi so với vector của model B. Kết quả: similarity search trả về rác mà không có lỗi runtime nào báo hiệu — đây là loại bug âm thầm, khó phát hiện nhất trong hệ thống RAG.</p></div>
+
+<h3>4. Lộ trình quyết định 4 bước khi 1 dự án cân nhắc thêm vector DB</h3>
+<p>Trước khi so sánh sản phẩm cụ thể (mục 5), nên đi qua đúng thứ tự quyết định sau — bỏ qua bước 1-2 mà nhảy thẳng vào "chọn sản phẩm nào" là nguyên nhân phổ biến nhất của việc thêm hạ tầng không cần thiết:</p>
+<table>
+<tr><th>Bước</th><th>Câu hỏi</th><th>Nếu câu trả lời là "không"</th></tr>
+<tr><td>1</td><td>Có nhu cầu tìm kiếm theo Ý NGHĨA (không chỉ exact-match từ khoá) không?</td><td>Dừng lại — không cần vector DB, dùng full-text search (VD Postgres <code>tsvector</code>) là đủ</td></tr>
+<tr><td>2</td><td>Quy mô dữ liệu đủ lớn để brute-force (Flat, mục 1) trở nên chậm (thường &gt;100K-1M vector cho use case real-time)?</td><td>Dừng lại — brute-force trong chính SQL database hiện có (VD <code>pgvector</code> ở chế độ Flat, hoặc thậm chí tính cosine similarity bằng tay trong application code) đã đủ nhanh, chưa cần ANN index chuyên dụng</td></tr>
+<tr><td>3</td><td>Đã có Postgres/SQL database chạy sẵn trong hạ tầng chưa?</td><td>Nếu CÓ → pgvector gần như luôn là lựa chọn đầu tiên nên thử; nếu CHƯA và cần vector search làm trung tâm hệ thống → mới cân nhắc DB chuyên dụng (Qdrant/Weaviate/Pinecone)</td></tr>
+<tr><td>4</td><td>Có filter chọn lọc mạnh đi kèm mọi query (VD luôn kèm <code>ticker=X</code>), hoặc nhiều tenant/nguồn dữ liệu cần cô lập?</td><td>Nếu KHÔNG → bỏ qua mục 5-6 phía dưới, mọi sản phẩm ở bảng mục 5 đều đủ dùng; nếu CÓ → đọc kỹ mục 5 (filtered search) và mục 6 (multi-tenancy) trước khi chốt sản phẩm, vì đây là 2 trục quyết định dễ bị bỏ sót nhất khi so sánh vector DB chỉ bằng benchmark QPS thô</td></tr>
+</table>
+<p>Thứ tự này quan trọng vì bước 3-4 (chọn sản phẩm + kiểm tra 2 trục nâng cao) chỉ có ý nghĩa SAU KHI bước 1-2 đã xác nhận nhu cầu thật — nhiều đội kỹ thuật làm ngược lại (so sánh benchmark sản phẩm trước, rồi mới hỏi "có cần dùng không"), dẫn tới quyết định bị dắt mũi bởi tính năng thay vì bài toán thật.</p>
+
+<h3>5. Đào sâu bài toán filtered search — vì sao pre-filter/post-filter đều có giới hạn thật, và ACORN giải quyết ra sao (verify 2026-09)</h3>
+<p>Mục 2 đã nêu 2 cách phối hợp filter với ANN index (pre-filter, post-filter) nhưng chưa lượng hoá vấn đề. Dưới đây là phần lượng hoá — vì sao đây không phải "chi tiết vặt" mà là 1 trong những bug production phổ biến nhất khi thêm filter vào 1 hệ RAG đã chạy tốt lúc chưa có filter.</p>
+<div class="callout danger"><div class="label">⚠️ Post-filter — recall sụp đổ khi filter chọn lọc mạnh (highly selective)</div>
+<p>Post-filter nghĩa là: chạy ANN search LẤY TOP-K trước (không biết gì về filter), rồi mới loại bỏ những kết quả không khớp điều kiện. Nếu similarity và điều kiện filter độc lập thống kê với nhau, số kết quả CÒN LẠI sau lọc xấp xỉ bằng <code>K × selectivity</code> (selectivity = tỉ lệ tài liệu thoả điều kiện trên tổng N).</p>
+<pre><code>Muốn top-100 kết quả cuối, filter chỉ chọn 5% tài liệu (selectivity = 0.05):
+
+  Lấy top-100 KHÔNG lọc trước → lọc sau:
+  Số kết quả còn lại kỳ vọng ≈ 100 × 0.05 = 5 kết quả   ← THIẾU 95 kết quả so với yêu cầu
+
+  Muốn thật sự có ~100 kết quả sau lọc, phải lấy top-K' TRƯỚC lọc, với:
+  K' × 0.05 ≈ 100  →  K' ≈ 100 / 0.05 = 2,000
+  → phải kéo ANN search lấy nhiều hơn tới 20× (= 1/selectivity) so với K mong muốn
+
+Nếu selectivity càng nhỏ (filter càng "hiếm", VD chỉ 0.5%): K' ≈ 100/0.005 = 20,000
+  → ANN search phải trả về gần bằng N (nếu N không lớn hơn 20,000 nhiều) — mất hết lợi ích tốc độ của ANN</code></pre>
+<p>Đây chính xác là loại bug sản xuất âm thầm nhất khi thêm filter: hệ thống "vẫn chạy", vẫn trả về kết quả, nhưng số lượng ít hơn hẳn K yêu cầu — không có exception nào báo hiệu, chỉ có unit test đo đúng số lượng/recall mới bắt được.</p>
+</div>
+<p><strong>Pre-filter (áp filter trước, chỉ search trong tập đã lọc)</strong> né được vấn đề recall ở trên, nhưng đổi lại: nếu filter không loại được bao nhiêu (selectivity cao, VD 80% tài liệu thoả điều kiện), pre-filter gần như phải build lại / duyệt lại phần lớn graph ANN đã có — chi phí gần bằng brute-force trên tập đã lọc, và với HNSW cụ thể, việc "chỉ được đi qua các node thoả điều kiện" dễ làm graph bị NGẮT KẾT NỐI cục bộ (1 node thoả điều kiện có thể chỉ có hàng xóm không thoả điều kiện trong bán kính gần) — kẹt tại 1 điểm không tối ưu, không tới được vùng chứa kết quả gần nhất thật sự.</p>
+<div class="callout"><div class="label">📖 ACORN — thuật toán filtered search "predicate-agnostic" (SIGMOD 2024, dùng trong Weaviate/Apache Solr 10)</div>
+<p>Nguồn: <a href="https://dl.acm.org/doi/10.1145/3654923">paper ACM SIGMOD 2024</a> + <a href="https://weaviate.io/blog/speed-up-filtered-vector-search">Weaviate blog</a> (verify 2026-09). Cơ chế thật (không phải suy diễn từ hàng trên bảng): ACORN xây trên nền HNSW, nhưng khi có predicate, nó KHÔNG duyệt toàn bộ graph gốc — chỉ duyệt <strong>sub-graph gồm các node thoả điều kiện</strong>. Vấn đề "ngắt kết nối cục bộ" nêu ở trên được giải quyết bằng <strong>2-hop expansion</strong>: khi 1 node bị lọc bỏ, ACORN "nhảy qua" nó để nối trực tiếp 2 hàng xóm của nó với nhau, giữ graph liền mạch mà KHÔNG cần build lại 1 index riêng cho từng loại filter (đây là ý nghĩa "predicate-agnostic" — không cần biết trước tập filter nào sẽ được dùng, khác với cách build 1 index riêng cho mỗi filter phổ biến).</p>
+<p>Hình dung graph traversal khi filter loại bỏ phần lớn node — so sánh HNSW filter ngây thơ (dễ bị kẹt) với 2-hop expansion của ACORN:</p>
+<pre><code>HNSW filter ngây thơ — chỉ được đi qua node THOẢ điều kiện (● = thoả, ○ = không thoả):
+
+  Đang đứng ở A(●) ── B(○) ── C(○) ── D(●)   [D là đích, gần query nhất]
+                │
+             (không đi qua B,C vì không thoả filter)
+  → A bị KẸT: không còn hàng xóm nào (●) trực tiếp để nhảy tiếp
+  → dừng traversal SAI VỊ TRÍ, bỏ lỡ D dù D chỉ cách 2 bước
+
+ACORN — 2-hop expansion: khi hàng xóm trực tiếp (○) không thoả điều kiện,
+"nhảy qua" nó để nối thẳng 2 node (●) cách nhau đúng 2 bước:
+
+  A(●) ─────────── D(●)     (cạnh ảo mới: A→D, "nhảy qua" B,C bị lọc)
+       (2-hop shortcut)
+  → A vẫn tiếp tục nhảy được tới D — graph KHÔNG bị ngắt kết nối cục bộ,
+    dù bản thân B, C (không thoả filter) không tham gia kết quả cuối</code></pre>
+<p>Kết quả đo được (paper gốc, so với pre-filter/post-filter cổ điển): <strong>2-10× QPS cao hơn</strong> ở filter ít chọn lọc (low-cardinality, còn nhiều tài liệu thoả điều kiện) và <strong>hơn 30× QPS</strong> ở filter chọn lọc mạnh/phức tạp (high-cardinality) — ở CÙNG mức recall mục tiêu. Đây là lý do 2026 nhiều vector DB (Weaviate, Apache Solr 10, 1 số qua "elastic index selection" biến thể riêng) coi filtered search là bài toán thuật toán thật sự, không chỉ là "thêm WHERE clause" như SQL.</p>
+</div>
+
+<h3>6. Multi-tenancy — cô lập dữ liệu nhiều khách hàng/nhiều nguồn trong CÙNG 1 vector DB (verify 2026-09)</h3>
+<p>Vấn đề khác hẳn filtered search (mục 5) nhưng dễ nhầm vì cũng "thêm điều kiện vào query": khi 1 vector DB phục vụ NHIỀU tenant (nhiều khách hàng SaaS, hoặc trong dự án tài chính — nhiều nguồn dữ liệu cần cô lập, VD KB nội bộ vs dữ liệu khách hàng bên ngoài), có 3 cách kiến trúc khác hẳn nhau về mức độ cô lập:</p>
+<table>
+<tr><th>Cách tiếp cận</th><th>Cơ chế</th><th>Mức cô lập</th><th>Giới hạn thực tế</th></tr>
+<tr><td>1 bảng chung + cột <code>tenant_id</code> + filter (pgvector)</td><td>Row-level security của Postgres, 1 index HNSW DÙNG CHUNG cho mọi tenant, filter theo <code>tenant_id</code> lúc query</td><td>Thấp nhất — dữ liệu vật lý nằm chung, chỉ tách logic</td><td>Hoạt động tốt tới cỡ vài chục-vài trăm tenant (theo 1 blog benchmark, độ tin cậy trung bình); tenant lớn có thể làm graph traversal của tenant nhỏ chậm hơn vì cùng 1 graph</td></tr>
+<tr><td>Namespace (Pinecone, Cloudflare Vectorize)</td><td>Mỗi tenant 1 namespace logic trong CÙNG 1 index vật lý</td><td>Trung bình</td><td>Pinecone: tới 100,000 namespace/plan chuẩn nhưng CHỈ 20 index — namespace rẻ, index đắt (verify lại khi triển khai, số dễ đổi theo gói dịch vụ)</td></tr>
+<tr><td>Index/collection riêng theo tenant (Weaviate <code>multiTenancyConfig</code>)</td><td>Mỗi tenant có graph HNSW RIÊNG, bộ nhớ độc lập hoàn toàn</td><td>Cao nhất</td><td>Chi phí overhead mỗi tenant cao hơn (nhiều graph nhỏ thay vì 1 graph lớn) — nhưng theo Weaviate, ở &gt;1,000 tenant với dữ liệu không đồng đều, đây là kiến trúc chịu tải tốt hơn hẳn cách dùng chung graph + filter</td></tr>
+</table>
+<p><strong>Liên hệ ngược với ACORN (mục 5)</strong>: filter theo <code>tenant_id</code> trên 1 graph dùng chung (cách 1) chính là 1 trường hợp riêng của bài toán filtered search — nếu 1 tenant chiếm phần nhỏ dữ liệu (selectivity thấp), nó gặp đúng vấn đề recall/tốc độ đã lượng hoá ở mục 5. Đây là lý do Qdrant chọn cách khác: index payload field <code>tenant_id</code> và cho filter chạy NGAY TRONG lúc traverse HNSW (gần giống tinh thần ACORN) thay vì lọc post-hoc.</p>
+
+<h3>7. Sharding và replication ở quy mô tỷ vector — vì sao "chia nhỏ ra" khó hơn hẳn so với sharding 1 bảng SQL (verify 2026-09)</h3>
+<p>Sharding 1 bảng SQL theo khoá chính (VD <code>user_id % 4</code>) cho phép <strong>route thẳng</strong> 1 query tới ĐÚNG 1 shard — biết trước <code>user_id</code> là biết trước shard nào giữ dữ liệu đó. Sharding 1 vector index KHÔNG có tính chất này: "vector gần nhất" của 1 query CÓ THỂ nằm ở BẤT KỲ shard nào — không có cách nào biết trước mà không tính khoảng cách. Hệ quả trực tiếp: mọi query <strong>bắt buộc phải fan-out</strong> (gửi song song) tới TẤT CẢ shard, mỗi shard tự search trong index cục bộ của nó, rồi hợp nhất (merge) kết quả — chi phí query tăng theo SỐ SHARD, và <strong>tail latency (p99) bị quyết định bởi shard CHẬM NHẤT</strong>, không phải trung bình.</p>
+<pre><code>SQL sharding theo khoá chính (route được):          Vector sharding (PHẢI fan-out):
+  Query user_id=42 → hash(42)%4=2                     Query vector Q → "gần nhất" có thể ở BẤT KỲ shard
+    │                                                    │
+    ▼                                                    ├──▶ Shard 0: search cục bộ → top-10 candidate
+  CHỈ gửi tới Shard 2                                     ├──▶ Shard 1: search cục bộ → top-10 candidate
+  (3 shard còn lại không cần biết gì)                     ├──▶ Shard 2: search cục bộ → top-10 candidate
+                                                           └──▶ Shard 3: search cục bộ → top-10 candidate
+                                                                  │
+                                                          Merge 4×top-10 → top-10 CUỐI (tính lại khoảng cách)
+                                                          → p99 latency = latency của shard CHẬM NHẤT trong 4</code></pre>
+<p>Có 2 chiến lược chia shard, đánh đổi khác nhau:</p>
+<table>
+<tr><th>Chiến lược</th><th>Cơ chế</th><th>Ưu điểm</th><th>Nhược điểm</th></tr>
+<tr><td>Hash-based (ngẫu nhiên theo doc_id)</td><td>Chia đều theo hash — không quan tâm nội dung vector</td><td>Cân bằng tải hoàn hảo giữa các shard (mỗi shard cùng số lượng vector)</td><td>Đổi số shard (thêm/bớt) → gần như TOÀN BỘ dữ liệu phải rehash + di chuyển lại — downtime hoặc chi phí migration lớn</td></tr>
+<tr><td>Cluster-based (K-means trên chính vector, mỗi cluster → 1 shard)</td><td>Gom N vector thành K cluster (giống bước build của IVF, xem R4.5 §2), mỗi shard giữ đúng 1-vài cluster</td><td>Query có thể chỉ cần fan-out tới các shard có centroid GẦN query (giảm fan-out thực tế), thêm shard mới chỉ cần re-cluster cục bộ</td><td>Dễ lệch tải (hot shard) nếu phân phối dữ liệu không đều — 1 cluster đông vector hơn hẳn các cluster khác</td></tr>
+</table>
+<p><strong>Replication</strong> (khác sharding — không chia nhỏ dữ liệu mà nhân bản TOÀN BỘ 1 shard) giải quyết 1 vấn đề khác hẳn: chịu lỗi (1 node chết, node thay thế còn dữ liệu) và tăng QPS gần như tuyến tính (nhiều bản sao cùng phục vụ song song) — không giúp giảm RAM/dung lượng như sharding, ngược lại còn nhân bội chi phí lưu trữ theo hệ số replication.</p>
+<div class="callout danger"><div class="label">⚠️ Rebuild time khi thêm shard — worked example minh hoạ (không phải benchmark thật, chỉ dùng để lộ rõ bậc độ lớn)</div>
+<pre><code>Giả định: 3 shard hash-based, mỗi shard 10 triệu vector (tổng N = 30 triệu),
+1 shard đang quá tải (hot shard) → cần thêm shard thứ 4 để giảm tải.
+
+Vì hash-based: đổi số shard từ 3 → 4 nghĩa là hash(doc_id) % 3 → hash(doc_id) % 4
+cho ra kết quả KHÁC gần như toàn bộ doc_id cũ → GẦN NHƯ TOÀN BỘ 30 triệu vector
+phải được tính lại vị trí + build lại index tại shard mới của nó.
+
+Giả định throughput build+move gộp (minh hoạ, không phải số đo thật) ≈ 2,000
+vector/giây/node, chạy song song trên 4 node mới:
+  Thời gian ≈ 30,000,000 / (2,000 × 4) = 30,000,000 / 8,000 = 3,750 giây ≈ 62.5 phút
+
+→ Trong ~1 giờ đó, hệ thống ở trạng thái suy giảm (recall thấp hơn hoặc phải
+  đọc dữ liệu ở CẢ 2 layout cũ/mới) — đây là chi phí vận hành thật của việc
+  đổi số shard hash-based, không phải chỉ "thêm 1 máy là xong".
+
+So sánh với cluster-based: nếu chỉ cần tách 1 cluster quá đông thành 2 cluster
+con (re-cluster CỤC BỘ, không đụng tới 29 triệu vector còn lại nằm trong các
+cluster khác), thời gian tỉ lệ với kích thước CLUSTER đó, không phải toàn bộ N
+— đây chính là lý do các bài viết 2026 về scale vector DB (VD Weaviate) ưu tiên
+chiến lược cluster-based khi biết trước sẽ cần thêm/bớt shard nhiều lần.</code></pre>
+</div>
+
+<h3>8. Disaster recovery / backup — 3 lớp cần có, và vì sao "re-embed lại từ đầu" không phải 1 chiến lược (verify 2026-09)</h3>
+<p>Vector DB có 1 đặc điểm khiến DR (disaster recovery) dễ bị đánh giá thấp: dữ liệu VỪA có thể "tái tạo lại" (re-embed từ tài liệu gốc) VỪA cực kỳ tốn kém để tái tạo ở quy mô lớn — đúng chi phí thời gian đã tính ở mục 7 (hàng chục phút tới hàng giờ cho vài chục triệu vector, đó là build/move nội bộ; re-embed từ đầu qua API embedding công khai còn chậm và tốn tiền hơn nhiều vì phải gọi lại model cho từng tài liệu). "Chúng ta cứ re-embed lại toàn bộ khi có sự cố" không phải 1 kế hoạch DR — đó là <strong>không có</strong> kế hoạch DR.</p>
+<table>
+<tr><th>Lớp</th><th>Lưu gì</th><th>Vai trò</th><th>Chi phí</th></tr>
+<tr><td>1. Tài liệu gốc + config embedding</td><td>Văn bản/metadata gốc (chưa embed) + tên model/version embedding đã dùng, lưu ở object storage riêng</td><td>Cứu cánh cuối cùng — nếu mọi thứ khác mất, vẫn re-embed lại được (chậm, nhưng KHẢ THI)</td><td>Rẻ nhất (chỉ lưu text, không lưu vector)</td></tr>
+<tr><td>2. Snapshot định kỳ của index</td><td>Bản chụp toàn bộ vector + graph/cluster structure tại 1 thời điểm</td><td>Restore nhanh về đúng trạng thái đã chụp — không cần build lại index từ đầu</td><td>Full snapshot: tốn dung lượng nhất nhưng restore đơn giản nhất; Incremental (chỉ phần đổi từ snapshot trước): rẻ hơn nhưng restore phải áp tuần tự nhiều bản</td></tr>
+<tr><td>3. WAL / change-log</td><td>Nhật ký từng thay đổi (insert/update/delete) kể từ snapshot gần nhất</td><td>Cho phép <strong>point-in-time recovery</strong> — restore snapshot gần nhất rồi "replay" log tới đúng thời điểm trước sự cố, không mất dữ liệu giữa 2 lần snapshot</td><td>Trung bình — chi phí ghi log liên tục, nhưng nhỏ hơn nhiều so với snapshot full mỗi lần</td></tr>
+</table>
+<p>3 lớp trên tương ứng đúng 3 câu hỏi khi thiết kế DR: "nếu MẤT SẠCH thì có cứu được không" (lớp 1) → "cứu NHANH cỡ nào" (lớp 2) → "cứu tới ĐÚNG THỜI ĐIỂM nào, không lùi về quá xa" (lớp 3). Thiếu lớp 1: mất vĩnh viễn nếu snapshot cũng hỏng. Thiếu lớp 3: chỉ restore được về đúng lần snapshot gần nhất, mất mọi thay đổi sau đó (RPO = khoảng cách giữa 2 lần snapshot, có thể là hàng giờ-hàng ngày nếu snapshot không thường xuyên).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Giả sử KB tài chính có 3 đoạn văn bản đã embedding thành vector 4 chiều (rút gọn để tính tay được — thực tế 768+ chiều):</p>
+<pre><code>doc_A "ROE của FPT tăng mạnh quý này"      → [0.9, 0.1, 0.0, 0.2]
+doc_B "Biên lợi nhuận gộp VNM cải thiện"   → [0.8, 0.2, 0.1, 0.1]
+doc_C "Giá vàng thế giới tăng do lạm phát" → [0.0, 0.1, 0.9, 0.8]
+
+Query: "công ty nào có chỉ số sinh lời tốt hơn?" → [0.85, 0.15, 0.05, 0.15]
+
+Cosine similarity(query, doc) = (query · doc) / (||query|| × ||doc||)
+
+Với doc_A: dot = 0.85×0.9 + 0.15×0.1 + 0.05×0 + 0.15×0.2 = 0.765+0.015+0+0.03 = 0.81
+  ||query|| ≈ 0.8775, ||doc_A|| ≈ 0.9274 → cos ≈ 0.81 / (0.8775×0.9274) ≈ 0.995
+
+Với doc_B: dot = 0.85×0.8 + 0.15×0.2 + 0.05×0.1 + 0.15×0.1 = 0.68+0.03+0.005+0.015 = 0.73
+  ||doc_B|| ≈ 0.8367 → cos ≈ 0.73 / (0.8775×0.8367) ≈ 0.994
+
+Với doc_C: dot = 0.85×0 + 0.15×0.1 + 0.05×0.9 + 0.15×0.8 = 0+0.015+0.045+0.12 = 0.18
+  ||doc_C|| ≈ 1.2083 → cos ≈ 0.18 / (0.8775×1.2083) ≈ 0.170
+
+→ doc_A (0.995) và doc_B (0.994) đứng đầu, gần như ngang nhau; doc_C (0.170) bị loại rõ rệt
+→ Đúng trực giác: 2 câu về "chỉ số tài chính công ty" gần nhau, câu về "giá vàng" xa hẳn</code></pre>
+<p>Đây chính là phép toán mà ANN index (HNSW/IVF) phải làm nhanh hơn brute-force khi N tăng lên hàng triệu — bản chất phép tính (cosine similarity) không đổi, chỉ có <strong>cách tìm ứng viên để tính</strong> là được tối ưu.</p>
+
+<h3>Ví dụ mở rộng — tự tính "hệ số over-fetch" và đối chiếu với lợi ích ACORN tuyên bố</h3>
+<p>Tiếp tục ví dụ recall sụp đổ ở mục 5, với N = 1,000,000 tài liệu, cần top-20 kết quả cuối, filter theo <code>ticker = 'VNM'</code> (giả định VNM chiếm đúng 1/86 tổng số tài liệu nếu dữ liệu rải đều theo <code>HIGHLIGHT_GROUP</code> 86 ticker — selectivity ≈ 1.16%):</p>
+<pre><code>selectivity = 1/86 ≈ 0.0116
+
+Post-filter ngây thơ (lấy top-20 KHÔNG lọc, rồi lọc theo ticker):
+  Số kết quả còn lại kỳ vọng ≈ 20 × 0.0116 ≈ 0.23 kết quả   ← gần như LUÔN rỗng
+
+Hệ số over-fetch cần thiết = 1 / selectivity = 1 / 0.0116 ≈ 86×
+  → phải lấy top-(20×86) = top-1,720 TRƯỚC khi lọc mới kỳ vọng còn lại ~20 kết quả đúng ticker
+  → ANN search phải trả về 1,720/1,000,000 ≈ 0.17% tổng dữ liệu — vẫn nhanh hơn brute-force
+    nhiều, nhưng gấp 86 lần chi phí so với không có filter
+
+ACORN (ước lượng theo tỉ lệ QPS công bố ở mục 5, high-cardinality filter tương tự trường hợp này):
+  Thay vì mở rộng K lên 86×, ACORN chỉ traverse sub-graph các node CÙNG ticker + shortcut 2-hop
+  → chi phí gần với "search trong 1/86 dữ liệu" (~11,600 tài liệu) thay vì "mở rộng K rồi lọc"
+  → đúng tinh thần "2-10× đến >30× QPS" công bố ở mục 5, vì bài toán ở đây thuộc nhóm
+    high-cardinality (filter loại bỏ tới ~98.8% dữ liệu)</code></pre>
+<p><strong>Đọc con số này thế nào</strong>: đây là lý do "thêm 1 filter WHERE ticker=X vào semantic search" không hề rẻ như thêm 1 <code>WHERE</code> clause trong SQL — nếu dự án <code>predictor</code> tương lai triển khai semantic search theo từng ticker riêng lẻ (86 ticker, dữ liệu chia khá đều), đây chính xác là kịch bản filter chọn lọc mạnh mà post-filter ngây thơ xử lý tệ, và là lý do nên ưu tiên vector DB có filtered search tối ưu (Weaviate/Qdrant) hoặc namespace/collection riêng theo ticker (mục 6) thay vì 1 bảng chung + filter hậu kỳ.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<p>Bảng dưới đây tổng hợp từ WebSearch (chủ yếu blog benchmark thứ 3, <strong>độ tin cậy trung bình</strong> — không có nguồn chính chủ pgvector/Pinecone/Qdrant/Weaviate trong kết quả tra cứu, xem <code>_research_evidence_track1.md</code>). Số liệu nên hiểu là "order of magnitude" (cỡ độ lớn), không phải căn cứ mua sắm chính xác khi chưa tự bench.</p>
+<table>
+<tr><th></th><th>pgvector</th><th>Pinecone</th><th>Qdrant</th><th>Weaviate</th></tr>
+<tr><td>Mô hình vận hành</td><td>Extension trong Postgres — không phải DB riêng</td><td>Managed, serverless, không tự host được</td><td>Self-host (Rust) hoặc managed</td><td>Self-host hoặc managed</td></tr>
+<tr><td>Hiệu năng (theo benchmark tìm được)</td><td>HNSW ~5-8ms thuần index; ~300ms tổng có embedding</td><td>Latency thấp ổn định mọi scale (auto partition+replicate)</td><td>~1840 QPS @ 1M vector (cao nhất 1 benchmark) — Rust tiết kiệm RAM</td><td>Cạnh tranh, có hybrid search (BM25+dense) tích hợp sẵn 1 dòng query</td></tr>
+<tr><td>Tune tham số index?</td><td>Có (M, efConstruction — xem R4.5)</td><td>Không (black box)</td><td>Có</td><td>Có</td></tr>
+<tr><td>Khi dùng</td><td>Đã có Postgres, &lt;10M vector, muốn vector sống CÙNG data quan hệ</td><td>Muốn zero-ops, chấp nhận trả phí quản lý</td><td>Cần self-host, ngân sách vừa/nhỏ, cần price-performance tốt</td><td>Cần hybrid search built-in, muốn ít code custom nhất</td></tr>
+<tr><td>Chi phí ở scale lớn</td><td>Chi phí instance Postgres (RAM tăng theo N)</td><td>~$5,000+/tháng ở 100M vector (1 benchmark)</td><td>Rẻ hơn managed nếu tự vận hành</td><td>Tuỳ self-host/managed</td></tr>
+<tr><td>Migration ghi nhận được</td><td>Confident AI: Pinecone → Postgres; OpenWebUI: Qdrant → pgvector</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Filtered search tối ưu kiểu ACORN? (mục 5)</td><td>Không — filter qua <code>WHERE</code> thường (chịu đúng vấn đề recall/over-fetch ở mục 5)</td><td>Metadata filter có, cơ chế nội bộ không công bố chi tiết (black box)</td><td>Có — filter chạy ngay trong lúc traverse HNSW (payload index)</td><td>Có — dùng biến thể lấy cảm hứng từ ACORN (không phải bản implement gốc 1:1)</td></tr>
+<tr><td>Multi-tenancy (mục 6)</td><td>tenant_id + row-level security (cô lập thấp)</td><td>Namespace (tới 100K/plan chuẩn, nhưng giới hạn 20 index)</td><td>Payload field index theo tenant</td><td>Index/collection RIÊNG mỗi tenant (<code>multiTenancyConfig</code>) — cô lập cao nhất</td></tr>
+</table>
+<p>2 case migration ở dòng cuối (từ WebSearch) đáng chú ý: cả 2 đều đi <strong>TỪ</strong> 1 vector DB chuyên dụng <strong>VỀ</strong> pgvector — gợi ý rằng ở quy mô vừa/nhỏ, lợi ích "tận dụng Postgres đã có" thường thắng lợi ích "hiệu năng benchmark cao hơn của DB chuyên dụng".</p>
+<p><strong>Cập nhật (verify 2026-09)</strong>: ngoài 4 cái tên trên, 2 lựa chọn khác đáng biết khi so sánh ở quy mô lớn hơn: <strong>Milvus</strong> — kiến trúc phân tán + tăng tốc GPU, mục tiêu &gt;50M vector hoặc multi-tenancy quy mô "agent scale"; <strong>pgvectorscale</strong> (extension bổ sung cho pgvector, dùng thuật toán StreamingDiskANN — xem cơ chế DiskANN gốc ở <a href="R4_5_hnsw_ivf.html">R4.5</a>) — cải thiện hiệu năng pgvector ở quy mô trung bình mà KHÔNG cần rời khỏi hệ sinh thái Postgres. Với &lt;5M vector (đúng quy mô mọi kịch bản KB tài chính hiện tại của <code>predictor</code>), pgvector thuần (không cần pgvectorscale) đã đủ theo benchmark 2026.</p>
+
+<p><strong>Chi phí thực tế ở quy mô nhỏ (verify 2026-09, nguồn tổng hợp blog thứ 3, độ tin cậy trung bình-thấp — tự re-verify trên trang giá chính chủ trước khi quyết định)</strong>: ở đúng quy mô KB hiện tại của dự án (vài nghìn chunk, còn cách rất xa ngưỡng "cần cân nhắc"), CẢ Pinecone lẫn Qdrant Cloud đều có gói miễn phí đủ dùng — Pinecone Starter: $0, tới 100K vector; Qdrant Cloud: free tier vĩnh viễn, 1 node/4GB disk/1GB RAM. Điều này KHÔNG đổi kết luận ở trên: cái giá thật không phải tiền hàng tháng ($0 ở quy mô này), mà là <strong>chi phí vận hành cận biên</strong> — thêm 1 provider mới (connection string, API key, retry/timeout logic, thêm 1 điểm lỗi khi provider đó down) — thứ mà bật 1 extension pgvector trên Postgres đã có sẵn không phát sinh thêm.</p>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div><p>Repo <code>predictor</code> <strong>hiện KHÔNG dùng pgvector hay bất kỳ vector DB nào</strong> (re-verify 2026-09) — đã grep toàn bộ <code>backend/</code> + <code>init.sql</code>, không có <code>pgvector</code>, <code>embedding</code>, <code>qdrant</code>, <code>weaviate</code>, <code>pinecone</code>, <code>chromadb</code>, không <code>CREATE EXTENSION vector</code> trong bất kỳ migration/init nào (grep nhị phân ra "faiss" trong 103 file <code>.joblib</code> — đều là trùng byte ngẫu nhiên bên trong model đã serialize, không phải import thư viện FAISS thật; verify bằng <code>grep -rlai faiss backend/</code>, không có file <code>.py</code> nào import <code>faiss</code>). Toàn bộ retrieval hiện tại là exact-match trên Markdown heading (<code>.claude/skills/daily-investor-report/kb_loader.py</code>). Cần nói thẳng: <strong>dự án chưa có nhu cầu vector DB thật</strong> ở quy mô hiện tại (7 file KB cố định, tổng dung lượng nhỏ). NẾU tương lai dự án mở rộng sang free-text search trên tin tức/BCTC lớn, <code>pgvector</code> là đề xuất hợp lý nhất — không vì nó nhanh nhất, mà vì dự án <strong>đã có Postgres chạy sẵn</strong> (<code>docker-compose.yml</code>, <code>init.sql</code>) — thêm 1 extension (<code>CREATE EXTENSION vector;</code>) rẻ hơn nhiều so với vận hành thêm 1 hệ thống riêng (container Qdrant/Weaviate mới, thêm điểm lỗi, thêm connection string phải quản lý). Điều này đúng tinh thần "không thêm hạ tầng khi chưa cần" đã áp dụng ở nơi khác trong dự án (không dùng orchestration framework khi chưa cần cho pipeline daily-investor-report).</p></div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li>Chọn vector DB theo "cái nào có benchmark QPS cao nhất trên blog" thay vì theo hạ tầng đã có + quy mô thật của use case — benchmark blog thường đo trên phần cứng/dataset không giống môi trường production của bạn.</li>
+<li>Nghĩ vector DB "thay thế" SQL database — thực tế đa số hệ thống production dùng CẢ HAI (SQL cho dữ liệu quan hệ + transaction, vector DB/extension cho similarity search), pgvector thậm chí gộp cả 2 vào 1 hệ thống.</li>
+<li>Dùng 2 embedding model khác nhau giữa ingest và query mà không re-index (xem callout ở mục 3) — bug âm thầm, không có lỗi runtime.</li>
+<li>Build vector DB "phòng khi cần" trước khi có use case thật cần semantic search — thêm 1 hệ thống mới luôn có chi phí vận hành thật (backup, monitoring, connection pooling) dù chưa dùng tới.</li>
+<li>Thêm filter vào query semantic search mà không đo lại recall — post-filter với filter chọn lọc mạnh (VD selectivity &lt;5%) có thể âm thầm trả về ít hơn hẳn K kết quả yêu cầu, không có lỗi runtime nào báo hiệu (xem mục 5).</li>
+<li>Chọn kiến trúc multi-tenancy theo "cái nào dễ code nhất" (thường là tenant_id + filter) mà không xét quy mô tenant thật — cách này degrade đúng kiểu filtered-search ở mục 5 khi số tenant tăng và phân bố dữ liệu không đều.</li>
+<li>Chọn hash-based sharding "vì đơn giản" mà không tính trước chi phí đổi số shard — với dữ liệu tăng nhanh, việc rebuild gần như toàn bộ index mỗi lần thêm shard (mục 7) có thể tốn hàng chục phút tới hàng giờ downtime/suy giảm chất lượng.</li>
+<li>Coi "có thể re-embed lại từ tài liệu gốc" là đủ cho disaster recovery — thiếu lớp snapshot + WAL (mục 8) nghĩa là RPO thực tế bằng đúng thời gian re-embed toàn bộ corpus, có thể là hàng giờ-hàng ngày ở quy mô lớn, không phải vài phút như kỳ vọng.</li>
+</ul>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3><ul>
+<li>Giải thích được vì sao B-Tree index của SQL không giúp được cho bài toán similarity search trên embedding.</li>
+<li>Kể đúng 3 việc mọi vector DB phải làm, và giải thích được điểm khác biệt sản phẩm thường nằm ở việc filter phối hợp ANN index như thế nào.</li>
+<li>Tính tay được cosine similarity giữa 1 query vector và 2-3 document vector 4 chiều, xếp hạng đúng.</li>
+<li>Chọn đúng vector DB cho 1 tình huống cho trước (VD "đã có Postgres, 2M vector, ngân sách hạn chế" → pgvector) và giải thích lý do bằng đúng trục quyết định (không phải "vì nó nhanh nhất").</li>
+<li>Giải thích được vì sao dự án <code>predictor</code> hiện tại CHƯA cần vector DB, và nếu cần trong tương lai thì pgvector là đề xuất đầu tiên vì sao.</li>
+<li>Tính tay được số kết quả kỳ vọng còn lại sau post-filter cho 1 cặp (K, selectivity) cho trước, và suy ra hệ số "over-fetch" (1/selectivity) cần thiết.</li>
+<li>Giải thích đúng cơ chế 2-hop expansion của ACORN — vì sao nó giữ graph liền mạch mà không cần build lại index riêng cho từng filter.</li>
+<li>Chọn đúng kiến trúc multi-tenancy (tenant_id+filter / namespace / index riêng) cho 1 tình huống số tenant + độ đồng đều dữ liệu cho trước.</li>
+<li>Giải thích được vì sao vector search BẮT BUỘC fan-out tới mọi shard (không route được như SQL theo khoá chính), và tính tay được thời gian rebuild ước lượng khi đổi số shard hash-based.</li>
+<li>Kể đúng 3 lớp backup/DR (tài liệu gốc, snapshot index, WAL/change-log) và giải thích vì sao thiếu bất kỳ lớp nào cũng để lại 1 lỗ hổng cụ thể (mất vĩnh viễn / restore chậm / mất dữ liệu giữa 2 lần snapshot).</li>
+</ul></div>
+
+<div class="nav-bottom">
+  <a href="R3_6_orchestration_frameworks.html">← R3.6 · Orchestration Frameworks</a>
+  <a href="R4_2_graph_databases.html">R4.2 · Graph Databases →</a>
+</div>
+
+</div>
+</body>
+</html>

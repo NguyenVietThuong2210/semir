@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L8.3 — MCP Deep-Dive</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 8 · Module 3</div>
+  <h1>8.3 · MCP (Model Context Protocol) Deep-Dive</h1>
+  <p class="subtitle">Chuẩn open giúp LLM connect tools/data. Server-client protocol, tools + resources + prompts + sampling. Build MCP server bằng Python 30 phút.</p>
+  <div class="level">Level 8 · AI Artifacts · ~40 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Explain MCP relative to function calling</li>
+  <li>4 MCP primitives: Tools, Resources, Prompts, Sampling</li>
+  <li>Build MCP server bằng Python SDK</li>
+  <li>Understand transport: stdio vs HTTP + SSE</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 MCP bằng ngôn ngữ đời thường</div>
+<p><strong>Trước chuẩn USB</strong>: Mỗi hãng máy tính có cổng riêng. Mua chuột Logitech chỉ cắm được Dell; mua ổ cứng Sony chỉ dùng máy Sony. Ai muốn dùng thiết bị cross-vendor phải mua adapter đủ loại → hell.</p>
+<p><strong>USB ra đời</strong>: 1 chuẩn duy nhất. Chuột hãng nào cắm máy hãng nào cũng chạy. Ecosystem bùng nổ.</p>
+<p><strong>Trước MCP</strong>: Mỗi LLM (OpenAI/Claude/Gemini) có API tool khác. Muốn integrate Slack tool cho 3 LLM = viết 3 adapter riêng.</p>
+<p><strong>MCP</strong> = "USB cho LLM". 1 chuẩn JSON-RPC — server tool viết 1 lần, mọi LLM support MCP đều dùng được. 4 primitives (Tools/Resources/Prompts/Sampling) cover 90% use case.</p>
+</div>
+
+<h2>1. Vấn đề MCP giải quyết</h2>
+
+<div class="callout">
+<div class="label">Fragmentation trước MCP</div>
+<p>2023: OpenAI function calling, Anthropic tools, Google function calling, Cohere tools — mỗi provider format khác. Bạn build 1 tool cho Claude → không dùng được ChatGPT/Gemini. Duplicate integration hell.</p>
+</div>
+
+<p><strong>MCP (2024, Anthropic + open community)</strong>: standard protocol. Build 1 MCP server → work với Claude Desktop, Cursor, VSCode Claude, và bất kỳ MCP-compatible client.</p>
+
+<h2>2. Architecture</h2>
+
+<pre><code>┌── MCP Client (host app) ──────────────┐
+│  Claude Desktop, Cursor, VSCode Claude│
+│  Codex, ChatGPT (future)               │
+│                                         │
+│  ┌── LLM (Claude/GPT/Llama) ──────┐    │
+│  │  Reasoning + tool decisions     │    │
+│  └────────────────────────────────┘    │
+│  ┌── MCP Client Library ──────────┐    │
+│  │  Manage connections, format calls│  │
+│  └────────────────────────────────┘    │
+└───────────────┬───────────────────────┘
+                │  JSON-RPC 2.0
+                │  stdio / HTTP+SSE
+                ▼
+┌── MCP Server ────────────────────────┐
+│  Your custom integration              │
+│                                       │
+│  ┌── Tools ────┐  ┌── Resources ──┐  │
+│  │  Callables  │  │  Data sources │  │
+│  └─────────────┘  └───────────────┘  │
+│                                       │
+│  ┌── Prompts ──┐  ┌── Sampling ───┐  │
+│  │  Templates  │  │  LLM callbacks│  │
+│  └─────────────┘  └───────────────┘  │
+└──────────────────────────────────────┘
+                │
+                ▼
+      External systems
+      (Postgres, GitHub, Slack, Filesystem, ...)
+</code></pre>
+
+<h2>2.5 · Transport layer + wire protocol deep-dive</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔌 Deep-dive — JSON-RPC 2.0, stdio vs HTTP+SSE, authorization</div>
+
+<h4>Wire format — JSON-RPC 2.0</h4>
+<p>MCP dùng <strong>JSON-RPC 2.0</strong> (RFC), không phải REST. Mọi message có 3 field cốt lõi: <code>jsonrpc</code>, <code>id</code>, <code>method</code>/<code>result</code>/<code>error</code>.</p>
+
+<pre><code>// Request (client → server)
+{
+  "jsonrpc": "2.0",
+  "id": 42,
+  "method": "tools/call",
+  "params": {
+    "name": "get_stock_price",
+    "arguments": {"ticker": "VNM"}
+  }
+}
+
+// Response (server → client)
+{
+  "jsonrpc": "2.0",
+  "id": 42,
+  "result": {
+    "content": [{"type": "text", "text": "VNM: 68,500 VND"}]
+  }
+}
+
+// Error
+{
+  "jsonrpc": "2.0",
+  "id": 42,
+  "error": {"code": -32602, "message": "Invalid params: ticker required"}
+}
+
+// Notification (không có id, không expect response)
+{"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}
+</code></pre>
+
+<h4>2 transport modes</h4>
+<table>
+<tr><th></th><th>stdio</th><th>HTTP + SSE</th></tr>
+<tr><td><strong>Cách</strong></td><td>Server = child process, giao tiếp qua stdin/stdout</td><td>HTTP POST client→server, SSE stream server→client</td></tr>
+<tr><td><strong>Latency</strong></td><td>~1ms (pipe local)</td><td>~10-100ms (network)</td></tr>
+<tr><td><strong>Multi-client</strong></td><td>Không (1 process per client)</td><td>Yes (multi-tenant)</td></tr>
+<tr><td><strong>Auth</strong></td><td>Trust parent process (OS user)</td><td>OAuth 2.1, bearer token</td></tr>
+<tr><td><strong>Deployment</strong></td><td>Local dev, Claude Desktop</td><td>Remote SaaS, team-shared</td></tr>
+<tr><td><strong>Ví dụ</strong></td><td>filesystem, git MCP servers</td><td>Slack, Linear, GitHub cloud MCP</td></tr>
+</table>
+
+<h4>Authorization flow (HTTP transport, 2025 spec)</h4>
+<pre><code>1. Client gọi POST /mcp → server trả 401 với WWW-Authenticate header
+2. Client redirect user tới OAuth authorize URL
+3. User consent → callback với authorization code
+4. Client exchange code → access_token (short-lived) + refresh_token
+5. Client attach `Authorization: Bearer &lt;token&gt;` mọi request
+6. Server verify token (JWT hoặc introspection endpoint)
+7. Scoped permissions: token có scope "tools:read" không được call "tools:write"
+</code></pre>
+
+<h4>Transport security concerns</h4>
+<ul>
+  <li><strong>stdio</strong>: prompt injection từ tool response có thể poison LLM context. Fix: sanitize tool output, không trust markdown/HTML từ server.</li>
+  <li><strong>HTTP+SSE</strong>: token leak qua log, MITM. Fix: TLS mandatory, short token TTL (15 min), refresh rotation.</li>
+  <li><strong>Confused deputy</strong>: server A gọi server B thay user → escalation. Fix: token binding, per-tool audit log.</li>
+</ul>
+
+<h4>VN scenario — MCP server cho HOSE data</h4>
+<pre><code># stdio server local cho developer test:
+# .mcp/hose-server.py chạy qua stdin/stdout khi Claude Code invoke
+
+# HTTP server production cho team:
+# https://mcp.predictstock.vn với OAuth 2.1
+# Scopes: "quotes:read", "orders:write" (only for prod trader role)
+# Rate limit: 100 calls/min/user, JWT tenant claim = user_id
+</code></pre>
+
+<h4>Interview Q&A</h4>
+<ol>
+  <li><strong>Q: MCP vs OpenAI function calling?</strong> A: Function calling = per-provider API. MCP = cross-vendor protocol. MCP server viết 1 lần chạy được Claude/GPT/Gemini (khi provider support MCP client). MCP còn có Resources + Prompts + Sampling, function calling chỉ có Tools.</li>
+  <li><strong>Q: Vì sao JSON-RPC không REST?</strong> A: RPC bidirectional (server có thể notify client — VD "tools/list_changed"), REST unidirectional. RPC batch multiple calls trong 1 message. Overhead thấp hơn RESTful design.</li>
+  <li><strong>Q: stdio server multi-user được không?</strong> A: Không native — mỗi user cần process riêng (OS-level isolation). Muốn multi-tenant phải dùng HTTP+SSE với auth.</li>
+  <li><strong>Q: Prompt primitive để làm gì?</strong> A: Server publish reusable prompt template (VD "summarize_10k"). Client (LLM) fetch → fill args → gửi tới model. Đây là way share prompt discipline mà không đưa raw string vào code client.</li>
+</ol>
+</div>
+
+<h2>3. Bốn primitives</h2>
+
+<h3>3.1 Tools</h3>
+<p>Callable functions LLM có thể invoke. Giống function calling nhưng standardized.</p>
+
+<pre><code>@server.tool()
+async def get_stock_price(ticker: str) -> dict:
+    """Get current price of Vietnamese stock ticker.
+
+    Args:
+        ticker: Stock symbol (e.g., FPT, VNM)
+    """
+    return {"ticker": ticker, "price": 72.5, "change_pct": 1.2}
+
+# LLM sees tool, decides when to call, args extracted from user query.
+</code></pre>
+
+<h3>3.2 Resources</h3>
+<p>Read-only data sources LLM có thể browse/read. Files, DB rows, API endpoints.</p>
+
+<pre><code>@server.resource("stocks://prices/{ticker}")
+async def get_ticker_data(ticker: str) -> str:
+    """Return latest OHLCV data for ticker."""
+    df = query_db(f"SELECT * FROM ohlcv WHERE ticker = '{ticker}' LIMIT 30")
+    return df.to_csv()
+
+# LLM can browse: list resources → decide which to read → get content.
+# Different from tools: read-only, browsable, URI-addressable.
+</code></pre>
+
+<h3>3.3 Prompts</h3>
+<p>Predefined prompt templates user + LLM can select.</p>
+
+<pre><code>@server.prompt()
+async def analyze_stock(ticker: str, timeframe: str = "1M") -> list[Message]:
+    """Guided prompt for stock analysis."""
+    return [
+        Message(role="user",
+                content=f"Analyze {ticker} over {timeframe}. Focus on trend + volume."),
+        Message(role="assistant",
+                content="I'll analyze [ticker] in 3 sections: 1) Price action, 2) Volume, 3) Verdict."),
+    ]
+
+# User sees prompt in menu, click → prompt injected.
+# Great cho templated workflows.
+</code></pre>
+
+<h3>3.4 Sampling</h3>
+<p>Server request LLM completion. Reverse — server calls LLM (for agentic workflow inside server).</p>
+
+<pre><code>@server.tool()
+async def summarize_ticker(ticker: str, ctx: Context) -> str:
+    data = fetch_ticker_data(ticker)
+    # Server ask host's LLM to summarize:
+    result = await ctx.session.create_message(
+        messages=[{"role": "user", "content": f"Summarize: {data}"}],
+        max_tokens=500,
+    )
+    return result.content
+</code></pre>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 4 MCP primitives head-to-head (đọc SAU section 3)</div>
+
+<table>
+<tr><th></th><th>Tools</th><th>Resources</th><th>Prompts</th><th>Sampling</th></tr>
+<tr><td><strong>Direction</strong></td><td>Client → Server</td><td>Client → Server (read)</td><td>Client → Server (fetch)</td><td>Server → Client (reverse!)</td></tr>
+<tr><td><strong>Analogy</strong></td><td>Gọi function</td><td>Đọc file/DB</td><td>Load template prompt</td><td>Server nhờ client LLM</td></tr>
+<tr><td><strong>Ví dụ</strong></td><td>get_stock_price("VNM")</td><td>file:///docs/api.md</td><td>"summarize_bug_report" template</td><td>Server analyze image → cần LLM vision</td></tr>
+<tr><td><strong>Side effects</strong></td><td>✅ Có (write DB, send email)</td><td>❌ Không (chỉ read)</td><td>❌ Không</td><td>✅ Có (LLM tokens cost)</td></tr>
+<tr><td><strong>Caching OK?</strong></td><td>Không (state changes)</td><td>✅ Có (immutable snapshot)</td><td>✅ Có</td><td>Không</td></tr>
+<tr><td><strong>Auth cần</strong></td><td>Cao (write ops)</td><td>Trung bình (read sensitive)</td><td>Thấp</td><td>Cao (LLM cost)</td></tr>
+<tr><td><strong>Sync/async</strong></td><td>Cả 2</td><td>Sync thường</td><td>Sync</td><td>Async (LLM chậm)</td></tr>
+</table>
+
+<h4>Analogy đời thực — restaurant với 4 loại tương tác</h4>
+<pre><code>Khách hàng = LLM client
+Nhà hàng = MCP server
+
+Tools = "Cho tôi 1 phở bò" (khách yêu cầu server làm gì đó)
+Resources = "Xem menu" (khách đọc, không đổi state nhà hàng)
+Prompts = "Combo template cho gia đình 4 người" (nhà hàng đề xuất script)
+Sampling = "Chef muốn hỏi khách nên nêm thêm gia vị không" (nhà hàng nhờ khách quyết)
+</code></pre>
+
+<h4>Khi nào dùng primitive nào?</h4>
+<table>
+<tr><th>Use case</th><th>Chọn</th></tr>
+<tr><td>Query database</td><td>Tools (có side effect nếu update)</td></tr>
+<tr><td>List available files/docs</td><td>Resources</td></tr>
+<tr><td>Pre-defined prompt template (bug report, code review)</td><td>Prompts</td></tr>
+<tr><td>Server cần LLM để process image/audio</td><td>Sampling</td></tr>
+<tr><td>Give access to user's local files</td><td>Resources</td></tr>
+<tr><td>Execute code / write files</td><td>Tools</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: Sampling là primitive độc đáo — server "delegate" LLM call cho client. Vì sao? (1) Client control cost, (2) Client có LLM key, (3) User privacy — server không thấy raw prompts. Đây là why MCP khác Function Calling truyền thống.</p>
+</div>
+
+<h2>4. Build MCP server — 30 min tutorial</h2>
+
+<pre><code># pip install mcp
+
+from mcp.server import Server, NotificationOptions
+from mcp.types import Tool, TextContent
+import mcp.server.stdio
+
+server = Server("stock-tools")
+
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    return [
+        Tool(
+            name="get_price",
+            description="Get current price of VN stock",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string", "pattern": "^[A-Z0-9]{2,10}$"}
+                },
+                "required": ["ticker"]
+            }
+        )
+    ]
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    if name == "get_price":
+        ticker = arguments["ticker"]
+        # Fetch price...
+        price = 72.5
+        return [TextContent(type="text", text=f"{ticker}: {price}")]
+
+async def main():
+    async with mcp.server.stdio.stdio_server() as (read, write):
+        await server.run(read, write, ...)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+</code></pre>
+
+<h3>Register với Claude Desktop</h3>
+
+<pre><code># File (Windows): %APPDATA%\Claude\claude_desktop_config.json
+# File (macOS):   ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "stock-tools": {
+      "command": "python",
+      "args": ["/path/to/stock_mcp_server.py"]
+    }
+  }
+}
+
+# Restart Claude Desktop
+# Server auto-discovered, tools appear in Claude
+</code></pre>
+
+<h2>5. Transport modes</h2>
+
+<table>
+<tr><th></th><th>stdio</th><th>HTTP + SSE</th></tr>
+<tr><td>How</td><td>Subprocess pipe stdin/stdout</td><td>Long-lived HTTP + Server-Sent Events</td></tr>
+<tr><td>Best cho</td><td>Local server co-located với client</td><td>Remote server, hosted</td></tr>
+<tr><td>Latency</td><td>Very low</td><td>Network dependent</td></tr>
+<tr><td>Security</td><td>Process isolation</td><td>Cần TLS, auth</td></tr>
+</table>
+
+<h2>6. Auth patterns</h2>
+
+<div class="callout warn">
+<div class="label">Security matters</div>
+<p>MCP server có thể expose DB, file system, secrets. Bad auth = catastrophic breach.</p>
+</div>
+
+<ul>
+  <li><strong>Local stdio</strong>: process-level trust (client runs server)</li>
+  <li><strong>OAuth 2.1</strong>: standard for remote servers (MCP spec 2025)</li>
+  <li><strong>API key</strong>: simple, storage-based (env var, secure vault)</li>
+  <li><strong>Signed requests</strong>: HMAC verify</li>
+</ul>
+
+<h2>7. Discovery + capability negotiation</h2>
+
+<pre><code>Client connect:
+1. Handshake: exchange protocol version
+2. Client request capabilities: what tools/resources/prompts available
+3. Server respond với schema for each
+4. Client cache, present to LLM as available tools
+
+# Client can subscribe to updates: server push new tools/resources as available
+</code></pre>
+
+<h2>8. MCP server ecosystem (2025)</h2>
+
+<table>
+<tr><th>Category</th><th>Servers</th></tr>
+<tr><td>Filesystem</td><td>@modelcontextprotocol/server-filesystem</td></tr>
+<tr><td>GitHub</td><td>@modelcontextprotocol/server-github</td></tr>
+<tr><td>Postgres</td><td>@modelcontextprotocol/server-postgres</td></tr>
+<tr><td>Slack</td><td>@modelcontextprotocol/server-slack</td></tr>
+<tr><td>Web search</td><td>Brave, Perplexity</td></tr>
+<tr><td>Memory</td><td>Persistent memory across sessions</td></tr>
+<tr><td>Docker</td><td>Container management</td></tr>
+<tr><td>Cloudflare</td><td>Workers, KV, R2</td></tr>
+</table>
+
+<h2>9. Best practices</h2>
+
+<div class="callout success">
+<ol>
+  <li><strong>Explicit schema</strong>: JSON Schema strict, reject unknown fields</li>
+  <li><strong>Least privilege</strong>: read-only by default, write requires explicit approval</li>
+  <li><strong>Idempotent tools</strong>: retry-safe</li>
+  <li><strong>Error surface</strong>: return descriptive errors LLM can use to correct</li>
+  <li><strong>Logging + audit</strong>: log every tool call for debugging</li>
+  <li><strong>Rate limit</strong>: prevent LLM abuse (loop calls)</li>
+  <li><strong>Versioning</strong>: protocol + your server independent</li>
+</ol>
+</div>
+
+<h2>10. Case study — ai_orchestrator MCP</h2>
+
+<div class="example-box">
+<div class="title">ai_orchestrator MCP integration</div>
+<p>Directory: <code>d:/New-jouney/ai_orchestrator/mcp_server/</code></p>
+<p>Config: <code>.mcp.json</code> registers server. Claude Code CLI auto-discovers.</p>
+<p>Tools exposed (5 <code>@mcp.tool()</code> functions trong <code>mcp_server/server.py</code>, plus 7 <code>@mcp.resource()</code> report endpoints và 3 <code>@mcp.prompt()</code> templates):</p>
+<ul>
+  <li><code>run_pipeline</code> — start new pipeline for request</li>
+  <li><code>get_job_status</code> — kanban board + agent events</li>
+  <li><code>approve_spec</code> — HITL approval action</li>
+  <li><code>clarify_job</code> — answer clarification request</li>
+  <li><code>cancel_job</code> — cancel running job</li>
+</ul>
+<p>Result: user chat với Claude Code, Claude call MCP tools → interact với AI Orchestrator backend. No custom UI needed.</p>
+</div>
+
+<h2>11. Interview questions</h2>
+
+<div class="callout">
+<div class="label">Common</div>
+<ol>
+  <li>"MCP vs OpenAI function calling — 3 differences" → Standard protocol vs vendor-specific. 4 primitives (tools + resources + prompts + sampling) vs just tools. Client-server distribution vs single-app.</li>
+  <li>"When add MCP vs custom API?" → MCP: LLM integration primary usage. Custom API: broader systems integration (many clients not just LLM). Can do both — same backend, 2 exposure layers.</li>
+  <li>"Security concern MCP server exposing DB?" → SQL injection risk (LLM crafted query). Fix: use read-only DB user, parameterized queries only, explicit whitelist tables/columns.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. MCP 4 primitives — 1 câu mỗi cái.</p>
+<p class="a">Tools: LLM invokable functions with side effects. Resources: read-only data browsable by URI. Prompts: templated workflows selectable. Sampling: server request LLM completion (reverse direction).</p>
+
+<p class="q">2. stdio vs HTTP+SSE transport — khi nào chọn?</p>
+<p class="a">stdio: local server co-located với client (Claude Desktop launch server subprocess). HTTP+SSE: remote hosted server, multi-user. Latency low local vs network dependent remote.</p>
+
+<p class="q">3. Build MCP server exposing Postgres — security concerns?</p>
+<p class="a">(1) Read-only DB user. (2) Parameterized queries — LLM inputs never string-format. (3) Whitelist tables/columns. (4) Rate limit. (5) Log all queries + LLM prompt. (6) PII redact output.</p>
+
+<p class="q">4. MCP vs custom internal API — khi nào chọn nào?</p>
+<p class="a">MCP: LLM-first integration, use Claude Desktop/Cursor. Standard, no client UI code. Custom API: general purpose (mobile app, web, other services). Can have both: same backend, 2 layers.</p>
+
+<p class="q">5. Sampling primitive use case?</p>
+<p class="a">Server tool implementation cần LLM (agentic workflow inside server). E.g., summarize tool: fetch data + ask LLM to summarize → return. Server delegate reasoning to host's LLM.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>ai_orchestrator MCP: <code>d:/New-jouney/ai_orchestrator/mcp_server/</code></li>
+    <li>Config: <code>.mcp.json</code> in ai_orchestrator</li>
+    <li>Reference implementations: <a href="https://github.com/modelcontextprotocol/servers">github.com/modelcontextprotocol/servers</a></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://modelcontextprotocol.io/">MCP Official spec</a></li>
+    <li>📖 <a href="https://modelcontextprotocol.io/quickstart">MCP Quickstart tutorial</a></li>
+    <li>📖 <a href="https://github.com/modelcontextprotocol/python-sdk">Python SDK</a></li>
+    <li>📝 <a href="https://www.anthropic.com/news/model-context-protocol">Anthropic MCP announcement</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L8_2_skills.html">← L8.2</a>
+  <a href="L8_4_spec_driven.html">L8.4 · Spec-Driven Development →</a>
+</div>
+
+</div>
+</body>
+</html>

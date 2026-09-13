@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R3.4 · Multi-step Retrieval — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · RAG · Điểm 4/6</div>
+  <h1>R3.4 · Multi-step Retrieval</h1>
+  <p class="subtitle">Khi 1 lần truy vấn không đủ — tách câu hỏi phức hợp, định tuyến nguồn, và retrieval lặp lại theo những gì vừa học được.</p>
+  <div class="level">Độ khó: Khó · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Kể tên và phân biệt 7 kỹ thuật multi-step retrieval: self-query decomposition, query router, iterative retrieval (FLARE), HyDE, RAG-Fusion, GraphRAG, Self-RAG/CRAG.</li>
+<li>Giải thích 3 lý do cụ thể khiến multi-step retrieval cần tồn tại — không phải "phức tạp hơn thì tốt hơn".</li>
+<li>Phân biệt được "query router bằng if/else tĩnh" và "query router bằng LLM động" — và biết khi nào dùng cái nào.</li>
+<li>Đánh giá đúng: hệ thống KB hiện tại của dự án có multi-step retrieval hay không, dưới hình thức nào.</li>
+<li>Giải thích được vì sao GraphRAG là 1 hướng multi-hop KHÁC HẲN về bản chất (duyệt đồ thị, không phải embedding similarity), và chi phí thật của nó đã thay đổi thế nào từ 2024 đến 2026.</li>
+<li>Phân biệt được Self-RAG và CRAG — 2 kỹ thuật "tự sửa" retrieval sửa 2 vấn đề khác nhau, bổ sung chứ không cạnh tranh nhau.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>3 kỹ thuật self-query decomposition, query router, iterative retrieval/FLARE đã dạy đầy đủ ở module RAG nâng cao. Trang này bổ sung phần lý giải "vì sao cần" và case study router tĩnh thật của dự án.</p>
+<table>
+<tr><th>Module</th><th>Nội dung</th><th>Quan hệ với trang này</th></tr>
+<tr><td><code>../modules/L9_1_advanced_rag.html §6</code></td><td>Self-query decomposition, query router, FLARE iterative retrieval — cơ chế đầy đủ</td><td>Đọc TRƯỚC — nền tảng kỹ thuật</td></tr>
+</table>
+<p>Độ khó xếp <strong>Khó</strong>: đòi hỏi đã hiểu retrieval 1 bước (§R3.2, §R3.5) trước, và cần tư duy "khi nào KHÔNG nên dùng kỹ thuật phức tạp hơn" — dễ bị cám dỗ nghĩ multi-step luôn tốt hơn.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Retrieval 1 bước giống hỏi thủ thư "cho tôi sách về X" rồi nhận ngay 1 chồng sách — xong việc trong 1 lượt hỏi-đáp.</p>
+<p>Multi-step retrieval giống 1 cuộc trò chuyện với thủ thư: hỏi câu 1 → đọc lướt câu trả lời → phát hiện cần thêm thông tin B → hỏi tiếp câu 2 dựa trên những gì vừa học được từ câu 1 → lặp lại tới khi đủ thông tin trả lời. Cuộc trò chuyện tốn nhiều lượt hơn, nhưng xử lý được câu hỏi mà 1 lượt hỏi duy nhất không đủ.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Ba kỹ thuật — tóm tắt nhanh (chi tiết đầy đủ ở L9_1 §6)</h3>
+<table>
+<tr><th>Kỹ thuật</th><th>Cơ chế</th></tr>
+<tr><td>Self-query decomposition</td><td>Tách 1 câu hỏi phức hợp thành nhiều sub-query độc lập, retrieval riêng cho từng sub-query rồi gộp kết quả</td></tr>
+<tr><td>Query router</td><td>Chọn nguồn retrieval phù hợp (VD KB nào, index nào) dựa trên nội dung câu hỏi</td></tr>
+<tr><td>Iterative retrieval (FLARE)</td><td>Retrieval xen kẽ với generation — retrieve thêm khi model "không chắc" ở bước sinh tiếp theo</td></tr>
+</table>
+
+<h3>2. Ba lý do multi-step tồn tại — không phải vì "phức tạp hơn thì tốt hơn"</h3>
+<h4>2.1 Câu hỏi so sánh cần nhiều truy vấn độc lập</h4>
+<p>Ví dụ: so sánh VNM vs MSN. Retrieval 1 lần với query gộp "VNM MSN revenue growth" thường trả về tài liệu lẫn lộn cả 2 công ty, kém chính xác hơn 2 truy vấn tách biệt ("VNM revenue growth", "MSN revenue growth") rồi gộp kết quả sau.</p>
+<h4>2.2 Câu hỏi cần thông tin chưa biết trước sẽ cần</h4>
+<p>Model chỉ biết cần thêm dữ liệu gì SAU KHI đã đọc 1 phần kết quả đầu (đây là cơ chế FLARE) — không thể lên kế hoạch retrieval đầy đủ ngay từ query gốc vì thông tin cần thiết phụ thuộc vào những gì tìm thấy ở bước trước.</p>
+<h4>2.3 Câu hỏi cần định tuyến nguồn khác nhau</h4>
+<p>"Tin tức hôm nay về FPT" nên route sang KB tin tức (<code>news_event_playbook.md</code>). "MACD là gì" nên route sang KB chỉ báo kỹ thuật (<code>technical_indicators.md</code>). Dùng 1 index chung cho cả 2 loại câu hỏi làm loãng chất lượng retrieval của cả 2, vì mỗi nguồn có đặc thù ngôn ngữ/cấu trúc riêng.</p>
+
+<h3>2.4 FLARE — ví dụ khi model "phát hiện thiếu" giữa chừng</h3>
+<p>FLARE (Forward-Looking Active Retrieval) không quyết định hết nhu cầu retrieval ngay từ đầu — nó sinh câu trả lời từng phần, và mỗi khi model "không chắc" (confidence thấp) ở câu tiếp theo, nó dừng lại retrieve thêm rồi mới tiếp tục sinh.</p>
+<pre><code>Câu hỏi: "Vì sao giá VNM giảm mạnh tuần này?"
+
+Sinh câu 1: "Giá VNM giảm 5% tuần này chủ yếu do..." ← model không chắc lý do cụ thể
+  → Trigger retrieval bổ sung: query = "tin tức VNM tuần này"
+  → Tìm thấy: "VNM công bố lợi nhuận Q3 thấp hơn kỳ vọng 8%"
+
+Sinh tiếp (đã có thêm context): "...VNM công bố lợi nhuận Q3 thấp hơn
+  kỳ vọng thị trường 8%, kích hoạt làn sóng bán ra."</code></pre>
+<p>Khác biệt cốt lõi so với decomposition: FLARE không biết trước cần tìm "tin tức VNM tuần này" — nó chỉ nhận ra điều đó SAU KHI đã bắt đầu sinh câu trả lời và cảm thấy thiếu dữ kiện.</p>
+
+<h3>2.5 Hai kỹ thuật thường bị bỏ sót — HyDE và RAG-Fusion</h3>
+<p>Ngoài 3 kỹ thuật đã nêu ở mục 1, có 2 kỹ thuật "mở rộng truy vấn" (query expansion) khác cũng thuộc họ multi-step retrieval, hay bị nhắc tới cùng nhau vì cùng giải quyết vấn đề "1 cách diễn đạt query không đủ":</p>
+<table>
+<tr><th>Kỹ thuật</th><th>Cơ chế</th><th>Vấn đề nó giải quyết</th></tr>
+<tr><td>HyDE (Hypothetical Document Embeddings)</td><td>Yêu cầu LLM sinh 1 "tài liệu giả định" trả lời câu hỏi (KHÔNG cần đúng sự thật) rồi embed CHÍNH tài liệu giả định đó để tìm kiếm — thay vì embed trực tiếp câu hỏi gốc</td><td>Câu hỏi ngắn/mơ hồ thường có embedding khác xa embedding của 1 đoạn văn trả lời đầy đủ — dùng 1 "câu trả lời giả" làm cầu nối ngữ nghĩa giúp tìm đúng document thật hơn</td></tr>
+<tr><td>RAG-Fusion</td><td>Sinh NHIỀU biến thể của câu hỏi gốc bằng LLM → retrieval song song cho từng biến thể → gộp kết quả bằng Reciprocal Rank Fusion (RRF): mỗi document được cộng điểm <code>1/(k + rank)</code> theo thứ hạng nó xuất hiện ở MỖI danh sách kết quả, k là hằng số làm mượt</td><td>1 cách diễn đạt câu hỏi có thể bỏ lỡ tài liệu dùng từ vựng khác — nhiều biến thể + hợp nhất theo "đồng thuận" giúp giảm rủi ro bỏ sót do chỉ 1 cách hỏi</td></tr>
+</table>
+<p>Cả 2 đều là multi-step (cần ≥2 lượt retrieval hoặc ≥1 lượt LLM sinh thêm trước khi retrieval), nên cùng chịu chi phí latency/token bổ sung như mọi kỹ thuật multi-step khác — HyDE trên LLM nhỏ có báo cáo tăng 25-60% latency so với RAG 1 bước thường, dù chất lượng retrieval thường thắng rõ so với embed trực tiếp câu hỏi gốc.</p>
+
+<h3>2.6 GraphRAG — multi-hop bằng cách ĐI THEO CẠNH ĐỒ THỊ, không phải bằng embedding similarity</h3>
+<p>Tất cả kỹ thuật đã nêu (decomposition, HyDE, RAG-Fusion, FLARE) đều VẪN dựa trên tìm kiếm bằng độ tương đồng vector. GraphRAG là 1 họ kỹ thuật multi-hop khác hẳn về BẢN CHẤT: trước tiên trích xuất entity (VD ticker, sector, người, sự kiện) và quan hệ giữa chúng thành 1 đồ thị tri thức (knowledge graph), rồi trả lời câu hỏi multi-hop bằng cách ĐI THEO CẠNH đồ thị thay vì so embedding.</p>
+<table>
+<tr><th>Bước</th><th>Việc làm</th></tr>
+<tr><td>1. Trích xuất entity + quan hệ</td><td>Dùng LLM đọc corpus, rút ra các cặp (entity, quan hệ, entity) — VD (VNM, "thuộc ngành", Tiêu dùng)</td></tr>
+<tr><td>2. Xây đồ thị</td><td>Gộp toàn bộ entity/quan hệ thành 1 đồ thị lớn</td></tr>
+<tr><td>3. Community detection (thuật toán Leiden)</td><td>Gom cụm các entity liên quan chặt với nhau thành từng "cộng đồng" (community)</td></tr>
+<tr><td>4. Tóm tắt từng cộng đồng ở nhiều độ phân giải</td><td>Sinh sẵn (offline) 1 bản tóm tắt cho mỗi cộng đồng — dùng để trả lời câu hỏi "toàn cục" (global query) mà không cần đọc lại toàn bộ đồ thị mỗi lần</td></tr>
+</table>
+<p>Vì sao đi theo cạnh đồ thị mạnh hơn embedding similarity cho câu hỏi multi-hop: câu hỏi "công ty A liên quan gì tới sự kiện C, qua trung gian tổ chức B" đi theo đúng 3 cạnh đồ thị A→B→C — trong khi embedding similarity phải "may mắn" tìm được 1 chunk nào đó nhắc đủ cả 3 thực thể cùng lúc, điều không phải lúc nào cũng tồn tại trong corpus dưới dạng 1 đoạn văn liền mạch.</p>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân</div><p>GraphRAG KHÔNG phải "luôn tốt hơn RAG vector thường vì nó có đồ thị". Chi phí ban đầu (indexing) của GraphRAG gốc (Microsoft, 2024) cao tới mức ấn tượng — khoảng $33,000 để index 1 tập dữ liệu lớn — khiến nó bất khả thi với đa số team. Biến thể mới hơn (LazyGraphRAG, LightRAG, Fast GraphRAG, 2026) cắt giảm chi phí index 50-6,000 lần trong khi giữ hoặc cải thiện độ chính xác cho câu hỏi phạm vi toàn cục — nhưng đây vẫn là 1 kiến trúc NẶNG HƠN nhiều so với router tĩnh hay decomposition đơn giản, chỉ đáng đầu tư khi câu hỏi thật sự cần multi-hop qua nhiều quan hệ thực thể.</p></div>
+<table>
+<tr><th>Chỉ số</th><th>Số liệu</th></tr>
+<tr><td>Chi phí indexing GraphRAG gốc (Microsoft 2024, tập dữ liệu lớn)</td><td>~$33,000 — thực tế bất khả thi với đa số dự án vừa/nhỏ</td></tr>
+<tr><td>Chi phí biến thể tối ưu 2026 (LazyGraphRAG/LightRAG/Fast GraphRAG)</td><td>Giảm 50-6,000× so với gốc; ví dụ cụ thể: ~$5-6 để ingest 1,000 document bằng GPT-4o-mini, mỗi query retrieval thêm ~$0.001</td></tr>
+<tr><td>Độ chính xác multi-hop QA (Exact Match, khảo sát benchmark)</td><td>Cải thiện trung bình từ 0.392 lên 0.474 so với baseline KG-RAG được chọn làm mốc so sánh</td></tr>
+</table>
+<p>Liên hệ dự án: GraphRAG là ứng viên hợp lý CHỈ NẾU dự án cần trả lời câu hỏi kiểu "X liên quan gì tới Y qua trung gian Z" trên 1 mạng lưới quan hệ lớn (VD quan hệ sở hữu chéo giữa các doanh nghiệp, chuỗi tác động vĩ mô nhiều tầng) — 7 KB hiện tại của <code>kb_loader.py</code> là tra cứu theo tên (lookup), không phải bài toán duyệt đồ thị quan hệ, nên KHÔNG phải use case của GraphRAG ở quy mô hiện tại.</p>
+<table>
+<tr><th>Biến thể GraphRAG</th><th>Đặc điểm</th></tr>
+<tr><td>Microsoft GraphRAG (gốc, 2024)</td><td>Đầy đủ pipeline entity/relationship + community detection + tóm tắt nhiều độ phân giải — chi phí indexing cao nhất, ~$33K cho tập dữ liệu lớn</td></tr>
+<tr><td>LazyGraphRAG</td><td>Trì hoãn (lazy) phần tóm tắt tốn kém, chỉ tính khi thật sự cần cho 1 truy vấn cụ thể — giảm mạnh chi phí indexing trả trước</td></tr>
+<tr><td>LightRAG</td><td>Đơn giản hoá cấu trúc đồ thị, tối ưu cho tốc độ index + query thấp hơn nhiều so với bản gốc</td></tr>
+<tr><td>Fast GraphRAG</td><td>Tối ưu tốc độ xử lý, hướng tới triển khai gần thời gian thực hơn</td></tr>
+</table>
+<p>Điểm chung của cả 3 biến thể 2026: đều giữ hoặc cải thiện độ chính xác cho câu hỏi phạm vi toàn cục so với bản gốc, trong khi cắt chi phí 50-6,000× — nghĩa là "quá đắt để dùng" không còn là lý do loại bỏ GraphRAG mặc định như năm 2024, nhưng câu hỏi quyết định vẫn là "bài toán có thật sự cần duyệt đồ thị quan hệ không", không phải "có đủ tiền để index không".</p>
+
+<h3>2.7 Self-RAG vs CRAG — 2 cách khác nhau để hệ thống "tự sửa" khi retrieval kém, KHÔNG phải 2 lựa chọn loại trừ nhau</h3>
+<p>2 kỹ thuật này thường bị nhắc chung vì cùng thuộc nhóm "reflective/corrective RAG", nhưng sửa 2 vấn đề khác nhau:</p>
+<table>
+<tr><th>Tiêu chí</th><th>Self-RAG</th><th>Corrective RAG (CRAG)</th></tr>
+<tr><td>Vấn đề nó sửa</td><td>Cách MODEL suy luận trên bằng chứng đã có</td><td>Chất lượng/độ tin cậy của CHÍNH bằng chứng trước khi đưa vào model</td></tr>
+<tr><td>Cơ chế</td><td>Fine-tune 1 LLM để tự sinh "reflection token" quyết định: có cần retrieval không? đoạn tìm được có liên quan không (IsREL)? câu trả lời có được bằng chứng hỗ trợ không (IsSUP)?</td><td>Dùng 1 model đánh giá RIÊNG (retrieval evaluator) chấm điểm từng đoạn tìm được — phân thành 3 nhóm: Correct / Ambiguous (bổ sung tìm kiếm web) / Incorrect (loại bỏ)</td></tr>
+<tr><td>Độ phức tạp triển khai</td><td>Cao — cần fine-tune riêng 1 LLM với reflection token, không dùng được LLM "đóng băng" có sẵn</td><td>Thấp hơn — chỉ cần thêm 1 model đánh giá nhẹ, hoạt động được với BẤT KỲ LLM đóng băng nào</td></tr>
+<tr><td>Số liệu ghi nhận</td><td>Self-RAG 7B/13B vượt rõ Llama2 + RAG chuẩn trên QA mở/suy luận/fact-checking; chỉ ~2% câu trả lời đúng đến từ ngoài bằng chứng đã retrieve (so với 15-20% ở baseline — nghĩa là model "bịa" ít hơn hẳn)</td><td>Thêm latency vì phải chạy model đánh giá trước; đổi lại không cần fine-tune LLM chính</td></tr>
+</table>
+<p>Quan hệ 2 kỹ thuật: BỔ SUNG nhau, không cạnh tranh — CRAG làm sạch/sửa ĐẦU VÀO (bằng chứng) trước, Self-RAG giúp model PHẢN TƯ trên đầu ra sau; hệ thống production nghiêm túc có thể dùng cả 2 tầng nối tiếp nhau để đạt độ tin cậy cao hơn từng kỹ thuật riêng lẻ.</p>
+
+<h3>2.8 Ví dụ minh hoạ CRAG — chấm điểm 3 nhóm Correct/Ambiguous/Incorrect trên kết quả tìm được</h3>
+<p>Minh hoạ cơ chế "retrieval evaluator" của CRAG áp giả định vào 1 câu hỏi tra cứu KB (KHÔNG phải cơ chế có thật trong <code>kb_loader.py</code> — hiện tại KHÔNG có model đánh giá riêng nào chạy sau exact-match):</p>
+<pre><code>Câu hỏi: "Chỉ báo nào cho biết cổ phiếu đang quá mua?"
+Retrieval trả về 3 candidate (giả định đã qua 1 bước tìm kiếm semantic):
+
+Candidate 1: Section "RSI" — nói rõ "RSI &gt; 70 là vùng quá mua"
+  → Retrieval evaluator chấm: CORRECT (liên quan trực tiếp, rõ ràng)
+  → Hành động: đưa thẳng vào context cho generation
+
+Candidate 2: Section "Bollinger Bands" — nói về biên độ dao động giá,
+  có nhắc "quá mua" nhưng không phải trọng tâm chính của section
+  → Retrieval evaluator chấm: AMBIGUOUS (liên quan 1 phần, không chắc đủ)
+  → Hành động: bổ sung tìm kiếm thêm (CRAG gốc dùng web search;
+    trong bối cảnh nội bộ có thể là tìm thêm 1 KB khác)
+
+Candidate 3: Section "Cổ tức" — hoàn toàn không liên quan tới "quá mua"
+  → Retrieval evaluator chấm: INCORRECT
+  → Hành động: loại bỏ, không đưa vào context</code></pre>
+<p>Điểm khác biệt cốt lõi so với reranking đơn thuần (đã học ở <code>R3_2_reranking.html</code>): reranker chỉ XẾP HẠNG lại thứ tự, còn CRAG evaluator đưa ra HÀNH ĐỘNG khác nhau tuỳ nhóm (giữ nguyên / tìm thêm / loại bỏ hẳn) — đây là lý do CRAG được xếp vào nhóm kỹ thuật multi-step (có thể kích hoạt thêm 1 vòng tìm kiếm mới), không chỉ là 1 bước lọc tĩnh.</p>
+
+<h3>2.9 Chi phí THẬT của agentic/iterative multi-hop — số liệu để cân đong đo đếm, không đoán mò</h3>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân</div><p>"Agentic RAG (lặp nhiều vòng retrieve → suy luận → retrieve tiếp) luôn cho câu trả lời tốt hơn nên cứ lặp nhiều nhất có thể" là kết luận sai theo dữ liệu thật — chi phí tăng gần như tuyến tính/luỹ thừa trong khi lợi ích lại bão hoà rất nhanh.</p></div>
+<table>
+<tr><th>Chỉ số</th><th>Số liệu (khảo sát 2026)</th></tr>
+<tr><td>Token tiêu thụ (agentic RAG vs single-step RAG)</td><td>~3-10 lần nhiều hơn — vì mỗi vòng lặp cần thêm 1 lượt suy luận + 1 lượt retrieval</td></tr>
+<tr><td>Latency (Search-R1, đại diện agentic multi-hop, trên bộ multi-hop QA)</td><td>16-22 lần thời gian suy luận so với RAG 1 bước (naive RAG)</td></tr>
+<tr><td>Lợi ích biên theo số vòng lặp</td><td>2 vòng lặp đã thu được ~95% lợi ích so với 5 vòng — lặp sâu hơn gần như không cải thiện thêm đo được</td></tr>
+<tr><td>Tỷ lệ traffic nên route sang agentic (pattern hybrid 2026)</td><td>~70-85% câu hỏi nên đi qua RAG 1 bước (rẻ, nhanh); chỉ ~15-30% câu hỏi khó/mơ hồ/đa nguồn mới cần agentic</td></tr>
+</table>
+<p>Bài học cốt lõi: phần lớn giá trị của multi-step đến từ việc "có chạy vòng lặp hay không" (0 → 1 vòng), KHÔNG phải từ "chạy càng nhiều vòng càng tốt". Thiết kế hệ thống nên đặt giới hạn vòng lặp cứng (VD tối đa 2) thay vì để agent tự quyết định lặp bao nhiêu lần — vừa tránh chi phí runaway vừa không mất nhiều lợi ích thực tế theo số liệu trên.</p>
+
+<h3>3. Query router tĩnh (if/else) vs router động (LLM)</h3>
+<p>Router tĩnh: logic if/else Python cứng, quyết định route dựa trên input đã biết trước (VD "nếu có tên sector → gọi KB5"). Nhanh, rẻ, dễ debug — nhưng không mở rộng được khi số nguồn tăng lên không đoán trước nổi.</p>
+<p>Router động: 1 LLM call quyết định route dựa trên hiểu ngữ nghĩa câu hỏi tự do. Linh hoạt hơn nhiều, nhưng tốn thêm 1 lượt gọi LLM (latency + chi phí) cho MỖI câu hỏi, kể cả câu đơn giản.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Minh hoạ router tĩnh thật của dự án — cách <code>kb_loader.py</code> chọn nguồn KB dựa theo input đã biết trước, KHÔNG qua 1 LLM call nào:</p>
+<pre><code># .claude/skills/daily-investor-report/scripts/kb_loader.py
+
+def load_sector_playbook(self, sector: str):
+    """KB5: load sector playbook (e.g., 'Ngân hàng')."""
+    sec = self._extract_section("sector_playbooks.md", sector)   # route cố định -> KB5
+    ...
+
+def load_seasonal_for_date(self, date: datetime):
+    """KB6: load seasonal patterns matching current date."""
+    results = []
+    if date.month == 1 or (date.month == 2 and date.day &lt; 15):
+        sec = self._extract_section("behavioral_seasonal.md", "Tết Nguyên Đán")  # route theo tháng
+        ...</code></pre>
+<p>Đây là 1 dạng "query router" — nhưng quyết định route được viết CỨNG bằng Python (biết trước sector nào gọi KB nào, tháng nào kích hoạt playbook mùa vụ nào), không phải 1 LLM tự suy luận route từ câu hỏi tự do.</p>
+<p>So sánh với router động (giả định, KHÔNG phải code thật của dự án) để thấy khác biệt:</p>
+<pre><code># Router động — minh hoạ khái niệm, cần 1 LLM call TRƯỚC MỖI câu hỏi
+def route_query_llm(question: str) -&gt; str:
+    response = llm.call(f"Câu hỏi này nên route sang KB nào trong 7 KB: {question}")
+    return response.kb_id  # tốn thêm 1 round-trip LLM, latency + chi phí mỗi lần gọi</code></pre>
+
+<h3>Ví dụ self-query decomposition — số liệu cụ thể</h3>
+<p>Câu hỏi gốc: "So sánh biên lợi nhuận gộp của VNM và MSN quý gần nhất, ai cao hơn?"</p>
+<pre><code>Bước 1 — Decompose thành 2 sub-query độc lập:
+  sub_query_1 = "biên lợi nhuận gộp VNM quý gần nhất"
+  sub_query_2 = "biên lợi nhuận gộp MSN quý gần nhất"
+
+Bước 2 — Retrieval riêng cho từng sub-query:
+  sub_query_1 → tìm thấy: "VNM biên lợi nhuận gộp Q2/2026: 41.2%"
+  sub_query_2 → tìm thấy: "MSN biên lợi nhuận gộp Q2/2026: 27.8%"
+
+Bước 3 — Gộp kết quả, đưa cả 2 vào context cho generation:
+  context = [VNM: 41.2%, MSN: 27.8%]
+  → LLM generation trả lời: "VNM cao hơn (41.2% so với 27.8%)"</code></pre>
+
+<h3>Ví dụ RAG-Fusion — tính điểm RRF bằng tay để thấy rõ công thức</h3>
+<p>Câu hỏi gốc: "cổ phiếu ngân hàng nào đang quá bán". LLM sinh 3 biến thể: "ngân hàng RSI thấp", "cổ phiếu bank oversold", "ngân hàng nào đáng mua theo kỹ thuật". Retrieval song song cho 3 biến thể, sau đó hợp nhất bằng RRF với hằng số làm mượt k=60 (giá trị phổ biến trong thực nghiệm):</p>
+<pre><code>Hình dạng phép fusion (3 danh sách thứ hạng riêng biệt → 1 danh sách hợp nhất):
+
+  Biến thể 1 ─[Doc D, Doc B, Doc A]─┐
+  Biến thể 2 ─[Doc B, Doc D, Doc C]─┼─> RRF: cộng 1/(k+rank) mỗi doc
+  Biến thể 3 ─[Doc D, Doc A, Doc B]─┘   qua MỌI danh sách nó xuất hiện
+                                         │
+                                         ▼
+                              [Doc D, Doc B, Doc A, Doc C]  (thứ hạng cuối)</code></pre>
+<pre><code>Kết quả riêng từng biến thể (thứ hạng 1 = liên quan nhất):
+  Biến thể 1: [Doc D (hạng 1), Doc B (hạng 2), Doc A (hạng 3)]
+  Biến thể 2: [Doc B (hạng 1), Doc D (hạng 2), Doc C (hạng 3)]
+  Biến thể 3: [Doc D (hạng 1), Doc A (hạng 2), Doc B (hạng 3)]
+
+Điểm RRF mỗi doc = tổng 1/(k + rank) qua các danh sách nó xuất hiện:
+  Doc D: 1/(60+1) + 1/(60+2) + 1/(60+1) = 0.01639 + 0.01613 + 0.01639 = 0.0489
+  Doc B: 1/(60+2) + 1/(60+1) + 1/(60+3) = 0.01613 + 0.01639 + 0.01587 = 0.0484
+  Doc A: 1/(60+3) + 1/(60+2)            = 0.01587 + 0.01613          = 0.0320
+  Doc C: 1/(60+3)                        =                             0.01587
+
+Xếp hạng cuối theo điểm RRF: Doc D &gt; Doc B &gt; Doc A &gt; Doc C</code></pre>
+<p>Nhận xét: Doc D thắng vì nó xuất hiện Ở CẢ 3 danh sách với thứ hạng cao — đây chính là ý nghĩa "đồng thuận" của RRF: 1 document được nhiều cách diễn đạt khác nhau CÙNG công nhận là liên quan sẽ được ưu tiên hơn 1 document chỉ xuất hiện ở 1 danh sách dù xếp hạng 1 ở đó (Doc C chỉ xuất hiện 1 lần, điểm thấp nhất dù không hẳn kém liên quan).</p>
+<p>Nếu dùng retrieval 1 lần với query gộp "VNM MSN biên lợi nhuận gộp", hệ thống dễ trả về 1 document nói chung chung về ngành tiêu dùng mà không có cả 2 con số cụ thể cần so sánh — đây là lý do decomposition thắng ở dạng câu hỏi so sánh.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>Router tĩnh (if/else)</th><th>Router động (LLM)</th></tr>
+<tr><td>Tốc độ</td><td>Tức thời — không tốn LLM call</td><td>Chậm hơn — tốn 1 round-trip LLM mỗi câu hỏi</td></tr>
+<tr><td>Chi phí</td><td>~0</td><td>Tốn token cho mỗi lần route</td></tr>
+<tr><td>Debug</td><td>Dễ — đọc code là hiểu route logic</td><td>Khó hơn — phụ thuộc output LLM, có thể không nhất quán</td></tr>
+<tr><td>Khi nào phù hợp</td><td>Số nguồn cố định, liệt kê hết được trước (VD 7 KB)</td><td>Số nguồn lớn/mở, không đoán trước hết (VD hàng trăm KB)</td></tr>
+<tr><td>Ví dụ trong dự án</td><td><code>kb_loader.py</code> — 7 KB cố định</td><td>Chưa có — chưa cần thiết ở quy mô hiện tại</td></tr>
+</table>
+
+<h3>Bảng tổng hợp 5 kỹ thuật multi-step — chọn đúng cho đúng vấn đề</h3>
+<table>
+<tr><th>Kỹ thuật</th><th>Số lượt LLM/retrieval thêm</th><th>Vấn đề giải quyết tốt nhất</th><th>KHÔNG nên dùng khi nào</th></tr>
+<tr><td>Self-query decomposition</td><td>N lượt retrieval song song (N = số sub-query)</td><td>Câu hỏi so sánh nhiều thực thể (VD "VNM vs MSN")</td><td>Câu hỏi chỉ có 1 thực thể/1 khía cạnh — tách ra chỉ tốn thêm lượt gọi vô ích</td></tr>
+<tr><td>Query router (LLM động)</td><td>1 lượt LLM trước khi retrieval</td><td>Không gian nguồn lớn/mở, không liệt kê hết bằng if/else được</td><td>Số nguồn nhỏ, cố định — router tĩnh rẻ hơn, nhanh hơn, dễ debug hơn</td></tr>
+<tr><td>HyDE</td><td>1 lượt LLM sinh tài liệu giả định trước khi embed</td><td>Câu hỏi ngắn/mơ hồ mà embedding trực tiếp không bắt được ý</td><td>Câu hỏi đã rõ ràng, đã khớp tốt với văn phong corpus — HyDE thêm 25-60% latency không cần thiết</td></tr>
+<tr><td>RAG-Fusion (RRF)</td><td>N lượt retrieval song song (N = số biến thể câu hỏi)</td><td>Từ vựng câu hỏi có thể không khớp từ vựng corpus — cần nhiều góc nhìn để không bỏ sót</td><td>Corpus nhỏ, từ vựng đồng nhất (VD gọi theo tên cố định như <code>kb_loader.py</code>) — không có "góc nhìn khác" nào đáng tìm thêm</td></tr>
+<tr><td>Iterative/agentic (FLARE, Search-R1...)</td><td>Nhiều vòng lặp — chi phí token 3-10×, latency có thể 16-22× so với 1 bước</td><td>Câu hỏi cần thông tin phát sinh dần, không biết trước hết ngay từ đầu</td><td>Đa số câu hỏi (70-85% theo pattern hybrid 2026) — nên route sang RAG 1 bước trước, chỉ agentic hoá phần khó thật sự</td></tr>
+<tr><td>GraphRAG</td><td>1 lần indexing nặng (offline) + duyệt đồ thị lúc query</td><td>Câu hỏi multi-hop qua NHIỀU quan hệ thực thể (VD "A liên quan Y qua trung gian B")</td><td>Bài toán tra cứu theo tên (lookup), không có mạng lưới quan hệ thực thể phức tạp cần duyệt — chi phí indexing (dù đã giảm 50-6,000× so với gốc) vẫn không đáng nếu không có nhu cầu thật</td></tr>
+<tr><td>Self-RAG / CRAG</td><td>Self-RAG: cần fine-tune LLM riêng; CRAG: +1 model đánh giá nhẹ</td><td>Cần hệ thống tự phát hiện + tự sửa khi retrieval kém, giảm hallucination</td><td>Hệ thống nhỏ, retrieval đã đủ tin cậy qua kiểm thử thủ công — thêm tầng tự sửa là over-engineering nếu chưa đo được retrieval thật sự kém ở đâu</td></tr>
+</table>
+
+<h3>Ví dụ minh hoạ GraphRAG áp giả định vào dự án — vì sao đồ thị "thắng" embedding cho câu hỏi đa tầng</h3>
+<p>Giả sử (hoàn toàn giả định, KHÔNG phải tính năng có thật) dự án muốn trả lời "Nếu FED tăng lãi suất, ngành nào của VN chịu ảnh hưởng qua trung gian tỷ giá USDVND, và ticker nào trong ngành đó đang có tín hiệu bán?" — đây là câu hỏi 3-hop (FED → USDVND → ngành → ticker):</p>
+<pre><code>Cách vector similarity thuần (khó): cần 1 chunk NÀO ĐÓ nhắc đủ cả
+  4 khái niệm (FED, USDVND, tên ngành, tên ticker) trong cùng 1 đoạn
+  văn liền mạch — hiếm khi tồn tại, vì KB hiện tại (macro_cross_asset.md,
+  sector_playbooks.md, technical_indicators.md) tách riêng theo chủ đề.
+
+Cách GraphRAG (nếu có đồ thị entity-relationship): đi theo cạnh
+  FED --"tác động"--> USDVND --"ảnh hưởng"--> Ngành Xuất khẩu
+  --"gồm"--> [Ticker A, Ticker B] --"có tín hiệu"--> "bán" (Ticker B)
+  → Trả lời được dù không có 1 đoạn văn nào nhắc đủ cả chuỗi 4 bước.</code></pre>
+<p>Đây chính xác là loại câu hỏi <code>kb_loader.py</code> hiện tại KHÔNG trả lời được (nó tra cứu theo tên đơn lẻ, không duyệt chuỗi quan hệ) — nhưng cũng là bằng chứng cho thấy tại sao GraphRAG CHƯA đáng đầu tư ở quy mô 7 KB hiện tại: nếu loại câu hỏi 3-4 hop này chưa xuất hiện thật trong nhu cầu thật của skill, chi phí xây + duy trì 1 đồ thị tri thức là chi phí trả trước cho 1 vấn đề chưa xảy ra.</p>
+
+<h2>🎯 Ứng dụng vào dự án hiện tại</h2>
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Skill <code>daily-investor-report</code> hiện tại gọi KB theo <strong>pattern đã được code hardcode trước</strong> — VD gọi <code>load_sector_playbook(sector)</code> khi biết ticker thuộc sector nào, gọi <code>load_seasonal_for_date(date)</code> theo tháng hiện tại (xem <code>kb_loader.py</code> dòng 100-132). Đây thực chất là 1 dạng "query router" được quyết định bằng logic if/else Python cứng, không phải bằng 1 LLM router động.</p>
+<p>Đây KHÔNG phải điểm yếu. Với 7 KB cố định, router tĩnh nhanh hơn, rẻ hơn, dễ debug hơn 1 LLM router. Multi-step retrieval bằng LLM chỉ đáng đầu tư khi routing logic không còn liệt kê hết bằng if/else được nữa — VD nếu KB tăng lên hàng trăm nguồn không đoán trước được trước khi viết code.</p>
+<p>Về GraphRAG (mục 2.6) và Self-RAG/CRAG (mục 2.7): cả 2 nhóm kỹ thuật đều KHÔNG cần thiết ở quy mô hiện tại. GraphRAG chỉ đáng cân nhắc nếu skill cần trả lời câu hỏi đa tầng qua chuỗi quan hệ thực thể (ví dụ giả định ở mục 2.6) — hiện tại chưa có nhu cầu đó. Self-RAG/CRAG chỉ đáng thêm nếu ĐÃ đo được retrieval hiện tại (exact-match của <code>kb_loader.py</code>) tạo ra tỷ lệ sai/thiếu đáng kể — hiện tại <code>kb_loader.py</code> có cơ chế đơn giản hơn để phát hiện "không tìm thấy" (trả về <code>None</code> khi <code>_extract_section</code> không khớp heading nào), không cần 1 model đánh giá riêng cho bài toán tra cứu theo tên đã biết trước.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p>Dùng multi-step retrieval cho mọi câu hỏi kể cả câu đơn giản — tốn thêm latency/cost không cần thiết khi 1 bước retrieval đã đủ trả lời chính xác.</p>
+<p>Nghĩ router tĩnh (if/else) là "chưa đủ trình độ" so với router LLM động — sai, router tĩnh là lựa chọn ĐÚNG khi không gian nguồn nhỏ và cố định, không phải giải pháp tạm thời chờ nâng cấp.</p>
+<p>Áp dụng self-query decomposition cho câu hỏi không thực sự phức hợp — tách 1 câu hỏi đơn giản thành nhiều sub-query chỉ làm chậm hệ thống mà không cải thiện độ chính xác.</p>
+<p>Cho agent tự do quyết định lặp bao nhiêu vòng retrieval mà không đặt giới hạn cứng — theo số liệu thật, 2 vòng đã lấy được ~95% lợi ích so với 5 vòng, trong khi chi phí token/latency tiếp tục tăng gần như tuyến tính theo số vòng lặp; không giới hạn dễ dẫn tới "runaway cost" mà không đổi lại chất lượng tương xứng.</p>
+<p>Coi mọi kỹ thuật "mở rộng truy vấn" (HyDE, RAG-Fusion, decomposition...) là interchangeable — mỗi kỹ thuật giải quyết 1 LOẠI vấn đề khác nhau (embedding mismatch, từ vựng không khớp, câu hỏi đa thực thể); chọn sai kỹ thuật cho sai loại vấn đề vẫn tốn chi phí multi-step mà không giải quyết đúng gốc rễ.</p>
+<p>Nghe "GraphRAG" rồi mặc định nó "tiên tiến hơn nên tốt hơn" mọi retrieval dựa trên vector — bỏ qua chi phí indexing vẫn đáng kể (dù đã giảm mạnh so với bản gốc $33K) và bỏ qua việc bài toán của mình có thật sự cần duyệt quan hệ đa tầng hay chỉ là tra cứu đơn giản.</p>
+<p>Coi Self-RAG và CRAG là 2 lựa chọn phải chọn 1 — thực chất chúng sửa 2 vấn đề khác nhau (chất lượng bằng chứng vs cách model suy luận trên bằng chứng) và có thể dùng nối tiếp nhau trong cùng 1 hệ thống.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Kể đúng tên và cơ chế 7 kỹ thuật multi-step retrieval (3 kỹ thuật gốc + HyDE + RAG-Fusion + GraphRAG + Self-RAG/CRAG).</li>
+<li>Cho 1 câu hỏi cho trước, quyết định đúng: cần multi-step retrieval hay 1 bước là đủ, và nếu cần thì kỹ thuật nào phù hợp nhất, giải thích vì sao.</li>
+<li>Phân biệt được router tĩnh và router động, nêu đúng trade-off của mỗi loại.</li>
+<li>Đọc code <code>kb_loader.py</code> và giải thích được vì sao nó là 1 dạng query router tĩnh.</li>
+<li>Nêu được điều kiện cụ thể sẽ khiến dự án cần chuyển từ router tĩnh sang router động.</li>
+<li>Trích dẫn đúng số liệu chi phí thật của agentic/iterative retrieval (3-10× token, 16-22× latency ở 1 số benchmark) và giải thích vì sao "lặp càng nhiều càng tốt" là kết luận sai theo đường cong lợi ích bão hoà (2 vòng ≈ 95% lợi ích của 5 vòng).</li>
+<li>Giải thích được công thức Reciprocal Rank Fusion ở mức khái niệm (điểm cộng dồn theo nghịch đảo thứ hạng) và khi nào RAG-Fusion đáng dùng hơn 1 query đơn.</li>
+<li>Giải thích được cơ chế GraphRAG (trích entity/quan hệ → xây đồ thị → community detection → tóm tắt) và vì sao đi theo cạnh đồ thị mạnh hơn embedding similarity cho câu hỏi multi-hop thật sự.</li>
+<li>Phân biệt đúng Self-RAG và CRAG — biết chúng sửa 2 vấn đề khác nhau và có thể kết hợp, không phải 2 lựa chọn loại trừ.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R3_3_data_preparation.html">← R3.3 · Data Preparation</a>
+  <a href="R3_5_retrieval_generation.html">R3.5 · Retrieval + Generation →</a>
+</div>
+
+</div>
+</body>
+</html>

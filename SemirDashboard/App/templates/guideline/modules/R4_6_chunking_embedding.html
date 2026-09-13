@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R4.6 · Chunking &amp; Embedding Strategies — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Retrieval Techniques · Điểm 6/6</div>
+  <h1>R4.6 · Chunking and Embedding Strategies</h1>
+  <p class="subtitle">Trước khi có ANN index, hybrid retrieval, hay rerank để tối ưu — phải cắt tài liệu và chọn embedding model ĐÚNG NGAY TỪ ĐẦU. Sai ở bước này, mọi tầng phía sau đều vá lỗi trên nền móng hỏng.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>Dễ</strong>: nhớ lại 3 loại chunking cơ bản (fixed-size, sentence, semantic) và biết chúng khác nhau ở đâu.</li>
+<li><strong>Dễ</strong>: chọn đúng chunking strategy cho 1 loại tài liệu cho trước (Markdown có heading / bảng số liệu / tin tức / hội thoại).</li>
+<li><strong>Trung bình</strong>: giải thích vì sao "cắt giữa 1 khái niệm" hoặc "cắt giữa 1 bảng số liệu" phá vỡ chất lượng retrieval, không chỉ là vấn đề thẩm mỹ.</li>
+<li><strong>Trung bình</strong>: so sánh embedding model 2026 theo đúng trục quyết định (chất lượng, chi phí, ngôn ngữ) thay vì chỉ theo điểm MTEB.</li>
+<li><strong>Khó</strong>: thiết kế được quy trình tự re-verify 1 embedding model trên chính domain data tiếng Việt trước khi chốt, thay vì tin thẳng benchmark tiếng Anh.</li>
+<li><strong>Khó</strong>: phân biệt MRL (nén ở tầng TRAIN MODEL, chọn số chiều) và quantization (nén ở tầng LƯU TRỮ, chọn số bit/chiều) — 2 trục độc lập, tính được tỉ lệ nén cộng dồn khi dùng cả 2.</li>
+<li><strong>Khó</strong>: giải thích được cơ chế late chunking (embed CẢ tài liệu trước, cắt VÀ pool sau) khác gì "chunk trước rồi embed riêng từng chunk" (naive) LẪN "Contextual Retrieval" của Anthropic (LLM sinh thêm context cho từng chunk) — 3 cách tiếp cận khác nhau ở đúng lớp nào can thiệp.</li>
+<li><strong>Khó</strong>: tính tay được 1 quyết định breakpoint cho semantic chunking từ dãy độ tương đồng liên tiếp cho trước, dùng đúng phương pháp ngưỡng percentile.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Trang này đứng ĐẦU pipeline retrieval theo thứ tự vận hành thật (chunking + embedding xảy ra ở INGEST TIME, trước cả khi có ANN index ở <a href="R4_1_vector_databases.html">R4.1</a> hay <a href="R4_5_hnsw_ivf.html">R4.5</a>) — nhưng được xếp cuối trong 6 trang vì nó là bước "dễ nhất về khái niệm, khó nhất về việc tự tay đánh giá đúng cho domain riêng". Khái niệm chunking (fixed-size/semantic/sentence) và embedding cơ bản đã có ở <code>../modules/L5_2_rag.html §3.1-3.2</code>, pipeline data preparation đầy đủ đã có ở <code>.claude/skills/daily-investor-report/kb_loader.py</code> (đọc trực tiếp trong dự án). Trang này bổ sung: <strong>so sánh embedding model cụ thể 2026</strong> và <strong>chunking strategy theo loại tài liệu</strong> mà module cũ (viết ở tầm khái niệm) chưa có bảng cụ thể.</p>
+<p>Độ khó: <strong>Dễ</strong> — không có công thức toán, chủ yếu là bảng quyết định + nguyên tắc thực hành.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy — cắt bánh trước khi đóng hộp</div><p>Chunking giống việc cắt 1 chiếc bánh lớn thành từng miếng vừa ăn trước khi đóng hộp gửi đi. Cắt đúng chỗ (theo lớp bánh tự nhiên) — mỗi miếng vẫn ngon, đầy đủ hương vị. Cắt sai chỗ (cắt ngang giữa lớp kem) — miếng nào cũng dở dang, thiếu 1 phần quan trọng. Embedding giống việc "chụp ảnh X-quang" từng miếng bánh để sau này tìm lại đúng miếng cần — nếu máy chụp không đủ tốt (embedding model yếu) hoặc miếng bánh bị cắt tệ ngay từ đầu, ảnh X-quang dù có rõ đến đâu cũng không cứu được 1 miếng bánh thiếu mất phần quan trọng.</p></div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Ba loại chunking cơ bản — nhắc lại có bổ sung</h3>
+<table>
+<tr><th>Loại chunking</th><th>Cách hoạt động</th><th>Ưu điểm</th><th>Nhược điểm</th></tr>
+<tr><td>Fixed-size</td><td>Cắt cứng theo số token/ký tự cố định (VD mỗi 500 token), có thể overlap 1 phần giữa các chunk liền kề</td><td>Đơn giản, nhanh, dự đoán được kích thước</td><td>Dễ cắt ngang giữa 1 câu/1 ý, phá vỡ ngữ nghĩa</td></tr>
+<tr><td>Sentence-based</td><td>Cắt theo ranh giới câu (dùng thư viện tách câu), gom nhiều câu tới khi đạt kích thước mong muốn</td><td>Không cắt ngang giữa câu, tự nhiên hơn fixed-size</td><td>Vẫn có thể cắt ngang giữa 2 câu có liên hệ chặt (câu sau phụ thuộc ngữ cảnh câu trước)</td></tr>
+<tr><td>Semantic chunking</td><td>Dùng embedding để đo "độ liên tục ngữ nghĩa" giữa các câu liền kề, cắt tại điểm ngữ nghĩa CHUYỂN CHỦ ĐỀ rõ rệt</td><td>Giữ trọn vẹn 1 ý/chủ đề trong mỗi chunk</td><td>Tốn thêm 1 lượt embedding + tính toán ở bước chuẩn bị dữ liệu, phức tạp hơn 2 cách trên</td></tr>
+</table>
+
+<h3>2. Chunking theo loại tài liệu — bảng quyết định mở rộng</h3>
+<p>Đây là phần bổ sung quan trọng nhất của trang này — 3 loại chunking ở trên là "công cụ", còn bảng dưới đây là "khi nào dùng công cụ nào":</p>
+<table>
+<tr><th>Loại tài liệu</th><th>Chunking strategy phù hợp</th><th>Vì sao</th></tr>
+<tr><td>Markdown có heading rõ (như KB dự án)</td><td>Chunk theo heading boundary (H2/H3)</td><td>Giữ trọn 1 khái niệm/section — đúng cách <code>kb_loader.py</code> đang làm</td></tr>
+<tr><td>BCTC (bảng số liệu)</td><td>Chunk theo bảng hoàn chỉnh, không cắt giữa bảng</td><td>Cắt giữa bảng số liệu phá vỡ ngữ nghĩa (dòng "Doanh thu" tách khỏi giá trị của nó — retrieval trả về 1 chunk có tên chỉ tiêu nhưng không có số, hoặc ngược lại)</td></tr>
+<tr><td>Tin tức/bài báo</td><td>Chunk theo đoạn văn (paragraph), có overlap 1-2 câu</td><td>Tin tức không có heading rõ như tài liệu kỹ thuật; overlap tránh cắt đứt ý giữa 2 chunk liền kề</td></tr>
+<tr><td>Transcript/hội thoại</td><td>Chunk theo turn hoặc theo topic-shift (semantic chunking)</td><td>Giữ ngữ cảnh hội thoại — 1 câu trả lời tách khỏi câu hỏi của nó thì vô nghĩa khi đọc riêng lẻ</td></tr>
+</table>
+
+<div class="callout danger"><div class="label">⚠️ Vì sao cắt sai chunking không chỉ là vấn đề thẩm mỹ</div><p>Khi 1 chunk bị cắt dở (VD dòng "Doanh thu quý 3" nằm ở chunk A, con số "1,200 tỷ" nằm ở chunk B kế bên), embedding của chunk A KHÔNG chứa thông tin số liệu — nó trở thành 1 "vân tay" gần như vô nghĩa về mặt truy vấn (câu hỏi "doanh thu quý 3 là bao nhiêu" sẽ không tìm ra đúng chunk chứa cả 2 phần). Đây không phải lỗi của embedding model hay của ANN index — lỗi nằm ở NGAY BƯỚC CHUẨN BỊ DỮ LIỆU, và không có tầng rerank hay hybrid retrieval nào phía sau có thể sửa được, vì thông tin đã bị chia cắt vĩnh viễn từ đầu.</p></div>
+
+<h3>3. Embedding model — so sánh 2026</h3>
+<p>Bảng dưới đây đã <strong>verify lại 2026-09</strong> (WebSearch + WebFetch chính chủ <code>blog.voyageai.com</code>, cộng nhiều blog benchmark thứ 3 — xem <code>_review_evidence_batch2.md</code>). So với bản trước (dựa 1 nguồn WebSearch duy nhất, độ tin cậy trung bình), bảng này đã cập nhật 2 thay đổi quan trọng: (1) Voyage đã ra dòng <strong>Voyage 4</strong> (2026-01), <code>voyage-3-large</code> không còn là model tốt nhất của hãng; (2) xuất hiện nhóm model open-weight mới (Qwen3-Embedding, QZhou-Embedding) đứng đầu MTEB v2 mà bản trước chưa có:</p>
+<table>
+<tr><th>Model</th><th>MTEB score (theo nguồn tìm được)</th><th>Giá</th><th>Ghi chú</th></tr>
+<tr><td>Voyage voyage-4-large</td><td>Đứng đầu RTEB leaderboard của Voyage, vượt OpenAI text-embedding-3-large ~14% NDCG@10 (theo Voyage tự công bố)</td><td>~$0.12/1M token (giá thật của voyage-4-large; <code>voyage-3-large</code> đã deprecated có giá $0.18/1M — 2 model khác giá, đừng nhầm)</td><td>Kiến trúc MoE, rẻ hơn 40% chi phí serving so với dense model tương đương; cùng "shared embedding space" với voyage-4/voyage-4-lite/voyage-4-nano (embed bằng bản lớn, query bằng bản nhỏ mà không cần re-index) — Anthropic KHÔNG có embedding model riêng, Voyage là bên thứ 3 được khuyến nghị</td></tr>
+<tr><td>OpenAI text-embedding-3-large / -small</td><td>Cao, cạnh tranh trực tiếp (kém Voyage/Qwen3 theo 1 số benchmark)</td><td>3-large ~$0.13/1M, 3-small ~$0.02/1M (chênh ~6.5×)</td><td>3-small thường đủ dùng cho RAG phổ thông với chi phí thấp hơn nhiều</td></tr>
+<tr><td>Qwen3-Embedding (mới, đầu 2026)</td><td>Top open-weight trên MTEB Multilingual (70.58 với bản 8B, theo công bố chính chủ Qwen + HuggingFace model card)</td><td>Miễn phí (self-host)</td><td>Model MỚI chưa có trong bản review trước — đáng đưa vào shortlist nếu cân nhắc self-host thay BGE-M3</td></tr>
+<tr><td>BGE-M3 (self-hosted)</td><td>Gần bằng commercial API</td><td>Miễn phí (self-host, cần GPU serving)</td><td>Multilingual — đáng chú ý cho tiếng Việt; theo telemetry LangChain/LlamaIndex, đây là embedding model được DÙNG NHIỀU NHẤT trong RAG production tính đến 2026, không chỉ "gần bằng API" trên giấy</td></tr>
+<tr><td>Nomic Embed v2</td><td>Thấp hơn 1 chút</td><td>Rẻ</td><td>Multilingual, chi phí thấp</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Lưu ý trung thực về nguồn</div><p>Bảng trên tổng hợp từ nhiều nguồn WebSearch (2026-09) + 1 WebFetch chính chủ <code>blog.voyageai.com</code> cho phần Voyage 4 — độ tin cậy phần Voyage cao hơn phần còn lại (vẫn dựa blog thứ 3, độ tin cậy trung bình). PHẢI tự re-verify trên trang chính chủ + tự chạy benchmark trên chính KB tiếng Việt của dự án trước khi chốt. MTEB đo trên benchmark tiếng Anh chủ yếu — hiệu năng thực tế trên văn bản tài chính tiếng Việt có thể lệch đáng kể, đặc biệt với thuật ngữ viết tắt ngành VN (VD "room ngoại", "call margin") không có nhiều trong training data phổ biến.</p></div>
+
+<h3>4. Quy trình tự re-verify embedding model cho domain tiếng Việt</h3>
+<pre><code>Bước 1: Tạo eval set nhỏ (30-50 cặp query-document) từ CHÍNH domain thật
+         (VD 30 câu hỏi tài chính tiếng Việt + đáp án đúng nằm ở đoạn KB nào)
+
+Bước 2: Embedding toàn bộ document bằng model ứng viên (VD BGE-M3)
+
+Bước 3: Với mỗi query trong eval set, tính similarity, xem đáp án đúng có
+         nằm trong top-5 không → tính recall@5
+
+Bước 4: Lặp lại bước 2-3 với model khác (VD Voyage voyage-3-large)
+
+Bước 5: So sánh recall@5 THẬT trên domain của mình — không dùng điểm MTEB
+         benchmark tiếng Anh để quyết định, vì đó đo trên phân phối dữ liệu
+         khác hẳn (tiếng Anh, domain tổng quát, không có thuật ngữ VN)</code></pre>
+
+<h3>5. Matryoshka Representation Learning (MRL) — nén embedding NGAY TỪ LÚC TRAIN MODEL (verify 2026-09)</h3>
+<p>Mục 3 đã so sánh embedding model theo chất lượng/giá — nhưng 1 trục khác, độc lập, đang trở thành chuẩn 2026: nhiều model (OpenAI <code>text-embedding-3</code>, Google) được train với <strong>MRL (Matryoshka Representation Learning)</strong> — 1 hàm loss "lồng nhau" khiến các CHIỀU ĐẦU của vector (prefix) tự nó đã mang đủ thông tin hữu ích, không cần toàn bộ vector mới dùng được.</p>
+<div class="callout"><div class="label">📖 Vì sao KHÔNG giống việc "cắt bớt chiều" thông thường</div><p>Cắt bớt chiều của 1 embedding KHÔNG được train MRL (VD lấy 256/1536 chiều đầu bất kỳ) thường phá huỷ chất lượng — các chiều được học ĐỒNG THỜI, không chiều nào "quan trọng hơn" chiều nào để giữ lại ưu tiên. MRL thay đổi chính hàm loss lúc train để ép mô hình học sao cho <strong>prefix bất kỳ độ dài nào cũng là 1 embedding "đủ dùng" độc lập</strong> — do đó cắt (truncate) embedding đã train MRL không cần train lại, không cần thuật toán nén riêng (khác PQ ở <a href="R4_5_hnsw_ivf.html">R4.5 §2.2</a>, vốn là 1 bước NÉN THÊM sau khi đã có embedding, áp dụng được cho MỌI loại embedding bất kể có MRL hay không).</p></div>
+<p>Số liệu thật (verify 2026-09): <code>text-embedding-3-large</code> (OpenAI) cắt còn <strong>256 chiều</strong> (từ gốc 3072) vẫn <strong>vượt điểm MTEB</strong> của model thế hệ trước <code>text-embedding-ada-002</code> chạy ĐẦY ĐỦ 1536 chiều — minh chứng trực tiếp rằng "ít chiều hơn nhưng model MỚI + có MRL" có thể thắng "nhiều chiều hơn nhưng model CŨ". API của các model có MRL thường có tham số <code>dimensions</code> để chọn thẳng độ dài mong muốn, không cần code nén riêng.</p>
+
+<h3>6. Quantization ở TẦNG EMBEDDING (int8/binary) — khác PQ ở tầng index, cùng mục tiêu giảm bộ nhớ (verify 2026-09)</h3>
+<p>R4.5 §2.2 đã giải thích Product Quantization (PQ) — nén bằng cách chia vector thành sub-vector rồi thay bằng mã centroid. Có 1 họ kỹ thuật khác, ĐƠN GIẢN HƠN, áp dụng ngay tại tầng embedding (trước khi đưa vào bất kỳ ANN index nào): <strong>scalar quantization</strong> (mỗi chiều float32 → int8, ánh xạ tuyến tính theo khoảng giá trị học được) và <strong>binary quantization</strong> (mỗi chiều → chỉ 1 bit, dấu dương/âm).</p>
+<table>
+<tr><th>Kỹ thuật</th><th>Nén bao nhiêu</th><th>Mất recall (benchmark 2026, baseline 384 chiều)</th><th>Đặc điểm</th></tr>
+<tr><td>int8 scalar quantization</td><td>4× (float32 4 byte → int8 1 byte)</td><td>Rất nhỏ — recall giảm ~1.46%, MRR giảm ~2.72%</td><td>"Lựa chọn an toàn" — hầu như luôn đáng đánh đổi</td></tr>
+<tr><td>Binary quantization (1-bit)</td><td>32× (4 byte → 1 bit)</td><td>Lớn — kém scalar hơn 17%+ recall, 18.4%+ MRR ở baseline; SỤP hẳn khi chiều giảm thêm (còn 64 chiều: recall chỉ 0.102 so với 0.300 của scalar)</td><td>"Vách đá hiệu năng" (performance cliff) — mức độ mất mát PHỤ THUỘC KIẾN TRÚC MODEL: model họ ModernBERT giữ ~98% chất lượng, model họ E5 tụt còn 87-92%</td></tr>
+</table>
+<p><strong>Kết hợp thực dụng</strong>: dùng binary quantization để LỌC THÔ cực nhanh (khoảng cách Hamming giữa 2 vector bit rẻ hơn nhiều so với cosine similarity float), sau đó dùng int8 (hoặc full-precision) để RESCORE lại top candidate — đạt gần độ chính xác float32 với chi phí gần bằng binary. Đây là 1 dạng cascade giống tinh thần đa-tầng đã thấy ở <a href="R4_4_reranking_pipelines.html">R4.4 §4</a> (rẻ trước, đắt sau) nhưng áp dụng ở TẦNG LƯU TRỮ VECTOR, không phải tầng rerank.</p>
+
+<h3>7. Late chunking — đảo NGƯỢC thứ tự "cắt rồi embed" thành "embed rồi mới cắt" (verify 2026-09)</h3>
+<p>Mục 1-2 giả định thứ tự cố định: cắt tài liệu thành chunk TRƯỚC → embed TỪNG chunk riêng lẻ SAU (gọi là "naive chunking" trong nghiên cứu late chunking). Vấn đề của thứ tự này: khi embed chunk 2 riêng lẻ, model KHÔNG còn thấy được ngữ cảnh của chunk 1 — 1 câu như "Nó tiếp tục dẫn đầu thị phần" (đại từ "Nó" ám chỉ công ty đã nêu ở đoạn TRƯỚC) sẽ bị embed gần như VÔ NGHĨA về mặt chủ thể nếu đứng riêng trong 1 chunk.</p>
+<p><strong>Late chunking</strong> (Jina AI, 2024, đã tích hợp vào <code>jina-embeddings-v3</code>) đảo ngược thứ tự: (1) đưa TOÀN BỘ tài liệu (hoặc phần tối đa vừa context model, VD 8192 token) qua model transformer MỘT LẦN DUY NHẤT → có được embedding CHO TỪNG TOKEN mang đầy đủ ngữ cảnh toàn văn bản (nhờ cơ chế self-attention xuyên suốt cả đoạn); (2) CHỈ SAU ĐÓ mới xác định ranh giới chunk (theo bất kỳ chiến lược nào ở mục 1-2) và <strong>mean-pooling</strong> các token-embedding TRONG từng ranh giới đó thành 1 vector/chunk.</p>
+<pre><code>Naive chunking (mục 1-2):                    Late chunking (mục 7):
+
+  Đoạn 1 → cắt → Chunk A → embed(A) riêng       Toàn văn bản → embed 1 LẦN
+  Đoạn 2 → cắt → Chunk B → embed(B) riêng         (transformer thấy HẾT ngữ cảnh)
+    (embed(B) KHÔNG thấy gì từ đoạn 1)                    │
+                                                            ▼ (cắt ranh giới SAU khi đã có
+                                                              token-embedding đầy đủ ngữ cảnh)
+                                                    Pool token-embedding trong [Chunk A]
+                                                    Pool token-embedding trong [Chunk B]
+                                                      (mỗi pool vẫn "nhớ" ngữ cảnh toàn văn
+                                                       bản nhờ attention đã chạy TRƯỚC khi cắt)</code></pre>
+<p><strong>Khác biệt với "Contextual Retrieval" của Anthropic</strong> (đã nhắc ở <code>L9_1_advanced_rag.html</code>, callout "Production standard 2025" — giảm failure rate 67%): 2 kỹ thuật GIẢI QUYẾT ĐÚNG 1 vấn đề (chunk thiếu ngữ cảnh) nhưng bằng cơ chế HOÀN TOÀN khác nhau — không phải 2 tên gọi khác nhau của cùng 1 việc:</p>
+<table>
+<tr><th>Tiêu chí</th><th>Naive chunking (mục 1-2)</th><th>Contextual Retrieval (Anthropic, <code>L9_1</code>)</th><th>Late chunking (mục này)</th></tr>
+<tr><td>Cơ chế</td><td>Cắt trước, embed riêng từng chunk</td><td>Gọi LLM sinh 1-2 câu TÓM TẮT ngữ cảnh, GHÉP vào ĐẦU mỗi chunk (dạng text), rồi mới embed chunk đã ghép</td><td>Embed TOÀN VĂN BẢN 1 lần, cắt + pool token-embedding SAU</td></tr>
+<tr><td>Cần gọi LLM?</td><td>Không</td><td>CÓ — 1 lệnh gọi LLM/chunk (chi phí one-time lúc ingest)</td><td>Không — chỉ cần 1 embedding model hỗ trợ long-context</td></tr>
+<tr><td>Yêu cầu hạ tầng đặc biệt</td><td>Không</td><td>Ngân sách gọi LLM lúc ingest (batch, có thể dùng prompt caching — xem R2.4)</td><td>Embedding model phải hỗ trợ context DÀI (VD 8192 token của <code>jina-embeddings-v3</code>) — model context ngắn (512 token) không tận dụng được late chunking cho tài liệu dài hơn</td></tr>
+<tr><td>Chi phí</td><td>Thấp nhất</td><td>Cao nhất (1 LLM call/chunk, dù có thể giảm bằng caching)</td><td>Thấp — chỉ tốn thêm 1 lượt pooling, không có LLM call nào</td></tr>
+<tr><td>Tài liệu quá dài hơn context model</td><td>Không bị giới hạn (cắt trước, mỗi chunk luôn vừa)</td><td>Không bị giới hạn (context do LLM tóm tắt xử lý riêng)</td><td>Bị giới hạn — cần "long late chunking" (chia thành macro-chunk vừa <code>l_max</code> token trước, áp late chunking TRONG từng macro-chunk)</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ 2 kỹ thuật này KHÔNG loại trừ nhau — dễ nhầm là "chọn 1 trong 2" (né BUG-1 false dichotomy)</div><p>Late chunking và Contextual Retrieval giải quyết cùng triệu chứng (chunk thiếu ngữ cảnh) nhưng không cạnh tranh trực tiếp — late chunking rẻ hơn nhiều (không cần LLM) nhưng CHỈ hoạt động nếu có embedding model hỗ trợ context dài; Contextual Retrieval tốn kém hơn nhưng hoạt động với BẤT KỲ embedding model nào (kể cả context ngắn) vì phần "thêm ngữ cảnh" nằm ở LLM, không phải ở embedding model. Với KB tài chính tiếng Việt của dự án — nếu chọn BGE-M3 (context 8192 token, đã đề cập ở mục 3) làm embedding model, late chunking là lựa chọn RẺ HƠN đáng thử trước, chỉ cần Contextual Retrieval nếu late chunking vẫn chưa đủ cải thiện recall đo được (đúng quy trình đo ở mục 4).</p></div>
+
+<h3>8. Semantic chunking — cơ chế phát hiện ranh giới THẬT bằng ngưỡng percentile, không chỉ "cắt khi đổi chủ đề" chung chung (verify 2026-09)</h3>
+<p>Mục 1 đã liệt kê semantic chunking là 1 trong 3 loại cơ bản ("dùng embedding đo độ liên tục ngữ nghĩa, cắt tại điểm chuyển chủ đề") nhưng chưa nói ĐO bằng công thức gì, CẮT ở ngưỡng nào. Cơ chế thật: (1) embed TỪNG CÂU riêng lẻ trong tài liệu, (2) tính <strong>cosine distance</strong> (= 1 − cosine similarity) giữa mỗi cặp câu LIỀN KỀ, tạo ra 1 chuỗi độ lệch dọc theo tài liệu, (3) xác định ranh giới chunk tại vị trí độ lệch VƯỢT ngưỡng — 3 cách chọn ngưỡng phổ biến:</p>
+<table>
+<tr><th>Phương pháp chọn ngưỡng</th><th>Cách tính</th><th>Đặc điểm</th></tr>
+<tr><td>Percentile (mặc định phổ biến nhất)</td><td>Cắt khi độ lệch vượt percentile thứ 95 (hoặc 80 tuỳ độ nhạy mong muốn) của TOÀN BỘ phân phối độ lệch trong tài liệu</td><td>Tự thích nghi theo mật độ nội dung của CHÍNH tài liệu đó — không cần biết trước "độ lệch bao nhiêu là nhiều"</td></tr>
+<tr><td>Standard deviation</td><td>Cắt khi độ lệch vượt quá 3 độ lệch chuẩn so với giá trị trung bình của toàn phân phối</td><td>Nhạy với outlier cực đoan, có thể bỏ lỡ ranh giới "vừa phải" nếu phân phối có nhiều outlier nhỏ làm độ lệch chuẩn giãn ra</td></tr>
+<tr><td>Interquartile range (IQR)</td><td>Dùng khoảng giữa 50% dữ liệu (Q1-Q3) để xác định outlier, cắt tại điểm nằm ngoài khoảng đó</td><td>Ổn định hơn với phân phối lệch (skewed), ít bị ảnh hưởng bởi 1-2 outlier cực đoan</td></tr>
+</table>
+<p><strong>Worked example — quyết định breakpoint cho 1 đoạn KB tài chính cụ thể</strong>:</p>
+<pre><code>5 câu liên tiếp trong 1 file KB (chủ đề chuyển từ "kết quả kinh doanh FPT"
+sang "giá vàng thế giới" — giống ví dụ cosine similarity FPT/vàng ở R4.1):
+
+S1: "ROE của FPT tăng mạnh quý này."
+S2: "Biên lợi nhuận gộp cũng cải thiện đáng kể."
+S3: "Ban lãnh đạo cho biết đà tăng trưởng sẽ tiếp tục."
+S4: "Giá vàng thế giới tăng mạnh do lo ngại lạm phát."
+S5: "Nhà đầu tư tìm đến vàng như kênh trú ẩn an toàn."
+
+Cosine similarity giữa các cặp câu liền kề (giả định đã embed từng câu):
+  sim(S1,S2)=0.93   sim(S2,S3)=0.90   sim(S3,S4)=0.40   sim(S4,S5)=0.92
+
+Cosine distance = 1 - similarity:
+  d(S1,S2)=0.07     d(S2,S3)=0.10     d(S3,S4)=0.60     d(S4,S5)=0.08
+
+Giả định ngưỡng percentile-95 tính trên TOÀN BỘ phân phối distance của cả
+file KB (nhiều cặp câu hơn 4 cặp này) rơi vào khoảng 0.35 (đa số cặp câu
+trong 1 đoạn liền mạch có distance nhỏ ~0.05-0.15; chỉ tại ranh giới chủ đề
+thật mới vọt cao) — kiểm tra 4 giá trị trên với ngưỡng 0.35:
+
+  d(S1,S2)=0.07 < 0.35 → KHÔNG cắt (giữ S1,S2 cùng chunk)
+  d(S2,S3)=0.10 < 0.35 → KHÔNG cắt (giữ S2,S3 cùng chunk)
+  d(S3,S4)=0.60 > 0.35 → CẮT tại đây — đúng ranh giới chủ đề thật
+  d(S4,S5)=0.08 < 0.35 → KHÔNG cắt (giữ S4,S5 cùng chunk)
+
+→ Kết quả: Chunk 1 = {S1,S2,S3} (chủ đề FPT), Chunk 2 = {S4,S5} (chủ đề vàng)
+  — đúng ranh giới ngữ nghĩa thật, điều mà fixed-size chunking (cắt cứng theo
+  số câu/token, VD luôn cắt sau mỗi 2 câu) sẽ KHÔNG đảm bảo bắt đúng.</code></pre>
+<p><strong>Đánh đổi thật của semantic chunking</strong> (đã nêu ở bảng mục 1, giờ cụ thể hoá): mỗi tài liệu cần thêm 1 lượt embed CẤP CÂU (không phải cấp chunk) chỉ để QUYẾT ĐỊNH ranh giới — tốn thêm compute so với fixed-size/sentence-based, và với văn bản tài chính có nhiều câu chỉ chứa 1 con số/1 mã ticker đơn lẻ (VD "P/E: 15.2"), độ lệch ngữ nghĩa giữa các câu ngắn kiểu này có thể KHÔNG ổn định — cần tự kiểm tra ngưỡng trên chính domain, không dùng percentile 95 mặc định của thư viện mà chưa verify.</p>
+<p><strong>Quan trọng hơn cả chi phí compute</strong>: <code>R3_3_data_preparation.html</code> đã dẫn 1 nghiên cứu bình duyệt (Vectara, NAACL 2025) cho thấy fixed-size/recursive splitting <strong>thắng semantic chunking một cách nhất quán</strong> trên nhiều tiêu chí thực nghiệm — nghĩa là đây KHÔNG phải đơn thuần "phức tạp hơn nhưng chắc chắn tốt hơn" (trade-off phức tạp-vs-chất lượng một chiều), mà là kỹ thuật có lợi ích thực tế CHƯA ĐƯỢC CHỨNG MINH nhất quán. Luôn benchmark semantic chunking so với fixed-size/recursive trên chính corpus của mình trước khi chọn — đừng mặc định "ngữ nghĩa" = "tốt hơn".</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Minh hoạ tác động của việc chunk sai với 1 đoạn BCTC giả định:</p>
+<pre><code>Văn bản gốc:
+"Bảng 3: Kết quả kinh doanh quý 3/2026
+ Doanh thu thuần: 1,200 tỷ đồng
+ Lợi nhuận gộp: 340 tỷ đồng
+ Biên lợi nhuận gộp: 28.3%"
+
+--- Chunking SAI (fixed-size 40 token, cắt giữa bảng) ---
+Chunk 1: "Bảng 3: Kết quả kinh doanh quý 3/2026\nDoanh thu thuần: 1,200 tỷ đồng"
+Chunk 2: "Lợi nhuận gộp: 340 tỷ đồng\nBiên lợi nhuận gộp: 28.3%"
+
+→ Query "biên lợi nhuận gộp quý 3 là bao nhiêu" → embedding của Chunk 2 CÓ
+  chứa "biên lợi nhuận gộp: 28.3%" nhưng THIẾU ngữ cảnh "quý 3/2026" (nằm ở
+  Chunk 1) → nếu văn bản gốc có nhiều bảng của nhiều quý khác nhau, retrieval
+  có thể trả về ĐÚNG số liệu nhưng SAI quý, vì chunk không tự nói rõ nó thuộc
+  quý nào
+
+--- Chunking ĐÚNG (theo bảng hoàn chỉnh) ---
+Chunk duy nhất: toàn bộ đoạn trên, giữ nguyên cả tiêu đề bảng + mọi dòng số liệu
+
+→ Query tương tự → chunk trả về CÓ ĐẦY ĐỦ ngữ cảnh "quý 3/2026" + đúng số liệu
+  → retrieval chính xác, không cần rerank hay hybrid nào "cứu" lại</code></pre>
+
+<h3>Ví dụ mở rộng — MRL (mục 5) và quantization (mục 6) là 2 "núm vặn" ĐỘC LẬP, cộng dồn được</h3>
+<p>Lấy <code>text-embedding-3-large</code> (3072 chiều gốc, float32) làm baseline, áp lần lượt 2 kỹ thuật ở mục 5-6 — giống tinh thần bảng cộng dồn GQA+FP8 đã thấy ở <code>R2_1_kv_caching.html</code>, nhưng ở tầng embedding thay vì KV cache:</p>
+<pre><code>Baseline — 3072 chiều × 4 byte (float32) = 12,288 byte/vector
+
++ MRL truncate còn 256 chiều (mục 5, KHÔNG cần train lại, chỉ đổi tham số `dimensions`):
+  256 × 4 byte = 1,024 byte/vector
+  Tỉ lệ giảm = 12,288 / 1,024 = 12× (đúng bằng 3072/256 = 12, vì mỗi chiều vẫn 4 byte)
+
++ Từ 1,024 byte (đã MRL), áp thêm int8 scalar quantization (mục 6, 4 byte → 1 byte/chiều):
+  256 × 1 byte = 256 byte/vector
+  Tỉ lệ giảm thêm = 4× (đúng bằng 4 byte/1 byte)
+
+=> Tổng cộng: 12,288 byte → 256 byte = giảm 12 × 4 = 48× — đến từ 2 quyết định
+   ĐỘC LẬP (số chiều do MRL quyết định lúc embed, số bit/chiều do quantization
+   quyết định lúc lưu trữ), giống hệt tinh thần "GQA + FP8 cộng dồn" ở KV cache,
+   không phải 1 kỹ thuật "thần kỳ" duy nhất.
+
+Nếu đổi bước 2 sang BINARY quantization thay vì int8 (256 chiều → 1 bit/chiều):
+  256 / 8 = 32 byte/vector → tổng giảm 12,288/32 = 384×
+  NHƯNG: 256 chiều đã khá thấp, và benchmark mục 6 cho thấy binary "sụp" mạnh
+  ở chiều thấp (64 chiều: recall chỉ 0.102) — kết hợp MRL-truncate-mạnh VỚI
+  binary-quantization cùng lúc là combo RỦI RO, cần tự đo recall thật (đúng
+  quy trình mục 4) trước khi tin vào tỉ lệ nén 384× trên giấy.</code></pre>
+<table>
+<tr><th>Yếu tố cần quyết định</th><th>Câu hỏi nên tự hỏi</th></tr>
+<tr><td>Loại tài liệu</td><td>Có heading rõ không? Có bảng số liệu không? Có cấu trúc hội thoại không? → chọn strategy theo bảng mục 2</td></tr>
+<tr><td>Ngôn ngữ chính của corpus</td><td>Chủ yếu tiếng Việt → ưu tiên model multilingual (BGE-M3) hoặc tự benchmark, không tin thẳng MTEB tiếng Anh</td></tr>
+<tr><td>Ngân sách vận hành</td><td>Chấp nhận vận hành GPU self-host (BGE-M3 miễn phí nhưng cần hạ tầng) hay ưu tiên API trả tiền theo lượt (Voyage/OpenAI, không cần vận hành gì)?</td></tr>
+<tr><td>Quy mô corpus hiện tại</td><td>Corpus nhỏ (vài KB file) → có thể trì hoãn quyết định embedding model tới khi thật sự cần semantic search, không cần tối ưu sớm</td></tr>
+<tr><td>Có cần MRL truncation/quantization không? (mục 5-6)</td><td>Corpus đã tiến gần mốc hàng triệu vector VÀ RAM/storage đã đo thấy là nút thắt thật chưa? Nếu chưa → giữ nguyên full-precision, full-dimension, đơn giản hơn để debug</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div><p>KB hiện tại (<code>.claude/skills/daily-investor-report/kb/*.md</code>) đã <strong>chunk đúng theo heading</strong> — không cần đổi. Nếu tương lai mở rộng sang BCTC/tin tức, áp dụng bảng chunking theo loại tài liệu ở mục 2 (đặc biệt: không bao giờ cắt giữa 1 bảng số liệu BCTC). NẾU dự án triển khai embedding cho KB tiếng Việt, ưu tiên đánh giá <strong>BGE-M3</strong> trước (multilingual, self-host, không phụ thuộc thêm 1 API provider ngoài Claude) — vì dự án đã có triết lý tối thiểu hoá external dependency (không dùng orchestration framework khi chưa cần; không dùng vector DB khi chưa cần, xem R4.1). Nếu chất lượng BGE-M3 không đủ trên eval set tiếng Việt tự tạo (đo bằng quy trình ở mục 4), mới cân nhắc Qwen3-Embedding (self-host, top MTEB v2 open-weight) hoặc Voyage voyage-4-large/voyage-4-lite (API trả phí, đồng bộ hệ sinh thái Anthropic). <strong>Về MRL/quantization (mục 5-6)</strong>: ở quy mô KB hiện tại (vài nghìn chunk), lợi ích tiết kiệm bộ nhớ gần như bằng 0 (vài nghìn vector dù không nén cũng chỉ tốn vài chục MB) — 2 kỹ thuật này chỉ đáng cân nhắc CÙNG THỜI ĐIỂM với việc cân nhắc ANN index chuyên dụng (R4.5), tức là khi corpus tiến gần mốc hàng triệu chunk trở lên, không phải áp dụng sớm "cho tối ưu".</p></div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li>Dùng MTEB benchmark tiếng Anh để chọn embedding model cho tài liệu tiếng Việt mà không tự verify trên eval set tiếng Việt thật — số điểm cao trên benchmark tổng quát không đảm bảo hiệu năng tốt trên thuật ngữ ngành hẹp.</li>
+<li>Cắt fixed-size không quan tâm tới cấu trúc tài liệu (VD cắt giữa 1 bảng số liệu, giữa 1 câu hỏi-đáp trong transcript) — lỗi này KHÔNG thể sửa được bằng tầng rerank hay hybrid phía sau, vì thông tin đã mất vĩnh viễn từ bước chuẩn bị dữ liệu.</li>
+<li>Đổi embedding model giữa chừng mà quên re-index toàn bộ corpus cũ (liên hệ chéo với lỗi đã nêu ở R4.1 §3) — 2 không gian vector không tương thích với nhau.</li>
+<li>Tối ưu chunking/embedding sớm khi corpus còn quá nhỏ để cần semantic search — dành thời gian cho việc chưa có nhu cầu thật, trong khi retrieval exact-match đơn giản đã đủ dùng ở quy mô đó.</li>
+<li>Cắt bớt chiều của 1 embedding KHÔNG được train MRL rồi kỳ vọng chất lượng giữ nguyên như model có MRL — 2 việc trông giống nhau (đều "ít chiều hơn") nhưng chỉ MRL đảm bảo prefix vẫn hữu ích, cắt ngẫu nhiên trên model thường phá huỷ chất lượng.</li>
+<li>Dùng binary quantization mặc định vì thấy "384× nén" hấp dẫn mà không tự đo recall trên model + domain cụ thể — mức mất mát phụ thuộc kiến trúc model (ModernBERT chịu tốt, E5 chịu kém hơn) và sụp mạnh khi kết hợp với số chiều đã bị MRL cắt quá thấp.</li>
+<li>Coi late chunking và Contextual Retrieval là "2 lựa chọn cạnh tranh, chọn 1" — thực chất khác lớp can thiệp (embedding model vs LLM sinh text), có thể chọn late chunking trước vì rẻ hơn, chỉ thêm Contextual Retrieval nếu vẫn chưa đủ.</li>
+<li>Dùng ngưỡng percentile-95 mặc định của 1 thư viện semantic chunking mà không kiểm tra trên chính phân phối distance của domain mình — với câu ngắn chỉ chứa 1 con số/ticker (phổ biến trong văn bản tài chính), độ lệch ngữ nghĩa giữa câu có thể không ổn định như văn bản tự sự thông thường.</li>
+</ul>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3><ul>
+<li>Chọn đúng chunking strategy cho 3-4 loại tài liệu khác nhau (Markdown có heading / BCTC bảng số / tin tức đoạn văn / transcript hội thoại), giải thích được lý do.</li>
+<li>Giải thích được vì sao cắt sai chunking là lỗi KHÔNG THỂ sửa bằng rerank hay hybrid retrieval phía sau.</li>
+<li>Thiết kế được quy trình 5 bước tự re-verify 1 embedding model trên domain tiếng Việt thật, không dựa vào điểm MTEB tiếng Anh.</li>
+<li>Giải thích được vì sao BGE-M3 là ứng viên ưu tiên đầu tiên cho dự án <code>predictor</code> cụ thể (không phải cho mọi dự án nói chung).</li>
+<li>Với 1 đoạn văn bản BCTC cho trước, tự chỉ ra được cách chunk sai (fixed-size cắt ngang bảng) và cách chunk đúng (theo bảng hoàn chỉnh).</li>
+<li>Tính tay được tỉ lệ nén cộng dồn khi áp cả MRL truncation lẫn quantization lên 1 embedding cho trước (số chiều gốc, số chiều sau cắt, số byte/chiều trước-sau).</li>
+<li>Giải thích được vì sao binary quantization là "vách đá hiệu năng" chứ không phải giảm dần đều, và biết mức mất mát phụ thuộc kiến trúc model cụ thể.</li>
+<li>Giải thích được cơ chế late chunking (embed toàn văn bản 1 lần, pool token-embedding theo ranh giới chunk SAU), phân biệt đúng với naive chunking và Contextual Retrieval của Anthropic theo đúng lớp can thiệp (embedding model vs LLM).</li>
+<li>Tính tay được quyết định breakpoint semantic chunking từ 1 dãy cosine similarity liên tiếp cho trước và 1 ngưỡng percentile cho trước, xác định đúng vị trí cắt chunk.</li>
+</ul></div>
+
+<div class="nav-bottom">
+  <a href="R4_5_hnsw_ivf.html">← R4.5 · HNSW/IVF</a>
+  <a href="R5_1_tool_use.html">R5.1 · LLM Augmentation — Tool Use →</a>
+</div>
+
+</div>
+</body>
+</html>

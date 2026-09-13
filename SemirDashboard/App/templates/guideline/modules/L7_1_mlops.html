@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L7.1 — MLOps Full Lifecycle</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 7 · Module 1</div>
+  <h1>7.1 · MLOps Full Lifecycle</h1>
+  <p class="subtitle">Data → train → serve → monitor → retrain. Feature store, model registry, drift detection. V20 execution plan là MLOps textbook.</p>
+  <div class="level">Level 7 · Production · ~35 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Vẽ full MLOps lifecycle</li>
+  <li>Feature store concept</li>
+  <li>Model registry + versioning</li>
+  <li>Drift detection (data, concept, prediction)</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 MLOps bằng ngôn ngữ đời thường</div>
+<p><strong>Trồng lúa</strong>: Không phải chỉ gieo hạt → gặt lúa. Cần cả pipeline: chuẩn bị đất (data collection) → gieo (train) → chăm bón (validate) → gặt (deploy) → xay xát (serving) → bán (monitor doanh thu) → mua giống mới (retrain). Bỏ 1 khâu = không có gạo trên bàn.</p>
+<p><strong>MLOps</strong> = DevOps + ML-specific: data versioning (DVC), model registry (MLflow), CI/CD cho model (không chỉ code), monitoring drift, auto-retrain. Model không phải "code chạy 1 lần rồi thôi" — nó già đi theo thời gian và cần chăm sóc liên tục.</p>
+</div>
+
+<h2>1. Full lifecycle</h2>
+
+<pre><code>┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│  Data → Feature engineering → Feature store              │
+│    ↓                                                     │
+│  Train → Evaluate → Register model                       │
+│    ↓                                                     │
+│  Deploy (canary → prod) → Serve                          │
+│    ↓                                                     │
+│  Monitor (metrics, drift) → Alert → Retrain trigger      │
+│    ↓                                                     │
+│  Loop back to Train                                      │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+</code></pre>
+
+<h2>2. Feature store</h2>
+
+<div class="callout">
+<div class="label">Vì sao cần</div>
+<p>Model V18 dùng RSI, MACD, MA. Nếu train pipeline compute khác inference pipeline → training-serving skew → prod fail.</p>
+<p>Feature store: single source of truth cho features.</p>
+</div>
+
+<h3>Architecture</h3>
+<pre><code>┌── Offline store ───┐        ┌── Online store ──┐
+│  (Parquet, BigQ)    │        │  (Redis, DynamoDB)│
+│  Historical         │        │  Latest values    │
+│  For training       │  ←→   │  For inference    │
+│  Batch scoring      │        │  Real-time        │
+└─────────────────────┘        └───────────────────┘
+              ↑                        ↑
+              └── Same transformation ─┘
+              (guarantee no skew)
+
+# Feast (open-source), Tecton (commercial), Databricks Feature Store
+</code></pre>
+
+<h2>3. Model registry</h2>
+
+<div class="callout">
+<div class="label">Vì sao cần (đọc TRƯỚC ví dụ)</div>
+<p><strong>Model registry</strong> = "sổ hộ tịch" cho model. Mỗi lần train ra model mới, registry ghi lại: model này version bao nhiêu, train từ data nào, code commit nào, đo được metrics gì, đang ở trạng thái nào (dev/staging/prod). Không có registry → không ai biết "model đang chạy prod tên gì, train ngày nào, có rollback được không" — giống công ty không lưu hợp đồng lao động, hỏi ai đang làm vị trí gì cũng không biết.</p>
+<p>Khác <strong>feature store</strong> (lưu dữ liệu đầu vào) và <strong>experiment tracking</strong> (lưu log các lần thử nghiệm chưa chắc dùng) — model registry chỉ lưu các model đã "tốt nghiệp" từ experiment, sẵn sàng candidate cho production.</p>
+</div>
+
+<pre><code>Model versioning:
+├─ v1: baseline (2024-01)
+├─ v2: added foreign flow features
+├─ v3: retrained monthly (2024-Q2)
+├─ v3.1: hotfix bad quantization
+├─ v4: current production
+└─ v5-candidate: A/B testing
+
+# Registry tracks:
+- Model artifacts (weights)
+- Training data version
+- Code version (git commit)
+- Metrics on evaluation set
+- Deployment status (dev, staging, prod, deprecated)
+
+# Tools: MLflow, Weights & Biases, Neptune
+</code></pre>
+
+<h2>4. V20 model dir versioning (real example)</h2>
+
+<pre><code>/app/models/
+├─ v18/                          ← current production
+├─ v18.backup.20260620/          ← rollback point
+├─ v18_original_79feat/          ← clean rollback (V20 Slice 0.5 lesson)
+├─ v20-candidate/                ← being validated
+├─ v20/                          ← after cut-over
+
+# Never in-place edit. Always new dir + atomic mv.
+# Documented in reports/_baselines/README_model_dirs.md
+</code></pre>
+
+<h2>5. Drift detection</h2>
+
+<h3>3 loại drift</h3>
+
+<table>
+<tr><th>Type</th><th>What</th><th>Detect</th></tr>
+<tr><td>Data drift</td><td>Feature distribution shift</td><td>KL divergence, PSI, KS test</td></tr>
+<tr><td>Concept drift</td><td>P(y|X) change</td><td>Accuracy drop, prediction feedback</td></tr>
+<tr><td>Prediction drift</td><td>Model output distribution shift</td><td>Compare output histograms over time</td></tr>
+</table>
+
+<h3>Population Stability Index (PSI)</h3>
+<pre><code>PSI = Σ (actual% - expected%) × ln(actual% / expected%)
+
+# expected% = phân phối feature lúc TRAIN (baseline, ví dụ RSI hôm train)
+# actual%   = phân phối feature HÔM NAY (production, đang phục vụ)
+# Chia feature thành bins (ví dụ RSI: 0-10, 10-20, ... 90-100),
+# so % lượng data rơi vào mỗi bin giữa 2 thời điểm.
+
+# Interpret:
+# PSI < 0.1: no significant change
+# 0.1 <= PSI < 0.25: minor shift, monitor
+# PSI >= 0.25: major shift, retrain candidate
+
+# Compute per feature, alert on top-10 features
+</code></pre>
+
+<p><strong>Ví dụ tính tay</strong> — feature RSI chia 2 bin đơn giản (oversold &lt;30, còn lại ≥30):</p>
+<pre><code>Lúc TRAIN (expected%): bin &lt;30 chiếm 20%, bin ≥30 chiếm 80%
+HÔM NAY (actual%):      bin &lt;30 chiếm 35%, bin ≥30 chiếm 65%  (thị trường downtrend nhiều hơn)
+
+PSI = (0.35-0.20)×ln(0.35/0.20) + (0.65-0.80)×ln(0.65/0.80)
+    = 0.15×ln(1.75)            + (-0.15)×ln(0.8125)
+    = 0.15×0.5596              + (-0.15)×(-0.2076)
+    = 0.0839                  + 0.0311
+    = 0.115
+
+→ PSI=0.115 nằm trong khoảng [0.1, 0.25) = "minor shift, monitor" — chưa
+  đủ ngưỡng retrain nhưng đáng theo dõi thêm vài ngày.</code></pre>
+
+<div class="callout">
+<div class="label">🔍 Common confusion — KL divergence vs KS test vs PSI</div>
+<p>Cả 3 đều trả lời "2 phân phối có khác nhau không?" nhưng khác cách đo:</p>
+<ul>
+  <li><strong>KL divergence</strong>: đo "tốn bao nhiêu thông tin" nếu dùng phân phối cũ để xấp xỉ phân phối mới. Số càng lớn = khác biệt càng nhiều. Nhạy với bin rỗng (chia 0).</li>
+  <li><strong>KS test (Kolmogorov-Smirnov)</strong>: so khoảng cách lớn nhất giữa 2 đường cong phân phối tích lũy (CDF). Có p-value → trả lời "khác biệt có ý nghĩa thống kê không".</li>
+  <li><strong>PSI</strong>: biến thể của KL divergence, dùng phổ biến trong ngành finance/credit scoring vì có ngưỡng diễn giải rõ ràng (0.1 / 0.25) — dễ set alert tự động hơn p-value.</li>
+</ul>
+<p>V18/V20 dùng PSI vì đơn giản, dễ alert theo threshold cố định, không cần hiểu thống kê sâu để action.</p>
+</div>
+
+<h2>6. Retrain triggers</h2>
+
+<ul>
+  <li><strong>Scheduled</strong>: monthly, quarterly</li>
+  <li><strong>Drift-based</strong>: PSI &gt; threshold auto-trigger</li>
+  <li><strong>Performance-based</strong>: 7d rolling hit rate drops &gt; 10pp (V20 Slice 5 pattern)</li>
+  <li><strong>Data-based</strong>: N new labels available</li>
+  <li><strong>Manual</strong>: engineer decision</li>
+</ul>
+
+<h2>7. Canary deployment</h2>
+
+<pre><code>Route 1% traffic to v20-candidate, 99% to v18-current
+Monitor: v20 latency, error rate, business metrics
+
+Day 1: 1%   → OK
+Day 3: 5%   → OK
+Day 7: 25%  → OK
+Day 14: 100% → cut over. v18 archived.
+
+# Fast rollback if v20 anomaly at any stage.
+</code></pre>
+
+<h2>8. Training-serving skew</h2>
+
+<div class="callout danger">
+<div class="label">Common bug</div>
+<p>Train dùng pandas rolling(20).mean(), serve dùng NumPy convolution — subtle differences (window inclusive vs exclusive). Prediction offset → prod accuracy drop.</p>
+<p>Fix: shared code path. V18 dùng cùng <code>features_v18.py::build_v18_features()</code> cho cả train và inference. Test: assert train_features == serve_features on same input.</p>
+</div>
+
+<h2>9. Retraining pipeline</h2>
+
+<pre><code>Trigger → Fetch data → Feature engineering → Train
+     ↓                                          ↓
+     └── Validate features ─────────────────── Evaluate
+                                                ↓
+                                             Champion vs challenger
+                                                ↓
+                                             Approve → Register → Canary → Prod
+</code></pre>
+
+<div class="callout">
+<div class="label">💡 Champion vs Challenger là gì</div>
+<p><strong>Champion</strong> = model đang chạy production hiện tại (đương kim vô địch). <strong>Challenger</strong> = model mới vừa train xong, đang xin "đấu" để thay thế. So sánh 2 model trên cùng 1 evaluation set (offline) hoặc cùng traffic (online, xem canary section 7) — challenger phải thắng rõ ràng trên metric quan trọng (hit rate, ECE) mới được promote. Nếu challenger thua hoặc ngang → giữ nguyên champion, không đổi vì đổi tốn risk mà không lợi.</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh MLOps components + Feature store options (đọc SAU sections 2-9)</div>
+
+<h4>MLOps components — what/why/tools</h4>
+<table>
+<tr><th>Component</th><th>Vấn đề giải quyết</th><th>Tools phổ biến 2024-2025</th></tr>
+<tr><td><strong>Feature store</strong></td><td>Cùng features cho train + serve, low latency</td><td>Feast, Tecton, Hopsworks, DataBricks Feature Store</td></tr>
+<tr><td><strong>Model registry</strong></td><td>Version, metadata, lineage của models</td><td>MLflow, Weights & Biases, Neptune, Vertex AI</td></tr>
+<tr><td><strong>Experiment tracking</strong></td><td>Compare hyperparams + metrics runs</td><td>MLflow, W&B, Neptune, Comet</td></tr>
+<tr><td><strong>Data versioning</strong></td><td>Reproducibility — data thay đổi</td><td>DVC, Delta Lake, LakeFS</td></tr>
+<tr><td><strong>Pipeline orchestration</strong></td><td>Schedule + DAG training/serving</td><td>Airflow, Prefect, Kubeflow, Dagster</td></tr>
+<tr><td><strong>Model serving</strong></td><td>Low-latency inference</td><td>KServe, BentoML, TorchServe, Triton</td></tr>
+<tr><td><strong>Monitoring</strong></td><td>Drift, accuracy degrade</td><td>Evidently, Arize, WhyLabs, Aporia</td></tr>
+<tr><td><strong>Feature drift</strong></td><td>Detect distribution shift</td><td>Evidently, Arize, custom KS test</td></tr>
+</table>
+
+<h4>Feature store types compare</h4>
+<table>
+<tr><th></th><th>Offline (batch)</th><th>Online (real-time)</th><th>Streaming</th></tr>
+<tr><td><strong>Latency</strong></td><td>Minutes-hours</td><td>&lt;10ms</td><td>Seconds</td></tr>
+<tr><td><strong>Storage</strong></td><td>Data warehouse (BigQuery)</td><td>Redis, DynamoDB</td><td>Kafka + KV</td></tr>
+<tr><td><strong>Use case</strong></td><td>Training features</td><td>Serving features</td><td>Fresh features (fraud)</td></tr>
+<tr><td><strong>Cost</strong></td><td>Rẻ (compute on-demand)</td><td>Cao (memory + always on)</td><td>Rất cao</td></tr>
+<tr><td><strong>Training-serving skew fix</strong></td><td>N/A</td><td>Cùng codebase compute offline + online</td><td>Same</td></tr>
+</table>
+
+<h4>V18 MLOps stack thực tế</h4>
+<pre><code># PredictStock V18 (production)
+Feature computation: backend/predict/features_v18.py (single source)
+Model storage: /app/models/v18/{ticker}.t{h}.joblib
+Model registry: model_registry table trong Postgres (SQL query)
+Training pipeline: docker exec + train_v18_unified.py
+Serving: FastAPI /api/predict endpoint
+Monitoring: reports/_qa/ + composite confidence tracking
+Retrain trigger: manual + drift detection (V20 planned)
+
+Maturity level: ~Level 1 (Google's model — automated train+eval pipeline exists, nhưng retrain trigger + deploy vẫn manual; Level 2 là target của V20, chưa đạt)
+</code></pre>
+
+<h4>Decision matrix — chọn components nào?</h4>
+<table>
+<tr><th>Team size</th><th>Recommend stack</th></tr>
+<tr><td>Solo dev / hobby</td><td>Local MLflow + Docker</td></tr>
+<tr><td>Startup 2-5 dev</td><td>MLflow + Airflow + BentoML + Evidently</td></tr>
+<tr><td>Growth stage 10+ dev</td><td>Feast + Kubeflow + KServe + Arize</td></tr>
+<tr><td>Enterprise</td><td>Vertex AI / SageMaker (managed)</td></tr>
+<tr><td>ML nghiêm túc + budget</td><td>DataBricks (all-in-one)</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: MLOps stack không phải "bigger is better". Startup dùng MLflow đơn giản thắng enterprise dùng Kubeflow phức tạp nếu team không sẵn sàng vận hành. Match tools với team maturity + workload.</p>
+</div>
+
+<h2>10. MLOps maturity levels (Google)</h2>
+
+<table>
+<tr><th>Level</th><th>Description</th></tr>
+<tr><td>0</td><td>Manual: data scientist run notebook, hand deploy</td></tr>
+<tr><td>1</td><td>ML pipeline automated: train + eval automatic, deploy manual</td></tr>
+<tr><td>2</td><td>CI/CD for models: automated retrain + deploy pipeline</td></tr>
+</table>
+
+<p>V20 execution plan pushes toward Level 2 với slice sequencing + gates + rollback.</p>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Feature store — vì sao cần?</p>
+<p class="a">Prevent training-serving skew. Same transformation guaranteed for both. Also: reuse features across models, low-latency online serving.</p>
+
+<p class="q">2. Data drift vs Concept drift?</p>
+<p class="a">Data drift: P(X) change (input distribution). Concept: P(y|X) change (relationship input-target). Data drift detectable without labels (features histogram). Concept requires ground truth (labels catch up).</p>
+
+<p class="q">3. PSI = 0.35 feature "RSI". Action?</p>
+<p class="a">Major shift. Investigate: market regime change? Data pipeline bug? User behavior shift? Retrain if root cause not fixable. Meanwhile: watch model accuracy — may need canary rollout of new model.</p>
+
+<p class="q">4. Canary deploy 5%. New model higher error rate. Do gì?</p>
+<p class="a">(1) Investigate error type — same as old or new bug? (2) Freeze rollout. (3) Reproduce locally. (4) Fix + re-canary. (5) If severity high: rollback 100% to old immediately.</p>
+
+<p class="q">5. V20 model dir hygiene — 3 rules từ V19.5 lessons?</p>
+<p class="a">(1) Never in-place edit. (2) Immutable versioned dirs (v20-candidate/, v20/). (3) Atomic cut-over via mv + engine restart. Rollback = single mv command. Documented trong README_model_dirs.md.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>V20 plan §1: 7 operating principles = MLOps textbook</li>
+    <li>Model registry: <code>backend/db.py::model_registry</code> table</li>
+    <li>Consistency cron (drift proxy): <code>backend/scripts/v20_consistency_report.py</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 Chip Huyen — <em>Designing Machine Learning Systems</em> (2022)</li>
+    <li>📝 <a href="https://ml-ops.org/">MLOps.org principles</a></li>
+    <li>📄 <a href="https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning">Google MLOps whitepaper</a></li>
+    <li>📖 <a href="https://feast.dev/">Feast feature store docs</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L6_6_observability.html">← L6.6</a>
+  <a href="L7_2_deployment.html">L7.2 · Deployment →</a>
+</div>
+
+</div>
+</body>
+</html>

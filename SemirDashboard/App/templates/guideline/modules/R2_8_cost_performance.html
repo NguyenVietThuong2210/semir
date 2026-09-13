@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2.8 · Cost/Performance Trade-offs — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM APIs · Điểm 8/8</div>
+  <h1>R2.8 · Cost/Performance Trade-offs</h1>
+  <p class="subtitle">Bài cuối của LLM APIs — không lặp lại số liệu cost đã có, mà đưa ra 1 khung quyết định 4 câu hỏi để ghép lại 7 khái niệm trước đó (KV cache, Prompt Caching, Structured Output, Rate limits...) thành 1 checklist thực chiến.</p>
+  <div class="level">Độ khó: Khó · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Áp dụng đúng thứ tự ưu tiên tối ưu cost: output tokens trước, input tokens sau (không phải ngược lại).</li>
+<li>Trả lời được 4 câu hỏi quyết định trước khi chọn model/kiến trúc cho 1 tính năng LLM mới.</li>
+<li>Ghép lại đúng 7 khái niệm đã học (R2.1-R2.7) thành 1 bảng tra cứu "nút thắt → công cụ".</li>
+<li>Tính được ước lượng tiết kiệm khi áp dụng đúng combo Prompt Caching + Structured Output + Batch API.</li>
+<li>Phân biệt được <strong>model routing</strong> (1 quyết định duy nhất, trước khi gọi) và <strong>model cascading</strong> (gọi tuần tự, leo thang khi cần) — 2 chiến lược cost-quality khác nhau, không phải "cái nào tốt hơn" mà là 2 điểm khác nhau trên trục đánh đổi độ chính xác quyết định so với độ phức tạp vận hành.</li>
+<li>Giải thích được vì sao "cost-per-token" không phải chỉ số đúng để tối ưu — chỉ số đúng là "cost-per-successful-output".</li>
+<li>Phân biệt được Prompt Compression (giảm số token thật sự gửi, hoạt động cả với nội dung không lặp lại) với Prompt Caching (giảm giá phần token lặp lại, không đổi số token gửi) — biết đây là 2 đòn bẩy cộng dồn được, không cạnh tranh.</li>
+<li>Biết vì sao cần 1 lớp cost observability (VD Langfuse/Helicone) trước khi kết luận bất kỳ tối ưu nào ở bài này thực sự hiệu quả trên dữ liệu thật.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Đã có ở module cũ — đọc trước khi vào bài này</div>
+<p>Toàn bộ cost anatomy (vì sao output đắt gấp 5× input, TTFT vs TPOT, break-even self-host vs API) đã có RẤT sâu ở <code>../modules/L5_5_cost_latency.html §1</code>. Bài này KHÔNG lặp lại số liệu đó — chỉ đưa thêm 1 khung quyết định thực chiến để áp dụng 7 khái niệm R2.1-R2.7 vào 1 tính năng cụ thể.</p>
+</div>
+<p><strong>Prerequisite</strong>: nên đọc qua R2.1 (KV caching), R2.4 (Prompt Caching), R2.5 (Structured Outputs), R2.7 (Rate limits/Retries) trước — bài này là bài "tổng hợp" của cả 8 điểm trong topic LLM APIs.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Tưởng tượng bạn vận hành 1 quán ăn. Chi phí không chỉ nằm ở "mua nguyên liệu" (input token) — phần lớn chi phí nằm ở "thời gian đầu bếp nấu + trình bày món" (output token, đắt hơn 5×). Muốn giảm chi phí, bạn không cắt giảm nguyên liệu trước — bạn tối ưu công thức nấu (structured output = công thức chuẩn, không lan man), rồi mới tính đến mua nguyên liệu rẻ hơn (input optimization, cache).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Khung quyết định 4 câu hỏi — bổ sung chưa có ở module cũ</h3>
+<p>Trước khi implement 1 tính năng LLM mới, trả lời tuần tự 4 câu hỏi sau — thứ tự trả lời quyết định kiến trúc cuối cùng:</p>
+<ol>
+<li><strong>Latency-sensitive hay batch-tolerant?</strong> User đang chờ trực tiếp (chat UI) → tối ưu TTFT/TPOT, cân nhắc model nhỏ + streaming (xem <code>L5_5 §5.5, §9</code>). Chạy nền/EOD (report hàng ngày) → dùng Batch API (R2.7), không cần model nhanh nhất.
+  <ul>
+  <li><em>Đào sâu thêm (2026)</em>: ngay trong nhóm "latency-sensitive", vẫn có 2 loại cần đo bằng chỉ số KHÁC NHAU.</li>
+  <li><strong>Response dạng streaming</strong> (chatbot, trợ lý viết văn hiển thị từng chữ): <strong>TTFT quyết định trải nghiệm</strong> — người dùng cảm nhận "nhanh" từ lúc thấy ký tự ĐẦU TIÊN, không phải lúc xong toàn bộ.</li>
+  <li><strong>Response không streaming</strong> (agent gọi tool nội bộ, pipeline RAG chờ đủ kết quả rồi mới xử lý tiếp): <strong>throughput tổng (TPOT × độ dài output)</strong> mới là thứ đáng tối ưu — không ai "nhìn thấy" token đang chảy ra để cảm nhận TTFT.</li>
+  <li>→ Chọn sai chỉ số để tối ưu (VD tối ưu TTFT cho 1 pipeline backend không streaming) là tối ưu nhầm mục tiêu.</li>
+  </ul>
+</li>
+<li><strong>Task cần reasoning nhiều bước hay chỉ format/tổng hợp?</strong> Dùng reasoning model CHỈ KHI thật sự cần multi-step planning — dùng sai chỗ tốn <strong>10-100× chi phí / 5-50× khối lượng token</strong> vì hidden reasoning tokens (số liệu đã dẫn nguồn ở <code>R2_3_types_of_llms.html</code>).</li>
+<li><strong>Output có schema cứng không?</strong> Nếu có, Structured Output (R2.5) giảm cả cost (ít token thừa do giải thích dài dòng) lẫn lỗi parse — 2 lợi ích cùng lúc từ 1 thay đổi.</li>
+<li><strong>Phần nào của prompt lặp lại giữa nhiều lần gọi?</strong> Đây là ứng viên Prompt Caching (R2.4) — thường là đòn bẩy cost lớn nhất, cũng bị bỏ qua nhiều nhất trong thực tế vì "trông có vẻ đã hoạt động đúng rồi" (không có gì crash, chỉ đang trả thừa tiền âm thầm).</li>
+</ol>
+
+<h3>2. Vì sao thứ tự "output trước, input sau" quan trọng</h3>
+<p>Nhiều dev mới tối ưu sai thứ tự: thấy prompt dài → cắt bớt input trước. Nhưng output đắt gấp ~5× input (đã chứng minh ở <code>L5_5_cost_latency.html §1</code>) — 1 response dài thêm 200 token tốn tương đương cắt giảm 1000 token input. Structured Output (R2.5) trực tiếp tấn công đúng chỗ đắt nhất: ép model trả lời ngắn gọn, đúng schema, không lan man giải thích thừa.</p>
+
+<h3>3. Model routing vs model cascading — 2 chiến lược cost-quality khác nhau, không phải "cách nào đúng hơn"</h3>
+<p>Câu hỏi 1 ở mục 1 ("latency-sensitive hay batch-tolerant") giả định đã BIẾT trước nên dùng model nào. Nhưng ở quy mô lớn (nhiều loại câu hỏi, độ khó rất khác nhau mỗi lần), có 2 cách hệ thống hoá việc "chọn đúng model cho đúng độ khó" — khác nhau ở CƠ CHẾ, không phải khác nhau ở "cái nào là chân lý":</p>
+<table>
+<tr><th>Chiến lược</th><th>Cơ chế</th><th>Số lần gọi model/request</th><th>Ưu điểm</th><th>Nhược điểm</th></tr>
+<tr><td><strong>Model routing</strong></td><td>1 bộ phân loại (nhỏ, rẻ) nhìn câu hỏi TRƯỚC, quyết định NGAY nên gửi tới model nhỏ hay lớn — chỉ 1 lần gọi model chính duy nhất</td><td>1 (cộng thêm 1 lần gọi router rất rẻ)</td><td>Latency thấp — không có bước "thử rồi mới biết cần leo thang"</td><td>Quyết định 1 lần, sai thì sai luôn — cần router đủ chính xác (VD RouteLLM train trên dữ liệu ưu tiên người dùng thật)</td></tr>
+<tr><td><strong>Model cascading</strong></td><td>Luôn thử model NHỎ trước; nếu câu trả lời không đủ tin cậy (đo bằng 1 tiêu chí phụ, VD confidence hoặc self-consistency), mới "leo thang" gọi tiếp model lớn hơn</td><td>1-2+ (tuỳ có phải leo thang không)</td><td>Tiết kiệm rất mạnh khi phần lớn câu hỏi dễ — FrugalGPT (nghiên cứu tiên phong) đo được giảm tới 98% chi phí trong 1 số benchmark</td><td>Latency TĂNG cho các case phải leo thang (tốn 2 lần gọi thay vì 1); cần tiêu chí "đủ tin cậy chưa" đáng tin cậy, nếu không sẽ leo thang sai hoặc dừng sai</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Không phải chọn 1 — đây là quyết định kiến trúc theo đặc điểm traffic</div>
+<p>Routing phù hợp khi latency là ưu tiên số 1 và có đủ dữ liệu để train/hiệu chỉnh 1 router đáng tin cậy. Cascading phù hợp khi phần lớn traffic là câu hỏi dễ (model nhỏ đã đủ), chấp nhận latency cao hơn cho thiểu số case khó, đổi lấy tiết kiệm cost rất lớn ở phần đa số. Khung quyết định rộng hơn (theo nghiên cứu 2026) — 3 tầng, không loại trừ nhau:</p>
+<ul>
+<li><strong>Rule tĩnh trước khi gọi (pre-request)</strong>: rẻ nhất nhưng thô nhất.</li>
+<li><strong>Cascade lúc suy luận (at-inference)</strong>: chính xác nhất nhưng phức tạp vận hành nhất.</li>
+<li><strong>Retry sau khi có response (post-response)</strong>: lưới an toàn cuối cùng.</li>
+<li>→ Hệ thống trưởng thành thường có cả 3 tầng cùng lúc.</li>
+</ul>
+</div>
+
+<h3>4. "Cost-per-token" là chỉ số sai để tối ưu — chỉ số đúng là "cost-per-successful-output"</h3>
+<p>Theo dõi "đã tiêu bao nhiêu $/1M token" là chỉ số dễ đo nhưng KHÔNG phản ánh giá trị thật: 1 request rẻ (token thấp) nhưng trả lời sai/phải gọi lại vẫn tốn hơn 1 request đắt hơn nhưng đúng ngay lần đầu. Chỉ số đúng để tối ưu là <strong>cost-per-successful-output</strong> — tổng chi phí (gồm cả các lần gọi lại do lỗi/leo thang cascade/retry) chia cho số kết quả THỰC SỰ dùng được. Đây là lý do 5 đòn bẩy đã học (Prompt Caching, Structured Output, Batch API, routing, cascading) cần được đo bằng chỉ số này, không phải bằng "giá/1M token" đơn thuần của riêng 1 lần gọi.</p>
+
+<h3>5. Đòn bẩy thứ 6 chưa nhắc: Prompt Compression — nén NỘI DUNG, khác hẳn Prompt Caching (nén CHI PHÍ của nội dung lặp lại)</h3>
+<p>Dễ nhầm 2 khái niệm chỉ vì cùng chữ "giảm chi phí input": <strong>Prompt Caching</strong> (R2.4) làm cho phần input LẶP LẠI rẻ hơn (không đổi số token thật sự gửi). <strong>Prompt Compression</strong> làm cho input NGẮN LẠI thật sự — giảm số token gửi đi, hoạt động được cả với nội dung KHÔNG lặp lại (VD 1 đoạn tin tức dài, khác nhau mỗi lần).</p>
+<p>Cơ chế tiêu biểu (họ LLMLingua): dùng 1 model NHỎ để tính "perplexity" (độ khó đoán) của từng token trong prompt gốc — token nào có perplexity THẤP (dễ đoán, đóng góp ít thông tin mới) bị loại bỏ trước, giữ lại token mang nhiều thông tin. Phiên bản LLMLingua-2 đổi hướng thành bài toán phân loại token (giữ/bỏ), dùng model nén nhỏ hơn nên nhanh hơn hẳn.</p>
+<table>
+<tr><th>Kỹ thuật</th><th>Tỷ lệ nén</th><th>Đánh đổi chất lượng</th><th>Đặc điểm</th></tr>
+<tr><td>LLMLingua (gốc)</td><td>Tới ~20× trên 1 số benchmark (GSM8K, BBH, ShareGPT)</td><td>Tối thiểu ở tỷ lệ nén vừa phải</td><td>Dùng perplexity từ 1 model nhỏ để chấm điểm từng token</td></tr>
+<tr><td>LLMLingua-2</td><td>2-5× phổ biến trong thực tế production</td><td>Thấp hơn LLMLingua gốc ở CÙNG tỷ lệ nén (tốt hơn, không phải kém hơn)</td><td>Bài toán phân loại token, giảm latency end-to-end tới 2.9× nhờ model nén nhỏ hơn, nhanh hơn</td></tr>
+<tr><td>LongLLMLingua</td><td>~4× (giữ lại phần liên quan câu hỏi)</td><td>Có thể CẢI THIỆN chất lượng (+21.4% trên NaturalQuestions) — vì loại bỏ được nhiễu không liên quan, không chỉ nén</td><td>"Question-aware" — chấm điểm mức liên quan giữa từng đoạn context và câu hỏi cụ thể, không nén đồng đều</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Ngưỡng an toàn — không phải "nén càng nhiều càng tốt"</div>
+<p>Benchmark 2026 chỉ rõ: nén ở mức 30-70% (giữ 30-70% token gốc) từ các bộ nén extractive tốt nhất chỉ mất RẤT ÍT độ chính xác. Nhưng vượt qua ngưỡng ~80% nén (chỉ giữ lại &lt;20% token gốc), đánh đổi chất lượng trở nên RÕ RỆT VÀ ĐO ĐƯỢC — đây không phải quy luật tuyến tính "nén thêm 10% thì mất thêm 10% chất lượng", mà giống 1 "vách đá" chất lượng xuất hiện sau 1 ngưỡng nhất định. Không nên coi tỷ lệ nén công bố (VD "tới 20×") là an toàn ở MỌI mức — 20× thường chỉ đúng cho 1 số benchmark cụ thể, không phải cam kết chung cho mọi loại nội dung.</p>
+</div>
+<p><strong>Không cạnh tranh với Prompt Caching — cộng dồn được</strong>: với nội dung LẶP LẠI (VD system prompt cố định), Prompt Caching vẫn là lựa chọn tốt hơn (90% discount, không mất thông tin gì). Prompt Compression phát huy giá trị đúng chỗ Prompt Caching KHÔNG giúp được — phần nội dung THAY ĐỔI mỗi lần gọi (VD 1 đoạn tin tức dài đưa vào mỗi ticker) — 2 kỹ thuật nhắm vào 2 loại token khác nhau trong cùng 1 request, dùng đồng thời không mâu thuẫn.</p>
+
+<h3>6. Đo trước khi tối ưu — cost observability, không phải suy diễn</h3>
+<p>Toàn bộ 8 bài trong track này lặp lại 1 nguyên tắc: "không suy diễn, phải đo bằng dữ liệu thật". Với chi phí LLM, "đo" cụ thể nghĩa là có 1 lớp observability tách riêng khỏi log ứng dụng thông thường — theo dõi token/cost/latency ở mức từng request, từng model, từng user:</p>
+<table>
+<tr><th>Công cụ</th><th>Trọng tâm</th><th>Đặc điểm</th><th>Phù hợp nhất khi</th></tr>
+<tr><td>Langfuse</td><td>Tracing/debug pipeline agent nhiều bước</td><td>Open-source, tự host được, sở hữu dữ liệu hoàn toàn; hỗ trợ export theo chuẩn OpenTelemetry (tránh khoá chặt vào 1 vendor)</td><td>Pipeline nhiều bước (multi-step agent), cần debug sâu luồng xử lý, ngân sách LLM cỡ vừa-lớn</td></tr>
+<tr><td>Helicone</td><td>Cost/latency visibility qua tầng proxy nhẹ</td><td>Setup nhanh nhất, tự động tính cost cho 300+ model, breakdown theo user/model, cảnh báo ngân sách</td><td>Cần bật cost tracking nhanh, không cần tracing sâu từng bước xử lý nội bộ</td></tr>
+<tr><td>Dùng cả 2</td><td>Helicone ở tầng proxy (cost + cache), Langfuse cho phần pipeline cần debug sâu</td><td>Kết hợp — không phải chọn 1</td><td>Hệ thống đủ lớn để cần cả giám sát chi phí tổng thể LẪN debug chi tiết 1 số luồng quan trọng</td></tr>
+</table>
+<p><strong>Vì sao mục này thuộc đúng chủ đề "cost/performance"</strong>: không có công cụ đo, mọi con số trong 7 mục trước (routing, cascading, caching, compression...) chỉ là ước lượng lý thuyết — quyết định "có đáng đầu tư cascading không", "tỷ lệ cache-hit thật là bao nhiêu" chỉ trả lời được chính xác khi có dữ liệu usage log thật, đúng tinh thần "không suy diễn" đã nhắc lại xuyên suốt track LLM APIs.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Ước lượng tiết kiệm khi áp dụng đúng combo cho pipeline gọi LLM 86 ticker (<code>HIGHLIGHT_GROUP</code>, mode <code>all</code>):</p>
+<pre><code>Baseline (không tối ưu gì): mỗi ticker gọi lại full system prompt ~3800 token
+  + output tự do (trung bình 800 token, có giải thích dài dòng)
+  86 ticker × (3800 input + 800 output×5 "giá trị tương đương") ≈ chi phí X
+
+Sau khi áp dụng combo:
+  + Prompt Caching (R2.4): 3800 token system prompt chỉ tính phí đầy đủ ở request 1,
+    85 request còn lại chỉ trả ~10% giá gốc cho phần cached
+  + Structured Output (R2.5): output giảm từ 800 → ~400 token (bỏ giải thích lan man,
+    ép đúng field cần thiết)
+  + Batch API (R2.7): nếu chạy EOD không cần real-time, giá giảm thêm 50%
+
+→ Tiết kiệm ước tính: phần lớn đến từ Prompt Caching (input lặp lại chiếm tỷ trọng
+  lớn khi system prompt to hơn nhiều lần output mỗi ticker), phần còn lại từ giảm
+  output dài dòng. Số chính xác cần đo bằng usage log thật, không suy diễn.</code></pre>
+
+<p><strong>Ví dụ minh hoạ riêng cho cascading (mục 3)</strong> — giả định (không phải số đo thật của dự án) 1 tính năng tương lai cần LLM phân loại "tin tức có liên quan trực tiếp tới ticker hay không" trước khi đưa vào report, với 86 tin tức/ngày:</p>
+<pre><code>Không cascading — luôn gọi model lớn cho cả 86 tin tức:
+  86 × giá model lớn = baseline 100%
+
+Cascading — thử model nhỏ/rẻ trước, chỉ leo thang model lớn khi model nhỏ "không chắc":
+  Giả định 80% tin tức là case RÕ RÀNG (model nhỏ đủ tự tin phân loại đúng) —
+  20% còn lại (~17 tin) mơ hồ, cần leo thang model lớn để phân loại chính xác hơn
+  Chi phí: 86 × giá_nhỏ (mọi tin đều qua bước 1) + 17 × giá_lớn (chỉ 20% leo thang)
+  Nếu giá_lớn ≈ 10 × giá_nhỏ: 86×1 + 17×10 = 86 + 170 = 256 "đơn vị"
+  So với không cascading: 86 × 10 = 860 "đơn vị"
+  → Tiết kiệm ước tính ~70% trong kịch bản giả định này (số liệu minh hoạ tỷ lệ,
+    KHÔNG phải benchmark đo thật của dự án — muốn áp dụng thật cần đo tỷ lệ
+    "case rõ ràng vs mơ hồ" bằng dữ liệu lịch sử trước khi cam kết con số)
+
+Đánh đổi phải chấp nhận: 17 tin (20%) tốn THÊM 1 lượt gọi (model nhỏ trước,
+model lớn sau) → latency của riêng 17 tin đó cao hơn so với gọi thẳng model lớn
+ngay từ đầu — đúng nhược điểm "latency tăng cho case leo thang" đã nêu ở mục 3.</code></pre>
+
+<p><strong>Ví dụ riêng cho Prompt Compression (mục 5)</strong> — áp dụng cho phần KHÔNG cacheable của workload 86 ticker: giả định mỗi ticker kèm 1 đoạn tin tức liên quan dài trung bình 1,000 token (khác nhau mỗi ticker, không lặp lại nên Prompt Caching không giúp được gì):</p>
+<pre><code>Không nén: 86 ticker × 1,000 token tin tức × $3/1M = $0.258 (chỉ riêng phần tin tức)
+
+Nén bằng LLMLingua-2 ở tỷ lệ nén 3× (giữ ~33% token gốc, trong vùng an toàn 30-70%):
+  86 × (1,000 / 3) token × $3/1M ≈ 86 × 333 × $3/1M ≈ $0.086
+  Tiết kiệm ≈ 66% CHỈ RIÊNG phần tin tức — cộng dồn với phần tiết kiệm system prompt
+  đã tính ở ví dụ Prompt Caching (R2.4), không phải 2 khoản tiết kiệm loại trừ nhau
+
+Chi phí ẩn cần tính thêm: bản thân bước nén cũng cần 1 lời gọi model nhỏ (compressor)
+— với LLMLingua-2, model nén NHỎ hơn nhiều so với model chính, chi phí này thường
+nhỏ hơn đáng kể so với khoản tiết kiệm, nhưng vẫn cần đo thật (mục 6), không giả định
+"nén luôn miễn phí" — đây chính là 1 dạng "chi phí vận hành thêm" y hệt cascading (mục 3)
+cần 1 lượt gọi model nhỏ trước khi quyết định.</code></pre>
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Nút thắt</th><th>Công cụ</th><th>Học ở đâu</th></tr>
+<tr><td>Cost cao vì output dài</td><td>Structured output + prompt "ngắn gọn"</td><td>R2.5, bài này</td></tr>
+<tr><td>Cost cao vì prompt lặp lại nhiều lần</td><td>Prompt Caching</td><td>R2.4</td></tr>
+<tr><td>Latency cao vì prefill chậm (input dài)</td><td>Prompt Caching (skip prefill phần cached)</td><td>R2.1, R2.4</td></tr>
+<tr><td>Latency cao vì generate chậm (output dài)</td><td>Model nhỏ hơn, streaming UI</td><td><code>L5_5 §5.5, §9</code></td></tr>
+<tr><td>Throughput thấp khi gọi nhiều ticker</td><td>Batch API, continuous batching phía server</td><td>R2.7, <code>L5_5 §6</code>, <code>L4_6 §4</code></td></tr>
+<tr><td>Request lỗi rải rác (rate limit/timeout)</td><td>Retry + backoff + jitter</td><td>R2.7</td></tr>
+<tr><td>Cost cao vì luôn dùng model lớn cho mọi câu hỏi kể cả câu dễ</td><td>Model routing (1 quyết định trước) hoặc cascading (thử nhỏ trước, leo thang khi cần)</td><td>Bài này, mục 3</td></tr>
+<tr><td>Đo sai hiệu quả tối ưu bằng "giá/1M token" thay vì "giá/kết quả dùng được"</td><td>Chuyển sang đo cost-per-successful-output</td><td>Bài này, mục 4</td></tr>
+<tr><td>Cost cao vì nội dung KHÔNG lặp lại (VD tin tức dài, khác mỗi lần) vẫn đầy đủ token</td><td>Prompt Compression (LLMLingua/LongLLMLingua) — nén cả nội dung không cacheable</td><td>Bài này, mục 5</td></tr>
+<tr><td>Không biết tối ưu nào thực sự có tác dụng trên traffic thật</td><td>Cost observability (Langfuse/Helicone) — đo trước khi kết luận</td><td>Bài này, mục 6</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<ol>
+<li><strong>Kiểm tra thật</strong> xem <code>.claude/skills/daily-investor-report/SKILL.md</code> (persona + hard rules) hiện đang gửi lại dưới dạng cacheable <code>cache_control</code> breakpoint hay đang gửi full-text mỗi lần — nếu chưa cache, đây là action item đo được, chi phí thấp, không đụng logic nghiệp vụ (xem R2.4).</li>
+<li><strong>Không dùng reasoning-mode Claude</strong> cho report hàng ngày — task là tổng hợp/viết văn, không phải multi-step math/planning; dùng reasoning ở đây là đốt tiền không cần thiết (câu hỏi 2 ở §1).</li>
+<li><strong>Multi-modal cho QA pipeline có sẵn</strong>: <code>.claude/skills/daily-investor-report/scripts/capture_screenshots.py</code> đã tạo ảnh — bổ sung bước "vision model kiểm tra bố cục" là mở rộng tự nhiên (xem R2.6), không phải xây từ đầu.</li>
+<li><strong>Cân nhắc Prompt Compression cho phần tin tức/dữ liệu động</strong> (mục 5): nếu pipeline sau này đưa nguyên văn tin tức dài vào mỗi ticker (không cacheable vì khác nhau mỗi lần), đây là điểm Prompt Caching không giúp được gì — Prompt Compression mới là đòn bẩy đúng chỗ, không phải "tối ưu thêm cache cho kỹ hơn".</li>
+<li><strong>Trước khi cam kết bất kỳ con số tiết kiệm nào trong bài này vào 1 changelog/plan doc</strong>: đo bằng usage log thật (Langfuse/Helicone hoặc log nội bộ tương đương), đúng kỷ luật "evidence over elapsed time" đã ghi trong <code>ai-trader/VALIDATION_CHECKLIST.md</code> của dự án — nguyên tắc đó không chỉ áp dụng cho AI Trader, mà cho mọi tuyên bố "đã tối ưu X%" liên quan tới chi phí LLM.</li>
+<li><strong>Giữ đúng ranh giới CLAUDE.md</strong>: mọi đề xuất ở trên chỉ tối ưu cost/latency/độ tin cậy của lời gọi LLM — không đề xuất LLM tính điểm số sống (<code>senior_score.py</code> vẫn là single source of truth), không đề xuất LLM nhận derivative đã tính sẵn (giữ đúng <code>feedback_llm_independence.md</code>).</li>
+</ol>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Tối ưu input tokens trước output tokens</strong> — sai thứ tự vì output đắt gấp 5× (đã chứng minh ở <code>L5_5_cost_latency.html §1</code>); nên tấn công output dài dòng trước bằng Structured Output.</p>
+<p><strong>2. Dùng reasoning model cho task không cần multi-step reasoning</strong> — bill gấp 10-100× (khối lượng token 5-50×) vì hidden reasoning tokens, trong khi task chỉ là tổng hợp/format (cùng số liệu đã dẫn nguồn ở <code>R2_3_types_of_llms.html</code>, không phải 1 con số rời rạc khác).</p>
+<p><strong>3. Coi 4 câu hỏi quyết định là độc lập</strong> — thực tế chúng tương tác: 1 task latency-sensitive VÀ có prompt lặp lại nhiều lần cần cả streaming LẪN Prompt Caching cùng lúc, không phải chọn 1 trong 2.</p>
+<p><strong>4. Coi model routing và model cascading là 2 lựa chọn cạnh tranh, phải chọn 1</strong> — thực tế đây là 2 cơ chế phục vụ đặc điểm traffic khác nhau (routing khi cần latency thấp và có router đáng tin cậy; cascading khi phần lớn câu hỏi dễ và chấp nhận latency cao hơn cho thiểu số case khó); hệ thống trưởng thành có thể dùng cả rule tĩnh, cascade, VÀ retry — không loại trừ nhau.</p>
+<p><strong>5. Tối ưu theo "giá/1M token" mà không quy về cost-per-successful-output</strong> — 1 phương án rẻ hơn per-token nhưng tỷ lệ phải gọi lại/leo thang cao có thể đắt hơn phương án đắt per-token nhưng đúng ngay lần đầu; so sánh chi phí thô không tính tỷ lệ thành công là so sánh sai chỉ số.</p>
+<p><strong>6. Nhầm Prompt Compression với Prompt Caching, tưởng đã làm 1 cái là đủ</strong> — Prompt Caching chỉ giúp phần nội dung LẶP LẠI; nội dung thay đổi mỗi lần (tin tức, dữ liệu động) hoàn toàn không hưởng lợi gì từ caching, dù vẫn có thể nén được bằng Prompt Compression — bỏ qua đòn bẩy này với hệ thống có nhiều dữ liệu động là bỏ lỡ 1 nguồn tiết kiệm thật.</p>
+<p><strong>7. Nén prompt tới tỷ lệ rất cao (VD &gt;80%) chỉ vì con số "20×" nghe ấn tượng</strong> — theo mục 5, đây là vùng đánh đổi chất lượng rõ rệt, không phải vùng an toàn tuyến tính; cần test thực tế ở đúng use case, không suy diễn từ 1 con số benchmark tổng quát.</p>
+<p><strong>8. Tuyên bố "đã tối ưu X%" mà không đo bằng observability tool/log thật</strong> — đúng nguyên tắc "evidence over elapsed time" của dự án (xem <code>ai-trader/VALIDATION_CHECKLIST.md</code>): mọi con số tiết kiệm trong bài này là MINH HOẠ cách tính, không phải số đo thật cho tới khi verify bằng usage log của chính hệ thống.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Trả lời đúng thứ tự 4 câu hỏi quyết định cho 1 use case cho trước (VD: "chatbot hỏi-đáp real-time cho user cuối").</li>
+<li>Giải thích được vì sao tối ưu output token có ROI cao hơn tối ưu input token trong đa số trường hợp.</li>
+<li>Với pipeline <code>daily-investor-report</code>, chỉ ra đúng 2 optimization có thể áp dụng ngay mà không đụng logic phân tích.</li>
+<li>Giải thích được vì sao dùng reasoning model cho task tổng hợp văn bản là lãng phí.</li>
+<li>Tự confirm: mọi đề xuất cost/performance không vi phạm ranh giới CLAUDE.md (không đụng <code>senior_score.py</code>, không phá rule LLM independence).</li>
+<li>Phân biệt được model routing và model cascading — nêu đúng cơ chế, ưu/nhược điểm của từng chiến lược, và chọn đúng chiến lược cho 1 đặc điểm traffic cho trước.</li>
+<li>Giải thích được vì sao "cost-per-token" là chỉ số sai để tối ưu, và tính lại được ví dụ đơn giản theo "cost-per-successful-output".</li>
+<li>Phân biệt được Prompt Compression và Prompt Caching — giải thích tại sao 2 kỹ thuật này cộng dồn được, không cạnh tranh, và biết ngưỡng nén nào bắt đầu đánh đổi chất lượng rõ rệt.</li>
+<li>Giải thích được vì sao cần 1 lớp cost observability trước khi tin bất kỳ con số "đã tiết kiệm X%" nào, và kể tên được ≥1 công cụ cụ thể (Langfuse hoặc Helicone) cùng trọng tâm của nó.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R2_7_rate_limits_retries.html">← R2.7 · Rate Limits/Retries</a>
+  <a href="R3_1_mcp.html">R3.1 · RAG — MCP →</a>
+</div>
+
+</div>
+</body>
+</html>

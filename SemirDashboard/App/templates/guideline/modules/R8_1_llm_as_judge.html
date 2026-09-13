@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R8.1 · LLM-as-a-Judge — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Observability &amp; Evaluation · Điểm 1/6</div>
+  <h1>R8.1 · LLM-as-a-Judge</h1>
+  <p class="subtitle">Dùng 1 LLM để chấm điểm output của 1 LLM khác — kỹ thuật rẻ, scale được, nhưng có 3 pitfall 2026 đã xác nhận lại và 1 quy tắc bất di bất dịch: judge phải độc lập với hệ thống nó đang chấm.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Phân biệt <strong>pointwise</strong> (chấm điểm tuyệt đối 1 output) vs <strong>pairwise</strong> (so sánh A/B chọn cái tốt hơn) — biết khi nào dùng cái nào.</li>
+<li>Kể tên + giải thích cơ chế 3 loại <strong>judge bias</strong>: position bias, verbosity bias, self-preference bias.</li>
+<li>Viết được 1 judge prompt rubric-based đúng chuẩn (tiêu chí rõ ràng, thang điểm cố định, input đầy đủ context).</li>
+<li>Nêu đúng 3 pitfall lớn nhất 2026 (bỏ validate với người, sai input cho judge, coi pass rate 100% là thành công) + cách fix từng cái.</li>
+<li>Biết pattern mới <strong>Agent-as-a-Judge</strong> — khi nào 1 lệnh gọi LLM đơn là không đủ.</li>
+<li>Hiểu vì sao điểm judge thô KHÔNG phải xác suất đã hiệu chỉnh, và fix bằng <strong>calibration</strong> (Platt scaling/temperature scaling) như thế nào.</li>
+<li>Giải thích vì sao 1 panel nhiều judge có thể có ít "phiếu độc lập thật" hơn số judge — hiện tượng lỗi tương quan (correlated errors).</li>
+<li>Phân biệt judge tổng quát (frontier model) vs judge chuyên biệt (fine-tuned reward model) — đánh đổi chi phí/khả năng tổng quát hoá.</li>
+<li>Áp dụng đúng rule LLM independence của dự án <code>predictor</code> khi thiết kế judge.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Khái niệm này đã được dạy khá sâu ở 2 module nền tảng — trang này ôn nhanh phần cốt lõi rồi tập trung vào phần <strong>cập nhật 2026</strong> mà 2 module cũ chưa có:</p>
+<table>
+<tr><th>Module đã học</th><th>Đã dạy gì</th><th>Trang này bổ sung gì</th></tr>
+<tr><td><a href="../modules/L5_4_llm_eval.html">L5.4 — LLM Evaluation</a></td><td>4 approach eval, pointwise vs pairwise, rubric-based prompting, judge bias (position/verbosity/self-preference), offline vs online + ý nghĩa thống kê</td><td>3 pitfall 2026 xác nhận lại bằng nguồn mới nhất + pattern Agent-as-a-Judge</td></tr>
+<tr><td><a href="../modules/L9_3_agent_eval.html">L9.3 — Agent Evaluation</a></td><td>LLM-as-judge cho agent trajectory, position bias fix + calibration, trace-driven debugging</td><td>Liên hệ trực tiếp rule LLM independence của <code>daily-investor-report</code></td></tr>
+</table>
+<p>Độ khó xếp <strong>Trung bình</strong>: khái niệm dễ hiểu ("nhờ AI chấm điểm AI") nhưng cơ chế bias và cách validate đúng đòi hỏi tư duy cẩn thận hơn 1 phép đo đơn giản.</p>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Tưởng tượng 1 cuộc thi nấu ăn có giám khảo là <strong>1 đầu bếp khác</strong> (không phải khách hàng thật, không phải ban tổ chức). Giám khảo này chấm nhanh, chấm được hàng trăm món/ngày, chi phí thấp hơn thuê hẳn 1 hội đồng chuyên gia — đó là lý do LLM-as-a-judge phổ biến: nó là "giám khảo AI" chấm output của "đầu bếp AI" khác. Nhưng giám khảo AI có <strong>thiên kiến</strong> y hệt giám khảo người: dễ bị ấn tượng bởi món trình bày cầu kỳ hơn (verbosity bias), dễ chấm cao hơn cho món nếm trước/sau tuỳ thứ tự (position bias), và có xu hướng thích phong cách nấu giống chính mình (self-preference bias — nếu giám khảo cũng là 1 đầu bếp GPT thì có thể vô thức chấm món "kiểu GPT" cao hơn món "kiểu Claude").</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Pointwise vs Pairwise — 2 cách chấm cơ bản</h3>
+<p><strong>Pointwise</strong>: đưa 1 output cho judge, yêu cầu chấm điểm tuyệt đối theo thang cố định (VD 1-5). Judge không thấy output nào khác để so sánh.</p>
+<p><strong>Pairwise</strong>: đưa 2 output (A và B) cùng lúc, yêu cầu judge chọn cái nào tốt hơn (hoặc hoà). Không cần thang điểm tuyệt đối — chỉ cần phán đoán tương đối.</p>
+<div class="callout">
+<div class="label">📖 Vì sao pairwise thường đáng tin hơn pointwise?</div>
+<p>Con người (và LLM) giỏi so sánh tương đối hơn ước lượng tuyệt đối. Hỏi "món này ngon bao nhiêu điểm trên 10" khó trả lời nhất quán hơn hỏi "món A hay món B ngon hơn". Đây là lý do các bảng xếp hạng model lớn (Chatbot Arena) dùng pairwise + Elo rating thay vì pointwise trung bình cộng.</p>
+</div>
+
+<h3>2. Ba loại Judge Bias — cơ chế vì sao xảy ra</h3>
+<h4>2.1 Position bias</h4>
+<p>Trong pairwise, judge có xu hướng thiên vị output xuất hiện <strong>ở vị trí đầu tiên</strong> (hoặc vị trí cuối, tuỳ model) trong prompt — bất kể chất lượng thật. Cơ chế: model attention có xu hướng trọng số không đều theo vị trí token trong context. Cách phát hiện: chạy lại đúng cặp A/B nhưng <strong>đảo thứ tự</strong> — nếu verdict đổi theo thứ tự thay vì theo chất lượng, đó là position bias thuần.</p>
+<h4>2.2 Verbosity bias</h4>
+<p>Judge có xu hướng chấm câu trả lời <strong>dài hơn</strong> cao hơn, kể cả khi nội dung thêm vào không có giá trị (lặp ý, diễn giải dài dòng). Cơ chế: câu dài "trông" đầy đủ, chi tiết hơn — judge nhầm lẫn "độ dài" với "độ chất lượng".</p>
+<h4>2.3 Self-preference bias</h4>
+<p>Nếu judge là model X, nó có xu hướng chấm cao hơn cho output cũng do model X (hoặc cùng họ model) sinh ra, so với output từ model khác — kể cả khi chất lượng khách quan ngang nhau. Cơ chế: mỗi model có "phong cách" riêng (cách chọn từ, cấu trúc câu) — judge dễ nhận ra và ưu ái phong cách quen thuộc với chính nó.</p>
+
+<h3>3. Ba pitfall lớn nhất 2026 (đã xác nhận lại từ nguồn 2026)</h3>
+<h4>3.1 Bỏ qua bước validate judge với con người</h4>
+<p>Sai lầm: tin thẳng điểm LLM-judge ở quy mô lớn mà chưa bao giờ đối chiếu với điểm người thật. Fix: luôn lấy 1 tập mẫu (VD 50-100 case), có người chấm độc lập, tính <strong>agreement rate</strong> giữa judge và người. Chỉ tin dùng judge ở quy mô lớn khi agreement đủ cao (thường ≥ 80% cho binary pass/fail).</p>
+<h4>3.2 Đưa sai input vào judge</h4>
+<p>Sai lầm kinh điển: chấm hallucination nhưng không đưa context đã retrieve vào prompt của judge — judge không có căn cứ nào để biết câu trả lời có "bịa" hay không so với nguồn thật. Fix: input của judge phải chứa đủ mọi thứ cần để phán quyết đúng loại lỗi đang chấm (context cho faithfulness, câu hỏi gốc cho relevancy, rubric cho quality).</p>
+<h4>3.3 Coi pass rate 100% là thành công</h4>
+<p>Sai lầm: thấy eval set pass 100% và ăn mừng. Thực ra đó là dấu hiệu <strong>eval set chưa đủ khó</strong> — không phân biệt được model tốt/tệ vì cả 2 đều pass hết. Fix: 1 eval set tốt phải có model baseline (yếu) fail 1 phần đáng kể — nếu không, eval không có "độ phân giải" để phát hiện regression.</p>
+
+<h3>4. Pattern mới — Agent-as-a-Judge</h3>
+<p>Thay vì 1 lệnh gọi LLM đơn để chấm điểm, dùng hẳn <strong>1 agent đầy đủ</strong> được orchestrate qua nhiều bước: truy hồi bằng chứng → thực thi tool (VD chạy test thật) → tham vấn nhiều model → mới ra phán quyết cuối. Dùng khi việc chấm điểm bản thân nó phức tạp — VD chấm 1 Pull Request cần đọc nhiều file, chạy test suite thật, không chỉ đọc text tĩnh.</p>
+
+<h3>5. Judge score thô KHÔNG phải xác suất — calibration 2026</h3>
+<p>Điểm "8/10" hay nhãn "PASS, độ tự tin cao" từ 1 LLM-judge chỉ là 1 con số nội bộ của model — nó KHÔNG tự động có nghĩa "80% khả năng đúng". Bằng chứng: nếu gom mọi case judge nói "confidence cao" lại, tỷ lệ human đồng ý thực tế trên nhóm đó thường THẤP HƠN con số confidence — judge có xu hướng quá tự tin (overconfident), giống hệt vấn đề calibration đã biết ở neural network classifier. <strong>Calibration</strong> là bước hậu-xử-lý (post-hoc): học 1 phép ánh xạ từ điểm judge thô → xác suất đã hiệu chỉnh, dùng 1 tập validation có nhãn người, tách biệt hoàn toàn khỏi tập dùng để tính điểm eval cuối (nếu dùng chung 1 tập, calibration bị overfit và mất ý nghĩa).</p>
+<table>
+<tr><th>Phương pháp</th><th>Cơ chế</th><th>Khi nào dùng</th></tr>
+<tr><td><strong>Platt scaling</strong></td><td>Fit 1 logistic regression 1 biến: <code>P(đúng) = sigmoid(a×raw_score + b)</code> trên tập validation có nhãn người</td><td>Judge output là điểm liên tục/thang rời rạc (1-5, 1-10)</td></tr>
+<tr><td><strong>Temperature scaling</strong></td><td>Chia logit cho 1 hằng số T (học trên tập validation, tối thiểu hoá negative log-likelihood) trước khi đưa qua softmax</td><td>Judge output có logit/probability nội bộ truy cập được (không chỉ text "PASS/FAIL")</td></tr>
+</table>
+<div class="callout">
+<div class="label">📖 Worked example — đo độ méo bằng Expected Calibration Error (ECE)</div>
+<pre><code>20 case đã chấm bằng judge, đối chiếu với nhãn người thật, chia 2 bin theo confidence judge:
+
+Bin A — judge nói "PASS, confidence trung bình 0.90" (10 case):
+  Human đồng ý PASS: 7/10 → accuracy thực tế = 0.70
+  Gap = |confidence - accuracy| = |0.90 - 0.70| = 0.20
+
+Bin B — judge nói "FAIL, confidence trung bình 0.85" (10 case):
+  Human đồng ý FAIL: 9/10 → accuracy thực tế = 0.90
+  Gap = |0.85 - 0.90| = 0.05
+
+ECE = Σ (trọng số bin × gap bin) = (10/20)×0.20 + (10/20)×0.05
+    = 0.5×0.20 + 0.5×0.05 = 0.10 + 0.025 = 0.125
+
+→ ECE 0.125 nghĩa là trung bình, độ tự tin judge lệch khỏi độ chính xác thật ~12.5 điểm %
+   — đủ lớn để KHÔNG nên dùng điểm judge thô làm ngưỡng quyết định tự động (VD "confidence
+   &gt; 0.85 thì auto-approve") mà chưa fit lại qua Platt/temperature scaling trước.
+</code></pre>
+</div>
+
+<h3>6. Panel nhiều judge — cẩn thận lỗi tương quan (correlated errors)</h3>
+<p>Trực giác thường gặp: dùng 1 panel N judge (VD GPT + Claude + Gemini) để "trung bình hoá" bias, tưởng rằng N judge độc lập sẽ giảm nhiễu theo căn bậc hai của N. Nghiên cứu 2026 ("Nine Judges, Two Effective Votes") chỉ ra vấn đề: nếu các judge có lỗi <strong>tương quan</strong> với nhau (cùng huấn luyện trên corpus tương tự, cùng thiên vị 1 kiểu văn phong), số "phiếu bầu độc lập thật" của panel thấp hơn hẳn số judge danh nghĩa.</p>
+<div class="callout">
+<div class="label">📖 Worked example minh hoạ — công thức cỡ mẫu hiệu dụng (design effect)</div>
+<pre><code>Công thức thống kê chuẩn cho cỡ mẫu hiệu dụng khi có tương quan giữa các quan sát:
+  N_eff = N / (1 + (N-1) × ρ)      (ρ = hệ số tương quan trung bình giữa các judge)
+
+Minh hoạ với N=9 judge, giả định ρ=0.5 (tương quan cao — nhiều judge cùng họ model,
+cùng thiên vị theo văn phong dài dòng/markdown giống hệt các bias đã học ở mục 2):
+  N_eff = 9 / (1 + 8×0.5) = 9 / (1 + 4) = 9 / 5 = 1.8 ≈ 2 phiếu độc lập thật
+
+So sánh nếu ρ=0 (9 judge hoàn toàn độc lập, lý tưởng không thực tế):
+  N_eff = 9 / (1 + 8×0) = 9 / 1 = 9 phiếu độc lập thật (đúng bằng N danh nghĩa)
+</code></pre>
+<p><strong>Lưu ý</strong>: ρ=0.5 ở đây là số minh hoạ cơ chế design-effect, không phải số đo thực nghiệm chính xác của paper gốc — nhưng hướng kết luận (panel tương quan cao → hiệu dụng thấp hơn nhiều số judge danh nghĩa) khớp đúng phát hiện chính của nghiên cứu.</p>
+</div>
+<p>Hệ quả thực hành: (1) chọn judge đa dạng THẬT SỰ (khác họ model, khác nhà huấn luyện) thay vì chỉ khác tên nhưng cùng xu hướng bias; (2) đo tương quan lỗi giữa các judge trên 1 tập validation trước khi tin panel giảm được noise; (3) trọng số động theo độ tin cậy từng judge/từng case (dynamic confidence weighting) cho kết quả tốt hơn trung bình cộng đơn giản.</p>
+<pre><code>Kiến trúc panel — 3 judge bỏ phiếu độc lập rồi hợp nhất:
+
+  output cần chấm
+        │
+   ┌────┼────┬──────────┐
+   ▼    ▼    ▼          │
+ Judge-A Judge-B Judge-C   (3 model khác họ — KHÔNG cùng 1 provider)
+   │    │    │
+   PASS PASS FAIL
+        └──┬──┘
+     Hợp nhất phiếu (majority vote / trọng số theo độ tin cậy)
+           │
+     Verdict cuối = PASS (2/3)
+
+Nếu Judge-A và Judge-B thực ra tương quan cao (VD cùng huấn luyện lệch 1 kiểu văn
+phong), "2/3 phiếu PASS" chỉ tương đương ~1 phiếu độc lập thật + 1 phiếu của Judge-C
+— KHÔNG mạnh bằng vẻ ngoài "đa số 2/3".</code></pre>
+
+<h3>7. Judge tổng quát (frontier model) vs judge chuyên biệt (fine-tuned reward model)</h3>
+<p>Ngoài việc dùng thẳng 1 frontier LLM (Claude/GPT/Gemini) làm judge qua prompt, có hướng khác: <strong>fine-tune 1 reward model chuyên biệt</strong> cho đúng 1 loại tác vụ chấm điểm. Dữ liệu RewardBench cho thấy reward model chuyên biệt (VD Skywork-Reward-Gemma-2-27B-v0.2, điểm 94.3) có thể VƯỢT cả 1 frontier model dùng làm judge như Claude 3.5 Sonnet (điểm 84.2 trên cùng benchmark khi dùng làm judge) cho ĐÚNG tác vụ nó được huấn luyện — với chi phí per-eval thấp hơn nhiều (model nhỏ hơn, không tính phí theo token API đắt đỏ). Đánh đổi: reward model fine-tune dễ "suy biến thành classifier chuyên 1 việc" — quá khớp (overfit) với đúng phân phối dữ liệu huấn luyện, mất khả năng tổng quát hoá khi tác vụ chấm điểm thay đổi hoặc mở rộng sang domain mới.</p>
+<table>
+<tr><th>Tiêu chí</th><th>Judge tổng quát (frontier LLM qua prompt)</th><th>Judge chuyên biệt (fine-tuned reward model)</th></tr>
+<tr><td>Chi phí per-eval</td><td>Cao hơn (token API đắt)</td><td>Thấp hơn (model nhỏ, tự host)</td></tr>
+<tr><td>Khả năng tổng quát hoá</td><td>Tốt — xử lý được tác vụ mới chưa từng thấy</td><td>Kém hơn — dễ suy biến thành classifier hẹp cho đúng phân phối train</td></tr>
+<tr><td>Cần dữ liệu huấn luyện riêng?</td><td>Không — chỉ cần viết rubric prompt</td><td>Có — cần tập nhãn người đủ lớn, đủ đa dạng</td></tr>
+<tr><td>Cập nhật khi đổi tiêu chí chấm</td><td>Sửa prompt, dùng ngay</td><td>Phải thu thập lại dữ liệu, huấn luyện lại</td></tr>
+<tr><td>Khi nào chọn</td><td>Tác vụ đa dạng, tiêu chí còn thay đổi, khối lượng chấm vừa phải</td><td>Tác vụ hẹp, ổn định, khối lượng chấm RẤT lớn (chi phí API sẽ cộng dồn đáng kể)</td></tr>
+</table>
+
+<h3>8. Kỹ thuật viết judge prompt: CoT-trước-khi-chấm + few-shot anchor</h3>
+<p>2 kỹ thuật prompt-engineering cụ thể (bổ sung cho rubric-based prompting đã học ở <code>L5_4</code>) cải thiện agreement với người, không cần đổi model judge:</p>
+<ul>
+<li><strong>Chain-of-thought trước khi chấm (justify-then-score)</strong>: bắt judge viết lý do TRƯỚC khi in điểm số, thay vì in điểm trước rồi mới giải thích. Nhiều nghiên cứu (G-Eval; "Are We on the Right Way to Assessing LLM-as-a-Judge?" 2026) xác nhận bỏ bước reasoning-trước-khi-chấm làm agreement với người giảm rõ rệt — cơ chế: buộc model cam kết vào bằng chứng cụ thể trước khi cam kết vào 1 con số, giảm khả năng chọn điểm theo cảm tính rồi biện minh ngược. (Độ lớn cải thiện cụ thể tuỳ nghiên cứu/benchmark — chưa có 1 con số % duy nhất đủ tin cậy để trích dẫn, chỉ nên coi đây là hướng cải thiện định tính đã xác nhận nhiều lần.)</li>
+<li><strong>Few-shot anchor examples</strong>: chèn 2-4 case mẫu đã có nhãn người (gồm cả case "tốt" và case "có lỗi", kèm điểm + giải thích) ngay trong prompt judge — neo lại thang điểm và làm rõ ranh giới các case biên (edge case) khi 2 tiêu chí xung đột nhau.</li>
+</ul>
+<p>Điểm neo tham khảo thật (Zheng et al. 2023, "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena", cùng nguồn MT-Bench đã dẫn ở <code>L5_4</code>): GPT-4-as-judge đạt ~85% agreement với human annotator — cao hơn cả agreement giữa 2 human annotator với nhau trên cùng tập (~81%, do con người cũng không hoàn toàn nhất quán). Đây là con số gốc 2023 cho judge cơ bản, KHÔNG phải kết quả riêng của việc "kết hợp CoT + few-shot" — 2 kỹ thuật ở trên là cách cải thiện thêm dựa trên nền tảng đó, không có 1 con số benchmark 2026 cụ thể đo riêng hiệu ứng cộng gộp của cả 2. Ngưỡng khuyến nghị thực hành: calibrate judge tới khi đạt <strong>85-90% agreement</strong> với tập nhãn người trước khi tin dùng ở quy mô lớn — số cụ thể hơn ngưỡng "≥80%" đã nêu ở mục 3.1 (không mâu thuẫn, chỉ là mức tối thiểu chấp nhận được vs mức mục tiêu nên nhắm tới).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p><strong>Ví dụ 1 — Judge prompt rubric-based (pointwise, thang 1-5)</strong> cho việc chấm 1 investor thesis do LLM viết:</p>
+<pre><code>Bạn là judge chấm chất lượng 1 bản phân tích cổ phiếu. Chấm theo đúng 4 tiêu chí sau,
+mỗi tiêu chí 1-5 điểm, KHÔNG chấm tổng quan mơ hồ:
+
+1. Grounding (1-5): mọi số liệu nêu ra có xuất hiện trong dữ liệu nguồn đính kèm không?
+2. Logic (1-5): luận điểm có mạch lạc, không tự mâu thuẫn không?
+3. Actionability (1-5): kết luận có đủ cụ thể để hành động (mua/bán/chờ, mức giá) không?
+4. Independence (1-5): thesis có tự suy luận từ dữ liệu thô, hay chỉ diễn giải lại 1 kết
+   luận đã có sẵn (VD lặp lại đúng verdict hệ thống mà không thêm phân tích riêng)?
+
+── DỮ LIỆU NGUỒN (context judge PHẢI dùng để chấm mục 1) ──
+{raw_market_data_json}
+
+── OUTPUT CẦN CHẤM ──
+{llm_thesis_text}
+
+Trả lời đúng format JSON: {"grounding": int, "logic": int, "actionability": int,
+"independence": int, "reasoning": "giải thích ngắn gọn từng điểm"}
+</code></pre>
+<p><strong>Ví dụ 2 — phát hiện position bias bằng số cụ thể.</strong> Chấm pairwise 2 bản thesis A và B cho cùng 1 ticker:</p>
+<pre><code>Lần chạy 1: prompt = "A: ...(thesis 1)... B: ...(thesis 2)..." → judge chọn A thắng
+Lần chạy 2: prompt = "A: ...(thesis 2)... B: ...(thesis 1)..." (đảo vị trí, đổi nhãn)
+            → judge lại chọn A thắng (tức là chọn thesis 1 — giống lần 1)
+
+Kết luận: verdict ổn định theo NỘI DUNG, không đổi theo vị trí → không có position bias
+          rõ ràng ở cặp này. Nếu lần 2 lại chọn "A thắng" tức là chọn thesis 2 (đổi ý
+          theo vị trí, không theo nội dung) → CÓ position bias, cần swap-test toàn bộ
+          eval set và loại bỏ verdict không ổn định.
+</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Pointwise</th><th>Pairwise</th></tr>
+<tr><td>Input cho judge</td><td>1 output</td><td>2 output (A, B)</td></tr>
+<tr><td>Output judge</td><td>Điểm số tuyệt đối (VD 1-5)</td><td>Lựa chọn tương đối (A/B/hoà)</td></tr>
+<tr><td>Độ nhất quán</td><td>Thấp hơn — khó neo thang điểm ổn định giữa các lần chấm</td><td>Cao hơn — so sánh tương đối tự nhiên hơn với LLM</td></tr>
+<tr><td>Chi phí khi N output</td><td>O(N) lệnh gọi</td><td>O(N²) nếu so mọi cặp (thường giảm bằng Elo/tournament)</td></tr>
+<tr><td>Dùng khi nào</td><td>Cần điểm số tuyệt đối để theo dõi xu hướng theo thời gian</td><td>Cần xếp hạng nhiều biến thể (A/B test prompt, so 2 model)</td></tr>
+</table>
+<table>
+<tr><th>Pitfall</th><th>Hậu quả nếu bỏ qua</th><th>Cách fix</th></tr>
+<tr><td>Bỏ qua validate với người</td><td>Tin nhầm 1 judge lệch lạc ở quy mô lớn, không phát hiện được</td><td>Sample 50-100 case, đối chiếu điểm người, đo agreement rate</td></tr>
+<tr><td>Đưa sai input cho judge</td><td>Judge chấm "cảm tính" vì thiếu căn cứ, verdict vô nghĩa</td><td>Đảm bảo input judge có đủ context cần cho đúng loại lỗi đang chấm</td></tr>
+<tr><td>Coi pass rate 100% là tốt</td><td>Eval mất khả năng phát hiện regression thật</td><td>Thiết kế eval set sao cho model baseline yếu phải fail 1 phần rõ rệt</td></tr>
+</table>
+<table>
+<tr><th>Tình huống</th><th>Kỹ thuật nên áp dụng (mục 5-8)</th></tr>
+<tr><td>Cần dùng điểm judge làm ngưỡng auto-approve/auto-block</td><td>Calibration (Platt/temperature scaling) trước — đo ECE, đừng tin confidence thô</td></tr>
+<tr><td>Đã dùng panel 3+ judge, nghi ngờ vẫn còn thiên vị hệ thống</td><td>Đo tương quan lỗi giữa các judge, tính N_eff — nếu N_eff thấp, đổi họ model đa dạng hơn</td></tr>
+<tr><td>Khối lượng chấm rất lớn, tác vụ hẹp và ổn định (VD chấm 1 loại form cố định)</td><td>Cân nhắc fine-tune reward model chuyên biệt để giảm chi phí per-eval</td></tr>
+<tr><td>Agreement với người vẫn dưới 80% dù đã calibrate</td><td>Thêm CoT-trước-khi-chấm + 2-4 few-shot anchor example trước khi đổi model</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p>Rule LLM independence của <code>daily-investor-report</code> (memory <code>feedback_llm_independence.md</code>, nhắc lại trong <code>CLAUDE.md</code>) quy định: LLM viết thesis từ dữ liệu thị trường thô, <strong>không</strong> được nhận các trường hệ thống tính sẵn (<code>combined_score</code>, <code>ai_signal</code>, <code>verdict</code>, <code>mf_score</code>, <code>driver</code>, <code>factors</code>). Nếu dự án sau này xây 1 LLM-judge để tự động chấm chất lượng thesis, judge đó <strong>tuyệt đối không</strong> được nhận các trường này làm input để so sánh "thesis có khớp verdict hệ thống không" — làm vậy sẽ biến phép đo "LLM có phân tích độc lập tốt không" thành phép đo hoàn toàn khác: "LLM có đồng ý với hệ thống không". Input đúng cho judge trong trường hợp này là: dữ liệu thị trường thô (giống input mà LLM thesis đã nhận) + rubric 4 tiêu chí ở ví dụ trên — trong đó tiêu chí "Independence" chính là cách đo ngược lại rủi ro rò rỉ field hệ thống vào thesis.</p>
+<p>Nếu dự án triển khai judge này ở quy mô lớn (chấm hàng chục thesis/ngày cho 86 ticker <code>HIGHLIGHT_GROUP</code>), nên áp đúng 2 kỹ thuật ở mục 5 và mục 8 trước khi tin dùng:</p>
+<ul>
+<li><strong>Calibrate trước khi tin ngưỡng</strong>: không dùng thẳng "confidence" judge tự báo cáo — chấm tay 30-50 thesis, đo ECE (mục 5), chỉ coi 1 ngưỡng điểm là "đáng tin để auto-flag" sau khi biết gap thật giữa confidence và accuracy.</li>
+<li><strong>Sửa thứ tự field trong JSON output</strong>: đổi judge prompt hiện có (ví dụ 1 ở dưới) sang yêu cầu field <code>"reasoning"</code> xuất hiện TRƯỚC field điểm số, không phải sau — tận dụng đúng cơ chế CoT-trước-khi-chấm (mục 8), giúp model cam kết vào bằng chứng cụ thể trước khi cam kết vào 1 con số.</li>
+</ul>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<p>(1) Tin điểm LLM-judge ở production mà chưa từng đối chiếu với người. (2) Chấm hallucination mà quên đưa context nguồn vào prompt judge. (3) Ăn mừng pass rate 100% thay vì nghi ngờ eval set chưa đủ khó. (4) Chỉ test pairwise 1 chiều, không swap thứ tự A/B để kiểm tra position bias. (5) Đưa field hệ thống tính sẵn (verdict, score) vào input judge khi mục tiêu là đo tính độc lập của LLM. (6) Dùng thẳng "confidence" judge báo cáo làm ngưỡng auto-approve mà chưa calibrate — ECE có thể lệch &gt;10 điểm % (xem mục 5). (7) Tin panel N judge giảm noise theo N mà không kiểm tra lỗi tương quan — panel "đa dạng tên gọi" nhưng cùng bias vẫn chỉ có vài phiếu độc lập thật (mục 6).</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích đúng khác biệt pointwise vs pairwise + khi nào chọn cái nào.</li>
+<li>Kể đúng cơ chế (không chỉ tên) của 3 judge bias: position, verbosity, self-preference.</li>
+<li>Kể đúng 3 pitfall 2026 + cách fix từng cái, không nhầm thứ tự pitfall với nguyên nhân.</li>
+<li>Giải thích được vì sao Agent-as-a-Judge cần thiết cho 1 số bài toán chấm điểm phức tạp (VD review code) mà 1 lệnh gọi LLM đơn không làm được.</li>
+<li>Tính được ECE từ 1 bảng confidence×accuracy đơn giản, giải thích Platt scaling và temperature scaling khác nhau ở input nào.</li>
+<li>Giải thích được vì sao panel judge tương quan cao có thể chỉ có 1-2 "phiếu độc lập thật" dù danh nghĩa có 9 judge, và tính được N_eff theo công thức design-effect.</li>
+<li>Nêu đúng khi nào nên fine-tune 1 reward model chuyên biệt thay vì dùng thẳng frontier LLM làm judge.</li>
+<li>Tự confirm: không đề xuất đưa field hệ thống tính sẵn vào input của 1 judge/eval được thiết kế để độc lập.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R7_6_llm_deployment.html">← R7.6 · LLM Deployment</a>
+  <a href="R8_2_multiturn_evals.html">R8.2 · Multi-turn Evals →</a>
+</div>
+
+</div>
+</body>
+</html>

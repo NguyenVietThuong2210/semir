@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L7.2 — Model Deployment</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 7 · Module 2</div>
+  <h1>7.2 · Model Deployment (Batch / Real-time / Streaming)</h1>
+  <p class="subtitle">3 serving patterns. FastAPI + XGBoost, vLLM + LLM, event-driven. Cost + latency + SLA trade-offs.</p>
+  <div class="level">Level 7 · Production · ~30 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>3 deployment patterns + when</li>
+  <li>Model serving stack (FastAPI, TorchServe, vLLM)</li>
+  <li>Auto-scaling for GPU</li>
+  <li>Blue-green vs canary vs shadow deployment</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Deployment patterns bằng ngôn ngữ đời thường</div>
+<p><strong>Bán phở</strong>:</p>
+<ul>
+  <li><strong>Batch</strong>: Cửa hàng nấu sẵn 100 bát sáng sớm → bán cả ngày. Rẻ per bát nhưng phở nguội. Áp dụng: dự đoán churn hàng ngày cho 1M user — không cần realtime.</li>
+  <li><strong>Real-time</strong>: Khách gọi, làm từng bát tươi. Đắt per bát, phải chờ 5 phút, nhưng tươi ngon. Áp dụng: fraud detection khi user swipe thẻ.</li>
+  <li><strong>Streaming</strong>: Phở take-away liên tục theo dòng khách qua cửa sổ drive-thru. Áp dụng: click-through prediction cho ads bidding — inference trên stream events Kafka.</li>
+</ul>
+<p><strong>Chọn pattern nào</strong> dựa vào SLA latency (chấp nhận phở nguội 1 tiếng hay phải nóng?) + volume (100 bát/ngày hay 100 bát/phút?) + freshness signal (khách hôm nay đến có khác hôm qua không?).</p>
+<p><strong>SLA (Service Level Agreement)</strong> = cam kết chất lượng dịch vụ bằng số cụ thể — ví dụ "p95 latency &lt; 200ms" nghĩa là 95% request phải trả lời dưới 200ms. Không có SLA rõ ràng = không biết pattern nào "đủ nhanh".</p>
+</div>
+
+<h2>1. 3 patterns</h2>
+
+<h3>1.1 Batch inference</h3>
+<pre><code>Nightly Airflow DAG:
+1. Fetch all users needing prediction (~1M)
+2. Run model in batches of 10k (parallel)
+3. Store predictions in DB (Postgres/Redis)
+4. UI reads pre-computed predictions
+
+# Cost: cheap (batch efficient, spot instances OK)
+# Latency: N hours behind live
+# Use: recommendation, monthly report
+</code></pre>
+
+<h3>1.2 Real-time (synchronous)</h3>
+<pre><code>User request → API → Model → Response
+                       ↓
+                     ~50ms
+
+# FastAPI + XGBoost + Redis cache
+# Cost: higher (24/7 warm instance)
+# Latency: p95 < 200ms
+# Use: search rank, fraud detection, chat
+</code></pre>
+
+<h3>1.3 Streaming (async)</h3>
+<pre><code>Event bus (Kafka) → consumer → model → sink
+
+# High throughput events (clickstream)
+# Cost: depends on throughput
+# Latency: seconds
+# Use: clickstream anomaly, ad targeting
+</code></pre>
+
+<h2>2. V18 serving stack</h2>
+
+<pre><code>Request → FastAPI (routers/predict.py)
+             ↓
+          Check tier-3 skip (fast reject)
+             ↓
+          TTLCache lookup (in-memory)
+             ↓
+          Postgres cache (prediction_log)
+             ↓
+          engine.predict() [XGBoost inference]
+             ↓
+          Composite confidence
+             ↓
+          Response JSON
+
+# Latency budget: ~20ms p95
+# 86 tickers concurrent OK
+</code></pre>
+
+<div class="callout">
+<div class="label">💡 2 thuật ngữ trong flow trên</div>
+<p><strong>Tier-3 skip</strong>: trước khi chạy model tốn kém, check nhanh các điều kiện rẻ tiền để từ chối sớm (ví dụ ticker không đủ lịch sử data, hoặc ngoài giờ giao dịch) — "tier-3" vì đây là lớp check rẻ nhất/nhanh nhất trong chuỗi validate. Giống bảo vệ hỏi "anh có hẹn không" trước khi cho vào — khỏi tốn công dẫn khách lên tận phòng họp.</p>
+<p><strong>TTLCache (Time-To-Live Cache)</strong>: cache lưu trong RAM của chính process, mỗi entry tự hết hạn sau N giây (TTL). Nhanh nhất (không qua network) nhưng chỉ tồn tại trong 1 process — nếu chạy nhiều instance, mỗi instance có cache riêng (không chia sẻ như Redis).</p>
+</div>
+
+<h2>3. LLM serving stack</h2>
+
+<pre><code>Request → API gateway → Rate limit → Request batcher
+                                          ↓
+                                      vLLM engine (PagedAttention + Continuous batching)
+                                          ↓
+                                      GPU worker (A100/H100)
+                                          ↓
+                                      Streaming SSE back to client
+
+# vLLM: up to 24× throughput of HuggingFace Transformers, up to 3.5× của TGI (vllm.ai blog 2023)
+# Multi-LoRA: serve 100+ fine-tuned variants trên 1 base
+</code></pre>
+
+<div class="callout">
+<div class="label">💡 Vì sao vLLM nhanh hơn nhiều lần — 2 kỹ thuật cốt lõi</div>
+<p><strong>PagedAttention</strong>: Bình thường, mỗi request cần cấp phát 1 khối bộ nhớ GPU liền mạch (contiguous) cho KV cache (xem L7.5 Q17) — như đặt cả bàn dài cho 1 khách dù họ chỉ ăn ít. Nếu output ngắn hơn dự kiến → phí bộ nhớ (fragmentation). PagedAttention chia bộ nhớ thành "trang" (page) nhỏ như hệ điều hành quản lý RAM — cấp phát đúng nhu cầu, không phí, phục vụ nhiều request đồng thời hơn trên cùng GPU.</p>
+<p><strong>Continuous batching</strong>: Batching kiểu cũ (static) phải đợi đủ N request rồi mới chạy cùng lúc, request xong sớm vẫn phải chờ cả batch — như xe bus chỉ chạy khi đủ khách, ai lên sớm vẫn ngồi chờ. Continuous batching: request nào xong thì rời "bus" ngay, request mới join ngay lập tức vào slot trống — không ai phải chờ vô ích. Kết quả: GPU luôn bận, throughput cao hơn nhiều.</p>
+<p><strong>LoRA (Low-Rank Adaptation)</strong> — nhắc trước khi đọc "Multi-LoRA": thay vì fine-tune lại toàn bộ model (hàng tỷ tham số) cho mỗi use-case, LoRA chỉ train 1 cặp ma trận nhỏ (rank thấp) "gắn thêm" vào model gốc đã đóng băng (frozen). Nhẹ (~50MB thay vì 10GB+), swap nhanh. Multi-LoRA = 1 GPU giữ 1 bản model gốc dùng chung, nạp nhiều "miếng dán" LoRA khác nhau theo request — xem code implementation ở L7.5 Q16.</p>
+</div>
+
+<h2>4. Auto-scaling GPU</h2>
+
+<div class="callout warn">
+<div class="label">GPU is expensive</div>
+<p>1 × A100 = $2-3/h. Idle GPU = wasted money. Must scale.</p>
+</div>
+
+<pre><code># Kubernetes HPA (Horizontal Pod Autoscaler):
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+spec:
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: nvidia.com/gpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Pods
+    pods:
+      metric:
+        name: llm_queue_depth
+      target:
+        type: AverageValue
+        averageValue: "5"
+
+# Scale up when queue depth &gt; 5 or GPU util &gt; 70%
+# Scale down after 5 min idle (avoid thrashing)
+</code></pre>
+
+<h3>Cold start problem</h3>
+<pre><code>New GPU instance startup: 60-180s (pull image + load model 30GB)
+User request during scale-up: timeout
+
+Solutions:
+1. Keep min 1 replica warm (24/7 cost)
+2. Predictive scaling (traffic pattern learned)
+3. Provisioned concurrency (AWS Lambda-style)
+4. Serverless spot mixed (spot cheaper, fallback on-demand)
+</code></pre>
+
+<h2>5. Deployment strategies</h2>
+
+<h3>5.1 Blue-Green</h3>
+<pre><code>Blue = current prod
+Green = new version, warm & ready
+
+Switch: LB point to Green (instant)
+Rollback: LB back to Blue (instant)
+
+# Cost: 2× while both running
+# Best cho monolith apps
+</code></pre>
+
+<h3>5.2 Canary</h3>
+<pre><code>Route 1% → 5% → 25% → 100% traffic to new version
+Monitor at each stage, rollback if degradation
+
+# Slower rollout, safer
+# Better cho ML models (real-world verification)
+</code></pre>
+
+<h3>5.3 Shadow (dark launch)</h3>
+<pre><code>All requests go to old model (user sees result)
+Duplicate request to new model (compare offline, no user impact)
+
+# Zero user risk
+# Compare predictions apples-to-apples
+# Best cho major architecture change
+</code></pre>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 5 deployment strategies (đọc SAU section 5)</div>
+
+<table>
+<tr><th></th><th>Big Bang</th><th>Blue-Green</th><th>Canary</th><th>Rolling</th><th>Shadow</th></tr>
+<tr><td><strong>Cách</strong></td><td>Replace 100% ngay</td><td>2 env (blue live + green new) → switch</td><td>5% → 25% → 100% traffic new</td><td>Update N instances/batch</td><td>New chạy song song, không serve user</td></tr>
+<tr><td><strong>Rollback time</strong></td><td>Long (redeploy old)</td><td>&lt;1s (flip DNS)</td><td>Nhanh (revert weight)</td><td>Medium (rollback batch)</td><td>N/A (không traffic)</td></tr>
+<tr><td><strong>Downtime</strong></td><td>Có (deploy window)</td><td>Zero</td><td>Zero</td><td>Zero</td><td>Zero</td></tr>
+<tr><td><strong>Cost</strong></td><td>Cheap (1× infra)</td><td>2× infra (2 env)</td><td>+monitoring cost</td><td>1× infra</td><td>2× infra + no revenue from new</td></tr>
+<tr><td><strong>User risk</strong></td><td>❌ 100% user thấy bug ngay</td><td>Low (test green trước switch)</td><td>Low (chỉ 5% user affected)</td><td>Medium</td><td>Zero (log only)</td></tr>
+<tr><td><strong>Data compat</strong></td><td>Cần schema tương thích</td><td>Cần double-write hoặc backward-compat</td><td>Same as blue-green</td><td>Same</td><td>Có thể breaking changes</td></tr>
+<tr><td><strong>Best for</strong></td><td>Small team, dev env</td><td>Zero downtime + fast rollback</td><td>New feature với risk</td><td>Stateless services</td><td>Test model quality before serve</td></tr>
+</table>
+
+<h4>Timeline visual — cùng deploy v18.5 model bằng 3 strategies</h4>
+<pre><code>=== Blue-Green ===
+t=0:  Blue serves 100% → v18.4
+      Green deploy v18.5, warm up
+t=5:  Green ready, tests pass
+t=6:  Switch DNS → Green serves 100%
+      Blue standby (rollback nếu cần)
+Total downtime: ~0s
+
+=== Canary ===
+t=0:   v18.4 serves 100%
+t=1h:  v18.5 gets 5% traffic, monitor SLA
+t=4h:  metrics OK → 25% v18.5
+t=1d:  metrics OK → 50% v18.5
+t=2d:  metrics OK → 100% v18.5
+Total: 2 days rollout, safest cho new model
+
+=== Shadow ===
+t=0:   v18.4 serves 100% (user)
+       v18.5 receives copy of requests (log only)
+t=1d:  Compare v18.5 vs v18.4 predictions
+       Nếu v18.5 accuracy ≥ v18.4 + no regression → promote
+Total: 1-7 days shadow, then blue-green switch
+</code></pre>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Situation</th><th>Chọn</th></tr>
+<tr><td>Bug fix critical, tested kỹ</td><td>Blue-Green</td></tr>
+<tr><td>Major feature, uncertainty</td><td>Canary</td></tr>
+<tr><td>ML model retrain (test quality)</td><td>⭐ Shadow → Canary → Blue-Green</td></tr>
+<tr><td>Config change</td><td>Rolling</td></tr>
+<tr><td>Dev env / staging</td><td>Big Bang</td></tr>
+<tr><td>Breaking schema change</td><td>Blue-Green với 2 databases</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: Production ML deploy thường combine <em>Shadow (1 week) → Canary (2 days) → Blue-Green (final)</em>. V19.5 disaster (L2.6) vì skip 2 steps đầu, deploy Big Bang thẳng 100% → 14 tickers rơi fallback → mất trust.</p>
+</div>
+
+<h2>6. V18 blue-green example</h2>
+
+<pre><code># Minh họa cơ chế (không phải trích nguyên văn code thật —
+# cơ chế thật dùng model_registry table + MODEL_VERSION_DIR, xem backend/models/README_rollback.md):
+def route_model():
+    version = get_model_registry_version()   # 'v18' or 'v20'
+    return load_model(f"/app/models/{version}/")
+
+# Model registry table:
+INSERT INTO model_registry (version, activated_at) VALUES ('v20', NOW());
+
+# Blue-green cut-over:
+1. Deploy v20 artifacts to /app/models/v20/
+2. Warm smoke test (10 tickers)
+3. UPDATE model_registry SET current = 'v20'
+4. Clear prediction cache (invalidate old)
+5. Restart API (pick up new registry)
+
+# Rollback: UPDATE model_registry SET current = 'v18' + restart
+</code></pre>
+
+<h2>7. Cost anatomy real-time serving</h2>
+
+<pre><code>App: 1M requests/day, 50ms model + 20ms other
+
+Baseline throughput per instance:
+  50ms/req → 20 req/s per instance
+  1M/86400 sec ≈ 12 req/s average
+  Peak 3× ≈ 35 req/s → need 2 instances
+
+Instance cost:
+  Small (2 vCPU, 4GB): $50/month × 2 = $100/month
+  Plus Redis: $30/month
+  Plus DB (Postgres t3.medium): $50/month
+  Total: ~$180/month for 1M req/day predictor
+</code></pre>
+
+<h2>Deployment anti-patterns</h2>
+<div class="callout danger">
+<div class="label">Đừng làm</div>
+<ol>
+  <li><strong>Big-bang deploy 100% traffic</strong>: bug → toàn bộ user affected + rollback stress. Canary 1% → 10% → 100% với auto-rollback trên metric drop.</li>
+  <li><strong>Autoscale trên CPU only</strong>: LLM/ML workload thường I/O-bound waiting API → CPU thấp nhưng queue depth cao. Scale trigger: queue depth, p95 latency, GPU util (nếu có).</li>
+  <li><strong>Không có warm-up</strong>: new pod nhận full traffic ngay → cold cache + JIT compile → p99 spike. Warm-up: replay 100 canary requests trước khi mark ready.</li>
+  <li><strong>Shared model file mutable</strong>: 2 pods đọc cùng file khi 1 pod đang overwrite → corruption. Immutable versioned dirs + atomic symlink swap.</li>
+  <li><strong>GPU idle vì batch=1</strong>: online serving 1 request/1 GPU forward pass → utilization 5%. Dynamic batching (Triton) gộp 8-32 requests trong 20ms window.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Batch vs Real-time vs Streaming — 3 examples.</p>
+<p class="a">Batch: nightly recommendation refresh, monthly credit score. Real-time: search ranking, chat response, fraud detection. Streaming: clickstream anomaly, real-time ad bidding.</p>
+
+<p class="q">2. Blue-green vs Canary — khi nào chọn nào?</p>
+<p class="a">Blue-green: instant cut-over, stateless apps, monoliths. Canary: gradual, ML models (verify production behavior), microservices. Shadow: zero risk major changes.</p>
+
+<p class="q">3. GPU auto-scale — cold start problem?</p>
+<p class="a">New instance startup 60-180s (image + model load). User request timeout during. Fix: (1) Keep min 1 warm. (2) Predictive scaling. (3) Provisioned concurrency (pre-warm N instances). (4) Small standby model for fallback.</p>
+
+<p class="q">4. Serve 100 fine-tuned LoRA variants — architecture?</p>
+<p class="a">Base model shared trong GPU memory (single copy). LoRA weights (~50MB each) loaded on-demand. vLLM Multi-LoRA support: request specifies adapter_id, forward pass với base + LoRA. Save 100× memory vs separate deployments.</p>
+
+<p class="q">5. Shadow deployment 1 tuần cho V20 vs V18. Compare gì?</p>
+<p class="a">(1) Prediction agreement rate (V20 says UP when V18 says UP?). (2) Confidence calibration. (3) Latency p50/p95. (4) Downstream: PnL simulation nếu trader follow V20 predictions vs V18. (5) Sanity: outputs valid schema, no NaN.</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 Chip Huyen — <em>Designing ML Systems</em> Ch 7 Deployment</li>
+    <li>📖 <a href="https://docs.vllm.ai/">vLLM docs</a></li>
+    <li>📄 <a href="https://cloud.google.com/blog/products/ai-machine-learning/best-practices-for-deploying-ml-models">Google — Best practices for deploying ML models</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L7_1_mlops.html">← L7.1</a>
+  <a href="L7_3_sysdesign_predict.html">L7.3 · System Design 1 →</a>
+</div>
+
+</div>
+</body>
+</html>

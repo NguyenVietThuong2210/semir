@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L1.5 — Sample Weights + CV + Optuna</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 1 · Module 5</div>
+  <h1>1.5 · Sample Weights + Cross-Validation + Optuna</h1>
+  <p class="subtitle">3 kỹ thuật training rất quan trọng: cân bằng samples, đánh giá honest bằng CV có gap, tự động tune hyperparameters với Optuna Bayesian search.</p>
+  <div class="level">Level 1 · Foundations · ~35 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>3 loại sample weights V18 dùng + code compute</li>
+  <li>Vì sao K-Fold random KHÔNG dùng được cho time-series</li>
+  <li>Walk-forward CV + gap concept — implement bằng sklearn</li>
+  <li>Optuna vs Grid vs Random search — khi nào chọn cái nào</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Sample weight + CV bằng ngôn ngữ đời thường</div>
+<p><strong>Sample weight = trọng số câu hỏi trong đề thi</strong>: Học sinh làm 100 câu, giáo viên đánh dấu 5 câu "trọng tâm" giá 50% điểm. Học sinh khôn ngoan sẽ luyện 5 câu đó kỹ hơn. Sample weight bảo model: "sample này quan trọng hơn — làm sai trả giá đắt".</p>
+<p><strong>V18</strong>: Sample gần đây (2024-2026) weight cao hơn sample cũ (2021) — vì market regime đổi, dữ liệu gần phản ánh reality hiện tại tốt hơn.</p>
+<p><strong>Cross-validation = tự thi thử</strong>: Học 4 chương, giấu 1 chương để tự test → biết mình yếu chỗ nào. Xoay vòng 5 lần (mỗi chương giấu 1 lần) = 5-fold CV. Optuna = tự động tìm hyperparameter tốt nhất qua nhiều lần thi thử.</p>
+</div>
+
+<h2>1. Sample weights — không phải mọi sample bằng nhau</h2>
+
+<p>V18 dùng 3 loại weight nhân với nhau:</p>
+
+<h3>1.1 Class balance weight</h3>
+<pre><code># Nếu FLAT chiếm 50%, UP 25%, DOWN 25%:
+# Cân đối để mỗi class contribute equal loss:
+class_weight = {0: 2.0, 1: 1.0, 2: 2.0}   # DOWN, FLAT, UP
+w_class = np.array([class_weight[y] for y in y_train])
+</code></pre>
+
+<h3>1.2 Recency decay (temporal weight)</h3>
+<pre><code># Sample xa quá khứ giảm weight — market pattern change over time.
+# Half-life 200 ngày:
+tau = 200 / np.log(2)   # decay constant
+days_ago = (today - date_i).days
+w_time = np.exp(-days_ago / tau)
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức w = exp(−t/τ) với τ = half_life/ln(2)?</div>
+<p><strong>Câu hỏi</strong>: Tại sao dùng exponential decay, không phải linear (1 − t/T)?</p>
+
+<p><strong>Bước 1 — Đặc tính mong muốn</strong>:</p>
+<ul>
+<li>Sample hôm nay (t=0): weight = 1 (max).</li>
+<li>Sample rất cũ (t → ∞): weight → 0 (dần dần bỏ qua, không âm).</li>
+<li>Smooth, không cutoff cứng (linear cutoff tại t=T thì sample t=T+1 nhảy về 0 → discontinuity).</li>
+</ul>
+
+<p><strong>Bước 2 — Chọn exponential vì</strong>: Hàm exp(−t/τ) thoả mãn cả 3 tính chất trên + có "memory-less" property: rate decay tại mọi t đều bằng −w/τ (proportional). Tính chất này khớp intuition "market forgetting past exponentially fast".</p>
+
+<p><strong>Bước 3 — Định nghĩa half-life</strong>: Ta muốn "sau H ngày, weight còn 1/2". Đặt:</p>
+<pre><code>w(H) = exp(−H/τ) = 1/2
+=> −H/τ = ln(1/2) = −ln(2)
+=> τ = H / ln(2)
+</code></pre>
+
+<p>Ví dụ H = 200 ngày → τ = 200/0.693 ≈ 288.5. Verify:</p>
+<pre><code>t=0:    w = exp(0) = 1.00
+t=200:  w = exp(−200/288.5) = exp(−0.693) = 0.50  ✓ (half-life đúng)
+t=400:  w = exp(−400/288.5) = 0.25  (quarter)
+t=1000: w = exp(−3.47) = 0.031 (gần bỏ)
+</code></pre>
+
+<p><strong>Analogy đời thực</strong>: Giống decay của cà phê nhớ vị — càng lâu càng nhạt, nhưng không bao giờ 0 hoàn toàn. Half-life 200 ngày = "market pattern mờ đi một nửa sau 200 phiên", khớp research empirical VN market (regime shift ~1 năm).</p>
+</div>
+
+<h3>1.3 Label clarity weight</h3>
+<pre><code># Samples với |return| xa threshold rõ ràng → weight cao.
+# Samples borderline (|return| ≈ threshold) → weight thấp.
+excess = np.abs(returns) - label_threshold
+w_clarity = 1 + np.clip(excess / label_threshold, 0, 3)   # 1x → 4x
+</code></pre>
+
+<pre><code># Combine (cap 5×):
+w_total = w_class * w_time * w_clarity
+w_total = np.clip(w_total, 0.1, 5.0)
+
+xgb.fit(X, y, sample_weight=w_total)
+</code></pre>
+
+<h2>2. Cross-Validation — test không gian lận</h2>
+
+<div class="callout danger">
+<div class="label">🚨 K-Fold random KHÔNG dùng được cho time-series</div>
+<p>K-Fold random shuffle rồi chia — nghĩa là test set có thể chứa data từ 2020 và train set chứa 2024. Đó là <strong>data leak</strong>: model biết tương lai khi train quá khứ. Test score sẽ inflate, deploy sẽ chết.</p>
+</div>
+
+<h3>Walk-forward validation (đúng cách)</h3>
+
+<pre><code>from sklearn.model_selection import TimeSeriesSplit
+
+# 5 folds, mỗi fold train quá khứ + test tương lai gần
+cv = TimeSeriesSplit(n_splits=5, gap=5)  # gap 5 phiên tránh leak
+
+for train_idx, test_idx in cv.split(X):
+    X_train, y_train = X[train_idx], y[train_idx]
+    X_test, y_test = X[test_idx], y[test_idx]
+    # train + eval
+
+# Visualization:
+# Fold 1: train [.....]      test [T]
+# Fold 2: train [.......]    test [T]
+# Fold 3: train [.........]  test [T]
+# ...
+# Test luôn là tương lai của train.
+</code></pre>
+
+<h3>Vì sao cần gap?</h3>
+
+<p>Label ở time t được tính từ close[t] → close[t+h]. Nếu test bắt đầu ngay sau train end, thì:</p>
+<ul>
+  <li>Train cuối cùng sample t → label dùng close[t+h]</li>
+  <li>Test đầu tiên sample t+1 → feature có thể tính từ close[t]</li>
+  <li>Overlap → leak</li>
+</ul>
+<p>Gap ≥ horizon (5 phiên cho h=5) tránh overlap.</p>
+
+<h2>3. Optuna — Bayesian hyperparameter search</h2>
+
+<h3>3 approaches</h3>
+<table>
+<tr><th></th><th>Grid search</th><th>Random search</th><th>Optuna (Bayesian)</th></tr>
+<tr><td>Cách</td><td>Thử mọi combo</td><td>Random sample</td><td>Học từ trials trước, pick smarter</td></tr>
+<tr><td>Trial count</td><td>Exponential với params</td><td>Constant</td><td>Constant nhưng effective hơn</td></tr>
+<tr><td>Best khi</td><td>Few params, small ranges</td><td>Baseline</td><td>Many params, expensive train</td></tr>
+</table>
+
+<h3>Optuna implementation V18</h3>
+
+<pre><code>import optuna
+
+def objective(trial):
+    params = {
+        'n_estimators': trial.suggest_int('n', 200, 800),
+        'max_depth': trial.suggest_int('d', 3, 8),
+        'learning_rate': trial.suggest_float('lr', 0.02, 0.2, log=True),
+        'subsample': trial.suggest_float('ss', 0.5, 1.0),
+        'colsample_bytree': trial.suggest_float('cs', 0.5, 1.0),
+        'reg_alpha': trial.suggest_float('ra', 1e-4, 1.0, log=True),
+        'reg_lambda': trial.suggest_float('rl', 1e-4, 5.0, log=True),
+        'min_child_weight': trial.suggest_int('mcw', 1, 30),
+        'gamma': trial.suggest_float('gm', 0.0, 2.0),
+    }
+    m = XGBClassifier(**params)
+    m.fit(X[tr], y[tr], sample_weight=w[tr], eval_set=[(X[val], y[val])],
+          early_stopping_rounds=30, verbose=False)
+    preds = m.predict_proba(X[val])
+    return log_loss(y[val], preds, sample_weight=w[val])
+
+study = optuna.create_study(
+    direction='minimize',
+    sampler=optuna.samplers.TPESampler(seed=42),   # TPE Bayesian
+    pruner=optuna.pruners.MedianPruner(),
+)
+study.optimize(objective, n_trials=50, timeout=1800)
+best_params = study.best_params
+</code></pre>
+
+<h3>Tricks quan trọng</h3>
+<ul>
+  <li><code>log=True</code> cho params như lr, reg_alpha (search log-scale)</li>
+  <li>Pruner: kill trial sớm nếu underperform (tiết kiệm 30-50% compute)</li>
+  <li>Sampler TPE (Tree-structured Parzen Estimator) mặc định — hoạt động tốt hầu hết trường hợp</li>
+  <li>Tie in với CV: mỗi trial chạy full CV (5 folds) → chọn trial có mean CV loss thấp nhất</li>
+</ul>
+
+<h2>4. 🔍 So sánh: Sample Weight strategies + CV variants + Tuning methods</h2>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 Bảng compare toàn bộ (đọc SAU khi đã hiểu sample weight, CV, và Optuna ở mục 1-3)</div>
+
+<h4>5 sample weight strategies</h4>
+<table>
+<tr><th>Strategy</th><th>Ý tưởng</th><th>Công thức</th><th>Khi dùng</th><th>Cạm bẫy</th></tr>
+<tr><td><strong>Recency</strong></td><td>Sample gần đây quan trọng hơn</td><td><code>w_i = 0.9965^(T-t_i)</code> (half-life 200 ngày, khớp §1.2)</td><td>Time-series regime shift</td><td>Decay quá mạnh mất history</td></tr>
+<tr><td><strong>Class weight</strong></td><td>Class hiếm weight cao</td><td><code>w_c = n/(K·n_c)</code></td><td>Imbalanced (fraud, disease)</td><td>Overfit rare class</td></tr>
+<tr><td><strong>Volatility</strong></td><td>Sample volatile quan trọng</td><td><code>w_i = |return|/mean</code></td><td>Trading, big moves</td><td>CV score ảo</td></tr>
+<tr><td><strong>Uncertainty</strong></td><td>Sample hard quan trọng</td><td><code>w_i = 1/conf_prev</code></td><td>Boosting (XGBoost tự làm)</td><td>Noisy label dominate</td></tr>
+<tr><td><strong>Uniform</strong></td><td>Tất cả bằng nhau</td><td><code>w_i = 1</code></td><td>Default</td><td>Không tận dụng structure</td></tr>
+</table>
+
+<p><strong>V18 dùng recency × volatility</strong>: Sample recent + volatile (breakouts, crashes) weight ~2460× hơn sample cũ + boring (1.97/0.0008). FPT ví dụ:
+<br>&nbsp;&nbsp;• Sample 2021 return -0.5% → w = 0.0008 (IGNORE)
+<br>&nbsp;&nbsp;• Sample 2024 return +3.2% → w = 0.22 (moderate)
+<br>&nbsp;&nbsp;• Sample 2026 return +5.5% → w = 1.97 (HIGH) ⭐</p>
+
+<h4>5 CV variants</h4>
+<table>
+<tr><th>CV Type</th><th>Cách chia</th><th>Dùng cho</th><th>Nhược</th></tr>
+<tr><td>KFold random</td><td>Shuffle 5 folds</td><td>Tabular i.i.d.</td><td>❌ SAI time-series</td></tr>
+<tr><td>Stratified KFold</td><td>Random + giữ class dist</td><td>Imbalanced classification</td><td>❌ Vẫn sai time-series</td></tr>
+<tr><td>TimeSeriesSplit</td><td>Train past, test future</td><td>Time-series</td><td>Folds không đồng đều</td></tr>
+<tr><td><strong>Purged CV</strong> ⭐</td><td>TimeSeriesSplit + purge gap</td><td>Finance (label horizon &gt;1 day)</td><td>Fold nhỏ hơn</td></tr>
+<tr><td>GroupKFold</td><td>Chia theo group</td><td>Data có structural group</td><td>Không time-series</td></tr>
+</table>
+
+<p><strong>V18 dùng Purged CV vì</strong>: Label horizon T+3, sample T498 label liên quan T501 (nằm trong test). Purge 5 samples quanh boundary → fix vertical leakage.</p>
+
+<h4>Tuning methods so sánh</h4>
+<table>
+<tr><th></th><th>Grid Search</th><th>Random Search</th><th>Bayesian (Optuna)</th></tr>
+<tr><td>Cách</td><td>Thử mọi combination</td><td>Random sample</td><td>Học trials trước, focus vùng tốt</td></tr>
+<tr><td>Trials cần</td><td>10^N exponential</td><td>50-200</td><td>50-100 ⭐</td></tr>
+<tr><td>Efficient</td><td>❌ Tệ &gt;3 params</td><td>OK</td><td>⭐ Best</td></tr>
+<tr><td>V18 dùng</td><td>❌</td><td>❌</td><td>✅ Optuna 50 trials</td></tr>
+</table>
+
+<p><strong>Insight cuối</strong>: Sample weight + CV + Tuning = 3 lever quan trọng nhất trong training pipeline. Sai 1 trong 3 → model tệ. V18 combo: recency×volatility + Purged CV + Optuna = strong nhất cho time-series financial task.</p>
+</div>
+
+<h2>5. Nested CV — đánh giá pipeline có tune</h2>
+
+<div class="callout warn">
+<div class="label">Pitfall</div>
+<p>Nếu bạn tune hyperparameters bằng CV rồi report cùng CV score làm final estimate → overfit đến CV. Đúng cách: nested CV.</p>
+</div>
+
+<pre><code>Outer CV (5-fold): estimate final performance
+├─ Fold 1:
+│  ├─ Inner CV (3-fold): tune hyperparameters
+│  ├─ Train với best params trên full outer-train
+│  └─ Eval trên outer-test → score_1
+├─ Fold 2: ... → score_2
+...
+└─ Fold 5: ... → score_5
+
+Final: mean(score_1..5)
+</code></pre>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. K-Fold random KHÔNG dùng được cho time-series — vì sao?</p>
+<p class="a">Random shuffle → test set chứa data từ tương lai vs train quá khứ → data leak. Score inflate, deploy fail.</p>
+
+<p class="q">2. TimeSeriesSplit dùng gap để làm gì?</p>
+<p class="a">Tránh label leak khi label horizon > 0. Với h=5, feature at t=T dùng data ≤ T; label dùng close[T+5]. Nếu test bắt đầu t=T+1 (không gap), sample T+1's feature có thể sử dụng info tại T (already in train label). Gap ≥ h fix.</p>
+
+<p class="q">3. Recency decay half-life 200 ngày nghĩa là gì?</p>
+<p class="a">Sample cách 200 ngày trước có weight = 0.5 (half). Cách 400 ngày = 0.25. Model prefer recent samples — VN market pattern thay đổi (macro shift, retail flow).</p>
+
+<p class="q">4. Optuna vs Grid search cho 9 hyperparameters mỗi cái 5 giá trị. Trial count?</p>
+<p class="a">Grid: 5^9 = ~2M trials (infeasible). Optuna 50-100 trials thường đủ với TPE sampler — vì Bayesian pick smart, không waste ở regions bad.</p>
+
+<p class="q">5. Nested CV vs single CV khi tune hyperparameters — score nào honest?</p>
+<p class="a">Nested. Single CV overfits vì hyperparams được chọn bằng chính CV → CV score biased. Nested tách tune (inner) vs estimate (outer) — outer score = production estimate.</p>
+
+</div>
+
+<div class="callout" style="background: rgba(239,68,68,0.08); border-left-color: #ef4444">
+<div class="label">❌ Sai lầm thường gặp vs ✅ Thực tế</div>
+<ul>
+  <li><strong>❌ "Shuffle data trước CV để random hơn"</strong> → ✅ SAI cho time-series. Shuffle = leak. Luôn dùng TimeSeriesSplit.</li>
+  <li><strong>❌ "Recency decay càng dốc càng tốt vì recent luôn quan trọng"</strong> → ✅ Decay quá dốc → hầu như chỉ train trên 100 samples cuối → high variance + không học pattern cross-regime. Half-life 200-500 là balance.</li>
+  <li><strong>❌ "Optuna 200 trials luôn hơn 50 trials"</strong> → ✅ Với 50 trials, TPE đã converge — thêm chỉ marginal. Dùng compute quí đó cho retraining nhiều seed.</li>
+  <li><strong>❌ "Nested CV double compute nên skip"</strong> → ✅ Skip nested = report inflated score. Nếu compute hạn chế: dùng 1 hold-out set 20% giữ nguyên (final), tune bằng CV trên 80%.</li>
+  <li><strong>❌ "Sample weight = class_weight sklearn"</strong> → ✅ class_weight chỉ balance class. sample_weight tổng quát hơn: per-sample (recency + volatility + class).</li>
+</ul>
+</div>
+
+<h2>6. 🎓 Interview-style Q&A</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q1: "Vì sao Purged CV thay vì thường TimeSeriesSplit?"</div>
+<p><strong>Model answer</strong>: "Nếu label horizon &gt; 0 (VD predict return T+5), sample tại T+498 có label dùng close[T+503], overlap với test range bắt đầu T+500 → vertical leak. Purge = drop N samples ở boundary (N = horizon). López de Prado (2018) chứng minh purge tăng honest score 3-8% + fix ảo tưởng edge. V18 áp dụng: gap = 5 phiên."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q2: "Hyperparameter search với 15 params. Grid, random hay Bayesian?"</div>
+<p><strong>Model answer</strong>: "Bayesian (Optuna TPE). Grid: 5^15 = infeasible. Random: cover space tốt nhưng waste 40% trials ở region bad. Bayesian: học từ trials trước → focus vùng promising, 50-100 trials thường match random 500+ trials. Bonus: median pruner kill trial sớm → tiết kiệm 30% compute."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q3: "Sample weight có ảnh hưởng calibration không?"</div>
+<p><strong>Model answer</strong>: "Có. Weighted training = model overfit vào high-weight samples → output probability lệch theo distribution weighted, không phải natural. Fix: calibrate trên val set với sample_weight cũng weighted CÙNG cách. Hoặc: calibrate trên val set unweighted và chấp nhận trade-off. V18 chọn weighted calibration cho consistency."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q4: "Định nghĩa nhanh: gap, purge, embargo trong CV."</div>
+<p><strong>Model answer</strong>:
+<br>• <strong>Gap</strong>: khoảng cách giữa train end và test start, ngăn label overlap.
+<br>• <strong>Purge</strong>: drop samples train mà label overlap với test range (khi horizon &gt; 0).
+<br>• <strong>Embargo</strong>: sau test set, thêm 1 buffer trước fold tiếp theo — tránh label từ test leak vào future train (khi có serial correlation).
+<br>Kết hợp: Purged Embargoed CV = gold standard finance ML (López de Prado 2018).</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q5: "Nested CV score 55%, single CV score 62%. Trust cái nào cho production?"</div>
+<p><strong>Model answer</strong>: "Nested 55%. Single CV được dùng để tune hyperparameter → score đó biased upward (chọn params tốt nhất trên chính CV = overfit CV). Nested tách tune (inner) khỏi estimate (outer) → outer score honest. Gap 7% cho thấy hyperparameter search có overfit đáng kể — có thể reduce bằng ít trials + regularize params bounds."</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li><code>backend/train_v18_unified.py</code> lines 415-500: Optuna objective</li>
+    <li>Log: <code>nested=0.472</code> = nested CV skill score</li>
+    <li><code>TimeSeriesSplit(n_splits=3, gap=5)</code> — trong training script</li>
+    <li>Sample weights compute: <code>_compute_sample_weights_v18()</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://optuna.org/">Optuna official docs</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1907.10902">Optuna paper (Akiba et al 2019)</a></li>
+    <li>📄 <a href="https://robjhyndman.com/hyndsight/tscv/">Hyndman — Cross-validation for time series</a></li>
+    <li>📖 <a href="https://scikit-learn.org/stable/modules/cross_validation.html#time-series-split">sklearn TimeSeriesSplit docs</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L1_4_v18_architecture.html">← L1.4</a>
+  <a href="L1_6_calibration.html">L1.6 · Calibration →</a>
+</div>
+
+</div>
+</body>
+</html>

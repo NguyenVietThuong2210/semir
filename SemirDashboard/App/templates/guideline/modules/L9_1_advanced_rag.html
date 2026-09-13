@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L9.1 — Advanced RAG (Contextual, Hybrid, Rerank, GraphRAG, Agentic)</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 9 · Module 1</div>
+  <h1>9.1 · Advanced RAG — beyond naive vector search</h1>
+  <p class="subtitle">Contextual Retrieval (Anthropic 2024, -49% retrieval failure rate), hybrid BM25+dense, cross-encoder rerankers, GraphRAG (Microsoft), agentic RAG (self-query, decompose). Level 9 expert track.</p>
+  <div class="level">Level 9 · Expert · ~40 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Diagnose why naive RAG fails (5 failure modes)</li>
+  <li>Implement Anthropic Contextual Retrieval</li>
+  <li>Hybrid retrieval (BM25 + dense) + Reciprocal Rank Fusion</li>
+  <li>Cross-encoder reranking (Cohere, bge-reranker)</li>
+  <li>GraphRAG + Agentic RAG patterns</li>
+</ul>
+
+<h2>1. Why naive RAG fails — 5 failure modes</h2>
+
+<table>
+<tr><th>Failure</th><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+<tr><td>Missing context</td><td>Chunk retrieved không đủ để answer</td><td>Chunk cắt giữa reasoning chain</td><td>Contextual Retrieval / parent-child chunking</td></tr>
+<tr><td>Wrong chunk ranked #1</td><td>Semantic-close but irrelevant</td><td>Embedding không hiểu keyword</td><td>Hybrid BM25 + rerank</td></tr>
+<tr><td>Lost in the middle</td><td>Answer trong retrieved docs nhưng LLM miss</td><td>LLM attention degrade với long context (Liu 2023)</td><td>Rerank + top-3 only</td></tr>
+<tr><td>Multi-hop fail</td><td>Câu hỏi cần 2 docs, retrieve 1</td><td>Single-shot retrieval</td><td>Agentic RAG (decompose)</td></tr>
+<tr><td>Global query</td><td>"Summarize theme of corpus"</td><td>RAG = local retrieval</td><td>GraphRAG community summaries</td></tr>
+</table>
+
+<h2>2. Anthropic Contextual Retrieval (2024)</h2>
+
+<p><strong>Core idea</strong>: prepend to each chunk 1-2 sentence AI-generated <em>context</em> mô tả chunk nằm ở đâu trong document.</p>
+
+<pre><code># Before (naive chunk):
+"The company reported revenue of $8.5B."
+
+# After (contextualized chunk):
+"This chunk is from Acme Corp Q3 2024 10-K filing, section on
+Financial Performance. The company reported revenue of $8.5B."
+</code></pre>
+
+<h3>Impact (Anthropic benchmark)</h3>
+<ul>
+  <li>Contextual embeddings alone: −35% retrieval failure rate</li>
+  <li>+ Contextual BM25: −49% failure rate</li>
+  <li>+ Reranking: −67% failure rate</li>
+</ul>
+
+<h3>Implementation với prompt caching</h3>
+<pre><code>DOCUMENT_CONTEXT_PROMPT = """
+&lt;document&gt;{{WHOLE_DOCUMENT}}&lt;/document&gt;
+Here is the chunk we want to situate within the whole document:
+&lt;chunk&gt;{{CHUNK_CONTENT}}&lt;/chunk&gt;
+Give a short succinct context to situate this chunk. Answer only with the context.
+"""
+# Cache document (large) → chỉ pay full price 1 lần cho toàn corpus
+</code></pre>
+
+<h2>3. Hybrid retrieval — BM25 + Dense + RRF</h2>
+
+<pre><code># BM25 catches exact keywords (ticker "VNM", số "8.5B")
+# Dense catches semantic ("revenue" ~ "sales" ~ "top line")
+
+def reciprocal_rank_fusion(bm25_hits, dense_hits, k=60):
+    scores = {}
+    for rank, doc_id in enumerate(bm25_hits):
+        scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + rank)
+    for rank, doc_id in enumerate(dense_hits):
+        scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + rank)
+    return sorted(scores.items(), key=lambda x: -x[1])
+</code></pre>
+
+<h2>4. Cross-encoder reranking</h2>
+
+<p><strong>Bi-encoder</strong> (dùng cho retrieval): embed query + doc riêng, cosine sim. Nhanh (millions docs).</p>
+<p><strong>Cross-encoder</strong> (dùng cho rerank): concat [query || doc] → BERT → 1 score. Chậm nhưng chính xác.</p>
+
+<pre><code># Pipeline: top-100 (bi-encoder) → rerank → top-10 (cross-encoder)
+from sentence_transformers import CrossEncoder
+reranker = CrossEncoder("BAAI/bge-reranker-v2-m3")
+pairs = [[query, doc.text] for doc in top100]
+scores = reranker.predict(pairs)
+top10 = sorted(zip(top100, scores), key=lambda x: -x[1])[:10]
+</code></pre>
+
+<h3>Options</h3>
+<ul>
+  <li><strong>Cohere Rerank v3</strong> — API, best quality, ~$2/1000 search units (1 unit = 1 query + tới 100 docs, không tính theo token)</li>
+  <li><strong>bge-reranker-v2-m3</strong> — open source, multilingual, đủ tốt</li>
+  <li><strong>Jina Reranker</strong> — mid tier</li>
+</ul>
+
+<h2>5. GraphRAG (Microsoft Research 2024)</h2>
+
+<p><strong>Problem</strong>: naive RAG fail cho "global queries" (theme, summarize) vì retrieval là local.</p>
+
+<p><strong>GraphRAG pipeline</strong>:</p>
+<ol>
+  <li>LLM extract entities + relationships từ corpus → knowledge graph</li>
+  <li>Community detection (Leiden algorithm) → clusters</li>
+  <li>LLM sinh community summary cho mỗi cluster (bottom-up)</li>
+  <li>Query time: match query → relevant communities → return summaries</li>
+</ol>
+
+<p><strong>Trade-off</strong>: index cost cao (LLM parse full corpus), nhưng answer global queries tốt hơn naive 3-5×.</p>
+
+<h2>6. Agentic RAG</h2>
+
+<h3>6.1 Self-query decomposition</h3>
+<pre><code>User: "So sánh revenue growth của VNM và MSN trong Q2 2024"
+Agent: decompose thành:
+  - "VNM Q2 2024 revenue growth"
+  - "MSN Q2 2024 revenue growth"
+Run 2 retrievals separately, LLM synthesize.
+</code></pre>
+
+<h3>6.2 Query router</h3>
+<pre><code>if query.type == "factual":     use vector RAG
+elif query.type == "aggregate": use SQL over structured
+elif query.type == "temporal":  use time-series index
+elif query.type == "global":    use GraphRAG summaries
+</code></pre>
+
+<h3>6.3 Iterative retrieval (FLARE)</h3>
+<p>Generate → detect low-confidence token → retrieve more → regenerate. Dùng khi answer cần multi-hop.</p>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 6 RAG variants head-to-head (đọc SAU sections 2-6)</div>
+
+<table>
+<tr><th></th><th>Naive RAG</th><th>Contextual</th><th>Hybrid (BM25+Dense)</th><th>Rerank pipeline</th><th>GraphRAG</th><th>Agentic RAG</th></tr>
+<tr><td><strong>Setup complexity</strong></td><td>Đơn giản</td><td>+ 1 LLM call/chunk index</td><td>+ BM25 index</td><td>+ Cross-encoder</td><td>+ KG extraction (đắt)</td><td>+ Agent loop</td></tr>
+<tr><td><strong>Index cost</strong></td><td>1× embedding</td><td>2-3× (context LLM)</td><td>1× emb + BM25 (rẻ)</td><td>Same as base</td><td>10-50× (LLM extract entities)</td><td>Same as base</td></tr>
+<tr><td><strong>Query cost</strong></td><td>1 embedding + LLM</td><td>Same</td><td>+ BM25 lookup (rẻ)</td><td>+ Rerank (~$0.001)</td><td>+ community summaries</td><td>Multiple LLM calls</td></tr>
+<tr><td><strong>Recall improvement</strong></td><td>Baseline (5.7% fail rate)</td><td>-35% (Anthropic)</td><td>-49% combined</td><td>-67% với rerank</td><td>Solves global queries</td><td>Handles multi-hop</td></tr>
+<tr><td><strong>Best for</strong></td><td>Prototype, small corpus</td><td>Domain docs (finance, legal)</td><td>Exact keyword + semantic mix</td><td>⭐ Production default</td><td>Global queries "summarize theme"</td><td>Multi-hop, comparative</td></tr>
+<tr><td><strong>Nhược</strong></td><td>Fail 5 modes</td><td>Cost prompt cache-able</td><td>Fusion tuning</td><td>Cross-encoder latency</td><td>Đắt, không update dễ</td><td>Latency + cost cao</td></tr>
+</table>
+
+<h4>Ví dụ số cụ thể — cùng query "Q2 revenue growth Vinamilk" trên 100 docs</h4>
+<pre><code>Naive RAG:
+  Retrieve top-5 dense embedding matches
+  → Miss 2/5 vì embedding "revenue" ≠ "doanh thu" (cross-lingual gap)
+  → Recall: 60%, Answer quality: 6/10
+
+Contextual RAG (Anthropic 2024):
+  Prepend "[Vinamilk Q2 2024 earnings report, Financial Highlights section]"
+  vào mỗi chunk trước khi embed
+  → Recall: 78%, Answer quality: 7.5/10
+
+Hybrid + Rerank:
+  BM25 catches "VNM ticker" exact + Dense catches "doanh thu tăng"
+  Rerank top-100 → top-5
+  → Recall: 88%, Answer quality: 8.5/10 ⭐
+
+GraphRAG (cho "chiến lược đầu tư 2024 theme"):
+  Naive RAG fail vì knowledge scatter khắp docs
+  GraphRAG extract "chiến lược đầu tư" community → summary → 3× better
+</code></pre>
+
+<h4>Decision matrix — RAG pipeline nên build thế nào?</h4>
+<table>
+<tr><th>Corpus size + type</th><th>Recommend</th></tr>
+<tr><td>&lt;100 docs, prototype</td><td>Naive RAG với good embedding</td></tr>
+<tr><td>Production docs domain-specific</td><td>⭐ Contextual + Hybrid + Rerank</td></tr>
+<tr><td>100k+ docs enterprise</td><td>Contextual + Hybrid + Rerank + query router</td></tr>
+<tr><td>Global queries "summarize corpus"</td><td>GraphRAG (nếu ngân sách cho phép)</td></tr>
+<tr><td>Multi-hop reasoning</td><td>Agentic RAG với decompose</td></tr>
+<tr><td>Time-sensitive (news, stock)</td><td>Hybrid + freshness boost</td></tr>
+</table>
+
+<p><strong>Production standard 2025</strong>: Contextual chunking + Hybrid BM25/Dense + Cross-encoder rerank + Query router = giảm failure rate <strong>67%</strong> (Anthropic benchmark). Đây là setup nghiêm túc cho enterprise RAG, không phải "just chunk + embed + retrieve".</p>
+</div>
+
+<h2>6.5 · HyDE + Ragas formulas + agentic self-critique</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🎯 Deep-dive — HyDE, Ragas metrics chi tiết công thức, self-query, self-critique</div>
+
+<h4>HyDE (Hypothetical Document Embeddings) — Gao 2022</h4>
+<p><strong>Analogy VN</strong>: "hỏi rồi tự trả lời giả định trước → dùng câu trả lời giả để tìm doc thật". Vì query ngắn (câu hỏi) và doc dài (câu trả lời) sống ở vùng embedding khác nhau — mismatch. Solution: sinh <em>hypothetical answer</em> trước, embed câu trả lời giả, dùng nó match doc thật.</p>
+
+<pre><code># Pipeline HyDE
+query = "Q2 2024 revenue Vinamilk là bao nhiêu?"
+
+# Step 1: LLM sinh câu trả lời GIẢ ĐỊNH (không cần đúng số)
+hypothetical = llm(f"Answer this question: {query}")
+# → "Vinamilk Q2 2024 báo cáo doanh thu khoảng 15,000 tỷ đồng,
+#    tăng 5% so với cùng kỳ, driven by domestic dairy segment..."
+
+# Step 2: Embed hypothetical (không phải query)
+h_emb = embed(hypothetical)
+
+# Step 3: Retrieve với h_emb thay query
+docs = vector_store.search(h_emb, top_k=10)
+
+# Insight: hypothetical + real doc same "shape" (statement style)
+# → retrieval accuracy tăng 15-30% cho question-style query
+</code></pre>
+
+<p><strong>Trade-off</strong>: thêm 1 LLM call trước retrieval (+latency + cost). Dùng khi corpus large + query dạng câu hỏi phức tạp. Skip cho keyword search.</p>
+
+<h4>Ragas metrics — công thức chính xác</h4>
+<p><strong>Analogy VN</strong>: "chấm bài RAG như chấm essay — có 4 tiêu chí độc lập". Mỗi metric = 1 rubric.</p>
+
+<table>
+<tr><th>Metric</th><th>Đo gì</th><th>Công thức</th><th>Ai judge</th></tr>
+<tr><td><strong>Faithfulness</strong></td><td>Answer có support từ context?</td><td>|claims trong answer support bởi context| / |total claims trong answer|</td><td>LLM extract claims, verify từng cái</td></tr>
+<tr><td><strong>Answer relevance</strong></td><td>Answer trả lời question?</td><td>mean(cos_sim(embed(q_i), embed(q))) với q_i = LLM sinh question ngược từ answer, n=3</td><td>Embedding sim</td></tr>
+<tr><td><strong>Context precision</strong></td><td>Retrieved chunks bao nhiêu % relevant + ranked đúng?</td><td>Σ (precision@k × v_k) / |relevant chunks|, v_k=1 nếu chunk k relevant</td><td>LLM judge chunk vs ground truth</td></tr>
+<tr><td><strong>Context recall</strong></td><td>Retrieved cover ground-truth answer bao nhiêu?</td><td>|GT sentences supported by retrieved| / |total GT sentences|</td><td>LLM check từng sentence GT</td></tr>
+</table>
+
+<h4>Faithfulness — chi tiết step-by-step</h4>
+<pre><code># Step 1: LLM decompose answer thành atomic claims
+answer = "VNM có doanh thu Q2 2024 là 15.5k tỷ, tăng 8% YoY, biên gộp 42%"
+claims = llm_decompose(answer)
+# → ["VNM revenue Q2 2024 = 15.5k tỷ", "VNM revenue Q2 2024 grew 8% YoY", "VNM gross margin = 42%"]
+
+# Step 2: Cho từng claim, verify từ context
+verdicts = []
+for claim in claims:
+    v = llm(f"Given context:\n{context}\n\nIs claim supported? {claim}\nYES/NO")
+    verdicts.append(v == "YES")
+
+# Step 3: Faithfulness = mean(verdicts)
+faithfulness = sum(verdicts) / len(claims)
+# VD: 2/3 supported → faithfulness = 0.67
+</code></pre>
+
+<h4>Answer relevance + Context precision + Context recall — ví dụ số cụ thể (3 metric còn lại chưa có số)</h4>
+<pre><code># --- Answer relevance ---
+# LLM sinh ngược n=3 câu hỏi từ answer, so cos_sim với query gốc
+answer = "VNM Q2 2024 revenue tăng 8% YoY"
+query_goc = "Q2 2024 revenue Vinamilk là bao nhiêu?"
+generated_questions = [
+    "VNM Q2 2024 revenue tăng bao nhiêu?",   # cos_sim(embed(q), embed(query_goc)) = 0.94
+    "Doanh thu quý 2 Vinamilk thế nào?",      # cos_sim = 0.81
+    "VNM có lãi Q2 không?",                   # cos_sim = 0.42 (answer không nói lãi — LLM suy diễn lệch đề)
+]
+answer_relevance = mean([0.94, 0.81, 0.42]) = 0.72
+# → 0.72 = khá nhưng không cao, vì 1/3 câu hỏi sinh ngược bị lệch — dấu hiệu answer
+#   có phần không trực tiếp trả lời câu hỏi gốc.
+
+# --- Context precision (top-5 retrieved, v_k=1 nếu chunk k relevant) ---
+retrieved = [chunk1(relevant), chunk2(relevant), chunk3(irrelevant), chunk4(relevant), chunk5(irrelevant)]
+# precision@1 = 1/1 = 1.0   (chunk1 relevant, v_1=1 → tính)
+# precision@2 = 2/2 = 1.0   (chunk2 relevant, v_2=1 → tính)
+# precision@4 = 3/4 = 0.75  (chunk4 relevant, v_4=1 → tính; chunk3 kéo mẫu số xuống)
+context_precision = (1.0*1 + 1.0*1 + 0.75*1) / 3  # 3 = tổng số relevant chunks trong top-5
+                   = 2.75 / 3 = 0.917
+
+# --- Context recall (ground-truth answer có 4 câu, đếm mấy câu được retrieved context support) ---
+gt_sentences = ["revenue tăng 8%", "biên gộp 42%", "dẫn đầu ngành sữa", "guidance Q3 tích cực"]
+supported_by_retrieved = ["revenue tăng 8%", "biên gộp 42%", "dẫn đầu ngành sữa"]  # thiếu guidance Q3
+context_recall = 3 / 4 = 0.75
+# → retrieval bỏ sót 1 fact quan trọng (guidance Q3) dù precision cao (0.917) — đây
+#   chính là lý do PHẢI track cả precision lẫn recall, 1 con số cao không đủ nói lên
+#   chất lượng retrieval toàn diện.
+</code></pre>
+
+<h4>Agentic RAG — self-query + self-critique</h4>
+<pre><code># Self-query (LlamaIndex): LLM tự rewrite query cho retrieval tốt hơn
+raw_query = "cổ phiếu nào rẻ nhất VN30?"
+structured = llm_extract_filter(raw_query)
+# → {filter: {sector: "*", metric: "PE"}, sort: "asc", limit: 5, group: "VN30"}
+# Chuyển thành SQL / metadata filter thay chỉ vector search
+
+# Self-critique (Reflexion pattern)
+answer_v1 = llm(prompt + retrieved_docs)
+critique = llm(f"Critique answer for factual accuracy + completeness: {answer_v1}")
+if critique.mentions_gaps():
+    new_query = llm(f"What to retrieve to fill gaps: {critique}")
+    more_docs = retrieve(new_query)
+    answer_v2 = llm(prompt + retrieved_docs + more_docs)
+# Loop until critique clean or max_iter
+</code></pre>
+
+<h4>Cohere Rerank v3 — mechanics</h4>
+<ul>
+  <li>Model: multilingual cross-encoder (support 100+ languages, tốt cho tiếng Việt)</li>
+  <li>Input: query + 1000 docs (batch)</li>
+  <li>Output: relevance score 0-1 cho từng doc</li>
+  <li>Cross-encoder score = joint attention (query, doc) → nhạy với semantic + keyword</li>
+  <li>Latency: ~200ms cho 100 docs, ~1s cho 1000 docs</li>
+  <li>Best practice: retrieve top-100 (bi-encoder) → rerank top-100 → keep top-5 cho LLM context</li>
+</ul>
+
+<h4>Anti-pattern VN</h4>
+<ul>
+  <li><strong>Ragas thay human eval</strong>: Ragas = CI signal, không thay human. Faithfulness 0.9 vẫn có thể sai nếu ground-truth-fact không có trong context.</li>
+  <li><strong>HyDE cho keyword query</strong>: "VNM giá bao nhiêu" — HyDE overkill, chỉ cần BM25 exact match ticker.</li>
+</ul>
+
+<h4>Interview Q&A</h4>
+<ol>
+  <li><strong>Q: HyDE khi nào KHÔNG dùng?</strong> A: Query có exact keyword/ticker/entity (BM25 win). Query đơn giản factual (embedding trực tiếp OK). Latency-critical (thêm LLM call = +500ms).</li>
+  <li><strong>Q: Faithfulness vs Answer Relevance khác gì?</strong> A: Faithfulness = answer có bám context? (hallucination check). Answer relevance = answer có trả lời đúng câu hỏi? (topical). 2 orthogonal — có thể faithful nhưng irrelevant, hoặc relevant nhưng hallucinated.</li>
+  <li><strong>Q: Self-critique loop infinite risk?</strong> A: Yes. Cap max_iter=3. Nếu critique vẫn nhiều gap sau 3 loop → escalate HITL, không bơm thêm LLM call.</li>
+  <li><strong>Q: Context precision vs recall trade-off?</strong> A: Precision cao = ít noise cho LLM (top-3 relevant). Recall cao = cover đủ ground truth (top-20 maybe). Rerank giúp cả 2 (retrieve wide, rerank narrow).</li>
+</ol>
+</div>
+
+<h2>7. Case study — PredictStock knowledge base RAG</h2>
+
+<div class="example-box">
+<div class="title">daily-investor-report skill KB</div>
+<p>Skill có <code>kb/</code> chứa:</p>
+<ul>
+  <li><code>chart_patterns.md</code> — 22+ chart-shape patterns (double top, cup handle...) cộng thêm nhóm candlestick + Wyckoff riêng</li>
+  <li><code>sector_playbooks.md</code> — playbook cho 11 sectors HOSE</li>
+</ul>
+<p>(<code>vn_market_knowledge.md</code> — rules HOSE/HNX price band/T+2 — nằm ở root của skill, không phải trong <code>kb/</code>.)</p>
+<p><strong>Current approach</strong>: embed toàn bộ KB vào SKILL.md context (~2073 lines). Works vì corpus nhỏ.</p>
+<p><strong>Scale-up path</strong> nếu KB lên 100+ files: chuyển sang hybrid RAG:</p>
+<ul>
+  <li>BM25 index cho ticker/keyword ("VNM", "RSI 70")</li>
+  <li>Dense embedding (bge-m3) cho semantic ("khi nào nên chốt lời")</li>
+  <li>Rerank top-20 → top-5 với bge-reranker</li>
+  <li>Contextual prefix mỗi chunk: "Từ playbook Ngân hàng, phần technical setup..."</li>
+</ul>
+</div>
+
+<h2>8. Evaluation cho RAG</h2>
+
+<table>
+<tr><th>Metric</th><th>Nghĩa</th><th>Tool</th></tr>
+<tr><td>Retrieval recall@k</td><td>% ground-truth chunks trong top-k</td><td>RAGAS, custom</td></tr>
+<tr><td>Faithfulness</td><td>Answer có support từ retrieved docs?</td><td>RAGAS, LLM judge</td></tr>
+<tr><td>Answer relevance</td><td>Answer trả lời câu hỏi?</td><td>RAGAS</td></tr>
+<tr><td>Context precision</td><td>Retrieved chunks bao nhiêu % relevant?</td><td>RAGAS</td></tr>
+<tr><td>End-to-end accuracy</td><td>Answer đúng ground truth (nhân công eval)</td><td>Human, LLM judge</td></tr>
+</table>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+<p class="q">1. Contextual Retrieval giảm failure rate bao nhiêu?</p>
+<p class="a">Anthropic 2024: −35% embedding alone, −49% với BM25, −67% với rerank. Cost: 1-shot LLM call per chunk (dùng prompt caching để cheap).</p>
+<p class="q">2. Bi vs cross-encoder — khi nào dùng cái nào?</p>
+<p class="a">Bi-encoder cho retrieval (top-100 từ millions, fast). Cross-encoder cho rerank (top-100 → top-10, slow nhưng accurate). Pipeline chuẩn: bi → cross.</p>
+<p class="q">3. Lost in the middle problem?</p>
+<p class="a">Liu 2023: LLM attention degrade với info giữa long context. Fix: rerank + top-3 only, đừng dump top-20 raw. Test bằng needle-in-haystack.</p>
+<p class="q">4. Khi nào cần GraphRAG?</p>
+<p class="a">Global queries (theme, summarize corpus). Naive RAG chỉ trả lời local factual. GraphRAG cost cao index nhưng giải quyết class problems khác.</p>
+<p class="q">5. RAGAS 4 metrics core?</p>
+<p class="a">Faithfulness (answer↔context), Answer relevance (answer↔question), Context precision (relevant chunks / retrieved), Context recall (retrieved chunks / ground truth). Không thay human eval, chỉ CI signal.</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>PredictStock KB: <code>.claude/skills/daily-investor-report/kb/</code></li>
+    <li>Anthropic blog: Contextual Retrieval methodology + numbers</li>
+    <li>Skill SKILL.md §17 references KB structure</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://www.anthropic.com/news/contextual-retrieval">Anthropic Contextual Retrieval (2024)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2307.03172">Lost in the Middle (Liu et al 2023)</a></li>
+    <li>📖 <a href="https://microsoft.github.io/graphrag/">Microsoft GraphRAG</a></li>
+    <li>📖 <a href="https://docs.ragas.io/">RAGAS eval framework</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2305.06983">FLARE — active RAG (Jiang 2023)</a></li>
+    <li>📖 <a href="https://cohere.com/blog/rerank-3">Cohere Rerank v3</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L8_7_multica.html">← L8.7</a>
+  <a href="L9_2_llm_ops.html">L9.2 · LLM Ops →</a>
+</div>
+
+</div>
+</body>
+</html>

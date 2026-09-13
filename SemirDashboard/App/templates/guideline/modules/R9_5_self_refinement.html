@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R9.5 · Self-Refinement — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Advanced Steps · Điểm 5/8</div>
+  <h1>R9.5 · Self-Refinement</h1>
+  <p class="subtitle">Từ "tự nghĩ lại" (Reflexion, đã học) đến "tự nghĩ lại + verify bằng tool thật" — vì suy luận nội tại có thể tự tin sai.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Ôn nhanh Reflexion (đã học đủ ở <code>L6_1</code>) — không học lại từ đầu, chỉ tái sử dụng làm nền.</li>
+<li>Hiểu đúng nâng cấp 2025-2026: self-refinement phải có <strong>bằng chứng runtime</strong> (chạy lại tool thật), không chỉ suy luận nội tại ("nghĩ lại bằng lời").</li>
+<li>Nối đúng khái niệm này với triết lý <code>verify</code> skill của Claude Code: "drive the affected flow, not just tests or typecheck".</li>
+<li>Kể lại chính xác case study thật đã xảy ra trong dự án: phát hiện đầu tiên sai (nghi <code>flow_score</code>), qua re-derivation độc lập mới lộ ra thành phần thật sự sai là <code>ta_score</code> — rồi phát hiện ĐÓ cũng cần 1 lượt QA thứ hai vì bị nhiễu noise dữ liệu.</li>
+<li>Biết vì sao "tự tin sau 1 lượt refine" là chưa đủ — cần ngân sách ít nhất 2 lượt cho các thay đổi có rủi ro cao.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Trang này <strong>không dạy lại</strong> Reflexion — <a href="../modules/L6_1_agent_patterns.html"><code>L6_1_agent_patterns.html</code></a> mục 2 đã dạy đủ (loop generate → nhận feedback → tự phê bình bằng lời → generate lại). Trang này chỉ tập trung vào phần <em>chưa có ở đâu khác</em>: khoảng cách giữa "tự nghĩ lại" (nội tại, dễ tự tin sai) và "tự nghĩ lại có kiểm chứng bằng công cụ thật" (runtime evidence).</p>
+<table>
+<tr><th>Module đã có</th><th>Đã cover</th><th>Trang này bổ sung</th></tr>
+<tr><td><a href="../modules/L6_1_agent_patterns.html"><code>L6_1_agent_patterns.html</code></a> mục 2</td><td>Reflexion — cơ chế self-critique loop cơ bản</td><td>Liên hệ "self-refinement" với runtime tool-verification 2026 — điểm khác biệt sống còn giữa "nghĩ mình đã sửa đúng" và "chứng minh đã sửa đúng"</td></tr>
+<tr><td>Không có module nào</td><td>—</td><td>Case study thật, có tên biến cụ thể (<code>ta_score</code> vs <code>flow_score</code>), 2 lượt QA độc lập</td></tr>
+</table>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Reflexion thuần (chỉ suy luận nội tại) giống 1 học sinh tự chấm lại bài kiểm tra của chính mình bằng trí nhớ — "chắc câu 3 mình làm đúng rồi" — nhưng không mở lại sách giáo khoa để đối chiếu. Rất dễ tự tin sai vì học sinh không có "nguồn sự thật độc lập" để so sánh.</p>
+<p><strong>Self-refinement 2026 (có tool-verification)</strong> giống học sinh đó mở lại đáp án chính thức, hoặc nhờ 1 bạn khác chấm độc lập, <em>trước khi</em> kết luận mình đúng hay sai — không tin vào trí nhớ/suy luận của chính mình khi có cách kiểm tra rẻ hơn là chạy lại và nhìn kết quả thật.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Ôn nhanh Reflexion — không lặp lại, chỉ tóm tắt để làm nền</h3>
+<pre><code>Attempt 1: [Generate code] → run → fail
+Reflection: "Loop condition sai, nên là i &lt; len thay vì i &lt;= len"
+Attempt 2: [Regenerate với reflection trong context] → run → pass</code></pre>
+<p>Chi tiết đầy đủ (cơ chế, khi nào dùng, so sánh với ReAct/Plan-and-Execute) đã có ở <a href="../modules/L6_1_agent_patterns.html"><code>L6_1</code></a> mục 2 — đọc lại đó nếu chưa nắm chắc, vì phần dưới đây giả định bạn đã hiểu vòng lặp cơ bản này.</p>
+
+<h3>2. Nâng cấp 2025-2026 — vì sao "nghĩ lại" thôi chưa đủ</h3>
+<p>Xu hướng 2025-2026 (pattern "Reflection + Tool-use hybrid") là: agent không chỉ "nghĩ lại" bằng suy luận thuần, mà phải <strong>verify bằng cách gọi tool thật</strong> — chạy lại test, query lại DB, chạy lại backtest — <em>trước khi</em> kết luận đã sửa đúng.</p>
+<div class="callout">
+<div class="label">📖 Vì sao suy luận nội tại có thể "tự tin sai"</div>
+<p>1 LLM khi được hỏi "bạn đã sửa đúng chưa?" có xu hướng trả lời "có, tôi đã sửa đúng" dựa trên <em>việc code trông hợp lý</em> — không phải dựa trên việc đã thực sự chạy lại và quan sát kết quả. Đây không phải lỗi ngẫu nhiên — nó là hệ quả tự nhiên của việc suy luận bằng ngôn ngữ: "trông đúng" và "chạy đúng" là 2 việc khác nhau, và mô hình ngôn ngữ giỏi việc đầu hơn việc sau nếu không được ép phải verify.</p>
+</div>
+<p>Đây chính xác là triết lý đứng sau <code>verify</code> skill của Claude Code: <em>"drive the affected flow, not just tests or typecheck"</em> — không dừng lại ở việc đọc lại code (suy luận nội tại), mà phải chạy lại luồng thật và quan sát hành vi thật.</p>
+
+<h3>3. Bậc thang bằng chứng — từ yếu nhất đến mạnh nhất</h3>
+<table>
+<tr><th>Bậc</th><th>Loại bằng chứng</th><th>Độ tin cậy</th><th>Ví dụ</th></tr>
+<tr><td>1 (yếu nhất)</td><td>Đọc lại code, suy luận "trông có vẻ đúng"</td><td>Thấp — dễ tự tin sai</td><td>"Tôi đã sửa dấu, chắc chắn đúng rồi"</td></tr>
+<tr><td>2</td><td>Chạy lại unit test có sẵn</td><td>Trung bình — chỉ tốt bằng độ phủ của test</td><td>Chạy <code>pytest</code>, xanh hết</td></tr>
+<tr><td>3</td><td>Chạy lại toàn bộ luồng thật (integration/E2E), quan sát output thật</td><td>Cao</td><td>Query lại DB thật, chạy lại backtest trên dữ liệu thật</td></tr>
+<tr><td>4 (mạnh nhất)</td><td>Bậc 3 + có 1 người/agent thứ hai độc lập re-derive lại từ đầu, không chỉ đọc lại kết luận của người thứ nhất</td><td>Cao nhất</td><td>2-pass validation của <code>CLAUDE.md</code> — xem case study bên dưới</td></tr>
+</table>
+<p>Điểm mấu chốt: càng lên bậc cao, chi phí càng lớn nhưng rủi ro "tự tin sai" càng giảm. Với thay đổi có rủi ro thấp (sửa 1 dòng UI text), bậc 2 có thể đủ. Với thay đổi ảnh hưởng tới quyết định tài chính thật (công thức <code>senior_score.py</code>), dự án này bắt buộc bậc 4.</p>
+
+<h3>3.5 Self-Refine (Madaan et al., NeurIPS 2023) — 1 PAPER cụ thể khác hẳn Reflexion, không phải tên khác của cùng 1 cơ chế</h3>
+<div class="callout danger">
+<div class="label">⚠️ Nhầm lẫn phổ biến cần tránh (đúng dạng BUG hay gặp nhất chủ đề này)</div>
+<p>"Self-refinement" (tên chủ đề trang này) và "<strong>Self-Refine</strong>" (tên 1 paper cụ thể, Madaan et al. 2023) DỄ bị coi là 1. Không phải — Self-Refine là 1 cơ chế cụ thể, và cơ chế đó khác Reflexion ở đúng 1 điểm mấu chốt: <strong>nguồn phản hồi để sửa</strong>.</p>
+</div>
+<table>
+<tr><th></th><th>Reflexion (Shinn 2023, đã học ở <code>L6_1</code>)</th><th>Self-Refine (Madaan 2023, paper riêng)</th></tr>
+<tr><td>Nguồn phản hồi</td><td>MÔI TRƯỜNG bên ngoài — VD chạy test thật, nhận tín hiệu pass/fail nhị phân (binary reward) TỪ THỰC THI THẬT</td><td>KHÔNG có nguồn bên ngoài nào — chính LLM tự sinh phản hồi cho output của chính nó (self-feedback), không chạy tool/test nào cả</td></tr>
+<tr><td>Cơ chế lặp</td><td>Attempt → chạy → nhận kết quả thật (pass/fail) → viết reflection bằng lời → attempt lại</td><td>Generate → LLM tự phê bình output của chính mình (cùng 1 model, không cần model khác) → LLM tự refine dựa trên phê bình đó → lặp lại, có thể nhiều vòng</td></tr>
+<tr><td>Cần huấn luyện thêm/model khác?</td><td>Không — dùng chung 1 LLM, nhưng CẦN có 1 "môi trường" khả thi để chạy thử (VD sandbox chạy test)</td><td>Không — hoàn toàn task-agnostic, không cần fine-tune, không cần môi trường thực thi nào, chỉ cần chính LLM đó</td></tr>
+<tr><td>Ứng dụng gốc trong paper</td><td>Coding agent, QA có thể verify bằng chạy lại</td><td>Tối ưu code, sinh hội thoại (dialogue generation), đảo ngược cảm xúc câu văn (sentiment reversal) — nhiều loại task không nhất thiết "chạy được"</td></tr>
+<tr><td>Điểm yếu đã biết (paper gốc + nghiên cứu sau)</td><td>Phụ thuộc chất lượng môi trường verify — nếu môi trường verify sai, reflection dựa trên tín hiệu sai</td><td>Tự giám sát unsupervised nhiều vòng có thể TÍCH LUỸ lỗi phản hồi + sửa sai (accumulate errors in feedback and rectification), chi phí tính toán cao hơn nếu lặp nhiều vòng</td></tr>
+</table>
+<p><strong>Vì sao khác biệt này quan trọng, nối lại đúng bậc thang bằng chứng ở mục 3</strong>: Self-Refine — đúng như paper gốc mô tả — thực chất nằm gọn ở <strong>Bậc 1</strong> của bậc thang (chỉ có suy luận nội tại, KHÔNG có bằng chứng runtime nào), dù nó vẫn "lặp lại nhiều vòng" nghe có vẻ nghiêm ngặt hơn 1 lần "đọc lại code". Reflexion (nhờ có bước chạy thật) đã nhảy lên ít nhất Bậc 2-3. Đây chính xác là lỗi cần tránh nếu mô tả sai: gọi Self-Refine là "phiên bản yếu của Reflexion" thì đúng tinh thần, nhưng nếu mô tả CƠ CHẾ Self-Refine là "có chạy lại test" (cơ chế thật của Reflexion) thì đó là lỗi gán nhầm cơ chế của 1 paper sang tên 1 paper khác — đúng loại lỗi cần kiểm chứng qua nguồn gốc, không suy diễn từ hàng lân cận trong bảng.</p>
+
+<h3>3.6 Khi self-refinement làm mọi thứ TỆ HƠN — hiện tượng có thật, đã ghi nhận nghiên cứu</h3>
+<p>Mục 2 đã giải thích self-refinement thuần "có thể tự tin sai". Nghiên cứu 2025-2026 đi xa hơn: không chỉ "có thể sai mà không biết", refinement lặp lại còn có thể <strong>chủ động làm output tệ hơn bản gốc</strong> — 3 dạng suy thoái cụ thể đã ghi nhận:</p>
+<table>
+<tr><th>Dạng suy thoái</th><th>Cơ chế</th></tr>
+<tr><td>Không tự sửa được lỗi suy luận khi thiếu phản hồi ngoài</td><td>LLM thiếu khả năng nội tại để tự verify đúng/sai cho suy luận của chính nó — tự sửa "mù" (naive self-correction) có thể làm câu trả lời ĐÚNG ban đầu bị sửa thành SAI</td></tr>
+<tr><td>Output càng lặp càng "nhạt" (blander), càng chung chung</td><td>Với sinh hội thoại/văn bản mở, mỗi vòng refine có xu hướng phạt (loại bỏ) cách diễn đạt riêng biệt vì bị coi là "rủi ro", hội tụ dần về văn phong an toàn/khuôn mẫu ("corporate-speak") — càng refine nhiều vòng, càng mất bản sắc ban đầu</td></tr>
+<tr><td>Nghịch lý "sửa được lỗi người khác chỉ ra, không sửa được lỗi của chính mình"</td><td>Cùng 1 model có thể sửa ĐÚNG khi 1 lỗi được trình bày từ BÊN NGOÀI (VD người khác chỉ ra), nhưng KHÔNG sửa được đúng lỗi Y HỆT khi nó xuất hiện trong chính output trước đó của nó — cho thấy "self-critique" không đối xứng với "critique từ nguồn khác"</td></tr>
+</table>
+<p>Đây là lý do sâu hơn (không chỉ "cẩn thận cho chắc") vì sao bậc thang bằng chứng ở mục 3 xếp Bậc 1 (suy luận nội tại thuần, đúng cơ chế Self-Refine ở mục 3.5) là <strong>yếu nhất</strong>, không phải "cũng tạm ổn với việc nhỏ": nếu không có tín hiệu bên ngoài nào, số vòng lặp refine tăng thêm không chỉ "không giúp gì thêm" mà còn có rủi ro làm output tệ đi — khác hẳn trực giác thường gặp "refine nhiều vòng hơn = chắc chắn tốt hơn".</p>
+
+<h3>4. Khi nào Bậc 1 (Self-Refine thuần) THỰC SỰ đủ dùng — không phải mọi trường hợp đều cần leo hết bậc thang</h3>
+<p>Mục 3.6 cho thấy rủi ro của Bậc 1 — nhưng kết luận đúng KHÔNG phải "không bao giờ dùng Self-Refine thuần" (false dichotomy). Vẫn có vùng an toàn hợp lý, phân biệt theo đúng ranh giới content-quality vs decision-weight đã dùng nhất quán trong track R9 (xem thêm <code>R9_8_automated_prompt_engineering.html</code>):</p>
+<table>
+<tr><th>Loại thay đổi</th><th>Bậc bằng chứng cần thiết</th><th>Vì sao</th></tr>
+<tr><td>Văn phong 1 đoạn văn KHÔNG chứa số liệu cụ thể (VD câu mở đầu chung chung)</td><td>Bậc 1 (Self-Refine thuần) — đủ</td><td>Không có "đúng/sai" khách quan để verify bằng tool — rủi ro cao nhất của Bậc 1 (mục 3.6) là MẤT số liệu cụ thể, không áp dụng nếu vốn dĩ không có số liệu nào để mất</td></tr>
+<tr><td>Bất kỳ câu nào TRÍCH DẪN số liệu thị trường (giá, khối lượng, chỉ báo)</td><td>Tối thiểu Bậc 3</td><td>Đúng rủi ro đã minh hoạ ở worked example mục 3.6 — refine không tool-verify có thể âm thầm xoá/làm mờ số liệu đúng</td></tr>
+<tr><td>Bất kỳ thay đổi nào chạm <code>senior_score.py</code>/AI Trader</td><td>Bậc 4 bắt buộc</td><td>Đã nêu ở mục 3, không có ngoại lệ theo <code>CLAUDE.md</code></td></tr>
+</table>
+<p>Bài học tổng hợp: câu hỏi đúng không phải "self-refinement thuần có đáng tin không" (nhị phân), mà là "nội dung đang refine có chứa claim cần đối chiếu với thực tế hay không" — nếu có, bắt buộc leo bậc; nếu thuần văn phong không claim gì kiểm chứng được, Bậc 1 là chi phí hợp lý, không cần lãng phí tool-call cho việc không cần verify.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<div class="evidence-box">
+<div class="title">🎯 Case study thật — <code>ta_score</code> sign-inversion (2026-08-09)</div>
+<p><strong>Bước 1 — Phát hiện đầu tiên (nghi ngờ sai)</strong>: 1 phân tích ban đầu nghi ngờ <code>flow_score</code> là thành phần bị sai dấu trong công thức composite score.</p>
+<p><strong>Bước 2 — Re-derivation độc lập (không chỉ đọc lại kết luận cũ)</strong>: 1 bước phân tích sub-score decomposition độc lập — thực sự chạy lại phân tích trên dữ liệu thật, không chỉ đọc lại lý luận ban đầu — phát hiện ra <code>flow_score</code> không phải thủ phạm. Thành phần thực sự sai dấu là <code>ta_score</code>.</p>
+<p><strong>Bước 3 — Fix</strong>: sửa <code>ta_score</code> dựa trên phát hiện đúng ở bước 2.</p>
+<p><strong>Bước 4 — QA độc lập lần thứ 2 (không dừng ở 1 lượt refine)</strong>: 1 lượt QA độc lập tiếp theo phát hiện ra rằng chính lượt validate đầu tiên (bước 2) đã bị nhiễu bởi noise dữ liệu — kết quả đúng, sau khi lọc noise, khác với con số báo cáo lần đầu (trong trường hợp này là tốt hơn).</p>
+<p><strong>Bài học</strong>: không phải 1 lần "tự nghĩ lại" (dù đã có tool-verify ở bước 2) là đủ để kết luận cuối cùng chính xác — quy trình 2-pass (implement → re-derivation độc lập → fix → QA độc lập lần 2) là kỷ luật bắt buộc, không phải sự cẩn trọng "cho có" trong trường hợp đặc biệt.</p>
+</div>
+
+<h3>Worked example — minh hoạ "càng refine càng nhạt" (mục 3.6), áp vào đúng domain viết thesis của dự án</h3>
+<p>Minh hoạ tự dựng (illustrative, không phải log thật từ hệ thống) để thấy rõ cơ chế suy thoái mục 3.6 áp vào loại văn bản gần nhất với <code>predictor</code> — 1 câu nhận định trong thesis đầu tư, refine thuần bằng self-critique KHÔNG có bằng chứng runtime nào để đối chiếu:</p>
+<pre><code>Bản gốc (v1, LLM viết lần đầu):
+  "FPT phá vỡ vùng kháng cự 92.500 với khối lượng gấp 2.3 lần trung bình 20
+   phiên — dòng tiền lớn có dấu hiệu nhập cuộc rõ rệt, không phải phá vỡ giả."
+
+Self-critique (không chạy lại tool nào, chỉ tự "nghĩ"):
+  "Câu này khá khẳng định ('rõ rệt', 'không phải phá vỡ giả') — có thể quá
+   chắc chắn, nên viết thận trọng/cân bằng hơn."
+
+Sau refine (v2):
+  "FPT phá vỡ vùng kháng cự 92.500 với khối lượng tăng đáng kể so với trung
+   bình gần đây — có thể là tín hiệu tích cực, cần theo dõi thêm."
+
+→ v2 "an toàn" hơn nhưng đã ÂM THẦM MẤT 2 con số cụ thể (92.500, 2.3 lần) —
+  đây đúng dạng suy thoái "blander/generic" ở mục 3.6: refine không dựa trên
+  bằng chứng runtime nào (không đối chiếu lại dữ liệu giá/khối lượng thật),
+  chỉ dựa trên "cảm giác câu trước nghe quá chắc" — kết quả là câu MƠ HỒ HƠN,
+  không phải câu CHÍNH XÁC HƠN.
+
+So sánh với refine CÓ tool-verify (đúng tinh thần mục 2-3, Bậc 3):
+  Query lại dữ liệu thật → xác nhận khối lượng đúng 2.3× trung bình 20 phiên
+  → giữ nguyên số liệu cụ thể trong v2, chỉ sửa phần DIỄN GIẢI nếu dữ liệu
+  thật không khớp — refine có bằng chứng SỬA ĐÚNG CHỖ CẦN SỬA, không xoá
+  luôn thông tin cụ thể chỉ vì "nghe có vẻ chắc".</code></pre>
+
+<h3>Worked example — chi phí token: Self-Refine thuần (3 vòng) so với tool-verify (1 vòng + Bậc 4)</h3>
+<pre><code>Giả sử 1 đoạn thesis ~300 token, dùng Sonnet 4.5 (giá đã dẫn ở L5_1 §6.5:
+input $3/1M, output $15/1M):
+
+Self-Refine thuần, 3 vòng lặp (mục 3.5, không tool nào, chỉ LLM tự phê bình):
+  Mỗi vòng: ~300 input (bản trước + yêu cầu phê bình) + ~350 output (phê bình
+  + bản refine mới) ≈ 300×$3/1M + 350×$15/1M = $0.0009 + $0.00525 = $0.00615
+  3 vòng: 3 × $0.00615 ≈ $0.0185
+  → RẺ, nhưng theo mục 3.6: không có gì đảm bảo vòng 3 TỐT HƠN vòng 1 —
+    có thể đã bị "nhạt hoá" mất số liệu cụ thể (worked example trên)
+
+Tool-verify 1 vòng + Bậc 4 (mục 2-3, đúng chuẩn cho thay đổi rủi ro cao):
+  Vòng verify: 300 input + query lại DB thật (chi phí hạ tầng, không tính
+  token) + 350 output (kết luận + sửa nếu cần) ≈ $0.00615 (tương đương 1 vòng)
+  Bậc 4 — review độc lập lần 2: thêm ~500 input (đọc lại toàn bộ + dữ liệu
+  gốc) + 400 output (kết luận độc lập) ≈ 500×$3/1M + 400×$15/1M = $0.0015 +
+  $0.006 = $0.0075
+  TỔNG: $0.00615 + $0.0075 ≈ $0.0137
+
+→ Trong ví dụ minh hoạ này, tool-verify + Bậc 4 (~$0.0137) thực ra RẺ HƠN
+  3 vòng Self-Refine thuần (~$0.0185) — vì Self-Refine thuần cần NHIỀU vòng
+  hơn để "cảm thấy" tự tin (không có tiêu chí dừng khách quan), trong khi
+  tool-verify có tín hiệu rõ ràng để dừng sau đúng số vòng cần thiết. Đây
+  là phản trực giác đáng nhớ: "phương án nghe rẻ hơn vì không cần tool"
+  không tự động rẻ hơn trên thực tế nếu nó cần nhiều vòng lặp hơn để bù lại
+  việc thiếu tín hiệu dừng khách quan.</code></pre>
+
+<h3>Pseudo-code minh hoạ vòng lặp self-refine + tool-verify</h3>
+<pre><code>def self_refine_with_verification(claim, max_rounds=2):
+    for round in range(max_rounds):
+        # Bậc 1: suy luận nội tại — KHÔNG dừng ở đây
+        reasoning = llm.reflect(claim)
+
+        # Bậc 3: verify bằng tool thật — bắt buộc trước khi kết luận
+        evidence = run_real_flow(claim)   # VD: chạy lại backtest, query lại DB thật
+
+        if evidence.contradicts(reasoning):
+            claim = llm.revise(claim, evidence)   # suy luận nội tại đã sai — sửa lại
+            continue
+        else:
+            break   # suy luận khớp bằng chứng thật — có thể dừng
+
+    # Bậc 4 (bắt buộc cho thay đổi rủi ro cao): 1 agent/người thứ 2 độc lập
+    # re-derive lại TOÀN BỘ từ đầu — không chỉ đọc lại kết luận ở trên
+    independent_check = second_reviewer.rederive_from_scratch(claim)
+    return reconcile(claim, independent_check)
+</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>Self-Refine thuần (Madaan 2023, mục 3.5)</th><th>Reflexion (Shinn 2023, <code>L6_1</code>)</th><th>Self-refinement + tool-verify (2025-2026)</th></tr>
+<tr><td>Nguồn phản hồi để sửa</td><td>Suy luận nội tại của chính LLM — KHÔNG có nguồn ngoài nào</td><td>Môi trường thật (VD chạy test, tín hiệu pass/fail nhị phân)</td><td>Bằng chứng thật từ chạy lại tool/luồng thật, có thể có review độc lập lần 2</td></tr>
+<tr><td>Bậc trong bậc thang bằng chứng (mục 3)</td><td>Bậc 1 (yếu nhất)</td><td>Bậc 2-3 (tuỳ độ phủ môi trường verify)</td><td>Bậc 3-4 (bắt buộc Bậc 4 cho thay đổi rủi ro cao)</td></tr>
+<tr><td>Rủi ro chính</td><td>Tự tin sai NGAY CẢ SAU nhiều vòng lặp — có thể làm output tệ hơn (mục 3.6)</td><td>Phụ thuộc chất lượng môi trường verify — verify sai thì reflection dựa trên tín hiệu sai</td><td>Vẫn có thể sai nếu chỉ 1 lượt verify — cần 2-pass cho rủi ro cao (case <code>ta_score</code>)</td></tr>
+<tr><td>Chi phí</td><td>Thấp nhất (chỉ gọi thêm LLM, không cần môi trường/tool)</td><td>Trung bình (cần 1 môi trường thực thi khả thi)</td><td>Cao hơn (cần chạy lại luồng thật, có thể cần review độc lập lần 2)</td></tr>
+<tr><td>Phù hợp cho</td><td>Task KHÔNG có cách verify khách quan (văn phong, tối ưu code không có test rõ ràng) — nhưng rủi ro suy thoái nếu lặp quá nhiều vòng</td><td>Task có tín hiệu lỗi rõ ràng, rẻ để thử lại (code, toán)</td><td>Quyết định có hậu quả thật (công thức tài chính, dữ liệu production)</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p>Kỷ luật "implement → independent re-derivation, not just re-reading the code → fix real gaps found → redeploy" trong <code>CLAUDE.md</code> (2-pass validation cho AI Trader) chính là self-refinement + tool-use hybrid áp dụng thủ công cho công việc kỹ sư — case <code>ta_score</code> ở trên là bằng chứng thật, không phải ví dụ minh hoạ giả định. Đây cũng là lý do memory rule <code>feedback_mandatory_independent_verify_before_report</code> yêu cầu bắt buộc trigger 1 sub-agent "AI senior leader" verify độc lập <em>toàn bộ</em> quá trình/runtime/kết quả trước khi báo cáo cho user — không được bỏ qua vì việc "nhỏ" hay "đã tự tin". Việc cần làm khi thực hiện bất kỳ thay đổi nào ảnh hưởng tới <code>senior_score.py</code> hoặc AI Trader: luôn đi hết Bậc 4 của bậc thang bằng chứng ở trên, không dừng ở Bậc 1-2.</p>
+<p>Áp mục 4 vào đúng luồng viết thesis (<code>author_llm_thesis.py</code> — tên hiện tại; <code>generate_llm_thesis.py</code> nhắc ở <code>L5_1</code> đã bị deprecate 2026-07-11): câu nhận định ĐỊNH TÍNH thuần văn phong (VD "cần theo dõi thêm diễn biến ngành") ở mức Bậc 1 là chấp nhận được; nhưng bất kỳ câu nào trích dẫn giá/volume/chỉ báo cụ thể (đúng loại câu trong worked example mục 3.6) bắt buộc đối chiếu lại dữ liệu thật trước khi coi là "đã refine xong" — khớp đúng check <code>C19_entry_stop_target_ordering</code> đã có sẵn trong <code>llm_qa_checklist.py</code> (kế thừa R3-R5 từ <code>validate_llm_thesis.py</code> đã retired cùng đợt), vốn dĩ đã đóng đúng vai trò "Bậc 3" cho riêng phần số liệu, dù trước nay tài liệu dự án chưa gọi tên nó theo khung bậc thang bằng chứng này.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Tự tin sau 1 lượt self-refine mà không verify bằng tool thật</strong> — suy luận nội tại có thể tự tin sai; luôn cần chạy lại luồng thật để có bằng chứng, đúng như case <code>ta_score</code> đã cho thấy ngay cả bước "verify" đầu tiên cũng có thể bị nhiễu.</p>
+<p><strong>2. Coi việc đọc lại code là "đã verify"</strong> — đọc lại code chỉ là Bậc 1 trong bậc thang bằng chứng, không phải Bậc 3-4. "Tôi đã đọc lại kỹ" không tương đương "tôi đã chạy lại và quan sát".</p>
+<p><strong>3. Dừng ở 1 lượt QA vì "đã có bằng chứng runtime rồi"</strong> — case <code>ta_score</code> cho thấy ngay cả bằng chứng runtime (Bậc 3) cũng có thể bị nhiễu noise; các thay đổi rủi ro cao cần đủ 2 lượt độc lập (Bậc 4), không chỉ 1.</p>
+<p><strong>4. Gọi Self-Refine (Madaan 2023, mục 3.5) và Reflexion (Shinn 2023) là "cùng 1 cơ chế, khác tên"</strong> — sai theo đúng nghĩa BUG-8: Self-Refine không hề dùng tín hiệu từ môi trường/thực thi thật, Reflexion thì có (ít nhất trong ví dụ kinh điển "chạy → fail → reflect"). Mô tả nhầm cơ chế của paper này bằng cơ chế của paper kia là lỗi gán sai nguồn, không phải tiểu tiết.</p>
+<p><strong>5. Tin rằng "refine càng nhiều vòng thì output càng tốt"</strong> — sai theo mục 3.6: refine không có bằng chứng bên ngoài có thể làm output NHẠT hơn, MẤT thông tin cụ thể hơn qua mỗi vòng (worked example thesis FPT), không phải "an toàn ở mức tệ nhất là không đổi".</p>
+<p><strong>6. Cho rằng "model có thể tự sửa lỗi của người khác chỉ ra" nghĩa là nó cũng tự phát hiện được lỗi Y HỆT trong output của chính nó</strong> — nghiên cứu mục 3.6 cho thấy đây là 2 khả năng KHÔNG đối xứng; đừng suy diễn "model sửa lỗi giỏi nói chung" thành "model tự phát hiện lỗi của chính mình giỏi tương đương".</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Không giải thích lại Reflexion từ đầu — chỉ cần nêu đúng nó là nền, chi tiết ở <code>L6_1</code>.</li>
+<li>Giải thích đúng khoảng cách giữa "suy luận nội tại" và "bằng chứng runtime" — vì sao cái sau đáng tin hơn.</li>
+<li>Kể đúng trình tự case study <code>ta_score</code>: nghi <code>flow_score</code> trước → re-derivation lộ ra <code>ta_score</code> mới đúng → QA độc lập lần 2 phát hiện noise ở lần 1.</li>
+<li>Xác định đúng bậc thang bằng chứng (4 bậc) và biết dự án bắt buộc Bậc 4 cho thay đổi ảnh hưởng <code>senior_score.py</code>/AI Trader.</li>
+<li>Phân biệt đúng Self-Refine (Madaan, KHÔNG có nguồn phản hồi ngoài) với Reflexion (Shinn, CÓ tín hiệu môi trường thật) — xếp đúng mỗi cái vào bậc thang bằng chứng mục 3.</li>
+<li>Kể được ít nhất 2/3 dạng suy thoái khi self-refinement làm output tệ hơn (không tự sửa được lỗi thiếu phản hồi ngoài, output càng lặp càng nhạt, nghịch lý sửa được lỗi người khác chỉ ra nhưng không tự phát hiện lỗi của chính mình).</li>
+<li>Tái tạo lại được worked example "càng refine càng nhạt" cho 1 câu thesis khác (không chỉ nhớ đúng ví dụ FPT), chỉ ra đúng chỗ thông tin cụ thể bị mất khi refine không có bằng chứng runtime.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R9_4_agent_swarms.html">← R9.4 · Agent Swarms</a>
+  <a href="R9_6_robotic_agents.html">R9.6 · Robotic Agents →</a>
+</div>
+
+</div>
+</body>
+</html>

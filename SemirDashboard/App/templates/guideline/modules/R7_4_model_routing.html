@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R7.4 · Model Routing — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Infrastructure · Điểm 4/6</div>
+  <h1>R7.4 · Model Routing</h1>
+  <p class="subtitle">4 loại router đã có ở L9.2 — bổ sung phân biệt complexity vs semantic routing, và 3 công cụ gateway mới 2026 (Portkey, Azure AI Foundry Model Router, vLLM Semantic Router).</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>[Dễ]</strong> Nhớ lại 4 loại router đã học: rule-based, classifier-based, RouteLLM learned, LLM router.</li>
+<li><strong>[Trung bình]</strong> Phân biệt 2 trục routing độc lập: complexity routing (khó/dễ) vs semantic routing (chủ đề gì).</li>
+<li><strong>[Trung bình]</strong> Biết 3 công cụ gateway 2026 mới: Portkey, Azure AI Foundry Model Router, vLLM Semantic Router.</li>
+<li><strong>[Khó]</strong> Đánh giá đúng: <code>predictor</code> hiện KHÔNG cần model routing runtime, và biết khi nào sẽ cần.</li>
+<li><strong>[Trung bình→Khó]</strong> Biết cơ chế train thật của RouteLLM (matrix factorization/BERT classifier trên human preference data) và kiến trúc Envoy ext_proc của vLLM Semantic Router.</li>
+<li><strong>[Khó]</strong> Phân biệt model routing với load balancing và failover routing — 3 khái niệm hay bị gộp chung thành "routing".</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Đã có ở module cũ</div>
+<p><a href="L9_2_llm_ops.html"><code>L9_2_llm_ops.html</code> mục 3</a> đã dạy đủ 4 loại router (rule-based, classifier-based, RouteLLM learned, LLM router) với bảng so sánh setup cost/accuracy/savings — không lặp lại. Trang này chỉ bổ sung: (1) phân biệt complexity routing vs semantic routing, (2) 3 công cụ gateway mới 2026 chưa có ở <code>L9_2</code>.</p>
+</div>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Model routing giống hệ thống phân loại bệnh nhân ở bệnh viện. <strong>Complexity routing</strong> giống phân loại theo mức độ nặng nhẹ (cấp cứu → bác sĩ giỏi nhất; khám định kỳ → y tá thường cũng đủ). <strong>Semantic routing</strong> giống phân loại theo chuyên khoa (đau tim → khoa tim mạch; gãy xương → khoa chấn thương) — 2 trục phân loại độc lập, 1 bệnh nhân có thể vừa "nặng" vừa "thuộc khoa tim mạch" cùng lúc.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Trung bình] Complexity routing vs Semantic routing — 2 trục độc lập</h3>
+<p><strong>Complexity routing</strong> ("câu này khó hay dễ" → model to hay nhỏ) đã dạy đầy đủ ở <code>L9_2</code>. <strong>Semantic routing</strong> ("câu này thuộc chủ đề gì" → route theo domain chuyên biệt, VD: câu hỏi y tế → model fine-tune y tế, câu hỏi code → model chuyên code) là trục bổ sung — 2 trục này có thể kết hợp: 1 request vừa được phân loại độ khó, vừa được phân loại chủ đề, rồi route tới đúng model phù hợp cả 2 tiêu chí.</p>
+
+<h3>2. [Trung bình] 3 công cụ gateway mới 2026</h3>
+<table>
+<tr><th>Công cụ</th><th>Đặc điểm</th></tr>
+<tr><td><strong>Portkey</strong></td><td>Mã nguồn mở hoàn toàn (Apache 2.0) từ 3/2026, hỗ trợ 1,600+ model qua 250+ provider, kèm 50+ guardrail dựng sẵn (số liệu tăng dần theo thời gian — trang tài liệu chính thức), conditional routing, circuit breaker, semantic caching — 1 "gateway" tổng hợp thay vì tự viết router. Lưu ý: Palo Alto Networks công bố ý định mua lại Portkey ngày 30/4/2026 và đã HOÀN TẤT thương vụ ngày 29/5/2026 (tích hợp vào Prisma AIRS) — phần gateway Apache 2.0 vẫn mở nguồn do ràng buộc license, nhưng lộ trình sản phẩm dài hạn nay phụ thuộc chiến lược Palo Alto.</td></tr>
+<tr><td><strong>Azure AI Foundry Model Router</strong></td><td>Phân tích mỗi prompt real-time, route qua 27+ model (OpenAI/Anthropic/DeepSeek/Meta/xAI) với 3 chế độ: Balanced (chọn model rẻ nhất trong biên 1-2% chất lượng so với tốt nhất), Cost (nới biên 5-6%, ưu tiên rẻ), Quality (luôn chọn tốt nhất bất kể giá).</td></tr>
+<tr><td><strong>vLLM Semantic Router</strong></td><td>Bản v0.1 "Iris", phát hành 5/1/2026 — lớp intelligence hệ thống phân loại request theo intent/độ phức tạp/an toàn rồi route qua nhiều model bằng 1 chuỗi plugin tín hiệu-quyết định có thể cấu hình.</td></tr>
+</table>
+
+<h3>3. Cơ chế thật của RouteLLM — không phải "1 model nhỏ đoán độ khó" mơ hồ</h3>
+<p><code>L9_2</code> đã liệt kê RouteLLM là 1 trong 4 loại router ("learned"), nhưng chưa mổ xẻ CƠ CHẾ TRAIN thật — đây là phần bổ sung. RouteLLM (Berkeley, LMSYS) không phải 1 kiến trúc duy nhất mà là 1 FRAMEWORK train được nhiều loại router khác nhau trên cùng 1 tập dữ liệu, tiêu biểu 2 loại:</p>
+<table>
+<tr><th>Kiến trúc router</th><th>Cơ chế học</th><th>Đặc điểm</th></tr>
+<tr><td><strong>Matrix Factorization</strong></td><td>Lấy cảm hứng từ collaborative filtering (giống hệ gợi ý phim) — học 1 hàm điểm ẩn <code>δ(M, q)</code> biểu diễn "model M trả lời tốt câu hỏi q tới mức nào", mô hình hoá bằng tích Hadamard giữa embedding model và embedding câu hỏi, qua 1 lớp hồi quy tuyến tính</td><td>Router hiệu năng tốt nhất trong benchmark gốc — nhẹ, suy luận nhanh (không cần forward pass qua model ngôn ngữ lớn để route)</td></tr>
+<tr><td><strong>BERT Classifier</strong></td><td>Dùng BERT-base lấy embedding câu hỏi, qua 1 lớp logistic regression ra xác suất "model mạnh có thắng model yếu không"</td><td>Đơn giản hơn để triển khai, nhưng cần fine-tune riêng BERT trên dữ liệu preference</td></tr>
+</table>
+<p><strong>Dữ liệu train</strong>: cả 2 kiến trúc học từ <strong>human preference data</strong> thật (dữ liệu dạng "người dùng thích câu trả lời của model A hơn model B cho câu hỏi này") — đây là lý do RouteLLM cần data augmentation (gán nhãn bằng LLM-judge hoặc nhãn vàng) để khái quát hoá tốt sang model MỚI chưa từng thấy lúc train, không chỉ 2 model đã dùng để sinh dữ liệu preference ban đầu.</p>
+
+<h3>4. Load balancing vs Model routing — 2 khái niệm khác nhau, không phải 1 cái "cao cấp hơn" cái kia</h3>
+<div class="callout danger"><div class="label">⚠️ Nhầm lẫn phổ biến</div>
+<p><strong>Model routing</strong> quyết định request nên đi tới MODEL NÀO (Haiku hay Opus, model y tế hay model code) — quyết định về CHẤT LƯỢNG/CHI PHÍ. <strong>Load balancing</strong> phân phối traffic giữa nhiều REPLICA CỦA CÙNG 1 MODEL (VD 5 instance Claude Sonnet giống hệt nhau chạy song song) — quyết định về THÔNG LƯỢNG/ĐỘ SẴN SÀNG, không đổi model nào trả lời. 1 hệ thống gateway trưởng thành làm CẢ HAI, theo đúng thứ tự: model routing chọn xong MODEL, rồi load balancer chọn REPLICA nào của model đó đang rảnh nhất để nhận request.</p>
+</div>
+
+<h3>5. Failover routing — khi 1 provider bị sập, khác hẳn 2 loại routing trên</h3>
+<p>Đây là trục thứ 3, độc lập với complexity routing (mục 1 gốc) và semantic routing: <strong>failover routing</strong> không quan tâm "câu hỏi khó hay dễ, thuộc chủ đề gì" — nó chỉ trả lời "provider đang gọi có SỐNG không". Cơ chế: gateway (Portkey và tương tự) định nghĩa 1 chuỗi fallback theo thứ tự ưu tiên, tự động chuyển sang provider kế tiếp khi provider hiện tại timeout/rate-limit/lỗi 5xx — không cần code gọi API tự viết logic retry-sang-provider-khác thủ công.</p>
+<pre><code>Request → Gọi Anthropic Claude (ưu tiên 1)
+             │
+             ├── Thành công → trả kết quả, DỪNG
+             │
+             └── Lỗi (rate limit 429 / timeout / 5xx)
+                     ↓
+                  Gọi OpenAI GPT (ưu tiên 2, fallback)
+                     │
+                     ├── Thành công → trả kết quả, DỪNG
+                     └── Lỗi tiếp → Gọi provider ưu tiên 3 (nếu có cấu hình)...</code></pre>
+<p><strong>Khác biệt với Retry + backoff (đã học ở <code>R2_7_rate_limits_retries.html</code>)</strong>: retry+backoff thử LẠI CHÍNH provider đó sau khi chờ; failover routing chuyển SANG PROVIDER KHÁC ngay khi lỗi — 2 chiến lược bổ trợ, không cạnh tranh: hệ thống trưởng thành thường retry 1-2 lần trên provider chính trước, rồi mới failover nếu vẫn lỗi.</p>
+
+<table>
+<tr><th>Cơ chế</th><th>Trả lời câu hỏi gì</th><th>Đơn vị điều phối</th><th>Học ở đâu</th></tr>
+<tr><td>Model routing</td><td>Model NÀO nên xử lý request này?</td><td>Loại model (Haiku/Sonnet/Opus, domain-specific)</td><td><code>L9_2</code>, bài này mục 1-3, 6</td></tr>
+<tr><td>Load balancing</td><td>Replica NÀO của model đã chọn đang rảnh?</td><td>Instance/replica cùng 1 model</td><td>Bài này, mục 4</td></tr>
+<tr><td>Failover routing</td><td>Provider hiện tại có SỐNG không?</td><td>Provider (Anthropic/OpenAI/Google...)</td><td>Bài này, mục 5</td></tr>
+<tr><td>Retry + backoff</td><td>Lỗi tạm thời, thử lại CÙNG provider có hết lỗi không?</td><td>Cùng 1 request, cùng 1 provider</td><td><code>R2_7_rate_limits_retries.html</code></td></tr>
+</table>
+
+<h3>6. vLLM Semantic Router — cơ chế thật đứng sau cái tên, không chỉ "lớp intelligence" mơ hồ</h3>
+<p>Bổ sung cơ chế cho bảng mục 2: đây là 1 <strong>Envoy External Processor (ext_proc)</strong> — đứng GIỮA client và các model backend, biến routing từ logic viết tay rải rác trong code ứng dụng thành 1 control-plane tập trung, quan sát/cấu hình được:</p>
+<pre><code>Client → Envoy proxy → [gRPC call tới ext_proc] → Semantic Router (Go + CGO bindings)
+                                                        │
+                                                        ├─ ModernBERT classifier (mmBERT-32K,
+                                                        │   307M tham số, 1800+ ngôn ngữ):
+                                                        │   phân loại intent, phát hiện jailbreak,
+                                                        │   phát hiện PII, fact-check, hallucination
+                                                        │
+                                                        └─ Quyết định route → trả lại Envoy backend
+                                                           cluster nào nên nhận request này
+        ↓
+Envoy forward request tới đúng model backend đã chọn</code></pre>
+<p><strong>Điểm khác biệt cơ chế so với RouteLLM (mục 3)</strong>: RouteLLM là 1 router ĐƠN TRỤC (mạnh/yếu, matrix factorization hoặc BERT classifier riêng cho quyết định đó). vLLM Semantic Router là 1 <strong>Mixture-of-Models router ĐA TÍN HIỆU</strong> — bản "Athena" 2026 dùng 8 classifier neural riêng biệt (intent, jailbreak, PII, hallucination...) rồi TỔNG HỢP quyết định, không chỉ 1 điểm số mạnh/yếu duy nhất. Đây là lý do nó nằm ở tầng hạ tầng (Envoy proxy, ngôn ngữ Go) chứ không phải 1 thư viện Python gọi trong code ứng dụng như RouteLLM.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<div class="callout danger"><div class="label">⚠️ Con số cần nhớ</div>
+<p>RouteLLM (Berkeley) đạt <strong>85% tiết kiệm chi phí</strong> trong khi giữ <strong>95% chất lượng GPT-4</strong> trong eval kiểm soát — chỉ <strong>14% query</strong> thực sự cần model đầu bảng (frontier), 86% còn lại route được sang model rẻ hơn. <strong>37% doanh nghiệp năm 2026</strong> dùng 5+ model production cùng lúc — coi việc chọn model như "kiểm soát không lưu" (air traffic control), route động từng request tới đích tối ưu thay vì cố định 1 model cho tất cả.</p>
+</div>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tình huống</th><th>Cần router nào?</th></tr>
+<tr><td>Câu hỏi đơn giản vs phức tạp, cùng 1 domain</td><td>Complexity routing (đã có ở <code>L9_2</code>)</td></tr>
+<tr><td>Nhiều domain khác nhau (y tế/code/pháp lý)</td><td>Semantic routing</td></tr>
+<tr><td>Cần cả 2 tiêu chí, nhiều provider</td><td>Gateway tổng hợp (Portkey/Azure Model Router)</td></tr>
+<tr><td>Nhiều replica CÙNG 1 model, cần phân phối tải</td><td>Load balancing (mục 4) — KHÔNG phải model routing, đừng nhầm</td></tr>
+<tr><td>Provider chính bị sập/rate-limit</td><td>Failover routing (mục 5), kết hợp Retry+backoff (<code>R2_7</code>)</td></tr>
+<tr><td>Chỉ 1-2 model trong sản phẩm</td><td>Không cần router — over-engineering nếu thêm</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> hiện KHÔNG cần model routing runtime — không có nhiều model LLM cạnh tranh chi phí trong sản phẩm (XGBoost không cần router kiểu này; LLM chỉ dùng ở lớp report/dev). Nếu tương lai <code>daily-investor-report</code> mở rộng LLM hybrid mode ra nhiều model (VD: 1 model rẻ tóm tắt tin tức, 1 model mạnh viết thesis), bảng router 4 loại đã có ở <code>L9_2</code> là đủ — chưa cần Portkey/Azure Model Router ở quy mô này.</p>
+<p><strong>Failover routing (mục 5) là mảng DUY NHẤT trong bài này có thể đáng cân nhắc sớm hơn</strong> — không phải vì cần nhiều model, mà vì <code>daily-investor-report</code> phụ thuộc 100% vào 1 provider (Anthropic/Claude qua Claude Code). Nếu Anthropic API có sự cố đúng lúc chạy report EOD, hiện tại KHÔNG có provider dự phòng nào — đây là rủi ro vận hành thuần tuý (availability), tách biệt hoàn toàn khỏi câu hỏi "có cần routing đa-model để tối ưu chi phí không" — 2 quyết định độc lập, không nên gộp chung khi đánh giá "dự án có cần model routing không".</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Thêm model router phức tạp (Portkey/semantic router) khi chỉ có 1-2 model trong sản phẩm</strong> — over-engineering, bảng router đơn giản ở <code>L9_2</code> đã đủ cho quy mô đó.</p>
+<p><strong>2. Nhầm complexity routing và semantic routing là 1</strong> — chúng là 2 trục độc lập, có thể kết hợp nhưng không thay thế nhau.</p>
+<p><strong>3. Trích số liệu RouteLLM (85%/95%/14%) như phổ quát cho mọi hệ thống</strong> — đây là kết quả từ 1 eval kiểm soát cụ thể, cần đo lại trên workload thật trước khi tin tưởng áp dụng.</p>
+<p><strong>4. Nhầm model routing với load balancing</strong> — tưởng "gateway đã route rồi" nghĩa là traffic đã được phân phối cân bằng giữa các instance; thực tế đây là 2 tầng quyết định riêng biệt, cần cả 2 nếu có nhiều replica của cùng 1 model.</p>
+<p><strong>5. Coi failover routing thay thế được Retry+backoff (hoặc ngược lại)</strong> — đây là 2 lớp phòng thủ bổ trợ theo tầng khác nhau (retry trên CÙNG provider trước, failover SANG provider khác sau), không phải chọn 1 trong 2.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Phân biệt được complexity routing và semantic routing bằng 1 ví dụ cụ thể mỗi loại.</li>
+<li>Kể tên đúng 3 công cụ gateway mới 2026 và 1 đặc điểm nổi bật của mỗi công cụ.</li>
+<li>Giải thích được vì sao <code>predictor</code> hiện không cần model routing runtime.</li>
+<li>Giải thích được số liệu RouteLLM (85% tiết kiệm, 95% chất lượng, 14% query cần frontier model) nghĩa là gì.</li>
+<li>Giải thích đúng cơ chế train của RouteLLM (matrix factorization HOẶC BERT classifier) và vai trò của human preference data.</li>
+<li>Mô tả đúng luồng xử lý request qua vLLM Semantic Router (Envoy ext_proc → classifier → route quyết định) và phân biệt "đa tín hiệu" của nó với router đơn trục RouteLLM.</li>
+<li>Phân biệt đúng model routing / load balancing / failover routing / retry+backoff — 4 cơ chế khác nhau theo bảng tổng hợp, không gộp chung thành 1 khái niệm "routing".</li>
+<li>Đánh giá đúng: rủi ro phụ thuộc 100% vào 1 provider (Anthropic) trong <code>daily-investor-report</code> là 1 quyết định khác hẳn "có cần model routing đa-model để tối ưu chi phí không".</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R7_3_cloud_services.html">← R7.3 · Cloud Services</a>
+  <a href="R7_5_containerization.html">R7.5 · Containerization →</a>
+</div>
+
+</div>
+</body>
+</html>

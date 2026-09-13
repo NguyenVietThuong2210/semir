@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L8.6 — AI Frameworks Landscape</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 8 · Module 6</div>
+  <h1>8.6 · AI Frameworks Landscape (2025)</h1>
+  <p class="subtitle">Survey 15+ frameworks: LangChain, LangGraph, LlamaIndex, DSPy, Semantic Kernel, CrewAI, AutoGen, Haystack, Instructor, Guidance, Outlines, Pydantic AI. Pick right tool per job.</p>
+  <div class="level">Level 8 · AI Artifacts · ~40 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Categorize frameworks by layer (orchestration / RAG / structured output / agents)</li>
+  <li>Trade-offs top 5 frameworks</li>
+  <li>Choose framework per use case</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Framework survey bằng ngôn ngữ đời thường</div>
+<p><strong>Đi chợ Đông Ba mua nguyên liệu bún bò Huế</strong>: Không mua hết ở 1 sạp — mỗi sạp chuyên 1 thứ. Sạp rau (LangChain — general purpose), sạp thịt (LlamaIndex — RAG heavy), sạp gia vị (DSPy — optimize prompt), sạp bún tươi (CrewAI — multi-agent orchestration).</p>
+<p><strong>Framework survey</strong> = biết sạp nào chuyên gì để chọn đúng. Không có sạp "best" cho mọi món — có sạp best cho từng công thức.</p>
+<p><strong>Nguyên tắc chọn</strong>:</p>
+<ul>
+  <li>Cần graph phức tạp có loop/branch → LangGraph</li>
+  <li>Cần RAG heavy trên nhiều loại document → LlamaIndex</li>
+  <li>Cần tune prompt tự động → DSPy</li>
+  <li>Cần structured output đảm bảo JSON → Instructor/Pydantic AI</li>
+  <li>Cần multi-model routing rẻ nhất → LiteLLM</li>
+</ul>
+</div>
+
+<h2>1. Framework categories</h2>
+
+<table>
+<tr><th>Category</th><th>Purpose</th><th>Examples</th></tr>
+<tr><td>Orchestration</td><td>Multi-step LLM workflows</td><td>LangGraph, LangChain, Haystack</td></tr>
+<tr><td>RAG</td><td>Retrieval-augmented pipelines</td><td>LlamaIndex, Haystack, LangChain</td></tr>
+<tr><td>Structured output</td><td>Force LLM output valid format</td><td>Instructor, Outlines, Guidance, Pydantic AI</td></tr>
+<tr><td>Multi-agent</td><td>Agents collaborate</td><td>CrewAI, AutoGen, LangGraph</td></tr>
+<tr><td>Declarative</td><td>Compile prompts, not write</td><td>DSPy</td></tr>
+<tr><td>Runtime / serving</td><td>Deploy LLM efficiently</td><td>vLLM, TGI, TensorRT-LLM, SGLang</td></tr>
+<tr><td>Development environment</td><td>Prompt engineer + evaluate</td><td>PromptFlow, Langfuse, LangSmith</td></tr>
+<tr><td>SDK / adapter</td><td>Unified LLM API</td><td>LiteLLM, Vercel AI SDK, Semantic Kernel</td></tr>
+</table>
+
+<h2>2. LangChain</h2>
+
+<h3>Pros</h3>
+<ul>
+  <li>Large ecosystem (500+ integrations)</li>
+  <li>Community + docs mature</li>
+  <li>Multi-language (Python, JS/TS)</li>
+</ul>
+
+<h3>Cons</h3>
+<ul>
+  <li>API changes frequent (breaking upgrades)</li>
+  <li>Over-abstraction (many wrapping layers)</li>
+  <li>Perf overhead vs raw SDK calls</li>
+</ul>
+
+<p><strong>Best cho</strong>: prototype fast, standard patterns (RAG chatbot, summarization).</p>
+
+<h2>3. LangGraph</h2>
+
+<h3>Pros</h3>
+<ul>
+  <li>State machine model perfect cho agents</li>
+  <li>Deterministic routing (Python control)</li>
+  <li>Native HITL + checkpointing</li>
+  <li>Production-ready (Postgres, Redis)</li>
+</ul>
+
+<h3>Cons</h3>
+<ul>
+  <li>Learning curve (state, edges, reducers)</li>
+  <li>Overkill cho simple chains</li>
+</ul>
+
+<p><strong>Best cho</strong>: complex agent workflows, SDLC pipelines, HITL (ai_orchestrator uses this).</p>
+
+<h2>4. LlamaIndex</h2>
+
+<h3>Pros</h3>
+<ul>
+  <li>RAG-first design</li>
+  <li>Rich retrieval strategies (sub-question, tree-summarize, agent-based)</li>
+  <li>Vector DB adapters extensive</li>
+  <li>Good abstractions cho document processing</li>
+</ul>
+
+<h3>Cons</h3>
+<ul>
+  <li>Weaker cho general orchestration vs LangGraph</li>
+  <li>Agent support secondary priority</li>
+</ul>
+
+<p><strong>Best cho</strong>: knowledge base search, document QA, enterprise data indexing.</p>
+
+<h2>5. DSPy (Stanford)</h2>
+
+<div class="callout success">
+<div class="label">Different philosophy</div>
+<p>Instead prompt engineering (edit strings), DSPy: <strong>declarative programming with LLMs</strong>. Define signature (input/output), let DSPy compile optimal prompt via few-shot bootstrap.</p>
+</div>
+
+<pre><code>import dspy
+
+class GenerateAnswer(dspy.Signature):
+    """Answer question based on context."""
+    context = dspy.InputField()
+    question = dspy.InputField()
+    answer = dspy.OutputField(desc="short answer")
+
+# Define pipeline:
+class RAG(dspy.Module):
+    def __init__(self, num_passages=3):
+        self.retrieve = dspy.Retrieve(k=num_passages)
+        self.generate = dspy.ChainOfThought(GenerateAnswer)
+
+    def forward(self, question):
+        context = self.retrieve(question).passages
+        return self.generate(context=context, question=question)
+
+# Compile với few-shot examples auto-selected:
+rag = RAG()
+compiled_rag = dspy.BootstrapFewShot().compile(rag, trainset=trainset)
+</code></pre>
+
+<p><strong>Best cho</strong>: production systems where prompt need optimization, research iterations.</p>
+
+<h2>6. Semantic Kernel (Microsoft)</h2>
+
+<h3>Pros</h3>
+<ul>
+  <li>Enterprise-grade, .NET + Python + Java</li>
+  <li>Plugins ecosystem (Semantic Kernel plugins)</li>
+  <li>Integration Azure OpenAI, Microsoft stack</li>
+  <li>Planning: plan + execute pattern built-in</li>
+</ul>
+
+<h3>Cons</h3>
+<ul>
+  <li>Smaller community vs LangChain</li>
+  <li>Focus Microsoft ecosystem</li>
+</ul>
+
+<p><strong>Best cho</strong>: Enterprise .NET shops, Azure users.</p>
+
+<h2>7. CrewAI</h2>
+
+<h3>Pros</h3>
+<ul>
+  <li>Simple role-based multi-agent</li>
+  <li>Easy to define agents với goal + backstory</li>
+  <li>Tasks orchestrate sequential/hierarchical</li>
+</ul>
+
+<h3>Cons</h3>
+<ul>
+  <li>Limited flexibility (fixed patterns)</li>
+  <li>Non-deterministic routing (some LLM decisions)</li>
+  <li>Persistence secondary</li>
+</ul>
+
+<p><strong>Best cho</strong>: prototype multi-agent apps, small teams simple workflows.</p>
+
+<h2>8. AutoGen (Microsoft Research)</h2>
+
+<h3>Pros</h3>
+<ul>
+  <li>Conversational multi-agent (chat pattern)</li>
+  <li>Rich UserProxy for HITL</li>
+  <li>Code execution native</li>
+</ul>
+
+<h3>Cons</h3>
+<ul>
+  <li>LLM decide next speaker → non-deterministic</li>
+  <li>Conversational overhead expensive</li>
+  <li>Debug hard (state = conversation history)</li>
+</ul>
+
+<p><strong>Best cho</strong>: brainstorm/creative tasks, research.</p>
+
+<h2>9. Haystack (deepset)</h2>
+
+<h3>Pros</h3>
+<ul>
+  <li>Enterprise NLP pipeline</li>
+  <li>Strong retrieval + ranker components</li>
+  <li>Elasticsearch + Postgres + vector DBs</li>
+</ul>
+
+<h3>Cons</h3>
+<ul>
+  <li>Heavier setup vs LlamaIndex</li>
+  <li>Traditional NLP roots (some legacy API)</li>
+</ul>
+
+<p><strong>Best cho</strong>: enterprise search, question answering, hybrid search (BM25 + dense).</p>
+
+<h2>9.5 · Inner mechanics comparison — LangChain vs LlamaIndex vs Semantic Kernel vs DSPy</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔬 Deep-dive — Cơ chế bên trong + khi nào chọn framework nào</div>
+
+<h4>Core abstraction so sánh</h4>
+<table>
+<tr><th></th><th>LangChain</th><th>LlamaIndex</th><th>Semantic Kernel</th><th>DSPy</th></tr>
+<tr><td><strong>Core primitive</strong></td><td>Runnable (LCEL pipe)</td><td>QueryEngine / Index</td><td>Kernel + Plugin + Function</td><td>Signature + Module + Optimizer</td></tr>
+<tr><td><strong>Chức năng gốc</strong></td><td>General chain composition</td><td>RAG-first (index, retrieval)</td><td>Enterprise .NET integration</td><td>Compile prompts (không phải write)</td></tr>
+<tr><td><strong>Prompt style</strong></td><td>String template (Jinja)</td><td>String template</td><td>Semantic function (prompt + config file)</td><td>⭐ Declarative signature (input→output types)</td></tr>
+<tr><td><strong>Optimization</strong></td><td>Manual prompt tuning</td><td>Manual + built-in evaluators</td><td>Manual</td><td>⭐ Auto — bootstrap few-shot, compile với metric</td></tr>
+<tr><td><strong>Sweet spot</strong></td><td>Kitchen-sink glue code</td><td>RAG production apps</td><td>Enterprise MSFT stack</td><td>Research + prompt optimization</td></tr>
+<tr><td><strong>Weakness</strong></td><td>Bloat, breaking changes</td><td>Less flexible cho non-RAG</td><td>C#-centric, adoption ngoài MSFT thấp</td><td>Learning curve, ecosystem nhỏ</td></tr>
+</table>
+
+<h4>DSPy — compile, không phải write</h4>
+<pre><code>class Thesis(dspy.Signature):
+    """Generate investor thesis from ticker data."""
+    ticker: str = dspy.InputField()
+    data: dict = dspy.InputField()
+    thesis: str = dspy.OutputField(desc="grounded, no hallucination")
+    verdict: str = dspy.OutputField(desc="BUY/HOLD/SELL")
+
+program = dspy.ChainOfThought(Thesis)
+# KEY: không viết prompt. DSPy compile:
+optimizer = dspy.BootstrapFewShot(metric=faithfulness_score)
+compiled = optimizer.compile(program, trainset=examples)
+# → compiled program tự chọn few-shot examples optimal, auto tune prompt
+</code></pre>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Nhu cầu</th><th>Chọn</th></tr>
+<tr><td>Production RAG với discipline</td><td>⭐ LlamaIndex</td></tr>
+<tr><td>Multi-step chains + tracing</td><td>LangChain (LCEL) + LangSmith</td></tr>
+<tr><td>Enterprise .NET / MSFT stack</td><td>Semantic Kernel</td></tr>
+<tr><td>Research, prompt-as-hyperparam</td><td>⭐ DSPy</td></tr>
+<tr><td>Simple 1-shot API call</td><td>Anthropic/OpenAI SDK trực tiếp (skip framework)</td></tr>
+<tr><td>Multi-agent orchestration</td><td>LangGraph (LangChain sub-lib) hoặc CrewAI</td></tr>
+</table>
+
+<h4>Anti-pattern VN</h4>
+<p><strong>PredictStock case</strong>: Team đầu dùng LangChain cho pipeline collect → LLM → validate. 6 tháng sau prompt drift, khó debug do abstraction nhiều. Refactor sang <em>direct Anthropic SDK</em> + Pydantic validation → code dễ đọc, dễ audit hơn. Bài học: framework tốt khi complexity thật sự cần; đơn giản thì SDK trực tiếp thắng.</p>
+
+<h4>Interview Q&A</h4>
+<ol>
+  <li><strong>Q: DSPy vs LangChain philosophically?</strong> A: LangChain = imperative (bạn viết chain). DSPy = declarative (bạn khai báo signature, compiler viết prompt). DSPy như PyTorch cho prompts — có optimizer, có metric.</li>
+  <li><strong>Q: LlamaIndex vs LangChain cho RAG?</strong> A: LlamaIndex sinh ra cho RAG, có 20+ index types, response synthesizers built-in. LangChain general-purpose, RAG là 1 use case. Pick LlamaIndex nếu RAG là core.</li>
+  <li><strong>Q: Framework nào "future-proof"?</strong> A: Không cái nào. Skill quan trọng: hiểu abstraction underneath (LLM API + prompt + parse) — thay framework dễ khi hiểu core.</li>
+</ol>
+</div>
+
+<h2>10. Instructor / Outlines / Guidance / Pydantic AI</h2>
+
+<p>Category: structured output enforcement.</p>
+
+<h3>Instructor</h3>
+<pre><code>from instructor import from_openai
+from pydantic import BaseModel
+
+class UserInfo(BaseModel):
+    name: str
+    age: int
+
+client = from_openai(OpenAI())
+user = client.chat.completions.create(
+    model="gpt-4",
+    response_model=UserInfo,  # Pydantic model → auto-parse
+    messages=[{"role": "user", "content": "John is 25"}]
+)
+# user is UserInfo instance, guaranteed valid
+</code></pre>
+
+<h3>Outlines</h3>
+<p>Grammar-guided decoding — LLM output guaranteed valid via constrained token sampling. Regex + JSON schema supported.</p>
+
+<h3>Guidance</h3>
+<p>Microsoft's version. Template with markers cho LLM fill. Structured output + streaming.</p>
+
+<h3>Pydantic AI</h3>
+<p>Newest (2024). Type-safe, Pydantic-native, provider-agnostic.</p>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 8 frameworks head-to-head (đọc SAU sections 2-10)</div>
+
+<h4>Bảng compare toàn diện 15 dimensions</h4>
+<table>
+<tr><th></th><th>LangChain</th><th>LangGraph</th><th>LlamaIndex</th><th>DSPy</th><th>Semantic Kernel</th><th>CrewAI</th><th>AutoGen</th><th>Haystack</th></tr>
+<tr><td><strong>Ngôn ngữ</strong></td><td>Py/JS</td><td>Py/JS</td><td>Py</td><td>Py</td><td>C#/Py/Java</td><td>Py</td><td>Py</td><td>Py</td></tr>
+<tr><td><strong>Focus</strong></td><td>Chain functions</td><td>State machine graph</td><td>RAG-first</td><td>Prompt optimization</td><td>MS ecosystem</td><td>Role-play agents</td><td>Conversation agents</td><td>NLP pipelines</td></tr>
+<tr><td><strong>Learning curve</strong></td><td>Medium</td><td>Medium-High</td><td>Low (RAG easy)</td><td>High (paradigm shift)</td><td>Medium</td><td>Low</td><td>Medium</td><td>Low</td></tr>
+<tr><td><strong>Prod ready</strong></td><td>Yes (mature)</td><td>Yes</td><td>Yes</td><td>Beta</td><td>Yes (enterprise)</td><td>Beta</td><td>Beta</td><td>Yes</td></tr>
+<tr><td><strong>Loops</strong></td><td>Hack</td><td>✅ Native</td><td>Limited</td><td>No (declarative)</td><td>Custom</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+<tr><td><strong>State mgmt</strong></td><td>Memory objects</td><td>⭐ Global state + checkpoint</td><td>Storage context</td><td>N/A</td><td>Kernel memory</td><td>Basic</td><td>Basic</td><td>Document store</td></tr>
+<tr><td><strong>Multi-agent</strong></td><td>Chain hack</td><td>✅ Supervisor pattern</td><td>Limited</td><td>No</td><td>Planners</td><td>⭐ Native (role/goal)</td><td>⭐ Conversation-based</td><td>No</td></tr>
+<tr><td><strong>Human-in-loop</strong></td><td>Callback</td><td>⭐ Interrupt/resume built-in</td><td>Limited</td><td>No</td><td>Custom</td><td>Basic</td><td>Basic</td><td>Custom</td></tr>
+<tr><td><strong>Tracing</strong></td><td>LangSmith</td><td>⭐ LangSmith native</td><td>Callbacks</td><td>DSPy trace</td><td>OpenTelemetry</td><td>Basic</td><td>Basic</td><td>Basic</td></tr>
+<tr><td><strong>Structured out</strong></td><td>Pydantic parser</td><td>Pydantic</td><td>Pydantic</td><td>Signatures ⭐</td><td>Handlebars template</td><td>Task output_pydantic</td><td>Depend</td><td>Custom</td></tr>
+<tr><td><strong>RAG feature</strong></td><td>OK</td><td>OK</td><td>⭐ Best (query engines, agents)</td><td>Retrieve module</td><td>Kernel memory</td><td>Search tool</td><td>Retrieval tool</td><td>⭐ Original RAG framework</td></tr>
+<tr><td><strong>Deploy</strong></td><td>LangServe</td><td>LangGraph Cloud</td><td>Query engine</td><td>DSPy compile</td><td>MS Azure</td><td>Basic</td><td>Basic</td><td>Docker</td></tr>
+<tr><td><strong>Best for</strong></td><td>RAG basic, prompt chains</td><td>Complex agents với loops/HITL</td><td>Document-heavy RAG apps</td><td>Auto-optimize prompts</td><td>MS Copilot ecosystem</td><td>Role-based agents (marketing, research)</td><td>Multi-agent conversations</td><td>Search + Q&A</td></tr>
+<tr><td><strong>Nhược</strong></td><td>Bloated, abstraction leak</td><td>Learning curve, docs sparse</td><td>Chỉ Python</td><td>Beta, ecosystem nhỏ</td><td>MS lock-in</td><td>Chỉ chat-based agent</td><td>Chưa mature</td><td>Ít flexibility ngoài search</td></tr>
+</table>
+
+<h4>Decision matrix nhanh</h4>
+<table>
+<tr><th>Nhu cầu</th><th>Chọn top-2</th></tr>
+<tr><td>Prototype nhanh</td><td>LangChain / LlamaIndex</td></tr>
+<tr><td>Complex agent với loops + HITL</td><td>LangGraph / AutoGen</td></tr>
+<tr><td>Document-heavy RAG</td><td>LlamaIndex / Haystack</td></tr>
+<tr><td>Auto-optimize prompt</td><td>DSPy (only choice)</td></tr>
+<tr><td>Multi-role team simulation</td><td>CrewAI / AutoGen</td></tr>
+<tr><td>Structured output guarantee</td><td>Instructor / Pydantic AI</td></tr>
+<tr><td>Grammar-constrained output</td><td>Outlines / Guidance</td></tr>
+<tr><td>MS ecosystem</td><td>Semantic Kernel</td></tr>
+<tr><td>Production LLM app 2025</td><td>LangGraph + Instructor + LangSmith combo</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: Không có "1 framework win all". Modern production LLM app thường <em>combine</em> — VD: LangGraph orchestrate + LlamaIndex retrieval + Instructor output + LangSmith observe. Framework wars là myth, engineering pragmatism là reality.</p>
+</div>
+
+<h2>11. Framework decision matrix</h2>
+
+<table>
+<tr><th>Use case</th><th>Recommend</th></tr>
+<tr><td>Simple RAG chatbot</td><td>LlamaIndex hoặc LangChain</td></tr>
+<tr><td>Complex agent SDLC pipeline</td><td>LangGraph</td></tr>
+<tr><td>Multi-agent brainstorm</td><td>AutoGen hoặc CrewAI</td></tr>
+<tr><td>Enterprise document search</td><td>Haystack hoặc LlamaIndex</td></tr>
+<tr><td>Structured output</td><td>Instructor hoặc Outlines</td></tr>
+<tr><td>Prompt optimization research</td><td>DSPy</td></tr>
+<tr><td>Microsoft .NET shop</td><td>Semantic Kernel</td></tr>
+<tr><td>Simple production LLM app</td><td>Raw SDK (Anthropic/OpenAI direct)</td></tr>
+<tr><td>Serve fine-tuned LLM cheaply</td><td>vLLM + FastAPI</td></tr>
+<tr><td>Observability</td><td>LangSmith / Langfuse</td></tr>
+</table>
+
+<h2>12. Anti-patterns</h2>
+
+<div class="callout warn">
+<ol>
+  <li><strong>Framework Frenzy</strong>: adopt every new framework. Fix: master 2-3 well, know landscape.</li>
+  <li><strong>Over-abstraction</strong>: 5 wrapper layers, debug painful. Fix: prefer thin abstractions or raw SDK.</li>
+  <li><strong>Lock-in</strong>: framework tie deeply, hard migrate. Fix: use LiteLLM adapter, provider-agnostic patterns.</li>
+  <li><strong>Framework as silver bullet</strong>: use framework for problem không suit. Fix: solve problem first, framework later.</li>
+  <li><strong>Version chaos</strong>: LangChain 0.1 → 0.3 breaking. Fix: pin versions, upgrade planned intervals.</li>
+</ol>
+</div>
+
+<h2>13. Emerging (2025)</h2>
+
+<ul>
+  <li><strong>Pydantic AI</strong>: Pydantic-native LLM SDK, gaining traction</li>
+  <li><strong>Agent Development Kit (ADK)</strong>: Google's agent framework, MCP-native</li>
+  <li><strong>Mastra</strong>: TypeScript-first alternative to LangGraph</li>
+  <li><strong>Motia</strong>: event-driven multi-agent</li>
+  <li><strong>Letta / MemGPT</strong>: persistent memory agents</li>
+</ul>
+
+<h2>14. Interview cheat sheet</h2>
+
+<div class="callout">
+<ol>
+  <li>"LangChain vs LangGraph — khi nào?" → LangChain: linear chains, RAG, prototype. LangGraph: agents, cycles, HITL, state management. Same team, different scope.</li>
+  <li>"Vì sao DSPy?" → Prompt engineering brittle + manual. DSPy compile prompt automatic + optimize với examples. Best cho research + production maintain.</li>
+  <li>"Structured output 3 options?" → (1) LLM native (OpenAI structured output, Claude tools). (2) Instructor (Pydantic). (3) Grammar-guided (Outlines).</li>
+  <li>"Choose framework production?" → Prefer least abstraction. Raw SDK cho simple. LangGraph cho complex agents. Avoid over-abstraction. Pin versions.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Categorize 8 frameworks bạn biết theo layer.</p>
+<p class="a">Orchestration: LangGraph, LangChain, Haystack. RAG: LlamaIndex. Multi-agent: CrewAI, AutoGen. Declarative: DSPy. Structured output: Instructor, Outlines. SDK unified: LiteLLM, Semantic Kernel. Runtime: vLLM. Observability: LangSmith.</p>
+
+<p class="q">2. LangGraph vs LangChain — 3 lý do choose LangGraph.</p>
+<p class="a">(1) State machine cho agents (cycles, conditional edges). (2) HITL native (interrupt_before + resume). (3) Checkpointing (Postgres/Redis).</p>
+
+<p class="q">3. DSPy compile prompt — mechanism?</p>
+<p class="a">Define signature (input/output fields). DSPy tests candidate prompts (few-shot examples auto-selected via bootstrap or teleprompter). Best prompt chọn. Optimize gradient-like on prompt space. Result: prompt outperform manual engineering, self-improve với data.</p>
+
+<p class="q">4. Structured output — Instructor vs Outlines mechanism khác?</p>
+<p class="a">Instructor: post-hoc validate output (LLM output → Pydantic parse → retry nếu fail). Outlines: grammar-guided decoding — during generation, LLM tokens constrained match grammar. Outlines guaranteed valid; Instructor iterative retry.</p>
+
+<p class="q">5. Framework Frenzy anti-pattern — fix?</p>
+<p class="a">Adopt 2-3 core (LangGraph + LlamaIndex + Instructor covers 80% needs). Know landscape (this module) but not commit. New framework only if solve real problem existing not. Migration cost 3-6 months typical.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>ai_orchestrator uses LangGraph: <code>orchestrator/graph.py</code></li>
+    <li>daily-investor-report skill (custom, no framework): LLM steps chạy inline như instructions của Claude Code agent session, không phải qua Anthropic SDK call riêng biệt</li>
+    <li>MCP for AI Orchestrator: <code>d:/New-jouney/ai_orchestrator/mcp_server/</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://python.langchain.com/">LangChain docs</a></li>
+    <li>📖 <a href="https://docs.llamaindex.ai/">LlamaIndex docs</a></li>
+    <li>📖 <a href="https://dspy-docs.vercel.app/">DSPy docs</a></li>
+    <li>📖 <a href="https://learn.microsoft.com/semantic-kernel/">Semantic Kernel docs</a></li>
+    <li>📖 <a href="https://docs.crewai.com/">CrewAI docs</a></li>
+    <li>📖 <a href="https://microsoft.github.io/autogen/">AutoGen docs</a></li>
+    <li>📖 <a href="https://python.useinstructor.com/">Instructor docs</a></li>
+    <li>📖 <a href="https://ai.pydantic.dev/">Pydantic AI docs</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L8_5_ai_alignment.html">← L8.5</a>
+  <a href="L8_7_multica.html">L8.7 · Multi-CA + MoE →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R1.3 · TypeScript — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Coding Fundamentals · Điểm 3/6</div>
+  <h1>R1.3 · TypeScript — hợp đồng type-safe giữa Frontend và API</h1>
+  <p class="subtitle">Vì sao type <code>string</code> khai báo trong code không đảm bảo giá trị thật từ API không phải <code>null</code> — và cái giá phải trả nếu quên điều đó.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Giải thích được TypeScript là static type-checker chạy compile-time, khác Python (runtime, trừ khi chạy mypy riêng).</li>
+<li>Chỉ ra chính xác vì sao API JSON response là "boundary không type-safe" — nguồn gốc thật của null-safety rule trong dự án.</li>
+<li>Sửa đúng 1 đoạn code vi phạm rule <code>(field ?? "").method()</code> thành chuẩn, dựa trên ví dụ thật trong <code>frontend/src/</code>.</li>
+<li>Đọc được build pipeline <code>tsc &amp;&amp; vite build</code> và giải thích vì sao type-check luôn chạy TRƯỚC bundling.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Nên đọc sau R1.1 (Python) vì phần lớn giá trị của module này nằm ở việc <strong>so sánh</strong> 2 triết lý type-checking khác nhau (TypeScript compile-time vs Python runtime + mypy tùy chọn).</p>
+<p>Độ khó: <strong>Trung bình</strong> — khái niệm "type hệ thống khai báo không tự verify runtime" hơi phản trực giác với người mới, vì cảm giác "đã khai báo type thì chắc chắn đúng type" là ngộ nhận phổ biến.</p>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Nếu Python backend là nhà máy sản xuất linh hoạt (đổi công thức nhanh, không cần giấy tờ), TypeScript frontend là quầy giao hàng cho khách — phải chắc chắn 100% gói hàng đúng nhãn trước khi khách nhận.</p>
+<p>Nhưng có 1 kẽ hở quan trọng: <strong>nhãn dán do nhân viên tự viết tay</strong> (developer tự khai báo type <code>string</code>), không phải máy quét tự động xác nhận nội dung gói hàng thật sự chứa gì. Nếu kho hàng (API backend) lỡ gửi gói rỗng (<code>null</code>) nhưng nhãn vẫn ghi "có hàng", quầy giao hàng vẫn tin nhãn — cho tới khi khách mở ra mới biết trống rỗng (runtime crash).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>Bước 1 — TypeScript là gì? (dễ)</h3>
+<p>TypeScript = JavaScript + hệ thống kiểu tĩnh (static type system), do Microsoft phát triển. Dự án dùng React 18 + TypeScript + Vite (<code>frontend/package.json</code>).</p>
+<p>Điểm khác biệt cốt lõi với "JavaScript có thêm hint": TypeScript là 1 <strong>compiler</strong> thật sự chạy trước khi code tới trình duyệt — nó đọc toàn bộ file <code>.ts</code>/<code>.tsx</code>, kiểm tra type có khớp không, rồi mới cho phép build tiếp.</p>
+<pre><code>interface TickerData {
+  ticker: string;
+  verdict?: string;   // dấu ? = optional, có thể không tồn tại
+}
+
+function render(data: TickerData) {
+  return data.ticker.toUpperCase();  // OK — TS biết chắc ticker luôn là string
+}</code></pre>
+
+<h3>Bước 2 — Compile-time vs runtime: khoảng cách nguy hiểm</h3>
+<p>Đây là phần quan trọng nhất của module. TypeScript kiểm tra type <strong>lúc viết code</strong> (compile-time) — nó KHÔNG chạy lại kiểm tra đó lúc chương trình đang chạy thật (runtime).</p>
+<table>
+<tr><th></th><th>Compile-time (TypeScript check)</th><th>Runtime (chương trình đang chạy)</th></tr>
+<tr><td>Ai kiểm tra?</td><td><code>tsc</code> — đọc code, không chạy code</td><td>Trình duyệt/Node — thực sự thực thi</td></tr>
+<tr><td>Biết gì về dữ liệu thật?</td><td>Chỉ biết những gì developer <em>khai báo</em> trong <code>interface</code></td><td>Biết giá trị <em>thật</em> nhận được từ API</td></tr>
+<tr><td>API trả JSON có tự mang theo TypeScript type không?</td><td>—</td><td><strong>Không</strong> — JSON chỉ là text, không có khái niệm <code>interface</code></td></tr>
+</table>
+<p><strong>Hệ quả</strong>: khi frontend gọi API, response JSON đi qua 1 "biên giới" (boundary) hoàn toàn không type-safe. Developer khai báo <code>interface TickerData { verdict: string }</code>, nhưng TypeScript compiler chỉ đang <em>tin</em> lời khai đó — nó không tự kết nối tới server thật để verify.</p>
+
+<h3>Bước 3 — Vì sao rule <code>(field ?? "").method()</code> ra đời</h3>
+<p>Đây là standing rule bắt buộc của dự án, ghi trong <code>CLAUDE.md</code> và memory <code>feedback_null_guard_api_fields.md</code>: <em>"Any DB/API string field must use <code>(field ?? "").method()</code> — TypeScript types don't guarantee runtime null safety."</em></p>
+<pre><code>// SAI — TypeScript "tin" field này luôn là string, nhưng response thật từ
+// /api/predict/VNM có thể trả null nếu chưa có prediction hôm nay
+interface TickerData { verdict: string; }
+function render(data: TickerData) {
+  return data.verdict.toUpperCase();  // 💥 Runtime crash nếu verdict = null
+}
+
+// ĐÚNG — theo đúng standing rule của dự án
+function render(data: TickerData) {
+  return (data.verdict ?? "").toUpperCase();  // an toàn dù verdict null/undefined
+}</code></pre>
+<p><code>??</code> (nullish coalescing) chỉ thay thế khi giá trị bên trái là <code>null</code> hoặc <code>undefined</code> — khác <code>||</code> vốn cũng thay thế cả chuỗi rỗng <code>""</code> hay số <code>0</code>, dễ gây bug lặng lẽ nếu dùng nhầm.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>3 ví dụ thật, đọc trực tiếp từ <code>frontend/src/</code>, áp dụng đúng pattern <code>(field ?? "").method()</code>:</p>
+<pre><code>// frontend/src/components/Predict/VolumeSignalCard.tsx dòng 15
+const signalVariant = (item.signal ?? "").toLowerCase() as
+  Parameters&lt;typeof Badge&gt;[0]["variant"];
+
+// frontend/src/pages/AITrader.tsx dòng 344
+&lt;span&gt;{(c.verdict ?? "HOLD").replace("_", " ")}&lt;/span&gt;
+// Lưu ý: fallback ở đây KHÔNG phải "" mà là "HOLD" — vì "" không có ý
+// nghĩa hiển thị hợp lý cho verdict (khác trường hợp uppercase text thường).
+
+// frontend/src/pages/Screener.tsx dòng 123
+list.filter((m) => m.ticker.includes(q) || (m.name ?? "").toUpperCase().includes(q));</code></pre>
+<p>Nhận xét: rule không cứng nhắc luôn dùng <code>""</code> làm fallback — <code>AITrader.tsx</code> chọn <code>"HOLD"</code> vì đó là giá trị mặc định có ý nghĩa nghiệp vụ (không có verdict = coi như giữ nguyên vị thế). Nguyên tắc quan trọng hơn cú pháp: <strong>luôn xử lý rõ ràng trường hợp null/undefined</strong>, không để nó lọt tới <code>.method()</code>.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>TypeScript (<code>tsc</code>)</th><th>Python + mypy</th></tr>
+<tr><td>Bắt buộc hay tùy chọn?</td><td>Bắt buộc — build fail nếu type sai (<code>npm run build</code> = <code>tsc &amp;&amp; vite build</code>)</td><td>Tùy chọn — Python vẫn chạy được dù mypy báo lỗi; CI chạy riêng 1 step <code>mypy predict/</code></td></tr>
+<tr><td>Phạm vi check trong dự án</td><td>Toàn bộ <code>frontend/src/</code></td><td>Chỉ thư mục <code>predict/</code> (<code>--ignore-missing-imports --no-strict-optional</code>)</td></tr>
+<tr><td>Verify được dữ liệu API thật không?</td><td>Không — chỉ tin theo <code>interface</code> khai báo</td><td>Không — cùng giới hạn</td></tr>
+<tr><td>Khi nào chạy?</td><td>Compile-time, trước khi bundle (<code>tsc</code> trước <code>vite build</code>)</td><td>Riêng biệt, không chặn runtime nếu chạy trực tiếp <code>python app.py</code></td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Cấu trúc thư mục thật <code>frontend/src/</code>: <code>api/</code> (gọi backend — <code>predict.ts</code>, <code>trader.ts</code>, <code>market.ts</code>), <code>components/</code>, <code>pages/</code> (<code>Dashboard.tsx</code>, <code>AITrader.tsx</code>, <code>Screener.tsx</code>...), <code>stores/</code> (<code>watchlistStore.ts</code> — Zustand, state management nhẹ hơn Redux), <code>types/index.ts</code> (khai báo interface — chính là "hợp đồng" giữa 2 ngôn ngữ), <code>hooks/</code>, <code>utils/</code>.</p>
+<p>CI (<code>.github/workflows/ci.yml</code> dòng 72-76) chạy <code>npx tsc --noEmit</code> rồi mới <code>npm run build</code> — nếu type sai, job fail ngay ở bước <code>tsc</code>, không để lọt lỗi ra bundle production. <code>package.json</code> script <code>build</code> cũng tự thực thi đúng thứ tự này: <code>"build": "tsc &amp;&amp; vite build"</code>.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>#1 — Tin field <code>string</code> luôn có giá trị</strong>: gọi thẳng <code>data.verdict.toUpperCase()</code> mà không guard — crash ngay khi API trả <code>null</code> (VD ticker chưa có prediction hôm nay). Đây chính xác là ngộ nhận ở Bước 2: nhầm "khai báo type" với "đảm bảo runtime".</p>
+<p><strong>#2 — Dùng <code>any</code> để né lỗi type</strong>: khi TypeScript báo lỗi type khó sửa, ép kiểu <code>data as any</code> để "cho qua" — làm mất hoàn toàn lợi ích của TypeScript ở đúng chỗ có rủi ro cao nhất. Nên sửa type gốc hoặc dùng optional chaining (<code>?.</code>) + <code>??</code> thay vì tắt type-check.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được vì sao TypeScript "không đảm bảo runtime null safety" dù type khai báo là <code>string</code> không có <code>?</code>.</li>
+<li>Sửa đúng 1 đoạn code TypeScript vi phạm null-safety rule thành chuẩn <code>(field ?? fallback).method()</code>.</li>
+<li>Phân biệt được khi nào fallback nên là <code>""</code> và khi nào nên là giá trị nghiệp vụ có ý nghĩa (VD <code>"HOLD"</code>).</li>
+<li>Giải thích được thứ tự <code>tsc &amp;&amp; vite build</code> và vì sao không đảo ngược thứ tự.</li>
+<li>Chỉ ra vì sao dùng <code>any</code> để né lỗi type là một anti-pattern, không phải giải pháp.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R1_2_bash.html">← R1.2 · Bash</a>
+  <a href="R1_4_ds_algos.html">R1.4 · DS &amp; Algos →</a>
+</div>
+
+</div>
+</body>
+</html>

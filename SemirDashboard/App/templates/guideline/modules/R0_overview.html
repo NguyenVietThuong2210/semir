@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R0 · AI Engineering Learning Roadmap — Bổ sung curriculum</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Roadmap bổ sung</div>
+  <h1>R0 · AI Engineering Learning Roadmap — Index + Checklist</h1>
+  <p class="subtitle">Nguồn gốc: ảnh "AI Engineering Learning Roadmap" (mcp.DailyDoseofDS.com). 10 module R1-R10 dưới đây build thêm trên curriculum 51-module đã có (Level 1-9) — không viết lại từ đầu, chỉ gap-fill + cập nhật 2026 + ứng dụng cụ thể vào dự án <code>predictor</code>.</p>
+  <div class="level">Roadmap AI Engineering · 10 module · 63 checklist item · Biên soạn 2026-09-04</div>
+</div>
+
+<div class="container">
+
+<h2>🗺️ Cấu trúc roadmap gốc</h2>
+
+<p>Ảnh gốc vẽ hành trình từ <strong>Beginner Developer</strong> → <strong>Full-stack AI Engineer</strong>, đi qua 10 nhóm kỹ năng:</p>
+
+<pre><code>Beginner Developer
+   │
+   ├─► Coding Fundamentals ──────────► LLM APIs
+   │                                       │
+   ├─► RAG ──► Retrieval Techniques ──► LLM Augmentation
+   │
+   ├─► AI Agents ──► Infrastructure ──► Observability and Evaluation
+   │
+   └─► Advanced Steps ──► Security
+                                       │
+                                       ▼
+                          Full-stack AI Engineer
+</code></pre>
+
+<div class="callout">
+<div class="label">📖 Điểm khởi đầu — "Beginner Developer"</div>
+<p>Không phải 1 chủ đề riêng để research, mà là <strong>điều kiện tiên quyết</strong>: đúng thứ tự trong ảnh, bạn cần vững <a href="R1_1_python.html">Coding Fundamentals (R1.1-R1.6)</a> trước khi bước vào bất kỳ chủ đề LLM/Agent nào khác. Nếu bạn đã là dev có kinh nghiệm, có thể lướt nhanh R1 và bắt đầu thật từ R2.</p>
+</div>
+
+<div class="callout success">
+<div class="label">💡 Điểm đích — "Full-stack AI Engineer"</div>
+<p>Cũng không phải 1 chủ đề riêng — là <strong>trạng thái đạt được khi bạn trả lời được đủ 63 checklist item</strong> bên dưới với confidence + evidence thật từ chính dự án <code>predictor</code>. Mỗi module đều có mục "🎯 Ứng dụng vào dự án hiện tại" — kiến thức chỉ tính là "học xong" khi bạn nối được nó với 1 quyết định/file/dòng code thật trong repo, không phải khi thuộc lòng định nghĩa.</p>
+</div>
+
+<h2>📚 10 chủ đề — 63 trang riêng (mỗi bullet gốc = 1 trang), mapping vào curriculum cũ</h2>
+
+<p>Mỗi trang liên kết xuyên suốt bằng nav-bottom (← trang trước / trang sau →) — có thể đọc tuần tự từ R1.1 tới R10.4, hoặc nhảy thẳng vào 1 điểm cụ thể.</p>
+
+<table>
+<tr><th>#</th><th>Chủ đề</th><th>63 trang (bấm để mở)</th><th>Curriculum cũ liên quan</th></tr>
+<tr><td>1</td><td><strong>Coding Fundamentals</strong></td><td><a href="R1_1_python.html">R1.1 Python</a> · <a href="R1_2_bash.html">R1.2 Bash</a> · <a href="R1_3_typescript.html">R1.3 TypeScript</a> · <a href="R1_4_ds_algos.html">R1.4 DS&amp;Algos</a> · <a href="R1_5_git.html">R1.5 Git</a> · <a href="R1_6_pytest.html">R1.6 PyTest</a></td><td><em>(gap — chưa có module nào trong 51 module cũ)</em></td></tr>
+<tr><td>2</td><td><strong>LLM APIs</strong></td><td><a href="R2_1_kv_caching.html">R2.1 KV Caching</a> · <a href="R2_2_system_prompts.html">R2.2 System Prompts</a> · <a href="R2_3_types_of_llms.html">R2.3 Types of LLMs</a> · <a href="R2_4_prompt_caching.html">R2.4 Prompt Caching</a> · <a href="R2_5_structured_outputs.html">R2.5 Structured Outputs</a> · <a href="R2_6_multimodal_models.html">R2.6 Multi-modal</a> · <a href="R2_7_rate_limits_retries.html">R2.7 Rate Limits/Retries</a> · <a href="R2_8_cost_performance.html">R2.8 Cost/Performance</a></td><td><a href="L4_6_inference.html">L4.6</a>, <a href="L5_1_prompt.html">L5.1</a>, <a href="L5_5_cost_latency.html">L5.5</a></td></tr>
+<tr><td>3</td><td><strong>RAG</strong></td><td><a href="R3_1_mcp.html">R3.1 MCP</a> · <a href="R3_2_reranking.html">R3.2 Reranking</a> · <a href="R3_3_data_preparation.html">R3.3 Data Prep</a> · <a href="R3_4_multistep_retrieval.html">R3.4 Multi-step Retrieval</a> · <a href="R3_5_retrieval_generation.html">R3.5 Retrieval+Generation</a> · <a href="R3_6_orchestration_frameworks.html">R3.6 Orchestration Frameworks</a></td><td><a href="L5_2_rag.html">L5.2</a>, <a href="L9_1_advanced_rag.html">L9.1</a>, <a href="L8_3_mcp_deep.html">L8.3</a>, <a href="L8_6_ai_frameworks.html">L8.6</a></td></tr>
+<tr><td>4</td><td><strong>Retrieval Techniques</strong></td><td><a href="R4_1_vector_databases.html">R4.1 Vector DB</a> · <a href="R4_2_graph_databases.html">R4.2 Graph DB</a> · <a href="R4_3_hybrid_retrieval.html">R4.3 Hybrid Retrieval</a> · <a href="R4_4_reranking_pipelines.html">R4.4 Reranking Pipelines</a> · <a href="R4_5_hnsw_ivf.html">R4.5 HNSW/IVF</a> · <a href="R4_6_chunking_embedding.html">R4.6 Chunking/Embedding</a></td><td><a href="L5_2_rag.html">L5.2</a>, <a href="L9_1_advanced_rag.html">L9.1</a></td></tr>
+<tr><td>5</td><td><strong>LLM Augmentation</strong></td><td><a href="R5_1_tool_use.html">R5.1 Tool Use</a> · <a href="R5_2_fine_tuning.html">R5.2 Fine-tuning</a> · <a href="R5_3_rag_basics.html">R5.3 RAG Basics</a> · <a href="R5_4_prompt_engineering.html">R5.4 Prompt Engineering</a> · <a href="R5_5_context_engineering.html">R5.5 Context Engineering</a></td><td><a href="L5_3_tools.html">L5.3</a>, <a href="L4_5_finetuning_lora.html">L4.5</a>, <a href="L5_1_prompt.html">L5.1</a></td></tr>
+<tr><td>6</td><td><strong>AI Agents</strong></td><td><a href="R6_1_memory.html">R6.1 Memory</a> · <a href="R6_2_mcp.html">R6.2 MCP</a> · <a href="R6_3_acp.html">R6.3 ACP</a> · <a href="R6_4_a2a.html">R6.4 A2A</a> · <a href="R6_5_human_in_the_loop.html">R6.5 HITL</a> · <a href="R6_6_multiagent_systems.html">R6.6 Multi-agent</a> · <a href="R6_7_design_patterns.html">R6.7 Design Patterns</a> · <a href="R6_8_orchestration_frameworks.html">R6.8 Orchestration Frameworks</a></td><td><a href="L6_1_agent_patterns.html">L6.1</a>–<a href="L6_5_hitl.html">L6.5</a>, <a href="L8_1_agents_artifact.html">L8.1</a>, <a href="L8_3_mcp_deep.html">L8.3</a></td></tr>
+<tr><td>7</td><td><strong>Infrastructure</strong></td><td><a href="R7_1_cicd.html">R7.1 CI/CD</a> · <a href="R7_2_kubernetes.html">R7.2 Kubernetes</a> · <a href="R7_3_cloud_services.html">R7.3 Cloud Services</a> · <a href="R7_4_model_routing.html">R7.4 Model Routing</a> · <a href="R7_5_containerization.html">R7.5 Containerization</a> · <a href="R7_6_llm_deployment.html">R7.6 LLM Deployment</a></td><td><a href="L7_1_mlops.html">L7.1</a>, <a href="L7_2_deployment.html">L7.2</a>, <a href="L9_2_llm_ops.html">L9.2</a></td></tr>
+<tr><td>8</td><td><strong>Observability &amp; Evaluation</strong></td><td><a href="R8_1_llm_as_judge.html">R8.1 LLM-as-Judge</a> · <a href="R8_2_multiturn_evals.html">R8.2 Multi-turn Evals</a> · <a href="R8_3_agent_evaluation.html">R8.3 Agent Evaluation</a> · <a href="R8_4_component_evals.html">R8.4 Component Evals</a> · <a href="R8_5_observability_platforms.html">R8.5 Observability Platforms</a> · <a href="R8_6_agent_instrumentation.html">R8.6 Agent Instrumentation</a></td><td><a href="L5_4_llm_eval.html">L5.4</a>, <a href="L6_6_observability.html">L6.6</a>, <a href="L9_3_agent_eval.html">L9.3</a></td></tr>
+<tr><td>9</td><td><strong>Advanced Steps</strong></td><td><a href="R9_1_cli_agents.html">R9.1 CLI Agents</a> · <a href="R9_2_slack_agents.html">R9.2 Slack Agents</a> · <a href="R9_3_computer_use.html">R9.3 Computer Use</a> · <a href="R9_4_agent_swarms.html">R9.4 Agent Swarms</a> · <a href="R9_5_self_refinement.html">R9.5 Self-Refinement</a> · <a href="R9_6_robotic_agents.html">R9.6 Robotic Agents</a> · <a href="R9_7_voice_vision_agents.html">R9.7 Voice/Vision Agents</a> · <a href="R9_8_automated_prompt_engineering.html">R9.8 Auto Prompt Eng.</a></td><td><em>(gap lớn nhất — gần như chưa cover)</em></td></tr>
+<tr><td>10</td><td><strong>Security</strong></td><td><a href="R10_1_guardrails.html">R10.1 Guardrails</a> · <a href="R10_2_sandboxing.html">R10.2 Sandboxing</a> · <a href="R10_3_ethical_guidelines.html">R10.3 Ethical Guidelines</a> · <a href="R10_4_prompt_injection_defenses.html">R10.4 Prompt Injection Defenses</a></td><td><a href="L5_6_safety.html">L5.6</a>, <a href="L8_5_ai_alignment.html">L8.5</a></td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🔍 Evidence log — bằng chứng nghiên cứu (không phải nội dung dạy)</div>
+<p>File research đứng riêng, ghi lại mọi WebSearch/nguồn đã tra cứu cho 10 module trên, phân biệt rõ finding có nguồn web thật vs kiến thức train sẵn (<code>[TRAIN-KNOWLEDGE]</code>):</p>
+<ul>
+  <li><code>roadmap_ai_engineering/_research_evidence_track1.md</code> — 9 query cho chủ đề 1-5</li>
+  <li><code>roadmap_ai_engineering/_research_evidence_track2.md</code> — 25 query cho chủ đề 6-10</li>
+</ul>
+</div>
+
+<h2>✅ Checklist tổng hợp — 63 câu hỏi tự test</h2>
+
+<p>Trả lời được với confidence + evidence thật (chỉ ra đúng file/dòng trong repo <code>predictor</code>) = đã học xong chủ đề đó. Mỗi mục cũng có sẵn ở cuối module HTML tương ứng.</p>
+
+<div class="qa-gate">
+<h3>1. Coding Fundamentals (R1)</h3>
+<ul>
+<li>Giải thích được vì sao GIL khiến <code>threading</code> không tăng tốc I/O-bound Python code, và dự án dùng gì thay thế.</li>
+<li>Chỉ ra được 1 vị trí thật trong <code>backend/predict/engine.py</code> dùng dict-cache thay vì list-scan, và tính Big-O trước/sau.</li>
+<li>Viết đúng 1 commit message theo Conventional Commits format dựa trên <code>git log</code> thật của repo.</li>
+<li>Giải thích được vì sao <code>test_*_integration.py</code> là ngoại lệ có chủ đích, không phải vi phạm convention "mock trước".</li>
+<li>Sửa được đoạn code TypeScript vi phạm null-safety rule thành đúng chuẩn <code>(field ?? "").method()</code>.</li>
+<li>Đọc <code>.github/workflows/ci.yml</code> và liệt kê đúng thứ tự 4+ gate mà 1 PR backend phải qua.</li>
+</ul>
+
+<h3>2. LLM APIs (R2)</h3>
+<ul>
+<li>Vẽ được sơ đồ phân biệt KV cache (transformer-level) và Prompt Caching (API-level) — chỉ ra tầng nào nằm trên tầng nào.</li>
+<li>Với 1 system prompt cho trước, chỉ ra được nên đặt <code>cache_control</code> breakpoint ở đâu, và ước tính % tiết kiệm nếu gọi N lần liên tiếp.</li>
+<li>Phân loại đúng 1 LLM cho trước theo 4 trục (post-training stage / kiến trúc / tier / open-closed weight).</li>
+<li>Viết được 1 JSON schema "chặt" (dùng enum/min/max) thay vì schema "yếu" chỉ khai kiểu dữ liệu.</li>
+<li>Code được 1 hàm retry có exponential backoff + jitter + phân loại lỗi retryable/non-retryable.</li>
+<li>Với 1 use case cho trước, trả lời đúng: nên tối ưu output tokens hay input tokens trước, và vì sao.</li>
+</ul>
+
+<h3>3. RAG (R3)</h3>
+<ul>
+<li>Giải thích được vì sao <code>kb_loader.py</code> là "retrieval-augmented generation" nhưng không phải "RAG vector-based", và khi nào nên nâng cấp.</li>
+<li>Vẽ được sơ đồ 2-tầng bi-encoder → cross-encoder và giải thích vì sao không chạy cross-encoder trên toàn bộ corpus.</li>
+<li>Liệt kê đúng 5 bước data preparation pipeline theo thứ tự, giải thích vì sao thứ tự đó quan trọng.</li>
+<li>Cho 1 câu hỏi cho trước, quyết định đúng: cần multi-step retrieval hay 1 bước là đủ, và vì sao.</li>
+<li>Nêu được điểm mới của MCP spec 2026-07-28 (MRTR) so với spec cũ mà <code>L8_3_mcp_deep.html</code> dạy.</li>
+<li>Áp dụng khung quyết định để trả lời: skill <code>daily-investor-report</code> có nên đổi sang LangGraph không, và điều kiện nào sẽ đổi câu trả lời đó.</li>
+</ul>
+
+<h3>4. Retrieval Techniques (R4)</h3>
+<ul>
+<li>Vẽ được sơ đồ 1 query đi qua HNSW từ tầng cao nhất xuống tầng đáy, chỉ rõ vì sao mỗi tầng thu hẹp không gian tìm kiếm.</li>
+<li>Giải thích được <code>nprobe</code> trong IVF đánh đổi gì, và tính được (ước lượng) nprobe hợp lý cho K=1000 cluster.</li>
+<li>Code được RRF fusion cho 2 danh sách kết quả (BM25 + vector) từ đầu, không nhìn code mẫu.</li>
+<li>Với 1 use case cho trước, quyết định đúng: cần Graph DB hay bảng quan hệ SQL thường là đủ.</li>
+<li>Chọn đúng chunking strategy cho 3 loại tài liệu khác nhau (Markdown có heading / BCTC bảng số / tin tức đoạn văn).</li>
+<li>Giải thích được vì sao pgvector là đề xuất hợp lý đầu tiên cho dự án <code>predictor</code> cụ thể (không phải cho mọi dự án nói chung).</li>
+</ul>
+
+<h3>5. LLM Augmentation (R5)</h3>
+<ul>
+<li>Vẽ được khung quyết định 5 nhánh (Tool Use/Fine-tune/RAG/Prompt Eng/Context Eng) và áp dụng đúng cho 3 câu hỏi ví dụ khác nhau.</li>
+<li>Giải thích đúng 3 kỹ thuật context engineering (compaction, tool-result clearing, memory) và chỉ ra khác biệt cốt lõi giữa memory với 2 kỹ thuật còn lại.</li>
+<li>Chỉ ra được <code>CLAUDE.md</code>/<code>memory/MEMORY.md</code> là ví dụ thật của kỹ thuật "memory" trong context engineering, giải thích đúng 3 đặc điểm khớp định nghĩa.</li>
+<li>Giải thích được vì sao dự án <code>predictor</code> không có đường fine-tune Claude trực tiếp, và điều đó ảnh hưởng gì tới thiết kế closed-loop learning của AI Trader.</li>
+<li>Phân biệt đúng RAG và Tool Use trong 1 câu hỏi tình huống cụ thể (VD "giá cổ phiếu hôm nay" vs "công thức RSI là gì").</li>
+<li>Giải thích được vì sao "context window lớn hơn" không thay thế được kỷ luật context engineering.</li>
+</ul>
+
+<h3>6. AI Agents (R6)</h3>
+<ul>
+<li>Vẽ được sơ đồ 3 giao thức MCP/A2A/ACP trên giấy, chỉ đúng "ai nói với ai".</li>
+<li>Giải thích được vì sao MCP 2026-07-28 chuyển sang stateless core.</li>
+<li>Kể tên đủ 5 loại memory agent + map đúng 2 ví dụ có thật trong <code>predictor</code>.</li>
+<li>Phân biệt được soft gate vs hard gate bằng 1 ví dụ thật từ memory file của dự án này.</li>
+<li>Phân biệt được 3 khái niệm dễ nhầm: Multi-agent systems (kiến trúc) vs Design Patterns (building block) vs Orchestration Frameworks (công cụ).</li>
+<li>Kể được Microsoft Agent Framework hợp nhất 2 framework nào, GA khi nào.</li>
+<li><strong>Tự confirm: không có đề xuất nào ở trên đưa LLM vào làm live scoring feature của AI Trader.</strong></li>
+</ul>
+
+<h3>7. Infrastructure (R7)</h3>
+<ul>
+<li>Đọc được <code>.github/workflows/ci.yml</code> thật và chỉ ra đúng 3 gap so với chuẩn ML CI/CD 2026.</li>
+<li>Giải thích được khi nào NÊN chuyển từ Docker Compose sang Kubernetes (không phải "khi nào CÓ THỂ").</li>
+<li>So sánh đúng 3 cloud AI platform theo đúng trục "compliance/data residency" thay vì chỉ "model nào giỏi hơn".</li>
+<li>Phân biệt được complexity routing vs semantic routing.</li>
+<li>Đọc <code>backend/Dockerfile</code> và liệt kê đúng 2 cải thiện chi phí thấp/lợi ích cao nên làm ngay.</li>
+<li>Giải thích được vì sao autoscale LLM serving khác autoscale service thường (KV-cache VRAM vs CPU%).</li>
+</ul>
+
+<h3>8. Observability and Evaluation (R8)</h3>
+<ul>
+<li>Kể đúng 3 pitfall LLM-judge 2026 + cách fix từng cái.</li>
+<li>Giải thích được vì sao cần cả holistic VÀ sliding-window eval cho multi-turn, không chỉ 1 trong 2.</li>
+<li>Vẽ được 3 tầng eval agent (end-to-end/trajectory/component) + cho ví dụ thật từ <code>daily-investor-report</code> cho tầng component.</li>
+<li>Kể tên 5 platform observability + tiêu chí chọn platform nào cho tình huống nào.</li>
+<li>Giải thích <code>gen_ai.*</code> namespace giải quyết vấn đề gì so với tự đặt tên attribute.</li>
+<li><strong>Tự confirm: không đề xuất nào đưa field hệ thống tính sẵn vào input của 1 judge/eval được thiết kế để độc lập.</strong></li>
+</ul>
+
+<h3>9. Advanced Steps (R9)</h3>
+<ul>
+<li>Chỉ ra đúng 4 thành phần kiến trúc CLI Agent (memory/hooks/skills/subagents) bằng ví dụ thật từ <code>.claude/</code> của <code>predictor</code>.</li>
+<li>Giải thích Claude Tag khác gì "Claude in Slack" bản cũ (shared teammate vs trợ lý cá nhân).</li>
+<li>Biết khi nào dùng Computer Use thay vì function calling (chỉ khi không có API).</li>
+<li><strong>Tự confirm: không có đề xuất Agent Swarm nào biến LLM thành input quyết định trade runtime.</strong></li>
+<li>Kể được ví dụ thật trong <code>CLAUDE.md</code> về self-refinement 2-pass validation (case <code>ta_score</code>).</li>
+<li>Giải thích GEPA khác GRPO/RL truyền thống thế nào (gradient-free, reflection ngôn ngữ, Pareto frontier).</li>
+<li><strong>Tự confirm: đề xuất Automated Prompt Engineering chỉ áp dụng cho content-quality, không cho decision-weight.</strong></li>
+</ul>
+
+<h3>10. Security (R10)</h3>
+<ul>
+<li>Giải thích được Constitutional AI khác Constitutional Classifiers ở điểm nào (training-time vs runtime).</li>
+<li>Kể đúng 3 loại guardrail (NeMo/Llama Guard/Constitutional Classifiers) + bản chất từng loại (framework/model/classifier huấn luyện từ hiến pháp).</li>
+<li>Giải thích được vì sao <code>dangerouslyDisableSandbox</code> hợp lý ở bối cảnh <code>predictor</code> hiện tại nhưng sẽ nguy hiểm nếu đổi bối cảnh (CI xử lý PR ngoài).</li>
+<li>Phân biệt được EU AI Act (luật cưỡng chế) vs NIST RMF (tự nguyện) vs ISO 42001 (chứng nhận được) vs OECD (nguyên tắc).</li>
+<li>Giải thích được rule LLM independence của <code>daily-investor-report</code> chính là 1 cơ chế phòng thủ data-provenance/injection thật, không chỉ là "chất lượng phân tích".</li>
+</ul>
+</div>
+
+<h2>🎯 Headline research findings</h2>
+
+<div class="example-box">
+<div class="title">Track 1 (chủ đề 1-5)</div>
+<ul>
+<li>Coding Fundamentals là gap 100% (0/51 module cũ cover) — R1 dùng bằng chứng thật từ <code>backend/tests/conftest.py</code>, <code>.github/workflows/ci.yml</code>, git log thật.</li>
+<li><code>kb_loader.py</code> của dự án là retrieval <strong>exact-match theo heading</strong>, không phải vector-based RAG — dùng chính nó làm case study "RAG giả vs RAG thật".</li>
+<li>Repo chưa dùng vector DB/pgvector ở bất kỳ đâu (grep sạch) — R4 giải thích HNSW/IVF ở mức thuật toán thật, không chỉ liệt bảng đặc tính.</li>
+<li>"Context Engineering" là gap 100% trong curriculum cũ, dùng nguồn chính chủ Anthropic Engineering Blog — và chỉ ra <code>CLAUDE.md</code> + <code>memory/MEMORY.md</code> của chính dự án này LÀ một triển khai context-engineering thật.</li>
+</ul>
+</div>
+
+<div class="example-box">
+<div class="title">Track 2 (chủ đề 6-10)</div>
+<ul>
+<li>A2A (Google → Linux Foundation, 150+ tổ chức) và ACP (IBM, archived 8/2025, sáp nhập vào A2A) là gap hoàn toàn — R6 bổ sung đầy đủ + map memory taxonomy (5 loại) vào file thật của dự án.</li>
+<li>R7 audit trực tiếp <code>.github/workflows/ci.yml</code> và <code>backend/Dockerfile</code> thật — đề xuất fix rẻ/cụ thể thay vì gợi ý Kubernetes/cloud platform không cần thiết.</li>
+<li>R8 phát hiện: 8-20 check Self-QA gate của <code>daily-investor-report</code> <strong>đã chính là</strong> component-level eval, chỉ chưa được gọi đúng tên.</li>
+<li>R9 (gap lớn nhất) dùng chính Claude Code làm case study CLI Agent sống; đưa ranh giới cứng: Automated Prompt Engineering chỉ được tối ưu chất lượng nội dung LLM, không bao giờ đụng trọng số quyết định của <code>senior_score.py</code>.</li>
+<li>R10 phân biệt Constitutional AI (train-time) vs Constitutional Classifiers++ (runtime, update 1/2026) — dùng chính <code>dangerouslyDisableSandbox</code> và rule LLM-independence của dự án làm case study sandbox/injection-defense thật.</li>
+</ul>
+</div>
+
+<h2>⚠️ Giới hạn đã biết (đọc trước khi tin tuyệt đối)</h2>
+
+<div class="callout danger">
+<div class="label">⚠️ Đọc trước khi dùng để ra quyết định quan trọng</div>
+<ul>
+<li>Model tạo nội dung có knowledge cutoff ~T1/2026; nhiều claim "2026" dựa trên WebSearch — xem 2 file evidence log để biết claim nào có nguồn kiểm chứng được, claim nào chỉ từ kiến thức train sẵn (<code>[TRAIN-KNOWLEDGE]</code>).</li>
+<li>Phần lớn nguồn track 2 và 2/9 nguồn track 1 là blog/tin tức bên thứ 3 — không phải tài liệu chính thức của nhà cung cấp framework/protocol; nên tự verify lại nếu dùng để ra quyết định quan trọng.</li>
+<li>Đã qua 1 vòng review độc lập (coverage/dễ hiểu/khả thi/evidence honesty đều PASS, 3 lỗi nhỏ đã fix) nhưng chưa được test qua 1 phiên học thử với sinh viên thật.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="../index.html">← Về Curriculum</a>
+  <a href="R1_1_python.html">R1.1 · Coding Fundamentals — Python →</a>
+</div>
+
+</div>
+</body>
+</html>

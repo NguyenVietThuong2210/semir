@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L4.5 — Fine-tuning + LoRA</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 4 · Module 5</div>
+  <h1>4.5 · Fine-tuning: Full → SFT → PEFT → LoRA → QLoRA</h1>
+  <p class="subtitle">Cách adapt pretrained LLM cho domain riêng. Từ full fine-tuning (đắt) → LoRA (99% param save) → QLoRA (fit 65B model trên 1 GPU).</p>
+  <div class="level">Level 4 · LLM · ~35 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Trade-off full fine-tune vs LoRA</li>
+  <li>Implement LoRA layer bằng PyTorch</li>
+  <li>Choose rank r + alpha</li>
+  <li>QLoRA: 4-bit quantization + LoRA</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 LoRA / QLoRA bằng ngôn ngữ đời thường</div>
+<p><strong>Full fine-tuning = xây lại nhà từ móng</strong>: 70 tỷ tham số phải update hết → cần 8 GPU × 80GB, đắt $100k, chậm.</p>
+<p><strong>LoRA = chỉ đổi nội thất</strong>: Giữ nguyên tường/móng (frozen weights), chỉ thêm 2 ma trận nhỏ A×B (rank 8-64) bên cạnh mỗi layer. Update 0.1% params → task-specific behavior. Ngôi nhà 70B chỉ cần "thêm 1 tấm rèm" là đổi phong cách.</p>
+<p><strong>QLoRA = ép ảnh 4K → JPEG 480p</strong>: Weights gốc quantize từ 16-bit xuống 4-bit (nén 4×) — fit vào 1 GPU duy nhất thay vì 1 cụm 8 GPU. Train LoRA adapters trên đó. Kết quả: fine-tune Llama-65B trên 1 GPU 48GB (VD A6000 — không phải GPU laptop/gaming 24GB như RTX 4090, xem con số cụ thể ở phần dưới).</p>
+<p><strong>Khi nào dùng</strong>: LoRA cho domain specialization (medical, legal, VN language). Full fine-tune cho hoàn toàn thay đổi hành vi model (ít khi cần).</p>
+</div>
+
+<h2>1. Full fine-tuning</h2>
+
+<pre><code>Load pretrained weights → gradient descent trên ALL params với new data
+
+# Update: W_new = W_old - lr · ∂L/∂W
+
+Cost:
+- Memory: ~16 bytes/param (fp16 weights 2 + fp16 gradients 2 + fp32 Adam m/v/master
+  copy 12 — xem breakdown chi tiết ở mục dưới, KHÔNG phải chỉ "4× param" thô)
+  LLaMA-70B: 70B × 16 bytes = 1,120 GB (cần ~14× A100 80GB — lớn hơn nhiều so với
+  ước lượng đơn giản hoá "4×N"!)
+- Compute: expensive per step
+- Storage: mỗi task 1 full model (~140GB fp16)
+</code></pre>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — LoRA: vì sao thay 0.1% params đủ để dạy Llama-70B mới (chi tiết dễ hiểu)</div>
+
+<p><strong>Điều gây shock</strong>: Bạn có Llama-70B (70 tỷ tham số). Muốn dạy nó Vietnamese medical Q&A. Full fine-tune cần update cả 70B params → cần 8 GPU × 80GB = $100k. LoRA cần update <em>chỉ 0.1%</em> = 70M params → 1 GPU 24GB đủ = $500 cost. Cùng chất lượng end-task. Vì sao work?</p>
+
+<p><strong>Bước 1 — Hiểu LoRA math một cách dễ</strong></p>
+<p>Full fine-tune: mỗi layer có weight matrix W (kích thước d×d, ví dụ 4096×4096 = 16.7M params). Update ΔW cùng shape. Sau training: W_new = W + ΔW.</p>
+<p>LoRA insight: <em>giả định</em> ΔW có "rank thấp" — có thể xấp xỉ bằng A·B với A(d×r) và B(r×d), r &lt;&lt; d:</p>
+<pre><code>Full fine-tune ΔW — full rank, dense:         LoRA ΔW ≈ B·A — rank r, "cổ chai" nén thông tin:
+
+  ┌──────────────────┐                          ┌────┐        ┌──────────────────┐
+  │                   │                          │    │        │                  │
+  │       ΔW           │  d×d = 16.7M params       │ B  │   ×    │        A          │   B: d×r, A: r×d
+  │      (d×d)         │  (d=4096)                 │d×r │        │       r×d         │
+  │                   │                          │    │        │                  │
+  └──────────────────┘                          └────┘        └──────────────────┘
+      rank = d (full)                             rank = r (bottleneck, VD r=8)</code></pre>
+<p>Ví dụ r=8:</p>
+<ul>
+<li><strong>A</strong>: 4096×8 = 32.7k params</li>
+<li><strong>B</strong>: 8×4096 = 32.7k params</li>
+<li><strong>Total</strong>: 65k params thay vì 16.7M. <strong>Cắt 250×</strong>.</li>
+</ul>
+<p>Deploy: W_new = W (frozen) + A·B (learned).</p>
+
+<p><strong>Bước 2 — Vì sao r=8 đủ? Intrinsic dimensionality hypothesis</strong></p>
+<p>Aghajanyan 2020 phát hiện: fine-tune 1 task chỉ đổi vài "chiều" trong param space (khoảng 100-1000 chiều thực sự matter). Model pretrained đã có knowledge base rồi — task-specific chỉ cần tinh chỉnh nhẹ trên vài direction. Rank r=8 encode được 8 directions per layer × 80 layers = 640 directions tổng. Đủ để cover intrinsic dimensionality của mọi task instruction tuning.</p>
+
+<p><strong>Analogy đời thực</strong>: Học sinh giỏi toán tự nhiên (Llama pretrained biết cơ bản). Muốn cậu ta giỏi thêm 1 chuyên đề hình học không gian:</p>
+<ul>
+<li><strong>Full fine-tune</strong> = bắt cậu học lại từ lớp 1 tất cả toán → tốn thời gian, có thể quên kiến thức cũ.</li>
+<li><strong>LoRA</strong> = chỉ dạy thêm 20 buổi chuyên đề hình học không gian → hiệu quả cao, giữ nguyên kiến thức toán cũ.</li>
+</ul>
+<p>Kiến thức mới thường "nhỏ" so với kiến thức nền. LoRA tận dụng điều này.</p>
+
+<p><strong>Bước 3 — Chọn r theo task</strong></p>
+<table>
+<tr><th>Task</th><th>r đề xuất</th><th>Lý do</th></tr>
+<tr><td>Instruction tuning (chat format)</td><td>r=4-8</td><td>Chỉ cần adjust output format, ít thay đổi</td></tr>
+<tr><td>Domain adaptation (medical, legal)</td><td>r=16-32</td><td>Cần thêm domain terminology + patterns</td></tr>
+<tr><td>Full language shift (VN từ English base)</td><td>r=64-128</td><td>Thay đổi lớn trong tokenizer + syntax</td></tr>
+<tr><td>New capability (code từ text-only base)</td><td>Full FT tốt hơn</td><td>Beyond intrinsic dimension</td></tr>
+</table>
+<p><em>Rule of thumb</em>: start r=8. Nếu train loss plateau cao (không improve) → double r (16, 32, 64). Chọn r sai = tune 6 tháng không cải thiện.</p>
+
+<p><strong>Bước 4 — LoRA khác Full FT ở đâu quan trọng nhất? Catastrophic forgetting</strong></p>
+<p>Full fine-tune update mọi weights → model học task mới nhưng QUÊN capability cũ. Ví dụ: fine-tune Llama trên medical → mất khả năng làm math. Đây gọi là <em>catastrophic forgetting</em>.</p>
+<p>LoRA freeze base weights → capability cũ giữ nguyên. Chỉ thêm task-specific delta. Serve nhiều persona (customer support, coder, medical) qua N LoRA adapters cùng 1 base = tiết kiệm 100× storage + không interference giữa personas.</p>
+
+<p><strong>Con số biết nói — cost comparison Llama-70B</strong>:</p>
+<table>
+<tr><th>Method</th><th>GPUs needed</th><th>Storage per persona</th><th>Cost per task</th></tr>
+<tr><td>Full FT</td><td>8× A100 80GB</td><td>140 GB</td><td>$100k</td></tr>
+<tr><td>LoRA r=8 (base fp16, không quantize)</td><td>2× A100 80GB (base 140GB fp16 vẫn phải load nguyên, LoRA chỉ giảm phần train, KHÔNG giảm phần load base)</td><td>65 MB (chỉ adapter)</td><td>$500</td></tr>
+<tr><td>QLoRA r=8 (base 4-bit)</td><td>1× A100 80GB (base 140GB→35GB sau quantize + overhead; theo đúng tỉ lệ với case 65B/48GB đã verify ở mục dưới thì 70B cần hơn 48GB — vẫn KHÔNG fit RTX 4090 24GB, xem giải thích chi tiết ngay dưới)</td><td>65 MB</td><td>$100</td></tr>
+</table>
+<p>LoRA rẻ hơn Full FT 200× (chi phí $/task). QLoRA rẻ hơn 1000× — tiết kiệm chủ yếu tới từ số GPU cần ít hơn (2× thay vì 8×, rồi 1× thay vì 8×) + storage adapter chỉ 65MB thay vì lưu nguyên 140GB/persona, KHÔNG phải nhờ chạy được model 70B trên 1 GPU tiêu dùng (24GB) — điều đó vẫn KHÔNG khả thi, xem giải thích ngay dưới.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>QLoRA — engineering trick cho consumer GPU (chi tiết)</strong></p>
+
+<p><strong>Vấn đề</strong>: Llama-70B (140GB FP16) không fit RTX 4090 (24GB). Ngay cả frozen. Làm sao LoRA khi base không load được?</p>
+
+<p><strong>Bước 1 — Quantize base xuống 4-bit</strong>: 140GB / 4 = 35GB. Vẫn không fit. Nhưng...</p>
+
+<p><strong>Bước 2 — NF4 (Normal Float 4)</strong>: Không dùng uniform int4 (16 levels đều nhau). Dùng NF4 — levels theo quantile của normal distribution (nhiều levels ở gần 0, ít levels ở đuôi). Vì weights follow N(0, σ) — hầu hết gần 0.</p>
+<ul>
+<li><strong>Uniform int4</strong>: chỉ dùng 16 levels để cover [-1, +1]. Mất precision ở gần 0 nơi có nhiều value.</li>
+<li><strong>NF4</strong>: 9 levels trong [-0.4, +0.4] (dày), 3 levels đuôi [-1, -0.4) (thưa), 4 levels (+0.4, +1] (thưa) — đúng theo 16 giá trị liệt kê ở dưới.</li>
+</ul>
+<p>Result: reconstruction error thấp hơn ~3.7× so uniform int4 (xem MSE cụ thể bên dưới: 1.5e-3/4e-4).</p>
+
+<p><strong>Bước 3 — Double quantization</strong>: Constants của quantization (scale, zero-point) cũng chiếm memory. Quantize CHÚNG nữa (recursively). Tiết kiệm thêm 0.5 bit/param. Small win nhưng ở scale 70B params = 35GB→30GB.</p>
+
+<p><strong>Bước 4 — Paged optimizer</strong>: Đưa optimizer state (Adam m, v) ra CPU khi không dùng, load vào GPU khi update. Tiết kiệm thêm memory.</p>
+
+<p><strong>Combine tất cả</strong>: Llama-65B trên 1 GPU 48GB (A6000-class) — <strong>khả thi</strong> (xem breakdown "~48GB" ở mục 4 trên — KHÔNG fit RTX 4090 24GB, vốn chỉ bằng nửa dung lượng cần). Không phải magic — engineering data type + memory management smart.</p>
+
+<p><strong>Khi LoRA vỡ hoàn toàn</strong>: Base model không có capability nền. VD: dùng Llama-7B text-only để LoRA cho code task. Rank r=128 cũng không cứu — base không biết programming syntax. Fix: chọn base phù hợp (StarCoder for code, BioMedLM for medical). LoRA amplify capability có sẵn — không tạo capability mới.</p>
+
+<p><strong>Take-away tổng hợp</strong>:</p>
+<ol>
+<li>LoRA work vì intrinsic dimensionality của task fine-tune thấp (Aghajanyan 2020).</li>
+<li>Chọn r theo task complexity: r=4-8 chat, 16-32 domain, 64-128 language shift.</li>
+<li>LoRA tránh catastrophic forgetting — serve N persona/model dễ dàng.</li>
+<li>QLoRA = LoRA + NF4 quant + double quant + paged optimizer → consumer GPU train được 70B.</li>
+<li>Chọn base model phù hợp domain là điều kiện tiên quyết — LoRA không tạo capability, chỉ amplify.</li>
+</ol>
+</div>
+
+<h2>2. Parameter-Efficient Fine-Tuning (PEFT)</h2>
+
+<p>Idea: freeze base model, add small trainable modules.</p>
+
+<table>
+<tr><th>Method</th><th>Trainable params</th><th>Impl</th></tr>
+<tr><td>Prompt tuning</td><td>~0.01%</td><td>Learn soft prompt embeddings</td></tr>
+<tr><td>Prefix tuning</td><td>~0.1%</td><td>Learn key-value prefix per layer</td></tr>
+<tr><td>Adapter</td><td>~1-5%</td><td>Insert small FFN blocks</td></tr>
+<tr><td><strong>LoRA</strong></td><td>~0.1-1%</td><td>Low-rank matrix update on attention Q, V</td></tr>
+</table>
+
+<h2>3. LoRA — Low-Rank Adaptation (Hu 2021)</h2>
+
+<div class="callout">
+<div class="label">Key insight</div>
+<p>Weight update ΔW từ fine-tuning empirically low-rank. Decompose: ΔW = B · A where B ∈ ℝ^(d×r), A ∈ ℝ^(r×k), rank r &lt;&lt; min(d,k).</p>
+</div>
+
+<pre><code>class LoRALayer(nn.Module):
+    def __init__(self, d_in, d_out, rank=8, alpha=16):
+        super().__init__()
+        self.W_frozen = ...   # pretrained, requires_grad=False
+        self.A = nn.Parameter(torch.randn(rank, d_out) * 0.01)
+        self.B = nn.Parameter(torch.zeros(d_in, rank))
+        self.scaling = alpha / rank
+
+    def forward(self, x):
+        return x @ self.W_frozen.T + (x @ self.B @ self.A) * self.scaling
+</code></pre>
+
+<p>Init B=0 → ΔW start = 0 → model start identical to base. Học từ đó.</p>
+
+<h3>Where apply LoRA?</h3>
+<ul>
+  <li>Standard: attention Q_proj, V_proj</li>
+  <li>Aggressive: also K, O, FFN — more params trainable</li>
+  <li>Alpaca-LoRA: chỉ Q,V — good enough</li>
+</ul>
+
+<h3>Rank r choice</h3>
+<table>
+<tr><th>r</th><th>Params (%)</th><th>Use case</th></tr>
+<tr><td>4-8</td><td>~0.1%</td><td>Style change, small domain shift</td></tr>
+<tr><td>16-32</td><td>~0.5%</td><td>Most tasks (default)</td></tr>
+<tr><td>64-128</td><td>~2-5%</td><td>Large domain shift (medical, legal)</td></tr>
+</table>
+
+<h2>4. QLoRA (Dettmers 2023)</h2>
+
+<div class="callout success">
+<div class="label">Breakthrough</div>
+<p>Fine-tune 65B model trên 1 × 48GB GPU! Combine: 4-bit quantization base + LoRA update in fp16.</p>
+</div>
+
+<pre><code>1. Quantize base model weights → 4-bit (NF4 - Normal Float 4-bit)
+2. Backprop through 4-bit weights (dequantize on-the-fly)
+3. LoRA adapters kept in fp16 (trainable)
+4. Result: memory savings 4× base + tiny LoRA
+
+Total for LLaMA-65B:
+  Base fp16: 130 GB
+  Base 4-bit: 33 GB
+  LoRA (r=64): ~500 MB
+  Adam state on LoRA: ~1 GB
+  Activations: ~10 GB (with grad checkpoint)
+  Total: ~48 GB ✅ 1 GPU
+</code></pre>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — LoRA memory math cho 32-layer 4096-dim model, alpha scaling, gotchas</div>
+
+<p><strong>1. Memory savings — chi tiết per component</strong></p>
+<p>Model 32-layer, d=4096 (6.7B params). Full FT cần lưu:</p>
+<pre><code>Weights (fp16):            6.7B × 2 bytes = 13.4 GB
+Gradients (fp16):          6.7B × 2      = 13.4 GB
+Adam m (fp32):             6.7B × 4      = 26.8 GB
+Adam v (fp32):             6.7B × 4      = 26.8 GB
+Fp32 master weight copy:  6.7B × 4      = 26.8 GB  (hay bị bỏ sót — cần để accumulate
+                                                       update nhỏ mà fp16 không đủ precision)
+Activations:               ~15 GB
+Total:                                    ~122 GB → 2× A100 80GB (sát trần, ít margin)
+
+LoRA r=8 apply Q,V mọi layer (32 layer × 2 mat):
+Trainable = 32 × 2 × (4096·8 + 8·4096) = 32 × 2 × 65,536 = 4.2M params
+
+Weights base (fp16, frozen):  13.4 GB  (không cần gradient/optim state)
+LoRA weights (fp16):          4.2M × 2 = 8 MB
+LoRA gradients (fp16):        8 MB
+Adam trên LoRA (fp32 × 2):    34 MB
+Activations:                  ~15 GB
+Total:                        ~28 GB → 1× RTX 4090 24GB (với grad checkpoint)</code></pre>
+
+<p><strong>Ratio memory saving = 122/28 ≈ 4.4×</strong>. Ratio trainable params = 6.7B / 4.2M ≈ <strong>1600× less</strong>.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>2. Alpha scaling — vì sao có <code>α/r</code>?</strong></p>
+<p>Update effective: <code>ΔW = (α/r) · B·A</code>. Khi ĐỔI r (VD từ 8 → 16), ta muốn magnitude effective giống nhau (không phải retune learning rate). Nếu α = 2r (VD α=16 khi r=8, α=32 khi r=16) → <code>α/r = 2</code> constant → change r không phải retune lr.</p>
+
+<p><strong>Rule of thumb</strong>: α = 2r (Hu 2021 default). Một số paper dùng α = r (không scale).</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>3. NF4 quantization math (QLoRA)</strong></p>
+<p>Weights pretrained empirically ~ N(0, σ). NF4 = 16 levels được chọn sao cho MỖI level chứa 1/16 xác suất của N(0,1). Levels (chuẩn hóa):</p>
+<pre><code>[-1.0, -0.696, -0.525, -0.395, -0.284, -0.185, -0.091, 0.0,
+  0.080, 0.161, 0.246, 0.338, 0.441, 0.563, 0.723, 1.0]
+
+Dense ở giữa (nơi có nhiều weights), thưa ở đuôi.
+Uniform int4 (đối chiếu):
+[-1.0, -0.867, -0.733, ..., -0.067, 0.067, ..., 0.867, 1.0]  đều nhau
+
+MSE reconstruction:
+  NF4:      ~4e-4  ✅
+  int4:     ~1.5e-3 (3.7× tệ hơn)</code></pre>
+
+<p><strong>Quantize theo block</strong>: chia weights thành block 64 elements, mỗi block có scale riêng (fp32). Weight quantized = level × scale. Storage: 4 bit/param + 32 bit/64 params = 4.5 bit/param.</p>
+<p><strong>Double quantization</strong>: scale (32 bit/block 64 param) cũng quantize xuống 8 bit — và quantize luôn scale-của-scale ("super-scale"). 3 tầng lồng nhau:</p>
+<pre><code>Tầng 2 — "super-scale": 1 giá trị fp32 (32-bit) dùng chung cho 1 block 256 scale
+                         = 256 × 64 = 16,384 param
+                         → overhead = 32 / 16,384 ≈ 0.002 bit/param
+        │
+        │  mỗi super-scale "phủ" 256 block con:
+        ▼
+Tầng 1 — scale mỗi block 64 param: quantize xuống 8-bit (thay vì giữ nguyên fp32/32-bit)
+                         → overhead = 8 / 64 = 0.125 bit/param   (fp32 gốc sẽ là 32/64 = 0.5 bit/param)
+        │
+        │  mỗi scale "phủ" 64 giá trị weight:
+        ▼
+Tầng 0 — giá trị weight: NF4 code, 4-bit/param
+
+Tổng effective = 4 (NF4 base) + 0.125 (scale 8-bit) + 0.002 (super-scale) ≈ 4.127 bit/param</code></pre>
+<p>Khớp đúng con số paper QLoRA gốc (Dettmers 2023) công bố.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>4. LoRA gotchas</strong></p>
+<ul>
+  <li><strong>Target modules chọn sai</strong>: chỉ Q,V (Alpaca-LoRA) — nhẹ nhưng underfit domain. Chọn all-linear (Q,K,V,O + FFN) — quality ↑ nhưng params ↑ 5×. Rule: bắt đầu Q,V, plateau → thêm K,O.</li>
+  <li><strong>Learning rate cần cao hơn Full FT</strong>: LoRA lr = 1e-4 to 3e-4 (vs Full FT 2e-5). Vì trainable params ít, gradient scale khác.</li>
+  <li><strong>Merge trước serve</strong>: <code>merge_and_unload()</code> gộp A·B vào W → 0 runtime overhead. Nhưng multi-tenant thì KHÔNG merge, swap adapter per request.</li>
+  <li><strong>QLoRA + gradient checkpoint bắt buộc</strong>: không checkpoint → activation memory bùng nổ, defeat mục đích.</li>
+  <li><strong>Không dùng DeepSpeed ZeRO-3 với LoRA</strong>: ZeRO-3 shard weights (base frozen không cần shard) → thêm overhead network không lợi ích.</li>
+  <li><strong>Catastrophic forgetting vẫn xảy ra</strong> nếu train quá lâu trên narrow domain. Fix: mix 5-10% general instruction data vào training set.</li>
+</ul>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — DoRA (2024): tách LoRA thành "hướng" và "độ dài" để thu hẹp khoảng cách với Full FT</div>
+
+<p><strong>💡 Analogy</strong>: LoRA (đã học ở trên) học update ΔW = B·A và CỘNG THẲNG vào weight gốc W. Điều này ép ΔW phải làm CÙNG LÚC 2 việc trộn lẫn: vừa đổi "HƯỚNG" mà weight đang trỏ tới (như đổi hướng đi), vừa đổi "ĐỘ DÀI/CƯỜNG ĐỘ" của weight đó (như đổi tốc độ đi) — trong khi Full fine-tuning thật sự (update mọi tham số tự do) có xu hướng đổi 2 thứ này theo tỉ lệ RẤT KHÁC NHAU tuỳ layer. DoRA (Weight-Decomposed LoRA, NVIDIA + đồng tác giả, ICML 2024 Oral) tách riêng 2 thành phần này ra TỪ ĐẦU — giống việc mô tả 1 mũi tên bằng 2 con số riêng biệt (hướng nó chỉ tới đâu, và nó dài bao nhiêu) thay vì 1 vector duy nhất gộp chung — rồi cho phép mỗi thành phần học với "tốc độ" (gradient dynamic) riêng của nó.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: phân tích thực nghiệm của paper DoRA so sánh cách Full FT thay đổi weight (theo cả 2 chiều magnitude/direction) với cách LoRA thay đổi weight — phát hiện: Full FT có tương quan (correlation) magnitude-vs-direction thay đổi RẤT KHÁC so với LoRA (LoRA có xu hướng thay đổi 2 thành phần này theo tỉ lệ gần như cố định, "kém tự do" hơn Full FT thật sự cho phép). Đây là 1 phần lý do LoRA đôi khi vẫn thua Full FT dù đã tune r/alpha kỹ.</p>
+
+<pre><code># Bước 1 — Decompose weight gốc W₀ thành magnitude (độ dài) + direction (hướng):
+W₀ = m · (V / ‖V‖_c)      # m = vector magnitude (1 số/cột), V = ma trận, ‖V‖_c = norm theo cột
+                            # (V / ‖V‖_c) luôn có norm = 1 mỗi cột → thuần "hướng", không còn "độ dài"
+                            # Khởi tạo: m = ‖W₀‖_c (magnitude BAN ĐẦU = đúng norm của weight gốc)
+
+# Bước 2 — Chỉ áp dụng LoRA cho phần DIRECTION (không đụng trực tiếp vào magnitude):
+V' = W₀ + B·A               # cùng công thức LoRA quen thuộc, nhưng chỉ update "hướng"
+direction_new = V' / ‖V'‖_c # chuẩn hoá lại thành hướng đơn vị sau khi cộng B·A
+
+# Bước 3 — Magnitude m được HỌC RIÊNG, độc lập với A, B (thêm 1 vector nhỏ, gần như free):
+W_new = m · direction_new = m · (W₀ + B·A) / ‖W₀ + B·A‖_c
+
+# → 3 nhóm tham số học riêng: A, B (như LoRA thường) VÀ m (vector magnitude, cực nhỏ:
+#   chỉ 1 số/cột, VD d=4096 → thêm đúng 4096 tham số/layer, gần như 0 chi phí thêm)</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: DoRA KHÔNG PHẢI "LoRA với rank cao hơn" hay "thêm 1 layer mới" — nó là 1 cách RE-PARAMETERIZE (viết lại công thức biểu diễn) CHÍNH weight đang có, tách 1 ma trận thành 2 thành phần toán học tương đương (magnitude × direction luôn tái tạo lại đúng ma trận gốc), rồi cho phép LoRA chỉ cần lo phần direction — nhẹ nhàng hơn nhiều so với việc bắt B·A phải "gánh" luôn cả việc đổi magnitude. Việc tách này gần như MIỄN PHÍ về tham số (chỉ thêm vector m, ~0.01% so với B·A) nhưng cho phép mô phỏng sát hành vi Full FT hơn.</p>
+
+<table>
+<tr><th></th><th>LoRA (Hu 2021)</th><th>DoRA (2024)</th></tr>
+<tr><td>Tham số học thêm</td><td>A, B (2 ma trận rank r)</td><td>A, B (như LoRA) + m (1 vector magnitude/cột)</td></tr>
+<tr><td>Cách update weight</td><td>W_new = W₀ + B·A (cộng thẳng)</td><td>W_new = m · (W₀+B·A)/‖W₀+B·A‖_c (tách hướng/độ dài)</td></tr>
+<tr><td>Overhead tham số so LoRA</td><td>Baseline</td><td>+~0.01% (vector m rất nhỏ)</td></tr>
+<tr><td>Overhead lúc inference</td><td>0 (merge được vào W)</td><td>0 (vẫn merge được — m·direction vẫn ra 1 ma trận W thường)</td></tr>
+<tr><td>Học hành vi giống Full FT hơn?</td><td>Trung bình (magnitude/direction bị trộn lẫn)</td><td>Có — khớp tốt hơn correlation magnitude-direction của Full FT (verified thực nghiệm trong paper)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: DoRA là ví dụ cho nguyên lý "tái tham số hoá không đổi biểu diễn cuối cùng, chỉ đổi cách GRADIENT chảy tới từng phần" — về mặt toán, m·(V/‖V‖_c) LUÔN tái tạo được BẤT KỲ ma trận W nào (không giới hạn biểu diễn), nhưng việc TÁCH RIÊNG 2 thành phần giúp optimizer (Adam/SGD) cập nhật từng phần theo đúng "nhịp độ" nó cần, thay vì ép 1 update chung phải đáp ứng 2 nhu cầu khác nhau cùng lúc — cùng tinh thần với AdamW tách weight decay khỏi adaptive LR (đã học ở <code>L2_2_regularization.html</code>) hay Muon tách xử lý ma trận 2D khỏi xử lý per-coordinate (đã học ở <code>L3_2_optimizers.html</code>).</p>
+
+<p><strong>📖 Mở rộng</strong>: paper gốc báo cáo DoRA cải thiện commonsense reasoning benchmark trên LLaMA so với LoRA cùng số tham số trainable, với chi phí thêm gần như 0 (cả lúc train lẫn lúc inference sau khi merge) — đây là lý do DoRA nhanh chóng được thêm vào các thư viện PEFT phổ biến (HuggingFace PEFT hỗ trợ DoRA qua flag <code>use_dora=True</code> trên chính <code>LoraConfig</code> đã dùng ở mục 5 dưới, không cần đổi pipeline).</p>
+</div>
+
+<h2>5. Practical training pipeline</h2>
+
+<pre><code>from peft import get_peft_model, LoraConfig
+import bitsandbytes as bnb
+
+# 1. Load base 4-bit
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-2-13b-hf",
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+)
+
+# 2. Add LoRA
+config = LoraConfig(
+    r=16, lora_alpha=32, lora_dropout=0.1,
+    target_modules=["q_proj", "v_proj"],
+    task_type="CAUSAL_LM",
+)
+model = get_peft_model(model, config)
+model.print_trainable_parameters()
+# trainable params: 13.1M / 13.5B (0.097%)
+# = n_layers × 2(Q,V) × r×(d_in+d_out) = 40 × 2 × 16×(5120+5120) ≈ 13.1M
+
+# 3. Train
+trainer = SFTTrainer(model, ..., peft_config=config)
+trainer.train()
+
+# 4. Save (just LoRA weights, ~50 MB)
+model.save_pretrained("./llama-domain-lora")
+</code></pre>
+
+<h2>6. Serving LoRA models</h2>
+
+<ul>
+  <li>Merge LoRA into base: <code>merge_and_unload()</code> → 1 fused model, no runtime overhead</li>
+  <li>Alternative: keep LoRA separate, swap adapters at inference (multi-task, multi-tenant serving)</li>
+  <li>vLLM + Multi-LoRA: serve nhiều adapters trên 1 base model, chọn per request</li>
+</ul>
+
+<h2>7. When fine-tune vs prompt engineer vs RAG?</h2>
+
+<table>
+<tr><th></th><th>Fine-tune</th><th>Prompt eng</th><th>RAG</th></tr>
+<tr><td>Task-specific behavior</td><td>✅</td><td>✅</td><td>-</td></tr>
+<tr><td>Fresh factual knowledge</td><td>-</td><td>-</td><td>✅</td></tr>
+<tr><td>Style / tone</td><td>✅</td><td>✅ (weak)</td><td>-</td></tr>
+<tr><td>Cost setup</td><td>Medium (LoRA)</td><td>Free</td><td>Medium</td></tr>
+<tr><td>Cost inference</td><td>Same as base</td><td>Same</td><td>Higher (retrieval)</td></tr>
+<tr><td>Update knowledge</td><td>Retrain</td><td>Edit prompt</td><td>Instant</td></tr>
+</table>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. LoRA rank 16 cho 7B model — trainable params?</p>
+<p class="a">Attention Q, V proj mỗi cái d_model² params. Với LoRA r=16: 2 · d_model · 16 per layer × 2 (Q,V) × n_layers. LLaMA-7B: 32 layer × 4096 dim → ~2·4096·16·2·32 ≈ 8M params (0.1% of 7B).</p>
+
+<p class="q">2. Vì sao LoRA init B=0?</p>
+<p class="a">ΔW = B · A. B=0 → ΔW = 0 → model start = base pretrained. Học từ zero drift → stable training, không catastrophic forgetting.</p>
+
+<p class="q">3. QLoRA 4-bit quantize base — có precision loss không?</p>
+<p class="a">Có (~1-2% quality drop on MMLU). Nhưng LoRA compensate — adapter học fix quantization errors. Net: QLoRA match fp16 full fine-tune, save 4× memory.</p>
+
+<p class="q">4. Serving multi-tenant với 100 LoRA adapters — architecture?</p>
+<p class="a">Base model shared trong GPU memory. LoRA weights per adapter small (~50MB). Request đến với adapter_id → load LoRA vào side buffer → compute forward với base + LoRA. vLLM Multi-LoRA support natively.</p>
+
+<p class="q">5. Domain nhiều VN documents. LoRA rank chọn bao nhiêu?</p>
+<p class="a">Bắt đầu r=16 (default sweet spot). Nếu VN quá khác English (large domain shift): r=32-64. Also: consider fine-tune tokenizer for VN (nếu original 32k vocab, add 10k VN-specific tokens).</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/2106.09685">Hu et al (2021) — LoRA paper</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2305.14314">Dettmers et al (2023) — QLoRA</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2402.09353">Liu et al (2024) — DoRA: Weight-Decomposed Low-Rank Adaptation (ICML Oral)</a></li>
+    <li>📖 <a href="https://huggingface.co/docs/peft/index">PEFT library docs</a></li>
+    <li>📝 <a href="https://sebastianraschka.com/blog/2023/llm-finetuning-lora.html">Sebastian Raschka — Practical LoRA guide</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L4_4_alignment_rlhf.html">← L4.4</a>
+  <a href="L4_6_inference.html">L4.6 · Inference →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R3.3 · Data Preparation — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · RAG · Điểm 3/6</div>
+  <h1>R3.3 · Data Preparation</h1>
+  <p class="subtitle">Nguyên liệu bẩn thì đầu bếp giỏi mấy cũng nấu dở — pipeline chuẩn bị dữ liệu cho RAG, áp cụ thể cho văn bản tài chính tiếng Việt.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Liệt kê đúng thứ tự 5 bước data preparation pipeline cho RAG: Extraction → Cleaning → Chunking → Metadata enrichment → Embedding.</li>
+<li>Giải thích vì sao thứ tự đó quan trọng — vì sao KHÔNG được nhảy thẳng vào bước Embedding.</li>
+<li>Nhận diện 4 lỗi cleaning đặc thù khi xử lý văn bản tài chính tiếng Việt.</li>
+<li>Đối chiếu pipeline lý thuyết với cấu trúc KB thật của dự án và biết dự án đang ở bước nào trong pipeline.</li>
+<li>So sánh được 5 chiến lược chunking (fixed-size/recursive, semantic, hierarchical, late chunking, contextual retrieval) bằng số liệu benchmark thật, không phải bằng trực giác "cái nào nghe hiện đại hơn".</li>
+<li>Giải thích được vì sao chuẩn hoá Unicode tiếng Việt phải dùng NFC chứ không phải NFD cho mục đích tìm kiếm/so khớp.</li>
+<li>Nhận diện thách thức riêng của OCR tiếng Việt (dấu thanh) và hậu quả nếu không xác minh lại kết quả OCR cho dữ liệu tài chính.</li>
+<li>Phân biệt được deduplication lexical và semantic, biết khi nào dự án cần thêm bước này vào pipeline.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Khái niệm chunking (fixed-size, semantic, sentence-based) đã dạy ở module RAG cơ bản. Trang này bổ sung phần pipeline ĐẦY ĐỦ (không chỉ chunking) và áp cụ thể cho đặc thù tiếng Việt/tài chính mà module cũ chưa bàn tới.</p>
+<table>
+<tr><th>Module</th><th>Nội dung</th><th>Quan hệ với trang này</th></tr>
+<tr><td><code>../modules/L5_2_rag.html §3.1</code></td><td>Khái niệm chunking (fixed-size, semantic, sentence-based)</td><td>Nền tảng — trang này mở rộng thành pipeline 5 bước đầy đủ</td></tr>
+</table>
+<p>Độ khó xếp <strong>Dễ</strong>: không cần toán, chủ yếu là quy trình thực hành + nhận diện lỗi thường gặp — phù hợp đọc trước khi vào các trang khó hơn (Reranking, Multi-step retrieval).</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Data preparation cho RAG giống việc chuẩn bị nguyên liệu trước khi nấu ăn. Rau chưa rửa, thịt chưa thái đúng cỡ thì đầu bếp giỏi mấy cũng nấu ra món dở. Retrieval/rerank/generation có kiến trúc hay đến đâu cũng vô nghĩa nếu dữ liệu nguồn (KB) bẩn, sai cấu trúc, hoặc bị chunk sai chỗ (VD cắt đứt giữa 1 bảng số liệu).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<p>Toàn cảnh trước khi đi vào từng bước — pipeline 5 bước theo đúng 1 thứ tự bắt buộc (không đảo ngược), cộng 1 bước điều kiện (dedup) chỉ chèn thêm khi cần:</p>
+<pre><code>PDF/HTML/scan thô
+      │  [1. Extraction]   giữ cấu trúc bảng, OCR nếu là ảnh scan
+      ▼
+   text thô
+      │  [2. Cleaning]     Unicode NFC, số liệu kiểu VN, header/footer, whitespace
+      ▼
+   text sạch ──[2.5 Deduplication]──>  (CHỈ khi nhiều nguồn/crawl lặp — lexical hoặc semantic)
+      │
+      ▼
+   [3. Chunking]   heading-boundary / recursive / semantic / late / contextual retrieval
+      │
+      ▼
+   [4. Metadata enrichment]   gắn ngày, ticker/sector, độ tin cậy
+      │
+      ▼
+   [5. Embedding]   vector hoá — CHỈ SAU KHI 4 bước trên đã sạch
+      │
+      ▼
+   vector DB / index sẵn sàng cho retrieval</code></pre>
+
+<h3>1. Cấu trúc nguồn thật của dự án — điểm khởi đầu để so sánh</h3>
+<p>KB của skill <code>daily-investor-report</code> (<code>.claude/skills/daily-investor-report/kb/</code>) gồm 7 file Markdown, mỗi file có heading H2/H3 rõ ràng ánh xạ 1-1 với 1 khái niệm. Ví dụ <code>technical_indicators.md</code> có 45+ section, mỗi section là 1 indicator như "MACD", "RSI".</p>
+<p>Đây là <strong>structured markdown</strong>, không phải PDF hay HTML lộn xộn. Bước "chuẩn hoá cấu trúc" gần như đã làm sẵn từ lúc viết KB thủ công — không phải xử lý ngược từ tài liệu thô như khi crawl BCTC hay tin tức.</p>
+
+<h3>2. Bước 1 — Extraction</h3>
+<p>Chuyển PDF/HTML thô thành text sạch. Với báo cáo tài chính (BCTC) tiếng Việt, bảng số liệu (bảng cân đối kế toán, báo cáo kết quả kinh doanh) là điểm khó nhất.</p>
+<p>Text extraction ngây thơ (VD thư viện PyPDF2 cơ bản) thường làm vỡ cấu trúc bảng thành 1 chuỗi số vô nghĩa, mất hoàn toàn quan hệ hàng/cột. Cần công cụ giữ layout bảng (Camelot, pdfplumber) hoặc parse trực tiếp định dạng XBRL nếu nguồn có sẵn.</p>
+
+<h4>2.1 Không có 1 công cụ "thắng tuyệt đối" cho mọi loại bảng — bảng so sánh</h4>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân</div><p>Dễ mắc lỗi trình bày "Camelot đúng, pdfplumber sai" (hoặc ngược lại) cho việc trích bảng PDF. Thực tế 2025-2026: cả 2 ĐỀU hoạt động tốt, chỉ khác nhau ở LOẠI bảng phù hợp nhất — không có công cụ nào thắng mọi tình huống, kể cả khi thêm vision-LLM vào so sánh.</p></div>
+<table>
+<tr><th>Công cụ</th><th>Cơ chế</th><th>Mạnh nhất khi nào</th><th>Yếu ở đâu</th></tr>
+<tr><td>pdfplumber</td><td>Đọc toạ độ ký tự/đường kẻ trực tiếp từ PDF, không cần dependency hệ thống</td><td>Bảng có viền rõ, trang trộn lẫn bảng + văn xuôi</td><td>Bảng không viền (borderless), PDF scan (ảnh, không có text layer)</td></tr>
+<tr><td>Camelot</td><td>2 chế độ: Lattice (bảng có viền) và Stream (bảng không viền, dựa khoảng trắng)</td><td>Tài liệu mà bảng LÀ nội dung chính — BCTC, bảng giá, báo cáo phòng lab</td><td>Bảng nhiều trang bị tách rời thành các chunk rời rạc không tự nối lại</td></tr>
+<tr><td>Vision-LLM (đọc ảnh trang PDF trực tiếp)</td><td>Model đa phương thức "nhìn" trực tiếp layout trang như ảnh, không cần parser toạ độ</td><td>PDF scan, layout phức tạp/không chuẩn mà parser toạ độ bó tay</td><td>Chi phí/latency cao hơn nhiều cho xử lý hàng loạt; dễ "bịa" số liệu (hallucinate) nếu ảnh mờ — cần công cụ chuyên trích bảng vẫn đáng tin hơn cho dữ liệu dạng bảng dày đặc</td></tr>
+</table>
+<p>Khuyến nghị thực tế (không phải nhị phân "chọn 1"): dùng công cụ chuyên trích bảng (pdfplumber/Camelot) làm mặc định cho PDF digital có text layer; chỉ chuyển sang vision-LLM khi tài liệu là bản scan/ảnh hoặc layout quá bất quy tắc để parser toạ độ xử lý được — 2 công cụ phục vụ 2 tình huống khác nhau, không phải "cái mới (vision-LLM) luôn thay thế cái cũ".</p>
+
+<h4>2.2 Thách thức riêng của OCR tiếng Việt — vì sao "đọc được chữ" chưa chắc đọc ĐÚNG</h4>
+<p>Khi nguồn là bản scan (không có text layer, VD chụp lại 1 trang báo cáo), bước Extraction phải qua OCR trước khi có text để làm sạch. Tiếng Việt có 1 thách thức OCR đặc thù mà tiếng Anh không gặp: dấu thanh (sắc, huyền, hỏi, ngã, nặng) xuất hiện CẢ Ở TRÊN lẫn Ở DƯỚI ký tự, cộng thêm dấu phụ nguyên âm (â, ê, ô, ư, ơ) — khiến engine OCR (đặc biệt engine tổng quát không train riêng cho tiếng Việt) dễ đọc sai hoặc bỏ sót dấu.</p>
+<div class="callout danger"><div class="label">⚠️ Hậu quả nghiêm trọng hơn tiếng Anh</div><p>Khác với lỗi chính tả tiếng Anh (thường vẫn đoán được ý qua ngữ cảnh), thiếu/sai 1 dấu thanh tiếng Việt có thể đổi HẲN nghĩa của từ (VD "bán" ↔ "bàn" ↔ "bạn" ↔ "bản" — cùng 1 chuỗi ký tự gốc "ban", khác nhau hoàn toàn ở dấu). Với văn bản tài chính, 1 lỗi OCR dạng này ở tên công ty, đơn vị tiền tệ, hay từ khoá hành động ("bán ra" thành "bàn ra") có thể làm sai lệch hẳn ý nghĩa được trích xuất, không chỉ là lỗi chính tả vô hại.</p></div>
+<p>Hệ quả thực hành: pipeline dùng OCR cho nguồn scan tiếng Việt KHÔNG nên coi kết quả OCR là text đáng tin ngay — cần bước xác minh bổ sung (VD đối chiếu số liệu quan trọng như doanh thu/lợi nhuận với nguồn khác, hoặc review thủ công các trường trọng yếu) trước khi đưa vào bước Cleaning/Chunking, đặc biệt khi tài liệu có bố cục phức tạp hoặc chữ nền (background) rối làm giảm thêm độ chính xác nhận diện dấu.</p>
+<pre><code>Ví dụ minh hoạ lỗi OCR đổi nghĩa (giả định, đúng dạng lỗi thường gặp):
+
+Nguồn scan gốc: "Doanh nghiệp quyết định BÁN RA 2 triệu cổ phiếu quỹ"
+
+❌ OCR đọc sai dấu (engine tổng quát, không train riêng tiếng Việt):
+"Doanh nghiệp quyết định BẢN RA 2 triệu cổ phiếu quỹ"
+→ "bán" (sell) bị đọc thành "bản" (edition/version) — câu mất nghĩa
+  hành động rõ ràng, nếu hệ thống hạ nguồn (downstream) cố trích xuất
+  "hành động: bán/mua" bằng keyword matching, nó sẽ KHÔNG bắt được
+  tín hiệu "bán ra" vì chuỗi ký tự đã sai ngay từ bước OCR.
+
+✅ Sau xác minh/sửa lại đúng dấu:
+"Doanh nghiệp quyết định BÁN RA 2 triệu cổ phiếu quỹ"
+→ Tín hiệu "bán ra" (bearish signal cho cổ phiếu quỹ) được giữ nguyên,
+  trích xuất đúng cho bước phân tích/generation sau này.</code></pre>
+<table>
+<tr><th>Loại OCR</th><th>Độ phù hợp với dấu thanh tiếng Việt</th><th>Khi nào chọn</th></tr>
+<tr><td>OCR tổng quát đa ngôn ngữ (không train riêng tiếng Việt)</td><td>Thấp hơn — dễ đọc sai/bỏ sót dấu thanh phức tạp</td><td>Chỉ chấp nhận được khi tài liệu chữ rõ, không nền phức tạp, và có bước xác minh sau đó</td></tr>
+<tr><td>OCR huấn luyện riêng cho tiếng Việt (mô hình transformer chuyên biệt)</td><td>Cao hơn — được train trên tập dữ liệu có dấu thanh tiếng Việt</td><td>Ưu tiên nếu xử lý khối lượng lớn tài liệu scan tiếng Việt thường xuyên</td></tr>
+<tr><td>Vision-LLM (đọc trực tiếp ảnh trang, đã nhắc ở mục 2.1)</td><td>Khá tốt nhờ hiểu ngữ cảnh câu, nhưng vẫn có thể "đoán" sai nếu ảnh mờ</td><td>Khi cần vừa đọc chữ vừa hiểu bố cục phức tạp (bảng lẫn văn xuôi) trong 1 bước</td></tr>
+</table>
+
+<h3>3. Bước 2 — Cleaning</h3>
+<p>4 việc cần làm khi làm sạch văn bản tài chính tiếng Việt:</p>
+<ul>
+<li><strong>Chuẩn hoá encoding Unicode</strong> — dấu tiếng Việt có 2 dạng biểu diễn (tổ hợp vs dựng sẵn); 2 nguồn dữ liệu khác nhau (crawl web vs OCR) có thể trả về dạng khác nhau cho CÙNG 1 chữ nhìn giống hệt trên màn hình — lỗi kinh điển khi crawl dữ liệu VN từ nhiều nguồn.</li>
+<li><strong>Loại header/footer lặp lại</strong> — số trang ("Trang 3/45"), tên công ty lặp mỗi trang PDF.</li>
+<li><strong>Chuẩn hoá số liệu kiểu VN</strong> — dấu chấm ngăn cách nghìn kiểu VN ("1.234.567") khác chuẩn US ("1,234,567"), cần đổi về 1 format nhất quán cho toàn hệ thống.</li>
+<li><strong>Loại khoảng trắng thừa</strong> — nhiều dòng trống liên tiếp do lỗi OCR/extraction.</li>
+</ul>
+
+<h4>3.1 Sâu hơn về Unicode tiếng Việt — vì sao phải chọn ĐÚNG NFC, không phải NFD</h4>
+<p>1 ký tự tiếng Việt có dấu (VD "ề") có thể biểu diễn theo 2 dạng Unicode tương đương nhưng khác chuỗi byte:</p>
+<ul>
+<li><strong>NFC (Normalization Form Composed)</strong> — "dựng sẵn": 1 code point duy nhất cho cả ký tự đã có dấu (VD U+1EC1 cho "ề").</li>
+<li><strong>NFD (Normalization Form Decomposed)</strong> — "tổ hợp": TÁCH thành nhiều code point riêng — ký tự gốc + các dấu phụ ghép vào. Tiếng Việt có thể cần tới 3 code point cho 1 âm tiết (nguyên âm gốc + dấu mũ + dấu thanh, VD "ề" = "e" + U+0302 dấu mũ + U+0309 dấu hỏi).</li>
+</ul>
+<p>Vấn đề kỹ thuật sâu hơn ở NFD cho tiếng Việt: thứ tự ghép các dấu phụ theo "combining class" chuẩn Unicode đôi khi KHÔNG khớp đúng trật tự chính tả tiếng Việt thật (VD chữ có cả dấu mũ và dấu thanh — theo chính tả VN, dấu mũ thuộc về nguyên âm trước, dấu thanh thêm sau, nhưng thuật toán sắp xếp combining-class chuẩn có thể tạo thứ tự khác). Đây là lý do 2 hệ thống khác nhau tạo ra NFD cho CÙNG 1 chữ có thể ra 2 chuỗi byte khác nhau dù nhìn y hệt trên màn hình — khiến so khớp chuỗi (string equality) thất bại âm thầm.</p>
+<p>Vì lý do đó, <code>unicodedata.normalize("NFC", raw)</code> (đúng như dòng code cleaning ở dưới) là lựa chọn ĐÚNG cho mục đích tìm kiếm/so khớp: NFC gộp về 1 code point cố định cho mỗi ký tự hiển thị, loại bỏ sự mơ hồ về thứ tự ghép dấu phụ mà NFD có thể gặp phải. Dùng NFD chỉ hợp lý cho 1 số tác vụ xử lý nội bộ đặc thù (VD phân tích riêng từng dấu thanh) — KHÔNG hợp lý làm chuẩn lưu trữ/so khớp cho 1 hệ RAG.</p>
+
+<h3>3.2 Bước hay bị bỏ quên giữa Cleaning và Chunking — Deduplication</h3>
+<p>Khi dữ liệu đến từ NHIỀU nguồn/nhiều lần crawl (VD tin tức về cùng 1 sự kiện được đăng lại trên nhiều báo, hoặc 1 báo cáo được re-crawl nhiều lần theo lịch), corpus dễ tích tụ document/chunk GẦN NHƯ giống hệt nhau. Nếu không loại bỏ, hậu quả kép: (1) tốn chi phí embedding + storage vô ích cho nội dung trùng lặp, (2) khi retrieval, cùng 1 thông tin chiếm nhiều vị trí trong top-k, đẩy các thông tin THỰC SỰ khác biệt ra khỏi ngân sách context (liên hệ trực tiếp bài học "top-3 sau rerank" ở <code>R3_5_retrieval_generation.html</code>).</p>
+<table>
+<tr><th>Kỹ thuật dedup</th><th>Cơ chế</th><th>Bắt được loại trùng lặp nào</th><th>Chi phí</th></tr>
+<tr><td>Lexical (MinHash + LSH)</td><td>Băm (hash) các n-gram của văn bản, so khớp gần đúng qua Locality-Sensitive Hashing — không cần embedding</td><td>Trùng lặp gần NGUYÊN VĂN (câu chữ giống nhau phần lớn, VD 1 bài báo đăng lại)</td><td>Rẻ — không cần GPU/model, có biến thể tối ưu tốc độ cho tập cực lớn (LSHBloom)</td></tr>
+<tr><td>Semantic (SemDeDup và họ hàng)</td><td>Encode document thành vector, gom cụm (k-means), so khoảng cách trong từng cụm để tìm cặp trùng Ý NGHĨA dù câu chữ khác nhau</td><td>Trùng lặp Ý NGHĨA nhưng diễn đạt khác (VD 2 bài viết khác câu chữ nhưng cùng nói 1 sự kiện y hệt)</td><td>Đắt hơn — cần chạy embedding model cho toàn corpus trước khi cluster</td></tr>
+</table>
+<p>Với KB curated hiện tại của dự án (viết tay, không crawl tự động), rủi ro trùng lặp gần như bằng 0 — dedup CHỈ trở thành bước cần thiết thật sự nếu dự án bắt đầu tự động hoá thu thập dữ liệu (crawl tin tức nhiều nguồn), đúng kịch bản "mở rộng ăn dữ liệu ngoài KB curated" đã nhắc ở mục Ứng dụng dự án bên dưới.</p>
+
+<h3>4. Bước 3 — Chunking</h3>
+<p>Với KB dạng Markdown có heading rõ (như dự án hiện có), chunk theo heading boundary (mỗi H2/H3 = 1 chunk) tốt hơn fixed-size 500 token, vì giữ nguyên ngữ nghĩa trọn vẹn của 1 khái niệm thay vì cắt giữa chừng.</p>
+<p>Đây <strong>chính xác</strong> là cách <code>kb_loader.py._extract_section()</code> đang làm: tìm heading khớp, cắt tới heading cùng cấp tiếp theo (dòng 51-73 của file). Dự án chưa từng gọi hàm này là "RAG chunking", nhưng trên thực tế nó đã là chunking-by-structure — 1 kỹ thuật chunking hợp lệ, không phải "tạm bợ".</p>
+
+<h4>4.1 Với văn bản KHÔNG có cấu trúc heading rõ — bảng so sánh 5 chiến lược chunking, kèm số liệu benchmark thật</h4>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân</div><p>Ngộ nhận phổ biến: "semantic chunking (cắt theo ranh giới ngữ nghĩa bằng embedding similarity) luôn tốt hơn fixed-size chunking vì nó 'thông minh' hơn". SAI theo benchmark thật — 1 nghiên cứu bình duyệt của Vectara (NAACL 2025) phát hiện fixed-size chunking THẮNG semantic chunking một cách NHẤT QUÁN trên cả 3 tiêu chí (document retrieval, evidence retrieval, answer generation) — chi phí tính toán thêm của semantic chunking không được đền bù bằng kết quả tốt hơn tương ứng. Đồng thời, 1 benchmark khác (FloTorch 2026) cho thấy semantic chunking đạt RECALL cao nhất (91.9%) nhưng ĐỘ CHÍNH XÁC CÂU TRẢ LỜI CUỐI (end-to-end accuracy) lại thấp hơn recursive splitting (54% so với 69%) — 2 chỉ số này KHÔNG luôn đi cùng chiều.</p></div>
+<table>
+<tr><th>Chiến lược</th><th>Cơ chế</th><th>Số liệu benchmark tiêu biểu (2025-2026)</th><th>Khi nào phù hợp</th></tr>
+<tr><td>Fixed-size / Recursive character split</td><td>Cắt theo số token/ký tự cố định, có thể lùi lại theo ranh giới câu/đoạn gần nhất (recursive)</td><td>Recursive 512-token thắng benchmark FloTorch 2026 với 69% end-to-end accuracy; RecursiveCharacterTextSplitter đạt 85.4-89.5% (tối ưu quanh 400 token)</td><td>Điểm khởi đầu mặc định hợp lý cho hầu hết corpus không có cấu trúc heading rõ — rẻ, nhanh, benchmark thực tế thường thắng</td></tr>
+<tr><td>Semantic chunking</td><td>Cắt tại điểm embedding similarity giữa 2 câu liền kề giảm mạnh — dùng model embedding để "cảm nhận" ranh giới ý</td><td>Recall cao nhất (91.9% theo LLMSemanticChunker) nhưng end-to-end accuracy thấp hơn recursive (54% vs 69%, FloTorch); Vectara NAACL 2025: thua fixed-size trên CẢ 3 tiêu chí</td><td>Chỉ đáng dùng khi đã đo và xác nhận nó thắng recursive TRÊN CHÍNH corpus của mình — không mặc định chọn vì nghe "thông minh hơn"</td></tr>
+<tr><td>Hierarchical / heading-boundary chunking</td><td>Cắt theo cấu trúc tài liệu có sẵn (H1/H2/H3, section) — đúng cách <code>kb_loader.py</code> đang làm</td><td>Không cần benchmark riêng khi tài liệu ĐÃ có cấu trúc rõ — bản chất là tận dụng metadata cấu trúc thay vì suy luận lại từ nội dung</td><td>Tài liệu có heading rõ ràng, ổn định (Markdown viết tay, tài liệu kỹ thuật có mục lục) — trường hợp của KB dự án này</td></tr>
+<tr><td>Late chunking (Jina)</td><td>Encode TOÀN BỘ document trước bằng model có context dài, rồi mới "cắt" embedding theo chunk boundary SAU — chunk vẫn giữ được ngữ cảnh toàn văn bản trong vector của nó</td><td>Cải thiện tăng dần theo độ dài tài liệu trên benchmark BEIR — lợi ích rõ nhất với document dài, nơi chunk riêng lẻ dễ mất ngữ cảnh nếu cắt trước khi encode</td><td>Document dài, ngữ cảnh toàn cục quan trọng cho từng đoạn nhỏ (VD 1 báo cáo dài mà đoạn giữa chỉ nói "công ty" mà không nhắc lại tên)</td></tr>
+<tr><td>Contextual Retrieval (Anthropic, prepend context)</td><td>Dùng 1 LLM nhanh đọc toàn văn bản, sinh 1 đoạn context ngắn (50-100 token) mô tả "chunk này nằm trong phần nào, nói về gì" rồi GẮN THÊM vào đầu chunk trước khi embed + index BM25</td><td>Giảm ~49% tỷ lệ retrieval thất bại (kết hợp Contextual Embeddings + Contextual BM25); kết hợp thêm reranking giảm tới ~67%</td><td>Corpus có nhiều chunk mà tự nó không đủ ngữ cảnh để hiểu (VD "doanh thu công ty tăng 3% so với quý trước" — không rõ công ty nào, quý nào nếu đọc riêng chunk đó)</td></tr>
+</table>
+<p>Bài học chung: KHÔNG có 1 chiến lược "tiên tiến nhất luôn thắng" — recursive/fixed-size vẫn là baseline mạnh và rẻ, semantic chunking cần benchmark riêng trước khi tin tưởng, và late chunking/contextual retrieval chỉ đáng chi phí thêm (gọi thêm LLM, cần model context dài) khi corpus thực sự có vấn đề "chunk mất ngữ cảnh" mà chunking đơn giản không giải quyết được.</p>
+
+<h4>4.2 Ví dụ cụ thể Contextual Retrieval — trước/sau khi prepend context</h4>
+<p>Minh hoạ đúng vấn đề Contextual Retrieval giải quyết, dùng 1 chunk giả định trích từ 1 báo cáo tài chính dài nhiều trang (KHÔNG phải cách <code>kb_loader.py</code> hiện làm — <code>kb_loader.py</code> không cần kỹ thuật này vì KB đã có heading tự mô tả, xem mục "Ứng dụng dự án" bên dưới):</p>
+<pre><code>❌ Chunk THÔ (cắt theo đoạn văn, mất ngữ cảnh về công ty/thời điểm):
+"Doanh thu tăng 3% so với quý trước, chủ yếu nhờ mảng bán lẻ phục hồi."
+→ Đọc riêng chunk này: KHÔNG rõ công ty nào, quý nào — nếu embed
+  trực tiếp, query "doanh thu VNM quý 3" khó match đúng chunk này
+  dù nó CHÍNH LÀ câu trả lời cần tìm.
+
+✅ Chunk sau khi Contextual Retrieval prepend (LLM đọc toàn báo cáo,
+   tự sinh câu context ngắn rồi gắn vào đầu chunk TRƯỚC KHI embed):
+"[Ngữ cảnh: Trích báo cáo tài chính quý 3/2026 của VNM, phần
+  Kết quả kinh doanh hợp nhất] Doanh thu tăng 3% so với quý trước,
+  chủ yếu nhờ mảng bán lẻ phục hồi."
+→ Cùng nội dung gốc, nhưng giờ chunk TỰ CHỨA đủ thông tin để
+  match đúng với query "doanh thu VNM quý 3" mà không cần đọc
+  thêm chunk nào khác để biết ngữ cảnh.</code></pre>
+<p>Chi phí đánh đổi: mỗi chunk cần 1 lượt gọi LLM (đọc toàn văn bản để sinh câu context) trước khi embed — tốn thêm thời gian/tiền ở bước chuẩn bị dữ liệu (offline, làm 1 lần), đổi lại giảm đáng kể retrieval thất bại theo số liệu benchmark đã nêu ở bảng 4.1.</p>
+
+<h3>5. Bước 4 — Metadata enrichment</h3>
+<p>Gắn thêm metadata cho mỗi chunk trước khi embed: ngày cập nhật, ticker/sector liên quan, nguồn gốc, độ tin cậy. Dùng để filter trước hoặc sau retrieval — VD chỉ lấy chunk về "Ngân hàng" khi query liên quan tới VCB.</p>
+<p><code>kb/REVIEW_CADENCE.md</code> (quy định review theo quý cho mỗi KB) trong dự án là 1 dạng metadata "độ tươi" ở tầng file — có thể hạ xuống tầng chunk nếu sau này cần độ chính xác cao hơn (VD biết chính xác section nào mới cập nhật gần nhất).</p>
+
+<h3>6. Bước 5 — Embedding</h3>
+<p>Bước cuối cùng, chỉ nên làm SAU KHI 4 bước trên đã sạch. Embed dữ liệu bẩn tạo ra hiện tượng "garbage in, garbage out" ở tầng vector — khó phát hiện hơn nhiều so với lỗi ở text thô, vì vector không đọc được bằng mắt để soi lỗi trực tiếp.</p>
+
+<h3>7. Ví dụ chunk sai vs chunk đúng</h3>
+<p>Minh hoạ tác hại của chunking cắt sai chỗ (fixed-size 200 ký tự, bỏ qua ranh giới heading) so với chunking theo heading boundary trên cùng 1 đoạn KB giả định:</p>
+<pre><code>Nguồn gốc (Markdown):
+## MACD
+MACD là chỉ báo động lượng, tính bằng hiệu 2 đường EMA...
+Tín hiệu mua khi đường MACD cắt lên đường signal.
+## RSI
+RSI đo tốc độ và biên độ thay đổi giá, dao động 0-100...
+
+❌ Chunk sai (fixed-size 80 ký tự, cắt mù không quan tâm heading):
+Chunk 1: "## MACD\nMACD là chỉ báo động lượng, tính bằng hiệu 2 đường EMA...\nTín hi"
+Chunk 2: "ệu mua khi đường MACD cắt lên đường signal.\n## RSI\nRSI đo tốc độ"
+→ Chunk 2 bị trộn lẫn nội dung MACD (nửa câu bị cắt đứt) VÀ heading RSI trong cùng 1 chunk.
+
+✅ Chunk đúng (heading boundary — cách kb_loader.py._extract_section() đang làm):
+Chunk 1: "## MACD\nMACD là chỉ báo động lượng...\nTín hiệu mua khi đường MACD cắt lên đường signal."
+Chunk 2: "## RSI\nRSI đo tốc độ và biên độ thay đổi giá, dao động 0-100..."
+→ Mỗi chunk giữ trọn 1 khái niệm, không lẫn nội dung của 2 indicator khác nhau.</code></pre>
+<p>Nếu retrieval trả về Chunk 2 (kiểu sai) cho câu hỏi "MACD là gì", LLM generation sẽ nhận nửa câu cụt về MACD trộn lẫn với heading RSI không liên quan — chất lượng câu trả lời giảm dù retrieval "tìm đúng chunk có chứa từ MACD".</p>
+
+<h3>Ví dụ số cụ thể — dedup tác động thế nào nếu dự án crawl tin tức tự động (kịch bản giả định)</h3>
+<p>Giả sử dự án tương lai tự động crawl tin tức "FPT công bố lợi nhuận Q3" từ 5 nguồn báo khác nhau trong cùng ngày — mỗi báo viết lại theo văn phong riêng nhưng cùng 1 sự kiện gốc:</p>
+<pre><code>Không dedup — cả 5 bài đều được embed + index:
+  Top-5 kết quả cho query "lợi nhuận FPT quý 3" TOÀN BỘ là 5 bài
+  nói CÙNG 1 sự kiện (chỉ khác văn phong) → 0 thông tin mới nào
+  khác được đưa vào context, dù corpus có thể có thêm góc phân tích
+  khác (VD phản ứng giá cổ phiếu, so sánh với dự báo) bị đẩy ra top-5.
+
+Có dedup (semantic, gom cụm rồi giữ lại 1 đại diện/cụm):
+  5 bài → nhận diện là 1 cụm ngữ nghĩa → giữ lại 1 bài đại diện
+  (VD bài có nguồn uy tín nhất hoặc đầy đủ nhất) + gắn metadata
+  "5 nguồn cùng đưa tin" nếu cần.
+  Top-5 kết quả giờ có chỗ cho 1 bài sự kiện + 4 chunk khác biệt
+  thật sự (phân tích, phản ứng giá, so sánh dự báo...).</code></pre>
+<p>Đây chính là lý do dedup nên đứng TRƯỚC bước chunking/embedding trong pipeline — dedup ở tầng document thô rẻ hơn nhiều so với việc để 5 bản gần giống nhau lọt vào tận bước retrieval rồi mới cố gắng lọc bằng rerank (rerank không được thiết kế để giải quyết vấn đề "trùng lặp nội dung", nó chỉ xếp hạng theo độ liên quan).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Code minh hoạ bước Cleaning cho văn bản tài chính tiếng Việt (minh hoạ khái niệm, không phải code thật của repo — nhưng đúng loại lỗi thường gặp khi xử lý dữ liệu VN thu thập từ nhiều nguồn khác nhau):</p>
+<pre><code>import re
+import unicodedata
+
+def clean_vn_financial_text(raw: str) -&gt; str:
+    # 1. Chuẩn hoá Unicode — 2 dạng biểu diễn dấu tiếng Việt (tổ hợp vs dựng sẵn)
+    #    có thể khiến embedding coi CÙNG 1 chữ là 2 token khác nhau
+    text = unicodedata.normalize("NFC", raw)
+
+    # 2. Chuẩn hoá số liệu kiểu VN: "1.234.567,89" (VN) -&gt; "1234567.89"
+    text = re.sub(r"(?&lt;=\d)\.(?=\d{3}(?:\D|$))", "", text)   # xoá dấu chấm ngăn nghìn
+    text = re.sub(r"(?&lt;=\d),(?=\d{1,2}(?:\D|$))", ".", text)  # đổi dấu phẩy thập phân -&gt; dấu chấm
+
+    # 3. Loại header/footer lặp lại (số trang dạng "Trang 3/45")
+    text = re.sub(r"Trang\s+\d+\s*/\s*\d+", "", text)
+
+    # 4. Loại khoảng trắng thừa do OCR/extraction (nhiều \n\n\n liên tiếp)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text</code></pre>
+<p>Đây chỉ là ví dụ mức bắt đầu — cleaning thật cho BCTC còn cần xử lý bảng (giữ cấu trúc hàng/cột, không flatten thành 1 dòng text). Ngay cả 4 bước nhỏ trên (Unicode NFC, số liệu VN, header/footer, whitespace) đã là 4 lỗi rất thường gặp khi ai đó lần đầu build RAG cho dữ liệu tài chính tiếng Việt và bỏ qua bước cleaning vì nghĩ "chunk rồi embed là xong".</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Bước</th><th>Việc làm</th><th>Nếu bỏ qua/làm sai</th></tr>
+<tr><td>1. Extraction</td><td>PDF/HTML → text sạch, giữ cấu trúc bảng</td><td>Bảng số liệu vỡ thành chuỗi số vô nghĩa</td></tr>
+<tr><td>2. Cleaning</td><td>Chuẩn hoá Unicode, số liệu VN, loại header/footer</td><td>Cùng 1 chữ bị coi là 2 token khác nhau, số liệu sai định dạng</td></tr>
+<tr><td>3. Chunking</td><td>Cắt theo heading boundary, không cắt giữa 1 ý</td><td>Chunk mất ngữ cảnh, cắt đứt giữa câu/bảng</td></tr>
+<tr><td>4. Metadata enrichment</td><td>Gắn ngày, ticker/sector, độ tin cậy</td><td>Không filter được, retrieval trộn lẫn thông tin cũ/mới</td></tr>
+<tr><td>5. Embedding</td><td>Vector hoá SAU khi đã sạch</td><td>Garbage in garbage out — lỗi khó phát hiện vì vector không đọc được bằng mắt</td></tr>
+<tr><td>2.5 Deduplication (điều kiện — chỉ cần khi có nhiều nguồn/crawl lặp)</td><td>Loại document/chunk gần giống nhau bằng lexical (MinHash/LSH) hoặc semantic (SemDeDup) TRƯỚC khi chunking/embedding</td><td>Top-k retrieval bị chiếm chỗ bởi nhiều bản gần giống nhau, đẩy thông tin thật sự khác biệt ra ngoài ngân sách context</td></tr>
+</table>
+<p>Lưu ý đánh số: dedup được liệt kê là bước "2.5" (điều kiện, không phải luôn bắt buộc) vì pipeline gốc 5 bước (Extraction → Cleaning → Chunking → Metadata → Embedding) vẫn là khung xương sống áp dụng cho MỌI corpus; dedup chỉ cần chèn thêm giữa Cleaning và Chunking khi nguồn dữ liệu có rủi ro trùng lặp thật (nhiều crawl, nhiều nguồn) — KB curated viết tay hiện tại của dự án không cần bước này (xem mục 3.2 và "Ứng dụng dự án" bên dưới).</p>
+
+<h3>Bảng quyết định — chọn công cụ Extraction/Chunking nào</h3>
+<table>
+<tr><th>Tình huống dữ liệu</th><th>Extraction</th><th>Chunking</th></tr>
+<tr><td>Markdown/text viết tay, có heading rõ (như KB dự án)</td><td>Không cần — đã là text sạch</td><td>Heading-boundary (như <code>kb_loader.py</code>)</td></tr>
+<tr><td>PDF digital có text layer, bảng có viền rõ (VD BCTC chuẩn)</td><td>pdfplumber hoặc Camelot (Lattice mode)</td><td>Recursive 400-512 token làm baseline, đo lại trước khi đổi</td></tr>
+<tr><td>PDF scan (ảnh), layout bất quy tắc</td><td>Vision-LLM (chấp nhận chi phí/latency cao hơn)</td><td>Recursive sau khi có text sạch từ vision-LLM</td></tr>
+<tr><td>Document dài, đoạn giữa hay mất ngữ cảnh (VD không nhắc lại tên công ty)</td><td>Theo loại nguồn ở trên</td><td>Late chunking hoặc Contextual Retrieval — chỉ nếu đã đo thấy recursive/heading-boundary thất bại thật</td></tr>
+</table>
+
+<h3>Bảng quyết định — dedup lexical hay semantic (hoặc bỏ qua)</h3>
+<table>
+<tr><th>Tình huống</th><th>Dedup nào</th><th>Vì sao</th></tr>
+<tr><td>KB curated viết tay, 1 nguồn duy nhất (như dự án hiện tại)</td><td>Không cần</td><td>Không có cơ chế nào tạo ra bản trùng lặp — nội dung được viết mới, không crawl lặp</td></tr>
+<tr><td>Crawl tin tức từ nhiều báo, cùng sự kiện đăng lại nhiều nơi</td><td>Semantic (SemDeDup-style)</td><td>Trùng lặp Ý NGHĨA nhưng câu chữ khác nhau — lexical hash sẽ bỏ lỡ phần lớn cặp trùng</td></tr>
+<tr><td>Crawl lại định kỳ CÙNG 1 nguồn (VD lịch crawl chạy 2 lần/ngày trùng nội dung)</td><td>Lexical (MinHash/LSH)</td><td>Trùng gần NGUYÊN VĂN — lexical rẻ hơn nhiều và đủ bắt được loại trùng lặp này</td></tr>
+<tr><td>Tập dữ liệu cực lớn (hàng triệu document), cần dedup nhanh</td><td>Lexical + Bloom filter (LSHBloom-style)</td><td>Tối ưu tốc độ ở quy mô petascale — semantic dedup toàn bộ tập lớn quá tốn kém</td></tr>
+</table>
+
+<h2>🎯 Ứng dụng vào dự án hiện tại</h2>
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>KB hiện tại của dự án (<code>.claude/skills/daily-investor-report/kb/*.md</code>) đã hoàn thành sẵn bước 1 (Extraction — viết trực tiếp bằng Markdown, không cần extract từ PDF) và phần lớn bước 3 (Chunking — heading H2/H3 rõ ràng, <code>kb_loader.py</code> chunk theo heading tại thời điểm truy vấn).</p>
+<p>Bước 2 (Cleaning) gần như không cần thiết ở dạng hiện tại vì nội dung được viết tay trực tiếp bằng Markdown sạch, không qua OCR/crawl. Bước 4 (Metadata enrichment) tồn tại ở mức thô — <code>kb/REVIEW_CADENCE.md</code> — chưa gắn ở tầng chunk. Bước 5 (Embedding) CHƯA áp dụng — hệ thống dùng exact-match thay vì vector search (xem <code>R3_5_retrieval_generation.html</code> cho phân tích đầy đủ).</p>
+<p>Nếu dự án mở rộng ăn dữ liệu ngoài KB curated hiện tại (VD tự động crawl tin tức, BCTC PDF), áp đầy đủ 5 bước ở trên — đặc biệt bước Cleaning encoding tiếng Việt và giữ cấu trúc bảng số liệu, vì đây là 2 lỗi phổ biến nhất khi mở rộng sang nguồn dữ liệu thô của thị trường Việt Nam.</p>
+<p>Về chunking cụ thể: KB hiện tại KHÔNG cần cân nhắc semantic chunking/late chunking/contextual retrieval — heading-boundary đã là lựa chọn đúng cho tài liệu có cấu trúc rõ (mục 4.1). Những kỹ thuật đó chỉ đáng cân nhắc nếu dự án BẮT ĐẦU nạp thêm 1 nguồn KHÔNG có cấu trúc heading (VD toàn văn 1 bài báo cáo phân tích dài không chia mục) — lúc đó nên bắt đầu từ recursive splitting rẻ tiền và ĐO trước khi nhảy thẳng lên semantic/late chunking, đúng tinh thần bảng benchmark ở mục 4.1 (đắt hơn không tự động đồng nghĩa tốt hơn).</p>
+<p>Về dedup (mục 3.2) và OCR tiếng Việt (mục 2.2): cả 2 đều KHÔNG áp dụng ở hiện trạng — KB viết tay không qua OCR, không có nguồn trùng lặp để dedup. Cả 2 trở nên liên quan NGAY LẬP TỨC nếu dự án hiện thực hoá kịch bản "crawl tin tức tự động" đã nhắc nhiều lần trong trang này: lúc đó cần cả dedup (do nhiều báo đưa cùng 1 tin) VÀ cẩn trọng với OCR nếu nguồn là ảnh chụp/scan thay vì HTML text thuần.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p>Nhảy thẳng vào bước 5 (chọn embedding model) trước khi làm xong bước 1-4 — đây là lỗi phổ biến nhất khi mới học RAG. Chất lượng retrieval phụ thuộc data preparation nhiều hơn phụ thuộc việc chọn embedding model nào trong đa số trường hợp thực tế.</p>
+<p>Dùng text extraction ngây thơ cho bảng số liệu BCTC — làm vỡ cấu trúc hàng/cột mà không nhận ra, vì kết quả vẫn "trông giống text" khi in ra màn hình.</p>
+<p>Bỏ qua chuẩn hoá Unicode khi gộp dữ liệu từ nhiều nguồn (crawl web + OCR + nhập tay) — dẫn tới hiện tượng "tìm không ra" dù văn bản nhìn giống hệt nhau bằng mắt thường.</p>
+<p>Mặc định chọn semantic chunking vì nó nghe "hiện đại/thông minh hơn" fixed-size — nghiên cứu bình duyệt (Vectara, NAACL 2025) cho thấy fixed-size/recursive splitting thắng semantic chunking một cách nhất quán trên nhiều tiêu chí; luôn benchmark trên chính corpus của mình trước khi tin vào trực giác "phức tạp hơn thì tốt hơn".</p>
+<p>Chọn NFD thay vì NFC khi chuẩn hoá Unicode tiếng Việt cho mục đích tìm kiếm/so khớp chuỗi — NFD có thể tạo ra thứ tự ghép dấu phụ không nhất quán giữa các hệ thống, khiến so khớp chuỗi thất bại âm thầm dù 2 chữ nhìn giống hệt nhau.</p>
+<p>Tin tưởng nguyên văn kết quả OCR tiếng Việt từ 1 engine tổng quát mà không xác minh, đặc biệt với số liệu/tên riêng quan trọng — dấu thanh sai có thể đổi hẳn nghĩa từ (không giống lỗi chính tả tiếng Anh, thường vẫn đoán được ý qua ngữ cảnh).</p>
+<p>Bỏ qua bước dedup khi bắt đầu tự động crawl nhiều nguồn, coi nó là "tối ưu thêm cho vui" — trùng lặp không bị lọc sẽ chiếm chỗ trong top-k retrieval, làm giảm thực chất lượng thông tin đưa vào context dù tưởng chừng corpus "có nhiều dữ liệu hơn".</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Liệt kê đúng 5 bước data preparation pipeline theo đúng thứ tự.</li>
+<li>Giải thích được vì sao thứ tự đó quan trọng — vì sao không nhảy thẳng vào bước Embedding.</li>
+<li>Kể được ít nhất 3/4 lỗi cleaning đặc thù tiếng Việt/tài chính đã học.</li>
+<li>Xác định đúng: KB hiện tại của dự án đang hoàn thành bước nào, còn thiếu bước nào.</li>
+<li>Đọc code cleaning mẫu và giải thích được mục đích từng dòng regex.</li>
+<li>Giải thích được vì sao NFC (không phải NFD) là lựa chọn đúng để chuẩn hoá Unicode tiếng Việt cho mục đích so khớp/tìm kiếm.</li>
+<li>Kể đúng ít nhất 3/5 chiến lược chunking đã học (fixed-size/recursive, semantic, hierarchical, late chunking, contextual retrieval) và 1 số liệu benchmark cho mỗi loại.</li>
+<li>Giải thích được vì sao "semantic chunking luôn tốt hơn fixed-size" là kết luận SAI theo benchmark thật, và biết cách kiểm chứng đúng (đo trên chính corpus, không suy diễn từ tên gọi).</li>
+<li>Giải thích được vì sao dấu thanh sai do OCR tiếng Việt nguy hiểm hơn lỗi chính tả tiếng Anh thông thường, và nêu được 1 biện pháp giảm thiểu.</li>
+<li>Phân biệt đúng dedup lexical (MinHash/LSH) và semantic (SemDeDup) — biết loại trùng lặp nào mỗi kỹ thuật bắt được, và khi nào dự án này thật sự cần dedup.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R3_2_reranking.html">← R3.2 · Reranking</a>
+  <a href="R3_4_multistep_retrieval.html">R3.4 · Multi-step Retrieval →</a>
+</div>
+
+</div>
+</body>
+</html>

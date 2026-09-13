@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L3.5 — Sequence Modeling Journey</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 3 · Module 5</div>
+  <h1>3.5 · RNN → LSTM → GRU → Attention → Transformer</h1>
+  <p class="subtitle">Cầu nối lên LLM. Vì sao 10 năm sequence modeling evolve từ RNN → Transformer. Mỗi step giải quyết pain của step trước.</p>
+  <div class="level">Level 3 · Deep Learning · ~40 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Vẽ RNN forward pass — hidden state update</li>
+  <li>Explain LSTM 3 gates + cell state</li>
+  <li>Understand GRU simplification</li>
+  <li>Show how Attention over encoder outputs led to Transformer</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 RNN → LSTM → Transformer bằng ngôn ngữ đời thường</div>
+<p><strong>RNN = đọc truyện, mỗi trang cập nhật trí nhớ</strong>: Đọc trang 1 nhớ 1 chút; trang 2 dùng "trí nhớ trang 1" + nội dung trang 2 → cập nhật; trang 500 chỉ còn nhớ vài trang cuối. Vanishing gradient = quên đầu.</p>
+<p><strong>LSTM = có sổ ghi chú riêng</strong>: 3 cổng (forget/input/output) quyết định "cái gì đáng nhớ, cái gì bỏ, cái gì ghi ra". Nhớ được xa hơn RNN nhưng vẫn tuần tự.</p>
+<p><strong>Transformer = đọc lướt cả sách 1 lần rồi mới hiểu</strong>: Không tuần tự — mọi từ nhìn nhau song song qua attention. Nhanh (parallelize được), context xa hoàn hảo. Nhược: memory O(n²) với độ dài chuỗi.</p>
+</div>
+
+<h2>1. Vanilla RNN — công thức + ý nghĩa từng biến</h2>
+
+<p><strong>Analogy</strong>: người thư ký ghi biên bản họp — mỗi câu mới cập nhật vào 1 cuốn sổ trí nhớ duy nhất (hidden state). Cuối cuộc họp, đọc trang cuối cùng để tóm tắt cả cuộc.</p>
+
+<pre><code>h_t = tanh(W_h · h_{t-1} + W_x · x_t + b_h)      # cập nhật trí nhớ
+y_t = W_o · h_t + b_o                              # output
+
+# Weight sharing: cùng (W_h, W_x, W_o, b) qua mọi timestep
+# Recurrent: h_t phụ thuộc h_{t-1} — buộc phải compute tuần tự
+</code></pre>
+
+<p><strong>Ý nghĩa từng biến</strong>:</p>
+<table>
+<tr><th>Ký hiệu</th><th>Shape</th><th>Ý nghĩa</th></tr>
+<tr><td>x_t</td><td>(D,)</td><td>Input tại timestep t (VD embedding của 1 token)</td></tr>
+<tr><td>h_t</td><td>(H,)</td><td>Hidden state — tóm tắt mọi thứ đã đọc đến t</td></tr>
+<tr><td>W_h</td><td>(H, H)</td><td>Recurrent weight — quyết định cách "trộn" trí nhớ cũ</td></tr>
+<tr><td>W_x</td><td>(H, D)</td><td>Input weight — biến đổi x_t vào không gian hidden</td></tr>
+<tr><td>b_h, b_o</td><td>(H,), (V,)</td><td>Bias</td></tr>
+<tr><td>tanh</td><td>—</td><td>Non-linear activation, giữ h_t trong [-1, 1]</td></tr>
+</table>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔢 RNN forward — worked example với số</div>
+
+<p><strong>Setup</strong>: D=2, H=2, sequence 3 timesteps. Weights (nhỏ để tính tay):</p>
+<pre><code>W_h = [[0.5, 0.1],  W_x = [[0.3, 0.2],  b_h = [0, 0]
+       [0.1, 0.5]]         [0.2, 0.3]]
+
+x_1 = [1, 0], x_2 = [0, 1], x_3 = [1, 1], h_0 = [0, 0]
+
+# t=1
+z_1 = W_h·h_0 + W_x·x_1 + b = [0, 0] + [0.3, 0.2] = [0.3, 0.2]
+h_1 = tanh([0.3, 0.2]) = [0.2913, 0.1974]
+
+# t=2
+z_2 = W_h·h_1 + W_x·x_2 = [0.5·0.2913 + 0.1·0.1974, 0.1·0.2913 + 0.5·0.1974] + [0.2, 0.3]
+    = [0.1654, 0.1278] + [0.2, 0.3] = [0.3654, 0.4278]
+h_2 = tanh([0.3654, 0.4278]) = [0.3499, 0.4034]
+
+# t=3
+z_3 = W_h·h_2 + W_x·x_3 = [0.5·0.3499 + 0.1·0.4034, 0.1·0.3499 + 0.5·0.4034] + [0.5, 0.5]
+    = [0.2153, 0.2367] + [0.5, 0.5] = [0.7153, 0.7367]
+h_3 = tanh([0.7153, 0.7367]) = [0.6144, 0.6280]
+
+# h_3 chứa "tóm tắt" cả 3 timestep — nhưng influence của x_1 đã fade
+</code></pre>
+</div>
+
+<div class="callout danger">
+<div class="label">🕳️ Vanishing gradient trong RNN — chứng minh bằng số</div>
+<p><strong>BPTT (backprop through time)</strong>: gradient ∂L/∂h_0 = Π_{t=1..T} ∂h_t/∂h_{t-1}. Mỗi factor:</p>
+<pre><code>∂h_t/∂h_{t-1} = diag(1 - h_t²) · W_h        # tanh'(z) = 1 - tanh²(z)
+
+# tanh' ≤ 1, thường ≈ 0.3-0.5 sau vài step (h saturates)
+# Nếu ||W_h|| < 1 (norm operator) → mỗi factor < 1
+# Sau T=50 timesteps: ||∂L/∂h_0|| ≤ 0.4^50 ≈ 10^-20 → về 0
+</code></pre>
+<p><strong>Con số cụ thể</strong>: giả sử tanh'≈0.5 và ||W_h||=0.9. Product qua 50 steps: (0.5·0.9)^50 = 0.45^50 ≈ 5×10^-18. KHÔNG phải underflow FP32 (sàn underflow FP32 là ~1e-38, còn cách xa 20 bậc) — thực ra là CỘNG số ~1e-18 vào 1 weight cỡ O(0.1-1) trong FP32 (độ chính xác tương đối ~1.19e-7) bị "nuốt" hoàn toàn, kết quả cộng không đổi → gradient hiệu dụng = 0 → weight không update → RNN <em>vật lý không thể học</em> dependency xa &gt; 20-30 steps.</p>
+<p><strong>Exploding ngược lại</strong>: nếu ||W_h||=1.5 → 1.5^50 ≈ 6×10^8 → gradient nổ → NaN. Fix: gradient clipping norm 1.0.</p>
+<p><strong>Fix historic</strong>: (1) LSTM/GRU với cell state <em>linear flow</em> (không tanh trên path chính) → gradient không shrink. (2) Gradient clipping. (3) Orthogonal init W_h (eigenvalues = 1). (4) Cuối cùng: bỏ RNN → Transformer.</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Vì sao Transformer thắng RNN KHÔNG phải vì "thông minh hơn" (chi tiết dễ hiểu)</div>
+
+<p><strong>Điều gây shock</strong>: Bạn nghĩ "Transformer thay RNN vì Transformer hiểu sâu hơn, có attention thông minh hơn". SAI. Transformer thắng vì <em>hardware efficiency</em> — nó train được nhiều data hơn trong cùng thời gian. LSTM có thể match Transformer về capability, NHƯNG không thể scale. Đây là insight quan trọng: <strong>hardware định nghĩa winner, không phải theoretical elegance</strong>.</p>
+
+<p><strong>Bước 1 — Cách RNN xử lý câu "Con mèo ngồi trên thảm"</strong>:</p>
+<ul>
+<li>Timestep 1: đọc "Con", update hidden state h_1 = f(h_0, "Con").</li>
+<li>Timestep 2: đọc "mèo", update h_2 = f(h_1, "mèo"). <strong>Phải đợi h_1 xong mới compute h_2</strong>.</li>
+<li>Timestep 3: đọc "ngồi", update h_3 = f(h_2, "ngồi"). Phải đợi h_2.</li>
+<li>...tuần tự cho đến hết câu.</li>
+</ul>
+
+<p><strong>Bước 2 — Vì sao đây là DEATH cho GPU?</strong> GPU có 10.000 CUDA cores, thiết kế cho parallel compute. RNN chỉ dùng 1 core tại 1 thời điểm (phải đợi timestep trước). GPU 99% idle. Với sequence 1000 tokens = 1000 sequential steps. Không có cách nào tăng tốc.</p>
+
+<p><strong>Bước 3 — Transformer xử lý cùng câu</strong>:</p>
+<ul>
+<li>Đưa cả câu vào 1 lần.</li>
+<li>Compute attention matrix N×N (mọi cặp token) trong 1 phép matrix multiply.</li>
+<li>Matrix multiply = parallelize hoàn hảo trên GPU. 10.000 cores làm việc cùng lúc.</li>
+<li>1000 tokens xử lý xong trong 1 forward pass, không cần 1000 timesteps.</li>
+</ul>
+
+<p><strong>Hình dung trực tiếp — đây là khác biệt cấu trúc cốt lõi giữa 2 kiến trúc:</strong></p>
+<pre><code>RNN — buộc phải đi TUẦN TỰ (mỗi bước phải đợi bước trước xong):
+
+  h0 ──►[f]──► h1 ──►[f]──► h2 ──►[f]──► h3
+          │            │            │
+        "Con"        "mèo"        "ngồi"
+
+  Bước 2 PHẢI ĐỢI h1 xong. Bước 3 PHẢI ĐỢI h2 xong. 1 core GPU bận/lần → 9999 core rảnh.
+
+Transformer — MỌI cặp token nhìn nhau CÙNG LÚC (full-mesh, 1 bước duy nhất):
+
+        Con ─────────── mèo
+         │  ╲         ╱  │
+         │    ╲     ╱    │
+         │      ╲ ╱      │
+         │      ╱ ╲      │
+         │    ╱     ╲    │
+         │  ╱         ╲  │
+       trên ─────────── ngồi
+
+  Mỗi cạnh = 1 phép so khớp Q·K. TẤT CẢ cạnh tính song song trong 1 phép matrix multiply
+  (attention matrix N×N) → 10.000 core GPU bận cùng lúc, không token nào phải đợi token nào.</code></pre>
+
+<p><strong>Bước 4 — Con số biết nói</strong>: Same data, same params, train trên GPU A100:</p>
+<table>
+<tr><th>Architecture</th><th>Throughput</th><th>Tokens train được trong 30 ngày</th></tr>
+<tr><td>LSTM</td><td>1,000 tokens/s/GPU</td><td>~100B tokens</td></tr>
+<tr><td>Transformer</td><td>50,000-100,000 tokens/s/GPU (50-100× LSTM)</td><td>~5-10T tokens</td></tr>
+</table>
+<p>→ Transformer thấy nhiều data hơn 50-100×. Chinchilla law: data → performance. <em>Data quantity thắng architecture elegance</em>.</p>
+
+<p><strong>Analogy đời thực — dây chuyền sản xuất</strong>:</p>
+<ul>
+<li>RNN = 1 công nhân làm 1 xe từ đầu đến cuối, tuần tự. Xe khác phải đợi.</li>
+<li>Transformer = dây chuyền Ford — mỗi công nhân làm 1 bộ phận, tất cả xe chạy song song trên băng chuyền.</li>
+</ul>
+<p>Đầu 1900s, tại sao Ford giết chết tất cả makers khác? KHÔNG phải xe Ford tốt hơn về chất lượng. Vì Ford sản xuất được nhiều xe hơn với giá rẻ hơn — economy of scale. Cùng logic áp dụng LLM: Transformer = Ford model.</p>
+
+<p><strong>Vì sao đây là insight sâu ít ai hiểu?</strong> Papers Transformer thường nhấn mạnh "attention is all you need" — như thể attention là điểm bí mật. Không. Attention là mechanism, PARALLELIZATION là win. Nếu ai đó phát minh RNN parallelizable → có thể LSTM chưa chết. Thực tế Mamba 2023 (State Space Model) làm được điều này → RNN comeback cho long-context.</p>
+
+<p><strong>Key value cho practice</strong>: Khi chọn architecture cho project mới, luôn hỏi:</p>
+<ol>
+<li><strong>Architecture power</strong>: model có capacity đủ không?</li>
+<li><strong>Compute efficiency</strong>: train được bao nhiêu data trong ngân sách?</li>
+</ol>
+<p>Cả 2 phải cân bằng. Model brilliant nhưng train 1 tháng = không ai dùng. Model đơn giản train 1 giờ, iterate 100 lần trong 1 tháng = win. Đây là why MLP/XGBoost baseline luôn phải chạy đầu tiên — nó là <em>speed baseline</em>, không chỉ accuracy baseline.</p>
+
+<p><strong>Hậu quả nếu không hiểu insight</strong>: Startup A hết $10M compute train custom "novel architecture" trong 6 tháng. Kết quả tệ hơn Llama-3 open source. Vì Llama-3 dùng Transformer standard nhưng train 15T tokens. Startup A phát minh novel = phải viết custom CUDA kernel → không optimize được → chỉ train được 200B tokens → data-starved → thua Llama-3 trên mọi benchmark. <em>Chọn architecture chuẩn + focus vào data + optimize hardware = win</em>.</p>
+
+<p><strong>Khi Transformer VỠ — long context</strong>: Attention O(N²) memory. Với sequence 100k tokens: 100k × 100k = 10 tỷ cells attention matrix. Với FP16: 20GB per layer, model 80 layers = 1.6TB. OOM ngay lập tức. RNN O(N) memory — chỉ 1 hidden state per timestep → linear scaling. Đây là why RNN vẫn win cho ultra-long sequence (audio, DNA, video).</p>
+
+<p><strong>Comeback của State Space Models (Mamba 2023)</strong>: Kết hợp parallelization của Transformer + linear scaling của RNN. Selective state space — chọn state nào remember dựa vào input. Train được như Transformer, memory tuyến tính như RNN. 2024-2025 nhiều lab thử Mamba cho long-context. Chưa clear ai sẽ thắng — cuộc chiến architecture chưa kết thúc.</p>
+
+<p><strong>Take-away tổng hợp</strong>:</p>
+<ol>
+<li>Transformer thắng KHÔNG phải vì hay hơn về capability. Vì parallelize được → train nhiều data hơn.</li>
+<li>Hardware efficiency = economic constraint = định nghĩa winner architecture.</li>
+<li>Insight này áp dụng chọn architecture cho MỌI project: cân bằng power + speed.</li>
+<li>Cuộc chiến chưa kết thúc — Mamba, RWKV, RetNet 2024-2025 attempt combine best of both.</li>
+</ol>
+</div>
+
+<h2>2. LSTM (Hochreiter & Schmidhuber 1997) — 3 cổng + cell state</h2>
+
+<p><strong>Analogy</strong>: sổ nhật ký công ty có 3 người kiểm soát. <em>Cổng Quên (f)</em>: mỗi ngày quyết xóa dòng cũ nào. <em>Cổng Ghi (i)</em>: quyết ghi mới điều gì. <em>Cổng Xuất (o)</em>: quyết show ra ngoài phần nào. Cell state c = quyển sổ chính, chảy tuyến tính qua thời gian — <strong>không bị tanh nén</strong> → gradient sống sót.</p>
+
+<pre><code># Gates (sigmoid → giá trị 0..1, "van" mở-đóng)
+f_t = σ(W_f · [h_{t-1}, x_t] + b_f)   # forget gate
+i_t = σ(W_i · [h_{t-1}, x_t] + b_i)   # input gate
+o_t = σ(W_o · [h_{t-1}, x_t] + b_o)   # output gate
+
+# Candidate cell (tanh → -1..1, thông tin mới)
+g_t = tanh(W_g · [h_{t-1}, x_t] + b_g)  # còn gọi c̃_t
+
+# Cell state update — CHỈ CỘNG và NHÂN element-wise, KHÔNG matmul lặp
+c_t = f_t ⊙ c_{t-1} + i_t ⊙ g_t
+
+# Hidden state (output)
+h_t = o_t ⊙ tanh(c_t)
+</code></pre>
+
+<p><strong>Ý nghĩa từng biến</strong>:</p>
+<table>
+<tr><th>Ký hiệu</th><th>Shape</th><th>Vai trò</th></tr>
+<tr><td>f_t</td><td>(H,)</td><td>Forget gate — 0=xoá hoàn toàn, 1=giữ nguyên c_{t-1}</td></tr>
+<tr><td>i_t</td><td>(H,)</td><td>Input gate — cho phép bao nhiêu g_t nhập vào c_t</td></tr>
+<tr><td>g_t (c̃_t)</td><td>(H,)</td><td>Candidate content — thông tin mới đề xuất</td></tr>
+<tr><td>o_t</td><td>(H,)</td><td>Output gate — cho phép bao nhiêu c_t lộ ra h_t</td></tr>
+<tr><td>c_t</td><td>(H,)</td><td>Cell state — "highway" trí nhớ dài hạn</td></tr>
+<tr><td>h_t</td><td>(H,)</td><td>Hidden state — output ngắn hạn, cung cấp cho layer sau</td></tr>
+<tr><td>⊙</td><td>—</td><td>Hadamard (element-wise) product</td></tr>
+</table>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔢 LSTM worked example — 1 timestep với số</div>
+<p><strong>Setup</strong>: H=2, D=2. Concat [h_{t-1}, x_t] shape (4,). Weights (đơn giản hoá):</p>
+<pre><code>h_{t-1} = [0.1, 0.2],  c_{t-1} = [0.5, -0.3],  x_t = [1.0, 0.0]
+concat = [0.1, 0.2, 1.0, 0.0]
+
+# Giả sử pre-activation cho từng gate
+z_f = 1.2 → f = σ(1.2) = 0.769   (nhớ 77% cell cũ)
+z_i = 0.5 → i = σ(0.5) = 0.622   (ghi 62% info mới)
+z_o = 0.8 → o = σ(0.8) = 0.690   (lộ 69% ra hidden)
+z_g = 0.4 → g = tanh(0.4) = 0.380
+
+# Áp dụng cho từng dim (đơn giản, cùng số):
+c_t = f · c_{t-1} + i · g
+    = [0.769·0.5,  0.769·(-0.3)] + [0.622·0.380, 0.622·0.380]
+    = [0.3845, -0.2307]         + [0.2364, 0.2364]
+    = [0.6209, 0.0057]
+
+h_t = o · tanh(c_t)
+    = 0.690 · [tanh(0.6209), tanh(0.0057)]
+    = 0.690 · [0.5518, 0.0057]
+    = [0.3807, 0.0039]
+</code></pre>
+<p><strong>Quan sát</strong>: c_t[0] tăng nhẹ (kết hợp memory cũ 0.5 + info mới), c_t[1] gần 0 (quên hầu hết cái cũ vì c_{t-1}[1] âm bị i·g dương cân bằng). Gate làm việc như "van" điều tiết dòng chảy trí nhớ.</p>
+</div>
+
+<h3>Vì sao LSTM sống sót vanishing — chứng minh chain rule qua cell state</h3>
+
+<pre><code># Path gradient qua cell state:
+∂c_t/∂c_{t-1} = f_t          (chỉ derivative đơn giản — KHÔNG có W·tanh')
+
+# Qua T timesteps:
+∂c_T/∂c_0 = Π_{t=1..T} f_t
+
+# Nếu forget gate f_t ≈ 1 (network chọn "nhớ") → product ≈ 1 → gradient survive
+# Nếu f_t ≈ 0.5 → 0.5^100 = 8×10^-31 vẫn vanish, nhưng network có thể HỌC để f=1
+# → LSTM vanish "có điều kiện", RNN vanish "cưỡng bức"
+</code></pre>
+
+<p><strong>Trick init nổi tiếng</strong>: khởi tạo <code>b_f = 1</code> hoặc <code>2</code> → σ(2) ≈ 0.88 → forget gate mặc định "nhớ nhiều" → gradient flow tốt ngay từ đầu training. Jozefowicz 2015 chứng minh này +5-10% accuracy trên language modeling.</p>
+
+<p>LSTM handle sequences up to ~200-500 steps well. Xa hơn vẫn kém → cần Transformer.</p>
+
+<h2>3. GRU (Cho 2014) — simplified LSTM</h2>
+
+<pre><code>r_t = sigmoid(W_r · [h_{t-1}, x_t])   # reset gate
+z_t = sigmoid(W_z · [h_{t-1}, x_t])   # update gate
+
+h_tilde = tanh(W · [r_t · h_{t-1}, x_t])
+h_t = (1 - z_t) · h_{t-1} + z_t · h_tilde
+
+# 2 gates thay vì 3, no separate cell state
+# Fewer params, faster train, comparable performance
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔢 GRU worked example — cùng số với LSTM ở trên để so sánh trực tiếp</div>
+<p><strong>Setup</strong>: dùng LẠI đúng input <code>h_{t-1}=[0.1, 0.2]</code>, <code>x_t=[1.0, 0.0]</code> như ví dụ LSTM — để thấy rõ GRU cho kết quả khác LSTM ra sao với CÙNG 1 input.</p>
+<pre><code># Giả sử pre-activation (đơn giản hoá, giống cách chọn số ở ví dụ LSTM)
+z_r = 0.6 → r = σ(0.6) = 0.646     # reset gate: 65% giữ ảnh hưởng h_{t-1} khi tính h_tilde
+z_z = 0.5 → z = σ(0.5) = 0.622     # update gate: giống vai trò i_t+f_t GỘP LÀM 1 của LSTM
+
+# h_tilde dùng (r · h_{t-1}) thay vì h_{t-1} thẳng — reset gate "lọc bớt" trí nhớ cũ trước khi đề xuất mới
+r_h = r · h_{t-1} = 0.646 · [0.1, 0.2] = [0.0646, 0.1292]
+z_g = 0.4 → h_tilde = tanh(0.4) = 0.380   (giả sử áp dụng đều 2 chiều để so sánh đơn giản)
+
+# Update: trộn trực tiếp h cũ và h_tilde mới theo tỷ lệ z — KHÔNG có cell state c riêng như LSTM
+h_t = (1 - z) · h_{t-1} + z · h_tilde
+    = (1-0.622) · [0.1, 0.2] + 0.622 · [0.380, 0.380]
+    = 0.378 · [0.1, 0.2] + [0.2364, 0.2364]
+    = [0.0378, 0.0756] + [0.2364, 0.2364]
+    = [0.2742, 0.3120]</code></pre>
+<p><strong>So sánh trực tiếp với LSTM (cùng input)</strong>: LSTM ra <code>h_t=[0.3807, 0.0039]</code> (2 chiều lệch nhau rất nhiều vì forget/input/output gate độc lập cho từng chiều qua c_t riêng); GRU ra <code>h_t=[0.2742, 0.3120]</code> (2 chiều gần nhau hơn vì chỉ có 1 phép trộn tuyến tính duy nhất, không có "bộ nhớ dài hạn" c_t tách biệt để tích luỹ lệch pha giữa các chiều theo thời gian). Đây là minh hoạ cụ thể cho nhận xét lý thuyết ở Interview Q8: GRU đơn giản hơn (ít tham số hơn ~25%) nhưng mất khả năng biểu diễn "trí nhớ dài hạn tách biệt khỏi output" mà cell state c_t của LSTM cung cấp.</p>
+</div>
+
+<h2>4. Sequence-to-Sequence (Seq2Seq)</h2>
+
+<pre><code>Encoder (LSTM): input sequence → final hidden state h_enc
+Decoder (LSTM): initialize with h_enc, generate output sequence
+
+# Problem: h_enc = single vector must encode entire input
+# Bottleneck! Long input → info loss
+</code></pre>
+
+<h2>5. Attention over encoder (Bahdanau 2014)</h2>
+
+<pre><code># Instead of only h_enc, decoder attend over ALL encoder hidden states:
+for step t in decoder:
+    scores_t = [h_dec_t . h_enc_i for i in encoder_positions]
+    weights_t = softmax(scores_t)
+    context_t = Σ weights_t[i] · h_enc_i
+    # decode using context_t
+</code></pre>
+
+<p>Fixed bottleneck! Decoder có thể look back specific positions. Machine translation BLEU tăng vọt.</p>
+
+<h2>6. Từ Bahdanau attention → Transformer (Vaswani 2017)</h2>
+
+<div class="callout">
+<div class="label">Key insight Vaswani</div>
+<p>"Attention Is All You Need" — remove RNN entirely, chỉ dùng self-attention. Vì:</p>
+<ul>
+  <li>RNN sequential → không parallelize được → chậm train</li>
+  <li>Self-attention: mỗi position thấy mọi position, direct connection → không vanish</li>
+  <li>Parallelizable → GPU-friendly → scale với data</li>
+</ul>
+</div>
+
+<h2>7. Chronological summary</h2>
+
+<pre><code>1990: Elman RNN (Elman 1990)
+1997: LSTM (Hochreiter & Schmidhuber)
+2014: GRU (Cho) — simplified
+2014: Seq2Seq (Sutskever) — encoder-decoder
+2014: Bahdanau attention — soft attention over encoder
+2017: Transformer (Vaswani) — remove RNN, self-attention only
+2018: BERT (Devlin) — encoder-only pretraining
+2018: GPT-1 (Radford) — decoder-only, next-token
+2020: GPT-3 (Brown) — 175B params, in-context learning
+2022: ChatGPT (RLHF) — general assistant
+2024: Claude Opus, GPT-4o, Llama 3 405B
+</code></pre>
+
+<h2>8. When still use LSTM?</h2>
+
+<div class="callout success">
+<div class="label">LSTM vẫn có chỗ đứng 2024</div>
+<ul>
+  <li>Small data (Transformer overfit)</li>
+  <li>Very long sequences (O(L²) attention infeasible)</li>
+  <li>Streaming inference (RNN state 1 vector, Transformer cần cache K,V of all past)</li>
+  <li>Time-series với clear temporal structure (không random access)</li>
+  <li>Financial time-series stock prediction (small dataset, LSTM competitive)</li>
+</ul>
+</div>
+
+<h2>9. Mamba / State Space Models — cơ chế thật (2023, nhắc tới nhiều lần ở trên nhưng chưa giải thích)</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Nhắc lại §1: RNN có bộ nhớ RẺ (O(n), 1 hidden state) nhưng phải tính TUẦN TỰ (chậm trên GPU). §6: Transformer tính SONG SONG (nhanh trên GPU) nhưng bộ nhớ ĐẮT (O(n²)). State Space Model (SSM) cổ điển giống 1 CÁI PHỄU LỌC NƯỚC cố định — nước (thông tin) chảy qua với tốc độ lọc GIỐNG NHAU mọi lúc, không quan tâm nước đục hay trong. Cách tính bằng "phễu cố định" này hoá ra biến đổi được thành 1 phép TÍCH CHẬP (convolution) — tính được cho CẢ CHUỖI CÙNG LÚC (song song như Transformer) thay vì phải đợi từng bước (như RNN) — đây là mẹo toán học cốt lõi của SSM cổ điển (S4, 2021). Mamba (2023) cải tiến thêm: làm cho "độ mở của phễu" THAY ĐỔI tuỳ theo nước đang chảy qua là gì (input-dependent) — giống 3 cổng của LSTM biết "cái gì đáng nhớ" — nhưng vẫn giữ được cách tính nhanh nhờ 1 thuật toán phần cứng khéo léo (parallel scan), không quay lại tuần tự thuần như RNN.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: §1 (Deep-dive) và nhiều đoạn ở trên nhắc "Mamba", "State Space Model", "Selective state space" như tên riêng nhưng chưa giải thích CƠ CHẾ — chỉ nói "Selective state space — chọn state nào remember dựa vào input" mà không nói vì sao đây lại giải quyết được bài toán O(n²) của Transformer.</p>
+
+<p><strong>Bước 1 — SSM cổ điển (S4, Gu et al. 2021) là gì?</strong> Về bản chất là 1 công thức đệ quy TUYẾN TÍNH giống RNN nhưng với ma trận CỐ ĐỊNH (không học theo input):</p>
+<pre><code>h_t = A·h_{t-1} + B·x_t     # A, B CỐ ĐỊNH — không đổi theo timestep hay theo input
+y_t = C·h_t
+
+# Vì A, B, C cố định (không phụ thuộc t hay x_t), công thức đệ quy này có thể
+# "khai triển" toán học thành 1 phép TÍCH CHẬP (convolution) trên toàn chuỗi:
+y = x * K            # K = "kernel" suy ra từ A, B, C, tính 1 LẦN cho cả chuỗi
+                     # → tính y CHO MỌI t CÙNG LÚC bằng 1 phép convolution (FFT-based)
+                     # → PARALLELIZE được như Transformer, KHÔNG cần đợi từng timestep</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: chính vì A, B, C CỐ ĐỊNH mà SSM cổ điển parallelize được (giống cách 1 bộ lọc audio cố định có thể áp dụng bằng convolution 1 lần cho cả file, không cần xử lý từng sample tuần tự) — nhưng đây CŨNG chính là điểm YẾU: model không thể "quyết định" bỏ qua thông tin không liên quan tuỳ ngữ cảnh, vì cách nó xử lý input GIỐNG HỆT nhau ở mọi vị trí, không phân biệt được token nào quan trọng hơn token nào (khác hẳn LSTM's gates hay Transformer's attention, cả 2 đều content-dependent).</p>
+
+<p><strong>Bước 2 — Mamba (Gu &amp; Dao 2023) sửa gì?</strong> Làm B, C, và bước thời gian Δ (step size) trở thành HÀM CỦA INPUT x_t (không cố định nữa):</p>
+<pre><code>B_t = Linear_B(x_t)       # B giờ phụ thuộc input tại timestep t
+C_t = Linear_C(x_t)       # C cũng phụ thuộc input
+Δ_t = softplus(Linear_Δ(x_t))   # step size cũng học theo input
+
+h_t = Ā_t·h_{t-1} + B̄_t·x_t     # Ā, B̄ = A, B đã discretize theo Δ_t (chi tiết kỹ thuật)
+y_t = C_t·h_t
+
+# → token "quan trọng" (theo ngữ cảnh) → model học Δ_t lớn → cập nhật state MẠNH
+# → token "nhiễu/thừa" → Δ_t nhỏ → gần như GIỮ NGUYÊN state cũ, bỏ qua input này
+# → đây chính là "SELECTIVE" trong tên gọi — chọn lọc như gate của LSTM,
+#   nhưng KHÔNG dùng gate tường minh (sigmoid f/i/o) mà dùng chính tham số SSM làm "gate"</code></pre>
+
+<p><strong>Bước 3 — Cái giá phải trả và cách Mamba giải quyết</strong>: vì A, B, C giờ phụ thuộc input (thay đổi theo t) → KHÔNG thể khai triển thành convolution cố định như S4 nữa → mất khả năng "tính 1 lần cho cả chuỗi" bằng FFT. Mamba giải quyết bằng <strong>hardware-aware parallel scan</strong> — 1 thuật toán tận dụng cấu trúc bộ nhớ GPU (không materialize toàn bộ hidden state ở high-bandwidth memory chậm, tính trực tiếp trong SRAM nhanh) để vẫn đạt tốc độ gần-song-song trên GPU, dù về mặt toán học công thức đệ quy giờ phụ thuộc input.</p>
+
+<table>
+<tr><th></th><th>RNN/LSTM</th><th>SSM cổ điển (S4, 2021)</th><th>Mamba (S6, 2023)</th><th>Transformer</th></tr>
+<tr><td>Content-dependent (selective)?</td><td>✅ (qua gates)</td><td>❌ (A,B,C cố định)</td><td>✅ (B,C,Δ theo input)</td><td>✅ (qua attention)</td></tr>
+<tr><td>Parallelize train?</td><td>❌ Tuần tự</td><td>✅ Convolution/FFT</td><td>✅ Parallel scan (hardware-aware)</td><td>✅ Matrix multiply</td></tr>
+<tr><td>Memory theo sequence length</td><td>O(n)</td><td>O(n)</td><td>O(n)</td><td>O(n²)</td></tr>
+<tr><td>Compute inference/token</td><td>O(1)</td><td>O(1)</td><td>O(1)</td><td>O(n) (phải attend mọi token cũ)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: Mamba là câu trả lời trực tiếp cho "insight sâu" đã nêu ở §1 Deep-dive — Transformer thắng vì parallelize được, không phải vì attention "thông minh hơn". Mamba chứng minh điều ngược lại cũng đúng: nếu làm RNN/SSM parallelize được (dù phải trả giá bằng 1 thuật toán phần cứng phức tạp hơn, không đơn giản như FFT của S4), nó có thể cạnh tranh lại Transformer ở đúng điểm Transformer từng độc quyền, trong khi vẫn giữ ưu thế O(n) memory cho sequence cực dài.</p>
+
+<p><strong>📖 Mở rộng</strong>: tính đến 2024-2026, Mamba/SSM vẫn CHƯA thay thế hoàn toàn Transformer cho LLM foundation quy mô lớn nhất — phần lớn model frontier (GPT, Claude, Gemini) vẫn dùng Transformer hoặc kiến trúc HYBRID (xen kẽ vài layer Mamba/SSM với layer attention, VD Jamba của AI21) để lấy lợi ích O(n) memory cho phần lớn layer nhưng vẫn giữ vài layer attention "toàn cục thật sự" ở 1 số vị trí — cuộc tranh luận kiến trúc nào thắng cho long-context vẫn đang tiếp diễn, đúng như "Take-away" ở §1 đã nêu.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">🐛 Common bugs / gotchas — RNN / LSTM / Transformer</div>
+<ol>
+  <li><strong>Quên khởi tạo h_0, c_0</strong>: PyTorch <code>nn.LSTM</code> auto zero, nhưng khi gọi custom bạn phải truyền. h_0 shape (num_layers·num_directions, batch, hidden).</li>
+  <li><strong>Sai axis batch_first</strong>: <code>nn.LSTM(batch_first=False)</code> default expect (L, N, D), không phải (N, L, D). Feed sai → shape correct nhưng mix batch với sequence → học rác.</li>
+  <li><strong>Padding không mask trong loss</strong>: batch có sequence độ dài khác → pad token 0 → loss include pad → model học predict &lt;pad&gt;. Dùng <code>ignore_index</code> hoặc <code>pack_padded_sequence</code>.</li>
+  <li><strong>Không gradient clip</strong>: RNN dễ explode (∏||W_h|| lớn). Luôn <code>torch.nn.utils.clip_grad_norm_(params, 1.0)</code>.</li>
+  <li><strong>b_f init = 0 cho LSTM</strong>: forget gate σ(0)=0.5 → mỗi step quên nửa → gradient nửa → vanish 2^-t. Fix: init b_f = 1.0 or 2.0.</li>
+  <li><strong>Teacher forcing 100% ở training</strong>: decoder train luôn thấy ground truth prev token → inference (autoregressive) shift distribution → error accumulate. Fix: scheduled sampling.</li>
+  <li><strong>Attention mask sai chiều</strong>: causal mask cho decoder phải upper-triangular với -∞. Nếu để 0 → model "peek" future → train loss thấp giả tạo, eval crash.</li>
+  <li><strong>Position encoding quên khi swap architecture</strong>: RNN có position implicit qua time. Transformer KHÔNG — bỏ pos-encoding → permutation invariant → "mèo cắn chuột" = "chuột cắn mèo".</li>
+  <li><strong>KV cache reset giữa turns</strong>: chat multi-turn nếu không giữ KV cache → recompute toàn bộ history mỗi lần → chậm 100×.</li>
+  <li><strong>LSTM bidirectional cho autoregressive</strong>: bi-LSTM thấy future → không dùng được cho language modeling / stock next-day prediction. Chỉ dùng cho classification / tagging biết cả sequence.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate + Interview Q&A</h3>
+
+<p class="q">1. Vanilla RNN vanishing gradient — 4 fixes historical?</p>
+<p class="a">(1) LSTM/GRU với gating + cell state linear flow (∂c_t/∂c_{t-1} = f_t, không phụ thuộc W). (2) Gradient clipping norm 1.0 (fix exploding). (3) Orthogonal init W_h (eigenvalues ≈ 1). (4) Bỏ RNN → Transformer với direct attention connections.</p>
+
+<p class="q">2. LSTM 3 gates + cell state. Function từng gate?</p>
+<p class="a">Forget f_t: control lượng past memory giữ (0=xóa, 1=giữ). Input i_t: control new info admit. Output o_t: control lượng cell state expose làm hidden. Candidate g_t: nội dung mới đề xuất (tanh, -1..1). Cell state c_t = persistent memory (linear flow), hidden state h_t = output ngắn hạn.</p>
+
+<p class="q">3. Bahdanau attention giải quyết pain gì của seq2seq?</p>
+<p class="a">Fixed-size encoder bottleneck. Long input → info loss. Attention cho decoder access all encoder positions với weight softmax, chọn relevant ones per timestep. BLEU tăng 5-10 points cho WMT'14 En-Fr.</p>
+
+<p class="q">4. Vì sao Transformer parallelize được nhưng RNN không?</p>
+<p class="a">RNN: h_t phụ thuộc h_{t-1} → sequential, 1 CUDA core làm việc tại 1 thời điểm, GPU idle 99%. Transformer self-attention: compute Q, K, V cho mọi position cùng lúc, attention = QK^T/√d — 1 matmul lớn, GPU 10.000 cores full utilization → throughput 50-100× RNN.</p>
+
+<p class="q">5. Long context 1M tokens — Transformer O(L²) infeasible. 5 Alternative?</p>
+<p class="a">(1) Sparse attention (Longformer window + global, BigBird). (2) Linear attention (Performer, Linformer — approximate softmax). (3) State-space models (S4, Mamba 2023 — linear scan). (4) Chunking + recurrence (Transformer-XL, Compressive Transformer). (5) Retrieval (RAG — chỉ attend top-k relevant chunks).</p>
+
+<p class="q">6. [Interview] Chứng minh ∂c_t/∂c_{t-1} trong LSTM. Vì sao đây là "long-term memory highway"?</p>
+<p class="a">c_t = f_t ⊙ c_{t-1} + i_t ⊙ g_t. ∂c_t/∂c_{t-1} = f_t (Hadamard, không phải matmul). Qua T step: ∂c_T/∂c_0 = Π f_t. Nếu network học f_t ≈ 1 (nhớ) → product ≈ 1 → gradient survive qua 100+ step. Đây khác RNN: ∂h_t/∂h_{t-1} = W_h · diag(tanh'), luôn có W_h nhân → product shrink exponential không thể tránh. LSTM tách "flow trí nhớ" (c) khỏi "flow output" (h) — đây là insight bản chất, không phải "thêm gate cho đẹp".</p>
+
+<p class="q">7. [Interview] Bidirectional LSTM có dùng được cho next-token prediction (LM) không? Vì sao?</p>
+<p class="a">Không. Bi-LSTM đọc trái→phải + phải→trái, hidden state tại t chứa info của tokens t+1..T (future). Language modeling training: predict token t+1 given tokens 1..t → nếu hidden đã thấy future = data leak, loss=0 giả. Bi-LSTM dùng được cho: NER, POS tagging, classification — task biết cả sequence. Trick BERT là masked LM: mask 15% tokens, dùng bi-context predict masked positions — bypass leak.</p>
+
+<p class="q">8. [Interview] GRU 2 gates thay 3 của LSTM. Bỏ gate nào? Trade-off gì?</p>
+<p class="a">GRU merge forget + input thành 1 update gate z_t: h_t = (1-z_t)·h_{t-1} + z_t·g_t (dùng h_t, KHÔNG có cell state c_t riêng như LSTM — đây chính là điểm khác biệt). Bỏ output gate — hidden = cell luôn. Fewer params ~25%, train nhanh 20%. Empirical (Chung 2014, Jozefowicz 2015): GRU ≈ LSTM trên hầu hết task, LSTM hơi tốt hơn cho task đòi hỏi long-term precise memory (arithmetic, code). Rule practice: thử GRU trước, chỉ LSTM khi cần capacity thêm.</p>
+
+<p class="q">9. [Interview] Transformer thắng LSTM không phải vì "attention thông minh" — insight thực sự là gì?</p>
+<p class="a">Parallelization. LSTM 1000 tokens/s/GPU vs Transformer 50k-100k tokens/s/GPU. Cùng budget 30 ngày: LSTM train 100B tokens, Transformer train 5-10T tokens. Chinchilla law: data quantity → performance. Transformer thấy data 50-100× nhiều hơn → win. Nếu ai đó parallelize được RNN (Mamba 2023 làm) → RNN có thể comeback. Bài học: hardware efficiency = economic constraint = định nghĩa winner, không phải theoretical elegance.</p>
+
+<p class="q">10. [Interview] Tại sao khởi tạo b_f = 1 cho LSTM forget gate quan trọng?</p>
+<p class="a">b_f=0 → σ(0)=0.5 → mỗi timestep quên nửa cell state → gradient ∏0.5 = vanish 2^-T. b_f=1 → σ(1)≈0.73, b_f=2 → σ(2)≈0.88 → cell state duy trì lâu → gradient flow tốt từ epoch 0. Jozefowicz 2015 chứng minh init này +5-10% perplexity trên PTB language model, và giúp LSTM converge nhanh gấp 2× so với init 0.</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 Hochreiter & Schmidhuber (1997) — LSTM paper</li>
+    <li>📄 <a href="https://arxiv.org/abs/1409.0473">Bahdanau et al (2014) — Neural Machine Translation with Attention</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1706.03762">Vaswani et al (2017) — Attention Is All You Need</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2312.00752">Gu & Dao (2023) — Mamba: Linear-Time Sequence Modeling with Selective State Spaces</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2111.00396">Gu, Goel, Ré (2021) — Efficiently Modeling Long Sequences with Structured State Spaces (S4)</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L3_4_cnn.html">← L3.4</a>
+  <a href="L4_1_tokenization.html">L4.1 · Tokenization →</a>
+</div>
+
+</div>
+</body>
+</html>

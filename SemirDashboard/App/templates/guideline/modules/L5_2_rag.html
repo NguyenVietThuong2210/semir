@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L5.2 — Retrieval-Augmented Generation (RAG)</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 5 · Module 2</div>
+  <h1>5.2 · Retrieval-Augmented Generation (RAG)</h1>
+  <p class="subtitle">Cách LLM "học" domain knowledge mà không cần fine-tune. Pattern chuẩn cho chatbot enterprise, agent, code assistant.</p>
+  <div class="level">Level 5 · LLM Systems · ~40 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Định nghĩa RAG bằng 3 câu (embed → retrieve → generate)</li>
+  <li>Chọn được embedding model + vector DB cho use case cụ thể</li>
+  <li>Implement RAG pipeline bằng Python (LangChain hoặc bare-bones)</li>
+  <li>Debug 5 failure mode phổ biến (bad chunk, wrong embed, no re-rank, hallucination)</li>
+  <li>So sánh RAG vs Fine-tuning: khi nào dùng gì</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 RAG là gì bằng ngôn ngữ đời thường?</div>
+<p><strong>Học sinh thi mở tài liệu (open-book exam)</strong>: Không thuộc lòng cả sách giáo khoa. Khi có câu hỏi → lật mục lục → tìm chương liên quan → đọc 2-3 trang → viết đáp án dựa trên đó.</p>
+<ul>
+  <li><strong>Học sinh</strong> = LLM (biết cách suy luận, viết văn)</li>
+  <li><strong>Mục lục</strong> = vector index (map từ câu hỏi → trang liên quan)</li>
+  <li><strong>Sách giáo khoa</strong> = knowledge base (docs công ty, wiki, code)</li>
+  <li><strong>Đọc 2-3 trang</strong> = retrieval top-K chunks</li>
+  <li><strong>Viết đáp án dựa trên</strong> = generation với context</li>
+</ul>
+<p><strong>Fine-tuning</strong> khác gì? Fine-tuning = bắt học sinh đi học lại lớp 12 với sách mới (đắt, lâu, mà quên kiến thức cũ). RAG = giữ nguyên học sinh, chỉ đưa thêm sách mở tài liệu (rẻ, nhanh, update chỉ cần đổi sách).</p>
+<p><strong>Ví dụ chatbot công ty</strong>: User hỏi "chính sách nghỉ phép 2026 ra sao?" → RAG tìm 3 chunks từ SOP HR → LLM viết trả lời dựa 3 chunks đó. Không hallucinate vì đã có evidence trong prompt.</p>
+</div>
+
+<h2>1. Vì sao cần RAG?</h2>
+
+<p><strong>Problem</strong>: LLM (Claude, GPT-4) được train trên public data đến 1 thời điểm cutoff. Không biết:</p>
+<ul>
+  <li>Company docs private (SOP, wiki, code)</li>
+  <li>Latest news / prices / events sau cutoff</li>
+  <li>Personal context (user history, preferences)</li>
+</ul>
+
+<p><strong>3 options giải quyết</strong>:</p>
+<ol>
+  <li><strong>Fine-tuning</strong>: retrain LLM với data mới. Đắt (10k-100k USD), lâu (days), require expertise, khó cập nhật.</li>
+  <li><strong>Long context</strong>: nhồi hết docs vào context (128k tokens Claude, 200k GPT-4-turbo). Đắt token, chậm inference, quality giảm với context dài.</li>
+  <li><strong>RAG</strong> ⭐: chỉ retrieve chunks liên quan từ knowledge base, inject vào prompt. Rẻ, real-time, easy update.</li>
+</ol>
+
+<h2>2. RAG pipeline — 3 phases</h2>
+
+<pre><code>┌─ INDEXING (offline, 1 lần khi có docs) ─────────────┐
+│                                                      │
+│  Docs → Chunk → Embed → Store in vector DB           │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+
+┌─ QUERY (runtime, mỗi user question) ────────────────┐
+│                                                      │
+│  Question → Embed → Search top-K → Rerank →         │
+│  → Format prompt (question + retrieved) → LLM →      │
+│  → Answer                                            │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+</code></pre>
+<p><strong>Rerank là gì?</strong> (bước "Rerank" ở trên) — sau khi lấy top-K chunk gần đúng bằng vector search (nhanh nhưng không hoàn toàn chính xác), dùng 1 model khác, chậm hơn nhưng chính xác hơn (cross-encoder), chấm điểm lại chính xác từng chunk so với câu hỏi, rồi chỉ giữ vài chunk tốt nhất. Cơ chế đầy đủ (bi-encoder vs cross-encoder, vì sao rerank chính xác hơn) giải thích chi tiết ở §5.7 bên dưới — ở đây chỉ cần biết đây là bước "lọc lại cho chính xác" sau khi tìm nhanh.</p>
+
+<h2>3. Phase 1: Indexing chi tiết</h2>
+
+<h3>3.1 Chunking — chia doc thành chunks</h3>
+
+<p>Long doc (100k words) không fit context của embedding model (thường 512 tokens). Phải chia.</p>
+
+<table>
+<tr><th>Strategy</th><th>Chunk size</th><th>Khi dùng</th></tr>
+<tr><td>Fixed size</td><td>500-1000 chars</td><td>Baseline, đơn giản</td></tr>
+<tr><td>Sentence-based</td><td>1-5 sentences</td><td>QA tightly-scoped</td></tr>
+<tr><td>Recursive character split</td><td>Adaptive</td><td>LangChain default, respect structure</td></tr>
+<tr><td>Semantic (BERT-based)</td><td>Variable</td><td>Best quality nhưng chậm</td></tr>
+<tr><td>Markdown-aware</td><td>Section-based</td><td>Cho docs có structure (README, wiki)</td></tr>
+</table>
+
+<div class="callout warn">
+<div class="label">Chunking pitfalls</div>
+<ul>
+  <li><strong>Chunks quá nhỏ</strong>: mất context, retrieval matches nhưng LLM không hiểu</li>
+  <li><strong>Chunks quá lớn</strong>: 1 chunk chứa nhiều topics → embedding trung bình → retrieval kém chính xác</li>
+  <li><strong>No overlap</strong>: câu bị cắt giữa 2 chunks → lost. Fix: overlap 10-20%</li>
+  <li><strong>Ignore structure</strong>: chunk cắt giữa code block, table, heading → nonsense</li>
+</ul>
+</div>
+
+<h3>3.2 Embedding — text → vector</h3>
+
+<pre><code>from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer('all-MiniLM-L6-v2')   # 384-dim, fast
+# Hoặc: 'BAAI/bge-large-en-v1.5' (1024-dim, higher quality)
+# Hoặc: OpenAI text-embedding-3-small (1536-dim, paid API)
+
+chunks = ["VN30 index tracks 30 largest HOSE stocks",
+          "FPT is a Vietnamese IT company",
+          ...]
+
+embeddings = model.encode(chunks)  # shape: (n_chunks, 384)
+</code></pre>
+
+<h3>3.3 Vector DB — lưu + search</h3>
+
+<table>
+<tr><th>DB</th><th>Type</th><th>Best cho</th></tr>
+<tr><td>FAISS</td><td>In-memory library (Meta)</td><td>Prototyping, &lt;10M vectors, no cloud</td></tr>
+<tr><td>Chroma</td><td>Embedded (SQLite-like)</td><td>Local app, dev</td></tr>
+<tr><td>Pinecone</td><td>Managed cloud</td><td>Production, no ops</td></tr>
+<tr><td>Weaviate</td><td>Self-host, hybrid search</td><td>Filter + vector combined</td></tr>
+<tr><td>Qdrant</td><td>Self-host, Rust perf</td><td>Fast, filter-friendly</td></tr>
+<tr><td>pgvector</td><td>Postgres extension</td><td>Đã có Postgres, không muốn thêm infra</td></tr>
+<tr><td>Milvus</td><td>Distributed</td><td>Billions vectors, enterprise</td></tr>
+</table>
+
+<h2>4. Phase 2: Query pipeline</h2>
+
+<pre><code>def rag_query(question: str, top_k: int = 5):
+    # Step 1: embed question
+    q_emb = model.encode([question])
+
+    # Step 2: vector search
+    scores, indices = index.search(q_emb, top_k)
+    candidates = [chunks[i] for i in indices[0]]
+
+    # Step 3 (optional): rerank
+    reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+    scores = reranker.predict([(question, c) for c in candidates])
+    ranked = sorted(zip(candidates, scores), key=lambda x: -x[1])
+    top_reranked = [c for c, _ in ranked[:3]]  # top 3 sau rerank
+
+    # Step 4: format prompt
+    context = "\n\n".join([f"[{i+1}] {c}" for i, c in enumerate(top_reranked)])
+    prompt = f"""Answer the question using ONLY the context below.
+If the answer is not in the context, say "I don't know".
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+
+    # Step 5: LLM generation
+    return claude.messages.create(model='claude-opus-4-7', ...)
+</code></pre>
+
+<h2>4.5 — Vector index architecture: HNSW vs IVF-PQ vs Flat (chọn đúng = giảm 100× cost)</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">Ẩn dụ VN — tìm số điện thoại trong danh bạ 10 triệu người</div>
+<table>
+<tr><th>Index</th><th>Cách hoạt động</th><th>Recall</th><th>Speed 10M vec</th><th>RAM 10M × 768d</th><th>Khi dùng</th></tr>
+<tr><td><strong>Flat (brute force)</strong></td><td>So sánh query với tất cả vector</td><td>100%</td><td>~2s</td><td>30GB</td><td>&lt;100k vec, ground truth</td></tr>
+<tr><td><strong>HNSW</strong> (Hierarchical NSW)</td><td>Graph nhiều tầng — top layer sparse, đi xuống dần. Giống Google Maps zoom</td><td>95-99%</td><td>~5ms</td><td>40GB (graph overhead)</td><td>&lt;100M vec, latency critical</td></tr>
+<tr><td><strong>IVF-PQ</strong></td><td>Chia vector space thành N cluster (IVF) + nén mỗi vector (Product Quantization) từ float32 xuống 8-16 bytes</td><td>85-95%</td><td>~10ms</td><td>0.6GB (nén 50×)</td><td>&gt;100M vec, RAM giới hạn</td></tr>
+<tr><td><strong>ScaNN / DiskANN</strong></td><td>Optimize cache line + SSD read</td><td>95%+</td><td>&lt;10ms</td><td>SSD-based</td><td>Billion-scale (Google, Bing)</td></tr>
+</table>
+
+<p><strong>Recall là gì?</strong> (cột "Recall" trong bảng trên) — tỷ lệ query mà kết quả ĐÚNG thực sự nằm đâu đó trong top-K trả về, so với nếu tìm brute-force (Flat, luôn đúng 100%). VD Recall 95% nghĩa là 95/100 query, index tìm đúng kết quả brute-force sẽ tìm ra; 5 query còn lại bị "trượt" vì graph/cluster không dẫn tới đúng node. Đánh đổi cơ bản của mọi ANN index (Approximate Nearest Neighbor — tìm gần đúng thay vì tìm chính xác 100%): giảm recall 1 chút để đổi lấy tốc độ nhanh hơn hàng trăm-nghìn lần.</p>
+
+<p><strong>Cấu trúc HNSW</strong> — graph nhiều tầng, tầng trên thưa (đi nhanh, ít chính xác), tầng dưới dày đặc (đi chậm hơn, chứa toàn bộ vector):</p>
+<pre><code>Layer 2 (thưa nhất):    A ─────────────────────── E
+                         │                         │
+Layer 1 (dày hơn):      A ──── B ──── C ────────── E ──── F
+                         │      │      │            │      │
+Layer 0 (TẤT CẢ vector): A─B─C─D─E─F─G─H─I─J─K─L─M─N─O ... (toàn bộ 10M)
+
+Search: bắt đầu ở Layer 2 (ít node — "đại lộ", đi rất nhanh)
+        → tới node gần query nhất trong layer này
+        → NHẢY XUỐNG Layer 1 (nhiều node hơn — "đường lớn"), tìm tiếp
+        → NHẢY XUỐNG Layer 0 (mọi node — "đường nhỏ"), tìm chính xác
+        → trả về top-K gần query nhất tại Layer 0</code></pre>
+<p><strong>Rule chọn</strong>: bắt đầu HNSW (Qdrant/Weaviate/pgvector default). Chỉ chuyển IVF-PQ khi RAM &gt; ngân sách. Bench recall trên eval set thật trước khi commit — HNSW tune param (M=16, efConstruction=200) khác biệt recall 5-15%. <strong>M</strong> = số kết nối tối đa mỗi node trong graph (M cao hơn → graph dày hơn, recall tốt hơn nhưng tốn RAM hơn, giống thêm nhiều "đường tắt" trong bản đồ). <strong>efConstruction</strong> = số ứng viên xét khi XÂY graph (cao hơn → graph chất lượng hơn nhưng index chậm hơn, chỉ tốn 1 lần lúc indexing). Mặc định M=16, efConstruction=200 là điểm khởi đầu an toàn cho hầu hết use case.</p>
+</div>
+
+<h2>4.7 — Context window budget math (đừng nhồi hết chunks vào)</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Budget cho Claude Opus 4.7 (200k context, 8k output max)</div>
+<pre><code>Budget = system + few-shot + retrieved_chunks + user_query + reserved_output
+       ≤ 200,000 tokens
+
+Ví dụ setup thực tế:
+  system prompt (rules + persona)     : 3,000
+  few-shot examples (3 pairs)         : 4,000
+  retrieved chunks (top-5 × 500t)     : 2,500
+  user query                          :   200
+  conversation history (last 3 turns) : 3,000
+  ─────────────────────────────────
+  input total                         :12,700 tokens
+  reserved for output                 : 2,000
+  ─────────────────────────────────
+  used                                :14,700 / 200,000 (7%)
+
+Cost = 12,700 × $15/1M + 2,000 × $75/1M = $0.19 + $0.15 = $0.34
+Với cache (system 3,000 + few-shot 4,000 = 7,000 tokens ĐƯỢC cache;
+           chunks 2,500 + query 200 + history 3,000 = 5,700 tokens KHÔNG cache
+           vì đổi mỗi lần gọi):
+  = 7,000 × $1.5/1M (cached) + 5,700 × $15/1M (uncached) + 2,000 × $75/1M (output)
+  = $0.0105 + $0.0855 + $0.15 = $0.246 ≈ $0.25 (-28%)
+</code></pre>
+<p><strong>Sai lầm phổ biến</strong>: nhồi top-20 chunks (10k tokens thay vì 2.5k của top-5). Kết quả: (a) "lost in the middle" — LLM bỏ qua chunk giữa; (b) riêng phần token CHUNKS tăng 4× (2.5k→10k) — vì đây chỉ là 1 phần của tổng 12.7k input, mức tăng CHI PHÍ TOÀN REQUEST thực tế nhẹ hơn 4× nhiều (input tổng tăng từ 12.7k lên 20.2k, khoảng +59%, không phải toàn bộ cost nhân 4); (c) latency tăng 2× (prefill lâu). Top-3 sau rerank chất lượng cao hơn top-20 raw.</p>
+</div>
+
+<h2>5. Advanced tricks</h2>
+
+<h3>5.1 Hybrid search: BM25 + vector</h3>
+<p>Vector chưa perfect cho exact match (từ khóa, code snippet). <strong>BM25</strong> (thuật toán xếp hạng dựa trên tần suất từ khoá xuất hiện trong doc — không hiểu nghĩa như embedding, bản nâng cấp của TF-IDF cổ điển) mạnh ở đó. Combine 2 scores.</p>
+
+<h3>5.2 Query rewriting</h3>
+<p>User hỏi "cái đó" (câu ngắn, context implicit). LLM rewrite thành query cụ thể hơn trước khi embed. VD:</p>
+<pre><code>original: "how do I fix that?"
+rewritten: "how do I fix the pandas ImportError when running train_v18_unified.py?"
+</code></pre>
+
+<h3>5.3 HyDE (Hypothetical Document Embeddings)</h3>
+<p><strong>Vấn đề</strong>: câu hỏi ("giá FPT thế nào?") và câu trả lời thật trong tài liệu ("FPT đóng cửa 72.5, tăng 1.2% phiên...") thường khác nhau về CÁCH VIẾT (câu hỏi ngắn, câu trả lời dài + số liệu cụ thể) — dù cùng chủ đề, 2 kiểu văn phong này không phải lúc nào cũng embed gần nhau.</p>
+<p><strong>Cách làm</strong>: thay vì embed thẳng câu hỏi, để LLM tưởng tượng ra 1 câu trả lời GIẢ (không cần đúng số liệu thật) theo đúng văn phong tài liệu thật, rồi embed câu trả lời giả đó để đi tìm — vì "câu trả lời giả" và "câu trả lời thật" cùng văn phong nên embedding gần nhau hơn "câu hỏi" và "câu trả lời thật".</p>
+<pre><code>Question:        "giá FPT thế nào?"
+HyDE hypothetical answer (LLM tự bịa, KHÔNG cần đúng số):
+                 "FPT hôm nay giao dịch quanh vùng 70-73, khối lượng
+                  trung bình, RSI trung tính không quá mua bán."
+→ Embed câu HyDE này (không phải câu hỏi gốc) để đi search chunk thật.</code></pre>
+<p><strong>Sai lầm thường gặp</strong>: dùng HyDE cho câu hỏi cần số liệu chính xác tuyệt đối (VD "giá đóng cửa FPT hôm nay là bao nhiêu") — LLM có thể bịa số gần đúng khiến embedding lệch hướng sai. Fix: chỉ dùng HyDE cho câu hỏi mang tính khái niệm/định tính, không dùng cho tra cứu số liệu chính xác (những câu đó nên dùng exact-match/BM25 — §5.1).</p>
+
+<h3>5.4 Multi-query retrieval</h3>
+<p><strong>Vấn đề</strong>: 1 câu hỏi có thể embed lệch nếu người dùng viết mơ hồ/thiếu từ khóa — chỉ retrieve theo đúng 1 cách diễn đạt dễ bỏ sót chunk liên quan viết theo cách khác.</p>
+<p><strong>Cách làm</strong>: LLM tạo 3-5 câu hỏi diễn đạt lại (paraphrase) cùng 1 ý, retrieve riêng cho từng câu, rồi UNION (gộp, bỏ trùng) kết quả — tăng khả năng ít nhất 1 cách diễn đạt match đúng chunk.</p>
+<pre><code>Original: "RSI cao nghĩa là gì?"
+Variant 1: "chỉ số RSI cao thì cổ phiếu đang ở trạng thái nào?"
+Variant 2: "RSI overbought là gì?"
+Variant 3: "RSI trên 70 có ý nghĩa gì khi phân tích kỹ thuật?"
+→ Retrieve top-5 cho MỖI variant (4 lần gọi retrieval) → union 4 tập kết quả,
+  bỏ trùng → thường được 8-15 chunk unique thay vì chỉ 5 của 1 câu gốc.</code></pre>
+<p><strong>Đánh đổi</strong>: tăng recall (ít bỏ sót chunk hơn) nhưng tốn 3-5× số lần gọi retrieval + 1 lần gọi LLM để sinh variants — chỉ đáng dùng khi câu hỏi thường mơ hồ/đa dạng cách hỏi (chatbot support), không cần cho query đã rất cụ thể (VD tra mã ticker).</p>
+
+<h3>5.5 Contextual retrieval (Anthropic 2024)</h3>
+<p>Anthropic báo: prepend mỗi chunk với 50-100 tokens context (từ full doc) trước embed → retrieval accuracy tăng 35%.</p>
+
+<h3>5.6 MMR (Maximal Marginal Relevance) — chống trùng lặp</h3>
+<p><strong>Vấn đề</strong>: top-5 chunks đều nói cùng 1 fact (report trích dẫn nhau) → LLM chỉ có 1 góc nhìn, thiếu diversity.</p>
+<pre><code>MMR score(d) = λ · sim(d, query) − (1−λ) · max_{d'∈selected} sim(d, d')
+
+# Giải thích từng ký hiệu:
+# d              = 1 chunk candidate đang xét có nên chọn tiếp không
+# sim(d, query)  = độ liên quan của d với câu hỏi (cosine similarity, càng cao càng tốt)
+# selected       = tập chunk ĐÃ chọn ở các bước trước
+# max_{d'∈selected} sim(d, d') = độ giống NHẤT giữa d và bất kỳ chunk nào đã chọn rồi
+#                  (càng cao = d càng trùng lặp với cái đã có → càng nên bị trừ điểm)
+# λ (lambda)     = trọng số đánh đổi relevance vs diversity, λ=0.7 nghĩa 70/30
+</code></pre>
+<p><strong>Ví dụ tính tay</strong> — đã chọn 1 chunk (C1), đang chọn chunk thứ 2 giữa 2 ứng viên C2, C3:</p>
+<pre><code>sim(C2, query) = 0.85   sim(C2, C1) = 0.90  (C2 gần giống C1 — trùng ý)
+sim(C3, query) = 0.75   sim(C3, C1) = 0.20  (C3 khác hướng C1 — bổ sung góc nhìn mới)
+
+λ = 0.7:
+MMR(C2) = 0.7×0.85 − 0.3×0.90 = 0.595 − 0.270 = 0.325
+MMR(C3) = 0.7×0.75 − 0.3×0.20 = 0.525 − 0.060 = 0.465
+
+→ Dù C2 relevance cao hơn (0.85 > 0.75), MMR CHỌN C3 (0.465 > 0.325) vì C2
+  trùng lặp quá nhiều với C1 đã chọn — ưu tiên đa dạng hoá thay vì nhồi 2 chunk nói cùng 1 ý.</code></pre>
+<p><strong>Kết luận</strong>: top-5 với MMR cover 3-4 khía cạnh khác nhau thay vì 1 khía cạnh lặp lại. Đặc biệt hữu ích cho comparative queries ("so sánh 3 phương án").</p>
+
+<h3>5.7 Reranker architecture — vì sao cross-encoder mạnh hơn embedding</h3>
+<p><strong>Ẩn dụ VN — vòng 2 phỏng vấn</strong>: embedding = quét CV bằng máy (top 100 CV giống JD nhất); cross-encoder = phỏng vấn trực tiếp từng người top 100 → chọn top 10 thật.</p>
+<table>
+<tr><th></th><th>Bi-encoder (embedding)</th><th>Cross-encoder (reranker)</th></tr>
+<tr><td>Cách xử lý</td><td>Encode query và doc RIÊNG BIỆT thành 2 vector, tính cosine</td><td>Concat [query, doc] → 1 BERT forward → xuất score</td></tr>
+<tr><td>Attention giữa q và d?</td><td>Không (chỉ cosine cuối)</td><td>Full cross-attention mọi cặp token</td></tr>
+<tr><td>Precomputable?</td><td>✅ Doc embed offline</td><td>❌ Phải chạy mỗi request</td></tr>
+<tr><td>Speed 1M pairs</td><td>~10ms (ANN index)</td><td>~30s trên GPU</td></tr>
+<tr><td>Accuracy (MS MARCO)</td><td>MRR@10 ≈ 0.35</td><td>MRR@10 ≈ 0.42 (+20%)</td></tr>
+</table>
+<p><strong>MRR@10 là gì?</strong> <em>Mean Reciprocal Rank</em> trong top-10 kết quả: với mỗi query, tìm vị trí (rank) của kết quả ĐÚNG đầu tiên trong top-10, lấy nghịch đảo (1/rank), rồi trung bình qua toàn bộ query set. VD: query 1 answer đúng ở vị trí #1 → 1/1 = 1.0; query 2 answer đúng ở vị trí #4 → 1/4 = 0.25; trung bình 2 query = 0.625. MRR càng gần 1 nghĩa là answer đúng càng thường xuyên đứng ĐẦU danh sách (không chỉ "có mặt trong top-10" mà còn "đứng cao").</p>
+<p><strong>Kiến trúc chuẩn 2 tầng — funnel thu hẹp dần</strong>: bi-encoder quét NHANH toàn bộ index để lấy 1 tập lớn recall cao, cross-encoder CHẬM nhưng chính xác chỉ chạy trên tập nhỏ đó:</p>
+<pre><code>   Toàn bộ vector DB (VD 10M chunks)
+              │
+              ▼   bi-encoder + ANN index (~10ms, embedding precompute sẵn offline)
+    ┌───────────────────────┐
+    │  top-100 candidates   │   MRR@10 ≈ 0.35 — recall cao, precision vừa
+    └───────────────────────┘
+              │
+              ▼   cross-encoder rerank (~30s/1M pairs GPU → ~100ms cho 100 pairs)
+        ┌───────────┐
+        │  top-3    │   MRR@10 ≈ 0.42 — precision cao, chỉ khả thi vì tập đã nhỏ
+        └───────────┘
+              │
+              ▼
+          LLM context</code></pre>
+<p>Options cross-encoder: <code>bge-reranker-v2-m3</code> (open-source), <code>Cohere Rerank 3</code>, <code>Jina Reranker</code>.</p>
+
+<h3>5.8 ColBERT / Late Interaction (2020-2022) — "khoảng giữa" giữa bi-encoder và cross-encoder</h3>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Nhắc lại §5.7 — bi-encoder nén CẢ câu/đoạn văn thành 1 VECTOR DUY NHẤT trước khi so sánh (nhanh nhưng mất chi tiết, giống tóm tắt cả CV thành 1 con số "độ phù hợp"); cross-encoder đọc CẢ query và doc CÙNG LÚC qua 1 model (chính xác nhưng chậm, giống đọc kỹ từng CV). ColBERT (Contextualized Late Interaction over BERT, Khattab & Zaharia 2020) đứng GIỮA: giữ 1 vector RIÊNG cho MỖI TỪ (không nén thành 1 vector duy nhất như bi-encoder), nhưng vẫn encode query/doc TÁCH BIỆT (không chậm như cross-encoder) — rồi so khớp TỪNG TỪ của query với TỪNG TỪ của doc lúc query-time, giống việc so khớp "chi tiết CV nào khớp với chi tiết JD nào" thay vì chỉ so 1 con số tổng.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: bi-encoder (§5.7) nén nguyên câu "FPT tăng trưởng doanh thu quý 2 nhờ mảng công nghệ" thành 1 vector duy nhất — nếu câu dài, nhiều ý, 1 vector không đủ "chỗ" giữ hết chi tiết, đặc biệt mất thông tin khi so khớp với query chỉ hỏi về 1 khía cạnh nhỏ (VD chỉ hỏi "mảng công nghệ" mà không quan tâm doanh thu). Cross-encoder (§5.7) giải quyết được vấn đề chi tiết này nhưng phải chạy model MỖI CẶP (query, doc) — không thể precompute doc embedding offline, nên không scale được cho hàng triệu doc.</p>
+
+<pre><code># Bi-encoder (§5.7): nén CẢ câu thành 1 vector
+doc_vec = BERT("FPT tăng trưởng doanh thu quý 2 nhờ mảng công nghệ")  # → 1 vector duy nhất
+score = cosine(query_vec, doc_vec)                                    # so 1 vs 1
+
+# ColBERT: giữ 1 vector CHO MỖI TOKEN, encode query/doc RIÊNG (vẫn precompute doc offline được)
+doc_vecs   = [BERT(tok) for tok in "FPT tăng trưởng doanh thu quý 2 nhờ mảng công nghệ"]  # N vector
+query_vecs = [BERT(tok) for tok in "mảng công nghệ FPT"]                                   # M vector
+
+# MaxSim: với MỖI token query, tìm token doc GIỐNG NHẤT, rồi CỘNG các max lại
+score = Σ_{i=1..M} max_{j=1..N} cosine(query_vecs[i], doc_vecs[j])
+# → token "công nghệ" trong query match RẤT SÁT token "công nghệ" trong doc (dù các
+#   phần khác của câu — "doanh thu quý 2" — không liên quan tới query, không bị pha loãng
+#   vào 1 vector trung bình như bi-encoder)</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: ColBERT KHÔNG PHẢI cross-encoder "rẻ hơn" — điểm mấu chốt là doc vẫn được encode ĐỘC LẬP với query (giống bi-encoder, nên vẫn precompute + index offline được cho hàng triệu doc), chỉ khác ở bước SO SÁNH cuối: thay vì so 1 vector với 1 vector (bi-encoder), nó so N vector với M vector qua MaxSim (tốn thêm chi phí so sánh, nhưng vẫn RẺ HƠN NHIỀU so với việc chạy lại BERT cho mỗi cặp query-doc như cross-encoder). Đây là lý do gọi "late interaction" — sự "tương tác" (interaction) giữa query và doc xảy ra MUỘN (late), ở bước so sánh vector cuối cùng, không phải ngay từ đầu như cross-encoder.</p>
+
+<table>
+<tr><th></th><th>Bi-encoder</th><th>ColBERT (late interaction)</th><th>Cross-encoder</th></tr>
+<tr><td>Số vector/doc</td><td>1 (nén cả câu)</td><td>N (1/token)</td><td>0 (không precompute được)</td></tr>
+<tr><td>Encode query & doc</td><td>Độc lập (precompute doc)</td><td>Độc lập (precompute doc)</td><td>CÙNG NHAU (không precompute)</td></tr>
+<tr><td>Độ chi tiết matching</td><td>Thấp (1 vs 1)</td><td>Cao (token vs token)</td><td>Cao nhất (full attention)</td></tr>
+<tr><td>Chi phí index/storage</td><td>Thấp (1 vector/doc)</td><td>Cao hơn (N vector/doc, dù ColBERTv2 nén residual để giảm)</td><td>Không cần index vector</td></tr>
+<tr><td>Scale cho triệu doc?</td><td>✅ Dễ</td><td>✅ Được (ColBERTv2 tối ưu nén)</td><td>❌ Chỉ dùng để rerank tập nhỏ</td></tr>
+</table>
+
+<p><strong>Insight</strong>: ColBERTv2 (2022) giải quyết đúng nhược điểm ban đầu của ColBERT (lưu N vector/doc tốn storage hơn nhiều so với 1 vector/doc của bi-encoder) bằng "residual compression" — nén các token vector gần giống nhau lại, giảm dung lượng lưu trữ đáng kể mà vẫn giữ được lợi ích matching chi tiết theo từng token. Đây là lý do 1 số hệ thống production (VD RAGatouille, 1 số pipeline dùng Colbert-based retrieval) chọn ColBERT làm bước RETRIEVAL CHÍNH (không chỉ rerank) khi cần độ chính xác cao hơn bi-encoder thuần mà vẫn muốn scale tốt hơn cross-encoder.</p>
+</div>
+
+<h3>5.9 Query rewriting patterns</h3>
+<ul>
+  <li><strong>Decontextualize</strong>: "cái đó thế nào?" + history → "chính sách bảo hành sản phẩm iPhone 15 Pro Max thế nào?"</li>
+  <li><strong>Decompose</strong>: câu hỏi 2 phần → 2 sub-queries, retrieve riêng, union.</li>
+  <li><strong>Expand synonyms</strong>: "doanh thu" → "doanh thu OR revenue OR sales OR turnover"</li>
+  <li><strong>Step-back prompt</strong>: từ câu cụ thể → generalize → retrieve concept trước, detail sau.</li>
+</ul>
+
+<h2>5.10 — Deep-dive: 5 bẫy giết sản phẩm RAG mà tutorial không nói</h2>
+<p>Mục này giả định bạn đã đọc xong Chunking (§3.1), Embedding (§3.2), Hybrid search (§5.1), Reranker (§5.7) ở trên — đây là các trap THỰC TẾ khi áp dụng đúng những kỹ thuật đó vào data thật, không phải khái niệm mới.</p>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — RAG: 5 bẫy giết sản phẩm mà tutorial không nói (chi tiết dễ hiểu)</div>
+
+<p><strong>Câu chuyện thật</strong>: Bạn build chatbot Vietnamese finance với RAG. Test 10 câu hỏi mẫu → 8/10 chính xác. Deploy → user complain "chatbot nói bậy 60% thời gian". Bạn confused: cùng model, cùng data, sao khác nhau? Đây là 5 bẫy hầu hết dev copy-paste tutorial dính.</p>
+
+<p><strong>Bẫy 1 — Embedding similarity KHÔNG phải semantic similarity</strong></p>
+
+<p><strong>Cosine similarity là gì?</strong> Mỗi đoạn text được embedding model biến thành 1 vector (mảng số, VD 768 chiều). Cosine similarity đo "2 vector chỉ cùng hướng bao nhiêu" — không quan tâm độ dài, chỉ quan tâm góc giữa chúng. Giá trị chạy từ <strong>-1 đến 1</strong>: 1 = trùng hướng hoàn toàn (nghĩa giống hệt), 0 = không liên quan, -1 = ngược nghĩa. Công thức: <code>cos(A,B) = (A·B) / (|A|·|B|)</code> — <code>A</code>, <code>B</code> là 2 vector embedding cần so (VD embedding của câu hỏi và embedding của 1 chunk); tích vô hướng (<code>A·B</code>) chia tích độ dài 2 vector (<code>|A|·|B|</code>). Trong RAG, "top-K" nghĩa là lấy K chunk có cosine similarity với câu hỏi cao nhất.</p>
+
+<p>Bạn nghĩ: "Query 'Q2 revenue growth' và document 'quý 2 doanh thu tăng 15%' rõ ràng semantically identical". Cosine similarity giữa 2 embeddings? <strong>0.4</strong> (thấp so với thang -1..1, đáng lẽ phải &gt;0.8 nếu model hiểu đúng nghĩa). Vì sao?</p>
+
+<p>Vì sao lại thấp vậy? Embedding model học bằng <strong>contrastive loss</strong>:</p>
+<ul>
+  <li>Lúc train, model được cho 1 cặp (query, doc) <strong>đúng khớp</strong> + nhiều doc "sai" ngẫu nhiên.</li>
+  <li>Model bị phạt (loss tăng) nếu vector của cặp đúng không nằm gần nhau hơn hẳn các cặp sai.</li>
+  <li>→ Model chỉ học được cách kéo gần những cặp có <em>dạng giống pairs đã thấy khi train</em> — không tự suy luận ra ngoài.</li>
+  <li>Nếu training data của OpenAI text-embedding-3 không có cặp English-Vietnamese finance → model chưa từng học "revenue = doanh thu" trong ngữ cảnh tài chính, nên không match.</li>
+</ul>
+
+<p><strong>Fix:</strong></p>
+<ul>
+  <li>Dùng <strong>multilingual model</strong> (bge-m3 hoặc jina-embeddings-v3) train trên 100+ ngôn ngữ.</li>
+  <li>Test embedding trên 20 sample queries của DOMAIN của bạn trước khi build.</li>
+  <li>Nếu cosine sim &lt; 0.6 cho matching pair → model không phù hợp domain.</li>
+</ul>
+
+<p><strong>Hậu quả nếu bỏ qua</strong>: Chatbot Vietnamese finance dùng OpenAI ada-002 → recall thấp 40% (recall = tỷ lệ query mà chunk đúng thực sự nằm trong top-K trả về — xem định nghĩa đầy đủ ở bảng §4.5). Chuyển bge-m3 → recall 75%. Cùng data, cùng LLM, chỉ đổi embedding model.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Bẫy 2 — Chunk size nói dối bạn</strong></p>
+
+<p>Tutorial nói "chunk 500 tokens" (đã học ở §3.1). Bạn làm. Result tệ. Vì sao? Vì 500 tokens sai với data của bạn.</p>
+
+<table>
+<tr><th>Chunk size</th><th>Vấn đề</th></tr>
+<tr><td>Quá nhỏ (100-200 tokens)</td><td>Mất context. "The company" không biết company nào. Retrieved chunk vô ích.</td></tr>
+<tr><td>Quá to (1500-2000 tokens)</td><td>Embedding tổng hợp trung bình → mất focus. Query "revenue" match chunk có mention revenue lướt qua.</td></tr>
+<tr><td>Sweet spot (500-800 + overlap 100)</td><td>Đủ context, đủ focus. Overlap giúp cross-chunk sentences không bị cắt.</td></tr>
+</table>
+
+<p><strong>Advanced fix — Contextual Retrieval (Anthropic 2024, đã nêu sơ ở §5.5)</strong>: Trước khi embed, LLM sinh 1-2 câu context prefix cho mỗi chunk:</p>
+<pre><code>Chunk raw:        "Revenue increased 15% year-over-year."
+Chunk contextual: "[Vinamilk Q2 2024 earnings report, section 'Financial highlights']
+                    Revenue increased 15% year-over-year."</code></pre>
+<p>Embedding của chunk contextual capture cả context — giảm 35% recall failure rate (riêng contextual chunks; +49% là con số CỘNG DỒN với hybrid BM25, xem số liệu Anthropic đầy đủ ở mục dưới). Cost: 1 LLM call per chunk khi index (one-time), sau đó free.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Bẫy 3 — Dense embedding thiếu chính xác exact match</strong></p>
+
+<p>Query: "cổ phiếu VNM giá bao nhiêu". User cần match doc có "VNM". Dense embedding có thể match doc "VJC" (cùng cổ phiếu, embedding gần) → LLM đọc doc VJC → trả lời sai giá VNM.</p>
+
+<p><strong>Fix — Hybrid retrieval (đã học ở §5.1: BM25 + dense), cộng thêm Reciprocal Rank Fusion (RRF) để hợp nhất 2 kết quả:</strong></p>
+<ul>
+  <li><strong>RRF</strong> combine 2 ranked list: <code>score(doc) = Σ 1/(k + rank_bm25) + 1/(k + rank_dense)</code> — <code>rank_bm25</code>/<code>rank_dense</code> là thứ hạng (1, 2, 3...) của doc đó trong mỗi list riêng; <code>k</code> là hằng số làm mượt (thường k=60) để hạng #1 không lấn át quá mạnh hạng #2. VD doc X đứng hạng 2 ở BM25, hạng 5 ở dense → score = 1/(60+2) + 1/(60+5) = 0.0161 + 0.0154 = 0.0315. Doc hạng cao ở CẢ 2 list sẽ có score tổng cao nhất.</li>
+</ul>
+<p>Hybrid thắng dense-only 15-30% recall. Đây là why enterprise RAG (Elastic, Weaviate) dùng cả 2.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Bẫy 4 — "Lost in the middle" — chunks nhiều nhưng LLM không đọc</strong></p>
+
+<p>Liu 2023 phát hiện: LLM attention degrade với info ở GIỮA long context. Nếu bạn nhồi top-20 chunks vào context (10k tokens), LLM đọc kỹ 3 chunks đầu + 3 chunks cuối, các chunks giữa gần như bỏ qua.</p>
+
+<p><strong>Ví dụ thật</strong>: Prompt = "Câu hỏi X? Docs: [chunk 1] [chunk 2] ... [chunk 20]. Answer:". Nếu answer nằm ở chunk 10 → LLM MISS 40% thời gian. Nếu ở chunk 1 hoặc chunk 20 → LLM catch 90%.</p>
+
+<p><strong>Fix — Rerank + top-3 (cross-encoder đã giải thích chi tiết ở §5.7 trên):</strong></p>
+<ol>
+  <li>Retrieval lấy top-100 chunks (recall cao)</li>
+  <li><strong>Rerank</strong> với cross-encoder (bge-reranker hoặc Cohere Rerank) → sort lại theo relevance thật</li>
+  <li>Chỉ đưa top-3 vào LLM</li>
+</ol>
+<p>Kết quả: chất lượng cao hơn top-20 raw. Cheap: rerank 100 chunks ~ $0.001. Đây là why <em>rerank là bước quan trọng NHẤT trong RAG</em>, không phải retrieval.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Bẫy 5 — Global queries phá vỡ RAG hoàn toàn</strong></p>
+
+<p>User hỏi: "Tổng hợp chiến lược đầu tư từ 100 báo cáo phân tích 2024". Không có 1 chunk nào chứa answer — knowledge phân tán qua 1000 chunks. Naive RAG retrieval top-5 → LLM chỉ thấy 5 chunks → miss 995 chunks.</p>
+
+<p><strong>Fix — GraphRAG (Microsoft 2024)</strong>: Index thời tạo <em>knowledge graph</em> + <em>community summaries</em> ("community" trong knowledge graph = 1 cụm entity liên kết chặt với nhau hơn phần còn lại của graph, VD toàn bộ entity liên quan 1 công ty; "community summary" = đoạn tóm tắt LLM sinh sẵn cho cả cụm đó). Query time: LLM chọn community summary phù hợp thay vì raw chunks. Giải quyết global query mà naive RAG không thể.</p>
+
+<p><strong>Fix — Summary-of-summaries hierarchy</strong>: Chunk lower level → summary chunk higher level → summary of summaries. Query trên top level trước, drill down.</p>
+
+<p>Đây là <em>frontier</em> — chưa có silver bullet. Nếu use case của bạn có global queries → phải architecture custom, không copy tutorial được.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Anthropic Contextual Retrieval benchmarks (2024)</strong> — mỗi kỹ thuật cộng dồn lên kỹ thuật trước:</p>
+<table>
+<tr><th>Setup</th><th>Recall failure rate</th><th>Giảm so với baseline</th></tr>
+<tr><td>Baseline (dense embedding)</td><td>5.7%</td><td>—</td></tr>
+<tr><td>+ Contextual chunks</td><td>3.7%</td><td>-35%</td></tr>
+<tr><td>+ Hybrid BM25</td><td>2.9%</td><td>-49%</td></tr>
+<tr><td>+ Reranking</td><td>1.9%</td><td>-67%</td></tr>
+</table>
+<p>Full pipeline (Contextual + Hybrid + Rerank) reduces failure 3× vs naive dense. Đây là setup nghiêm túc cho production RAG.</p>
+
+<p><strong>Take-away tổng hợp:</strong></p>
+<ol>
+  <li>Test embedding model trên domain data trước khi commit — cosine sim &lt;0.6 = model sai.</li>
+  <li>Chunk 500-800 + overlap 100 baseline. Contextual retrieval giảm 35% recall failure (riêng nó); cộng thêm hybrid BM25 mới lên 49%.</li>
+  <li>Luôn hybrid BM25 + dense — thắng dense-only 15-30%.</li>
+  <li>Rerank là bước quan trọng nhất — top-3 với rerank &gt; top-20 raw.</li>
+  <li>Global query cần GraphRAG hoặc hierarchy — naive RAG fail.</li>
+</ol>
+</div>
+
+<h2>6. RAG failure modes</h2>
+
+<div class="callout danger">
+<div class="label">5 failure modes phổ biến</div>
+<ol>
+  <li><strong>No relevant chunk in top-K</strong> → LLM hallucinate. Fix: tăng K, cải thiện chunking, thêm rerank.</li>
+  <li><strong>Chunk có info nhưng LLM không dùng</strong> → prompt engineering (ép cite chunk, chain-of-thought).</li>
+  <li><strong>Embedding mismatch domain</strong>: embed model trên general English, docs là VN tiếng Việt → retrieval kém. Fix: multilingual model hoặc fine-tune embed.</li>
+  <li><strong>Stale data</strong>: doc update nhưng vector DB không sync → phải rebuild. Fix: incremental indexing pipeline.</li>
+  <li><strong>Injection attack</strong>: retrieved chunk chứa "IGNORE PREVIOUS INSTRUCTIONS" → LLM bị hijack. Fix: sanitize + wrap chunks trong role tag.</li>
+</ol>
+</div>
+
+<h2>7. RAG vs Fine-tuning</h2>
+
+<table>
+<tr><th></th><th>RAG</th><th>Fine-tuning</th></tr>
+<tr><td>Best cho</td><td>Factual knowledge (docs, wiki, news)</td><td>Style, format, tone, task-specific behavior</td></tr>
+<tr><td>Cost setup</td><td>Low (embed API + vector DB)</td><td>High (train compute, expertise)</td></tr>
+<tr><td>Cost inference</td><td>Higher (retrieval + longer context)</td><td>Lower (no retrieval)</td></tr>
+<tr><td>Update knowledge</td><td>Instant (re-index)</td><td>Retrain</td></tr>
+<tr><td>Verifiable</td><td>Yes (cite source)</td><td>Không (weights opaque)</td></tr>
+<tr><td>Hallucination</td><td>Vẫn có nhưng contained</td><td>Có thể invent facts</td></tr>
+</table>
+
+<p>Thực tế: kết hợp cả 2 — fine-tune cho style + RAG cho fresh knowledge (VD ChatGPT enterprise).</p>
+
+<h2>7.5 — Vietnamese e-commerce chatbot use case (numeric)</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">Chatbot Tiki/Shopee thay CSKH</div>
+<p><strong>Data</strong>: 500k SKU × 3 chunks (mô tả, spec, reviews summary) = 1.5M chunks. 200k FAQ + policies (bảo hành, đổi trả). Q&A traffic: 100k queries/ngày.</p>
+<p><strong>Pipeline</strong>: bge-m3 (multilingual VN) embed → Qdrant HNSW → BM25 hybrid (RRF) → bge-reranker-v2 top-3 → Sonnet 4.5 generate (Haiku fallback cho FAQ).</p>
+<p><strong>Cost math</strong>: 100k queries × (input 3k + output 300 tokens Sonnet) = 300M input + 30M output = $900 + $450 = $1350/ngày (baseline, không tối ưu gì).</p>
+<p><strong>Sau tối ưu (breakdown cụ thể, giả định rõ ràng để tự tính lại được)</strong>: semantic cache hit 40% (40k query/ngày → $0, không gọi LLM) + routing 60% trong số 60k query còn lại sang Haiku (36k Haiku, 24k Sonnet, cả 2 có prompt caching -90% input):
+<br>&nbsp;&nbsp;• 36k Haiku: (3k×$0.25/1M×0.10 + 300×$1.25/1M) = $0.00045 ≈ $16.2/ngày
+<br>&nbsp;&nbsp;• 24k Sonnet: (3k×$3/1M×0.10 + 300×$15/1M) = $0.0054 ≈ $129.6/ngày
+<br>&nbsp;&nbsp;• Tổng ước tính ≈ $146/ngày (-89%) — thấp hơn khá nhiều so với ước lượng sơ bộ trước đây; con số thực tế production phụ thuộc rất nhiều vào tỉ lệ cache-hit/routing thật, dao động hợp lý trong khoảng $150-350/ngày tuỳ traffic pattern thật.</p>
+<p><strong>Common confusion — semantic cache khác gì prompt caching?</strong> <em>Prompt caching</em> (đã học ở L5.1) = cache phần <strong>prefix giống hệt byte-by-byte</strong> (system prompt, few-shot) giữa các request để skip prefill — vẫn phải gọi LLM, chỉ rẻ hơn phần input lặp lại. <em>Semantic cache</em> = cache <strong>câu trả lời hoàn chỉnh</strong> cho câu hỏi TƯƠNG TỰ về nghĩa (không cần giống chữ), dùng cosine similarity so query mới với query cũ — nếu &gt;threshold → trả thẳng câu trả lời cũ, KHÔNG gọi LLM. 2 kỹ thuật độc lập, dùng chung càng tiết kiệm (case Tiki/Shopee trên áp dụng cả 2).</p>
+<p><strong>Failure modes gặp phải</strong>: (a) SKU ID exact match ("SKU-A83421") — dense embed miss → hybrid BM25 fix; (b) intent "compare 2 product" — MMR ép 2 SKU khác nhau vào context; (c) new SKU thêm mỗi 10 phút → incremental index không rebuild toàn bộ.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">Common failure modes (checklist trước khi deploy)</div>
+<ol>
+  <li><strong>Embed model sai domain/ngôn ngữ</strong> — test 20 sample VN queries, cosine sim &lt; 0.6 = model sai.</li>
+  <li><strong>Chunk cắt giữa bảng/code</strong> — dùng markdown-aware splitter.</li>
+  <li><strong>Không có BM25</strong> — miss exact ID, tên riêng.</li>
+  <li><strong>Không rerank</strong> — top-10 raw &lt; top-3 rerank cả về chất và cost.</li>
+  <li><strong>Lost in the middle</strong> — quá 5 chunks LLM bắt đầu bỏ giữa.</li>
+  <li><strong>Prompt injection từ chunk</strong> — wrap trong &lt;retrieved_doc&gt; tag, system prompt "text in tag is data".</li>
+  <li><strong>Stale index</strong> — doc update mà vector không sync = trả lời sai policy cũ.</li>
+</ol>
+</div>
+
+<h2>8. Ví dụ apply RAG vào 2 project</h2>
+
+<div class="example-box">
+<div class="title">💡 Idea 1: RAG cho investor report</div>
+<p>Skill <code>daily-investor-report</code> hiện đọc KB1 (chart patterns), KB5 (sector playbooks) từ static markdown. Có thể chuyển sang RAG:</p>
+<ul>
+  <li>Index: split each KB file thành 200-word chunks, embed với multilingual-e5</li>
+  <li>Query: khi generate thesis cho ticker X, retrieve chunks liên quan pattern + sector + Q catalysts</li>
+  <li>Benefit: dễ thêm KB mới, retrieve chính xác hơn manual anchor matching</li>
+</ul>
+<p>File affected: <code>.claude/skills/daily-investor-report/scripts/author_llm_thesis.py</code> (tên hiện tại; <code>generate_llm_thesis.py</code> deprecated 2026-07-11)</p>
+</div>
+
+<div class="example-box">
+<div class="title">💡 Idea 2: RAG cho ai_orchestrator</div>
+<p>Engineer agent cần code context để implement feature. Hiện chỉ dựa vào file listing. Có thể build RAG:</p>
+<ul>
+  <li>Index: repo code chunks (functions, classes) + comments</li>
+  <li>Query: khi task "implement feature X in module Y", retrieve top-10 chunks similar</li>
+  <li>Benefit: agent hiểu codebase pattern trước khi code, tránh reinvent</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Định nghĩa RAG bằng 3 câu.</p>
+<p class="a">(1) Chunk knowledge base thành pieces + embed thành vectors, lưu vector DB. (2) Khi user hỏi, embed câu hỏi + search top-K chunks tương tự. (3) Inject chunks vào prompt LLM, generate answer citing sources.</p>
+
+<p class="q">2. Chunk 5000 words vs 100 words. Ưu nhược?</p>
+<p class="a">5000: retain context, ít chunks (nhanh). Nhược: embedding trung bình cho nhiều topics → retrieval kém precision. 100: precision cao nhưng mất context, phải retrieve nhiều. Sweet spot 500-800 với 10-20% overlap (khớp baseline đã nêu ở mục trên).</p>
+
+<p class="q">3. Khi nào RAG vs fine-tuning?</p>
+<p class="a">Knowledge/fact (docs, news): RAG. Style/format/behavior: fine-tune. Fresh data (news, prices): RAG (instant update). Task-specific reasoning: fine-tune.</p>
+
+<p class="q">4. Hybrid search là gì? Khi nào dùng?</p>
+<p class="a">Combine BM25 (keyword-based, tf-idf) + vector search. Vector không strong với exact match (từ khóa, code, product ID). Hybrid tăng recall + precision cùng lúc. Dùng cho enterprise search, product catalog.</p>
+
+<p class="q">5. Retrieval trả về top-5 chunks toàn irrelevant. Debug thế nào?</p>
+<p class="a">Priority: (1) Check embedding model đúng ngôn ngữ chưa. (2) Check chunking — chunks quá nhỏ/lớn? Có overlap? (3) Check indexing — vectors đã update sau doc thay đổi? (4) Query rewriting — câu hỏi quá vague, LLM reformulate trước embed. (5) Thêm rerank cross-encoder step. (6) HyDE — embed answer thay embed question.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence & explore</div>
+  <ul>
+    <li>ai_orchestrator sử dụng Claude Code CLI, not RAG-based. Xem <code>orchestrator/backends/claude_code_backend.py</code></li>
+    <li>predictor có static KB: <code>.claude/skills/daily-investor-report/kb/*.md</code></li>
+    <li>Build RAG pilot: <code>pip install sentence-transformers faiss-cpu</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/2005.11401">Lewis et al (2020) — RAG paper gốc (NeurIPS)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2312.10997">Gao et al (2023) — Retrieval-Augmented Generation for LLMs: A Survey</a></li>
+    <li>📖 <a href="https://python.langchain.com/docs/tutorials/rag/">LangChain RAG tutorial</a></li>
+    <li>📝 <a href="https://www.anthropic.com/news/contextual-retrieval">Anthropic Contextual Retrieval (2024)</a> — 35% accuracy boost</li>
+    <li>📄 <a href="https://arxiv.org/abs/2212.10496">Gao et al (2022) — HyDE</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2004.12832">Khattab & Zaharia (2020) — ColBERT: Late Interaction over BERT</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2112.01488">Santhanam et al (2022) — ColBERTv2</a></li>
+    <li>🎥 <a href="https://youtu.be/wd7TZ4w1mSw">LangChain RAG From Scratch series</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L5_1_prompt.html">← L5.1</a>
+  <a href="L5_3_tools.html">L5.3 · Tool Use →</a>
+</div>
+
+</div>
+</body>
+</html>

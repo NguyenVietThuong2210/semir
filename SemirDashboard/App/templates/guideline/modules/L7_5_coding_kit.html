@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L7.5 — Coding Kit</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 7 · Module 5</div>
+  <h1>7.5 · Coding Kit — Top 20 ML/DL/LLM Questions</h1>
+  <p class="subtitle">Common coding + concept questions với đáp án + code Python. Practice list cho phỏng vấn.</p>
+  <div class="level">Level 7 · Interview · ~60 phút</div>
+</div>
+<div class="container">
+
+<h2>Format</h2>
+<p>20 questions phân theo topic. Mỗi câu: prompt, code answer, discussion points.</p>
+
+<h2>ML Fundamentals (Q1-Q6)</h2>
+
+<h3>Q1. Implement K-means from scratch</h3>
+<pre><code>import numpy as np
+
+def kmeans(X, k=3, max_iter=100, tol=1e-4):
+    n, d = X.shape
+    # Init: pick k random samples as centroids
+    idx = np.random.choice(n, k, replace=False)
+    C = X[idx].copy()
+
+    for _ in range(max_iter):
+        # Assign each x to nearest centroid
+        dists = np.linalg.norm(X[:, None] - C[None, :], axis=2)
+        labels = dists.argmin(axis=1)
+        # Update centroids
+        new_C = np.array([X[labels==j].mean(axis=0) for j in range(k)])
+        if np.linalg.norm(new_C - C) &lt; tol:
+            break
+        C = new_C
+    return labels, C
+
+# Discussion: init strategy (K-means++), handling empty cluster
+</code></pre>
+
+<h3>Q2. Implement logistic regression with (batch) gradient descent</h3>
+<pre><code>def sigmoid(z): return 1 / (1 + np.exp(-z))
+
+def train_logreg(X, y, lr=0.01, epochs=100):
+    n, d = X.shape
+    w = np.zeros(d)
+    b = 0
+    for _ in range(epochs):
+        z = X @ w + b
+        p = sigmoid(z)
+        grad_w = X.T @ (p - y) / n
+        grad_b = (p - y).mean()
+        w -= lr * grad_w
+        b -= lr * grad_b
+    return w, b
+
+# Discussion: bias term, learning rate, regularization L2
+</code></pre>
+
+<h3>Q3. Compute AUC-ROC from scratch</h3>
+<pre><code>def auc_roc(y_true, y_prob):
+    # Sort by predicted prob desc
+    order = np.argsort(-y_prob)
+    y_true = y_true[order]
+
+    pos = y_true.sum()
+    neg = len(y_true) - pos
+    tp = fp = 0
+    prev_fpr = 0
+    auc = 0
+    for yi in y_true:
+        if yi == 1: tp += 1
+        else: fp += 1
+        tpr = tp / pos
+        fpr = fp / neg
+        # Trapezoidal area
+        auc += (fpr - prev_fpr) * tpr
+        prev_fpr = fpr
+    return auc
+
+# Discussion: interpret AUC 0.5 = random, 1.0 = perfect
+</code></pre>
+
+<h3>Q4. Handle class imbalance — code</h3>
+<pre><code>from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import classification_report
+
+weights = compute_class_weight('balanced', classes=np.unique(y), y=y)
+weight_dict = dict(enumerate(weights))
+
+model = XGBClassifier(scale_pos_weight=neg_count/pos_count)
+# Or:
+sample_weight = np.array([weight_dict[yi] for yi in y_train])
+model.fit(X, y, sample_weight=sample_weight)
+
+# Threshold tuning:
+from sklearn.metrics import precision_recall_curve
+p, r, thresholds = precision_recall_curve(y_val, p_val)
+best_idx = np.argmax(2*p*r/(p+r+1e-9))
+</code></pre>
+
+<h3>Q5. Time-series train-val split (no leak)</h3>
+<pre><code>from sklearn.model_selection import TimeSeriesSplit
+
+cv = TimeSeriesSplit(n_splits=5, gap=5)
+for train_idx, val_idx in cv.split(X):
+    # Ordered by time; val always AFTER train
+    # gap=5 for horizon 5 to avoid label leak
+    ...
+</code></pre>
+
+<h3>Q6. Cross-entropy loss + gradient</h3>
+<pre><code>def softmax(z):
+    z = z - z.max(axis=-1, keepdims=True)  # numeric stability
+    e = np.exp(z)
+    return e / e.sum(axis=-1, keepdims=True)
+
+def cross_entropy(logits, y_true):
+    """y_true one-hot."""
+    p = softmax(logits)
+    return -np.sum(y_true * np.log(p + 1e-12), axis=-1).mean()
+
+def ce_grad(logits, y_true):
+    """dL/dlogits = softmax(logits) - y_true / batch."""
+    p = softmax(logits)
+    return (p - y_true) / len(y_true)
+</code></pre>
+
+<h2>Deep Learning (Q7-Q12)</h2>
+
+<h3>Q7. Implement dropout</h3>
+<pre><code>def dropout(x, p, training=True):
+    if not training or p == 0:
+        return x
+    mask = (np.random.rand(*x.shape) > p).astype(float)
+    return x * mask / (1 - p)  # inverted scaling
+</code></pre>
+
+<h3>Q8. LayerNorm implementation</h3>
+<pre><code>class LayerNorm(nn.Module):
+    def __init__(self, dim, eps=1e-5):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(dim))
+        self.beta = nn.Parameter(torch.zeros(dim))
+        self.eps = eps
+
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        var = x.var(-1, keepdim=True, unbiased=False)
+        x_hat = (x - mean) / torch.sqrt(var + self.eps)
+        return self.gamma * x_hat + self.beta
+</code></pre>
+
+<h3>Q9. Attention head from scratch</h3>
+<pre><code>class AttentionHead(nn.Module):
+    def __init__(self, d_model, d_head):
+        super().__init__()
+        self.Wq = nn.Linear(d_model, d_head, bias=False)
+        self.Wk = nn.Linear(d_model, d_head, bias=False)
+        self.Wv = nn.Linear(d_model, d_head, bias=False)
+        self.d_head = d_head
+
+    def forward(self, x, mask=None):
+        Q = self.Wq(x); K = self.Wk(x); V = self.Wv(x)
+        scores = Q @ K.transpose(-2, -1) / (self.d_head ** 0.5)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        attn = F.softmax(scores, dim=-1)
+        return attn @ V
+</code></pre>
+
+<h3>Q10. Positional encoding sinusoidal</h3>
+<pre><code>def positional_encoding(seq_len, d_model):
+    pe = np.zeros((seq_len, d_model))
+    position = np.arange(seq_len)[:, None]
+    div = np.exp(np.arange(0, d_model, 2) * -(np.log(10000) / d_model))
+    pe[:, 0::2] = np.sin(position * div)
+    pe[:, 1::2] = np.cos(position * div)
+    return pe
+</code></pre>
+
+<h3>Q11. Simple LSTM cell</h3>
+<pre><code>class LSTMCell(nn.Module):
+    def __init__(self, d_in, d_h):
+        super().__init__()
+        self.W_f = nn.Linear(d_in + d_h, d_h)
+        self.W_i = nn.Linear(d_in + d_h, d_h)
+        self.W_o = nn.Linear(d_in + d_h, d_h)
+        self.W_c = nn.Linear(d_in + d_h, d_h)
+
+    def forward(self, x, h, c):
+        combined = torch.cat([x, h], dim=-1)
+        f = torch.sigmoid(self.W_f(combined))
+        i = torch.sigmoid(self.W_i(combined))
+        o = torch.sigmoid(self.W_o(combined))
+        c_tilde = torch.tanh(self.W_c(combined))
+        c_new = f * c + i * c_tilde
+        h_new = o * torch.tanh(c_new)
+        return h_new, c_new
+</code></pre>
+
+<h3>Q12. Batch normalization</h3>
+<pre><code>class BatchNorm1d(nn.Module):
+    def __init__(self, dim, momentum=0.1, eps=1e-5):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(dim))
+        self.beta = nn.Parameter(torch.zeros(dim))
+        self.register_buffer('running_mean', torch.zeros(dim))
+        self.register_buffer('running_var', torch.ones(dim))
+        self.momentum = momentum
+        self.eps = eps
+
+    def forward(self, x):
+        if self.training:
+            mean = x.mean(0)
+            var = x.var(0, unbiased=False)
+            self.running_mean = (1-self.momentum)*self.running_mean + self.momentum*mean.detach()
+            self.running_var = (1-self.momentum)*self.running_var + self.momentum*var.detach()
+        else:
+            mean, var = self.running_mean, self.running_var
+        x_hat = (x - mean) / torch.sqrt(var + self.eps)
+        return self.gamma * x_hat + self.beta
+</code></pre>
+
+<h2>LLM (Q13-Q20)</h2>
+
+<h3>Q13. BPE tokenizer training step</h3>
+<p><strong>BPE (Byte-Pair Encoding)</strong> = cách tách câu thành token không dựa theo từ điển cố định, mà học từ data: bắt đầu từ từng ký tự riêng lẻ, lặp lại việc "gộp cặp ký tự xuất hiện cạnh nhau nhiều nhất thành 1 token mới" hàng nghìn lần. Kết quả: từ phổ biến ("the") thành 1 token, từ hiếm/từ mới ("predictoring") bị tách thành nhiều mảnh con quen thuộc — không bao giờ gặp "unknown token" hoàn toàn.</p>
+<pre><code>from collections import Counter
+
+def train_bpe_step(word_freqs):
+    """Given word freq dict → 1 merge step."""
+    # Count adjacent pair frequencies
+    pairs = Counter()
+    for word, freq in word_freqs.items():
+        symbols = word.split()
+        for i in range(len(symbols) - 1):
+            pairs[(symbols[i], symbols[i+1])] += freq
+    # Merge most frequent
+    top = pairs.most_common(1)[0][0]
+    new_word_freqs = {}
+    for word, freq in word_freqs.items():
+        new_word = word.replace(f"{top[0]} {top[1]}", f"{top[0]}{top[1]}")
+        new_word_freqs[new_word] = freq
+    return new_word_freqs, top
+</code></pre>
+
+<h3>Q14. Top-P (nucleus) sampling</h3>
+<pre><code>def top_p_sample(logits, p=0.9):
+    probs = np.exp(logits) / np.exp(logits).sum()
+    order = np.argsort(-probs)
+    cumsum = probs[order].cumsum()
+    # Find cutoff index where cumsum >= p
+    cutoff = np.searchsorted(cumsum, p) + 1
+    keep = order[:cutoff]
+    # Renormalize
+    keep_probs = probs[keep] / probs[keep].sum()
+    return np.random.choice(keep, p=keep_probs)
+</code></pre>
+
+<h3>Q15. Cosine similarity for embeddings</h3>
+<pre><code>def cosine_similarity(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9)
+
+def semantic_search(query_emb, corpus_embs, top_k=5):
+    sims = np.array([cosine_similarity(query_emb, e) for e in corpus_embs])
+    top_idx = np.argsort(-sims)[:top_k]
+    return top_idx, sims[top_idx]
+</code></pre>
+
+<h3>Q16. Simple LoRA adapter</h3>
+<p><strong>LoRA (Low-Rank Adaptation)</strong>: đóng băng (freeze) toàn bộ weight gốc <code>base_layer</code>, chỉ train thêm 2 ma trận nhỏ <code>B</code> (d_in × rank) và <code>A</code> (rank × d_out) với <code>rank</code> rất nhỏ (8, 16...) so với d_in/d_out (hàng nghìn). Output = output gốc + (x qua đường tắt B→A) × hệ số scale. Vì rank nhỏ, số tham số cần train giảm hàng trăm-nghìn lần so với fine-tune toàn bộ — đây là lý do file LoRA chỉ ~50MB thay vì vài GB (liên hệ Multi-LoRA serving ở L7.2 mục 3).</p>
+<pre><code>class LoRA(nn.Module):
+    def __init__(self, base_layer, rank=8, alpha=16):
+        super().__init__()
+        self.base = base_layer  # frozen
+        for p in self.base.parameters(): p.requires_grad = False
+        d_in = base_layer.in_features
+        d_out = base_layer.out_features
+        self.A = nn.Parameter(torch.zeros(rank, d_out))
+        self.B = nn.Parameter(torch.randn(d_in, rank) * 0.01)
+        self.scale = alpha / rank
+
+    def forward(self, x):
+        return self.base(x) + (x @ self.B @ self.A) * self.scale
+</code></pre>
+
+<h3>Q17. KV cache implementation</h3>
+<p><strong>KV cache</strong>: khi LLM sinh token kế tiếp, nó cần Key/Value của TẤT CẢ token trước đó để tính attention — nếu tính lại từ đầu mỗi lần sinh 1 token mới thì cực tốn (O(n²) cho cả câu). KV cache lưu lại K, V đã tính của các token cũ, mỗi bước chỉ tính thêm K/V của token mới rồi nối (concat) vào cache — đổi bộ nhớ GPU lấy tốc độ. Đây chính là thứ PagedAttention (L7.2 mục 3) tối ưu cách cấp phát.</p>
+<pre><code>class Attention(nn.Module):
+    def __init__(self, d_model, n_heads):
+        super().__init__()
+        # ... init Wq, Wk, Wv, Wo ...
+        self.k_cache = None
+        self.v_cache = None
+
+    def forward(self, x, use_cache=False):
+        Q = self.Wq(x); K_new = self.Wk(x); V_new = self.Wv(x)
+        if use_cache and self.k_cache is not None:
+            K = torch.cat([self.k_cache, K_new], dim=1)
+            V = torch.cat([self.v_cache, V_new], dim=1)
+        else:
+            K, V = K_new, V_new
+        if use_cache:
+            self.k_cache = K
+            self.v_cache = V
+        # ... attention compute ...
+        return out
+</code></pre>
+
+<h3>Q18. Prompt injection sanitizer</h3>
+<pre><code>import re
+
+INJECTION_PATTERNS = [
+    r"ignore\s+(previous|above|prior)\s+instructions?",
+    r"disregard\s+(prompts?|system\s+prompt)",
+    r"you\s+are\s+now",
+    r"new\s+instructions?:",
+]
+
+def sanitize(text: str) -> str:
+    for pattern in INJECTION_PATTERNS:
+        text = re.sub(pattern, "[FILTERED]", text, flags=re.IGNORECASE)
+    return text
+
+# Additional: wrap in role tags
+def safe_wrap(text: str) -> str:
+    cleaned = sanitize(text)
+    return f"&lt;user_data&gt;{cleaned}&lt;/user_data&gt;"
+</code></pre>
+
+<h3>Q19. RAG retrieval + rerank</h3>
+<pre><code>def rag_retrieve(question, index, embed_model, rerank_model, k=10, top=3):
+    # Vector search
+    q_emb = embed_model.encode(question)
+    scores, indices = index.search(q_emb.reshape(1, -1), k)
+    candidates = [(docs[i], scores[0][j]) for j, i in enumerate(indices[0])]
+
+    # Rerank with cross-encoder
+    pairs = [(question, doc) for doc, _ in candidates]
+    rerank_scores = rerank_model.predict(pairs)
+    reranked = sorted(zip(candidates, rerank_scores), key=lambda x: -x[1])
+    return [doc for (doc, _), _ in reranked[:top]]
+</code></pre>
+
+<h3>Q20. Streaming SSE response</h3>
+<pre><code>from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+
+app = FastAPI()
+
+@app.post("/chat")
+async def chat(prompt: str):
+    async def event_stream():
+        async with client.messages.stream(
+            model="claude-opus-4-7",
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            async for text in stream.text_stream:
+                yield f"data: {text}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+</code></pre>
+
+<h2>Coding interview anti-patterns</h2>
+<div class="callout danger">
+<div class="label">Đừng làm khi coding phỏng vấn</div>
+<ol>
+  <li><strong>Code ngay không hỏi</strong>: giả định input format, edge case. Rule: 2 phút clarify → confirm ví dụ → mới code.</li>
+  <li><strong>Im lặng</strong>: interviewer không biết bạn nghĩ gì → assume stuck. Rule: "narrate" — nói to suy nghĩ, kể cả khi sai.</li>
+  <li><strong>Optimize sớm</strong>: viết brute force xong rồi improve. Đừng cố ra O(n) ngay, sẽ bug + hết giờ.</li>
+  <li><strong>Không test edge</strong>: empty, single element, duplicates, negative, overflow. Rule: 3 test cases minimum trước "done".</li>
+  <li><strong>Từ chối hint</strong>: interviewer gợi ý = cứu bạn khỏi wasted time. Nhận + acknowledge + iterate.</li>
+</ol>
+</div>
+
+<h2>System design template — 5 phần cho 45 phút</h2>
+<pre><code>1. Requirements (5 min)
+   - Functional: what does system do? 3-5 use cases
+   - Non-functional: QPS, latency SLA, availability, consistency
+   - Constraints: budget, existing infra, team size
+
+2. API + data model (5 min)
+   - REST endpoints or gRPC methods
+   - Schema (SQL tables or protobuf)
+   - Sample request/response
+
+3. High-level architecture (10 min)
+   - Boxes: client, API gateway, service, DB, cache, queue
+   - Arrows: data flow
+   - Identify 1-2 components để deep-dive
+
+4. Deep-dive (15 min)
+   - Pick riskiest / most interesting component
+   - Algorithm, data structure, sharding strategy
+
+5. Scale + failure (10 min)
+   - 10× traffic — bottleneck ở đâu, mitigate?
+   - 5 failure modes + mitigations
+   - Monitoring + alerting basics
+</code></pre>
+
+<div class="qa-gate">
+<h3>✅ Practice tip</h3>
+<p>Đối với mỗi Q: (1) Đọc prompt only, code từ đầu 15-30 min. (2) Compare với answer. (3) Nếu wrong, note pattern. (4) Chạy code ở Jupyter.</p>
+<p>Sau 20 Q: bạn có "muscle memory" cho phỏng vấn coding.</p>
+</div>
+
+<div class="nav-bottom">
+  <a href="L7_4_sysdesign_agent.html">← L7.4</a>
+  <a href="L7_6_behavioral_kit.html">L7.6 · Behavioral Kit →</a>
+</div>
+
+</div>
+</body>
+</html>

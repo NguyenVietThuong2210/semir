@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R1.1 · Python — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Coding Fundamentals · Điểm 1/6</div>
+  <h1>R1.1 · Python — ngôn ngữ "não" của hệ thống</h1>
+  <p class="subtitle">Vì sao backend của dự án chọn Python, GIL là gì, và tại sao nhầm lẫn concurrency model là lỗi kinh điển của dev mới.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Giải thích được 3 lý do cụ thể (không phải "mặc định") vì sao dự án chọn Python cho toàn bộ backend.</li>
+<li>Vẽ lại được mô hình GIL bằng 1 câu, và chỉ ra hệ quả trực tiếp của nó lên cách viết code I/O-bound vs CPU-bound.</li>
+<li>Đọc đúng 1 đoạn <code>async def</code> thật trong <code>backend/predict/engine.py</code> và giải thích event loop đang làm gì tại điểm <code>await</code>.</li>
+<li>Nhận diện được ít nhất 2 lỗi Python kinh điển (mutable default argument, quên <code>await</code>) trong 1 đoạn code cho trước.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Đây là điểm khởi đầu của cả 6 khái niệm Coding Fundamentals — không yêu cầu prerequisite nào khác ngoài biết đọc code ở mức rất cơ bản (biến, hàm, vòng lặp).</p>
+<p>Độ khó: <strong>Dễ</strong>. Riêng phần GIL/concurrency (mục 📖 bước 3 bên dưới) khó hơn mặt bằng chung — nếu mới lần đầu gặp khái niệm này, đọc chậm và quay lại sau khi đã quen code Python cơ bản cũng không sao.</p>
+<p>Không có module Level 1-9 nào dạy lại nội dung này — đây là gap 100% trong curriculum gốc, nên đọc <strong>trước</strong> mọi module ML/DL khác.</p>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Python trong dự án này giống <strong>"bộ não trung tâm"</strong> của cả hệ thống — nơi diễn ra mọi tính toán: đọc giá cổ phiếu, tính feature kỹ thuật, train XGBoost, tính composite score.</p>
+<p>Nó không phải ngôn ngữ nhanh nhất (C++/Rust chạy tính toán thuần túy nhanh hơn nhiều lần) — nhưng nó là ngôn ngữ <em>viết code nhanh nhất</em> và có sẵn toàn bộ "hộp dụng cụ" khoa học dữ liệu (<code>numpy</code>, <code>pandas</code>, <code>xgboost</code>, <code>asyncpg</code>) mà không ngôn ngữ nào khác sánh được về độ trưởng thành.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>Bước 1 — Vì sao dự án chọn Python cho backend?</h3>
+<p>Không phải ngẫu nhiên. 3 lý do quan sát được trực tiếp từ code:</p>
+<table>
+<tr><th>Lý do</th><th>Bằng chứng trong repo</th></tr>
+<tr><td>Hệ sinh thái ML trưởng thành nhất</td><td><code>xgboost</code>, <code>scikit-learn</code>, <code>pandas</code>, <code>numpy</code> — không ngôn ngữ nào khác có bộ thư viện ML sâu và ổn định bằng Python.</td></tr>
+<tr><td>Async I/O cho web + DB đồng thời</td><td><code>asyncpg</code> (driver Postgres bất đồng bộ) — dùng trong toàn bộ <code>backend/predict/engine.py</code> để không block khi chờ DB trả kết quả.</td></tr>
+<tr><td>Duck typing + rapid iteration</td><td>Thêm 1 feature mới (VD <code>rsi_14</code>) chỉ vài dòng, không cần khai báo type tường minh — dù dự án vẫn chạy <code>mypy</code> riêng để bắt lỗi type (xem mục Ứng dụng dự án).</td></tr>
+</table>
+
+<h3>Bước 2 — Duck typing là gì? (khái niệm dễ trước)</h3>
+<p>Python không ép bạn khai báo kiểu dữ liệu trước khi dùng. Một hàm nhận tham số <code>x</code> có thể hoạt động với <em>bất kỳ</em> object nào có method/thuộc tính đúng tên mà hàm cần — không quan tâm object đó "là gì".</p>
+<pre><code>def total_volume(ticker_list):
+    return sum(t.volume for t in ticker_list)
+# Hàm này chạy được với list Ticker, list Stock, hay bất kỳ object nào
+# có thuộc tính .volume — Python không kiểm tra "kiểu" trước khi chạy.</code></pre>
+<p>Câu nói kinh điển: "nếu nó đi như vịt, kêu như vịt, thì nó là vịt" — Python không hỏi "bạn có phải class Duck không?", chỉ hỏi "bạn có <code>.quack()</code> không?".</p>
+<p><strong>Cái giá phải trả</strong>: lỗi type chỉ lộ ra khi code <em>chạy tới</em> dòng đó, không phải lúc viết code. Đây là lý do dự án vẫn chạy <code>mypy</code> — một static type-checker riêng — để bắt trước một phần lớp lỗi này (xem mục 8).</p>
+
+<h3>Bước 3 — GIL (Global Interpreter Lock) — điểm học thuật quan trọng nhất</h3>
+<p>Đây là phần khó nhất của module này. Đọc chậm.</p>
+<p><strong>Định nghĩa</strong>: CPython (bản Python phổ biến nhất, dự án này dùng) chỉ cho phép <strong>1 thread thực thi bytecode Python tại 1 thời điểm</strong> trong 1 process — dù máy có 16 core, dù code tạo ra 100 thread.</p>
+<table>
+<tr><th>Bước</th><th>Điều gì xảy ra</th></tr>
+<tr><td>1</td><td>Tạo 2 thread A và B trong cùng 1 Python process.</td></tr>
+<tr><td>2</td><td>Cả 2 thread đều muốn chạy Python bytecode (VD 1 vòng lặp tính toán).</td></tr>
+<tr><td>3</td><td>GIL chỉ cấp "quyền chạy" cho 1 thread tại 1 thời điểm — thread kia phải đợi, dù có core rảnh.</td></tr>
+<tr><td>4</td><td>Kết quả: 2 thread CPU-bound trên Python <strong>không nhanh hơn</strong> 1 thread — đôi khi còn chậm hơn vì tốn overhead chuyển đổi.</td></tr>
+</table>
+<p><strong>Điểm mấu chốt hay bị hiểu sai</strong>: GIL không khoá CPython suốt 100% thời gian — nó chỉ khoá trong lúc thread đang chạy <em>bytecode Python</em>. Khi 1 thread gọi 1 hàm I/O cấp thấp (socket recv, đọc file, <code>time.sleep</code>) — tức là đang chờ hệ điều hành, không chạy bytecode gì cả — CPython <strong>chủ động nhả GIL ra</strong> trong lúc chờ, để thread khác được chạy. Đây là lý do <strong>threading VẪN hoạt động thật cho I/O-bound work</strong> — không phải nó "không dùng được", chỉ là nó không phải lựa chọn tối ưu nhất trong dự án này (xem bảng so sánh đầy đủ ở mục 📊 bên dưới).</p>
+<ul>
+<li><strong>I/O-bound</strong> (chờ mạng, chờ DB trả kết quả) → <strong>cả <code>threading</code> lẫn <code>asyncio</code> đều chạy được</strong> nhờ cơ chế nhả GIL ở trên — khác nhau ở chi phí/khả năng mở rộng, không phải khác nhau ở "chạy được hay không". Dự án chọn <code>asyncio</code> vì lý do cụ thể (xem bảng so sánh).</li>
+<li><strong>CPU-bound</strong> (train XGBoost, tính ma trận lớn) → CHỈ multi-<em>process</em> mới giúp (mỗi process có GIL riêng, không chia sẻ) — VD Docker container riêng, hoặc <code>ProcessPoolExecutor</code>. Cả <code>threading</code> lẫn <code>asyncio</code> đều KHÔNG giúp gì ở đây, vì tính toán thuần Python luôn cần giữ GIL suốt thời gian chạy, không có chỗ nào để "nhả ra".</li>
+</ul>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp #1 — 2 hướng hiểu sai ngược nhau, cả 2 đều sai</div>
+<p><strong>Hiểu sai (a)</strong>: nghĩ <code>asyncio</code> chạy 2 đoạn code Python thật sự song song trên 2 core. SAI — nó vẫn chạy tuần tự trên 1 thread, chỉ khác là khi 1 coroutine <code>await</code> một I/O, event loop chuyển ngay sang coroutine khác thay vì đứng im chờ.</p>
+<p><strong>Hiểu sai (b)</strong> — dễ mắc hơn, và dễ bị hiểu lầm từ chính cách trình bày GIL ở trên: nghĩ <code>threading</code> "vô dụng" hoặc "không hoạt động" cho I/O-bound vì GIL. SAI — <code>threading</code> vẫn tăng tốc thật cho I/O-bound (nhờ cơ chế nhả GIL lúc syscall chặn), đây là pattern hợp lệ và được dùng rộng rãi (VD <code>concurrent.futures.ThreadPoolExecutor</code> với thư viện <code>requests</code>). Cái GIL thật sự chặn là <strong>2 thread cùng chạy bytecode CPU-bound</strong>, không phải "mọi hình thức threading".</p>
+</div>
+
+<div class="callout"><div class="label">📖 Cập nhật — GIL không còn "vĩnh viễn bất biến" ở tầm CPython, nhưng chưa ảnh hưởng dự án này</div>
+<p>Python 3.14 (phát hành 10/2025) chính thức đưa free-threaded build (PEP 703/779) lên <strong>Phase 2 — "officially supported" nhưng vẫn opt-in</strong>, không phải mặc định: phải cài riêng biến thể <code>python3.14t</code>, còn bản mặc định <code>python3.14</code> vẫn chạy với GIL bật như bình thường. Phase 3 (no-GIL là build duy nhất) vẫn chưa có ngày chốt. Dự án này chạy <strong>Python 3.12-slim</strong> (<code>backend/Dockerfile</code> dòng 1) — bản GIL mặc định — nên toàn bộ lý luận GIL/asyncio/multi-process ở trên vẫn đúng 100% cho codebase hiện tại; free-threading chỉ liên quan nếu dự án chủ động nâng cấp lên 3.14t sau này.</p>
+</div>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>So sánh 3 cách viết cho cùng 1 việc: gọi API giá cổ phiếu cho 86 ticker (<code>HIGHLIGHT_GROUP</code>) — <strong>cả 2 cách đầu đều CHẠY ĐƯỢC và ĐỀU nhanh hơn tuần tự</strong>, khác nhau ở chi phí tài nguyên và khả năng mở rộng, không phải "1 cái đúng 1 cái sai".</p>
+<pre><code># Cách 1 — threading: HOẠT ĐỘNG THẬT cho I/O-bound, nhưng tốn tài nguyên hơn
+import concurrent.futures, requests
+
+def fetch_price(ticker):
+    resp = requests.get(f"/api/stocks/{ticker}")  # blocking call
+    return resp.json()
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=86) as pool:
+    results = list(pool.map(fetch_price, tickers))
+# Trong lúc thread A đang chờ requests.get() trả về (socket recv, GIL đã nhả),
+# thread B/C/... được chạy — 86 request THẬT SỰ overlap nhau về thời gian chờ.
+# Đánh đổi: mỗi OS thread tốn ~8MB stack mặc định + chi phí context-switch của
+# hệ điều hành — với 86 thread vẫn ổn, nhưng không scale tới hàng nghìn.
+
+# Cách 2 — asyncio: cũng hoạt động cho I/O-bound, nhẹ hơn nhiều ở quy mô lớn
+async def fetch_price(ticker, session):
+    async with session.get(f"/api/stocks/{ticker}") as resp:
+        return await resp.json()
+# Khi 1 coroutine await I/O, event loop chuyển ngay sang coroutine khác —
+# không tốn overhead tạo OS thread (1 coroutine ~vài KB, không phải ~8MB),
+# scale tới hàng nghìn request đồng thời trên 1 thread duy nhất.</code></pre>
+<p><strong>Vậy vì sao dự án chọn asyncio thay vì threading?</strong> Không phải vì threading "sai" — mà vì 3 lý do cụ thể: (1) chi phí bộ nhớ/thread thấp hơn hẳn khi cần mở rộng lên nhiều kết nối đồng thời; (2) hệ sinh thái DB đã cam kết async từ đầu — <code>asyncpg</code> (driver Postgres) chỉ có API bất đồng bộ, trộn với code threading sẽ phải bọc thêm lớp <code>run_in_executor</code> phiền phức; (3) tránh hẳn nhu cầu dùng <code>Lock</code>/<code>Semaphore</code> để bảo vệ state dùng chung — asyncio là cooperative (code tự nhường quyền chạy ở đúng chỗ <code>await</code>), không có 2 coroutine nào "chen ngang" giữa 2 dòng code như 2 OS thread có thể làm.</p>
+<p>Ví dụ thật từ repo — <code>backend/predict/engine.py</code> dòng 785 khai báo <code>async def _get_or_build_cohort_cached(db_session)</code>: toàn bộ pipeline fetch OHLCV + tính feature + gọi model đều là <code>async def</code>, vì phần lớn thời gian dành cho chờ DB/network trả kết quả, không phải tính toán CPU.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<p>Bảng đầy đủ 3 mô hình — chú ý cột "Hoạt động cho I/O-bound?": cả threading lẫn asyncio đều <strong>Có</strong>, khác nhau ở các cột còn lại, không phải khác nhau ở "chạy được hay không":</p>
+<table>
+<tr><th>Tiêu chí</th><th><code>threading</code></th><th><code>asyncio</code></th><th>Multi-process</th></tr>
+<tr><td><strong>Hoạt động cho I/O-bound?</strong></td><td>✅ Có (GIL nhả lúc syscall chặn)</td><td>✅ Có (event loop chuyển coroutine lúc <code>await</code>)</td><td>✅ Có, nhưng lãng phí — quá nặng cho việc chỉ cần chờ I/O</td></tr>
+<tr><td><strong>Hoạt động cho CPU-bound?</strong></td><td>❌ Không (GIL giữ suốt lúc chạy bytecode)</td><td>❌ Không (cùng lý do — vẫn 1 thread, 1 GIL)</td><td>✅ Có (mỗi process 1 GIL riêng, dùng được nhiều core thật)</td></tr>
+<tr><td><strong>Chi phí bộ nhớ/1 đơn vị</strong></td><td>~8MB/thread (stack mặc định OS)</td><td>~vài KB/coroutine</td><td>~vài chục MB/process (interpreter riêng)</td></tr>
+<tr><td><strong>Giới hạn scale thực tế</strong></td><td>Hàng trăm thread (OS + GIL contention)</td><td>Hàng chục nghìn coroutine</td><td>Thường bằng số core CPU</td></tr>
+<tr><td><strong>Cần lock cho shared state?</strong></td><td>Có — 2 OS thread có thể chen ngang bất kỳ đâu</td><td>Không — cooperative, chỉ nhường quyền tại <code>await</code></td><td>Không chia sẻ memory trực tiếp (mỗi process riêng)</td></tr>
+<tr><td><strong>Dùng khi nào trong dự án này</strong></td><td>Không dùng — asyncio đã đủ + rẻ hơn cho cùng bài toán I/O</td><td>Toàn bộ pipeline predict (I/O-bound: DB, API)</td><td>Training job (CPU-bound: XGBoost, ma trận lớn)</td></tr>
+<tr><td><strong>Ví dụ trong dự án</strong></td><td>Không dùng trong backend</td><td><code>engine.py</code> — toàn bộ pipeline predict</td><td>Container Docker riêng cho training job</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>backend/predict/engine.py</code> dùng <code>async def</code> xuyên suốt pipeline chính — ví dụ dòng 785 <code>async def _get_or_build_cohort_cached(db_session)</code>. Khi 1 endpoint chạy chậm, câu hỏi đầu tiên nên là: "đây là I/O-bound (đang chờ DB/network) hay CPU-bound (đang tính toán nặng)?" — vì hướng fix hoàn toàn khác nhau (tối ưu query/cache vs tối ưu thuật toán/chuyển sang multi-process).</p>
+<p>Song song đó, CI (<code>.github/workflows/ci.yml</code> dòng 32-33) chạy <code>mypy predict/ --ignore-missing-imports --no-strict-optional</code> — bằng chứng dự án không "phó mặc" hoàn toàn cho duck typing, mà bù lại bằng static type-check riêng cho thư mục lõi <code>predict/</code>.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>#2 — Mutable default argument</strong>: <code>def add_ticker(t, cache=[]): cache.append(t); return cache</code> — tham số mặc định <code>[]</code> chỉ được tạo <strong>1 lần duy nhất</strong> khi hàm được định nghĩa, không phải mỗi lần gọi. Gọi hàm 2 lần không truyền <code>cache</code>, lần 2 sẽ thấy dữ liệu còn sót từ lần 1 — bug rất khó phát hiện vì code "trông đúng". Fix: <code>def add_ticker(t, cache=None): cache = cache or []; ...</code>.</p>
+<p><strong>#3 — Quên <code>await</code> trong hàm async</strong>: gọi <code>fetch_price(ticker)</code> mà quên <code>await</code> phía trước sẽ không lỗi ngay — nó trả về 1 coroutine object chưa chạy, không phải kết quả thật. Code phía sau dùng nhầm object này sẽ lỗi ở 1 chỗ hoàn toàn khác, khó truy ngược lại nguyên nhân gốc.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được GIL bằng 1-2 câu, không cần thuật ngữ CS phức tạp.</li>
+<li>Cho 1 đoạn code, phân loại được nó là I/O-bound hay CPU-bound, và chọn đúng công cụ (asyncio/multiprocess).</li>
+<li>Giải thích được vì sao <code>threading</code> VẪN hoạt động thật cho I/O-bound (cơ chế nhả GIL lúc syscall chặn) — và tại sao dự án vẫn chọn <code>asyncio</code> thay vì threading dù cả 2 đều chạy được (3 lý do: bộ nhớ, hệ sinh thái <code>asyncpg</code>, không cần lock).</li>
+<li>Chỉ ra được vì sao CẢ <code>threading</code> LẪN <code>asyncio</code> đều KHÔNG giúp gì cho CPU-bound — chỉ multi-process mới giúp.</li>
+<li>Đọc 1 hàm Python có mutable default argument và nói được bug tiềm ẩn ở đâu.</li>
+<li>Tìm được ít nhất 1 <code>async def</code> thật trong <code>backend/predict/engine.py</code> và giải thích lý do nó cần async.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R0_overview.html">← R0 · Overview</a>
+  <a href="R1_2_bash.html">R1.2 · Bash →</a>
+</div>
+
+</div>
+</body>
+</html>

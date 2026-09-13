@@ -13,6 +13,8 @@ urlpatterns = [
 
     # ── Home & Static ─────────────────────────────────────────────────────────
     path("",           views.home,          name="home"),
+    path("guideline/",              views.guideline_view, name="guideline"),
+    path("guideline/<path:subpath>", views.guideline_view, name="guideline_page"),
     path("formulas/",  views.formulas_page, name="formulas"),
 
     # ── Data Upload ───────────────────────────────────────────────────────────

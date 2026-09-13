@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R5.4 · Prompt Engineering — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM Augmentation · Điểm 4/5</div>
+  <h1>R5.4 · Prompt Engineering</h1>
+  <p class="subtitle">Kỹ thuật rẻ nhất, nhanh nhất trong cả 5 — và giới hạn của nó: tại sao "viết prompt hay" không giải quyết được vấn đề của 1 agent chạy hàng trăm lượt liên tiếp (mở đường cho R5.5).</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<p>Dễ → khó:</p>
+<ul>
+<li><strong>[Dễ]</strong> Định vị Prompt Engineering: rẻ nhất, nhanh nhất để thử trong 5 kỹ thuật, luôn là điểm khởi đầu hợp lý.</li>
+<li><strong>[Trung bình]</strong> Nhớ lại nhanh: zero-shot, few-shot, Chain-of-Thought, structured output — chi tiết đầy đủ ở đâu.</li>
+<li><strong>[Khó]</strong> Giải thích đúng giới hạn cốt lõi của Prompt Engineering: nó giả định 1 lần gọi, tĩnh, ngắn — không có công cụ cho bối cảnh nhiều lượt gọi liên tiếp (đây là lý do Context Engineering ra đời, học ở R5.5).</li>
+<li><strong>[Trung bình]</strong> Thiết lập được golden dataset + quy trình chặn merge cho 1 lần sửa prompt production, tránh regression âm thầm.</li>
+<li><strong>[Khó]</strong> Áp dụng đúng 3 pattern ngôn từ ở tầng prompt để giảm lỗi parse JSON TRƯỚC KHI cần tới constrained decoding/retry (R2.5).</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Cách đọc trang này</div>
+<p>Zero-shot, few-shot, Chain-of-Thought (kèm giải thích latent variable marginalization — vì sao CoT thực sự "work" về mặt toán học, không chỉ là mẹo), system prompt patterns, structured output đã có RẤT đầy đủ ở <a href="L5_1_prompt.html"><code>L5_1_prompt.html</code></a>. Đọc kỹ module đó trước khi đọc R5.5 — vì Context Engineering chính là khái niệm ra đời để giải quyết những gì Prompt Engineering KHÔNG giải quyết được.</p>
+</div>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Prompt Engineering giống việc dặn dò 1 người trước khi họ làm 1 việc CỤ THỂ, NGẮN: "đi mua 3 quả táo, chọn quả không dập". Dặn kỹ, người đó làm đúng ngay. Nhưng nếu việc kéo dài cả ngày, qua hàng chục bước (mua táo → nấu ăn → dọn dẹp → tiếp khách...), lời dặn ban đầu dần bị "chìm" giữa hàng chục việc phát sinh — đây là lúc cần 1 kỹ thuật khác, không phải "dặn kỹ hơn".</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] Định vị Prompt Engineering trong bức tranh 5 kỹ thuật</h3>
+<p>Prompt Engineering tối ưu <strong>1 lần gọi LLM đơn lẻ</strong> — chọn từ ngữ, cấu trúc, ví dụ few-shot để 1 request trả lời tốt nhất có thể. Nó là kỹ thuật <strong>rẻ nhất, nhanh nhất để thử</strong> trong cả 5 kỹ thuật (không cần train, không cần build retrieval infra, không cần viết tool integration) — luôn là điểm khởi đầu hợp lý trước khi đầu tư vào 4 kỹ thuật còn lại (Tool Use, RAG, Fine-tuning, Context Engineering).</p>
+
+<h3>2. [Trung bình] Nhắc nhanh các kỹ thuật con (toán học đầy đủ ở <code>L5_1</code>)</h3>
+<table>
+<tr><th>Kỹ thuật</th><th>Ý tưởng 1 câu</th><th>Khi dùng</th></tr>
+<tr><td>Zero-shot</td><td>Hỏi thẳng, không ví dụ mẫu</td><td>Task đơn giản, model đã quen thuộc</td></tr>
+<tr><td>Few-shot</td><td>Đưa 2-5 ví dụ mẫu trước câu hỏi thật</td><td>Task cần đúng format/style cụ thể, khó diễn đạt bằng lời</td></tr>
+<tr><td>Chain-of-Thought (CoT)</td><td>Yêu cầu model "nghĩ từng bước" trước khi trả lời</td><td>Task cần suy luận nhiều bước (toán, logic)</td></tr>
+<tr><td>Structured Output</td><td>Ép trả lời đúng schema JSON/XML</td><td>Kết quả cần máy đọc tiếp (xem R2.5)</td></tr>
+</table>
+<p>Giải thích vì sao CoT thực sự "work" về mặt toán học (latent variable marginalization, không chỉ là mẹo tâm lý) đã có đầy đủ ở <code>L5_1_prompt.html</code> — không nhắc lại công thức ở đây.</p>
+
+<h3>3. [Khó] Giới hạn của Prompt Engineering — mở đường cho Context Engineering</h3>
+<p>Prompt Engineering giả định bối cảnh là <strong>1 lần gọi, tĩnh, ngắn</strong>. Nhưng 1 agent thật (như chính công cụ đang tạo ra trang này, hoặc 1 hệ thống multi-step) không phải "1 lần gọi" — nó là <strong>hàng chục, hàng trăm lượt gọi LLM liên tiếp</strong>, mỗi lượt tích lũy thêm: kết quả tool call trước đó, lịch sử hội thoại, file đã đọc.</p>
+<p>Prompt Engineering (viết 1 system prompt hay) không có công cụ nào để trả lời câu hỏi: <em>"sau 50 lượt, context đã phình lên 300,000 token, giờ làm gì?"</em> — đó chính xác là câu hỏi <strong>Context Engineering</strong> (R5.5) trả lời.</p>
+
+<h3>4. [Trung bình] Prompt versioning &amp; regression testing — kỷ luật production 2026 (gap so với <code>L5_1</code>)</h3>
+<p><code>L5_1_prompt.html</code> dạy CÁCH VIẾT 1 prompt tốt. Trang đó KHÔNG dạy: khi đã có 1 prompt tốt đang chạy production, làm sao biết 1 lần SỬA prompt (dù chỉ đổi vài chữ) không âm thầm làm hỏng hành vi đã đúng trước đó? Đây là khoảng trống thật — production 2026 coi prompt là 1 ARTIFACT cần version + test, không phải văn bản tự do sửa tuỳ hứng.</p>
+<ul>
+<li><strong>Golden dataset</strong> — 1 tập input/output mẫu đã review (thường 50-100 cặp), phủ use case chính + edge case + lỗi đã biết từng xảy ra. Mọi lần sửa prompt đều chạy lại eval trên tập này TRƯỚC khi merge.</li>
+<li><strong><code>prompt_version_id</code> là khoá nối</strong> giữa CI (lúc test) và production (lúc chấm điểm thật) — không gắn version rõ ràng, "baseline" chỉ là ước lượng cảm tính, không so sánh được chính xác giữa 2 lần chạy.</li>
+<li><strong>Ngưỡng chặn merge</strong>: PR nào đổi prompt/model version/cấu hình retrieval đều tự động chạy eval so với baseline đã pass gần nhất — regression vượt ngưỡng thì KHÔNG được merge, giống hệt kỷ luật CI cho code thường.</li>
+</ul>
+<p>3 loại thay đổi cần trigger eval lại — không chỉ riêng lúc "sửa câu chữ prompt":</p>
+<table>
+<tr><th>Loại thay đổi</th><th>Vì sao vẫn cần eval dù không đụng câu chữ prompt</th></tr>
+<tr><td>Đổi model version (VD Sonnet 4 → Sonnet 4.5)</td><td>Cùng 1 prompt, model mới có thể diễn giải khác — hành vi không đảm bảo giữ nguyên qua bản model khác</td></tr>
+<tr><td>Đổi cấu hình retrieval (top-k, chunk size — xem R5.3 §4)</td><td>Context đưa vào prompt thay đổi, dù bản thân câu chữ prompt không đổi 1 ký tự</td></tr>
+<tr><td>Đổi câu chữ prompt (trường hợp phổ biến nhất)</td><td>Trường hợp trực quan nhất — đúng loại lỗi ở worked example bên dưới</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Bẫy riêng cho hệ agent nhiều bước (2026)</div>
+<p>1 request agent thật có thể trải qua planning → retrieval (RAG) → chọn tool → function calling → format JSON → sinh câu trả lời cuối. Lỗi regression ở BẤT KỲ bước giữa nào (VD chọn sai tool) vẫn có thể bị CHE bởi 1 câu trả lời cuối cùng "nghe hợp lý" — kiểm tra chỉ output cuối không đủ để bắt được regression ở bước giữa.</p>
+</div>
+
+<h3>5. [Trung bình] Structured-output prompting Ở TẦNG PROMPT — lớp phòng thủ ĐẦU TIÊN, khác tầng R2.5</h3>
+<div class="callout"><div class="label">📖 Phân biệt với R2.5 và L5_1</div>
+<p><code>R2_5_structured_outputs.html</code> dạy tầng API (constrained decoding, retry-with-error-context khi provider không hỗ trợ). <code>L5_1 §"Enforce với schema"</code> dạy function calling. Mục này dạy tầng NGÔN TỪ trong chính prompt — thứ áp dụng được NGAY CẢ KHI không có constrained decoding, và là lớp phòng thủ ĐẦU TIÊN giảm tỷ lệ cần retry ở R2.5 xảy ra.</p>
+</div>
+<p>Pattern ngôn từ cụ thể (không phải cơ chế API) để giảm lỗi parse:</p>
+<table>
+<tr><th>Vấn đề hay gặp</th><th>Pattern sửa ở TẦNG PROMPT</th></tr>
+<tr><td>Model bọc JSON trong ```json code fence</td><td>Ghi rõ: "Output ONLY the JSON object. No markdown code fences."</td></tr>
+<tr><td>Model thêm câu dẫn/giải thích trước hoặc sau JSON</td><td>Ghi rõ: "No explanation before or after. Bắt đầu bằng <code>{</code>, kết thúc bằng <code>}</code>."</td></tr>
+<tr><td>Model lẫn lộn phần "dữ liệu tham khảo" với "chỉ dẫn cần làm theo"</td><td>Bọc dữ liệu trong delimiter/thẻ rõ ràng (VD <code>&lt;context&gt;...&lt;/context&gt;</code>) — tách bạch INSTRUCTION và DATA</td></tr>
+<tr><td>Câu chữ mơ hồ vô tình cho phép cả 2 cách hiểu (VD "có thể dùng markdown")</td><td>Rà lại TOÀN BỘ câu chữ liên quan format mỗi lần sửa — 1 cụm mơ hồ có thể phủ định cụm rõ ràng khác trong CÙNG prompt (đúng nguyên nhân ở worked example)</td></tr>
+</table>
+<p>Đây KHÔNG thay thế được constrained decoding hay retry-with-error-context (R2.5) khi provider hỗ trợ — 2 lớp bổ trợ nhau: pattern ngôn từ giảm tỷ lệ lỗi XẢY RA từ đầu (rẻ, áp dụng mọi provider); constrained decoding/retry là lưới an toàn khi pattern ngôn từ vẫn không đủ.</p>
+<pre><code>Lớp 1 (trang này, §5)   Lớp 2 (R2.5)              Lớp 3 (R2.5)
+Pattern ngôn từ    →    Constrained decoding  →   Retry-with-
+trong prompt             (nếu provider hỗ trợ)     error-context
+(rẻ, mọi provider)      (mạnh, cần hỗ trợ)         (khi cả 2 lớp
+                                                     trên vẫn miss)</code></pre>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<pre><code>Zero-shot:
+  "Phân loại tin tức này: tích cực/tiêu cực/trung lập"
+  → model tự suy luận định nghĩa "tích cực" theo cách hiểu mặc định
+
+Few-shot (khi cần đúng 1 tiêu chuẩn cụ thể):
+  "VD 1: 'Doanh thu tăng 20%' → tích cực
+   VD 2: 'Cổ phiếu giảm sàn' → tiêu cực
+   VD 3: 'Giữ nguyên dự báo' → trung lập
+   Phân loại: 'Lợi nhuận quý 3 vượt kỳ vọng 15%'"
+  → model bắt chước ĐÚNG tiêu chuẩn phân loại đã cho, không tự suy luận
+
+CoT (khi cần suy luận nhiều bước):
+  "Tính điểm rủi ro: P/E=25, ngành trung bình P/E=15, nợ/vốn=0.8.
+   Hãy nghĩ từng bước trước khi kết luận."
+  → model tự "show work" — dễ audit hơn output 1 dòng</code></pre>
+
+<h3>Worked example — 1 lần "cải thiện văn phong" prompt làm hỏng downstream parse</h3>
+<p>Minh hoạ cụ thể cho bẫy ở §4-5, đúng loại lỗi hay xảy ra khi sửa prompt mà không có golden dataset chặn:</p>
+<pre><code>Prompt GỐC (đang chạy production, downstream code gọi json.loads()):
+  "Trả lời bằng JSON, đúng schema {verdict, confidence, rationale}.
+   Output ONLY the JSON object. No markdown code fences."
+→ Output thật: {"verdict": "HOLD", "confidence": 0.55, "rationale": "..."}
+→ json.loads() parse OK
+
+1 dev sửa prompt cho "dễ đọc hơn" (không chạy lại eval trước khi merge):
+  "Hãy trả lời rõ ràng, có thể dùng markdown để dễ đọc, theo format
+   JSON gồm {verdict, confidence, rationale}."
+→ Output thật: "Dưới đây là kết quả phân tích:\n```json\n{"verdict":
+   "HOLD", ...}\n```"
+→ json.loads() FAIL — lỗi "Expecting value: line 1 column 1" vì có
+   text dẫn + code fence bọc ngoài JSON, downstream code chỉ biết
+   gọi json.loads() trực tiếp lên toàn bộ output string
+
+NGUYÊN NHÂN: cụm "có thể dùng markdown để dễ đọc" mâu thuẫn trực
+tiếp với yêu cầu "ONLY the JSON object" đã bị XOÁ MẤT khi "viết lại
+cho dễ đọc" — không có golden test nào bắt case "output có markdown
+fence hay không" nên lỗi lọt qua review bằng mắt (prompt mới ĐỌC vẫn
+"hay", chỉ sai khi chạy qua parser thật)
+
+FIX: khôi phục đúng 2 câu bắt buộc ("ONLY the JSON object", "No
+markdown code fences" — đúng pattern §5) + thêm 1 case vào golden
+dataset kiểm tra CHÍNH XÁC "output không chứa chuỗi ```" cho mọi
+lần sửa prompt sau này, không chỉ kiểm tra "verdict đúng giá trị"</code></pre>
+<p><strong>Bài học</strong>: lỗi này không nằm ở "văn phong dở" — bản thân câu văn mới hoàn toàn dễ đọc hơn với NGƯỜI. Vấn đề là prompt vừa là văn bản cho NGƯỜI đọc-hiểu vừa là hợp đồng cho MÁY parse — 1 golden test kiểm tra đúng hợp đồng đó (không chỉ "nghe hợp lý") là thứ duy nhất bắt được lỗi này trước khi lên production.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Vấn đề</th><th>Prompt Engineering giải quyết được?</th><th>Cần kỹ thuật gì thay thế</th></tr>
+<tr><td>1 câu hỏi đơn lẻ trả lời chưa đúng format</td><td>✅ Có — few-shot/structured output</td><td>—</td></tr>
+<tr><td>Model cần dữ liệu real-time</td><td>❌ Không</td><td>Tool Use (R5.1)</td></tr>
+<tr><td>Model "quên" rule sau 50 lượt hội thoại</td><td>❌ Không</td><td>Context Engineering (R5.5)</td></tr>
+<tr><td>Cần hành vi ổn định tuyệt đối, không phụ thuộc prompt</td><td>⚠️ Giới hạn</td><td>Fine-tuning (R5.2)</td></tr>
+<tr><td>Sửa prompt production, không chắc có phá hành vi cũ không</td><td>⚠️ Cần kỷ luật riêng</td><td>Golden dataset + regression test (§4, trang này)</td></tr>
+<tr><td>Model bọc JSON trong markdown fence dù đã yêu cầu JSON</td><td>✅ Có — pattern ngôn từ §5</td><td>—</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Skill <code>daily-investor-report</code> dùng đúng pattern "persona + hard rules trong system prompt" (xem <code>L5_1_prompt.html §5.3</code> "Hard rules from PredictStock investor report skill") — đây là Prompt Engineering ở dạng production, đủ tốt cho 1 lần gọi/1 ticker. Nhưng khi chạy mode <code>all</code> (86 ticker liên tiếp), câu hỏi "rule có còn được tuân thủ ở ticker thứ 60 không" không còn là vấn đề Prompt Engineering nữa — xem R5.5 để hiểu đúng góc nhìn chẩn đoán.</p>
+<p>15 hard rules của skill (<code>SKILL.md §19</code>, đã dẫn ở <code>L5_1 §5.3</code>) chính là loại nội dung CẦN 1 golden dataset canh giữ theo đúng §4: mỗi lần có ai đó "viết gọn lại" 1 trong 15 rule cho dễ đọc hơn, nguy cơ vô tình đổi nghĩa (giống hệt worked example ở trên, chỉ khác domain) là có thật — 1 bộ test case cố định cho 15 rule đó, chạy lại mỗi lần sửa <code>SKILL.md</code>, là cách duy nhất phát hiện sớm thay vì đợi report thật sai mới biết.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Coi Prompt Engineering và Context Engineering là một</strong> — nhầm "viết prompt hay" với "quản lý ngân sách context xuyên suốt nhiều lượt gọi". Đây là 2 vấn đề khác tầng.</p>
+<p><strong>2. Viết prompt dài hơn khi model "quên" rule ở lượt sau</strong> — nếu nguyên nhân thật là context bị tràn/lộn xộn (Context Engineering, R5.5), viết rule dài hơn chỉ làm tình hình tệ hơn, không sửa được gốc rễ.</p>
+<p><strong>3. Dùng few-shot khi zero-shot đã đủ</strong> — few-shot tốn thêm token mỗi lần gọi (ảnh hưởng cost, xem R2.8) mà không cải thiện đáng kể nếu task đã đơn giản.</p>
+<p><strong>4. Sửa prompt production mà không chạy lại golden dataset</strong> — đúng lỗi worked example ở trên: prompt "đọc" vẫn ổn, chỉ hỏng khi chạy qua downstream parser thật; review bằng mắt không thay được eval tự động.</p>
+<p><strong>5. Chỉ kiểm tra output CUỐI của 1 agent nhiều bước</strong> — regression ở bước giữa (chọn sai tool, retrieval lệch) có thể bị che bởi 1 câu trả lời cuối "nghe hợp lý"; cần eval từng bước, không chỉ bước cuối.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được vì sao Prompt Engineering luôn là điểm khởi đầu hợp lý trước 4 kỹ thuật còn lại.</li>
+<li>Chọn đúng kỹ thuật con (zero-shot/few-shot/CoT/structured output) cho 1 task cho trước.</li>
+<li>Giải thích đúng giới hạn cốt lõi của Prompt Engineering khiến Context Engineering phải ra đời.</li>
+<li>Với ví dụ "agent quên rule ở lượt 60", giải thích được vì sao viết rule dài hơn không phải hướng fix đúng.</li>
+<li>Giải thích được vì sao 1 golden dataset cần cả case "verdict đúng giá trị" LẪN case "output đúng hợp đồng parse" (VD không chứa markdown fence) — thiếu case thứ 2 sẽ bỏ lọt đúng loại lỗi ở worked example.</li>
+<li>Phân biệt đúng 3 tầng phòng thủ structured-output: pattern ngôn từ ở prompt (§5, trang này) → constrained decoding (R2.5) → retry-with-error-context (R2.5) — biết tầng nào áp dụng trước, tầng nào là lưới an toàn.</li>
+<li>Giải thích được vì sao kiểm tra CHỈ output cuối không đủ để bắt regression trong 1 agent nhiều bước.</li>
+<li>Liệt kê đúng 3 loại thay đổi (model version/cấu hình retrieval/câu chữ prompt) đều cần trigger lại eval, không chỉ riêng lúc sửa câu chữ.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R5_3_rag_basics.html">← R5.3 · RAG Basics</a>
+  <a href="R5_5_context_engineering.html">R5.5 · Context Engineering →</a>
+</div>
+
+</div>
+</body>
+</html>

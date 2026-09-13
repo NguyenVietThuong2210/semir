@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L4.1 — Tokenization + Embeddings</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 4 · Module 1</div>
+  <h1>4.1 · Tokenization + Embeddings</h1>
+  <p class="subtitle">Cách LLM "đọc" text: word-level → BPE → SentencePiece. Vocab size, token cost, Vietnamese quirks. Embeddings — nền tảng semantic.</p>
+  <div class="level">Level 4 · LLM · ~30 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Explain BPE algorithm — merge frequent pairs</li>
+  <li>Compare BPE vs WordPiece vs SentencePiece</li>
+  <li>Compute token cost cho VN text vs English</li>
+  <li>Understand embedding lookup + tied weights</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Tokenization bằng ngôn ngữ đời thường</div>
+<p><strong>Học tiếng Việt qua từ điển đầy đủ</strong>: Từ điển có "phở, phở bò, phở gà, phở đặc biệt, phở tái, phở nạm..." — vocab bung to 500k từ, gặp "phở-siêu-cay-mới-ra" chưa có → chịu.</p>
+<p><strong>BPE (Byte Pair Encoding)</strong>: Học các mảnh nhỏ "ph", "ở", "bò", "gà" — chỉ 50k mảnh nhưng ghép thành mọi từ có thể. "phở-siêu-cay" = "ph" + "ở" + "-" + "siêu" + "-" + "cay" → OK.</p>
+<p><strong>Trade-off</strong>: Tokenizer chọn cỡ nhỏ (byte-level) → xử lý được mọi text nhưng câu dài (mỗi ký tự = 1 token). Cỡ lớn (word-level) → câu ngắn nhưng OOV (out-of-vocab). BPE ở giữa — sweet spot của GPT/Llama.</p>
+</div>
+
+<h2>1. Vì sao không dùng word-level?</h2>
+
+<ul>
+  <li>Vocab huge (English 500k+ words) → giant embedding table</li>
+  <li>OOV (out-of-vocabulary): từ mới, typo, code → UNK token → info loss</li>
+  <li>Morphology: "running", "runs", "ran" → 3 separate embeddings, not sharing "run" root</li>
+</ul>
+
+<h2>2. Character-level — extreme opposite</h2>
+
+<ul>
+  <li>Vocab tiny (~100 characters)</li>
+  <li>No OOV</li>
+  <li>Nhưng: sequence 5-10× dài hơn → O(L²) attention explode</li>
+  <li>Semantic weak (mỗi char không có meaning riêng)</li>
+</ul>
+
+<h2>3. Byte-Pair Encoding (BPE)</h2>
+
+<p>Original Gage 1994 for data compression, adopted for NLP bởi Sennrich 2016.</p>
+
+<pre><code>ALGORITHM (training):
+1. Start vocab = all characters + special tokens (BOS, EOS, PAD)
+2. Compute frequency of adjacent character pairs in corpus
+3. Merge most frequent pair → new token in vocab
+4. Repeat until vocab size = target (e.g., 50k)
+
+Example (English):
+Corpus: "low", "lowest", "newest", "widest"
+Chars: l, o, w, e, s, t, n, i, d
+Pair freq: ('e','s') = 3, ('e','w') = 2, ('l','o') = 2, ...
+Merge 'e'+'s' → 'es': "low", "lowest" → "low", "low+est"
+Continue: merge 'est', 'ow', ...
+
+Result vocab: chars + merged subwords + full words
+</code></pre>
+
+<h3>Tokenize new text</h3>
+<pre><code>Input: "widened"
+Greedy longest match: 'wide' (if in vocab), 'ned' → ['wide', 'ned']
+Or fallback to chars: ['w', 'i', 'd', 'e', 'n', 'e', 'd']
+</code></pre>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — BPE từng bước tay (worked example) + SentencePiece Unigram math</div>
+
+<p><strong>Ví dụ tiếng Việt: tokenize "học sinh giỏi" từng bước</strong> (giả sử vocab đã trained trên corpus giáo dục VN).</p>
+
+<ol>
+<li><strong>Khởi tạo vocab</strong> chỉ có characters + byte fallback: <code>V₀ = {h, ọ, c, _, s, i, n, g, ỏ, ...}</code> (~200 chars UTF-8 VN).</li>
+<li><strong>Đếm frequency các cặp adjacent</strong> trong corpus. Giả sử corpus có "học sinh học giỏi học tập": <code>pairs = {(h,ọ): 3, (ọ,c): 3, (s,i): 1, (i,n): 1, (n,h): 1, (g,ỏ): 1, ...}</code>. Cặp thắng: <code>(h,ọ)</code> tần 3 → merge thành token mới <code>họ</code>. V₁ = V₀ ∪ {họ}.</li>
+<li><strong>Đếm lại</strong> sau khi merge (corpus giờ có "họ c sinh họ c giỏi họ c tập"): <code>(họ, c): 3</code> → merge → V₂ ∪ {học}.</li>
+<li><strong>Lặp cho đến khi</strong> |V| = target (VD 32k). Sau nhiều iteration: <code>V_final ⊃ {học, sinh, giỏi, học_sinh, học_giỏi, ...}</code>.</li>
+<li><strong>Encode câu mới "học sinh giỏi"</strong> bằng greedy longest match — vocab càng lớn, càng ít token:
+  <ul>
+  <li>Vocab có compound: <code>["học_sinh", "▁giỏi"]</code> = 2 tokens.</li>
+  <li>Vocab chỉ có unigram: <code>["học", "▁sinh", "▁giỏi"]</code> = 3 tokens.</li>
+  <li>Chỉ character-level: 11 tokens.</li>
+  </ul>
+  </li>
+</ol>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>SentencePiece Unigram (Kudo 2018) — khác BPE thế nào</strong></p>
+<p><strong>Ý tưởng ngược</strong>: BPE bottom-up (bắt đầu char, merge lên). Unigram top-down (bắt đầu vocab HUGE, prune xuống).</p>
+
+<div class="callout" style="background: rgba(34,197,94,0.06); border-left-color: #22c55e; margin: 10px 0;">
+<div class="label">💡 2 thuật ngữ lạ trước khi đọc tiếp: Viterbi + EM là gì?</div>
+
+<p><strong>Viterbi = "tìm đường đi rẻ nhất qua mê cung"</strong>:</p>
+<ul>
+<li>Câu "họcsinh" có thể cắt nhiều cách: "học"+"sinh", "họ"+"c"+"sinh", "h"+"ọ"+"c"+"s"+"i"+"n"+"h"...</li>
+<li>Mỗi cách cắt có 1 "chi phí" = tổng −log p(mỗi mảnh).</li>
+<li>Thử HẾT mọi cách cắt là exponential — Viterbi tránh việc đó bằng dynamic programming.</li>
+</ul>
+
+<pre><code>Lattice cắt chữ "họcsinh" — mỗi mũi tên là 1 token khả dĩ, mỗi path đầu-cuối là 1 cách cắt:
+
+  0 →[h]→ 1 →[ọ]→ 2 →[c]→ 3 →[s]→ 4 →[i]→ 5 →[n]→ 6 →[h]→ 7    (path toàn ký tự — dài, chi phí cao)
+  0 ------[họ]----→ 2 →[c]→ 3 → ...                              (dùng token "họ")
+  0 ---------------[học]-------→ 3 →[s]→[i]→[n]→[h]→ 7           (dùng token "học")
+  0 ---------------[học]-------→ 3 -------[sinh]-------→ 7       (2 token: "học" + "sinh")
+
+Viterbi KHÔNG liệt kê hết các path trên. Đi trái→phải, tại mỗi vị trí i chỉ giữ 1 con số:
+  best_cost[i] = chi phí RẺ NHẤT để đến vị trí i (từ mọi token kết thúc tại i)
+  best_cost[0] = 0
+  best_cost[i] = min qua mọi token w kết thúc ở i của ( best_cost[i − len(w)] + (−log p(w)) )
+→ Tuyến tính theo độ dài câu, không cần nhớ lại toàn bộ lịch sử mỗi path — giống GPS chỉ cần
+  biết "tới ngã tư này rẻ nhất là bao nhiêu", không cần nhớ lại mọi lộ trình đã thử.</code></pre>
+
+<p><strong>EM (Expectation-Maximization) = "đoán rồi chỉnh, lặp lại tới khi ổn định"</strong> — giải bài toán con gà quả trứng: muốn biết xác suất p(w) của mỗi token thì cần biết câu bị cắt (segment) thế nào; nhưng muốn cắt tối ưu thì lại cần biết p(w) trước.</p>
+
+<pre><code>  ┌──────────────────────┐
+  │    p(w) hiện tại       │
+  └───────────┬────────────┘
+              │  E-step: cố định p(w), dùng Viterbi tìm cách cắt TỐT NHẤT cho mọi câu trong corpus
+              ▼
+  ┌──────────────────────┐
+  │  cách cắt tốt nhất     │
+  │  cho từng câu          │
+  └───────────┬────────────┘
+              │  M-step: cố định cách cắt vừa tìm, đếm lại tần suất mỗi token → p(w) MỚI
+              ▼
+  ┌──────────────────────┐
+  │     p(w) mới           │──── lặp lại vài chục vòng cho tới khi p(w) hội tụ ──→ (quay về E-step)
+  └──────────────────────┘</code></pre>
+
+<p>Analogy: 2 người bạn đoán giá 1 món hàng lạ — người 1 đoán giá dựa trên "loại hàng"; người 2 phân loại hàng dựa trên "giá vừa đoán"; lặp qua lại vài lần thì cả 2 hội tụ về ước lượng hợp lý.</p>
+</div>
+
+<ol>
+<li><strong>Sinh vocab lớn ban đầu</strong> (500k subwords, mọi substring xuất hiện ≥ 2 lần).</li>
+<li><strong>Gán probability</strong> p(w) cho mỗi token. Loss = − Σ log p(sentence) với sentence được segment tối ưu bằng Viterbi.</li>
+<li><strong>Chạy EM</strong> (xem sơ đồ ở trên) — tính p(w) → segment optimal → update p(w). Lặp.</li>
+<li><strong>Prune</strong> 10% tokens ít contribute nhất (theo Δ log-likelihood). Về target size.</li>
+<li><strong>Ở inference</strong>, mỗi câu có NHIỀU segmentation valid → sample theo probability (BPE-dropout tương tự) → data augmentation trong training.</li>
+</ol>
+
+<p><strong>Δ log-likelihood pruning bằng số cụ thể (Bước 4)</strong>: thuật toán tính Δ (log-likelihood corpus giảm bao nhiêu nếu bỏ token này) cho toàn bộ vocab, sort, cắt 10% có Δ nhỏ nhất:</p>
+<ul>
+<li>Bỏ token <strong>"họ_sinh"</strong> → câu chứa nó phải segment lại thành "học" + "sinh" (2 token thay 1). Log-likelihood corpus giảm từ −1000.0 xuống −1000.3 (<strong>Δ = 0.3</strong> — giảm nhẹ, không quá quan trọng) → nằm trong nhóm 10% bị prune trước.</li>
+<li>Bỏ token <strong>"▁và"</strong> (từ nối cực phổ biến) → Δ = 45.0 (giảm rất mạnh) → giữ lại.</li>
+</ul>
+
+<p><strong>Vì sao Unigram tốt cho VN</strong>: dấu diacritic (á, ắ, ế) tạo nhiều ambiguity segment. Unigram probabilistic — chọn segmentation thống kê tốt nhất, không greedy đơn thuần.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Gotchas tokenization thường gặp</strong>:</p>
+<ul>
+  <li><strong>Leading space matter</strong>: <code>"hello"</code> ≠ <code>" hello"</code> trong BPE. Token <code>▁hello</code> (có space) khác <code>hello</code> (không). Debug: <code>tokenizer.encode("hello")[0]</code> có thể là <code>hello</code>; <code>tokenizer.encode(" hello")[0]</code> là <code>▁hello</code>.</li>
+  <li><strong>Pad token ≠ EOS token</strong>: Llama không có PAD gốc. Nếu set <code>pad_token = eos_token</code> → khi tính loss trên batch, model học "predict EOS everywhere" → generation dừng sớm. Fix: dùng <code>pad_token = "&lt;unk&gt;"</code> và mask trong loss.</li>
+  <li><strong>Padding side</strong>: decoder-only LLM cần <code>padding_side="left"</code> khi generate (right-pad → model attend vào pad tokens → garbage). Encoder (BERT): right-pad OK.</li>
+  <li><strong>BOS auto-inject</strong>: Llama tokenizer tự thêm <code>&lt;s&gt;</code> ở đầu. Nếu bạn concat 2 conversation → có 2 BOS ở giữa → confuse model. Kiểm: <code>tokenizer.encode(x, add_special_tokens=False)</code>.</li>
+</ul>
+</div>
+
+<h2>4. WordPiece (BERT)</h2>
+
+<p>Similar BPE nhưng merge criterion: maximize likelihood of training data (không chỉ frequency).</p>
+
+<div class="callout" style="background: rgba(34,197,94,0.06); border-left-color: #22c55e; margin: 10px 0;">
+<div class="label">💡 "Maximize likelihood" khác "frequency" thế nào? — ví dụ số</div>
+<p>BPE chọn cặp ghép <strong>xuất hiện nhiều nhất</strong>, bất kể ghép đó có "đáng" hay không. WordPiece chọn cặp làm <strong>likelihood của corpus tăng nhiều nhất</strong> nếu ghép — tức là so sánh "ghép 2 mảnh lại" với "để riêng 2 mảnh" xem cách nào predict corpus tốt hơn.</p>
+<p><strong>Ví dụ cụ thể</strong>: giả sử corpus có cặp ("t","h") xuất hiện 1000 lần VÀ cặp ("q","u") xuất hiện 500 lần.</p>
+<ul>
+<li><strong>BPE</strong>: chọn ("t","h") vì tần suất cao hơn (1000 &gt; 500) — không quan tâm gì khác.</li>
+<li><strong>WordPiece</strong> tính: <code>score = count(pair) / (count(token1) × count(token2))</code>. "t" và "h" đều rất phổ biến riêng lẻ (xuất hiện trong hàng ngàn từ khác) → <code>score("t","h") = 1000/(50000×40000)</code> = rất nhỏ. "q" gần như LUÔN đi kèm "u" trong tiếng Anh (q hiếm khi đứng 1 mình) → count("q")≈520 → <code>score("q","u") = 500/(520×600)</code> = lớn hơn nhiều dù tần suất tuyệt đối thấp hơn.</li>
+<li>→ WordPiece chọn ghép ("q","u") trước, vì ghép này "giải thích" dữ liệu tốt hơn (giảm surprise/entropy nhiều hơn), dù ít gặp hơn về số lần tuyệt đối.</li>
+</ul>
+</div>
+
+<pre><code># Prefix subwords với ##:
+"unhappy" → ["un", "##happy"]
+"##" indicates continuation, not word start
+</code></pre>
+
+<h2>5. SentencePiece (LLaMA, T5)</h2>
+
+<ul>
+  <li>Language-agnostic: treat text as raw byte stream, không assume whitespace = word boundary (crucial cho VN/CN/JP)</li>
+  <li>Trained bằng BPE hoặc Unigram (Kudo 2018)</li>
+  <li>Reversible: text → tokens → text exact</li>
+  <li>Byte fallback (xem callout dưới)</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.06); border-left-color: #22c55e; margin: 10px 0;">
+<div class="label">💡 "Byte fallback" nghĩa là gì?</div>
+<p>Vocab dù 32k-256k cũng KHÔNG thể chứa mọi ký tự Unicode có thể (emoji hiếm, chữ Hán cổ, ký hiệu toán học lạ...). Nếu gặp ký tự chưa từng thấy trong vocab, tokenizer cần 1 "lưới an toàn" (safety net) để không bị crash / mất thông tin.</p>
+<p><strong>Cơ chế</strong>: mọi text đều encode được thành chuỗi byte UTF-8 (256 giá trị byte có thể: 0x00-0xFF). Tokenizer luôn có sẵn 256 token đặc biệt đại diện "byte thô". Ký tự lạ (VD 1 emoji hiếm 🫠) → decompose thành 3-4 byte UTF-8 → mỗi byte trở thành 1 token riêng ("&lt;0xF0&gt;", "&lt;0x9F&gt;", ...) thay vì bị thay bằng UNK (mất thông tin hoàn toàn).</p>
+<p><strong>Lợi ích</strong>: tokenizer KHÔNG BAO GIỜ mất thông tin (100% reversible, kể cả input rác/binary). Đây là lý do LLaMA, GPT-4 xử lý được bất kỳ input nào (kể cả tiếng hiếm, code, base64) mà không lỗi UNK.</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 4 tokenization methods (đọc SAU khi hiểu section 3-5)</div>
+
+<h4>Bảng so sánh chi tiết</h4>
+<table>
+<tr><th></th><th>BPE</th><th>WordPiece</th><th>Unigram</th><th>SentencePiece</th></tr>
+<tr><td><strong>Ai dùng?</strong></td><td>GPT-2, GPT-3, GPT-4, Llama-2, Llama-3</td><td>BERT, DistilBERT, ELECTRA</td><td>T5 (early), XLNet</td><td>Wrapper cho BPE/Unigram — Llama, T5, mT5</td></tr>
+<tr><td><strong>Cách train</strong></td><td>Merge cặp byte thường xuyên nhất</td><td>Merge cặp maximize likelihood</td><td>Bắt đầu vocab lớn, prune tokens least useful</td><td>N/A — chỉ là framework wrapper</td></tr>
+<tr><td><strong>Xử lý space</strong></td><td>Byte-level: space là PREFIX gắn liền vào token theo sau (Ġ-marker), không phải token riêng biệt</td><td>Prefix ## cho subword</td><td>Space là token riêng</td><td>Space encoded thành `▁` — reversible</td></tr>
+<tr><td><strong>Reversible?</strong></td><td>✅ Có, hoàn toàn (byte-level BPE của GPT/Llama — prefix marker giữ đúng vị trí space)</td><td>Không (## prefix)</td><td>Yes</td><td>✅ Yes (killer feature)</td></tr>
+<tr><td><strong>Multilingual</strong></td><td>Cần preprocess</td><td>Cần preprocess</td><td>OK</td><td>⭐ Best — không cần pre-tokenize</td></tr>
+<tr><td><strong>Vietnamese quality</strong></td><td>Trung bình</td><td>Trung bình (BERT cắt sai từ có dấu)</td><td>Tốt</td><td>⭐ Best cho VN</td></tr>
+<tr><td><strong>Byte fallback</strong></td><td>Có (byte-level BPE)</td><td>Không</td><td>Có</td><td>Có (LLaMA sentencepiece)</td></tr>
+</table>
+
+<h4>Ví dụ tokenize "Tôi ăn phở" bằng 3 methods</h4>
+<pre><code>Original: "Tôi ăn phở"
+
+BPE (GPT-4):     ["T", "ôi", " ăn", " ph", "ở"]           — 5 tokens
+WordPiece (BERT):["Tôi", "ăn", "ph", "##ở"]              — 4 tokens (## = subword suffix)
+SentencePiece:   ["▁Tôi", "▁ăn", "▁ph", "ở"]             — 4 tokens (▁ = space marker)
+
+Vietnamese quirk: BPE cắt "phở" thành "ph" + "ở" → OK vì subword.
+                 Nhưng "phở tái nạm gầu" nếu tokenizer chỉ train English →
+                 phân mảnh thành 8-10 tokens (rất inefficient).
+</code></pre>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Nhu cầu</th><th>Chọn</th></tr>
+<tr><td>Train LLM foundation từ đầu</td><td>SentencePiece (unigram)</td></tr>
+<tr><td>Fine-tune Llama</td><td>Giữ SentencePiece BPE của Llama</td></tr>
+<tr><td>Fine-tune BERT</td><td>Giữ WordPiece của BERT</td></tr>
+<tr><td>Multilingual (VN + English)</td><td>SentencePiece multilingual (bge-m3 style)</td></tr>
+<tr><td>Byte-level guaranteed</td><td>ByT5 / BPE byte-level</td></tr>
+</table>
+
+<p><strong>Cạm bẫy phổ biến</strong>: Fine-tune LLM với tokenizer mới trên VN data → performance drop 30% vì embeddings không align. Rule: <em>KHÔNG BAO GIỜ</em> đổi tokenizer khi fine-tune. Muốn tokenizer VN tốt hơn = pretrain from scratch (đắt) hoặc extend vocab (thêm tokens VN mới) với embedding transfer.</p>
+</div>
+
+<h2>6. Vietnamese quirks</h2>
+
+<div class="callout warn">
+<div class="label">VN token cost cao</div>
+<p>English "Hello world" = 2 tokens (GPT-4). VN "Xin chào thế giới" = 6-9 tokens (BPE trained mostly on English). VN diacritics (á, ắ, ế) + tone marks → often split into multiple tokens.</p>
+<p>Ảnh hưởng: API cost cao 2-3× cho VN text, context window effective size nhỏ hơn.</p>
+</div>
+
+<pre><code>import tiktoken
+enc = tiktoken.encoding_for_model("gpt-4")
+print(len(enc.encode("Hello world")))          # 2
+print(len(enc.encode("Xin chào thế giới")))    # 8
+print(len(enc.encode("VN30 tăng 1.5% phiên hôm nay")))  # ~15
+</code></pre>
+
+<h2>7. Vocab size trade-off</h2>
+
+<table>
+<tr><th>Vocab size</th><th>Effect</th></tr>
+<tr><td>5k</td><td>Sequence dài, weak semantics per token</td></tr>
+<tr><td>32k (LLaMA-2)</td><td>Balance</td></tr>
+<tr><td>50k (GPT-3)</td><td>Balance, English-focused</td></tr>
+<tr><td>128k (Llama-3, chính xác 128,256)</td><td>Multilingual, code-friendly, VN cost tốt hơn</td></tr>
+<tr><td>~200k (GPT-4o, o200k_base) — Claude 3 không công bố chính xác</td><td>Multilingual, code-friendly hơn nữa</td></tr>
+<tr><td>256k+</td><td>Embedding table huge (256k × 4096 = 1B params just for embed!)</td></tr>
+</table>
+
+<h2>8. Number tokenization — vì sao LLM yếu toán KHÔNG chỉ vì "chưa học đủ"</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Tưởng tượng bạn cộng 2 số nhưng ai đó cắt ngẫu nhiên chữ số của chúng thành từng cụm 1-3 chữ số KHÔNG THEO HÀNG (không theo hàng đơn vị/chục/trăm) trước khi đưa cho bạn — VD số "1234" bị cắt thành "12"+"34" nhưng số "123" (chỉ ít hơn 1 chữ số) lại bị cắt thành "1"+"23" (ranh giới cắt hoàn toàn khác, không phải "giữ nguyên 3 chữ số cuối"). Bạn vẫn có thể cộng được số nhỏ (nhìn quen mắt), nhưng số càng dài, cách cắt càng "lộn xộn" không nhất quán giữa các số khác nhau → rất khó giữ đúng hàng đơn vị/chục/trăm khi cộng. Đây CHÍNH XÁC là những gì tokenizer BPE làm với số, không phải ẩn dụ.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: BPE/tiktoken không có khái niệm "đây là 1 con số, phải giữ nguyên cấu trúc hàng chục/hàng trăm" — nó coi digit-run (chuỗi chữ số liên tiếp) y hệt như coi 1 từ tiếng Anh: cắt theo tần suất xuất hiện trong corpus, không theo ý nghĩa toán học. Kết quả: cách cắt 1 số PHỤ THUỘC vào TỔNG ĐỘ DÀI của số đó, không phụ thuộc vị trí hàng (đơn vị/chục/trăm) của từng chữ số bên trong.</p>
+
+<pre><code># Ví dụ từ tokenizer họ tiktoken (GPT-4/4o, greedy left-to-right, tối đa 3 chữ số/token):
+"2", "20", "200", "201" đều được gộp thành ĐÚNG 1 token (không cắt thành "2"+"01"
+hay "20"+"1") — mỗi digit-run ngắn (≤3 chữ số) thường lọt vừa 1 token duy nhất.
+
+# Nhưng với số DÀI HƠN, ranh giới cắt (chunk boundary) nhảy lung tung:
+"1234" → có thể cắt "123" + "4"      (3 chữ số đầu + 1 chữ số cuối)
+"2345" → có thể cắt "234" + "5"      (giống pattern trên — ổn)
+"12345"→ có thể cắt "123" + "45"     (3+2 — khác hẳn pattern của số 4-chữ-số ở trên)
+
+→ Model KHÔNG thấy "hàng nghìn/hàng trăm/hàng chục/hàng đơn vị" như con người — nó thấy
+  các "cụm số" (chunk) mà ranh giới thay đổi tuỳ độ dài tổng thể, không theo vị trí hàng.</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: đây KHÔNG phải "model chưa học đủ toán trong lúc pretrain" (dù data toán ít cũng là 1 phần vấn đề) — đây là 1 giới hạn CẤU TRÚC ở tầng tokenizer, xảy ra TRƯỚC KHI model nhìn thấy bất kỳ token nào. Cho dù train thêm 100× data toán, nếu tokenizer vẫn cắt "1234" và "2345" theo 2 pattern khác nhau, model vẫn phải học "bù" sự bất nhất quán này thay vì học phép cộng thật sự theo hàng — nghiên cứu thực nghiệm (arXiv:2402+ nhiều paper) cho thấy accuracy cộng số giảm về gần 0% khi số có ≥5 chữ số, chính xác ở vùng ranh giới chunk trở nên phức tạp nhất.</p>
+
+<p><strong>Fix thực tế</strong>:</p>
+<ul>
+  <li><strong>Chèn dấu phẩy/space giữa mỗi 3 chữ số</strong> khi viết số lớn trong prompt (VD "1,234,567" thay vì "1234567") — ép tokenizer cắt theo ranh giới CỐ ĐỊNH và ổn định hơn, cải thiện accuracy cộng/trừ đáng kể trong thực nghiệm.</li>
+  <li><strong>Single-digit tokenization</strong>: 1 số kiến trúc/tokenizer chuyên biệt (không phải BPE thường) ép MỖI CHỮ SỐ = 1 token riêng biệt (VD Llama một số phiên bản tokenize digit-by-digit) — tốn nhiều token hơn nhưng giữ đúng cấu trúc hàng, giúp arithmetic tốt hơn hẳn.</li>
+  <li><strong>Không dựa vào LLM để tính toán chính xác số lớn</strong> — dùng tool-calling gọi ra calculator/code execution thay vì để model tự cộng nhẩm bằng token, đặc biệt với số &gt;4-5 chữ số.</li>
+</ul>
+
+<p><strong>Insight</strong>: đây là ví dụ cụ thể cho nguyên lý chung của cả trang này — cách tokenizer cắt text KHÔNG TRUNG LẬP, nó áp đặt 1 cấu trúc lên input mà model buộc phải "học sống chung" thay vì học bản chất vấn đề. VN token cost cao (§6) là 1 biểu hiện của cùng nguyên lý (tokenizer bias theo ngôn ngữ training), số bị cắt sai hàng là 1 biểu hiện khác (tokenizer bias theo cấu trúc số học).</p>
+</div>
+
+<h2>9. Embeddings — lookup + math</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.06); border-left-color: #22c55e; margin: 10px 0;">
+<div class="label">💡 "d_model" là gì? (thuật ngữ sẽ dùng suốt phần LLM còn lại)</div>
+<p><strong>d_model</strong> = số chiều (dimension) của vector đại diện cho MỖI token bên trong model — "độ rộng" của model. Mỗi token, sau khi tra bảng embedding, không còn là 1 con số (token id) mà biến thành 1 vector d_model số thực, VD d_model=768 (GPT-2 small), 4096 (Llama-7B), 12288 (GPT-3). Vector này mang thông tin ngữ nghĩa — 2 từ gần nghĩa thì vector gần nhau trong không gian d_model chiều. d_model càng lớn → model càng "biểu diễn giàu" nhưng càng tốn compute/memory (embedding table = vocab_size × d_model số).</p>
+</div>
+
+<pre><code>class Embedding(nn.Module):
+    def __init__(self, vocab_size, d_model):
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(vocab_size, d_model) * 0.02)
+        # × 0.02: khởi tạo nhỏ (std ≈ 0.02) — nếu embedding init to (VD std=1),
+        # dot-product Q·K ở layer attention đầu tiên sẽ có variance lớn ngay từ bước 0
+        # → softmax saturate sớm (xem L4.2 vì sao chia √d). Init nhỏ giữ activation
+        # ổn định cho vài layer đầu trước khi LayerNorm "tiếp quản". Đây là convention
+        # GPT-2 (std=0.02), không phải con số ma thuật — chỉ cần đủ nhỏ.
+
+    def forward(self, token_ids):
+        # token_ids: (batch, seq_len) integer indices
+        return self.weight[token_ids]   # (batch, seq_len, d_model)
+</code></pre>
+
+<h3>Tied weights (weight sharing)</h3>
+
+<pre><code># Output layer LM = embedding^T
+# Save params + regularize
+logits = hidden @ embedding.weight.T   # (batch, seq_len, vocab_size)
+</code></pre>
+
+<p>LLaMA, GPT-2 tied. Saves 50M+ params, comparable quality.</p>
+
+<h2>10. Glitch tokens — khi 1 token trong vocab chưa bao giờ được "học" thật sự</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Tưởng tượng 1 cuốn từ điển 100.000 từ, nhưng có 500 từ trong đó CHỈ xuất hiện đúng 0-1 lần trong toàn bộ sách giáo khoa bạn dùng để học (dù từ điển liệt kê chúng vì chúng có trong 1 nguồn khác lúc BIÊN SOẠN từ điển). Bạn "biết" từ đó tồn tại (có trong từ điển) nhưng KHÔNG BAO GIỜ học được nghĩa thật của nó — nếu ai đó ép bạn dùng từ đó trong câu, bạn sẽ đoán bừa hoặc phản ứng kỳ lạ. Đây chính xác là "glitch token": tồn tại trong vocab (vì tokenizer train trên corpus A) nhưng gần như vắng mặt trong dữ liệu model thực sự HỌC (corpus B, thường khác corpus A) → embedding của nó gần như chưa từng được cập nhật gradient.</p>
+
+<p><strong>Vấn đề cụ thể (case nổi tiếng — "SolidGoldMagikarp", GPT-2/GPT-3)</strong>: tokenizer BPE được train trên 1 tập dữ liệu (VD chứa dump Reddit, có username hiếm gặp như "SolidGoldMagikarp" lặp lại đủ nhiều để BPE gộp nó thành 1 TOKEN DUY NHẤT trong vocab) — nhưng model chính lại được PRETRAIN trên 1 corpus khác (đã lọc/khác nguồn), trong đó chuỗi "SolidGoldMagikarp" gần như KHÔNG xuất hiện. Kết quả: token này có 1 slot trong embedding table (vì nằm trong vocab) nhưng vector embedding của nó gần như giữ nguyên giá trị KHỞI TẠO NGẪU NHIÊN (chưa bao giờ nhận đủ gradient update để mang ý nghĩa).</p>
+
+<pre><code># Cơ chế cụ thể (2 bước tách biệt, dễ nhầm là 1):
+Bước 1 — Tokenizer training: corpus A (VD Reddit dump) → BPE đếm tần suất → "SolidGoldMagikarp"
+          (1 username Reddit lặp lại nhiều) đủ tần suất → được gộp thành 1 TOKEN trong vocab.
+
+Bước 2 — Model pretraining: corpus B (đã filter/khác nguồn, KHÔNG chứa nhiều "SolidGoldMagikarp")
+          → token này CÓ trong vocab (nên CÓ 1 dòng trong embedding table) nhưng gradient đi
+          qua dòng đó gần như = 0 suốt cả pretraining (vì token gần như không bao giờ xuất hiện
+          làm input để model cần "học" biểu diễn nó).
+
+→ Embedding vector của token này vẫn ~= giá trị random init ban đầu, "trôi nổi" ở 1 vùng
+  KHÔNG GIAN không liên quan gì tới các embedding "đã học" xung quanh nó.</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: đây KHÔNG phải bug trong code hay lỗi kiến trúc model — bản thân cơ chế (tokenizer train trên corpus khác corpus pretrain model) là chuyện BÌNH THƯỜNG và phổ biến ở nhiều pipeline LLM. Vấn đề chỉ lộ ra khi 2 corpus lệch nhau ĐỦ NHIỀU để một số token "lọt lưới" — có mặt ở vocab nhưng vắng mặt ở dữ liệu train model. Hậu quả quan sát được: khi prompt chứa 1 glitch token, model phản ứng như đang được hỏi về 1 khái niệm NGẪU NHIÊN, không liên quan (VD yêu cầu lặp lại "SolidGoldMagikarp" khiến GPT-3 trả lời như thể được hỏi về từ "distribute") — vì vị trí embedding của nó trong không gian vector không mang thông tin gì hữu ích để model "neo" vào.</p>
+
+<p><strong>Insight</strong>: đây là hệ quả trực tiếp của 1 nguyên lý đơn giản — <strong>embedding chỉ học được ý nghĩa qua gradient update LẶP LẠI NHIỀU LẦN</strong>; mỗi token cần XUẤT HIỆN ĐỦ NHIỀU trong training để embedding của nó "hội tụ" về 1 vị trí có ý nghĩa trong không gian d_model chiều (xem §9 "d_model là gì?" ở trên về khái niệm không gian embedding). Token xuất hiện 0 hoặc gần 0 lần = embedding gần như vẫn là nhiễu ngẫu nhiên ban đầu — không phải model "không biết" theo nghĩa thiếu kiến thức, mà là vùng không gian đó CHƯA BAO GIỜ được "định hình" bởi training signal nào.</p>
+
+<p><strong>📖 Mở rộng — cách fix trong thực tế</strong>: GPT-4 xử lý vấn đề này đơn giản bằng cách ĐỔI tokenizer — "SolidGoldMagikarp" giờ bị cắt thành 5 token bình thường (Solid, Gold, Mag, ik, arp), mỗi token này XUẤT HIỆN THƯỜNG XUYÊN ở nơi khác trong corpus nên có embedding đã học tốt — loại bỏ hoàn toàn "slot chết" trong vocab. Bài học cho pipeline thực tế: LUÔN train tokenizer trên đúng (hoặc đại diện sát) corpus sẽ dùng để pretrain model — không dùng tokenizer train sẵn từ 1 nguồn dữ liệu khác hẳn mà không kiểm tra token-frequency overlap.</p>
+</div>
+
+<h2>11. Position + Token embedding combined</h2>
+
+<pre><code>x_input = embed_token(token_ids) + embed_position(positions)
+
+# Alternative modern: RoPE (rotary) — apply to Q, K in attention, not add
+</code></pre>
+
+<p><em>Ghi chú</em>: RoPE chỉ mới nhắc tên ở đây — công thức xoay đầy đủ + tại sao nó "extrapolate" tốt hơn được giải thích chi tiết bằng số ở <strong>L4.2 (Attention + Transformer)</strong>, phần "Deep-dive RoPE".</p>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. BPE algorithm — 4 bước.</p>
+<p class="a">(1) Init vocab với characters. (2) Find most frequent adjacent pair. (3) Merge pair → new token. (4) Repeat until target vocab size.</p>
+
+<p class="q">2. Vì sao SentencePiece thay BPE cho Asian languages?</p>
+<p class="a">BPE assume whitespace = word boundary. VN/CN/JP không có whitespace (CN, JP) hoặc phức tạp (VN với dấu). SentencePiece raw byte, ignore whitespace → language-agnostic.</p>
+
+<p class="q">3. VN text 2× tokens của EN cùng meaning → API cost impact?</p>
+<p class="a">2-3× cost per API call. Cần optimize: (1) Use Claude/GPT-4o với 128k vocab (VN token/char tốt hơn). (2) Cache repeated content. (3) Prompt compression (shorter format). (4) Fine-tune VN model với VN-specific tokenizer.</p>
+
+<p class="q">4. Tied weights — save gì?</p>
+<p class="a">Output projection layer = embedding.T. Save vocab_size × d_model params. GPT-2 medium 50k × 1024 = 50M params saved. Also mild regularization effect.</p>
+
+<p class="q">5. RoPE khác absolute position embed?</p>
+<p class="a">Absolute: add position embedding to token embedding. RoPE: rotate Q, K trong attention theo position. Ưu RoPE: relative position aware, extrapolate longer context tốt hơn. LLaMA, GPT-J, Falcon dùng.</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1508.07909">Sennrich et al (2016) — BPE for NMT</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1808.06226">Kudo & Richardson (2018) — SentencePiece</a></li>
+    <li>📝 <a href="https://www.lesswrong.com/posts/aPeJE8bSo6rAFoLqg/solidgoldmagikarp-plus-prompt-generation">SolidGoldMagikarp — Glitch tokens investigation (LessWrong)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2410.19730">Counting Ability of LLMs and Impact of Tokenization (2024)</a></li>
+    <li>📖 <a href="https://huggingface.co/learn/nlp-course/chapter6">HuggingFace — Tokenizers course</a></li>
+    <li>🎥 <a href="https://youtu.be/zduSFxRajkE">Karpathy — Let's build GPT tokenizer</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L3_5_sequence_transformer.html">← L3.5</a>
+  <a href="L4_2_attention_transformer.html">L4.2 · Attention + Transformer →</a>
+</div>
+
+</div>
+</body>
+</html>

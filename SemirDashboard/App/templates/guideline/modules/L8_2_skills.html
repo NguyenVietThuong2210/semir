@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L8.2 — Skills (Claude Skills, Custom Instructions)</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 8 · Module 2</div>
+  <h1>8.2 · Skills — Modular Agent Capabilities</h1>
+  <p class="subtitle">Cách package domain knowledge + workflows thành reusable "skills" agent load on-demand. Claude Skills format, best practices, ví dụ từ PredictStock daily-investor-report skill.</p>
+  <div class="level">Level 8 · AI Artifacts · ~30 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Định nghĩa Skill vs Agent vs Tool</li>
+  <li>Design Skill folder structure</li>
+  <li>Write SKILL.md manifest</li>
+  <li>Best practices: gating, evidence, QA gates</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Skill / Agent / Tool bằng ngôn ngữ đời thường</div>
+<p><strong>Bếp phở</strong>:</p>
+<ul>
+  <li><strong>Đầu bếp</strong> = agent (LLM + loop + goal "phục vụ khách")</li>
+  <li><strong>Dao, thớt, bếp gas</strong> = tools (atomic — cắt, chặt, đun)</li>
+  <li><strong>Công thức phở gia truyền</strong> = skill (package prompts + steps + KB, on-demand invoke khi khách gọi "phở bò tái")</li>
+</ul>
+<p><strong>Skill khác Tool</strong>: dao (tool) chỉ cắt được — dùng đâu cũng vậy. Công thức phở (skill) chứa nhiều bước + kiến thức domain + template output. Skill invoke tools, không phải thay thế.</p>
+<p><strong>Skill khác Agent</strong>: agent thường xuyên chạy (running loop). Skill nạp on-demand khi cần.</p>
+</div>
+
+<h2>1. Skill vs Agent vs Tool — 3 khái niệm dễ nhầm</h2>
+
+<table>
+<tr><th></th><th>Skill</th><th>Agent</th><th>Tool</th></tr>
+<tr><td>Definition</td><td>Package of prompts + scripts + docs cho 1 domain task</td><td>LLM + tools + loop + goal</td><td>Atomic capability (read file, call API)</td></tr>
+<tr><td>Example</td><td>daily-investor-report skill</td><td>Engineer agent trong AI Orchestrator</td><td>Bash, Read, Write</td></tr>
+<tr><td>Reusability</td><td>Across sessions/users</td><td>Per session</td><td>Basic building block</td></tr>
+<tr><td>Load time</td><td>On-demand (agent invoke)</td><td>Constant (running)</td><td>Always available</td></tr>
+</table>
+
+<h2>2. Skill anatomy</h2>
+
+<pre><code>.claude/skills/&lt;skill-name&gt;/
+├── SKILL.md              ← manifest (must exist)
+├── scripts/              ← implementation scripts
+│   ├── collect_and_build.py
+│   ├── render_report.py
+│   └── validate.py
+├── kb/                   ← knowledge base
+│   ├── chart_patterns.md
+│   └── sector_playbooks.md
+├── templates/            ← output templates
+│   └── report_template.html
+├── reports/              ← output artifacts
+│   ├── _data/
+│   └── _qa/
+└── examples/             ← few-shot examples
+    └── golden_report.md
+</code></pre>
+
+<h2>3. SKILL.md format</h2>
+
+<pre><code>---
+name: daily-investor-report
+description: Generate daily Vietnamese stock investor report...
+---
+
+## Section 1 — Persona & Output Goal
+
+### Who you are when using this skill
+- Vietnamese stock market specialist
+- 15+ years experience on HOSE/HNX
+- Blend AI signal + technical + flow + sentiment
+
+## Section 2 — Data Collection
+[step-by-step instructions LLM follows]
+
+## Section 3 — Analysis Framework
+[decision framework]
+
+## Section 4 — Ranking Logic
+[explicit rules]
+
+## Section N — Self-QA Gate (MANDATORY)
+[N checks LLM must pass before declaring success]
+
+## §19 — Pre-Thesis Discipline Checklist
+[safety rules]
+</code></pre>
+
+<h2>4. Best practices</h2>
+
+<h3>4.1 Trigger conditions</h3>
+
+<div class="callout">
+<div class="label">When to invoke skill</div>
+<p>Skill.md should specify WHEN. E.g., <code>daily-investor-report</code>: user says "generate today's investor report", "mode=all", etc.</p>
+<p>Agent load skill only when trigger matches. Not always in system prompt (would waste context).</p>
+</div>
+
+<h3>4.2 Sections structure</h3>
+
+<ul>
+  <li>Persona (role, tone)</li>
+  <li>Data collection (what inputs, from where)</li>
+  <li>Analysis framework (decision rules)</li>
+  <li>Output format (structured, examples)</li>
+  <li>Self-QA gate (mandatory checks)</li>
+  <li>Hard rules (RULE 1, RULE 2 với enforcement patterns)</li>
+</ul>
+
+<h3>4.3 Evidence + Traceability</h3>
+
+<p>Every claim in output link to source. daily-investor-report §11 Anti-Hallucination check: mọi số hiển thị phải có trong embedded JSON.</p>
+
+<h3>4.4 Versioning</h3>
+
+<pre><code># SKILL.md version bump khi:
+- Add new section
+- Change rule enforcement
+- Modify output schema
+- Fix bug
+
+# Log breaking changes at bottom for users to migrate.
+</code></pre>
+
+<h2>5. Case study — daily-investor-report skill</h2>
+
+<div class="example-box">
+<div class="title">Real skill anatomy</div>
+<p>Path: <code>.claude/skills/daily-investor-report/</code></p>
+<p>SKILL.md: 2073 lines (post §19-22 additions). Covers:</p>
+<ol>
+  <li>§1 Persona</li>
+  <li>§2 Data collection (2 modes, freshness gating)</li>
+  <li>§3 Analysis framework (v5 combined score)</li>
+  <li>§4 Ranking (top 5 BUY/SELL, sector cap)</li>
+  <li>§5-14 Various framework enhancements</li>
+  <li>§15 15 HARD RULES with regex enforcement</li>
+  <li>§16 LLM Hybrid Mode</li>
+  <li>§19 Pre-Thesis Discipline (post-FPT-bug lesson)</li>
+</ol>
+<p>Scripts:</p>
+<ul>
+  <li><code>collect_and_build.py</code> (3637 lines) - orchestrator</li>
+  <li><code>render_report.py</code> (2168 lines) - templating</li>
+  <li><code>author_llm_thesis.py</code> (641 lines) - LLM prompt builder</li>
+  <li><code>llm_qa_checklist.py</code> (1233 lines) - C1-C19 discipline checklist enforcer</li>
+</ul>
+<p>Skill invoked by user command <code>/daily-investor-report mode=all</code>. Claude reads SKILL.md, follows procedure, calls scripts, validates output, reports.</p>
+</div>
+
+<h2>6. Custom instructions vs Skills</h2>
+
+<table>
+<tr><th></th><th>Custom instructions (system prompt)</th><th>Skills</th></tr>
+<tr><td>Scope</td><td>Global for all interactions</td><td>Domain-specific, on-demand</td></tr>
+<tr><td>Content</td><td>Persona, preferences, workflows</td><td>Multi-file package with scripts</td></tr>
+<tr><td>Storage</td><td>Config file</td><td>Folder structure</td></tr>
+<tr><td>Reusability</td><td>Per user account</td><td>Across projects</td></tr>
+<tr><td>Best cho</td><td>Personal preferences</td><td>Complex workflows domain-specific</td></tr>
+</table>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh Skills vs Plugins vs Extensions vs Custom Instructions (đọc SAU sections 3-6)</div>
+
+<table>
+<tr><th></th><th>Claude Skills</th><th>ChatGPT Plugins</th><th>Custom GPTs</th><th>Custom Instructions</th><th>System Prompt</th></tr>
+<tr><td><strong>Vendor</strong></td><td>Anthropic</td><td>OpenAI (deprecated)</td><td>OpenAI</td><td>Both</td><td>Both</td></tr>
+<tr><td><strong>Format</strong></td><td>SKILL.md + folder</td><td>OpenAPI + endpoint</td><td>Instructions + KB + tools</td><td>Free-text</td><td>Free-text trong API</td></tr>
+<tr><td><strong>Scope</strong></td><td>Domain workflow</td><td>External API integration</td><td>User persona + KB</td><td>Personal preferences</td><td>Per-conversation</td></tr>
+<tr><td><strong>Storage</strong></td><td>Local folder .claude/skills/</td><td>OpenAI marketplace</td><td>OpenAI ecosystem</td><td>User settings</td><td>Trong prompt string</td></tr>
+<tr><td><strong>Runtime</strong></td><td>Claude Code loads on demand</td><td>ChatGPT calls URL</td><td>ChatGPT loads GPT</td><td>Prepended mọi conversation</td><td>Prefix every request</td></tr>
+<tr><td><strong>Tools access</strong></td><td>Yes (via Claude Code)</td><td>Function calling</td><td>Native tools</td><td>Không</td><td>Không direct</td></tr>
+<tr><td><strong>Multi-file</strong></td><td>⭐ Yes (kb/, scripts/, templates/)</td><td>Không</td><td>KB files</td><td>Text only</td><td>Text only</td></tr>
+<tr><td><strong>Version control</strong></td><td>⭐ Git-friendly</td><td>N/A</td><td>Không</td><td>Manual</td><td>Manual</td></tr>
+<tr><td><strong>Cross-user share</strong></td><td>Git repo share</td><td>Marketplace</td><td>Marketplace</td><td>Không (personal)</td><td>Copy-paste</td></tr>
+<tr><td><strong>Best for</strong></td><td>Complex domain workflow reproducible</td><td>External SaaS integration</td><td>Persona chatbot</td><td>Personal preferences</td><td>Per-app system</td></tr>
+</table>
+
+<h4>Ví dụ concrete — daily investor report bằng 5 methods</h4>
+<pre><code>=== System Prompt ===
+"You are a Vietnamese stock investor..."
+→ chỉ 1 conversation, không có KB, không tools
+
+=== Custom Instructions ===
+Users settings: "I trade Vietnamese stocks HOSE"
+→ ChatGPT nhớ preference nhưng không có workflow
+
+=== ChatGPT Custom GPT ===
+"Vietnamese Stock Advisor" GPT
++ upload PDF sector playbooks
++ enable Advanced Data Analysis
+→ Persona + KB nhưng không script/reproducible
+
+=== Claude Skill ===
+.claude/skills/daily-investor-report/
+├── SKILL.md (2073 lines discipline rules)
+├── kb/ (chart patterns, sector playbooks)
+├── scripts/collect_and_build.py (3637 lines)
+├── templates/report_template.html
+└── reports/_qa/ (QA gates)
+→ Full workflow, reproducible, git-versioned ⭐
+
+=== ChatGPT Plugin (deprecated) ===
+OpenAPI schema pointing to your API
+→ Deprecated 2024, thay bởi Custom GPTs
+</code></pre>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Nhu cầu</th><th>Chọn</th></tr>
+<tr><td>Personal preference</td><td>Custom Instructions</td></tr>
+<tr><td>Domain workflow reproducible</td><td>⭐ Claude Skills</td></tr>
+<tr><td>Chatbot persona cho non-tech users</td><td>Custom GPTs</td></tr>
+<tr><td>API integration (SaaS)</td><td>Function calling / MCP tools</td></tr>
+<tr><td>Team-shared workflow</td><td>Skills trong git repo</td></tr>
+<tr><td>Per-app system behavior</td><td>System Prompt trong API</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: Skills là bước tiến vượt bậc từ Custom GPTs — cho phép <em>reproducible, git-versioned, multi-file, tools-integrated</em> workflow. Đây là why Anthropic Skills đang được adopt mạnh trong dev community 2024-2025.</p>
+</div>
+
+<h2>6.5 · SKILL.md YAML frontmatter — full spec</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📋 Deep-dive — SKILL.md structure, tool inheritance, when to author</div>
+
+<h4>YAML frontmatter (các field khả dụng — không phải mọi field đều bắt buộc/đang dùng)</h4>
+<pre><code>---
+name: daily-investor-report              # unique slug (matches folder)
+description: |                            # 1-2 lines, LLM đọc để decide invoke
+  Generate professional daily Vietnamese
+  stock investor report in HTML. Two modes:
+  vn30 (~30s) or all (~60s).
+allowed-tools:                            # pre-approve tool cho lượt gọi skill (KHÔNG phải whitelist chặn tool khác — xem giải thích dưới)
+  - Bash(python:*)
+  - Bash(pytest:*)
+  - Read
+  - Write(reports/**)                     # scoped write
+  - Grep
+argument-hint: "[mode=vn30|all]"          # UX hint hiển thị lúc invoke
+---
+</code></pre>
+<p style="color: var(--text-dim); font-size: 0.9em;">Lưu ý: SKILL.md thật của <code>daily-investor-report</code> hiện chỉ có 3 field (name/description/argument-hint) — không có <code>allowed-tools</code>. Ví dụ trên minh họa field khả dụng trong spec, không phải trích nguyên văn file thật.</p>
+
+<h4>Tool inheritance rules (cơ chế thật, đã verify với docs chính thức)</h4>
+<ul>
+  <li><strong>allowed-tools</strong>: <em>pre-approve</em> các tool trong list cho lượt gọi skill đó — bỏ qua permission prompt cho riêng list này. KHÔNG chặn tool ngoài list; mọi tool khác vẫn gọi được bình thường theo permission settings hiện có của agent. Đây KHÔNG phải whitelist/sandbox.</li>
+  <li><strong>disallowed-tools</strong>: đây mới là field thật sự CHẶN — tool trong list này không được gọi trong lượt invoke skill, kể cả parent có quyền.</li>
+  <li><strong>Scoped patterns</strong>: <code>Write(reports/**)</code> chỉ pre-approve ghi trong reports/ (không tự động chặn ghi chỗ khác — muốn chặn phải dùng <code>disallowed-tools</code> hoặc permission <code>deny</code> riêng).</li>
+  <li><strong>Composition</strong> (skill A invoke skill B): hành vi hợp nhất permission chưa được document rõ ràng trong spec chính thức — đừng giả định "intersection" hay "union" cụ thể nào khi thiết kế skill chain.</li>
+</ul>
+
+<h4>Khi nào author 1 skill (vs prompt library)?</h4>
+<table>
+<tr><th>Tình huống</th><th>Chọn</th><th>Lý do</th></tr>
+<tr><td>Task 1-shot, prompt ngắn</td><td>Prompt library (snippets)</td><td>Overhead skill folder không đáng</td></tr>
+<tr><td>Repeatable, multi-step (&gt;5 steps)</td><td>⭐ Skill</td><td>SKILL.md discipline giúp reproducible</td></tr>
+<tr><td>Cần scripts + templates + KB</td><td>⭐ Skill</td><td>Multi-file structure</td></tr>
+<tr><td>Cross-team share qua git</td><td>⭐ Skill</td><td>Version-controlled, reviewable</td></tr>
+<tr><td>Personal preference toàn account</td><td>User memory</td><td>Persist mọi session</td></tr>
+<tr><td>Domain workflow &gt;100 lines discipline</td><td>⭐ Skill với §hard rules</td><td>PredictStock daily-investor-report = 2073 lines discipline</td></tr>
+</table>
+
+<h4>Skill vs prompt library — analogy VN</h4>
+<p><strong>Prompt library</strong> = tủ giấy note dán mảnh ("nhớ ghi số điện thoại", "đừng quên khóa cửa"). Nhanh, gọn, dùng cho ghi chú lẻ.
+<br><strong>Skill</strong> = cẩm nang kỹ thuật in đóng bìa (VD: cẩm nang bảo trì máy bay). Có mục lục, có checklist QA, có bản vẽ, có version. Bắt buộc cho việc lặp lại + có consequence khi sai.</p>
+
+<h4>Anti-pattern quan trọng</h4>
+<ul>
+  <li><strong>Nhầm allowed-tools là sandbox</strong>: allowed-tools chỉ pre-approve, không hề chặn tool khác — 1 bug trong skill vẫn có thể gọi <code>rm -rf</code> nếu agent parent có quyền đó. Fix: muốn thật sự chặn phải dùng <code>disallowed-tools</code> hoặc permission <code>deny</code> rules riêng, không thể trông cậy vào allowed-tools để "sandbox" skill.</li>
+  <li><strong>Skill trigger description mơ hồ</strong>: "handle stock stuff" → LLM invoke lung tung. Fix: description chỉ rõ khi nào invoke, kèm arg pattern.</li>
+</ul>
+
+<h4>Interview Q&A</h4>
+<ol>
+  <li><strong>Q: Skill có state không?</strong> A: Không native (mỗi invoke fresh). Skill có "convention state" — quy ước ghi output ra <code>reports/</code>, next invoke đọc lại. Đó là app-level state, không phải skill runtime.</li>
+  <li><strong>Q: Skill vs sub-agent (L8.1) — khi nào chọn cái nào?</strong> A: Skill = deterministic workflow user trigger (report generation). Sub-agent = LLM delegation cho sub-task (research, plan). Skill có KB + scripts, sub-agent chỉ có prompt.</li>
+  <li><strong>Q: allowed-tools có sandbox skill không?</strong> A: Không — allowed-tools chỉ pre-approve tool trong list (skip permission prompt), không chặn tool ngoài list. Muốn chặn thật sự, dùng <code>disallowed-tools</code> hoặc permission <code>deny</code> rules.</li>
+</ol>
+</div>
+
+<h2>7. Skill discovery patterns</h2>
+
+<h3>7.1 Explicit invocation</h3>
+<pre><code>User: "/daily-investor-report mode=all"
+System: match skill by name → invoke
+</code></pre>
+
+<h3>7.2 Keyword triggering</h3>
+<pre><code>User: "Generate today's stock report"
+System: detect "stock report" → suggest daily-investor-report skill
+</code></pre>
+
+<h3>7.3 Auto-selection</h3>
+<pre><code>Available skills listed in system prompt as one-liners:
+- daily-investor-report: Generate daily VN stock report
+- ml-walkforward-backtest: Backtest ML predictions
+
+LLM decide which to invoke based on user request.
+</code></pre>
+
+<h2>8. Anti-patterns</h2>
+
+<div class="callout danger">
+<ol>
+  <li><strong>Mega-skill</strong>: 1 skill cover 20 tasks. Fix: split by domain.</li>
+  <li><strong>No self-QA</strong>: skill trust LLM output blindly. Fix: mandatory checks (skill §11).</li>
+  <li><strong>Prompt drift</strong>: skill.md 1000+ lines LLM ignore parts. Fix: hard rules with enforcement patterns.</li>
+  <li><strong>No versioning</strong>: bug fix silently → downstream break. Fix: semver + changelog.</li>
+  <li><strong>Scripts + skill divergence</strong>: SKILL.md says X, script does Y. Fix: single source (README references code).</li>
+</ol>
+</div>
+
+<h2>9. Test & QA cho skill</h2>
+
+<pre><code># Golden test set:
+# Input: mode=all, sample data từ 2026-06-30
+# Expected output: reference JSON
+
+# Automated:
+def test_skill_daily_investor_report():
+    output = invoke_skill("daily-investor-report", mode="all")
+    assert output["qa"]["universe_size"] == 86
+    assert len(output["top_buy"]) == 5
+    assert all(pick["cc"] >= 0.5 for pick in output["top_buy"])
+
+# Regression:
+# Run daily on production, compare output metrics vs baseline
+# Alert on drift
+</code></pre>
+
+<h2>10. Ecosystem</h2>
+
+<ul>
+  <li><strong>Claude Skills</strong> (Anthropic 2024): official skill format cho Claude apps</li>
+  <li><strong>OpenAI Custom GPTs</strong>: similar concept in ChatGPT ecosystem</li>
+  <li><strong>Semantic Kernel Plugins</strong>: Microsoft's approach</li>
+  <li><strong>DSPy Signatures</strong>: declarative task definitions</li>
+</ul>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Skill vs Agent vs Tool — 3 dimension mỗi cái khác nhau.</p>
+<p class="a">Skill = package (prompt + scripts + KB) domain-specific. Agent = LLM + tools + loop + goal (running). Tool = atomic capability (Read, Bash). Skill invoke agent that use tools.</p>
+
+<p class="q">2. SKILL.md sections tối thiểu?</p>
+<p class="a">Persona, Data collection, Analysis/decision framework, Output format, Self-QA gate. Optional: hard rules, examples, versioning changelog.</p>
+
+<p class="q">3. Vì sao skill có §11 Self-QA gate?</p>
+<p class="a">LLM output có thể hallucinate, miss format, invent numbers. Skill mandate LLM check output trước declare success. Anti-hallucination check verify every numeric value có source trong data. Fail → rename file _FAILED.html, alert user.</p>
+
+<p class="q">4. daily-investor-report skill trigger keyword nào?</p>
+<p class="a">Explicit: /daily-investor-report [args]. Keyword: "daily report", "stock investor report", "VN30 analysis". Auto: agent detect user asking for market analysis.</p>
+
+<p class="q">5. Anti-pattern "mega-skill" — fix?</p>
+<p class="a">Split by domain. E.g., 1 skill cover both stock report + earnings analysis → split thành 2 skills invocable independently. Alternative: sub-skills (nested folder) cho related workflows.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>Real skill: <code>d:/New-jouney/predictor/.claude/skills/daily-investor-report/SKILL.md</code></li>
+    <li>Skill scripts: <code>.claude/skills/daily-investor-report/scripts/</code></li>
+    <li>ai_orchestrator skills: <code>d:/New-jouney/ai_orchestrator/.claude/skills/</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://docs.anthropic.com/en/docs/claude-code/skills">Anthropic Claude Code Skills docs</a></li>
+    <li>📖 <a href="https://platform.openai.com/docs/guides/custom-gpts">OpenAI Custom GPTs</a></li>
+    <li>📖 <a href="https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/">Semantic Kernel Plugins</a></li>
+    <li>📖 <a href="https://dspy-docs.vercel.app/">DSPy declarative signatures</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L8_1_agents_artifact.html">← L8.1</a>
+  <a href="L8_3_mcp_deep.html">L8.3 · MCP Deep-Dive →</a>
+</div>
+
+</div>
+</body>
+</html>

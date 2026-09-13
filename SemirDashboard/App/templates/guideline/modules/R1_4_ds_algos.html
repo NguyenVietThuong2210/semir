@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R1.4 · Basic DS &amp; Algos — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Coding Fundamentals · Điểm 4/6</div>
+  <h1>R1.4 · Basic Data Structures &amp; Algorithms</h1>
+
+  <p class="subtitle">Không phải bài tập phỏng vấn xa vời — <code>set</code>, <code>dict</code>, sliding window là những quyết định kỹ thuật nhỏ nhưng quyết định hệ thống có chịu tải nổi 86 ticker <code>HIGHLIGHT_GROUP</code> hay không.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Tính đúng Big-O của 1 đoạn code cho trước (list scan vs dict/set lookup).</li>
+<li>Đọc và giải thích được hàm <code>build_highlight_group()</code> thật trong <code>backend/data/groups.py</code> — vì sao nó dùng <code>set</code> thay vì chỉ dùng <code>list</code>.</li>
+<li>Nhận diện được pattern TTL cache (<code>_CA_CACHE</code>) trong <code>backend/predict/engine.py</code> và giải thích 2 thành phần của nó (dict + time-check).</li>
+<li>Giải thích được sliding window O(1)-mỗi-bước khác gì với cách tính "ngây thơ" O(n·k).</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Nên đọc sau R1.1 (Python) vì ví dụ dùng cú pháp Python (<code>dict</code>, <code>set</code>, <code>list</code>). Không cần biết thuật toán ML gì — đây là DS&amp;Algos nền tảng, khác hẳn <code>L1_3_trees_xgboost.html</code> (thuật toán học máy).</p>
+<p>Độ khó: <strong>Trung bình</strong>. Khái niệm Big-O đơn giản để phát biểu nhưng cần luyện mắt để "nhìn thấy" nó trong code thật — đây là kỹ năng cả module này rèn luyện.</p>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p><strong>List scan (O(n))</strong> giống tìm 1 cuốn sách trong chồng sách chưa sắp xếp — phải lật từng cuốn cho tới khi thấy đúng tên. Chồng càng nhiều sách, tìm càng lâu, thời gian tăng <em>tuyến tính</em> theo số sách.</p>
+<p><strong>Dict/Set lookup (O(1))</strong> giống tra từ điển thật — bạn không đọc từ trang 1, mà lật thẳng tới đúng vần chữ cái nhờ "chỉ mục" (index) đã sắp sẵn. Từ điển có 100 hay 100.000 từ, thời gian tra 1 từ gần như không đổi.</p>
+<p><strong>Sliding window</strong> giống tính điểm trung bình 5 môn thi gần nhất mỗi khi thêm 1 điểm mới: thay vì cộng lại cả 5 điểm từ đầu, bạn chỉ <em>cộng điểm mới, trừ điểm cũ nhất</em> ra khỏi tổng đang có sẵn.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>Bước 1 — Big-O là gì? (dễ, khái niệm nền)</h3>
+<p>Big-O đo <strong>tốc độ tăng</strong> của thời gian chạy khi kích thước input (<code>n</code>) tăng — không đo thời gian chạy chính xác bằng giây.</p>
+<table>
+<tr><th>Ký hiệu</th><th>Ý nghĩa</th><th>Ví dụ</th></tr>
+<tr><td>O(1)</td><td>Không đổi dù <code>n</code> tăng</td><td>Tra <code>dict["VNM"]</code></td></tr>
+<tr><td>O(log n)</td><td>Tăng rất chậm khi <code>n</code> tăng</td><td>Tìm kiếm nhị phân trên mảng đã sort</td></tr>
+<tr><td>O(n)</td><td>Tăng tuyến tính theo <code>n</code></td><td>Duyệt qua từng phần tử <code>list</code></td></tr>
+<tr><td>O(n²)</td><td>Tăng theo bình phương <code>n</code></td><td>So sánh mọi cặp phần tử với nhau</td></tr>
+</table>
+
+<h3>Bước 2 — <code>list</code> vs <code>dict</code>/<code>set</code>: khác nhau ở đâu, tại sao</h3>
+<p><strong>Vì sao list chậm khi tìm kiếm?</strong> <code>list</code> lưu phần tử theo đúng thứ tự chèn vào, không có "chỉ mục" theo giá trị — Python phải duyệt tuần tự <code>for item in list</code> cho tới khi thấy hoặc hết danh sách. Đây là <strong>O(n)</strong>.</p>
+<p><strong>Vì sao dict/set nhanh?</strong> <code>dict</code> và <code>set</code> dùng cấu trúc <strong>hash table</strong> bên trong: mỗi giá trị được "băm" (hash) thành 1 con số, con số đó trỏ thẳng tới đúng vị trí lưu trữ. Tra cứu không cần duyệt tuần tự — trung bình là <strong>O(1)</strong>.</p>
+<pre><code># O(n) — mỗi lần check phải duyệt hết list (tệ nhất khi ticker ở cuối/không có)
+ticker_list = ["ACB", "BID", "CTG", ...]   # 86 phần tử (HIGHLIGHT_GROUP)
+if "VNM" in ticker_list:      # Python duyệt tuần tự, tối đa 86 lần so sánh
+    ...
+
+# O(1) — convert 1 lần, sau đó mọi lần check gần như tức thời
+ticker_set = set(ticker_list)  # build 1 lần, tốn O(n)
+if "VNM" in ticker_set:        # tra cứu trung bình O(1), bất kể set có bao nhiêu phần tử
+    ...</code></pre>
+<p><strong>Đánh đổi khi nào KHÔNG dùng dict/set?</strong> Khi thứ tự phần tử quan trọng (VD chuỗi giá OHLCV theo thời gian) — <code>set</code> không giữ thứ tự, và bạn hiếm khi "tra cứu theo giá trị" trong time series, mà cần "lấy theo vị trí/thời gian" — lúc đó <code>list</code> vẫn là lựa chọn đúng.</p>
+
+<h3>Bước 3 — TTL Cache: dict + time-check</h3>
+<p>Pattern "cache-aside" kinh điển: đọc cache trước, nếu miss hoặc hết hạn thì tính lại và ghi lại cache. Cấu trúc: 1 <code>dict</code> lưu dữ liệu + 1 biến/field lưu thời điểm cache lần cuối.</p>
+<pre><code># Cấu trúc khái niệm của TTL cache (rút gọn từ pattern thật trong engine.py)
+_CACHE: dict[str, Any] = {}
+_LAST_FETCH: float = 0.0
+_REFRESH_SECS = 4 * 3600  # 4 giờ
+
+def get_cached_or_refresh():
+    global _CACHE, _LAST_FETCH
+    if time.time() - _LAST_FETCH < _REFRESH_SECS:
+        return _CACHE          # còn hạn dùng → trả cache ngay, O(1)
+    _CACHE = build_fresh_data()  # hết hạn → tính lại, ghi đè cache
+    _LAST_FETCH = time.time()
+    return _CACHE</code></pre>
+<p>Rủi ro kinh điển của pattern này (đã ghi trong memory dự án — <code>feedback_cache_all_paths.md</code>): nếu có <strong>nhiều chỗ trong code cùng ghi vào 1 cache key</strong>, sửa bug ở 1 chỗ mà quên chỗ khác → dữ liệu cũ (stale) vẫn lọt qua đường ghi bị bỏ sót. Khi fix bug cache, luôn grep toàn bộ nơi ghi vào key đó, không chỉ sửa 1 chỗ.</p>
+
+<h3>Bước 4 — Sliding window: O(1) mỗi bước thay vì tính lại từ đầu</h3>
+<p>Các chỉ báo kỹ thuật như RSI-14, MA-20 về bản chất thuật toán là <strong>sliding window</strong> trên chuỗi giá.</p>
+<table>
+<tr><th>Cách tính</th><th>Big-O mỗi bước</th><th>Big-O toàn chuỗi <code>n</code> ngày</th></tr>
+<tr><td>Ngây thơ: cộng lại toàn bộ window mỗi ngày</td><td>O(k) với k=kích thước window</td><td>O(n·k)</td></tr>
+<tr><td>Sliding window: cộng giá mới, trừ giá cũ nhất</td><td>O(1)</td><td>O(n)</td></tr>
+</table>
+<pre><code># Ngây thơ — tính lại tổng 20 ngày mỗi lần dịch cửa sổ
+def ma20_naive(prices, i):
+    return sum(prices[i-19:i+1]) / 20   # O(20) mỗi lần gọi
+
+# Sliding window — giữ tổng chạy, cập nhật O(1)
+running_sum = sum(prices[0:20])
+ma20 = running_sum / 20
+for i in range(20, len(prices)):
+    running_sum += prices[i] - prices[i-20]   # + giá mới, - giá rời khỏi cửa sổ
+    ma20 = running_sum / 20</code></pre>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Ví dụ thật, đọc trực tiếp từ <code>backend/data/groups.py</code> dòng 40-54 — hàm <code>build_highlight_group()</code> dùng chính xác kỹ thuật ở Bước 2:</p>
+<pre><code>def build_highlight_group() -> list[str]:
+    """VN30 + top N của mỗi ngành chưa có trong VN30 (mặc định N=5)."""
+    seen: set[str] = set(VN30)      # O(n) build 1 lần — n = 30 (VN30)
+    result: list[str] = list(VN30)
+    for sector_name, tickers in INDUSTRY_GROUPS.items():
+        max_count = SECTOR_MAX_OVERRIDE.get(sector_name, 5)
+        added = 0
+        for t in tickers:
+            if added >= max_count:
+                break
+            if t not in seen:        # O(1) nhờ set — không phải O(n) nếu dùng list
+                seen.add(t)
+                result.append(t)
+                added += 1
+    return result</code></pre>
+<p><strong>Vì sao đây là lựa chọn đúng, không phải "tối ưu sớm không cần thiết"</strong>: hàm này duyệt qua 12 ngành (INDUSTRY_GROUPS), mỗi ngành 5-15 ticker, và với <em>mỗi</em> ticker phải hỏi "đã có trong VN30/kết quả chưa?". Nếu dùng <code>if t not in result</code> (list) thay vì <code>seen</code> (set), mỗi lần check phải duyệt <code>result</code> đang lớn dần — tổng độ phức tạp trở thành O(n²) thay vì O(n). Với quy mô hiện tại (86 ticker HIGHLIGHT_GROUP — verify bằng <code>python -c "from data.groups import HIGHLIGHT_GROUP; print(len(HIGHLIGHT_GROUP))"</code> → 86) khác biệt còn nhỏ về thời gian tuyệt đối, nhưng đây đúng là thói quen thiết kế cần có trước khi universe ticker tăng lên hàng nghìn.</p>
+<p>Ví dụ TTL cache thật: <code>backend/predict/engine.py</code> dòng 102 <code>_CA_CACHE: dict = {}</code>, dòng 104 <code>_CA_REFRESH_SECS = 4 * 3600</code>, dùng trong <code>_get_or_build_cohort_cached</code> (dòng 785) và hàm refresh cross-asset <code>_refresh_ca_cache_if_stale()</code> (dòng 823-866) — đúng pattern cache-aside ở Bước 3.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Cấu trúc</th><th>Big-O lookup</th><th>Dùng khi nào trong dự án</th></tr>
+<tr><td><code>list</code></td><td>O(n) tìm kiếm, O(1) truy cập theo index</td><td>OHLCV time series — thứ tự thời gian quan trọng</td></tr>
+<tr><td><code>dict</code></td><td>O(1) trung bình</td><td><code>INDUSTRY_GROUPS</code> (tra theo tên ngành), <code>_CA_CACHE</code> (tra theo key cache)</td></tr>
+<tr><td><code>set</code></td><td>O(1) trung bình cho membership test</td><td><code>seen</code> trong <code>build_highlight_group()</code> — khử trùng lặp ticker</td></tr>
+<tr><td>Sliding window</td><td>O(1) mỗi bước cập nhật</td><td>RSI/MA/rolling stats trên chuỗi giá</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>backend/data/groups.py</code> dòng 40-57 — <code>build_highlight_group()</code> tạo ra <code>HIGHLIGHT_GROUP</code> (danh sách ticker theo dõi chính của toàn hệ thống, đúng 86 mã — verify trực tiếp bằng <code>len(HIGHLIGHT_GROUP)</code>) bằng đúng kỹ thuật <code>set</code> để khử trùng lặp O(1). Khi review PR mới đụng tới danh sách ticker, câu hỏi cần tự hỏi: "chỗ này dùng list để kiểm tra tồn tại — có nên đổi sang set/dict không?"</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>#1 — Check membership lặp lại trên list</strong>: <code>if ticker in ticker_list</code> gọi hàng trăm lần trong 1 request, mỗi lần O(n) — nên convert sang <code>set</code> 1 lần trước vòng lặp, không convert lại mỗi lần check.</p>
+<p><strong>#2 — Quên update 1 trong nhiều nơi ghi cùng 1 cache key</strong>: pattern TTL cache ở Bước 3 dễ có nhiều "đường ghi" (write path) khác nhau — sửa 1 đường mà bỏ sót đường khác tạo ra bug rất khó phát hiện (dữ liệu cũ lẫn dữ liệu mới không nhất quán). Luôn grep toàn bộ nơi ghi cache key trước khi sửa.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Tính đúng Big-O cho 1 đoạn code check membership trên list vs set.</li>
+<li>Giải thích được vì sao <code>build_highlight_group()</code> dùng <code>seen: set[str]</code> thay vì chỉ dùng <code>result: list[str]</code> để check trùng lặp.</li>
+<li>Vẽ lại được cấu trúc TTL cache (dict + time-check) và chỉ ra rủi ro "nhiều nơi ghi cùng key".</li>
+<li>Giải thích được sliding window giảm Big-O từ O(n·k) xuống O(n) thế nào.</li>
+<li>Chỉ ra 1 tình huống nên dùng <code>list</code> thay vì <code>set</code>/<code>dict</code> dù set/dict nhanh hơn về lookup.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R1_3_typescript.html">← R1.3 · TypeScript</a>
+  <a href="R1_5_git.html">R1.5 · Git →</a>
+</div>
+
+</div>
+</body>
+</html>

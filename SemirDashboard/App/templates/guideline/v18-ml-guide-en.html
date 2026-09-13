@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>V18 ML Guide — From Zero to Hero (English)</title>
+<style>
+:root {
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-card-hover: #334155;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --accent: #3b82f6;
+  --accent-2: #8b5cf6;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --border: #334155;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  padding: 0;
+}
+.container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+.hero {
+  background: linear-gradient(135deg, #1e3a8a 0%, #6d28d9 100%);
+  padding: 80px 24px 60px;
+  text-align: center;
+  border-bottom: 3px solid var(--accent);
+}
+.hero h1 { font-size: 2.8em; font-weight: 800; margin-bottom: 12px; }
+.hero .subtitle { font-size: 1.3em; color: #c7d2fe; max-width: 800px; margin: 0 auto; }
+.hero .meta { font-size: 0.9em; color: #a5b4fc; margin-top: 16px; }
+.toc {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 40px;
+  position: sticky;
+  top: 20px;
+  z-index: 10;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.toc h3 { color: var(--accent); margin-bottom: 12px; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; }
+.toc ol { list-style: none; counter-reset: toc; }
+.toc li { counter-increment: toc; padding: 4px 0; }
+.toc li::before {
+  content: counter(toc) ". ";
+  color: var(--accent-2);
+  font-weight: 700;
+  margin-right: 8px;
+}
+.toc a { color: var(--text); text-decoration: none; }
+.toc a:hover { color: var(--accent); }
+@media (min-width: 1100px) {
+  .layout { display: grid; grid-template-columns: 260px 1fr; gap: 32px; align-items: start; }
+  .toc { position: sticky; top: 20px; }
+}
+section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 32px;
+  margin-bottom: 28px;
+}
+section h2 {
+  color: var(--accent);
+  font-size: 1.7em;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 10px;
+}
+section h3 {
+  color: var(--accent-2);
+  font-size: 1.25em;
+  margin: 24px 0 12px;
+}
+section h4 {
+  color: var(--success);
+  font-size: 1.05em;
+  margin: 18px 0 8px;
+}
+p { margin: 12px 0; color: var(--text); }
+ul, ol { margin: 12px 0 12px 24px; }
+ul li, ol li { margin: 8px 0; }
+code {
+  background: #0f172a;
+  color: #fbbf24;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Monaco", "Consolas", monospace;
+  font-size: 0.92em;
+}
+pre {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+pre code {
+  background: none;
+  padding: 0;
+  color: #e2e8f0;
+  font-size: 0.88em;
+}
+.callout {
+  border-left: 4px solid var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 16px 20px;
+  margin: 20px 0;
+  border-radius: 6px;
+}
+.callout.warning { border-color: var(--warning); background: rgba(245, 158, 11, 0.1); }
+.callout.success { border-color: var(--success); background: rgba(34, 197, 94, 0.1); }
+.callout.danger  { border-color: var(--danger);  background: rgba(239, 68, 68, 0.1); }
+.callout .title { font-weight: 700; margin-bottom: 6px; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #0f172a; color: var(--accent); font-weight: 700; }
+tr:hover td { background: rgba(59, 130, 246, 0.05); }
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.mini-card {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  padding: 18px;
+  border-radius: 10px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.mini-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+.mini-card .num {
+  color: var(--accent);
+  font-size: 2em;
+  font-weight: 800;
+  display: block;
+  line-height: 1;
+}
+.mini-card .label {
+  color: var(--text-dim);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 6px;
+}
+.mini-card .desc { font-size: 0.92em; margin-top: 8px; color: var(--text); }
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 24px 0;
+}
+.flow-box {
+  background: #0f172a;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  padding: 14px 20px;
+  min-width: 140px;
+  text-align: center;
+}
+.flow-box.stage1 { border-color: var(--success); }
+.flow-box.stage2 { border-color: var(--warning); }
+.flow-box.decision { border-color: var(--accent-2); }
+.flow-arrow { color: var(--accent); font-size: 2em; }
+.svg-diagram {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0;
+  text-align: center;
+  overflow-x: auto;
+}
+.svg-diagram svg { max-width: 100%; height: auto; }
+.kbd {
+  display: inline-block;
+  background: #1e293b;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: monospace;
+  font-size: 0.88em;
+  color: var(--accent);
+}
+.timeline {
+  position: relative;
+  padding-left: 30px;
+  margin: 20px 0;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+.timeline-item {
+  position: relative;
+  margin: 16px 0;
+  padding-left: 20px;
+}
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -27px;
+  top: 8px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--bg-card);
+}
+.timeline-item.fail::before  { background: var(--danger); }
+.timeline-item.win::before   { background: var(--success); }
+.timeline-item.epic::before  { background: var(--warning); }
+.timeline-item .ver { color: var(--accent-2); font-weight: 700; font-size: 1.1em; }
+.timeline-item .skill { color: var(--text-dim); font-size: 0.85em; margin-left: 8px; }
+.lang-switch { text-align: center; padding: 16px 0; background: #0f172a; border-bottom: 1px solid var(--border); }
+.lang-switch a { color: var(--accent); text-decoration: none; padding: 6px 16px; border: 1px solid var(--accent); border-radius: 6px; margin: 0 8px; }
+.lang-switch a:hover { background: var(--accent); color: white; }
+.lang-switch a.active { background: var(--accent); color: white; }
+.glossary dt {
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 16px;
+}
+.glossary dd { margin-left: 16px; color: var(--text); }
+.analogy {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+  border: 1px dashed var(--accent-2);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 16px 0;
+}
+.analogy::before { content: "🎯 Analogy: "; font-weight: 700; color: var(--accent-2); }
+footer { text-align: center; padding: 40px 24px; color: var(--text-dim); border-top: 1px solid var(--border); margin-top: 60px; }
+</style>
+</head>
+<body>
+
+<div class="lang-switch">
+  <a href="v18-ml-guide-en.html" class="active">🇬🇧 English</a>
+  <a href="v18-ml-guide-vi.html">🇻🇳 Tiếng Việt</a>
+</div>
+
+<div class="hero">
+  <h1>📚 Understanding V18 ML — From Zero to Hero</h1>
+  <p class="subtitle">A complete beginner's guide to how the v18 stock prediction model works — covering everything from "what is machine learning?" to "why we use 78 features per ticker"</p>
+  <div class="meta">For PredictStock | Updated 2026-06-20 | Beginner-friendly</div>
+</div>
+
+<div class="container">
+<div class="layout">
+
+<aside>
+<div class="toc">
+  <h3>📑 Table of Contents</h3>
+  <ol>
+    <li><a href="#part1">What is Machine Learning?</a></li>
+    <li><a href="#part2">The Stock Prediction Problem</a></li>
+    <li><a href="#part3">Features: How Computers See Stocks</a></li>
+    <li><a href="#part4">The Models: From Trees to XGBoost</a></li>
+    <li><a href="#part5">V18 Architecture: The 2-Stage System</a></li>
+    <li><a href="#part6">Training Smart: Sample Weights & Cross-Validation</a></li>
+    <li><a href="#part7">Calibration: Making Probabilities Honest</a></li>
+    <li><a href="#part8">Composite Confidence: Combining 4 Signals</a></li>
+    <li><a href="#part9">Per-Ticker Routing & Production Gates</a></li>
+    <li><a href="#part10">From Prediction to Trade</a></li>
+    <li><a href="#part11">The V1→V18 Journey: 18 Iterations of Learning</a></li>
+    <li><a href="#part12">Glossary</a></li>
+  </ol>
+</div>
+</aside>
+
+<main>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 1 -->
+<section id="part1">
+<h2>1. What is Machine Learning? 🤖</h2>
+
+<p>Machine Learning (ML) is teaching a computer to <strong>find patterns in data</strong> instead of programming it with explicit rules.</p>
+
+<div class="analogy">
+Imagine you want a computer to recognize cats in photos. The <strong>old way</strong> was writing rules: "if it has whiskers AND pointy ears AND fur, it's a cat." This breaks easily — what about a hairless cat? The <strong>ML way</strong> is showing the computer 10,000 cat photos and 10,000 non-cat photos and letting it figure out the patterns itself.
+</div>
+
+<h3>The Three Types of ML</h3>
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">1</span>
+    <div class="label">Supervised</div>
+    <div class="desc">You give the computer answers to learn from. <em>"This photo is a cat, this isn't."</em> — Used for our v18!</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">2</span>
+    <div class="label">Unsupervised</div>
+    <div class="desc">Computer finds patterns without labels. <em>"Group these customers however you like."</em></div>
+  </div>
+  <div class="mini-card">
+    <span class="num">3</span>
+    <div class="label">Reinforcement</div>
+    <div class="desc">Computer learns by trial-and-error with rewards. <em>"Win the game and get +1."</em></div>
+  </div>
+</div>
+
+<h3>Two Sub-Types of Supervised Learning</h3>
+<table>
+<tr><th>Type</th><th>Predict</th><th>Example</th><th>V18 uses?</th></tr>
+<tr><td><strong>Classification</strong></td><td>A category</td><td>Cat / Dog / Bird</td><td>✅ YES (UP / DOWN / FLAT)</td></tr>
+<tr><td><strong>Regression</strong></td><td>A number</td><td>House price = $250,000</td><td>❌ No</td></tr>
+</table>
+
+<div class="callout">
+<div class="title">💡 Key Insight</div>
+V18 is a <strong>3-class classification problem</strong>. We don't predict "VNM will go up by 2.3% tomorrow" (that would be regression — too hard). We predict "VNM will go UP / stay FLAT / go DOWN" — much easier.
+</div>
+
+<h3>The ML Pipeline (How It Works)</h3>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 700 180" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#3b82f6"/>
+    </marker>
+  </defs>
+  <rect x="10"  y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+  <text x="65"  y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">1. DATA</text>
+  <text x="65"  y="105" text-anchor="middle" fill="#94a3b8" font-size="11">OHLCV bars</text>
+  <line x1="125" y1="90" x2="145" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="150" y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+  <text x="205" y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">2. FEATURES</text>
+  <text x="205" y="105" text-anchor="middle" fill="#94a3b8" font-size="11">RSI, MA, etc.</text>
+  <line x1="265" y1="90" x2="285" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="290" y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="345" y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">3. TRAIN</text>
+  <text x="345" y="105" text-anchor="middle" fill="#94a3b8" font-size="11">XGBoost</text>
+  <line x1="405" y1="90" x2="425" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="430" y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+  <text x="485" y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">4. PREDICT</text>
+  <text x="485" y="105" text-anchor="middle" fill="#94a3b8" font-size="11">UP/DOWN/FLAT</text>
+  <line x1="545" y1="90" x2="565" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="570" y="60" width="110" height="60" rx="10" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
+  <text x="625" y="85"  text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">5. TRADE</text>
+  <text x="625" y="105" text-anchor="middle" fill="#94a3b8" font-size="11">Buy / Sell</text>
+</svg>
+</div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 2 -->
+<section id="part2">
+<h2>2. The Stock Prediction Problem 📈</h2>
+
+<h3>Why is stock prediction hard?</h3>
+<ul>
+  <li><strong>Tiny signal, huge noise</strong> — Most daily moves are random (~90% noise, ~10% signal)</li>
+  <li><strong>Regime changes</strong> — Patterns from 2022 don't work in 2026 (interest rates, war, COVID...)</li>
+  <li><strong>You can't see the future</strong> — Have to use ONLY past data to predict future</li>
+  <li><strong>Transaction costs eat profits</strong> — Vietnamese fees: 0.20-0.55% per round trip</li>
+</ul>
+
+<div class="callout warning">
+<div class="title">⚠️ Reality Check</div>
+There are two ways to measure "accuracy":
+<ul>
+  <li><strong>Directional accuracy</strong> (binary UP-vs-DOWN when the model commits): random = 50%, edge starts at ~52%, pros run at 53-55%</li>
+  <li><strong>3-class accuracy</strong> (UP/FLAT/DOWN end-to-end): random = 33%, but majority-class baseline is ~40-45% (because FLAT is common). V18 stores this as <code>cv_accuracy_mean</code> — typical value ~0.60 for VN30</li>
+</ul>
+What matters is <em>skill_score</em>: how much above baseline. 0 = no skill, 0.05+ = tradeable.
+</div>
+
+<h3>How V18 Defines the Problem</h3>
+
+<p>For every trading day, for every stock, predict ONE of three things:</p>
+
+<div class="cards-grid">
+  <div class="mini-card" style="border-left: 4px solid #22c55e">
+    <span class="num" style="color: #22c55e">UP</span>
+    <div class="label">Rise more than threshold next day</div>
+    <div class="desc">Buy signal — price will likely rise</div>
+  </div>
+  <div class="mini-card" style="border-left: 4px solid #94a3b8">
+    <span class="num" style="color: #94a3b8">FLAT</span>
+    <div class="label">Move within ±threshold</div>
+    <div class="desc">No clear direction — don't trade</div>
+  </div>
+  <div class="mini-card" style="border-left: 4px solid #ef4444">
+    <span class="num" style="color: #ef4444">DOWN</span>
+    <div class="label">Fall more than threshold next day</div>
+    <div class="desc">Sell signal — price will likely fall</div>
+  </div>
+</div>
+
+<div class="callout">
+<div class="title">📐 The Threshold Question</div>
+What counts as "UP"? The threshold is <strong>per-ticker, ATR-based</strong> — set so that roughly 20% of historical daily moves land inside the FLAT zone. Real values from live artifacts:
+<ul>
+  <li>TIS (low volatility): <code>0.20%</code></li>
+  <li>VNM (medium): <code>0.27%</code></li>
+  <li>PDR (higher volatility): <code>0.45%</code></li>
+</ul>
+Bounded at floor 0.2% and cap 1.5%, scaled by √horizon for T+3 and T+5.
+</div>
+
+<h3>Three Horizons</h3>
+<p>We don't just predict tomorrow. We predict 3 future days:</p>
+<table>
+<tr><th>Horizon</th><th>Predict</th><th>Weight in final decision</th></tr>
+<tr><td>T+1</td><td>Tomorrow's direction</td><td>50% (loudest voice)</td></tr>
+<tr><td>T+3</td><td>3 days from now</td><td>30%</td></tr>
+<tr><td>T+5</td><td>1 week from now</td><td>20% (weakest voice)</td></tr>
+</table>
+
+<p>The 3 horizons "vote" together (weighted) to give the final prediction.</p>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 3 -->
+<section id="part3">
+<h2>3. Features: How Computers See Stocks 👁️</h2>
+
+<p>Computers can't "look at a chart". They need NUMBERS. Each stock on each day becomes a row of ~78 numbers called <strong>features</strong>.</p>
+
+<div class="analogy">
+A doctor doesn't diagnose you by "looking at you". She measures: temperature, blood pressure, heart rate, white blood cell count, etc. Each measurement = 1 feature. Together they describe your health. Same for stocks — RSI, MACD, volume ratio, etc.
+</div>
+
+<h3>V18's 78 Features — Grouped</h3>
+
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">51</span>
+    <div class="label">Base Technical</div>
+    <div class="desc">RSI, MACD, Bollinger Bands, Moving Averages, ATR, Stochastic, OBV, CCI...</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">2</span>
+    <div class="label">VN-Index Regime</div>
+    <div class="desc">vn30_ret_20d, vn30_vol_regime — overall market state</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">9</span>
+    <div class="label">Money Flow</div>
+    <div class="desc">MFI, CMF, bull volume ratio, accumulation streak — where institutions are putting money</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">7</span>
+    <div class="label">Volatility Regime</div>
+    <div class="desc">Realized vol, ATR normalized, Bollinger width, choppiness — "is the market calm or wild?"</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">2-6</span>
+    <div class="label">Cross-Asset</div>
+    <div class="desc">SP500, VIX, oil, USD/VND, Hang Seng — international context</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">4</span>
+    <div class="label">Breadth + Pair</div>
+    <div class="desc">VN30 breadth, peer return correlation — but only for 9 selected tickers</div>
+  </div>
+</div>
+
+<h3>Example Feature Explained: RSI</h3>
+<p>RSI (Relative Strength Index) measures momentum on a 0-100 scale:</p>
+<ul>
+  <li><strong>RSI < 30</strong> = oversold (might bounce up soon)</li>
+  <li><strong>RSI 30-70</strong> = neutral zone</li>
+  <li><strong>RSI > 70</strong> = overbought (might fall soon)</li>
+</ul>
+
+<p>Calculation (simplified):</p>
+<pre><code>RS = (average gain over 14 days) / (average loss over 14 days)
+RSI = 100 - (100 / (1 + RS))</code></pre>
+
+<h3>Why "Cross-Asset" Features?</h3>
+<p>Vietnamese stocks don't move in isolation. When SP500 crashes overnight, VN-Index typically opens lower. When oil prices spike, GAS and PLX rally. V18 includes:</p>
+
+<table>
+<tr><th>Signal</th><th>Why it matters</th></tr>
+<tr><td>SP500</td><td>Global risk sentiment</td></tr>
+<tr><td>VIX (fear index)</td><td>When VIX spikes, all stocks fall</td></tr>
+<tr><td>Oil (Brent)</td><td>Energy stocks driver</td></tr>
+<tr><td>DXY (USD index)</td><td>Strong USD hurts emerging markets</td></tr>
+<tr><td>Hang Seng</td><td>Regional contagion</td></tr>
+<tr><td>USD/VND</td><td>Currency pressure on exporters</td></tr>
+</table>
+
+<div class="callout danger">
+<div class="title">🚨 Look-Ahead Bias — The Cardinal Sin</div>
+You CAN'T use tomorrow's data to predict tomorrow. Every feature must use ONLY information available <em>before</em> the prediction. V18 uses <code>shift(1)</code> on all cross-asset features to ensure we never accidentally peek at the future.
+</div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 4 -->
+<section id="part4">
+<h2>4. The Models: From Trees to XGBoost 🌳</h2>
+
+<h3>Start Simple: A Decision Tree</h3>
+<p>A decision tree is just a series of "if-then" questions:</p>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg">
+  <!-- Root -->
+  <rect x="220" y="10" width="160" height="40" rx="6" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+  <text x="300" y="35" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">RSI &lt; 30?</text>
+
+  <!-- Yes branch -->
+  <line x1="280" y1="50" x2="160" y2="90" stroke="#3b82f6"/>
+  <text x="200" y="75" fill="#22c55e" font-size="11" font-weight="700">YES</text>
+
+  <rect x="80" y="90" width="160" height="40" rx="6" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+  <text x="160" y="115" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">Volume surge &gt; 2x?</text>
+
+  <line x1="120" y1="130" x2="60" y2="170" stroke="#22c55e"/>
+  <text x="85" y="155" fill="#22c55e" font-size="11" font-weight="700">YES</text>
+  <rect x="10" y="170" width="100" height="40" rx="6" fill="#22c55e" stroke="#22c55e"/>
+  <text x="60" y="195" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="800">UP</text>
+
+  <line x1="200" y1="130" x2="260" y2="170" stroke="#94a3b8"/>
+  <text x="240" y="155" fill="#94a3b8" font-size="11" font-weight="700">NO</text>
+  <rect x="220" y="170" width="100" height="40" rx="6" fill="#94a3b8" stroke="#94a3b8"/>
+  <text x="270" y="195" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="800">FLAT</text>
+
+  <!-- No branch -->
+  <line x1="320" y1="50" x2="440" y2="90" stroke="#3b82f6"/>
+  <text x="400" y="75" fill="#ef4444" font-size="11" font-weight="700">NO</text>
+
+  <rect x="360" y="90" width="160" height="40" rx="6" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
+  <text x="440" y="115" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">RSI &gt; 70?</text>
+
+  <line x1="400" y1="130" x2="340" y2="170" stroke="#ef4444"/>
+  <text x="370" y="155" fill="#ef4444" font-size="11" font-weight="700">YES</text>
+  <rect x="340" y="170" width="100" height="40" rx="6" fill="#ef4444" stroke="#ef4444"/>
+  <text x="390" y="195" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">DOWN</text>
+
+  <line x1="480" y1="130" x2="540" y2="170" stroke="#94a3b8"/>
+  <text x="520" y="155" fill="#94a3b8" font-size="11" font-weight="700">NO</text>
+  <rect x="490" y="170" width="100" height="40" rx="6" fill="#94a3b8" stroke="#94a3b8"/>
+  <text x="540" y="195" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="800">FLAT</text>
+
+  <text x="300" y="260" text-anchor="middle" fill="#94a3b8" font-size="12">Simple decision tree (in reality: 100+ branches, 5+ deep)</text>
+</svg>
+</div>
+
+<h3>Problem: One Tree is Weak</h3>
+<p>A single tree memorizes training data but doesn't generalize. Solution: combine MANY trees.</p>
+
+<h3>Random Forest = Many Trees Voting</h3>
+<p>Train 100 trees, each on a slightly different sample of data. Final prediction = majority vote.</p>
+
+<h3>Gradient Boosting = Trees that Fix Each Other's Mistakes</h3>
+<p>Train trees sequentially. Each new tree focuses on examples the previous trees got wrong. This is more powerful than Random Forest for tabular data.</p>
+
+<h3>XGBoost = Highly Optimized Gradient Boosting</h3>
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">⚡</span>
+    <div class="label">Fast</div>
+    <div class="desc">Parallel training, optimized C++ core</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🎯</span>
+    <div class="label">Accurate</div>
+    <div class="desc">Wins most Kaggle competitions on tabular data</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🛡️</span>
+    <div class="label">Regularized</div>
+    <div class="desc">Built-in L1/L2 to prevent overfitting</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🪶</span>
+    <div class="label">Handles missing</div>
+    <div class="desc">No need to impute NaN values</div>
+  </div>
+</div>
+
+<h3>LightGBM = Faster, Slightly Different XGBoost</h3>
+<p>V18 uses XGBoost + LightGBM together. Each makes different mistakes. Averaging their predictions reduces variance.</p>
+
+<div class="callout success">
+<div class="title">✅ Why Trees Beat Neural Networks Here</div>
+For TABULAR data with &lt; 10,000 samples per ticker, tree-based models (XGBoost, LightGBM) almost ALWAYS beat neural networks (deep learning). Neural nets need huge datasets. Trees handle missing values, mixed scales, and small datasets gracefully.
+</div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 5 -->
+<section id="part5">
+<h2>5. V18 Architecture: The 2-Stage System 🏗️</h2>
+
+<h3>The Problem with Direct 3-Class Prediction</h3>
+<p>If we directly predict UP/DOWN/FLAT, the model gets confused at boundaries:</p>
+<ul>
+  <li>Is +0.29% "FLAT" or "UP"?</li>
+  <li>Is -0.31% "FLAT" or "DOWN"?</li>
+</ul>
+<p>The classes blend into each other. <strong>Solution: split into 2 questions.</strong></p>
+
+<h3>V18's 2-Stage Architecture</h3>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 700 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- Input -->
+  <rect x="250" y="10" width="200" height="50" rx="10" fill="#0f172a" stroke="#3b82f6" stroke-width="2"/>
+  <text x="350" y="32" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">INPUT</text>
+  <text x="350" y="50" text-anchor="middle" fill="#94a3b8" font-size="11">78 features (RSI, MACD, vol, etc.)</text>
+
+  <line x1="350" y1="60" x2="350" y2="90" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar2)"/>
+
+  <!-- Stage 1 -->
+  <rect x="200" y="100" width="300" height="80" rx="10" fill="#0f172a" stroke="#22c55e" stroke-width="3"/>
+  <text x="350" y="125" text-anchor="middle" fill="#22c55e" font-size="14" font-weight="800">STAGE 1: Direction vs Flat?</text>
+  <text x="350" y="145" text-anchor="middle" fill="#e2e8f0" font-size="12">3 XGBoost models (seeds 42, 17, 99)</text>
+  <text x="350" y="162" text-anchor="middle" fill="#94a3b8" font-size="11">Binary: DIR or FLAT?  →  P(DIR) calibrated</text>
+
+  <line x1="350" y1="180" x2="350" y2="210" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar2)"/>
+
+  <!-- Gate -->
+  <polygon points="270,210 430,210 380,260 320,260" fill="#0f172a" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="350" y="240" text-anchor="middle" fill="#8b5cf6" font-size="13" font-weight="700">P(DIR) ≥ gate?</text>
+
+  <!-- NO -> FLAT -->
+  <line x1="270" y1="240" x2="120" y2="290" stroke="#94a3b8" stroke-width="2" marker-end="url(#ar2)"/>
+  <text x="180" y="265" fill="#94a3b8" font-size="11" font-weight="700">NO</text>
+  <rect x="50" y="290" width="140" height="60" rx="10" fill="#94a3b8" stroke="#94a3b8"/>
+  <text x="120" y="315" text-anchor="middle" fill="#0f172a" font-size="14" font-weight="800">PREDICT: FLAT</text>
+  <text x="120" y="335" text-anchor="middle" fill="#0f172a" font-size="11">Don't trade today</text>
+
+  <!-- YES -> Stage 2 -->
+  <line x1="430" y1="240" x2="540" y2="290" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar2)"/>
+  <text x="510" y="265" fill="#22c55e" font-size="11" font-weight="700">YES</text>
+
+  <rect x="430" y="290" width="240" height="80" rx="10" fill="#0f172a" stroke="#f59e0b" stroke-width="3"/>
+  <text x="550" y="315" text-anchor="middle" fill="#f59e0b" font-size="13" font-weight="800">STAGE 2: UP vs DOWN?</text>
+  <text x="550" y="335" text-anchor="middle" fill="#e2e8f0" font-size="11">XGBoost + LightGBM blend (50/50)</text>
+  <text x="550" y="352" text-anchor="middle" fill="#94a3b8" font-size="10">+ Isotonic calibration on Stage 2</text>
+</svg>
+</div>
+
+<h4>Why This is Better</h4>
+<ul>
+  <li><strong>Stage 1 is easier</strong> — Distinguishing "anything happens" from "nothing happens" is more reliable than 3-way classification</li>
+  <li><strong>Stage 2 sees only clear cases</strong> — When Stage 1 says "DIR", Stage 2 doesn't need to worry about FLAT noise</li>
+  <li><strong>Better calibration</strong> — Each stage handles its specific imbalance</li>
+</ul>
+
+<h3>The "Gate" Concept</h3>
+<p>After Stage 1, we have a probability like "P(DIR) = 0.62". Do we trust it? The <strong>gate</strong> is the minimum probability required to predict UP/DOWN. Below the gate → FLAT.</p>
+
+<p>V18 has TWO gate values per ticker:</p>
+<ol>
+  <li><strong>Artifact gate</strong> (<code>dir_conf_gate</code>) — found during training, max F1 subject to precision ≥ 0.72</li>
+  <li><strong>Production gate</strong> (<code>V18_PRODUCTION_GATES</code>) — backtest-tuned override used at inference</li>
+</ol>
+
+<table>
+<tr><th>Ticker</th><th>Artifact gate</th><th>Production gate (live)</th><th>Why</th></tr>
+<tr><td>VNM</td><td>0.45</td><td><strong>0.66</strong></td><td>Production tuned conservative — fewer false UP signals</td></tr>
+<tr><td>PDR</td><td>~0.50</td><td><strong>0.43</strong></td><td>Speculative — accept more signals, filter later by composite</td></tr>
+<tr><td>VHM</td><td>~0.50</td><td><strong>0.64</strong></td><td>Tends to over-predict FLAT — needs high bar</td></tr>
+<tr><td>MSN</td><td>~0.50</td><td><strong>0.68</strong></td><td>Macro-driven, high uncertainty</td></tr>
+</table>
+
+<p>Production gates come from walk-forward backtest convergence (the values in <code>V18_PRODUCTION_GATES</code> dict). Plus runtime boosts: +0.08 for low liquidity, +0.10 in bear regime, +0.05 for recent event.</p>
+
+<h3>Multi-Seed Ensemble (Stage 1)</h3>
+<p>Instead of training 1 Stage 1 model, V18 trains 3 with different random seeds (42, 17, 99). At prediction time, average their probabilities.</p>
+
+<div class="analogy">
+Asking 3 doctors instead of 1 reduces the chance of a single doctor's biased opinion ruining your diagnosis. Each tree forest has slightly different "biases" — averaging cancels them out.
+</div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 6 -->
+<section id="part6">
+<h2>6. Training Smart: Sample Weights & Cross-Validation ⚖️</h2>
+
+<h3>Not All Training Examples Are Equal</h3>
+<p>V18 applies 3 types of weights to each training row:</p>
+
+<h4>1. Class Balance Weights</h4>
+<p>Problem: 80% of days are FLAT, 10% UP, 10% DOWN. A naive model just predicts FLAT for everything (80% accuracy, 0% usefulness).</p>
+<p>Solution: weigh UP and DOWN examples higher so model pays attention to them.</p>
+<pre><code>cw = 0.5 / freq_of_class
+# If FLAT is 80% of data: cw = 0.625
+# If UP is 10% of data:   cw = 5.0</code></pre>
+
+<h4>2. Recency Decay (Half-Life ~200 days)</h4>
+<p>Recent data matters more (market regimes shift). Each row's weight decays exponentially with age:</p>
+<pre><code>weight = exp(-ln(2) / half_life * days_ago)
+# Row from 200 days ago: weight = 0.5
+# Row from 400 days ago: weight = 0.25
+# Row from today:        weight = 1.0</code></pre>
+
+<h4>3. Label Clarity Weighting</h4>
+<p>A +0.29% day (FLAT) and +0.31% day (UP) are basically identical — same information, different labels. Don't train hard on boundary cases.</p>
+
+<h3>Cross-Validation: Testing Without Cheating</h3>
+<p>You can't test the model on the same data you trained on (it just memorizes). For time-series, we use <strong>TimeSeriesSplit</strong>:</p>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg">
+  <text x="350" y="20" text-anchor="middle" fill="#3b82f6" font-size="14" font-weight="700">TimeSeriesSplit (5 folds, with 5-day gap)</text>
+
+  <!-- Fold 1 -->
+  <text x="20" y="55" fill="#94a3b8" font-size="11">Fold 1:</text>
+  <rect x="80" y="40" width="200" height="20" fill="#22c55e"/>
+  <rect x="280" y="40" width="10" height="20" fill="#f59e0b"/>
+  <rect x="290" y="40" width="50" height="20" fill="#ef4444"/>
+
+  <!-- Fold 2 -->
+  <text x="20" y="95" fill="#94a3b8" font-size="11">Fold 2:</text>
+  <rect x="80" y="80" width="260" height="20" fill="#22c55e"/>
+  <rect x="340" y="80" width="10" height="20" fill="#f59e0b"/>
+  <rect x="350" y="80" width="50" height="20" fill="#ef4444"/>
+
+  <!-- Fold 3 -->
+  <text x="20" y="135" fill="#94a3b8" font-size="11">Fold 3:</text>
+  <rect x="80" y="120" width="320" height="20" fill="#22c55e"/>
+  <rect x="400" y="120" width="10" height="20" fill="#f59e0b"/>
+  <rect x="410" y="120" width="50" height="20" fill="#ef4444"/>
+
+  <!-- Fold 4 -->
+  <text x="20" y="175" fill="#94a3b8" font-size="11">Fold 4:</text>
+  <rect x="80" y="160" width="380" height="20" fill="#22c55e"/>
+  <rect x="460" y="160" width="10" height="20" fill="#f59e0b"/>
+  <rect x="470" y="160" width="50" height="20" fill="#ef4444"/>
+
+  <!-- Legend -->
+  <rect x="80" y="195" width="14" height="14" fill="#22c55e"/>
+  <text x="100" y="207" fill="#e2e8f0" font-size="11">Train</text>
+  <rect x="160" y="195" width="14" height="14" fill="#f59e0b"/>
+  <text x="180" y="207" fill="#e2e8f0" font-size="11">Gap (purge)</text>
+  <rect x="280" y="195" width="14" height="14" fill="#ef4444"/>
+  <text x="300" y="207" fill="#e2e8f0" font-size="11">Validate</text>
+</svg>
+</div>
+
+<h4>Why a Gap?</h4>
+<p>Labels are based on FUTURE returns. Row at day 100 has label looking at day 101's price. If our train set ends at day 99 and val starts at day 100, they share label information. The 5-day GAP prevents this <strong>label leakage</strong>.</p>
+
+<h3>Optuna: Auto-Tuning Hyperparameters</h3>
+<p>XGBoost has 10+ knobs (tree depth, learning rate, subsample, etc.). Trying every combo = millions of trainings. Optuna intelligently searches:</p>
+<ol>
+  <li>Try random combination</li>
+  <li>Measure CV accuracy</li>
+  <li>Use Bayesian magic to pick "smart next try"</li>
+  <li>Repeat 50 times</li>
+  <li>Return best</li>
+</ol>
+<p>V18 runs 50 Optuna trials per Stage 1 model.</p>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 7 -->
+<section id="part7">
+<h2>7. Calibration: Making Probabilities Honest 🎯</h2>
+
+<p>XGBoost says "I'm 80% confident this stock goes UP". Is that actually true?</p>
+
+<div class="callout warning">
+<div class="title">⚠️ The Calibration Problem</div>
+A model can be ACCURATE but UNCALIBRATED. Example: model predicts "80% UP" 100 times. If it's well-calibrated, ~80 of those should actually go UP. If only 60 do, the model is overconfident.
+</div>
+
+<h3>Calibration Methods</h3>
+
+<h4>Platt Scaling (Logistic Regression on probabilities)</h4>
+<p>Fits a sigmoid curve to map raw probabilities to true frequencies. Good when calibration curve is monotonic.</p>
+<p><strong>V18 uses Platt for Stage 1</strong> (cal1 = Logistic Regression on out-of-fold predictions).</p>
+
+<h4>Isotonic Regression (More Flexible)</h4>
+<p>Fits a non-parametric monotonic step function. More flexible than Platt — can handle non-sigmoid calibration curves.</p>
+<p><strong>V18 uses Isotonic for Stage 2</strong> (cal2_iso, NEW in Phase 2).</p>
+
+<h3>Why Calibration Matters for Trading</h3>
+<p>If we set "buy threshold = 0.65", we want trades at this threshold to actually win 65% of the time. Bad calibration → either we trade too often (losses) or too rarely (missed opportunities).</p>
+
+<table>
+<tr><th>Raw model says</th><th>Truth (without cal)</th><th>After calibration</th></tr>
+<tr><td>P(UP) = 0.90</td><td>Actually 70% win rate</td><td>P(UP) = 0.70 ✓</td></tr>
+<tr><td>P(UP) = 0.60</td><td>Actually 55% win rate</td><td>P(UP) = 0.55 ✓</td></tr>
+</table>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 8 -->
+<section id="part8">
+<h2>8. Composite Confidence: Combining 4 Signals 🔮</h2>
+
+<p>The ML model gives us "P(UP)". But we also have OTHER information that the ML model can't fully see:</p>
+
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">🧠</span>
+    <div class="label">Model Probability</div>
+    <div class="desc">XGBoost's P(UP) — calibrated</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">📊</span>
+    <div class="label">Volume Alignment</div>
+    <div class="desc">Is volume confirming the direction?</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🌏</span>
+    <div class="label">Foreign Flow</div>
+    <div class="desc">Are foreign institutions buying or selling?</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">📰</span>
+    <div class="label">News Sentiment</div>
+    <div class="desc">Recent news positive or negative?</div>
+  </div>
+</div>
+
+<h3>The Formula</h3>
+<pre><code>compositeConfidence = (
+    0.55 * model_prob +
+    0.20 * vol_alignment +
+    0.10 * foreign_alignment +
+    0.15 * news_alignment
+)</code></pre>
+
+<p>If all 4 signals agree → high confidence → trade.</p>
+<p>If they conflict → low confidence → skip.</p>
+
+<h3>Example: VNM Today</h3>
+<table>
+<tr><th>Signal</th><th>Value</th><th>Contribution</th></tr>
+<tr><td>Model says DOWN with 60% conf</td><td>0.60</td><td>0.55 × 0.60 = 0.330</td></tr>
+<tr><td>Volume confirms DOWN (surge 2.5×)</td><td>0.75</td><td>0.20 × 0.75 = 0.150</td></tr>
+<tr><td>Foreigners SELLING heavily</td><td>1.00</td><td>0.10 × 1.00 = 0.100</td></tr>
+<tr><td>News neutral</td><td>0.50</td><td>0.15 × 0.50 = 0.075</td></tr>
+<tr><th colspan="2">compositeConfidence</th><th>0.655</th></tr>
+</table>
+
+<p>Buy/sell threshold is typically 0.60-0.65. This signal would pass.</p>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 9 -->
+<section id="part9">
+<h2>9. Per-Ticker Routing & Production Gates 🔀</h2>
+
+<p>Not all stocks behave the same. V18 has <strong>per-ticker</strong> optimizations:</p>
+
+<h3>V13 vs V16 Routing</h3>
+<p>From historical backtests, we discovered:</p>
+<ul>
+  <li>For <strong>21 tickers</strong> (ACB, CTG, MWG, etc.) → V13 feature set works best</li>
+  <li>For <strong>9 tickers</strong> (BVH, GAS, HPG, STB, etc.) → V16 feature set (with peer + breadth) works better</li>
+</ul>
+<p>V18 routes each ticker to its better feature set automatically.</p>
+
+<h3>Per-Ticker Production Gates</h3>
+<p>Each ticker has TWO gates:</p>
+<ol>
+  <li><strong>dir_conf_gate</strong> (Stage 1) — minimum P(DIR) to proceed to Stage 2</li>
+  <li><strong>min_skill</strong> (NEW in Phase 1) — if model's overall skill is too low, return FLAT regardless</li>
+</ol>
+
+<h3>The 3 Tickers We GATE (Phase 1)</h3>
+<table>
+<tr><th>Ticker</th><th>CV</th><th>Skill score</th><th>Status</th></tr>
+<tr><td>TIS</td><td>0.426</td><td>+0.044</td><td>🚫 Gated (marginal)</td></tr>
+<tr><td>SBA</td><td>0.414</td><td>+0.024</td><td>🚫 Gated (marginal)</td></tr>
+<tr><td>DHG</td><td>0.404</td><td>+0.007</td><td>🚫 Gated (near random)</td></tr>
+</table>
+
+<h3>Liquidity Gate Boost</h3>
+<p>For low-liquidity stocks (&lt; 5B VND daily volume), add +0.08 to the gate (harder to enter, easier to exit).</p>
+
+<h3>Market Regime Gate Boost</h3>
+<p>Detect bear/bull/sideways via VN-Index moving averages:</p>
+<ul>
+  <li>BEAR market → +0.10 to gate (be cautious)</li>
+  <li>Recent corporate event (volume spike 3×) → +0.05 to gate</li>
+</ul>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 10 -->
+<section id="part10">
+<h2>10. From Prediction to Trade 💰</h2>
+
+<div class="svg-diagram">
+<svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <rect x="20"  y="20" width="120" height="50" rx="8" fill="#0f172a" stroke="#3b82f6" stroke-width="2"/>
+  <text x="80"  y="42" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">Prediction</text>
+  <text x="80"  y="58" text-anchor="middle" fill="#94a3b8" font-size="10">UP, conf 0.72</text>
+
+  <line x1="140" y1="45" x2="170" y2="45" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <rect x="175" y="20" width="120" height="50" rx="8" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+  <text x="235" y="42" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">Score Filter</text>
+  <text x="235" y="58" text-anchor="middle" fill="#94a3b8" font-size="10">≥ buy_threshold?</text>
+
+  <line x1="295" y1="45" x2="325" y2="45" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <rect x="330" y="20" width="120" height="50" rx="8" fill="#0f172a" stroke="#f59e0b" stroke-width="2"/>
+  <text x="390" y="42" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">Compute Size</text>
+  <text x="390" y="58" text-anchor="middle" fill="#94a3b8" font-size="10">budget / N positions</text>
+
+  <line x1="450" y1="45" x2="480" y2="45" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <rect x="485" y="20" width="120" height="50" rx="8" fill="#0f172a" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="545" y="42" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">BUY</text>
+  <text x="545" y="58" text-anchor="middle" fill="#94a3b8" font-size="10">100-share lots</text>
+
+  <line x1="545" y1="70" x2="545" y2="100" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <rect x="425" y="100" width="240" height="60" rx="8" fill="#0f172a" stroke="#ef4444" stroke-width="2"/>
+  <text x="545" y="125" text-anchor="middle" fill="#ef4444" font-size="12" font-weight="700">Monitor Exit Conditions</text>
+  <text x="545" y="143" text-anchor="middle" fill="#94a3b8" font-size="10">stop-loss | take-profit | reversal | time</text>
+
+  <line x1="545" y1="160" x2="545" y2="190" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <rect x="425" y="190" width="240" height="50" rx="8" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+  <text x="545" y="212" text-anchor="middle" fill="#22c55e" font-size="12" font-weight="700">SELL</text>
+  <text x="545" y="228" text-anchor="middle" fill="#94a3b8" font-size="10">T+2 settlement → cash back in 2 days</text>
+</svg>
+</div>
+
+<h3>Exit Conditions (checked in order — defaults from <code>ai_trader_config</code>)</h3>
+<ol>
+  <li><strong>Stop loss</strong>: P&amp;L ≤ <code>-stop_loss_pct</code> (default −5%) → SELL immediately</li>
+  <li><strong>Take profit</strong>: P&amp;L ≥ <code>take_profit_pct</code> (default +10%) → SELL to lock in</li>
+  <li><strong>Signal reversal</strong>: Model now says DOWN with conf ≥ 0.65 → SELL</li>
+  <li><strong>Distribution</strong>: Volume shows institutional selling → SELL</li>
+  <li><strong>Time-based</strong>: Held ≥ 15 days AND P&amp;L &lt; −2% → cut losses</li>
+</ol>
+<p>Stop loss and take profit are user-configurable. Other defaults: <code>buy_threshold = 0.60</code>, <code>max_positions = 5</code>, <code>initial_budget = 100M VND</code>.</p>
+
+<h3>Vietnamese Market Rules V18 Respects</h3>
+<table>
+<tr><th>Rule</th><th>What it means</th></tr>
+<tr><td>T+2 share lock</td><td>Can't sell shares for 2 trading days after buying</td></tr>
+<tr><td>T+2 cash settlement</td><td>Sell proceeds available after 2 trading days</td></tr>
+<tr><td>Lot size 100</td><td>Must trade in multiples of 100 shares</td></tr>
+<tr><td>±6.8% skip threshold</td><td>Skip stocks at ≥6.8% daily change (close to ceiling/floor limit of ±7% on HOSE — no liquidity to fill orders)</td></tr>
+<tr><td>Fees: 0.2% buy / 0.35% sell</td><td>Total round-trip ~0.55% — eats thin margins</td></tr>
+</table>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 11 -->
+<section id="part11">
+<h2>11. The V1→V18 Journey: 18 Iterations of Learning 🚀</h2>
+
+<p>V18 wasn't built in a day. Here's the journey:</p>
+
+<div class="timeline">
+  <div class="timeline-item fail">
+    <span class="ver">v1</span> <span class="skill">skill -0.33 ❌</span>
+    <p>Single XGBoost, 51 features. Predicted FLAT 90% of the time. Useless.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v2</span> <span class="skill">skill -0.13</span>
+    <p>+ Optuna, isotonic calibration, recency decay. Big improvement but still negative.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v5</span> <span class="skill">skill -0.07</span>
+    <p>BIG REWRITE: 2-stage architecture introduced. Bug: only 204 training rows used.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v6-v8</span> <span class="skill">skill -0.07</span>
+    <p>Fixed 2-stage + recency. Tried 29 features (worse), restored 53 (better).</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v9</span> <span class="skill">skill -0.06</span>
+    <p>Per-ticker feature removal based on IC analysis. Each stock gets its own subset.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v12</span> <span class="skill">skill -0.048</span>
+    <p>Added 9 money-flow features (MFI, CMF, accum_streak).</p>
+  </div>
+  <div class="timeline-item win">
+    <span class="ver">v13</span> <span class="skill">skill -0.029 ✓ BREAKTHROUGH</span>
+    <p>Added 7 vol-regime features (realized_vol, ATR norm, BB width). + AdaptiveContext rules. <strong>First version where 18/30 tickers PASS.</strong></p>
+  </div>
+  <div class="timeline-item fail">
+    <span class="ver">v14</span> <span class="skill">skill -0.07 ❌ DISASTER</span>
+    <p>Tried "separate features per stage". Stage 2 lost critical UP/DOWN signals. -0.04 regression. Stopped at ticker 8/30.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v15</span> <span class="skill">skill -0.03</span>
+    <p>Reverted v14's mistake. Added adaptive gate, min_conf restore.</p>
+  </div>
+  <div class="timeline-item">
+    <span class="ver">v16</span> <span class="skill">skill -0.06</span>
+    <p>Added VN30 breadth + peer pair features. Worse on average but BETTER on 9 specific tickers.</p>
+  </div>
+  <div class="timeline-item epic">
+    <span class="ver">Hybrid-MAX</span> <span class="skill">skill -0.017 🏆</span>
+    <p>Insight: pick V13 for 21 tickers, V16 for 9. FIRST iteration ever NET PROFITABLE after transaction costs (+0.006%/trade).</p>
+  </div>
+  <div class="timeline-item fail">
+    <span class="ver">v17</span> <span class="skill">skill -0.068 ❌</span>
+    <p>Over-engineered "online hybrid" with auto-routing. Added complexity, removed clarity.</p>
+  </div>
+  <div class="timeline-item win">
+    <span class="ver">v18 FIXED</span> <span class="skill">skill -0.028, 19/30 PASS</span>
+    <p>Final: per-ticker routing (offline-decided) + restored v13 components. Matches Hybrid-MAX PASS count.</p>
+  </div>
+</div>
+
+<h3>Key Lessons (Critical for Any ML Practitioner)</h3>
+<div class="cards-grid">
+  <div class="mini-card">
+    <span class="num">📊</span>
+    <div class="label">Labels matter most</div>
+    <div class="desc">Fixing label thresholds (v1→v2) was the biggest single jump (+0.20 skill).</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🌳</span>
+    <div class="label">Don't prune features</div>
+    <div class="desc">v7 and v14 both regressed by removing features. Trees handle redundancy well.</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🧪</span>
+    <div class="label">A/B test architecture</div>
+    <div class="desc">v14's disaster could've been caught in 1 ticker. Always pilot first.</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">📉</span>
+    <div class="label">Variance is real</div>
+    <div class="desc">Per-ticker skill swings ±0.05 between runs. Don't trust single runs.</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">🎯</span>
+    <div class="label">Per-ticker > universal</div>
+    <div class="desc">One-size-fits-all rarely works. v18's routing was the breakthrough.</div>
+  </div>
+  <div class="mini-card">
+    <span class="num">📐</span>
+    <div class="label">Calibration matters</div>
+    <div class="desc">Without calibration, "65% confidence" doesn't mean 65% win rate.</div>
+  </div>
+</div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- PART 12 -->
+<section id="part12">
+<h2>12. Glossary 📖</h2>
+<dl class="glossary">
+  <dt>Feature</dt>
+  <dd>A measurable input number. E.g., "RSI = 42" is one feature value.</dd>
+
+  <dt>Label</dt>
+  <dd>The target the model predicts. For V18: UP, DOWN, or FLAT.</dd>
+
+  <dt>Training Data</dt>
+  <dd>Historical examples with known labels — what the model learns from.</dd>
+
+  <dt>Test/Validation Data</dt>
+  <dd>Examples held out to evaluate the model on data it hasn't seen.</dd>
+
+  <dt>Overfitting</dt>
+  <dd>When a model memorizes training data perfectly but fails on new data.</dd>
+
+  <dt>Cross-Validation (CV)</dt>
+  <dd>Testing technique: split data into folds, train on some, test on others, average results.</dd>
+
+  <dt>TimeSeriesSplit</dt>
+  <dd>CV variant that respects time order — always train on earlier data, test on later.</dd>
+
+  <dt>XGBoost / LightGBM</dt>
+  <dd>Gradient boosting tree libraries. The workhorses of tabular ML.</dd>
+
+  <dt>Optuna</dt>
+  <dd>Automated hyperparameter tuning library. Tries many combinations smartly.</dd>
+
+  <dt>Calibration</dt>
+  <dd>Adjusting probabilities so "80% confidence" actually means 80% truth rate.</dd>
+
+  <dt>Skill Score</dt>
+  <dd>How much better than baseline. <code>(accuracy - baseline) / (1 - baseline)</code>. 0 = no skill.</dd>
+
+  <dt>Look-Ahead Bias</dt>
+  <dd>Accidentally using future data — the cardinal sin of time-series ML.</dd>
+
+  <dt>RSI</dt>
+  <dd>Relative Strength Index. 0-100 scale measuring momentum.</dd>
+
+  <dt>MACD</dt>
+  <dd>Moving Average Convergence Divergence — trend-following indicator.</dd>
+
+  <dt>ATR</dt>
+  <dd>Average True Range — measures volatility (how much a stock typically moves).</dd>
+
+  <dt>OHLCV</dt>
+  <dd>Open / High / Low / Close / Volume — the 5 basic data points per bar.</dd>
+
+  <dt>T+2 Settlement</dt>
+  <dd>Vietnamese rule: cash from selling shares is available 2 trading days later.</dd>
+
+  <dt>Ensemble</dt>
+  <dd>Combining multiple models. V18 uses ensembles at multiple levels.</dd>
+</dl>
+</section>
+
+</main>
+</div>
+</div>
+
+<footer>
+PredictStock V18 — From Beginner to Production | 2026-06-20<br>
+Built with ❤️ for learners
+</footer>
+</body>
+</html>

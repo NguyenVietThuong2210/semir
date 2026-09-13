@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L9.4 — Distributed Training + Serving at Scale</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 9 · Module 4</div>
+  <h1>9.4 · Scale — Distributed Training + High-Throughput Serving</h1>
+  <p class="subtitle">DDP vs FSDP vs Tensor Parallelism vs Pipeline vs ZeRO. vLLM PagedAttention, continuous batching, speculative decoding, SGLang RadixAttention, quantization (INT8/INT4/FP8). Interview-grade depth cho câu hỏi "How would you serve Llama-70B at 1000 QPS?"</p>
+  <div class="level">Level 9 · Expert · ~45 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Data / Tensor / Pipeline / Sequence parallelism — chọn khi nào</li>
+  <li>ZeRO stages 1-3 + FSDP</li>
+  <li>vLLM PagedAttention + continuous batching</li>
+  <li>Speculative decoding, MTP, medusa</li>
+  <li>Quantization schemes (GPTQ, AWQ, FP8)</li>
+</ul>
+
+<h2>1. Distributed training taxonomy</h2>
+
+<table>
+<tr><th>Parallelism</th><th>Split what</th><th>Communication</th><th>Dùng khi</th></tr>
+<tr><td>Data Parallel (DDP)</td><td>Batch across GPUs, replicate model</td><td>AllReduce gradients</td><td>Model fits 1 GPU</td></tr>
+<tr><td>Tensor Parallel (TP)</td><td>Split weights of 1 layer (Megatron)</td><td>AllReduce mỗi layer</td><td>Intra-node, NVLink</td></tr>
+<tr><td>Pipeline Parallel (PP)</td><td>Split layers across GPUs</td><td>P2P activations</td><td>Inter-node, bubble overhead</td></tr>
+<tr><td>Sequence Parallel</td><td>Split sequence dim</td><td>Ring AllGather</td><td>Long context training</td></tr>
+<tr><td>FSDP / ZeRO-3</td><td>Shard params + grads + optim states</td><td>AllGather params on-the-fly</td><td>Model &gt; 1 GPU, staying with DP semantics</td></tr>
+</table>
+
+<h3>ZeRO stages (DeepSpeed)</h3>
+<ul>
+  <li><strong>ZeRO-1</strong>: shard optimizer states (Adam m,v). Cuts 4× vs DDP.</li>
+  <li><strong>ZeRO-2</strong>: + shard gradients. Cuts 8×.</li>
+  <li><strong>ZeRO-3</strong>: + shard params. Cuts N× (# GPUs). Equivalent to FSDP.</li>
+</ul>
+
+<h3>Tensor Parallel — chi tiết Megatron split</h3>
+<pre><code># Attention layer: split heads across GPUs (col-parallel)
+#   W_q, W_k, W_v shape [d_model, d_model]
+#   Split col: GPU_0 gets d_model/N cols → attention heads 0..H/N
+#   Sau attention: AllReduce concat outputs
+#
+# MLP layer: 2-stage split
+#   Layer 1 (up-projection): col-parallel (split output dim)
+#   Layer 2 (down-projection): row-parallel (split input dim)
+#   → chỉ 1 AllReduce per MLP block (không 2)
+#
+# Communication cost: O(batch × seq × d_model) per layer
+# Chỉ efficient khi high-bandwidth (NVLink 900GB/s), không PCIe (32GB/s)
+</code></pre>
+
+<h3>Pipeline Parallel — bubble problem</h3>
+<pre><code># Naive PP: GPU_0 layers 0-8, GPU_1 layers 9-16, ...
+# Timeline (T = forward+backward per micro-batch):
+#   GPU_0: [====F====] idle    idle    [====B====]
+#   GPU_1: idle      [====F====][====B====]
+# Bubble = idle time = (N-1) × T
+# Utilization (M=1 micro-batch, naive) = 1/N → giảm khi N tăng
+# (khớp công thức bubble tổng quát (N-1)/(M+N-1) dưới đây khi M=1: bubble=(N-1)/N, utilization=1/N)
+#
+# Fix: 1F1B (one-forward-one-backward) hoặc interleaved schedule
+# Bubble 1F1B: (N-1)/(M+N-1) với M = # micro-batches
+# → M &gt;&gt; N để bubble small
+</code></pre>
+
+<h3>Expert Parallelism (MoE — Mixture of Experts)</h3>
+<pre><code># DeepSeek-V3, Mixtral, GPT-4 rumored MoE
+# Model có E experts (VD 8 experts × 7B params = 56B total)
+# Nhưng chỉ 2 experts active per token (top-2 routing) → 14B FLOPS
+#
+# Expert Parallel: 8 experts distribute across 8 GPUs
+# Router (small NN) decides token → expert
+# Token dispatch: AllToAll communication (expensive!)
+#
+# Trade-off:
+#   ✓ Sparse compute (bigger model, same FLOPS as dense)
+#   ✗ AllToAll bottleneck (need high-bandwidth interconnect)
+#   ✗ Load balance issue (some experts hot, others cold)
+#
+# Auxiliary loss: encourage uniform expert usage
+</code></pre>
+
+<h3>3D parallelism (Megatron-Turing NLG 530B)</h3>
+<pre><code># Combine TP + PP + DP
+# TP=8 (within node, NVLink)
+# PP=8 (across nodes)
+# DP=32 (replicate whole 3D setup)
+# Total: 8 * 8 * 32 = 2048 GPUs
+</code></pre>
+
+<h2>2. Memory calculation cho training</h2>
+
+<pre><code># Llama-70B, mixed precision (fp16 weights, fp32 master + optim)
+params = 70e9
+
+# Per-param memory:
+weights_fp16   = 2 bytes
+master_fp32    = 4 bytes
+grad_fp16      = 2 bytes
+adam_m_fp32    = 4 bytes
+adam_v_fp32    = 4 bytes
+# Total: 16 bytes/param → 70B * 16 = 1.12 TB
+
+# Plus activations (batch, seq_len, hidden):
+# batch=4, seq=4096, hidden=8192, layers=80
+# activation ≈ 4 * 4096 * 8192 * 80 * 2 = ~21 GB (with checkpointing)
+
+# → cần 15+ A100 80GB just for weights, without ZeRO
+</code></pre>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Distributed training: vì sao 8 GPU chỉ = 5× throughput, không phải 8× (chi tiết dễ hiểu)</div>
+
+<p><strong>Điều gây shock</strong>: Bạn thuê 8 GPU H100. Naive expectation: training nhanh 8×. Thực tế: 5-6× (best case), thường 3-4×. 30-50% GPU idle. Đây là <em>communication overhead</em> — hầu hết ML engineer không hiểu, kết quả là scale không hiệu quả và tốn tiền vô ích.</p>
+
+<p><strong>Bước 1 — Naive Data Parallel hoạt động thế nào</strong></p>
+<ol>
+  <li>Model 70B params copy vào 8 GPU (mỗi GPU đầy đủ model).</li>
+  <li>Batch 32 chia thành 4/GPU. Mỗi GPU compute forward + backward → gradient local.</li>
+  <li><strong>AllReduce</strong>: 8 GPU chia sẻ gradient để consistent. Mỗi GPU nhận gradient trung bình của tất cả 8.</li>
+  <li>Mỗi GPU update model với gradient chung.</li>
+</ol>
+
+<p><strong>Bước 2 — AllReduce là bottleneck</strong></p>
+<p>Ring-AllReduce (thuật toán chuẩn, NCCL dùng) có chi phí ≈ O(P / bandwidth) — <strong>gần như KHÔNG phụ thuộc N</strong> (số GPU) với N đủ lớn, vì thuật toán ring chia nhỏ dữ liệu và pipeline việc truyền giữa các GPU thay vì mỗi GPU gửi riêng cho N-1 GPU khác:</p>
+<ul>
+<li>P = param size (70B params × 2 bytes = 140GB gradients)</li>
+<li>bandwidth = tốc độ interconnect</li>
+</ul>
+<p>Với 8 GPU + NVLink 600 GB/s: mỗi AllReduce ≈ 140GB / 600GB/s = <strong>~0.23s</strong>. Nếu forward+backward chỉ 2s → AllReduce chiếm 0.23/(2+0.23) ≈ <strong>10%</strong> mỗi step.</p>
+
+<p>Nhưng cross-node (không NVLink, chỉ InfiniBand 25 GB/s): AllReduce = 140GB / 25GB/s = <strong>5.6s</strong>. Nếu compute 2s → overhead 74%. GPU idle 74% thời gian.</p>
+
+<p><strong>Bước 3 — Đây là why interconnect matter HƠN GPU compute</strong></p>
+
+<table>
+<tr><th>Interconnect</th><th>Bandwidth</th><th>Use case</th></tr>
+<tr><td>NVLink (intra-node)</td><td>600-900 GB/s</td><td>Intra-node communication (up to 8 GPU)</td></tr>
+<tr><td>InfiniBand (inter-node)</td><td>25-100 GB/s</td><td>Cross-node cluster</td></tr>
+<tr><td>PCIe Gen5</td><td>32 GB/s</td><td>CPU-GPU + workstation GPU</td></tr>
+<tr><td>Ethernet 100Gb</td><td>12.5 GB/s</td><td>Old cluster, slow for LLM training</td></tr>
+</table>
+
+<p><strong>Con số biết nói</strong>: Cluster A với 64 A100 + NVLink + InfiniBand: train Llama-70B trong 21 ngày. Cluster B với 64 A100 + PCIe (không NVLink): 3 tháng. Cùng GPUs, cùng model — chỉ khác interconnect = 4.3× thời gian.</p>
+
+<p><strong>Analogy đời thực — dây chuyền lắp ráp</strong>:</p>
+<ul>
+<li>GPU = công nhân (làm nhanh).</li>
+<li>Interconnect = băng chuyền (vận chuyển bộ phận giữa công nhân).</li>
+</ul>
+<p>Nếu băng chuyền chậm → công nhân đứng chờ → dây chuyền không tăng tốc dù thuê thêm công nhân. Đây là why cluster design PHẢI ưu tiên interconnect + GPU balance.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Vì sao Model &gt; 100B cần 3D Parallelism?</strong></p>
+
+<p><strong>Vấn đề</strong>: GPT-3 175B, mỗi param FP16 = 2 bytes → 350GB. A100 80GB không fit. Data Parallel (full model per GPU) không dùng được.</p>
+
+<p><strong>Solution — chia model theo 3 axes</strong>:</p>
+
+<p><strong>1. Tensor Parallel (TP)</strong>: chia 1 layer thành 2 GPU. Ví dụ ma trận W (4096×4096) chia đôi cột thành W_left (4096×2048) và W_right. Compute matmul song song. Communication cần every layer → phải intra-node NVLink. TP typical = 2-8 (trong 1 node).</p>
+
+<p><strong>2. Pipeline Parallel (PP)</strong>: chia layers thành các stage. Layer 1-10 trên GPU 1, layer 11-20 trên GPU 2, etc. Communication ít (chỉ activations qua stage boundaries) → dùng inter-node InfiniBand OK.</p>
+<p>Vấn đề PP: "bubble" — GPU 2 idle chờ GPU 1 finish stage. Fix bằng <em>micro-batching</em> (GPipe): chia batch 32 thành 8 micro-batch. GPU 1 xong micro 1 → sang micro 2 → GPU 2 làm micro 1. Overlap → bubble giảm 8×.</p>
+
+<p><strong>3. Data Parallel (DP)</strong>: replicate the whole 2D setup (TP × PP). Chia batch across replicas.</p>
+
+<p><strong>Combine — Megatron-Turing NLG 530B</strong>:</p>
+<ul>
+<li>TP = 8 (trong node, NVLink)</li>
+<li>PP = 35 (across nodes)</li>
+<li>DP = 32 (replicate)</li>
+<li>Total: 8 × 35 × 32 = <strong>~9000 GPUs</strong></li>
+</ul>
+<p>Train được nhờ pattern này. Không có 3D parallel = train được cùng lắm 30B model.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>ZeRO / FSDP — đơn giản hơn 3D nhưng chậm 20-30%</strong></p>
+
+<p><strong>Insight ZeRO</strong>: Với Data Parallel, mỗi GPU giữ full copy của params + gradients + optimizer states. 70B model:</p>
+<ul>
+<li>Params FP16: 140GB</li>
+<li>Gradients FP16: 140GB</li>
+<li>Optimizer states (Adam m, v FP32): 560GB</li>
+<li>Total: 840GB per GPU. Không GPU nào fit.</li>
+</ul>
+<p>Nhưng nếu 8 GPU shard: mỗi GPU chỉ giữ 1/8 params + grads + optim = 105GB. Fit A100 80GB nếu bỏ activations.</p>
+
+<p><strong>3 stages ZeRO</strong>:</p>
+<ul>
+<li>ZeRO-1: shard optimizer states only. Đơn giản, tiết kiệm 4×.</li>
+<li>ZeRO-2: + shard gradients. Tiết kiệm 8×.</li>
+<li>ZeRO-3 (= FSDP): + shard params. Tiết kiệm N× (# GPU).</li>
+</ul>
+
+<p><strong>Trade-off</strong>: ZeRO-3 phải AllGather params từ shards trước mỗi forward pass. Communication overhead 20-30% cao hơn pure DP. Nhưng đơn giản hơn 3D parallel (không phải reshape model).</p>
+
+<p><strong>Cheat sheet chọn strategy</strong>:</p>
+<table>
+<tr><th>Model size</th><th>Strategy</th><th>Vì sao</th></tr>
+<tr><td>&lt; 7B</td><td>DDP hoặc ZeRO-1</td><td>Fit 1 GPU, chỉ shard optimizer</td></tr>
+<tr><td>7-30B</td><td>ZeRO-2</td><td>Cần shard gradients</td></tr>
+<tr><td>30-100B</td><td>FSDP / ZeRO-3</td><td>Cần shard params</td></tr>
+<tr><td>&gt; 100B</td><td>3D parallel (TP+PP+DP)</td><td>ZeRO-3 quá chậm ở scale này</td></tr>
+</table>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>PagedAttention — vì sao inference breakthrough</strong></p>
+
+<p><strong>Vấn đề serving</strong>: Khác training (fixed batch), serving requests đến/đi ngẫu nhiên, sequence length khác nhau. Naive allocation KV cache contiguous → fragmentation:</p>
+<ul>
+<li>Request A dài 2000 tokens, cấp block 4000 (dự phòng)</li>
+<li>Request A finish → free block 4000</li>
+<li>Request B cần 5000 tokens → không dùng được block 4000 (chỉ có 4000)</li>
+<li>Fragmentation 60-80% memory GPU.</li>
+</ul>
+
+<p><strong>PagedAttention insight</strong>: Quản KV cache như OS quản virtual memory. Chia thành pages nhỏ (16 tokens/page). Non-contiguous allocation. Request có thể "wire" cache từ scattered pages.</p>
+
+<p><strong>Kết quả</strong>: Fragmentation 60-80% → 4%. Cùng GPU serve <strong>4× throughput</strong>. Cùng revenue infrastructure = 4× profit margin. Đây là why vLLM/SGLang thắng HuggingFace vanilla transformers cho production LLM serving.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Khi cơ chế vỡ — communication dominates ở batch nhỏ</strong></p>
+
+<p>Small batch (32) → compute nhanh (0.2s) → AllReduce overhead 0.5s (2.5× compute). GPU idle 71%. Fix: <strong>Gradient accumulation</strong> — chạy N micro-batches trước 1 AllReduce. Effective batch = 32 × N. Communication phân bổ trên N steps → overhead 1/N.</p>
+<p>Nhưng tăng effective batch → cần <em>scale LR</em>. Rule: linear scaling (Goyal 2017) — batch × 2 → LR × 2. Hoặc √-scaling (Krizhevsky 2014). Không scale → converge tệ.</p>
+
+<p>Đây là why hyperparams recipe từ paper nhỏ (batch 32) KHÔNG dùng được trực tiếp cho cluster (batch 32k). Phải scale LR + warmup + học rate schedule.</p>
+
+<p><strong>Take-away tổng hợp</strong>:</p>
+<ol>
+<li>Distributed training = communication problem, không phải compute. 8 GPU ≠ 8× throughput.</li>
+<li>Interconnect (NVLink 600GB/s vs InfiniBand 25GB/s) quyết định efficiency hơn GPU speed.</li>
+<li>Model &gt;100B cần 3D parallel (TP + PP + DP). ZeRO-3 chậm hơn 20-30% nhưng đơn giản hơn.</li>
+<li>Serving khác training — PagedAttention giải quyết fragmentation 60-80% → 4× throughput.</li>
+<li>Batch scaling cần LR scaling — không copy recipe từ paper batch 32 cho cluster batch 32k.</li>
+</ol>
+</div>
+
+<h2>3. vLLM — PagedAttention + Continuous Batching</h2>
+
+<h3>Problem</h3>
+<ul>
+  <li>KV cache dominates memory at inference</li>
+  <li>Static batching wastes GPU khi sequences kết thúc lệch nhau</li>
+  <li>Traditional attention allocates contiguous KV — fragmentation waste 60-80%</li>
+</ul>
+
+<h3>PagedAttention (Kwon 2023)</h3>
+<ul>
+  <li>KV cache = pages (like OS virtual memory), 16 tokens/page</li>
+  <li>Non-contiguous storage, block table maps logical → physical</li>
+  <li>Zero fragmentation, sharing between beams (copy-on-write)</li>
+</ul>
+
+<h3>Continuous batching</h3>
+<pre><code># Static batching:
+# batch = [req1, req2, req3, req4]
+# Wait until all finish → next batch. Waste GPU idle.
+
+# Continuous (iteration-level):
+# Every step, new requests can join, finished ones leave.
+# Throughput 5-20× higher (Yu et al 2022, Orca).
+</code></pre>
+
+<h2>4. Speculative decoding + variants</h2>
+
+<h3>Standard speculative (Leviathan 2023)</h3>
+<ul>
+  <li>Small draft model generates K tokens</li>
+  <li>Large target model verifies in parallel (1 forward pass, KV cache trick)</li>
+  <li>Accept longest prefix matching target's argmax</li>
+  <li>2-3× speedup with equivalent output distribution</li>
+</ul>
+
+<h3>Medusa</h3>
+<ul>
+  <li>Multiple decoding heads on same model predict N tokens ahead</li>
+  <li>No separate draft model needed</li>
+  <li>Trained via head fine-tuning</li>
+</ul>
+
+<h3>EAGLE-2</h3>
+<ul>
+  <li>SOTA cuối 2024, dynamic tree drafting</li>
+  <li>3-5× speedup, no quality loss</li>
+</ul>
+
+<h2>5. Quantization</h2>
+
+<table>
+<tr><th>Scheme</th><th>Bits</th><th>Quality drop</th><th>Speed</th><th>Best for</th></tr>
+<tr><td>FP16 / BF16</td><td>16</td><td>0</td><td>Baseline</td><td>Training</td></tr>
+<tr><td>FP8 (Hopper H100)</td><td>8</td><td>&lt;0.5%</td><td>2× fp16</td><td>Training + inference</td></tr>
+<tr><td>INT8 (SmoothQuant, LLM.int8)</td><td>8</td><td>&lt;1%</td><td>1.5-2×</td><td>Inference</td></tr>
+<tr><td>GPTQ (Frantar 2022)</td><td>4</td><td>~1-2%</td><td>2-4×</td><td>Inference, weight only</td></tr>
+<tr><td>AWQ (Lin 2023)</td><td>4</td><td>~1%</td><td>2-4×</td><td>Better than GPTQ on activation-heavy</td></tr>
+<tr><td>INT4 KV cache</td><td>4</td><td>~2%</td><td>4× cache size</td><td>Long context serving</td></tr>
+</table>
+
+<h2>6. Serving stack comparison</h2>
+
+<table>
+<tr><th>Engine</th><th>Killer feature</th><th>Best for</th></tr>
+<tr><td>vLLM</td><td>PagedAttention, mature</td><td>General-purpose OSS</td></tr>
+<tr><td>SGLang</td><td>RadixAttention (prefix cache tree)</td><td>Agent workloads, shared prefixes</td></tr>
+<tr><td>TensorRT-LLM</td><td>NVIDIA-optimized kernels</td><td>Enterprise, H100/H200</td></tr>
+<tr><td>TGI (HuggingFace)</td><td>Ecosystem, safetensors</td><td>Quick deploy HF models</td></tr>
+<tr><td>llama.cpp</td><td>CPU + consumer GPU, GGUF</td><td>On-device, laptop</td></tr>
+<tr><td>MLC-LLM</td><td>Cross-platform (mobile, web)</td><td>Edge deployment</td></tr>
+</table>
+
+<h2>7. Interview design — "serve Llama-70B at 1000 QPS, p95 &lt; 500ms"</h2>
+
+<div class="example-box">
+<div class="title">Full answer template</div>
+<ol>
+  <li><strong>Model choice</strong>: Llama-70B AWQ 4-bit → fits 2× A100 80GB with room for KV cache</li>
+  <li><strong>Serving</strong>: vLLM cluster, tensor parallel=2, continuous batching, PagedAttention</li>
+  <li><strong>Speculative</strong>: EAGLE-2 → 3× throughput. Draft = same model with medusa heads.</li>
+  <li><strong>Scaling</strong>: Assume avg 200 in + 100 out tokens/req. Single vLLM instance ~30 QPS at p95 500ms → need ~40 instances. Route via NGINX + least-loaded.</li>
+  <li><strong>Cache</strong>: SGLang-style radix cache cho system prompt (10× hit rate cho agent workloads)</li>
+  <li><strong>Fallback</strong>: 5% traffic to smaller model (Llama-8B) via router when queue depth > threshold. Graceful degrade.</li>
+  <li><strong>Monitoring</strong>: prom + grafana. Track: TTFT (time to first token), TPOT (time per output token), queue depth, KV cache utilization, GPU SM utilization.</li>
+  <li><strong>Cost</strong>: 40 A100 80GB × $2/hr ≈ $58k/mo. Compare to API cost: 1000 QPS × 100 out tokens × 86400s × 30 = 259B tok/mo × $15/1M = $3.9M/mo. Self-host wins ≈67× ($3.888M / $57.6k).</li>
+</ol>
+</div>
+
+<h2>8. Case study — PredictStock ML training scale</h2>
+
+<div class="example-box">
+<div class="title">Không cần distributed nhưng vẫn có principle</div>
+<p>V18 unified train: 86 tickers × 3 horizons × 30 min = ~129 GPU-hour serial.</p>
+<p><strong>Parallelization applied</strong>:</p>
+<ul>
+  <li>Tickers train independently → embarrassingly parallel across CPU workers (docker exec ProcessPool 8)</li>
+  <li>3 horizons per ticker chạy async</li>
+  <li>Total real time: 129h / 8 workers ≈ 16.1h</li>
+</ul>
+<p>Lesson: 1st optimization là data parallel embarrassingly parallel dimension trước khi think TP/PP. Applies to ML backtest, hyperparam sweep, RAG index build.</p>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🎯 Deep-dive — Request routing, GPU scheduling, cost/token vs utilization (VN scenario)</div>
+
+<h4>Analogy VN — cảng Cát Lái phân xe container</h4>
+<p>Cảng có N cửa (GPU), xe container (request) tới liên tục. Có 3 chiến lược:</p>
+<ul>
+  <li><strong>Round-robin</strong> = phân đều theo thứ tự → cửa nhanh vẫn phải chờ xe cồng kềnh ở cửa chậm. Utilization ~50%.</li>
+  <li><strong>Least-loaded</strong> = chọn cửa ít xe nhất → tốt hơn nhưng bỏ qua "xe này chở gì" (short vs long context).</li>
+  <li><strong>Prefix-aware</strong> (SGLang RadixAttention) = xe cùng bill of lading (shared prompt prefix) gom về cùng cửa → tận dụng KV cache hit. Utilization ~85%+.</li>
+</ul>
+
+<h4>Request routing patterns (production LLM gateway)</h4>
+<table>
+<tr><th>Pattern</th><th>Cách</th><th>Cache hit</th><th>Latency p95</th><th>Dùng khi</th></tr>
+<tr><td>Round-robin</td><td>Modulo GPU count</td><td>Ngẫu nhiên (thấp)</td><td>Cao (long tail)</td><td>Homogeneous workload</td></tr>
+<tr><td>Least-loaded</td><td>Chọn GPU có # active req thấp nhất</td><td>Ngẫu nhiên</td><td>Trung bình</td><td>General purpose</td></tr>
+<tr><td>Prefix-aware</td><td>Hash prompt prefix → sticky GPU</td><td>⭐ Cao (60-80%)</td><td>Thấp</td><td>Nhiều user chung system prompt/skill</td></tr>
+<tr><td>Priority queue</td><td>Interactive &gt; batch</td><td>—</td><td>Interactive: thấp; batch: cao</td><td>Multi-tenant SaaS</td></tr>
+<tr><td>Model tier routing</td><td>Complexity classifier → Haiku/Sonnet/Opus</td><td>—</td><td>Thấp (cheap model fast)</td><td>Cost-sensitive (L9.2 §3)</td></tr>
+</table>
+
+<h4>GPU scheduling — công thức utilization + cost</h4>
+<pre><code># Cost per 1M tokens output
+cost_per_M_tokens = (gpu_hourly_rate × N_gpus) / (throughput_tok_per_sec × 3600 / 1e6)
+
+# VD: 8×H100 = $30/hr, throughput 5000 tok/s (Llama-70B fp8 vLLM)
+# cost = 30 / (5000 × 3600 / 1e6) = 30 / 18 = $1.67 / 1M tokens
+
+# GPU utilization — 2 metrics riêng biệt
+sm_utilization = (active_SM_cycles) / (total_SM_cycles)     # compute
+mem_bandwidth_util = (bytes_transferred) / (peak_HBM_bw × t) # memory
+
+# LLM inference thường memory-bound → mem_bw_util cao (80-90%), sm_util thấp (30-50%)
+# → tăng batch size hoặc speculative decoding để đẩy sm_util
+</code></pre>
+
+<h4>VN scenario — PredictStock daily-investor-report LLM Hybrid mode</h4>
+<p>Skill có 86 tickers × ~8k input tokens/ticker = ~688k tokens/day. Nếu naive dùng Opus API:</p>
+<pre><code>Cost = 688,000 × $15/1M = $10.32/day ≈ $310/month
+Latency = 86 × 4s = 344s (serial)
+</code></pre>
+<p>Sau routing + prompt caching:</p>
+<pre><code>1. System prompt (§19 discipline, 3k tokens) → cache 90% hit → $0.30 tiết kiệm/ticker
+2. Router: 60 tickers dễ → Haiku ($0.25/1M), 26 tickers khó → Sonnet ($3/1M)
+3. Parallel 10-way (asyncio.gather) → latency ≈34s
+Final: ~$19/month, ~34s → tiết kiệm ~94% cost, 10× nhanh
+</code></pre>
+
+<h4>Distributed inference patterns (serving Llama-70B)</h4>
+<table>
+<tr><th></th><th>Tensor Parallel (TP)</th><th>Pipeline Parallel (PP)</th><th>Expert Parallel (EP)</th></tr>
+<tr><td><strong>Split</strong></td><td>Weights trong 1 layer</td><td>Layers khác nhau</td><td>Experts (MoE)</td></tr>
+<tr><td><strong>Comm cost</strong></td><td>AllReduce mỗi layer (cao)</td><td>P2P activations (thấp)</td><td>AllToAll (rất cao)</td></tr>
+<tr><td><strong>Latency single req</strong></td><td>Tốt (parallel FLOPS)</td><td>Xấu (bubble)</td><td>Trung bình</td></tr>
+<tr><td><strong>Throughput</strong></td><td>Trung bình</td><td>⭐ Tốt với M &gt;&gt; N micro-batches</td><td>Tốt cho MoE models</td></tr>
+<tr><td><strong>Network cần</strong></td><td>NVLink (900GB/s)</td><td>PCIe/InfiniBand OK</td><td>NVLink + InfiniBand</td></tr>
+<tr><td><strong>Dùng khi</strong></td><td>Intra-node (8 GPU 1 host)</td><td>Cross-node (multi-host)</td><td>Mixtral, DeepSeek-V3</td></tr>
+</table>
+
+<h4>Anti-pattern VN</h4>
+<ul>
+  <li><strong>Chạy 1 request/GPU</strong>: sm_util ~5%, cost/token cao 20×. Fix: continuous batching (vLLM default).</li>
+  <li><strong>TP cross PCIe</strong>: 8 GPU trên 2 host qua PCIe → AllReduce nghẹt. Fix: TP intra-node, PP inter-node.</li>
+  <li><strong>Đo latency thay throughput</strong>: benchmark 1 req/lần → không biết throughput dưới load. Đo p50/p95/p99 dưới concurrency 32/64/128.</li>
+  <li><strong>Không tách prefill vs decode</strong>: prefill compute-bound, decode memory-bound. Mixing → utilization thấp cả 2. Fix: disaggregated serving (DeepSeek 2024).</li>
+</ul>
+
+<h4>Interview Q&A</h4>
+<ol>
+  <li><strong>Q: Serve Llama-70B 1000 QPS, budget $X — bạn thiết kế thế nào?</strong> A: (1) Quantize INT4/FP8 (fit 1×H100 80GB). (2) vLLM với continuous batching + PagedAttention. (3) TP=2 nếu context dài. (4) Speculative decoding EAGLE-2 (2-3× throughput). (5) Router prefix-aware để hit KV cache. (6) Autoscale GPU pool theo p95 latency SLO.</li>
+  <li><strong>Q: Prefill vs decode phase khác gì?</strong> A: Prefill = xử lý input prompt 1 lần (compute-bound, parallel token). Decode = generate 1 token/lần (memory-bound vì đọc full KV cache mỗi step). Ratio prefill:decode quyết định optimization strategy.</li>
+  <li><strong>Q: Cost/token vs GPU utilization — quan hệ?</strong> A: Không tuyến tính. Utilization 100% có thể vẫn cost cao nếu throughput thấp (memory-bound). Metric đúng: <code>$ / 1M output tokens</code>, không phải <code>$ / GPU-hour</code>.</li>
+  <li><strong>Q: KV cache size cho Llama-70B, batch=32, seq=8k?</strong> A: 2 (K+V) × 80 layers × 8k tokens × 8192 hidden × 2 bytes (fp16) × 32 batch = ~670GB. Vượt xa 1 GPU → paged + tiered (HBM → CPU RAM offload).</li>
+  <li><strong>Q: Dead-letter queue trong distributed inference?</strong> A: Request timeout/OOM → không retry vô hạn (loop hại). Push vào DLQ với metadata (input, error, retry_count). Alert nếu DLQ growth &gt; threshold. Root cause thường: input quá dài, model degrade, GPU straggler.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+<p class="q">1. DDP vs FSDP — khi nào chuyển?</p>
+<p class="a">DDP khi model fit 1 GPU (replicate). FSDP (ZeRO-3) khi model &gt; GPU memory, muốn giữ DP semantics. Trade-off: FSDP có AllGather param overhead mỗi forward → chậm 20-30% so DDP nhưng fit model to hơn.</p>
+<p class="q">2. PagedAttention giải quyết gì?</p>
+<p class="a">KV cache fragmentation. Naive: contiguous alloc waste 60-80% memory khi sequences varying length. Paged: OS-style pages 16 tokens, non-contiguous. Cho phép batch to hơn 2-4× → throughput tăng.</p>
+<p class="q">3. Continuous batching benefit?</p>
+<p class="a">Static batch wait cho slowest req finish. Continuous (iteration-level) cho req mới join giữa batch. 5-20× throughput (Orca 2022). Standard trong vLLM/TGI/SGLang.</p>
+<p class="q">4. Speculative decoding — mất quality?</p>
+<p class="a">Với sampling-based verification (Leviathan 2023), distribution equivalent với greedy. Nghĩa là output identical statistically. 2-3× speedup free. EAGLE-2 hiện SOTA 3-5×.</p>
+<p class="q">5. Chọn INT4 quantization — GPTQ vs AWQ?</p>
+<p class="a">AWQ (activation-aware weight quant) tốt hơn GPTQ khi model có activation outliers (large models). GPTQ ổn định general. Cả 2 &lt;2% quality drop trên MMLU. Combined with FP8 activations = tương lai H100/B100.</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>PredictStock parallel train: <code>backend/train_v18_unified.py</code> ProcessPool</li>
+    <li>PredictStock backtest parallel: <code>backend/backtest/runner.py</code> asyncio.gather</li>
+    <li>ml-walkforward-backtest skill Section 4 — parallelization patterns</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1909.08053">Megatron-LM (TP, Shoeybi 2019)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1910.02054">ZeRO (Rajbhandari 2019)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2309.06180">vLLM PagedAttention (Kwon 2023)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2211.05102">Orca continuous batching (Yu 2022)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2211.17192">Speculative decoding (Leviathan 2023)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2306.00978">AWQ (Lin 2023)</a></li>
+    <li>📖 <a href="https://github.com/sgl-project/sglang">SGLang RadixAttention</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2401.15077">EAGLE / EAGLE-2</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L9_3_agent_eval.html">← L9.3</a>
+  <a href="../index.html">🏠 Home</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R7.6 · LLM Deployment — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Infrastructure · Điểm 6/6</div>
+  <h1>R7.6 · LLM Deployment</h1>
+  <p class="subtitle">Bài cuối của Infrastructure — stack GPU cụ thể 2026 (vLLM + KServe/Ray Serve) cho bài toán deploy LLM, khác hẳn bài toán deploy XGBoost nhẹ mà <code>predictor</code> đang làm.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>[Dễ]</strong> Nhớ lại 3 pattern serving đã học (batch/real-time/streaming) — không lặp lại.</li>
+<li><strong>[Trung bình]</strong> Biết stack GPU cụ thể 2026 cho LLM: vLLM + KServe/Ray Serve + Prometheus/Grafana.</li>
+<li><strong>[Khó]</strong> Giải thích được vì sao autoscale LLM khác autoscale service thường — bottleneck là KV-cache VRAM, không phải CPU.</li>
+<li><strong>[Khó]</strong> Đánh giá đúng: <code>predictor</code> không cần stack này vì không tự host LLM nào.</li>
+<li><strong>[Trung bình→Khó]</strong> Biết cơ chế RadixAttention (SGLang) — khác gì Prompt Caching (API) và KV cache thường (1 request).</li>
+<li><strong>[Trung bình]</strong> Phân biệt cloud GPU serving với edge/on-device deployment (GGUF/llama.cpp/Ollama) — 2 paradigm khác hẳn nhau.</li>
+<li><strong>[Khó]</strong> Đánh giá đúng khi nào spot GPU instance đáng dùng cho tự host LLM, khi nào không.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Đã có ở module cũ</div>
+<p><a href="L7_2_deployment.html"><code>L7_2_deployment.html</code></a> đã dạy 3 pattern serving (batch/real-time/streaming), V18 serving stack thật, LLM serving stack cơ bản (vLLM/PagedAttention/continuous batching), auto-scaling GPU theo queue-depth, và 3 chiến lược rollout (blue-green/canary/shadow) — không lặp lại. Trang này bổ sung <strong>4 góc CHƯA có ở <code>L7_2</code></strong>: engine SGLang/RadixAttention (mục 3, khác hẳn cơ chế vLLM), edge/on-device deployment (mục 4, paradigm ngược hẳn "serving cluster"), spot GPU cost optimization cho tự host (mục 5, khác chi phí gọi API đã bàn ở <code>R7.3</code>) — đây là lý do trang này CHẤP NHẬN ngắn hơn 1 số trang khác trong track Infrastructure: phần lõi "deploy LLM" đã bị <code>L7_2</code> dạy rất sâu, phạm vi còn lại thật sự mới hẹp hơn.</p>
+</div>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Deploy model ML nhẹ (XGBoost) giống vận hành 1 quầy tính tiền — mỗi giao dịch nhanh, đều đặn, chỉ cần thêm quầy khi khách đông (autoscale theo số khách/CPU). Deploy LLM giống vận hành 1 nhà bếp nấu theo yêu cầu — mỗi món (response) tốn thời gian khác nhau tuỳ độ phức tạp (độ dài output), và "bàn bếp" (bộ nhớ GPU/KV-cache) mới là thứ giới hạn thật, không phải số đầu bếp (CPU).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Trung bình] Stack GPU cụ thể 2026 cho LLM</h3>
+<p>Bổ sung cho <code>L7_2</code>: <strong>vLLM</strong> làm inference engine (PagedAttention, continuous batching — cơ chế đã học ở <a href="L4_6_inference.html"><code>L4_6_inference.html</code></a>), <strong>KServe/Ray Serve</strong> làm lớp serving quản lý autoscale theo <strong>queue-depth và KV-cache utilization</strong> (khác autoscale theo CPU% truyền thống — vì bottleneck của LLM serving là VRAM/KV-cache, không phải CPU), <strong>Prometheus/Grafana</strong> cho observability GPU, và pattern canary/graceful-shutdown khi đổi phiên bản model.</p>
+
+<h3>2. [Khó] Khác biệt cốt lõi so với deploy model ML truyền thống</h3>
+<div class="callout danger"><div class="label">⚠️ Khác biệt cốt lõi</div>
+<p>Model ML nhẹ (XGBoost, <code>predictor</code> dùng) deploy trên CPU, latency ổn định, autoscale theo request/s là đủ. LLM deploy trên GPU, latency phụ thuộc độ dài output (không tất định), bottleneck thật là <strong>KV-cache VRAM</strong>, không phải CPU — 2 bài toán deploy khác hẳn nhau dù cùng gọi là "model serving".</p>
+</div>
+
+<h3>3. SGLang/RadixAttention — 1 inference engine 2026 khác vLLM, chưa có ở <code>L7_2</code></h3>
+<p><code>L7_2_deployment.html</code> đã dạy sâu vLLM (PagedAttention + continuous batching). <strong>SGLang</strong> là 1 engine khác, giải bài toán khác: tái sử dụng KV-cache giữa NHIỀU request có chung tiền tố (prefix), không chỉ tối ưu trong 1 request như KV cache thường (đã học ở <code>R2_1_kv_caching.html</code>).</p>
+<pre><code>RadixAttention — lưu KV-cache trong 1 CÂY RADIX (radix tree), khoá theo chuỗi token:
+
+Request A: "Bạn là trợ lý phân tích chứng khoán... [system 3800 token]... Phân tích FPT"
+Request B: "Bạn là trợ lý phân tích chứng khoán... [system 3800 token]... Phân tích VIC"
+                                     │
+                                     ▼
+                    Radix tree — 2 request rẽ nhánh SAU 3800 token chung:
+
+           [root]
+             │
+    3800 token system prompt (node dùng CHUNG — tính 1 lần, 2 request cùng đọc)
+             │
+        ┌────┴────┐
+    "FPT"      "VIC"     ← chỉ phần rẽ nhánh mới cần tính KV-cache mới
+   (request A)  (request B)</code></pre>
+<p><strong>Khác gì với Prompt Caching (R2.4) đã học</strong>: Prompt Caching là tính năng TẦNG API của 1 provider (Anthropic tự vận hành, không thấy cơ chế bên trong). RadixAttention là cơ chế TẦNG ENGINE bạn tự host — quản lý cache bằng cấu trúc cây tường minh, tự động tìm điểm rẽ nhánh giữa CÁC REQUEST KHÁC NHAU (không chỉ cùng 1 conversation). Benchmark thật: tỷ lệ cache-hit 50-99% tuỳ workload, hiệu quả nhất với hội thoại nhiều lượt, agent dùng chung tool definition, hoặc RAG pipeline tái dùng cùng 1 context document nhiều lần — đúng use case <code>daily-investor-report</code> (86 ticker dùng chung 1 system prompt 3800 token) NẾU dự án tự host thay vì gọi API Claude.</p>
+
+<h3>4. Edge/on-device deployment — paradigm khác hẳn "serving trên cụm GPU cloud" của <code>L7_2</code></h3>
+<p>Toàn bộ nội dung <code>L7_2</code> và mục 1-3 ở trên giả định ngầm: serve LLM nghĩa là chạy trên GPU datacenter, phục vụ nhiều user qua mạng. <strong>Edge/on-device</strong> là hướng ngược lại hoàn toàn: chạy model NGAY trên máy người dùng (laptop, điện thoại, server nội bộ không có GPU rời) — không có "serving cluster" nào cả.</p>
+<table>
+<tr><th></th><th>Cloud GPU serving (<code>L7_2</code>, mục 1-3)</th><th>Edge/on-device</th></tr>
+<tr><td>Nơi chạy</td><td>GPU datacenter (A100/H100)</td><td>CPU/GPU tiêu dùng của chính máy user (laptop, điện thoại)</td></tr>
+<tr><td>Định dạng model</td><td>fp16/bf16 hoặc FP8, đầy đủ tham số</td><td><strong>GGUF</strong> — định dạng nhị phân gộp weight+tokenizer+metadata, lượng tử hoá mạnh (4-8 bit, thậm chí 2-3 bit)</td></tr>
+<tr><td>Công cụ chạy</td><td>vLLM/SGLang/TensorRT-LLM</td><td><strong>llama.cpp</strong> (thư viện lõi) hoặc <strong>Ollama</strong> (wrapper thân thiện, quản lý model dễ hơn, đánh đổi bớt quyền kiểm soát chi tiết build/runtime flag)</td></tr>
+<tr><td>Chi phí biên mỗi request</td><td>$/GPU-giờ chia cho throughput</td><td>≈0 — dùng phần cứng người dùng đã có sẵn</td></tr>
+<tr><td>Lý do chọn</td><td>Throughput cao, model lớn, nhiều user đồng thời</td><td>Privacy (dữ liệu không rời máy), hoạt động OFFLINE, không phụ thuộc mạng/uptime provider</td></tr>
+<tr><td>Đánh đổi chất lượng</td><td>Không (chạy đúng độ chính xác gốc hoặc FP8 tổn thất tối thiểu, xem <code>R2_1</code> mục 6)</td><td>Lượng tử hoá 4-bit (Q4_K_M) giảm ~75% dung lượng, tổn thất chất lượng &lt;1% theo benchmark phổ biến — nhưng model PHẢI đủ nhỏ để fit RAM/VRAM máy người dùng (VD 7B ở Q4 cần ~4GB thay vì ~14GB fp16)</td></tr>
+</table>
+<p><strong>Không áp dụng cho <code>predictor</code></strong> — dự án không có yêu cầu privacy/offline nào cho phần LLM (chỉ dùng ở lớp report/dev qua Claude Code, không phải sản phẩm chạy trên máy end-user) và XGBoost vốn đã đủ nhẹ để không cần bàn tới edge deployment. Kiến thức này giá trị khi đánh giá kiến trúc bên ngoài (VD 1 sản phẩm cần chạy hoàn toàn offline trên máy khách hàng doanh nghiệp không cho phép dữ liệu rời mạng nội bộ).</p>
+
+<h3>5. Cost tier — spot GPU cho tự host, khác hẳn "chọn cloud AI platform" ở <code>R7.3</code></h3>
+<p><code>R7_3_cloud_services.html</code> đã bàn chi phí ở tầng GỌI API (Bedrock/Vertex/Azure OpenAI, trả tiền theo token). Mục này bàn chi phí ở tầng TỰ HOST hạ tầng GPU riêng (tiếp nối break-even self-host đã tính ở <code>L5_5_cost_latency.html §1</code>) — cụ thể là 1 đòn bẩy tiết kiệm chưa nhắc: <strong>spot/preemptible instance</strong>.</p>
+<pre><code>H100 on-demand: ≈ $2.5-2.9/giờ (đúng khoảng đã dùng ở L5_5_cost_latency.html §1 cho H100 —
+                LƯU Ý: R7.2 dùng cùng con số $2.5/giờ nhưng cho A100, GPU khác tier, không
+                phải nguồn xác nhận thêm cho H100)
+H100 spot:      ≈ $0.80/giờ    (tiết kiệm 60-90% theo khảo sát 2026 — biến động theo cung/cầu)
+
+Rủi ro đổi lại: instance có thể bị THU HỒI bất kỳ lúc nào (cloud provider cần lại capacity)
+  → Chỉ phù hợp workload CHỊU ĐƯỢC gián đoạn (batch job, training) — R2_7_rate_limits_retries.html
+    đã dạy retry+backoff cho lỗi API, đây là dạng "gián đoạn hạ tầng" cần chiến lược khác:
+    checkpoint định kỳ (15-30 phút) + fallback sang on-demand khi spot không có sẵn.
+  → KHÔNG phù hợp cho inference endpoint p99 &lt; 2 giây phục vụ user trực tiếp — 1 lần bị
+    thu hồi giữa chừng = request đang xử lý bị huỷ, vi phạm SLA ngay lập tức.
+
+Chiến lược trộn (mixed spot + on-demand fallback): nếu spot khả dụng ~80% thời gian
+và workload chấp nhận pause/retry sạch (không mất dữ liệu giữa chừng),
+tiết kiệm thực tế 50-70% với rủi ro gián đoạn quản lý được — đây là điểm cân bằng
+phổ biến nhất 2026 cho batch inference/training, KHÔNG áp dụng cho serving real-time.</code></pre>
+<p><strong>Ranh giới rõ với mục 1-2</strong>: autoscale theo KV-cache VRAM (mục 1) quyết định THÊM/BỚT bao nhiêu instance; spot vs on-demand (mục này) quyết định MỖI instance đó thuê với giá/rủi ro nào — 2 trục độc lập, kết hợp được: 1 hệ thống có thể vừa autoscale theo queue-depth vừa dùng spot cho phần tải nền có thể trì hoãn, on-demand cho phần tải cần SLA chắc chắn.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<pre><code>Autoscale truyền thống (XGBoost, predictor):
+  Metric theo dõi: CPU%, request/s
+  Rule: CPU &gt; 70% trong 5 phút → thêm 1 instance
+  → Đơn giản, đủ vì mỗi request tốn CPU gần như cố định
+
+Autoscale LLM (vLLM + KServe/Ray Serve):
+  Metric theo dõi: queue-depth (số request đang chờ), KV-cache utilization (%VRAM đã dùng)
+  Rule: KV-cache utilization &gt; 85% → thêm 1 GPU instance
+        (KHÔNG phải CPU% &gt; 70%, vì CPU thường rảnh trong khi GPU đã đầy)
+  → Phức tạp hơn vì mỗi request tốn VRAM khác nhau tuỳ độ dài output</code></pre>
+
+<h3>Ví dụ mở rộng — nếu <code>daily-investor-report</code> tự host thay vì gọi API Claude, RadixAttention tiết kiệm được gì (minh hoạ cơ chế, không phải kịch bản thật)</h3>
+<pre><code>86 ticker, mỗi request = 3800 token system prompt (dùng CHUNG) + ~200 token câu hỏi riêng ticker
+
+KHÔNG có RadixAttention (engine coi 86 request độc lập hoàn toàn):
+  86 × (3800 + 200) token cần tính KV-cache từ đầu = 86 × 4000 = 344,000 "đơn vị token-tính"
+
+CÓ RadixAttention (SGLang tự nhận diện 3800 token đầu GIỐNG HỆT giữa 86 request):
+  3800 token system prompt: tính 1 LẦN DUY NHẤT (request đầu tiên trong batch)
+  85 request còn lại: chỉ cần tính phần RẼ NHÁNH (200 token riêng mỗi ticker)
+  Tổng: 3800 + 86 × 200 = 3800 + 17,200 = 21,000 "đơn vị token-tính"
+
+→ Giảm ≈ 94% khối lượng tính KV-cache (344,000 → 21,000) trong kịch bản lý tưởng
+  (86 request tới cùng lúc, cùng batch, prefix giống hệt byte-by-byte).
+  Đây là con số MINH HOẠ CƠ CHẾ ở kịch bản lý tưởng nhất — cache-hit thật trên
+  workload production dao động 50-99% tuỳ mức độ trùng prefix thực tế (đã dẫn ở mục 3),
+  không phải cam kết cho mọi trường hợp. Lợi ích CẤU TRÚC tương tự Prompt Caching
+  (R2.4) đã tính cho pipeline này — nhưng đây là cơ chế TỰ HOST, không áp dụng khi
+  vẫn gọi Claude qua API (đúng hiện trạng dự án).</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Deploy XGBoost (predictor hiện tại)</th><th>Deploy LLM (stack GPU 2026)</th></tr>
+<tr><td>Phần cứng</td><td>CPU</td><td>GPU</td></tr>
+<tr><td>Bottleneck autoscale</td><td>CPU%, request/s</td><td>Queue-depth, KV-cache VRAM</td></tr>
+<tr><td>Latency</td><td>Ổn định, tất định</td><td>Biến thiên theo độ dài output</td></tr>
+<tr><td>Inference engine</td><td>Không cần đặc biệt</td><td>vLLM (PagedAttention, continuous batching)</td></tr>
+<tr><td>Serving layer</td><td>uvicorn/gunicorn đơn giản</td><td>KServe/Ray Serve</td></tr>
+<tr><td>Cache đa-request cùng prefix</td><td>Không áp dụng (mỗi request độc lập)</td><td>RadixAttention (SGLang, mục 3) — tự động, xuyên nhiều request</td></tr>
+<tr><td>Có thể chạy on-device không?</td><td>Có — XGBoost nhẹ, chạy CPU laptop bình thường</td><td>Có, NHƯNG cần lượng tử hoá mạnh (GGUF, mục 4) và chấp nhận đánh đổi chất lượng</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> chỉ cần serving pattern nhẹ (đã đúng ở <code>L7_2</code> — batch/real-time cho XGBoost, không cần GPU serving stack). Phần "LLM deployment" GPU-heavy ở trang này <strong>không áp dụng trực tiếp</strong> vào <code>predictor</code> hiện tại vì dự án không tự host LLM nào — nhưng vẫn cần hiểu để tránh nhầm lẫn khi review kiến trúc hoặc phỏng vấn (câu hỏi "sao không autoscale theo CPU cho LLM" là 1 red flag hiểu sai bottleneck). Cả 3 góc mới (SGLang, edge/on-device, spot GPU) đều thuộc phạm vi "nếu dự án tự host LLM" — kịch bản hiện KHÔNG xảy ra vì <code>daily-investor-report</code> gọi Claude qua Claude Code, không tự vận hành GPU nào.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Autoscale LLM serving theo CPU%</strong> — sai bottleneck, phải theo queue-depth/KV-cache VRAM.</p>
+<p><strong>2. Áp dụng stack GPU-heavy này cho <code>predictor</code></strong> — dự án không tự host LLM, việc thêm vLLM/KServe là over-engineering không cần thiết.</p>
+<p><strong>3. Nhầm "deploy LLM" và "deploy model ML nhẹ" là cùng 1 bài toán</strong> — khác nhau ở cả phần cứng, bottleneck, và công cụ serving.</p>
+<p><strong>4. Nhầm RadixAttention (SGLang) với Prompt Caching (R2.4)</strong> — RadixAttention là cơ chế TẦNG ENGINE tự host, tự động tìm điểm rẽ nhánh giữa MỌI request qua cấu trúc cây; Prompt Caching là tính năng TẦNG API do provider vận hành, cần đánh dấu <code>cache_control</code> thủ công — 2 tầng khác nhau, không thay thế nhau khi tự host.</p>
+<p><strong>5. Chọn edge/on-device deployment chỉ vì "chi phí biên gần 0"</strong> mà bỏ qua đánh đổi chất lượng lượng tử hoá và giới hạn RAM/VRAM máy người dùng — quyết định đúng phải bắt đầu từ yêu cầu privacy/offline thật sự, không phải từ chi phí đơn thuần.</p>
+<p><strong>6. Dùng spot GPU instance cho inference endpoint real-time phục vụ user trực tiếp</strong> — tiết kiệm 60-90% nghe hấp dẫn nhưng rủi ro bị thu hồi giữa chừng vi phạm SLA ngay lập tức; chỉ phù hợp batch/training chịu được gián đoạn.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Kể đúng 3 thành phần stack GPU 2026 cho LLM (vLLM, KServe/Ray Serve, Prometheus/Grafana).</li>
+<li>Giải thích được vì sao autoscale LLM serving khác autoscale service thường (KV-cache VRAM vs CPU%).</li>
+<li>Giải thích được vì sao <code>predictor</code> không cần áp dụng stack này hiện tại.</li>
+<li>Nhận diện được câu hỏi "sao không autoscale LLM theo CPU" là 1 red flag hiểu sai bottleneck khi phỏng vấn.</li>
+<li>Giải thích đúng cơ chế RadixAttention (cây radix, điểm rẽ nhánh giữa nhiều request) và phân biệt với Prompt Caching (API) + KV cache thường (1 request, <code>R2_1</code>).</li>
+<li>So sánh đúng cloud GPU serving và edge/on-device (GGUF/llama.cpp/Ollama) theo ≥4 tiêu chí, chọn đúng paradigm cho 1 tình huống cụ thể (VD yêu cầu offline/privacy).</li>
+<li>Đánh giá đúng khi nào spot GPU instance đáng dùng (batch/training, chịu gián đoạn) và khi nào không (real-time SLA thấp).</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R7_5_containerization.html">← R7.5 · Containerization</a>
+  <a href="R8_1_llm_as_judge.html">R8.1 · Observability &amp; Evaluation →</a>
+</div>
+
+</div>
+</body>
+</html>

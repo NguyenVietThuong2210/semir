@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2.5 — Model Interpretability</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 2 · Module 5</div>
+  <h1>2.5 · Model Interpretability (SHAP + Permutation)</h1>
+  <p class="subtitle">Cách debug ML model như debug code. SHAP values, permutation importance, partial dependence — case study V20 Slice 3 prune 43→17 features.</p>
+  <div class="level">Level 2 · Advanced ML · ~30 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Explain 3 methods: Gain (XGBoost internal), Permutation, SHAP</li>
+  <li>Compute SHAP cho 1 prediction bằng TreeExplainer</li>
+  <li>Đọc SHAP summary plot + dependence plot</li>
+  <li>Áp dụng V20 Slice 3: dropped 26 features với adoption &lt; 30%</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 SHAP / Interpretability bằng ngôn ngữ đời thường</div>
+<p><strong>Trả lời "vì sao xe rẻ hơn thị trường?"</strong></p>
+<ul>
+  <li><strong>Global explanation</strong>: "Nhìn chung với 1000 xe, feature ảnh hưởng giá nhất là năm sản xuất, số km, hãng." → tương tự feature importance / PDP.</li>
+  <li><strong>Local explanation (SHAP)</strong>: "Chiếc xe CỤ THỂ này rẻ 30 triệu vì: km cao (-15tr), tai nạn cũ (-10tr), nhưng màu đẹp (+5tr)." → giải thích 1 case cụ thể.</li>
+</ul>
+<p><strong>V20 Slice 3 dùng SHAP</strong> để loại bỏ features "đóng góp gần 0" cho model — như đầu bếp bỏ những gia vị chẳng ai để ý → nồi phở nhẹ mà vẫn ngon.</p>
+</div>
+
+<h2>1. Global vs local explanation</h2>
+
+<ul>
+  <li><strong>Global</strong>: overall feature importance across dataset. Which features matter overall?</li>
+  <li><strong>Local</strong>: why this specific prediction? Which features push toward UP/DOWN?</li>
+</ul>
+
+<h2>2. Method 1: Gain importance (XGBoost internal)</h2>
+
+<pre><code>importance = clf.feature_importances_   # sklearn API
+# Hoặc: clf.get_booster().get_score(importance_type='gain')
+
+# Metric: average gain in impurity when feature used at splits
+# Fast, no extra compute
+# Nhược: biased toward high-cardinality features, không quantify direction
+</code></pre>
+
+<h2>3. Method 2: Permutation importance</h2>
+
+<pre><code>from sklearn.inspection import permutation_importance
+result = permutation_importance(clf, X_val, y_val, n_repeats=10)
+
+# For each feature j:
+#   baseline_score = score(X_val, y_val)
+#   shuffle column j
+#   drop_score = score(X_val_shuffled, y_val)
+#   importance_j = baseline_score - drop_score
+</code></pre>
+
+<p>Ưu: model-agnostic, direct measure "if feature random, how much worse?". Nhược: slow (n_features × n_repeats × eval).</p>
+
+<h2>4. Method 3: SHAP (SHapley Additive exPlanations)</h2>
+
+<p>Lundberg & Lee (2017). Dựa Shapley value từ game theory: đóng góp fair mỗi feature.</p>
+
+<pre><code>Prediction = base_value + Σ SHAP_value[i]
+
+# SHAP_value[i] = "how much feature i pushed prediction from base"
+# base_value = average prediction across dataset
+# Sum SHAP = prediction - base (additive!)
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Shapley value từ Game Theory — công thức đầy đủ + ví dụ 3 feature với số cụ thể</div>
+
+<h3>Bối cảnh — bài toán "chia lương công bằng" (Shapley 1953)</h3>
+<p>3 nhân viên A, B, C hợp tác kiếm được 1 tỷ. Chia thế nào cho <em>công bằng</em>? Shapley: mỗi người nhận trung bình <em>giá trị họ thêm vào</em> qua tất cả các thứ tự có thể tham gia team.</p>
+
+<h3>Công thức chính thức</h3>
+<pre><code>φ_i(v) = Σ  [ |S|! · (n-|S|-1)! / n! ] · [ v(S ∪ {i}) - v(S) ]
+      S ⊆ N\{i}
+       ↑            ↑                          ↑
+   tổng qua       trọng số                   "marginal contribution" —
+   mọi coalition  hoán vị                    thêm feature i vào coalition S
+   không chứa i                              làm tăng payoff bao nhiêu
+
+Trong ML:
+  N = tập tất cả features {1, 2, ..., n}
+  v(S) = prediction của model khi CHỈ dùng features trong S
+         (features ngoài S được "marginalize" — thay bằng expectation)
+  φ_i = SHAP value của feature i cho 1 sample cụ thể
+</code></pre>
+
+<p><strong>Gloss tiếng Việt</strong>:</p>
+<ul>
+  <li><code>S</code> = "coalition" = tập con features (nhóm nhân viên đã có mặt)</li>
+  <li><code>v(S)</code> = "payoff" khi chỉ nhóm S làm việc</li>
+  <li><code>v(S ∪ {i}) - v(S)</code> = giá trị nhân viên i <em>thêm vào</em> khi gia nhập nhóm S</li>
+  <li>Weight <code>|S|!(n-|S|-1)!/n!</code> = xác suất S là "coalition đúng lúc" khi i gia nhập (uniform random ordering)</li>
+</ul>
+
+<p><strong>Hình dung cấu trúc coalition</strong> — với n=3 feature {RSI, Vol, News} có đúng 2³=8 coalition (subset), xếp thành lưới theo kích thước:</p>
+<pre><code>                      {RSI,Vol,News}            ← full coalition, v = 0.82
+                     ╱      │       ╲
+          {RSI,Vol}    {RSI,News}    {Vol,News}   ← coalition 2 feature
+                     ╲      │       ╱
+             {RSI}      {Vol}      {News}          ← coalition 1 feature
+                     ╲      │       ╱
+                          ∅                        ← coalition rỗng, v = 0.50 (base rate)
+
+Để tính φ_RSI, chỉ cần nhìn 4 CẠNH đi LÊN có "thêm RSI vào" (mũi tên nào cũng
+đi từ 1 coalition KHÔNG chứa RSI lên coalition CÓ chứa RSI, chỉ khác đúng 1 phần tử):
+
+  ∅         → {RSI}              (RSI gia nhập coalition rỗng)
+  {Vol}     → {RSI,Vol}          (RSI gia nhập coalition {Vol})
+  {News}    → {RSI,News}         (RSI gia nhập coalition {News})
+  {Vol,News}→ {RSI,Vol,News}     (RSI gia nhập coalition {Vol,News})
+
+→ 4 cạnh này CHÍNH XÁC là 4 dòng "S=..." trong phép tính φ_RSI ngay dưới đây —
+  mỗi cạnh đóng góp 1 "marginal contribution" v(S∪{i}) - v(S), nhân với trọng số
+  = xác suất cạnh đó được đi qua nếu xáo trộn ngẫu nhiên thứ tự 3 feature gia nhập.</code></pre>
+
+<h3>Ví dụ CỤ THỂ — 3 features (RSI, Volume, News), 1 sample VNM</h3>
+
+<p>Model là function <code>v(S)</code> — dự đoán probability UP. Ta biết 8 giá trị (mọi subset):</p>
+<pre><code>v(∅)          = 0.50   ← base rate, không feature nào
+v({RSI})      = 0.65
+v({Vol})      = 0.55
+v({News})     = 0.60
+v({RSI,Vol})  = 0.70
+v({RSI,News}) = 0.78
+v({Vol,News}) = 0.68
+v({RSI,Vol,News}) = 0.82   ← full prediction
+</code></pre>
+
+<p><strong>Tính SHAP cho RSI (φ_RSI)</strong>: cần tính marginal contribution của RSI qua 4 coalition không chứa RSI:</p>
+<pre><code>S=∅:            v({RSI}) - v(∅)          = 0.65 - 0.50 = 0.15
+                weight = 0!·2!/3! = 2/6 = 1/3
+
+S={Vol}:        v({RSI,Vol}) - v({Vol})  = 0.70 - 0.55 = 0.15
+                weight = 1!·1!/3! = 1/6
+
+S={News}:       v({RSI,News}) - v({News}) = 0.78 - 0.60 = 0.18
+                weight = 1!·1!/3! = 1/6
+
+S={Vol,News}:   v({RSI,Vol,News}) - v({Vol,News}) = 0.82 - 0.68 = 0.14
+                weight = 2!·0!/3! = 2/6 = 1/3
+
+φ_RSI = 1/3·0.15 + 1/6·0.15 + 1/6·0.18 + 1/3·0.14
+     = 0.050 + 0.025 + 0.030 + 0.0467
+     = 0.152
+</code></pre>
+
+<p><strong>Tính SHAP cho Vol (φ_Vol)</strong>: 4 coalition không chứa Vol:</p>
+<pre><code>S=∅:            v({Vol}) - v(∅)              = 0.55 - 0.50 = 0.05,  weight = 1/3
+S={RSI}:        v({RSI,Vol}) - v({RSI})      = 0.70 - 0.65 = 0.05,  weight = 1/6
+S={News}:       v({Vol,News}) - v({News})    = 0.68 - 0.60 = 0.08,  weight = 1/6
+S={RSI,News}:   v({RSI,Vol,News}) - v({RSI,News}) = 0.82 - 0.78 = 0.04,  weight = 1/3
+
+φ_Vol = 1/3·0.05 + 1/6·0.05 + 1/6·0.08 + 1/3·0.04
+      = 0.0167 + 0.0083 + 0.0133 + 0.0133
+      = 0.0517</code></pre>
+
+<p><strong>Tính SHAP cho News (φ_News)</strong>: 4 coalition không chứa News:</p>
+<pre><code>S=∅:            v({News}) - v(∅)             = 0.60 - 0.50 = 0.10,  weight = 1/3
+S={RSI}:        v({RSI,News}) - v({RSI})     = 0.78 - 0.65 = 0.13,  weight = 1/6
+S={Vol}:        v({Vol,News}) - v({Vol})     = 0.68 - 0.55 = 0.13,  weight = 1/6
+S={RSI,Vol}:    v({RSI,Vol,News}) - v({RSI,Vol}) = 0.82 - 0.70 = 0.12,  weight = 1/3
+
+φ_News = 1/3·0.10 + 1/6·0.13 + 1/6·0.13 + 1/3·0.12
+       = 0.0333 + 0.0217 + 0.0217 + 0.04
+       = 0.1167</code></pre>
+
+<pre><code>Tổng hợp:
+φ_RSI  = 0.152
+φ_Vol  = 0.0517
+φ_News = 0.1167
+
+Kiểm tra Local Accuracy:
+  base + Σ φ = 0.50 + 0.152 + 0.0517 + 0.1167 = 0.8204 ≈ 0.82 = v({RSI,Vol,News}) ✓
+</code></pre>
+
+<p><strong>Diễn giải business</strong>: "Model dự đoán VNM UP 82% (base 50%). RSI đóng góp +15.2pp (lớn nhất — đang oversold), News +10.8pp, Volume +6.0pp. Tất cả cùng chiều dương → BUY confident."</p>
+
+<h3>Vì sao tính này QUAN TRỌNG?</h3>
+<p>Shapley là <em>lời giải DUY NHẤT</em> thỏa 4 tiên đề công bằng (Efficiency, Symmetry, Dummy, Additivity — Shapley 1953). Không phương pháp interpretability nào khác có bảo đảm toán học này. Đó là lý do SHAP = gold standard.</p>
+
+<h3>Cost thực tế</h3>
+<p><strong>Exact Shapley</strong>: <code>O(2^n)</code> — với n=88 features thì 2^88 subsets → không khả thi.</p>
+<p><strong>TreeSHAP (Lundberg 2018)</strong>: khai thác cấu trúc tree → <code>O(TLD²)</code> với T=trees, L=leaves, D=depth. Với XGBoost 500 trees, depth 6 → giây, không phải năm. Đây là lý do TreeSHAP practical.</p>
+<p><strong>KernelSHAP</strong> (model-agnostic): sample subsets + fit weighted linear regression → approximation. Chậm nhưng dùng được cho NN/black-box.</p>
+
+<h3>LIME vs SHAP — trade-off chi tiết</h3>
+<table>
+<tr><th>Tiêu chí</th><th>LIME</th><th>SHAP</th></tr>
+<tr><td>Nguyên lý</td><td>Fit linear model quanh 1 sample (local surrogate)</td><td>Shapley từ game theory (marginal contribution)</td></tr>
+<tr><td>Bảo đảm toán</td><td>Không (heuristic)</td><td>4 tiên đề công bằng (unique)</td></tr>
+<tr><td>Local accuracy</td><td>Không guaranteed</td><td>Σ φ + base = prediction (exact)</td></tr>
+<tr><td>Consistency</td><td>Không (2 lần chạy khác nhau vì random perturbation)</td><td>Có (deterministic cho TreeSHAP)</td></tr>
+<tr><td>Speed</td><td>Chậm (fit model per sample)</td><td>TreeSHAP: rất nhanh. KernelSHAP: chậm hơn LIME.</td></tr>
+<tr><td>Xử lý correlated features</td><td>Có thể give arbitrary weights (fit linear)</td><td>Chia đều credit theo Shapley — vẫn có vấn đề nhưng có framework fix (cluster + aggregate)</td></tr>
+<tr><td>Interactions</td><td>Không cách nào biểu diễn (chỉ linear)</td><td>SHAP interaction values (n² pairs)</td></tr>
+<tr><td>Khi nào chọn</td><td>NN black-box không có fast Shapley; muốn nhanh, không cần rigor</td><td>Production ML, regulatory audit, tree-based models</td></tr>
+<tr><td>Cạm bẫy</td><td>Định nghĩa "gần" trong perturbation ảnh hưởng kết quả; không stable</td><td>Với model không tree (NN), KernelSHAP chậm; conditional vs marginal expectation thay đổi ý nghĩa</td></tr>
+</table>
+
+<p><strong>Rule of thumb</strong>: tree model → TreeSHAP (always). NN → Integrated Gradients hoặc DeepSHAP. Prototype/demo → LIME. Regulatory/audit → SHAP có defensible math.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Integrated Gradients — cơ chế thật đứng sau tên gọi (2 lần nhắc ở trên chưa giải thích)</div>
+<p><strong>Ý tưởng</strong>: thay vì chỉ nhìn gradient (đạo hàm) TẠI input hiện tại (dễ bị "gradient bão hoà" — gradient gần bằng 0 dù feature thực sự quan trọng, VD 1 neuron đã "saturate"), <strong>Integrated Gradients</strong> (Sundararajan, Taly, Yan — 2017) đi 1 ĐƯỜNG THẲNG từ 1 "baseline" (input tham chiếu, VD ảnh toàn đen/toàn 0 — đại diện cho "không có thông tin gì") tới input thật, RỒI CỘNG DỒN (tích phân — integral, phép tính tổng liên tục) gradient dọc suốt đường đi đó, không chỉ nhìn 1 điểm cuối:</p>
+<pre><code>IG_i(x) = (x_i - x'_i) · ∫₀¹ ∂F(x' + α(x-x'))/∂x_i dα
+
+# x = input thật, x' = baseline, α chạy từ 0 (baseline) tới 1 (input thật)
+# ∂F/∂x_i = gradient của model F theo feature i, đo TẠI điểm x' + α(x-x')
+#           (1 điểm nằm trên đường thẳng nối x' và x, tại vị trí α)
+
+Xấp xỉ thực tế (Riemann sum — chia đường thẳng thành m bước nhỏ thay vì tích phân liên tục):
+IG_i(x) ≈ (x_i - x'_i) · (1/m) · Σ_{k=1}^{m} ∂F(x' + (k/m)(x-x'))/∂x_i</code></pre>
+<p><strong>Ví dụ số tối giản (1 chiều)</strong>: hàm toy <code>f(x)=x²</code>, baseline x'=0, input x=2, chia m=4 bước. Đạo hàm <code>f'(x)=2x</code>. 4 điểm trên đường đi: x'+(k/4)·2 = 0.5, 1.0, 1.5, 2.0 → đạo hàm tương ứng = 1, 2, 3, 4.</p>
+<pre><code>IG ≈ (2-0) · (1/4) · (1+2+3+4) = 2 · (1/4) · 10 = 5
+
+So với giá trị ĐÚNG (Completeness — tổng attribution phải bằng đúng chênh lệch
+prediction): f(2) - f(0) = 4 - 0 = 4.
+
+→ Với m=4 (ít bước), xấp xỉ 5 LỆCH so với giá trị đúng 4 (do đây là Riemann sum
+  kiểu "lấy điểm cuối mỗi khoảng", đạo hàm hàm x² là hàm TĂNG nên hơi phóng đại).
+  Tăng m lên 50 (giá trị mặc định phổ biến trong code thật, VD thư viện Captum)
+  → xấp xỉ hội tụ về rất gần 4. Đây là lý do IG luôn cần chọn m đủ lớn.</code></pre>
+<p><strong>2 tính chất (axiom) IG được thiết kế để đảm bảo</strong> (khác Gradient thô không đảm bảo được): <strong>Sensitivity</strong> — nếu 2 input chỉ khác nhau ĐÚNG 1 feature và cho ra prediction khác nhau, feature đó BẮT BUỘC phải nhận attribution khác 0 (gradient thô có thể cho 0 nếu rơi đúng vùng bão hoà); <strong>Implementation Invariance</strong> — 2 mạng neural network khác kiến trúc nhưng cho ra CÙNG kết quả với MỌI input phải nhận attribution giống hệt nhau (không phụ thuộc cách implement bên trong).</p>
+<p><strong>DeepSHAP khác gì Integrated Gradients</strong> — đây là 2 THUẬT TOÁN KHÁC NHAU, hay bị nhầm là cùng 1 thứ: DeepSHAP KHÔNG dùng tích phân theo đường thẳng — nó kết hợp quy tắc lan truyền ngược (backpropagation) của DeepLIFT với cách đóng khung theo Shapley value (mục "Shapley value" ở trên), lấy giá trị tham chiếu từ TRUNG BÌNH 1 phân phối nền (background distribution) thay vì 1 baseline/1 đường đi duy nhất.</p>
+</div>
+</div>
+
+<h3>TreeExplainer — fast SHAP cho tree models</h3>
+
+<pre><code>import shap
+explainer = shap.TreeExplainer(clf)
+shap_values = explainer.shap_values(X_test)   # (n_samples, n_features)
+
+# 1 prediction:
+shap.force_plot(explainer.expected_value, shap_values[0], X_test.iloc[0])
+
+# Global summary:
+shap.summary_plot(shap_values, X_test)   # bee-swarm plot
+
+# Feature dependence:
+shap.dependence_plot("RSI_14", shap_values, X_test)
+</code></pre>
+
+<div class="callout">
+<div class="label">SHAP magic properties</div>
+<ol>
+  <li><strong>Local accuracy</strong>: Σ SHAP + base = prediction (exactly)</li>
+  <li><strong>Missingness</strong>: missing feature → 0 SHAP</li>
+  <li><strong>Consistency</strong>: model change increase feature contribution → SHAP không decrease</li>
+</ol>
+<p>Chỉ SHAP thỏa 3 properties này (Lundberg proof). Vì thế = gold standard.</p>
+</div>
+
+<h2>5. Case study V20 Slice 3</h2>
+
+<div class="example-box">
+<div class="title">V20 Slice 3: SHAP prune 43 → 17 features</div>
+<pre><code>Phase 1: Train 15 Tier-B tickers × 3 horizons = 45 artifacts
+Phase 2: Extract clf2_xgb.feature_importances_ mỗi artifact
+Phase 3: Compute per-feature adoption rate = % artifacts có feature trong top-50
+Phase 4: Drop features với adoption &lt; 30% AND mean importance &lt; 0.005
+</code></pre>
+<p>Result:</p>
+<ul>
+  <li><code>ret_5d_over_60d</code> (V20 new): 93% adoption — top adopter</li>
+  <li><code>days_to_tet</code>: 100% adoption (calendar effect strong ở VN!)</li>
+  <li><code>corr_regime_shift</code>: 100% adoption</li>
+  <li>26 features dropped: 6 patterns rare (bullish/bearish engulfing, morning/evening star, etc.), calendar noise, sector features với dead context</li>
+</ul>
+<p>Post-prune cv delta: −0.325pp (within noise ±0.5pp) → prove pruning không hurt performance. Feature count (V18 base + V20 candidates) 108 → 82 avg (drop đúng 26 candidate features như trên, ~24% cleaner).</p>
+<p>File: <code>reports/_baselines/v20_slice_3_signoff.json</code></p>
+</div>
+
+<h2>6. Partial dependence plot (PDP)</h2>
+
+<pre><code># Effect of RSI on prediction, holding others average:
+from sklearn.inspection import PartialDependenceDisplay
+PartialDependenceDisplay.from_estimator(clf, X, features=['RSI_14'])
+</code></pre>
+
+<p>Show trend: as RSI increases 30 → 70, prediction UP prob rise then plateau. Sanity check model logic.</p>
+
+<h2>7. Pitfalls</h2>
+
+<div class="callout warn">
+<ol>
+  <li><strong>Correlated features</strong>: SHAP splits credit — 2 features correlated 0.9 mỗi cái nhận half credit → underestimate. Fix: cluster + aggregate SHAP.</li>
+  <li><strong>Interaction effects</strong>: SHAP additive nhưng interactions phổ biến (RSI × MA20 status). Use SHAP interaction values (n²).</li>
+  <li><strong>Cost</strong>: TreeExplainer fast (O(depth × n_trees)) nhưng KernelExplainer (any model) O(2^features) — infeasible &gt; 20 features.</li>
+</ol>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 5 Interpretability techniques (đọc SAU khi đã hiểu Gain/Permutation/SHAP/PDP ở mục 2-6)</div>
+
+<p><strong>Câu hỏi thực tế</strong>: User hỏi "vì sao model bán VNM?". Bạn có SHAP, LIME, PDP, Feature Importance, Counterfactual. Chọn cái nào? Đây là bảng compare.</p>
+
+<h4>Bảng so sánh 5 techniques</h4>
+
+<table>
+<tr><th>Technique</th><th>Scope</th><th>Cơ chế</th><th>Output</th><th>Cost</th><th>Best for</th></tr>
+<tr>
+  <td><strong>Feature Importance</strong></td>
+  <td>Global</td>
+  <td>Đo tần suất feature được split trong trees, hoặc gain reduction</td>
+  <td>Bar chart: feature X quan trọng nhất</td>
+  <td>Rẻ (built-in XGBoost)</td>
+  <td>Overview quick, không đi sâu</td>
+</tr>
+<tr>
+  <td><strong>Permutation Importance</strong></td>
+  <td>Global</td>
+  <td>Shuffle feature X → đo accuracy giảm bao nhiêu</td>
+  <td>Bar chart accuracy drop</td>
+  <td>Trung bình (cần retest N features)</td>
+  <td>Model-agnostic (dùng cho bất kỳ model nào)</td>
+</tr>
+<tr>
+  <td><strong>PDP (Partial Dependence)</strong></td>
+  <td>Global</td>
+  <td>Cho feature X vary từ min→max, đo trung bình prediction</td>
+  <td>Curve: X vs predicted probability</td>
+  <td>Trung bình</td>
+  <td>Xem "trend" ảnh hưởng feature (linear? U-shape?)</td>
+</tr>
+<tr>
+  <td><strong>SHAP (Shapley)</strong></td>
+  <td>Local + Global</td>
+  <td>Game theory: đóng góp feature từng sample</td>
+  <td>Waterfall chart per sample; summary plot global</td>
+  <td>Cao (nhưng có TreeSHAP fast)</td>
+  <td>⭐ Best cho production explain per-prediction</td>
+</tr>
+<tr>
+  <td><strong>LIME</strong></td>
+  <td>Local</td>
+  <td>Fit linear model quanh 1 sample</td>
+  <td>Weights cho features gần sample</td>
+  <td>Cao (train per sample)</td>
+  <td>NN, complex model không có SHAP native</td>
+</tr>
+<tr>
+  <td><strong>Counterfactual</strong></td>
+  <td>Local</td>
+  <td>Tìm thay đổi min để flip prediction</td>
+  <td>"Nếu RSI giảm 10, prediction sẽ đổi từ SELL → HOLD"</td>
+  <td>Cao (search problem)</td>
+  <td>Actionable advice cho user</td>
+</tr>
+</table>
+
+<h4>Case study — user hỏi "vì sao model bán VNM?"</h4>
+
+<pre><code># Model output: VNM SELL với confidence 0.72
+
+=== Feature Importance (global) ===
+Top 5 features theo model:
+1. rsi_14        importance 0.15
+2. volume_zscore importance 0.12
+3. macd_hist     importance 0.11
+4. atr_pct       importance 0.09
+5. vnindex_ret   importance 0.08
+
+→ "Model nói chung dùng RSI + Volume nhiều nhất"
+❌ KHÔNG explain vì sao THIS VNM sample được bán
+
+=== SHAP (local) cho VNM sample cụ thể ===
+Base prediction: 0.5 (neutral)
++ rsi_14 = 82 (quá bán) → +0.15 → 0.65
++ volume_zscore = 2.3 (surge) → -0.20 → 0.45 (đáng lẽ tăng nếu volume up, nhưng...)
++ macd_hist = -0.14 (negative) → +0.15 → 0.60
++ atr_pct = 3.5 (volatile) → +0.05 → 0.65
++ vnindex_ret = -0.8 (market yếu) → +0.07 → 0.72
+
+Final: 0.72 (SELL)
+
+→ SHAP giải thích: "RSI overbought + MACD âm + market yếu → bán, dù volume surge"
+✅ User biết ROOT CAUSE của quyết định này
+
+=== Counterfactual ===
+"VNM would be HOLD (not SELL) nếu:
+   RSI giảm từ 82 → 65 (giảm 17 điểm)
+   HOẶC vnindex_ret cải thiện từ -0.8% → +0.3%"
+
+→ User biết ĐIỀU KIỆN gì cần đổi để prediction đổi
+✅ Actionable — trader biết monitor gì
+</code></pre>
+
+<h4>V20 Slice 3 SHAP prune — ứng dụng thực tế</h4>
+
+<pre><code># Chạy SHAP trên 43 feature ứng viên mới của V20 (cộng thêm vào 79 feature V18 gốc)
+# Tính mean(|shap_value|) per feature across 1000 samples
+
+Feature                        mean|SHAP|    Action
+─────────────────────────────────────────────────────
+rsi_14                         0.145         KEEP (top signal, feature V18 gốc)
+volume_zscore_20               0.128         KEEP (feature V18 gốc)
+macd_hist                      0.114         KEEP (feature V18 gốc)
+...
+close_gap_ratio                0.004         DROP (dead feature, ứng viên V20)
+volume_ratio_60                0.003         DROP (ứng viên V20)
+hour_of_day                    0.002         DROP (không có ý nghĩa cho daily data)
+sector_avg_close               0.001         DROP (ứng viên V20)
+
+Total: 43 ứng viên V20 → giữ 17, drop 26 (contribution < 0.5%)
+
+Result:
+- CV accuracy: 60% → 60% (không đổi)
+- Train time: 15% faster
+- Model size: 12% smaller
+- Interpretability: 20% better (ít features to reason about)
+</code></pre>
+
+<p><strong>Insight</strong>: SHAP không chỉ để explain. Là <em>audit tool</em> để prune model. Feature contribution &lt; 0.5% = noise, drop.</p>
+
+<h4>Khi nào dùng technique nào? Decision matrix</h4>
+
+<table>
+<tr><th>Nhu cầu</th><th>Chọn</th></tr>
+<tr><td>Overview quick global (5 phút)</td><td>Feature Importance</td></tr>
+<tr><td>Compare features model-agnostic</td><td>Permutation Importance</td></tr>
+<tr><td>Xem trend của 1 feature</td><td>PDP</td></tr>
+<tr><td>Explain 1 sample specific (user hỏi)</td><td>SHAP</td></tr>
+<tr><td>Explain deep learning không có SHAP</td><td>LIME</td></tr>
+<tr><td>Actionable advice cho user</td><td>Counterfactual</td></tr>
+<tr><td>Audit + prune model</td><td>SHAP + threshold</td></tr>
+<tr><td>Regulatory compliance (banking, medical)</td><td>SHAP + Counterfactual</td></tr>
+</table>
+
+<p><strong>Warning về SHAP</strong>: TreeSHAP (cho XGBoost/RF) fast + exact. KernelSHAP (cho NN) chậm + approximation. Nếu dùng NN, thử DeepSHAP hoặc Integrated Gradients thay vì KernelSHAP.</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy chính — "chia lương theo đóng góp thực tế của mỗi nhân viên"</div>
+<p>Công ty 3 người kiếm 1 tỷ. Chia thế nào công bằng? Không phải chia đều 333 triệu. Không phải theo giờ làm. Shapley bảo: <em>với mỗi nhân viên, tính xem "nếu không có bạn thì nhóm còn lại kiếm bao nhiêu?" — chênh lệch chính là đóng góp riêng của bạn. Trung bình qua mọi thứ tự bạn tham gia → lương công bằng</em>.</p>
+<p>Tương tự: mỗi feature là 1 "nhân viên", prediction cuối là "1 tỷ", SHAP value chính là lương công bằng mỗi feature đáng nhận. Đó là lý do <code>Σ SHAP + base = prediction</code>: tổng lương công bằng = tổng thu nhập.</p>
+</div>
+
+<div class="callout warn">
+<div class="label">⚠️ 3 hiểu lầm phổ biến về interpretability</div>
+<ol>
+  <li><strong>"Feature importance cao = feature causal"</strong> — SAI. SHAP/importance chỉ nói feature <em>correlated với output theo cách model đã học</em>, KHÔNG phải nhân quả. VD: "kem lạnh sales" cao SHAP cho "chết đuối" — nhưng nguyên nhân thật là "mùa hè". Feature importance ≠ causal inference. Muốn causal → cần intervention (A/B test) hoặc causal ML (DoWhy, EconML).</li>
+  <li><strong>"SHAP = ground truth explanation"</strong> — SAI. SHAP giải thích <em>model của bạn</em>, KHÔNG phải thế giới thực. Nếu model đã học wrong pattern (VD do bias data), SHAP sẽ giải thích wrong pattern đó rất "confident" → user tưởng đúng. SHAP là mirror của model, không phải oracle.</li>
+  <li><strong>"Correlated features chia đều SHAP không sao"</strong> — SAI khi ra quyết định feature engineering. 2 features corr 0.95 mỗi cái nhận half credit → nhìn ranking tưởng "cả 2 đều trung bình" → drop 1 tưởng an toàn nhưng thực tế model dùng combined signal → CV sụp sau drop. Fix: hierarchical clustering rồi aggregate SHAP tại cluster level, hoặc dùng SHAP conditional expectation (interventional).</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Gain importance vs Permutation vs SHAP — trade-off?</p>
+<p class="a">Gain: fast, biased toward high-cardinality. Permutation: model-agnostic, slow. SHAP: mathematically sound (3 properties), TreeExplainer fast cho tree, direction + magnitude.</p>
+
+<p class="q">2. Sum(SHAP) = prediction - base. Why matters?</p>
+<p class="a">Local accuracy = exact decomposition. Có thể verify feature contribution add up đúng. Feature importance methods khác không guaranteed.</p>
+
+<p class="q">3. V20 dropped <code>days_to_next_fomc</code> feature với adoption 33%. Right choice?</p>
+<p class="a">Borderline. 33% below 60% threshold. Nếu drop: cleaner model. Nhưng feature có thể mạnh cho subset tickers (US-exposed banks, tech). Decision context-dependent — V20 chose drop cho consistency.</p>
+
+<p class="q">4. SHAP value negative + prediction high — làm sao?</p>
+<p class="a">Nghĩa là feature push prediction DOWN, nhưng features khác push UP mạnh hơn → prediction net UP. SHAP local, not absolute.</p>
+
+<p class="q">5. Correlated features hurt SHAP thế nào? Fix?</p>
+<p class="a">2 features corr 0.9 mỗi cái nhận half credit → underestimate real importance. Fix: cluster correlated features (VD hierarchical clustering), aggregate SHAP tại cluster level.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>V20 SHAP analysis: <code>reports/_baselines/v20_slice_3_signoff.json</code></li>
+    <li>Prune workflow: adoption ≥ 60% keep, &lt; 30% drop, borderline case-by-case</li>
+    <li>Code: <code>clf2_xgb.feature_importances_</code> per artifact</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1705.07874">Lundberg & Lee (2017) — SHAP paper</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1802.03888">Lundberg et al (2018) — TreeExplainer</a></li>
+    <li>📖 <a href="https://christophm.github.io/interpretable-ml-book/">Interpretable ML book (Molnar)</a> — free comprehensive</li>
+    <li>📖 <a href="https://shap.readthedocs.io/">SHAP official docs</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L2_4_timeseries_cv.html">← L2.4</a>
+  <a href="L2_6_ml_system_design.html">L2.6 · ML System Design →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R4.2 · Graph Databases — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Retrieval Techniques · Điểm 2/6</div>
+  <h1>R4.2 · Graph Databases</h1>
+  <p class="subtitle">Khi câu hỏi không phải "cái gì GIỐNG cái này" mà là "cái gì LIÊN QUAN đến cái này qua đúng loại quan hệ nào" — vector search bó tay, graph database vào việc.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>Dễ</strong>: phân biệt được câu hỏi "giống nhau" (vector search trả lời) và câu hỏi "có quan hệ trực tiếp" (graph DB trả lời) — 2 loại câu hỏi hoàn toàn khác nhau về bản chất.</li>
+<li><strong>Dễ</strong>: đọc hiểu mô hình dữ liệu node + edge có nhãn + hướng, và 1 câu query Cypher đơn giản.</li>
+<li><strong>Trung bình</strong>: giải thích vì sao multi-hop traversal trên graph nhanh hơn nhiều JOIN liên tiếp trên SQL khi số hop tăng.</li>
+<li><strong>Trung bình</strong>: quyết định đúng khi nào 1 use case ĐÁNG dùng graph DB độc lập (không cần LLM), khi nào chỉ là over-engineering.</li>
+<li><strong>Khó</strong>: hiểu GraphRAG (graph DB + LLM) khác gì graph DB thuần, và biết 3 nhược điểm production còn tồn tại của nó theo nghiên cứu 2026.</li>
+<li><strong>Khó</strong>: phân biệt property graph (Neo4j/Cypher) với RDF triple store (SPARQL) theo đúng trục thiết kế (traversal ứng dụng vs trao đổi dữ liệu chuẩn hoá + suy luận), không coi 1 trong 2 là "cũ hơn".</li>
+<li><strong>Khó</strong>: tính tay được 1 ví dụ risk propagation đơn giản qua nhiều hop với hệ số suy giảm cho trước, và giải thích được vì sao đây là bước LƯỢNG HOÁ khác với multi-hop traversal (chỉ biết "có đường nối" hay không).</li>
+<li><strong>Khó</strong>: giải thích được vì sao sharding 1 graph database khó hơn hẳn sharding 1 bảng SQL — cạnh (edge) băng qua ranh giới shard buộc phải trả giá network round-trip cho MỖI hop, khác hẳn 1 JOIN trong bảng đã sharded theo khoá phù hợp.</li>
+<li><strong>Khó</strong>: phân biệt được graph "hiện tại" (chỉ biết trạng thái mới nhất) với graph temporal/bitemporal (biết được trạng thái tại BẤT KỲ thời điểm nào trong quá khứ), và biết khi nào 1 bài toán rủi ro tài chính THẬT SỰ cần loại thứ 2.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Trang này giả định bạn đã đọc <a href="R4_1_vector_databases.html">R4.1 · Vector Databases</a> — vì phần lớn giá trị của graph DB chỉ hiện rõ khi đặt cạnh vector DB để so sánh ("nó KHÔNG giải quyết cùng bài toán"). Nó cũng liên hệ trực tiếp <code>../modules/L9_1_advanced_rag.html §5</code> (GraphRAG — entity extraction, Leiden community detection, community summary) nhưng đào sâu ở 1 hướng khác: <strong>graph DB độc lập với LLM</strong> (không phải trong bối cảnh RAG) và <strong>chi phí/nhược điểm production thật của GraphRAG 2025-2026</strong> mà module cũ (viết trước các cập nhật này) chưa có.</p>
+<p>Độ khó: <strong>Trung bình</strong> — cơ chế node/edge/Cypher dễ hiểu, nhưng phần quyết định "khi nào đáng dùng" và phần GraphRAG production trade-off đòi hỏi tư duy kỹ hơn.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div><p>Nếu vector DB trả lời <strong>"cái gì GIỐNG cái này nhất"</strong> (độ tương đồng mờ, không có nhãn quan hệ rõ ràng), graph DB trả lời <strong>"cái gì LIÊN QUAN đến cái này theo QUAN HỆ CỤ THỂ nào"</strong>. Ví dụ: "công ty nào là nhà cung cấp của FPT" là 1 quan hệ rõ ràng, có hướng, có nhãn — khác hẳn "công ty nào GIỐNG FPT" (độ tương đồng mờ về mặt kinh doanh/ngành nghề, không có đường nối trực tiếp nào giữa 2 công ty). Đây là sự khác biệt cốt lõi, không phải "cái nào mạnh hơn cái nào".</p></div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Mô hình dữ liệu: node + edge có nhãn + hướng</h3>
+<p><strong>[TRAIN-KNOWLEDGE] Cơ chế cơ bản</strong>: graph database (Neo4j là ví dụ phổ biến nhất) lưu dữ liệu dưới dạng <strong>node</strong> (thực thể — VD công ty, ngành, người) và <strong>edge có nhãn + hướng</strong> (quan hệ — VD <code>FPT -[SUPPLIES_TO]-&gt; Viettel</code>, <code>VNM -[BELONGS_TO]-&gt; Ngành tiêu dùng</code>).</p>
+<pre><code>Node: (Company {ticker: "FPT", sector: "Tech"})
+Node: (Company {ticker: "VIETTEL", sector: "Telecom"})
+Edge: (FPT)-[:SUPPLIES_TO {since: 2018}]->(VIETTEL)
+
+# So sánh với bảng SQL tương đương:
+# companies(ticker, sector)
+# supplies(supplier_ticker, buyer_ticker, since)  ← 1 bảng join riêng cho MỖI loại quan hệ</code></pre>
+<p>Truy vấn graph dùng <strong>Cypher</strong> (ngôn ngữ query của Neo4j), đi theo pattern quan hệ:</p>
+<pre><code>MATCH (a:Company)-[:SUPPLIES_TO]->(b:Company)
+WHERE a.ticker = 'FPT'
+RETURN b.ticker
+
+# Đọc thành lời: "tìm mọi Company b sao cho có quan hệ SUPPLIES_TO từ FPT tới b"</code></pre>
+
+<h3>2. Vì sao multi-hop traversal nhanh hơn nhiều JOIN SQL</h3>
+<div class="callout"><div class="label">📖 Câu hỏi 2-hop, 3-hop trong SQL vs Graph</div><p>Câu hỏi "công ty nào cùng ngành với công ty đang là đối tác của FPT" là 1 câu hỏi <strong>2-hop</strong>: FPT → (đối tác) → công ty X → (cùng ngành với) → công ty Y. Trong SQL, mỗi hop = 1 JOIN thêm:</p>
+<pre><code>SELECT DISTINCT y.ticker
+FROM companies f
+JOIN partners p ON p.company_a = f.ticker      -- hop 1
+JOIN companies x ON x.ticker = p.company_b
+JOIN companies y ON y.sector = x.sector         -- hop 2
+WHERE f.ticker = 'FPT' AND y.ticker != x.ticker;</code></pre>
+<p>Với 2 hop, SQL vẫn ổn. Nhưng với 5-6 hop (VD "chuỗi cung ứng cấp 3, sở hữu chéo qua 4 lớp công ty con"), số JOIN tăng tuyến tính theo số hop, và mỗi JOIN là 1 phép quét/so khớp toàn bảng (hoặc dùng index nhưng vẫn phải join lại) — chi phí tăng nhanh. Graph traversal chuyên dụng (như Cypher engine của Neo4j) được tối ưu để "đi theo con trỏ" từ node này sang node kia trực tiếp trong cấu trúc lưu trữ (index-free adjacency — mỗi node giữ sẵn danh sách con trỏ tới các node liền kề), không cần join lại từ đầu ở mỗi hop.</p></div>
+
+<h3>3. Khi nào graph DB đáng dùng ĐỘC LẬP với LLM/RAG</h3>
+<p>Không phải mọi dữ liệu "có vẻ liên quan" đều đáng chuyển sang graph DB. 2 tiêu chí thật để quyết định:</p>
+<table>
+<tr><th>Tiêu chí</th><th>Đáng dùng graph DB khi...</th><th>KHÔNG đáng khi...</th></tr>
+<tr><td>Loại câu hỏi</td><td>Cần multi-hop traversal THẬT (3+ hop, thường xuyên) — vector search không trả lời được vì "gần nhau trong không gian embedding" không đồng nghĩa "có quan hệ trực tiếp"</td><td>90% câu hỏi thực tế chỉ cần lookup phẳng 1-2 bảng (WHERE, 1 JOIN)</td></tr>
+<tr><td>Cấu trúc dữ liệu vốn có</td><td>Dữ liệu vốn dĩ có quan hệ tường minh (sở hữu chéo cổ phần, chuỗi cung ứng, ban lãnh đạo chung nhiều công ty) — biểu diễn bằng graph tự nhiên hơn bảng phẳng</td><td>Dữ liệu chủ yếu là thuộc tính đơn (giá, chỉ báo kỹ thuật) không có quan hệ nhiều-nhiều phức tạp</td></tr>
+</table>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div><p>Dựng graph DB "vì nó cool" khi dữ liệu thực ra không có nhiều quan hệ multi-hop đáng truy vấn — chi phí vận hành (học Cypher, thêm 1 DB mới, đồng bộ dữ liệu 2 nơi, thêm điểm lỗi) không đáng nếu phần lớn câu hỏi thực tế vẫn chỉ cần lookup phẳng trên SQL đã có sẵn.</p></div>
+
+<h3>4. GraphRAG — kết hợp graph DB với LLM</h3>
+<p>Đã có pipeline đầy đủ ở <code>../modules/L9_1_advanced_rag.html §5</code>: entity/relation extraction bằng LLM → Leiden community detection → community summary → query-time match. Phần bổ sung dưới đây là <strong>cập nhật 2026</strong> (nguồn: WebSearch, mixed academic + blog — xem <code>_research_evidence_track1.md</code>):</p>
+<ul>
+<li>Microsoft GraphRAG hiện có lệnh CLI <code>update</code> để <strong>incremental update</strong> index thay vì re-index toàn bộ — giải quyết phần nào vấn đề chi phí (1 nguồn nhắc con số $33K để index dataset lớn theo cách cũ năm 2024, chưa tự verify).</li>
+<li><strong>Cập nhật (verify 2026-09, nguồn <code>microsoft.github.io/graphrag/cli</code> + tổng hợp WebSearch)</strong>: từ bản ≥0.5.0, GraphRAG giữ entity ID nhất quán qua các lần update, hỗ trợ 2 chế độ <code>standard-update</code>/<code>fast-update</code>, tự tính phần khác biệt (diff) giữa index cũ và nội dung mới rồi merge thay vì xoá-nạp lại toàn bộ — xác nhận chi tiết CLI trong trang là đúng, không lỗi thời. Ngoài ra, các đối thủ nhẹ hơn (LazyGraphRAG, LightRAG) được ghi nhận giảm chi phí index tới 50-6,000× so với con số $33K gốc của Microsoft GraphRAG 2024 — nếu chi phí index là rào cản chính, đáng cân nhắc các phương án này thay vì mặc định chọn Microsoft GraphRAG.</li>
+<li>3 nhược điểm còn tồn tại theo nghiên cứu follow-up: (a) preprocessing tốn token/compute cao (multi-pass extraction + summarization bằng LLM), (b) inference-time query graph tốn thêm 2-3× latency so với vector-only, (c) index tăng super-linear theo corpus size → khó incremental + tốn RAM.</li>
+<li>Xu hướng kiến trúc production 2025-2026: <strong>hybrid</strong> (vector + graph traversal + structured DB lookup) thay vì GraphRAG thuần cho mọi câu hỏi — dùng 1 router (tương tự cơ chế query router trong <code>L9_1_advanced_rag.html §6.2</code>) để chọn nhánh phù hợp theo loại câu hỏi.</li>
+</ul>
+
+<h3>5. Property graph (Neo4j/Cypher) khác gì RDF triple store (SPARQL) — 2 mô hình graph, không phải 1 (verify 2026-09)</h3>
+<p>Mục 1-4 đều nói về <strong>property graph</strong> (Neo4j) — nhưng đây không phải mô hình graph duy nhất. <strong>RDF triple store</strong> (Apache Jena, GraphDB, Amazon Neptune ở chế độ RDF) là 1 nhánh khác, dễ nhầm là "cùng loại graph DB" vì cả 2 đều biểu diễn dữ liệu dạng quan hệ có hướng — nhưng khác nhau ở đúng những điểm quyết định khi chọn công cụ:</p>
+<table>
+<tr><th>Tiêu chí</th><th>Property Graph (Neo4j, Cypher/GQL)</th><th>RDF Triple Store (SPARQL)</th></tr>
+<tr><td>Đơn vị dữ liệu</td><td>Node + edge, MỖI node/edge có thể mang nhiều property (key-value) trực tiếp</td><td>Bộ ba (triple) <code>subject-predicate-object</code> — muốn gắn thuộc tính vào 1 quan hệ phải "reify" thành node phụ, rườm rà hơn</td></tr>
+<tr><td>Trọng tâm thiết kế</td><td>Node-centric — tối ưu cho ỨNG DỤNG, traversal nhanh (index-free adjacency, xem mục 2)</td><td>Edge-centric — tối ưu cho TRAO ĐỔI DỮ LIỆU chuẩn hoá + suy luận logic (reasoning) qua ontology (OWL/RDFS)</td></tr>
+<tr><td>Ngôn ngữ query</td><td>Cypher (chuẩn hoá thành GQL — ISO chuẩn hoá năm 2024) — khai báo, tập trung pattern-matching</td><td>SPARQL — khai báo, hỗ trợ suy luận (infer 1 fact MỚI từ ontology, không chỉ truy vấn fact có sẵn)</td></tr>
+<tr><td>Chi phí duyệt cạnh (edge traversal)</td><td>Gần hằng số per-hop (index-free adjacency — mỗi node giữ sẵn con trỏ hàng xóm)</td><td>Thường có bậc logarit do dựa nhiều vào index (khác cơ chế "đi theo con trỏ" của property graph)</td></tr>
+<tr><td>Khi nên chọn</td><td>Ứng dụng nội bộ cần traversal nhanh, không cần trao đổi dữ liệu chuẩn hoá liên tổ chức (đúng use case chuỗi cung ứng/sở hữu chéo nội bộ ở mục 3-4)</td><td>Cần trao đổi dữ liệu theo chuẩn mở liên tổ chức (VD dữ liệu công bố theo chuẩn ngành), hoặc cần suy luận logic tự động từ ontology (VD "công ty con của công ty con" tự suy ra là "công ty cháu" theo rule ontology, không cần viết query 3-hop tường minh)</td></tr>
+</table>
+<p>So sánh trực tiếp cùng 1 câu hỏi ("FPT cung ứng cho công ty nào?") viết bằng 2 ngôn ngữ, để thấy khác biệt cú pháp phản ánh đúng khác biệt mô hình dữ liệu ở bảng trên:</p>
+<pre><code>-- Cypher (property graph — pattern trên node/edge có nhãn):
+MATCH (a:Company {ticker: 'FPT'})-[:SUPPLIES_TO]->(b:Company)
+RETURN b.ticker
+
+# SPARQL (RDF — pattern trên bộ ba subject-predicate-object):
+SELECT ?b WHERE {
+  ?a ex:ticker "FPT" .
+  ?a ex:suppliesTo ?b .
+}
+# Đọc thành lời: "tìm ?b sao cho tồn tại bộ ba (?a, ex:suppliesTo, ?b)
+#                 VÀ bộ ba (?a, ex:ticker, "FPT")" — mọi thứ đều là
+#                 bộ ba subject-predicate-object, kể cả thuộc tính "ticker"
+#                 (khác Cypher, nơi ticker là property gắn thẳng vào node)</code></pre>
+<p>Khác biệt cú pháp phản ánh đúng khác biệt triết lý: Cypher coi "ticker=FPT" là 1 <em>thuộc tính của node</em> (đọc trực tiếp), SPARQL coi nó là 1 <em>bộ ba độc lập</em> giống hệt về mặt cấu trúc với bộ ba quan hệ <code>suppliesTo</code> — đây chính là điểm cho phép RDF suy luận logic tổng quát (mọi thứ đều là triple, kể cả rule suy luận), nhưng cũng là lý do RDF "rườm rà" hơn khi chỉ cần đọc thuộc tính đơn giản.</p>
+<div class="callout danger"><div class="label">⚠️ Sai lầm hay gặp — coi RDF/SPARQL là "phiên bản cũ/chậm hơn" của property graph</div><p>Đây là 1 trục thiết kế khác nhau, không phải thang cũ/mới: RDF triple store vẫn là lựa chọn ĐÚNG khi bài toán thật sự cần suy luận logic theo ontology chuẩn hoá (phổ biến trong y sinh, dữ liệu chính phủ, dữ liệu liên tổ chức) — property graph không có cơ chế suy luận tương đương built-in. Ngược lại, dùng RDF cho 1 ứng dụng nội bộ chỉ cần traversal nhanh là over-engineering theo hướng khác — thêm chi phí học SPARQL/ontology mà không dùng tới lợi ích suy luận.</p></div>
+
+<h3>6. Graph algorithms cho phân tích rủi ro tài chính — không chỉ multi-hop traversal (verify 2026-09)</h3>
+<p>Mục 1-4 chỉ dùng graph để TRẢ LỜI CÂU HỎI (traversal, MATCH pattern). Nhưng graph DB hiện đại (Neo4j GDS — Graph Data Science library, TigerGraph) còn chạy được <strong>graph algorithm</strong> để PHÁT HIỆN cấu trúc rủi ro mà bản thân câu hỏi traversal không tự hỏi được — đúng loại use case thật cho mạng lưới sở hữu chéo/chuỗi cung ứng doanh nghiệp:</p>
+<table>
+<tr><th>Thuật toán</th><th>Trả lời câu hỏi gì</th><th>Ứng dụng tài chính</th></tr>
+<tr><td>Degree Centrality</td><td>Node nào có NHIỀU kết nối trực tiếp nhất?</td><td>Công ty nào là đối tác/cổ đông của nhiều công ty nhất — điểm dễ thấy nhất của rủi ro tập trung</td></tr>
+<tr><td>Betweenness Centrality</td><td>Node nào là "cầu nối" giữa các cụm khác nhau (nằm trên nhiều đường đi ngắn nhất nhất)?</td><td>Công ty trung gian trong chuỗi cung ứng — nếu công ty này gặp vấn đề, nhiều nhánh khác bị cắt đứt liên kết dù bản thân nó không "lớn" theo degree</td></tr>
+<tr><td>PageRank</td><td>Node nào "quan trọng" xét cả trọng số của node trỏ TỚI nó (không chỉ đếm số lượng)?</td><td>Công ty được nhiều công ty QUAN TRỌNG khác phụ thuộc (không chỉ nhiều công ty nhỏ) — bản gốc thuật toán này chính là thuật toán Google dùng xếp hạng trang web</td></tr>
+<tr><td>Community Detection (Louvain — tối ưu hoá modularity)</td><td>Nhóm node nào tạo thành 1 "cụm" gắn kết chặt hơn hẳn phần còn lại?</td><td>Phát hiện cụm công ty sở hữu chéo/cùng nhóm cổ đông ẩn — rủi ro lan truyền trong 1 cụm cao hơn hẳn rủi ro lan ra ngoài cụm</td></tr>
+</table>
+<p><strong>Risk propagation</strong> (mô hình lan truyền rủi ro qua mạng): khi 1 node "vỡ nợ"/gặp sự cố, mô hình lan truyền tính toán mức ảnh hưởng lên các node lân cận theo từng bước hop, thường có hệ số suy giảm (attenuation) theo khoảng cách — càng xa node gốc, ảnh hưởng càng nhỏ.</p>
+<pre><code>Ví dụ tính tay risk propagation đơn giản — hệ số suy giảm 50%/hop:
+
+  Công ty A (vỡ nợ, shock gốc = 100%)
+    │  (A là nhà cung cấp chính của B)
+    ▼
+  Công ty B (shock nhận = 100% × 50% = 50%)
+    │  (B là nhà cung cấp của C VÀ D)
+    ├──▶ Công ty C (shock nhận = 50% × 50% = 25%)
+    └──▶ Công ty D (shock nhận = 50% × 50% = 25%)
+         │  (D cũng là khách hàng của E — hop thứ 3 từ A)
+         ▼
+       Công ty E (shock nhận = 25% × 50% = 12.5%)
+
+→ E vẫn nhận 12.5% ảnh hưởng dù cách A tới 3 hop — đây chính là lý do
+  "rủi ro đối tác cấp 3" (3rd-party risk) là vấn đề thật, không phải
+  lý thuyết suông: multi-hop traversal (mục 2) TÌM ĐƯỢC đường đi này,
+  nhưng phải có mô hình propagation riêng (bảng trên) mới LƯỢNG HOÁ
+  được mức độ ảnh hưởng, không chỉ biết "có đường nối" hay không.</code></pre>
+<p>Đây là điểm khác biệt quan trọng giữa "graph DB trả lời được câu hỏi multi-hop" (mục 1-4, đã học) và "graph DB tự phát hiện + lượng hoá rủi ro cấu trúc" (mục 6, mới) — GraphRAG (mục 4) dùng LLM để trích xuất entity/relation, còn graph algorithm ở mục 6 hoạt động thuần theo cấu trúc graph, không cần LLM.</p>
+
+<h3>7. Sharding 1 graph database — vì sao khó hơn hẳn sharding 1 bảng SQL (verify 2026-09)</h3>
+<p>Mục 2 đã giải thích multi-hop traversal nhanh nhờ <strong>index-free adjacency</strong> — mỗi node giữ SẴN con trỏ tới hàng xóm. Cơ chế này nhanh CHỈ KHI mọi node liên quan nằm trên CÙNG 1 máy (con trỏ trỏ thẳng vào bộ nhớ cục bộ). Khi graph lớn tới mức phải chia ra nhiều máy (shard), chính lợi thế "đi theo con trỏ" đó biến thành điểm yếu: nếu 2 node có cạnh nối nhau lại nằm ở 2 shard KHÁC NHAU, "đi theo con trỏ" giờ có nghĩa là <strong>gọi qua mạng</strong> sang máy khác — mỗi hop tốn thêm độ trễ network (thường tính bằng mili-giây), thay vì đọc bộ nhớ cục bộ (tính bằng micro-giây hoặc nano-giây).</p>
+<p>Đây là khác biệt cốt lõi so với sharding 1 bảng SQL: 1 bảng <code>companies</code> sharded theo <code>ticker</code> vẫn trả lời được 1 JOIN đơn giản trong 1 shard nếu cả 2 bảng liên quan cùng được sharded theo đúng khoá đó (co-location). Graph thì KHÁC — 1 node (VD công ty FPT) có thể có quan hệ với hàng trăm node khác thuộc đủ loại lĩnh vực khác nhau (nhà cung cấp, cổ đông, ban lãnh đạo chung) — không có 1 khoá sharding "tự nhiên" nào gom được TẤT CẢ hàng xóm của FPT vào cùng 1 shard với nó, vì bản thân đồ thị quan hệ doanh nghiệp không có cấu trúc phân cụm rõ ràng theo 1 trục duy nhất.</p>
+<pre><code>Ví dụ cụ thể: câu hỏi 3-hop "chuỗi cung ứng cấp 3 của FPT" (mục 6, risk propagation)
+chạy trên graph ĐÃ sharded thành 3 máy (Shard A, B, C):
+
+  FPT (Shard A)
+    │  SUPPLIES_TO (cạnh CHÉO shard — hàng xóm nằm ở Shard B)
+    ▼
+  Công ty X (Shard B)  ── gọi mạng: Shard A → Shard B (+network latency, hop 1)
+    │  SUPPLIES_TO (cạnh CHÉO shard khác — hàng xóm nằm ở Shard C)
+    ▼
+  Công ty Y (Shard C)  ── gọi mạng: Shard B → Shard C (+network latency, hop 2)
+    │  SAME_SECTOR (cạnh nội bộ Shard C — không cần gọi mạng)
+    ▼
+  Công ty Z (Shard C)  ── đọc cục bộ (hop 3, KHÔNG có network latency)
+
+→ Traversal 3-hop tốn 2 lượt gọi mạng (hop 1, hop 2) + 1 lượt đọc cục bộ (hop 3)
+  — so với graph KHÔNG sharded (mọi node trên 1 máy): cả 3 hop đều là đọc cục
+  bộ, không có network latency nào. Đây chính là chi phí thật của việc chia
+  nhỏ graph ra nhiều máy — không tồn tại ở graph vừa đủ nhỏ để nằm 1 máy.</code></pre>
+<table>
+<tr><th>Vấn đề</th><th>Ở bảng SQL sharded</th><th>Ở graph database sharded</th></tr>
+<tr><td>Chi phí truy vấn xuyên shard</td><td>Có thể TRÁNH nếu 2 bảng liên quan được co-locate theo cùng khoá sharding</td><td>KHÓ tránh — 1 node có hàng xóm thuộc nhiều "cụm" khác nhau, không có 1 khoá sharding tự nhiên gom hết hàng xóm lại</td></tr>
+<tr><td>Hot shard (lệch tải)</td><td>Xảy ra nếu khoá sharding phân phối không đều (VD ticker phổ biến bị hỏi nhiều)</td><td>Xảy ra CÙNG lúc theo 2 hướng: node có RẤT NHIỀU cạnh (hub — VD 1 công ty mẹ có hàng chục công ty con) làm shard chứa nó quá tải cả lưu trữ lẫn traffic</td></tr>
+<tr><td>Rebalance khi thêm/bớt shard</td><td>Cần rehash + di chuyển dữ liệu (giống vấn đề đã nêu ở <a href="R4_1_vector_databases.html">R4.1 §7</a> cho vector DB)</td><td>Nặng hơn — di chuyển 1 node còn phải cập nhật LẠI mọi con trỏ ở các node hàng xóm của nó (đang trỏ tới vị trí cũ), không chỉ di chuyển bản thân dữ liệu node đó</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Đây không phải "graph DB kém hơn SQL" — là bài toán cấu trúc khác hẳn (BUG-1 false dichotomy check)</div><p>Kết luận đúng KHÔNG phải "graph DB không scale được" — Neo4j, TigerGraph, Galaxybase (kiến trúc HTAP phân tán 2026) đều có giải pháp phân tán thật (Galaxybase dùng kiến trúc "distribution" khác "partition" — nhân bản 1 phần graph có kiểm soát thay vì chia cứng). Điểm cần nhớ là: graph partitioning được xếp vào nhóm bài toán <strong>NP-khó</strong> về mặt lý thuyết (tìm cách chia tối ưu số cạnh cắt ngang shard) — khác hẳn sharding bảng SQL (chỉ cần chọn đúng khoá hash/range). Vì vậy, quyết định ĐÚNG khi dữ liệu graph lớn dần không phải "chuyển sang SQL" mà là: (1) ưu tiên giữ graph đủ nhỏ để chạy trên 1 máy nếu khả thi (RAM lớn hiện đại xử lý được graph hàng trăm triệu cạnh trên 1 máy), (2) nếu bắt buộc phân tán, chọn 1 hệ quản trị có thuật toán partitioning graph chuyên dụng (không tự chia tay bằng hash ngẫu nhiên).</p></div>
+
+<h3>8. Graph temporal/versioned — trả lời "TẠI THỜI ĐIỂM T, cấu trúc sở hữu/quan hệ là gì" (verify 2026-09)</h3>
+<p>Mục 1-7 đều ngầm giả định graph chỉ có 1 trạng thái — <strong>hiện tại</strong>. Khi 1 cạnh bị xoá (VD công ty A ngừng làm nhà cung cấp cho B) hoặc property đổi (VD tỉ lệ sở hữu cổ phần thay đổi), graph "hiện tại" đơn giản là UPDATE đè lên, mất luôn lịch sử. Với câu hỏi rủi ro tài chính thật (VD "kiểm toán lại: TẠI THỜI ĐIỂM xảy ra giao dịch X, ai đang sở hữu bao nhiêu % công ty Y" — cần biết đúng trạng thái QUÁ KHỨ, không phải trạng thái hiện tại), graph thường (chỉ lưu 1 snapshot mới nhất) không trả lời được.</p>
+<p><strong>Graph temporal/bitemporal</strong> giải quyết bằng cách gắn MỖI cạnh/property với 1 (hoặc 2) khoảng thời gian, thay vì chỉ có/không có:</p>
+<table>
+<tr><th>Khái niệm</th><th>Trả lời câu hỏi gì</th><th>Ví dụ tài chính</th></tr>
+<tr><td>Valid time (thời gian hiệu lực)</td><td>Sự thật này ĐÚNG trong khoảng thời gian nào NGOÀI ĐỜI THẬT?</td><td>"A sở hữu 15% B từ 2023-01 đến 2025-06" (rồi bán bớt)</td></tr>
+<tr><td>Transaction time (thời gian ghi nhận)</td><td>Hệ thống GHI NHẬN sự thật này vào lúc nào? (có thể trễ hơn valid time nếu phát hiện muộn/điều chỉnh hồi tố)</td><td>Giao dịch xảy ra 2023-01 nhưng tới 2023-03 mới công bố/nhập hệ thống — 2 mốc thời gian KHÁC NHAU</td></tr>
+<tr><td>Bitemporal (cả 2 trục)</td><td>Vừa biết sự thật ĐÚNG lúc nào ngoài đời, vừa biết HỆ THỐNG biết điều đó từ lúc nào</td><td>Cần cho audit trail: "báo cáo ngày 2023-02 dựa trên thông tin sở hữu nào TẠI THỜI ĐIỂM ĐÓ hệ thống đã biết" — khác câu hỏi "sự thật khách quan là gì" nếu sau này có điều chỉnh hồi tố</td></tr>
+</table>
+<p>Cơ chế lưu trữ phổ biến 2026 (theo nghiên cứu AeonG, kết hợp RocksDB/Memgraph): <strong>"delta + anchor"</strong> — định kỳ lưu 1 bản chụp ĐẦY ĐỦ (anchor), giữa 2 anchor chỉ lưu các THAY ĐỔI (delta). Muốn biết trạng thái tại thời điểm T bất kỳ: tìm anchor gần nhất TRƯỚC T, rồi áp (replay) tuần tự các delta từ anchor đó tới T — không cần lưu 1 bản sao đầy đủ cho MỖI thời điểm (sẽ tốn dung lượng theo cấp số nhân).</p>
+<pre><code>Timeline sở hữu cổ phần công ty B (minh hoạ, không phải benchmark thật):
+
+Anchor @ 2023-01-01: đầy đủ trạng thái graph tại mốc này
+  │
+  ├─ Delta @ 2023-06-15: A tăng sở hữu B từ 10% → 15%
+  ├─ Delta @ 2024-03-10: C mua 5% B (cổ đông mới xuất hiện)
+  ├─ Delta @ 2025-06-20: A bán hết, còn 0% B
+  │
+Anchor @ 2026-01-01: đầy đủ trạng thái graph tại mốc này (gộp mọi delta ở trên)
+
+Muốn biết "B ai sở hữu bao nhiêu % tại 2024-06-01"?
+  → Tìm anchor gần nhất TRƯỚC 2024-06-01 = Anchor @ 2023-01-01
+  → Replay delta: 2023-06-15 (A→15%) và 2024-03-10 (C→5%) đều TRƯỚC 2024-06-01
+    → áp cả 2 → kết quả: A=15%, C=5% tại 2024-06-01
+  → Delta 2025-06-20 (A bán hết) SAU 2024-06-01 → KHÔNG áp vào truy vấn này</code></pre>
+<p>Liên hệ trực tiếp với mục 6 (risk propagation): mọi phép tính lan truyền rủi ro qua graph ở mục 6 ngầm giả định graph "hiện tại" là đúng — nhưng 1 bài toán audit/compliance thật ("tại thời điểm xảy ra sự kiện rủi ro X, cấu trúc sở hữu chéo lúc đó là gì") cần graph temporal, không phải graph hiện tại, nếu không kết luận rủi ro sẽ SAI THỜI ĐIỂM dù đúng về mặt thuật toán lan truyền.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Ví dụ 1 câu hỏi 2-hop cụ thể cho ngành chứng khoán VN, viết bằng Cypher (giả định đã có graph: Company, quan hệ <code>SUPPLIES_TO</code>, <code>SAME_SECTOR</code>):</p>
+<pre><code>// Câu hỏi: "công ty nào cùng ngành với đối tác cung ứng của FPT?"
+MATCH (fpt:Company {ticker: 'FPT'})-[:SUPPLIES_TO]->(partner:Company)
+MATCH (partner)-[:SAME_SECTOR]->(peer:Company)
+WHERE peer.ticker <> partner.ticker
+RETURN DISTINCT peer.ticker, peer.sector
+
+// Diễn giải từng dòng:
+// dòng 1: từ node FPT, đi theo cạnh SUPPLIES_TO → được các đối tác cung ứng
+// dòng 2: từ mỗi đối tác đó, đi theo cạnh SAME_SECTOR → được các công ty cùng ngành
+// dòng 3: loại chính đối tác đó ra khỏi kết quả (không tính "cùng ngành với chính nó")
+// → 2 lượt MATCH liên tiếp = 2-hop traversal, mỗi lượt là 1 "bước nhảy" trên graph</code></pre>
+<p>So với việc phải viết 3 JOIN lồng nhau trong SQL (xem mục 2), cú pháp Cypher đọc gần với ngôn ngữ tự nhiên của câu hỏi hơn — đây là lợi ích thực sự khi số hop tăng, không phải chỉ là "cú pháp đẹp hơn".</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>SQL (bảng quan hệ + JOIN)</th><th>Vector DB</th><th>Property Graph DB</th><th>RDF Triple Store</th></tr>
+<tr><td>Trả lời câu hỏi gì</td><td>Lookup có cấu trúc, aggregate, join ít bước</td><td>"Gần giống cái này nhất" (similarity mờ)</td><td>"Liên quan qua quan hệ CỤ THỂ nào" (multi-hop, có nhãn)</td><td>Như property graph, CỘNG suy luận logic theo ontology</td></tr>
+<tr><td>Chi phí multi-hop tăng theo số hop</td><td>Tuyến tính, chậm dần rõ khi &gt;3-4 hop</td><td>Không áp dụng (không có khái niệm "hop")</td><td>Gần hằng số per-hop (index-free adjacency)</td><td>Thường bậc logarit (dựa index, không "đi theo con trỏ" trực tiếp)</td></tr>
+<tr><td>Ví dụ công cụ</td><td>Postgres, MySQL</td><td>pgvector, Pinecone, Qdrant, Weaviate</td><td>Neo4j, ArangoDB</td><td>Apache Jena, GraphDB, Amazon Neptune (chế độ RDF)</td></tr>
+<tr><td>Chi phí học/vận hành thêm</td><td>Thấp (đã biết SQL)</td><td>Trung bình (embedding pipeline mới)</td><td>Cao (Cypher/Gremlin mới, mô hình dữ liệu mới, đồng bộ 2 nơi)</td><td>Cao nhất (SPARQL + thiết kế ontology OWL/RDFS)</td></tr>
+<tr><td>Khi kết hợp LLM (GraphRAG)</td><td>—</td><td>RAG cổ điển (retrieve theo similarity)</td><td>GraphRAG (retrieve theo cấu trúc quan hệ + community summary)</td><td>Hiếm — GraphRAG hiện tại chủ yếu build trên property graph</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div><p>Repo <code>predictor</code> hiện tại (giá, chỉ báo kỹ thuật, KB tài chính curated) <strong>không có nhiều quan hệ multi-hop đáng truy vấn</strong> — dữ liệu chủ yếu là thuộc tính theo ticker/theo ngày, không phải mạng lưới sở hữu chéo hay chuỗi cung ứng phức tạp. Vì vậy <strong>chưa cần Graph DB</strong> ở trạng thái hiện tại. GraphRAG chỉ đáng cân nhắc nếu dự án chủ động build 1 knowledge graph quan hệ sở hữu chéo/chuỗi cung ứng doanh nghiệp VN thật sự — tức là khi có 1 nhu cầu nghiệp vụ cụ thể ("tìm rủi ro lan truyền qua chuỗi cung ứng khi 1 công ty gặp vấn đề"), không phải thêm graph DB "để RAG nghe hiện đại hơn". <strong>Nếu kịch bản đó xảy ra</strong>: đây sẽ là use case nội bộ thuần tuý (không cần trao đổi dữ liệu chuẩn hoá liên tổ chức) → property graph (Neo4j) là lựa chọn đúng, KHÔNG cần RDF/SPARQL (mục 5); và giá trị thật không chỉ nằm ở việc trả lời câu hỏi multi-hop (mục 1-2) mà ở việc chạy graph algorithm (mục 6 — centrality, community detection) để CHỦ ĐỘNG phát hiện công ty/nhóm cổ đông có vai trò "cầu nối" rủi ro cao trong 86 ticker của <code>HIGHLIGHT_GROUP</code>, thay vì chỉ trả lời khi có người hỏi.</p></div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li>Nhầm "graph DB" với "GraphRAG" — graph DB là 1 loại database (dùng được không cần LLM), GraphRAG là 1 kỹ thuật RAG cụ thể (dùng LLM để build + query graph). 2 khái niệm khác tầng.</li>
+<li>Chọn GraphRAG cho MỌI câu hỏi RAG vì "advanced hơn" — theo research 2026, GraphRAG tốn thêm 2-3× latency query-time so với vector-only; chỉ đáng khi câu hỏi thật sự cần cấu trúc quan hệ.</li>
+<li>Đánh giá thấp chi phí preprocessing của GraphRAG (multi-pass LLM extraction + summarization) — đây là chi phí ONE-TIME lớn dễ bị bỏ qua khi ước tính ngân sách ban đầu.</li>
+<li>Xây graph DB riêng rồi để nó "lệch" dần với SQL database chính (đồng bộ dữ liệu 2 nơi không có cơ chế nhất quán) — đây là chi phí vận hành dài hạn, không phải chi phí 1 lần.</li>
+<li>Coi RDF/SPARQL là "bản cũ, chậm hơn" của property graph — đây là 2 trục thiết kế khác nhau (traversal ứng dụng vs trao đổi dữ liệu chuẩn hoá + suy luận ontology), chọn sai theo "cái nào mới nghe hiện đại hơn" thay vì theo đúng nhu cầu (có cần suy luận logic chuẩn hoá liên tổ chức hay không).</li>
+<li>Nhầm "tìm được đường đi multi-hop" (traversal) với "đã lượng hoá được mức độ rủi ro lan truyền" (propagation) — 2 việc khác nhau, cần mô hình suy giảm theo hop riêng (mục 6), không tự động có từ 1 câu Cypher MATCH.</li>
+<li>Sharding 1 graph database bằng hash ngẫu nhiên theo node ID (giống cách sharding bảng SQL) mà không xét cấu trúc cạnh — cắt ngang rất nhiều cạnh qua nhiều shard, biến MỌI multi-hop traversal thành chuỗi gọi mạng chậm, mất hết lợi thế index-free adjacency đã có ở mục 2.</li>
+<li>Trả lời câu hỏi audit/compliance ("tại thời điểm X, ai sở hữu gì") bằng graph "hiện tại" (chỉ có 1 snapshot mới nhất) — kết luận có thể đúng về THUẬT TOÁN nhưng SAI THỜI ĐIỂM nếu dữ liệu đã bị UPDATE đè lên từ đó tới nay.</li>
+</ul>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3><ul>
+<li>Phân biệt được rõ ràng bằng ví dụ cụ thể: câu hỏi nào cần vector search, câu hỏi nào cần graph traversal.</li>
+<li>Viết được 1 câu Cypher 2-hop đơn giản từ đề bài cho trước (không nhìn code mẫu).</li>
+<li>Với 1 use case cho trước, quyết định đúng: cần Graph DB hay bảng quan hệ SQL thường là đủ, và giải thích bằng đúng 2 tiêu chí ở mục 3.</li>
+<li>Kể được 3 nhược điểm production của GraphRAG theo research 2026 (chi phí preprocessing, latency query-time, index tăng super-linear).</li>
+<li>Giải thích được vì sao repo <code>predictor</code> hiện tại chưa cần Graph DB.</li>
+<li>Phân biệt đúng property graph và RDF triple store theo 2 tiêu chí thiết kế (trọng tâm ứng dụng vs trao đổi/suy luận), chọn đúng cho 1 tình huống cho trước.</li>
+<li>Tính tay được risk propagation qua ≥3 hop với hệ số suy giảm cho trước, và kể tên đúng ≥2 graph algorithm (centrality/community detection) dùng để phát hiện cấu trúc rủi ro.</li>
+<li>Giải thích được vì sao sharding graph khó hơn sharding bảng SQL — chỉ ra đúng nguyên nhân (index-free adjacency phụ thuộc dữ liệu cùng máy, cạnh chéo shard biến thành network round-trip mỗi hop).</li>
+<li>Phân biệt được valid time và transaction time trong graph bitemporal, và tính tay được trạng thái graph tại 1 thời điểm T bất kỳ bằng cơ chế anchor + replay delta cho trước.</li>
+</ul></div>
+
+<div class="nav-bottom">
+  <a href="R4_1_vector_databases.html">← R4.1 · Vector Databases</a>
+  <a href="R4_3_hybrid_retrieval.html">R4.3 · Hybrid Retrieval →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L5.5 — Cost + Latency Optimization</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 5 · Module 5</div>
+  <h1>5.5 · Cost + Latency Optimization</h1>
+  <p class="subtitle">Prompt caching, batching, distillation, semantic cache, model routing. Chiến lược giảm cost 5-10× cho LLM app production.</p>
+  <div class="level">Level 5 · LLM Systems · ~30 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Cost budget calculation cho LLM app 10k users/day</li>
+  <li>Prompt caching (Anthropic, OpenAI) — 50-90% discount</li>
+  <li>Model routing: dùng model rẻ khi có thể</li>
+  <li>Semantic cache pattern</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Cost + Latency bằng ngôn ngữ đời thường</div>
+<p><strong>1 tách cà phê Highland</strong>: giá 55k = cà phê nguyên liệu 5k + sữa 3k + nhân công 15k + mặt bằng 20k + lợi nhuận 12k. Muốn giảm giá phải biết khoản nào chiếm nhiều nhất.</p>
+<p><strong>LLM call cost</strong>: input tokens (rẻ, ~$3/1M cho Sonnet) + output tokens (đắt gấp 5×, ~$15/1M). Cho câu hỏi 500 in + 2000 out: input=500×$3/1M=$0.0015, output=2000×$15/1M=$0.03, tổng $0.0315 → output chiếm 95.2% chi phí. Tối ưu = giảm output (prompt "trả lời ngắn gọn") trước khi cắt input.</p>
+<p><strong>Latency</strong>: TTFT (time to first token) = "thời gian cà phê ra khỏi máy". TPOT (time per output token) = "tốc độ rót". User cảm thấy chậm chủ yếu do TTFT — dùng streaming để bắt đầu hiển thị sớm.</p>
+<p><strong>Cache</strong>: nếu 100 user hỏi cùng câu → 99 lần dùng cache. Prompt caching (Anthropic) tiết kiệm 90% cost cho system prompt lặp lại.</p>
+</div>
+
+<h2>1. Cost anatomy</h2>
+
+<pre><code>Cost per request ≈ input_tokens × input_price + output_tokens × output_price
+
+Example (Claude Opus 4.7 nominal):
+  Input:  $15 / 1M tokens
+  Output: $75 / 1M tokens
+
+Prompt system (2k tokens) + user (500) + output (1k):
+  In:  2500 × 15/1M = $0.0375
+  Out: 1000 × 75/1M = $0.075
+  Total: $0.11 / request
+
+10k requests/day × 30 days = 300k requests × $0.11 = $33,000/month
+</code></pre>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Vì sao output token đắt gấp 5× input? (giải thích chi tiết dễ hiểu)</div>
+
+<p><strong>Nhìn ban đầu, con số rất khó chịu</strong>: Claude Sonnet giá $3/1M input tokens, $15/1M output tokens. Tại sao chênh 5 lần? Nhiều người nghĩ "vendor tham". Không đúng — đây là <em>vật lý</em> của Transformer.</p>
+
+<p><strong>Bước 1 — Input xử lý thế nào?</strong> Bạn gửi 1000 tokens. GPU đặt cả 1000 tokens vào bộ nhớ 1 lần, làm 1 phép tính lớn (1 forward pass với sequence length 1000). Tất cả 1000 tokens được xử lý <strong>SONG SONG</strong> trên hàng nghìn CUDA cores. GPU utilization ≈ 100%. Rất hiệu quả.</p>
+
+<p><strong>Bước 2 — Output xử lý thế nào?</strong> Model không thể sinh toàn bộ 500 tokens output cùng lúc. Vì sao? Vì token 21 (output đầu) cần biết prompt trước → OK, dùng cache. Token 22 cần biết prompt + token 21 vừa sinh. Token 23 cần token 22... <em>Tuần tự bắt buộc — không parallelize được</em>. Sinh 500 tokens = 500 forward pass riêng biệt.</p>
+
+<p><strong>Bước 3 — Con số biết nói</strong>: Vendor phải chạy GPU 500 lần cho output vs 1 lần cho input (với cùng số tokens). Tuy mỗi pass output cheaper hơn 1 pass input (nhờ KV cache), nhưng nhân với 500 → tổng compute cost lớn hơn nhiều. Kết quả: giá gấp 5×. Đây là <strong>hard math</strong>, không phải chính sách.</p>
+
+<pre><code>INPUT (prefill)                    OUTPUT (decode)
+1000 tokens → 1 forward pass       500 tokens → 500 forward pass riêng biệt
+┌─┬─┬─┬─┬─┬─┬─...─┬─┐              [t21]→[t22]→[t23]→...→[t520]
+│ │ │ │ │ │ │     │ │  (song song    mỗi token PHẢI đợi token trước
+└─┴─┴─┴─┴─┴─┴─...─┴─┘   1 lần)       (tuần tự bắt buộc, không parallelize)
+GPU utilization ≈ 100%             GPU utilization ≈ 20-40%
+
+Analogy: photocopy 1000 trang (5 phút) vs viết tay 1000 trang (200 giờ)
+</code></pre>
+
+<p><strong>Ví dụ thực tế cost breakdown</strong>: 1 request đến Claude Sonnet — prompt 8000 tokens (system + user context) + reply 2000 tokens.</p>
+<ul>
+<li>Input cost = 8000 × $3/1M = <strong>$0.024</strong></li>
+<li>Output cost = 2000 × $15/1M = <strong>$0.030</strong></li>
+<li>Total = $0.054, trong đó OUTPUT chiếm <strong>56%</strong> dù chỉ 20% tokens</li>
+<li>Nếu thêm "trả lời ngắn gọn" vào prompt → output giảm còn 500 tokens → output cost $0.0075 → total $0.0315, tiết kiệm <strong>42%</strong>. Cắt 1500 tokens output tiết kiệm nhiều hơn cắt 5000 tokens input.</li>
+</ul>
+
+<p><strong>Hậu quả nếu không hiểu insight này — case thực</strong>:</p>
+<table>
+<tr><th></th><th>Startup A</th><th>Startup B</th></tr>
+<tr><td>Bill ban đầu</td><td>$50k/tháng</td><td>$50k/tháng</td></tr>
+<tr><td>Thay đổi</td><td>System prompt 5000→3000 tokens (giảm 40% input)</td><td>Thêm "trả lời trong 3 câu" → output 1500→500 tokens (giảm 67% output)</td></tr>
+<tr><td>Cost giảm</td><td>20%×40% = <em>chỉ 8%</em> (input chỉ chiếm 20% cost)</td><td><strong>55%</strong></td></tr>
+</table>
+<p>Cùng 1 giờ engineer time — B tiết kiệm gấp ~6.9 lần A (55%/8%).</p>
+
+<p><strong>Priority cost optimization (làm theo thứ tự)</strong>:</p>
+<ol>
+<li><strong>Giảm output tokens</strong> — prompt "brief", structured output với schema (JSON limit fields), max_tokens hard cap. Đây là win 50-70%.</li>
+<li><strong>Prompt caching</strong> — Anthropic cache system prompt cost 90% off. Nếu 1000 users chia sẻ cùng system prompt 5000 tokens → thay vì trả 1000×5000=5M input tokens, trả 5000 + 1000×500=505k tokens. Tiết kiệm 90% input cost.</li>
+<li><strong>Model routing</strong> — Haiku $0.25, Sonnet $3, Opus $15 (60× spread). Câu chào "xin chào" đừng gọi Opus. Rule-based hoặc classifier bge-small route.</li>
+<li><strong>Semantic cache</strong> — 20% queries lặp lại (FAQ), dùng vector similarity match &gt; 95% → return cached response.</li>
+<li><strong>Batch API</strong> — 50% off nếu OK chờ 24h. Dùng cho pipeline analytics, không cho user-facing.</li>
+</ol>
+<p>Làm không thứ tự = tối ưu sai bậc.</p>
+
+<p><strong>Latency có 2 loại rất khác nhau — TTFT vs TPOT</strong>:</p>
+<ul>
+<li><strong>TTFT (Time To First Token)</strong> — thời gian từ khi gửi request đến khi thấy chữ ĐẦU TIÊN. Phụ thuộc input length (phải "prefill" — xử lý toàn bộ input trước khi sinh). Với 8000 input tokens: TTFT ≈ 2-3 giây. User cảm nhận: "app đơ", "server dead".</li>
+<li><strong>TPOT (Time Per Output Token)</strong> — thời gian sinh mỗi token sau token đầu. 30-100ms/token. Với 500 output tokens: 500 × 50ms = 25 giây. User cảm nhận: "gõ như rùa".</li>
+</ul>
+<p>Fix TTFT ≠ fix TPOT. TTFT fix bằng prompt caching (cached = skip prefill 90%). TPOT fix bằng model nhỏ hơn (Haiku 4× TPS Sonnet), speculative decoding, hoặc streaming UI (user thấy chữ dần dần, cảm giác "sinh động").</p>
+
+<p><strong>Reasoning model = warning cost bomb</strong>: Claude Extended Thinking, o1/o3 sinh nhiều "hidden reasoning tokens" trước output final. Bạn thấy output final 200 tokens, nhưng bill tính cả token reasoning ẩn bên trong. <strong>Cost thật 10-100× / khối lượng token 5-50×</strong> so với nominal output (số liệu đã dẫn nguồn, xem <code>R2_3_types_of_llms.html</code>). Dùng reasoning cho task đơn giản (dịch, format) = burn tiền vô ích. Rule: reasoning CHỈ cho math, planning, multi-step logic. Q&A và format = non-reasoning.</p>
+
+<p><strong>Khi cơ chế vỡ (edge case)</strong>: Model open-source self-host — cost = $/GPU-hour thay vì $/token. Ở scale nhỏ (dưới ngưỡng break-even, xem tính cụ thể ngay dưới) → API rẻ hơn. Ở scale lớn (&gt;$500k/tháng LLM spend tương đương): self-host rẻ hơn 5-10×. Break-even point là điều engineer cần compute cụ thể cho use case, không phải "cứ self-host" hay "cứ API".</p>
+
+<p><strong>Ví dụ tính break-even cụ thể</strong>: 1 GPU H100 thuê cloud ≈ $2.5/giờ = $1800/tháng (chạy 24/7, làm tròn). 1 GPU H100 phục vụ Llama-70B ở batch tốt xử lý được ≈ 3000 request/giờ (giả định 500 in + 300 out tokens/request) → công suất tháng = 3000 × 720 giờ = 2.16M request/tháng.</p>
+<ul>
+<li><strong>Self-host</strong>: $1800/tháng (GPU) + ~$500/tháng (ops, monitoring, on-call) = $2300/tháng bất kể chạy bao nhiêu request (tới giới hạn 2.16M).</li>
+<li><strong>API tương đương</strong> (Sonnet-class, $3/1M in + $15/1M out): mỗi request ≈ 500×$3/1M + 300×$15/1M = $0.0015 + $0.0045 = $0.006. Ở X request/tháng → cost = $0.006 × X.</li>
+<li><strong>Break-even</strong>: $2300 = $0.006 × X → X ≈ 383,000 request/tháng.</li>
+</ul>
+<p>Dưới ngưỡng này API rẻ hơn (không phải lo vận hành GPU); trên ngưỡng ~383,000 request/tháng tự host bắt đầu có lời, và ở 2M+ request (gần chạm giới hạn công suất 2.16M) self-host rẻ hơn API 3-5×. Đây là lý do câu "self-host rẻ hơn ở scale lớn" — <em>scale lớn</em> nghĩa là hàng trăm nghìn request/tháng trở lên (không phải vài nghìn), và "rẻ hơn nhiều lần" (3-5×) chỉ thật sự rõ rệt khi gần chạm trần công suất GPU.</p>
+<p><strong>Lưu ý kỹ thuật</strong>: ví dụ trên giả định 1 H100 (80GB) chạy được Llama-70B — thực tế cần quantize (INT4/INT8) vì 70B ở fp16 cần ≈140GB, vượt VRAM 1 H100; nếu chạy fp16 đầy đủ cần ít nhất 2 GPU, làm tăng chi phí GPU/tháng và dịch chuyển điểm break-even lên cao hơn.</p>
+</div>
+
+<h2>2. Prompt caching (Anthropic 2024)</h2>
+<p>Cơ chế KV cache đứng sau kỹ thuật này (vì sao cache prefix giúp skip prefill) đã giải thích chi tiết ở <code>L5_1_prompt.html §6.3</code> — phần dưới đây chỉ tập trung vào áp dụng cho bài toán cost.</p>
+
+<pre><code># Mark stable prefix (system prompt, few-shot examples) as cacheable
+messages = [{
+    "role": "system",
+    "content": long_system_prompt,  # 2000 tokens
+    "cache_control": {"type": "ephemeral"},
+}, ...]
+
+# First call: pay full price (write to cache)
+# Subsequent (within 5 min TTL): cached prefix charged 10% price
+# Savings: 90% on cached tokens
+</code></pre>
+
+<div class="callout success">
+<div class="label">Real numbers</div>
+<p>App với system prompt 5000 tokens, called 100x/hour. Uncached: $0.075/call. Cached: $0.008/call. 90% cost reduction just cho system prompt portion.</p>
+</div>
+
+<h2>3. Semantic cache</h2>
+
+<pre><code># Embed user query → search similar past queries → serve cached answer
+
+def semantic_cache(query: str, threshold=0.95):
+    q_emb = embed(query)
+    hits = vector_db.search(q_emb, top_k=1)
+    if hits and hits[0].similarity > threshold:
+        return hits[0].cached_response, cached=True
+    # Cache miss: call LLM
+    response = llm.complete(query)
+    vector_db.upsert(query, q_emb, response)
+    return response, cached=False
+</code></pre>
+
+<p>Hit rate 20-50% typical cho chatbot. Save proportional cost.</p>
+
+<h2>4. Model routing</h2>
+
+<pre><code>def route(query):
+    # Cheap classifier: is query simple or complex?
+    complexity = classify_complexity(query)
+    if complexity == "simple":
+        return call_haiku(query)     # $0.25/1M in
+    elif complexity == "medium":
+        return call_sonnet(query)    # $3/1M
+    else:  # complex reasoning
+        return call_opus(query)      # $15/1M
+
+# Simple classifier: rule-based (query length, keywords) or small LLM (Haiku)
+# Save 80-90% cost if 70% queries route to Haiku
+</code></pre>
+
+<h2>5. Distillation</h2>
+
+<p><strong>Định nghĩa</strong>: dùng model đắt (teacher) để "dạy" model rẻ (student) làm ĐÚNG 1 việc hẹp, thay vì trả tiền cho model đắt mỗi lần production chạy — giống 1 chuyên gia đắt tiền huấn luyện nhân viên junior làm 1 quy trình cụ thể, sau đó junior tự làm mà không cần chuyên gia đứng cạnh nữa.</p>
+
+<pre><code>Bước 1: Teacher (GPT-4 / Claude Opus) generate high-quality outputs on task-specific data.
+Bước 2: Student (Llama-8B / Haiku) fine-tune on teacher outputs.
+Bước 3: Deploy student in production — không gọi teacher nữa.
+
+Trade-off: 10× lower cost, 90-95% teacher quality.
+Best when: high volume + narrow domain (customer support, structured extraction).
+</code></pre>
+
+<p><strong>Ví dụ cụ thể</strong>: task "phân loại email khách hàng thành 5 category (khiếu nại/hỏi giá/đổi trả/khen/spam)". Dùng Opus generate label cho 5000 email mẫu (1 lần, tốn ~$50). Fine-tune Haiku trên 5000 cặp (email, label) đó. Production: Haiku tự phân loại, accuracy 92% (so với Opus gốc 96% — chấp nhận được vì task hẹp, rõ ràng). Cost giảm từ $15/1M (Opus) xuống $0.25/1M (Haiku) = 60× rẻ hơn cho hàng triệu email/tháng sau đó.</p>
+
+<p><strong>Sai lầm thường gặp</strong>: distill cho task RỘNG/mở (VD "trả lời mọi câu hỏi khách hàng") — student sẽ mất nhiều chất lượng hơn 90-95% vì không đủ data cover hết trường hợp. Fix: chỉ distill task đã đủ hẹp để 5000-10000 example teacher-generated thực sự cover được phần lớn case thật gặp trong production.</p>
+
+<h2>5.5 — Prefill vs Decode: 2 phase khác nhau về compute pattern</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">GPU nhìn 1 request như 2 workload riêng biệt</div>
+<table>
+<tr><th></th><th>Prefill phase</th><th>Decode phase</th></tr>
+<tr><td>Xảy ra khi</td><td>Đọc input (all tokens 1 lần)</td><td>Sinh output từng token</td></tr>
+<tr><td>Compute type</td><td>Compute-bound (matrix × matrix, parallel)</td><td>Memory-bound (matrix × vector, load weights mỗi token)</td></tr>
+<tr><td>GPU utilization</td><td>~90-100%</td><td>~20-40% (memory bandwidth bottleneck)</td></tr>
+<tr><td>Speedup techniques</td><td>Tensor parallelism, flash attention</td><td>Speculative decoding, KV cache, batching</td></tr>
+<tr><td>User perceives</td><td>TTFT (delay before first token)</td><td>ITL / TPOT (typing speed)</td></tr>
+</table>
+<p><strong>Giải nghĩa nhanh các thuật ngữ trong bảng trên</strong> (không cần hiểu sâu, chỉ cần biết đang tối ưu cái gì):</p>
+<ul>
+<li><strong>ITL (Inter-Token Latency)</strong> = khoảng cách thời gian giữa 2 token output liên tiếp — về bản chất giống TPOT, chỉ khác tên gọi tùy vendor.</li>
+<li><strong>Tensor parallelism</strong> = chia 1 phép nhân ma trận khổng lồ ra nhiều GPU tính song song từng mảnh, rồi ghép lại — cần khi model quá lớn không fit 1 GPU.</li>
+<li><strong>Flash attention</strong> = viết lại thuật toán attention để giảm số lần đọc/ghi bộ nhớ GPU (memory I/O) — không đổi kết quả toán học, chỉ chạy nhanh hơn 2-4× nhờ tận dụng cache GPU tốt hơn.</li>
+<li><strong>vLLM</strong> = 1 thư viện serving mã nguồn mở phổ biến để tự host LLM hiệu quả, nổi tiếng nhờ kỹ thuật PagedAttention (quản lý KV cache như hệ điều hành quản lý bộ nhớ ảo — tránh lãng phí RAM).</li>
+</ul>
+<p><strong>Hệ quả tối ưu</strong>:</p>
+<ul>
+<li><em>Prompt caching</em> = skip prefill 90% → TTFT giảm 5×.</li>
+<li><em>Speculative decoding</em> = decode 3-5 tokens/step thay vì 1 → ITL giảm 2-3×. (Cơ chế: model nhỏ draft n tokens, model lớn verify song song.)</li>
+<li><em>Continuous batching</em> (vLLM) = thay vì đợi cả batch request cũ decode xong mới nhận batch mới (static batching, lãng phí GPU chờ), server ghép request đang decode với request mới đang prefill NGAY khi có slot trống → GPU utilization 80%+ ở scale.</li>
+</ul>
+</div>
+
+<h2>6. Batching + streaming</h2>
+
+<h3>Batch (Anthropic Message Batches API — 50% off)</h3>
+<pre><code># 50% discount for batch processing (async, 24h SLA)
+batch = client.messages.batches.create([
+    {"custom_id": f"req_{i}", "params": {...}}
+    for i in range(1000)
+])
+# Poll batch.status → completed → get results
+
+# Vietnamese use case: 86 tickers × EOD thesis mỗi tối (khớp $0.105/call ở §10)
+#   Online: 86 × $0.105 = $9.03
+#   Batch:  86 × $0.0525 = $4.52 (chờ tối đa 24h — OK cho EOD job chạy 17h30)
+#   Saving: 50% với 0 code change ngoài batch API wrap
+</code></pre>
+<p><strong>Khi dùng batch</strong>: analytics pipeline, EOD reports, bulk embedding, offline eval. <strong>Không dùng</strong>: user-facing chatbot, real-time.</p>
+
+<h3>Streaming</h3>
+<pre><code>with client.messages.stream(...) as stream:
+    for text in stream.text_stream:
+        yield text   # Server-Sent Events to browser
+
+# Total tokens same, but perceived latency lower.
+# TTFB (time to first byte) matters more than total for UX.
+</code></pre>
+
+<h2>7. Reduce input tokens</h2>
+
+<ul>
+  <li><strong>Prompt compression</strong>: LLMLingua compress prompt 5-20× keeping meaning (cơ chế đầy đủ ở deep-dive ngay dưới)</li>
+  <li><strong>Retrieval scoping</strong>: RAG chỉ retrieve top-3 chunks (not top-10)</li>
+  <li><strong>Structured output</strong>: JSON smaller than markdown for same info</li>
+  <li><strong>Format optimization</strong>: XML tags cost less tokens than verbose English descriptions</li>
+</ul>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Deep-dive — LLMLingua nén prompt bằng cách nào (không phải tóm tắt bằng LLM đắt tiền)</div>
+
+<p><strong>💡 Analogy</strong>: nhắc lại khái niệm perplexity đã học ở <code>L5_4_llm_eval.html</code> §2 — perplexity đo model "bất ngờ" bao nhiêu khi thấy 1 token. LLMLingua dùng chính ý tưởng đó ngược lại: token nào model KHÔNG bất ngờ (perplexity thấp — dễ đoán, "nói cũng được không nói cũng được") thì AN TOÀN để XOÁ khỏi prompt mà không mất nhiều thông tin; token nào model RẤT bất ngờ (perplexity cao — mang thông tin mới, không đoán trước được) thì PHẢI GIỮ LẠI. Giống việc biên tập 1 bài báo dài: câu nào "nói cho có" (dự đoán được từ ngữ cảnh) bị cắt, câu nào chứa số liệu/sự kiện cụ thể (không đoán trước được) phải giữ.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: nén prompt bằng cách "nhờ 1 LLM khác tóm tắt lại" (dùng chính LLM đắt tiền để tóm tắt) tốn thêm 1 lượt gọi LLM — có thể LÀM MẤT chi tiết quan trọng (tóm tắt luôn mất thông tin ở mức nào đó) mà vẫn tốn cost cho lượt tóm tắt đó. LLMLingua (Jiang et al. 2023) không "viết lại" prompt — nó CHỈ XOÁ BỚT token gốc, dùng 1 model NHỎ (VD GPT-2, Llama-7B — rẻ hơn nhiều so với model production) để quyết định token nào xoá được.</p>
+
+<pre><code># Cơ chế 3 phần của LLMLingua:
+
+# 1. Budget controller: prompt thường có nhiều PHẦN khác nhau (instruction,
+#    few-shot examples, câu hỏi) — không nén đều tất cả, phân bổ tỉ lệ nén
+#    KHÁC NHAU cho từng phần (VD few-shot examples nén mạnh hơn instruction,
+#    vì examples thường lặp pattern, instruction cần giữ chính xác từng chữ)
+
+# 2. Token-level iterative compression: dùng model NHỎ tính perplexity của
+#    MỖI token trong ngữ cảnh của các token XUNG QUANH nó (không tính độc lập
+#    từng token, vì loại 1 token có thể đổi mức "bất ngờ" của token kế tiếp):
+for token in prompt_tokens:
+    ppl = small_lm.perplexity(token, context=surrounding_tokens)
+    if ppl &lt; threshold:      # token QUÁ dễ đoán → dư thừa
+        remove(token)         # xoá khỏi prompt
+
+# 3. Distribution alignment: model NHỎ (GPT-2) và model LỚN (Claude/GPT-4) có
+#    "gu" ngôn ngữ khác nhau — instruction-tune model nhỏ để "nhìn" giống model
+#    lớn hơn trước khi dùng nó tính perplexity, giảm sai lệch giữa 2 model</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: LLMLingua KHÔNG PHẢI tóm tắt (summarization) — nó xoá TỪNG TOKEN rời rạc dựa trên perplexity, kết quả có thể đọc lên hơi "cụt lủn"/ngữ pháp không hoàn chỉnh (giống văn phong điện tín — bỏ hết từ nối, giới từ ít mang thông tin), nhưng LLM đích (model lớn đọc prompt đã nén) vẫn hiểu được ý chính vì các token MANG THÔNG TIN THẬT vẫn còn nguyên. Đây khác hẳn cách "nén" bằng cách yêu cầu 1 LLM viết lại prompt ngắn hơn (cách đó tốn thêm 1 lượt gọi LLM và có thể diễn giải sai ý).</p>
+
+<p><strong>Insight</strong>: tỷ lệ nén tới 20× (theo báo cáo paper gốc trên benchmark GSM8K/BBH/ShareGPT) khả thi vì phần lớn văn bản tự nhiên (đặc biệt few-shot examples, hướng dẫn dài dòng) có tính REDUNDANT cao — nhiều từ chỉ để "cho mượt câu" chứ không mang thông tin mới, đúng tinh thần lý thuyết thông tin (information theory) đã gặp ở khái niệm compression=understanding trong <code>L4_3_pretraining.html</code> §1's Deep-dive — Shannon 1948.</p>
+</div>
+
+<h2>8. Reduce output tokens</h2>
+
+<ul>
+  <li>Explicit max_tokens in API call</li>
+  <li>System prompt: "answer in 50 words"</li>
+  <li>Stop sequences: stop at "END" marker</li>
+  <li>Choose model with shorter default output style (Haiku shorter than Opus)</li>
+</ul>
+
+<h2>9. Latency budget</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">P50 / P95 / P99 là gì? (percentile latency)</div>
+<p><strong>Ẩn dụ VN — xếp hàng ngân hàng</strong>: bạn đo thời gian phục vụ của 100 khách trong ngày rồi xếp từ nhanh đến chậm. <strong>P50 (median)</strong> = khách thứ 50 trong hàng đã sắp — nghĩa là 50% khách được phục vụ NHANH HƠN con số này. <strong>P95</strong> = khách thứ 95 — chỉ 5% khách (khách "xui" nhất) chậm hơn số này. <strong>P99</strong> = khách thứ 99 — trường hợp cực xấu, 1% tệ nhất.</p>
+<p><strong>Vì sao không dùng trung bình (average)?</strong> Trung bình bị 1 vài request cực chậm (network glitch, cold start) kéo lệch, che mất trải nghiệm thật của đa số user. VD 99 request mất 500ms + 1 request mất 20,000ms → trung bình = 695ms (trông "ổn") nhưng P99 = 20,000ms (thực tế có user chờ 20 giây!). Production luôn theo dõi P50 (trải nghiệm điển hình) VÀ P95/P99 (trải nghiệm tệ nhất, thường là user sắp rời bỏ app).</p>
+<p><strong>Ví dụ thật với 10 request latency (ms)</strong>: 800, 850, 900, 900, 950, 1000, 1100, 1200, 1500, 4500 (sắp xếp tăng dần). P50 = giá trị ở vị trí thứ 5 ≈ 950ms. P90 = vị trí thứ 9 = 1500ms. P99 gần vị trí thứ 10 = 4500ms (bị kéo bởi 1 request "outlier" do cold start hoặc rate-limit retry). SLA production thường viết dạng "P95 &lt; 3s" — không viết "average &lt; 3s" vì average che giấu outlier.</p>
+</div>
+
+<pre><code>User request → API gateway → LLM → response
+
+Typical p50 breakdown:
+- Network: 50 ms
+- Prompt build (RAG retrieval): 100-500 ms
+- LLM TTFT (first token): 500-1500 ms
+- LLM generation: 20-50 tokens/sec × 200 tokens = 4-10s
+- Post-process: 50 ms
+
+Optimize:
+- Streaming: user sees first token fast, feels fast
+- Parallel: RAG + safety check parallel not sequential
+- Smaller model: Haiku 3× faster than Opus
+- Speculative decoding: 2-3× speedup
+- KV cache reuse across turns
+</code></pre>
+
+<div class="callout danger">
+<div class="label">Common failure modes cost/latency</div>
+<ol>
+  <li><strong>Cache prefix có timestamp</strong> — "Today is 2026-07-05..." ở đầu system prompt → mỗi ngày cache miss toàn bộ. Fix: move date vào user message hoặc round to hour.</li>
+  <li><strong>max_tokens quá cao</strong> — default 4096 nhưng thực tế cần 300. Model không đủ signal để stop → burn output tokens. Fix: max_tokens sát nhu cầu + stop_sequences.</li>
+  <li><strong>Reasoning model cho task đơn giản</strong> — extended thinking sinh 5k hidden tokens cho câu "dịch câu này". Cost thật 10-100× / khối lượng token 5-50× so với nominal (đã nêu + nguồn ở §1 trên, xem <code>R2_3_types_of_llms.html</code>). Rule: reasoning chỉ khi task cần plan/math.</li>
+  <li><strong>Semantic cache threshold 0.85</strong> — hit rate cao ~50-60% nhưng 15% trả sai answer khác biệt subtle. Fix: threshold 0.95 + monitor user thumbs-down rate.</li>
+  <li><strong>No streaming trên user-facing UI</strong> — user chờ 8s trắng màn hình rồi thấy toàn bộ. Streaming UI = user thấy chữ ngay 1s → cảm giác nhanh 5×.</li>
+  <li><strong>Không đo cost per feature</strong> — bill $50k/tháng nhưng không biết feature nào burn. Log input+output tokens per endpoint từ đầu.</li>
+</ol>
+</div>
+
+<h2>10. Case study — PredictStock daily-investor-report cost tuning</h2>
+
+<div class="example-box">
+<div class="title">Skill <code>daily-investor-report</code> — từ $198.7/tháng xuống ~$122/tháng</div>
+<p>Ban đầu: mỗi ticker trong 86 HIGHLIGHT_GROUP gọi Opus 4.7 riêng biệt với system prompt 3800 tokens (hard rules R1-R5 + format spec + 3 few-shot thesis mẫu) lặp lại y hệt mỗi lần, output ~800 tokens/ticker (đã áp dụng giới hạn 4 đoạn ~140 từ từ trước) → 86 lần/ngày × 22 phiên/tháng = 1892 calls × ~$0.105/call = $198.7/tháng (xem tính toán chi tiết ở L5.1 §6.5).</p>
+<p><strong>2 bước tối ưu áp dụng thực tế</strong>:
+<br>1. <strong>Prompt caching</strong>: hệ quả TỰ NHIÊN của kiến trúc hiện tại, không phải 1 dòng code <code>cache_control</code> ai đó viết tay trong skill — <strong>đã verify 2026-09, đọc trực tiếp code</strong>: không file Python nào trong <code>.claude/skills/daily-investor-report/</code> hay <code>backend/</code> gọi Anthropic API/set <code>cache_control</code>. Cơ chế thật (theo <code>SKILL.md</code> §22.1 Step 2-3): script Python (<code>author_llm_thesis.py</code>) chỉ build 1 "pack" dữ liệu cho mỗi ticker; chính <strong>phiên Claude Code đang chạy</strong> đọc lần lượt 86 pack đó rồi tự viết thesis — không qua script gọi API riêng nào. Vì cả 86 lượt đọc/viết này diễn ra TRONG CÙNG 1 phiên hội thoại liên tục (system prompt + <code>CLAUDE.md</code> + SKILL.md không đổi giữa các lượt), caching prompt xảy ra <strong>tự động ở tầng harness Claude Code</strong> (Anthropic tự cache context lặp lại giữa các lượt gọi API nội bộ của chính CLI, không cần skill code cấu hình) — input cost vẫn giảm ~90% đúng như tính toán, chỉ khác Ở CHỖ AI/CÁI GÌ áp dụng cơ chế đó, không phải bản thân phép tính sai. <strong>Lưu ý</strong>: caching KHÔNG giảm được phần output ($0.06/call × 1892 = $113.5/tháng — riêng nó đã hơn nửa baseline $198.7) — đây là lý do kết quả cuối chỉ còn ~$122/tháng, không phải mức giảm sâu hơn nhiều người kỳ vọng khi nghĩ caching áp dụng cho cả input lẫn output.
+<br>2. <strong>Không dùng Batch API</strong> cố ý: report cần publish trước giờ mở cửa hôm sau (tối đa vài giờ chờ), trong khi Batch API SLA tới 24h — rủi ro trễ báo cáo lớn hơn số tiền tiết kiệm 50%.</p>
+<p>Kết quả: $198.7/tháng → ~$122/tháng (-39%), khớp với tính toán chi tiết ở L5.1 §6.5 (không phải -76% như ước lượng sai trước đây — sai vì nhầm áp dụng giảm giá 90% lên CẢ output, thứ prompt caching không hề đụng tới). Bài học: prompt caching là đòn bẩy lớn cho phần INPUT lặp lại, nhưng KHÔNG phải phép màu toàn phần — muốn giảm sâu hơn nữa phải tấn công riêng phần output (đã làm ở baseline) hoặc model routing.</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>PredictStock: <code>.claude/skills/daily-investor-report/scripts/author_llm_thesis.py</code> build pack dữ liệu (<code>generate_llm_thesis.py</code>, tên cũ, đã bị xoá — không phải chỉ đổi tên — 2026-07-11); không file Python nào gọi Anthropic API trực tiếp — phiên Claude Code tự đọc pack + viết thesis (<code>SKILL.md</code> §22.1 Step 2-3), nên prompt caching (mục 1 ở trên) là hành vi mặc định của chính CLI Claude Code khi chạy 1 phiên liên tục, không phải cấu hình trong skill code</li>
+    <li>Format spec giới hạn độ dài: Skill SKILL.md §19 (Pre-Thesis Discipline Checklist)</li>
+  </ul>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. LLM app 100k requests/day, prompt 3k tokens, output 500. Monthly cost với Opus?</p>
+<p class="a">Per request: 3000·$15/1M + 500·$75/1M = $0.045 + $0.0375 = $0.0825. Monthly: 100k · 30 · $0.0825 = $247,500. Cần optimize.</p>
+
+<p class="q">2. Prompt caching hit → tính cost gì?</p>
+<p class="a">First call: pay full price to write cache (input × 1.25 hoặc similar surcharge). Subsequent (within 5 min TTL): cached input × 0.1 (10% price). Savings scale với hit rate.</p>
+
+<p class="q">3. Semantic cache threshold 0.95 vs 0.85 — trade-off?</p>
+<p class="a">0.95 strict: false positive thấp, hit rate thấp (~10-20%). 0.85 lax: hit rate cao (~50-60%) nhưng return sai answers khi query khác nhau nhẹ nhàng. Test both, monitor user feedback.</p>
+
+<p class="q">4. Distill Opus → Haiku cho customer support. Realistic quality retention?</p>
+<p class="a">85-95% cho narrow domain (well-defined tasks). Drop nhiều hơn cho open-ended reasoning. Metric: A/B test student vs teacher, measure user satisfaction. Iterate fine-tune data cho gap.</p>
+
+<p class="q">5. TTFT vs total latency — which matters cho UX?</p>
+<p class="a">TTFT. User perceive speed = first token appearance. Streaming makes model feel 5× faster even total time same. Optimize prompt build + LLM warm-up + speculative decoding first.</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching">Anthropic Prompt Caching</a></li>
+    <li>📖 <a href="https://openai.com/api/pricing/">OpenAI pricing</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2310.05736">LLMLingua paper — prompt compression</a></li>
+    <li>📝 <a href="https://www.anthropic.com/news/message-batches-api">Anthropic Batch API</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L5_4_llm_eval.html">← L5.4</a>
+  <a href="L5_6_safety.html">L5.6 · LLM Safety →</a>
+</div>
+
+</div>
+</body>
+</html>

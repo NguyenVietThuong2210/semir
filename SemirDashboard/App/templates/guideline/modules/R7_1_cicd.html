@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R7.1 · CI/CD — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Infrastructure · Điểm 1/6</div>
+  <h1>R7.1 · CI/CD cho ML/LLM</h1>
+  <p class="subtitle">Vì sao pipeline "chạy được code" chưa đủ cho model — cần thêm data gate + eval gate. Đọc thật <code>.github/workflows/ci.yml</code> của <code>predictor</code> để thấy khoảng cách với chuẩn 2026.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+  <li><strong>(Dễ)</strong> Nhắc lại CI/CD truyền thống là gì — build, lint, test, deploy tự động mỗi lần push code.</li>
+  <li><strong>(Dễ→Trung bình)</strong> Hiểu vì sao ML/LLM cần thêm 2 tầng gate mà code thường không có: <em>data validation gate</em> và <em>model evaluation gate</em>.</li>
+  <li><strong>(Trung bình)</strong> Đọc hiểu chính xác từng bước trong <code>.github/workflows/ci.yml</code> thật của <code>predictor</code> — biết bước nào chạy, bước nào skip và tại sao.</li>
+  <li><strong>(Trung bình→Khó)</strong> Chỉ ra đúng 4 gap cụ thể giữa pipeline hiện tại và chuẩn CI/CD 2026 (3 gap ML-specific + 1 gap bảo mật tổng quát) — không phải nhận xét chung chung.</li>
+  <li><strong>(Khó)</strong> Đề xuất được cải thiện chi phí thấp, khả thi với quy mô Docker Compose 3 service hiện tại — không đề xuất hạ tầng không cần thiết.</li>
+  <li><strong>(Trung bình→Khó)</strong> Phân biệt được 3 loại quét bảo mật (SAST/SCA/secret scanning) và thiết kế đúng 4-lớp assertion cho test code có output non-deterministic (LLM-touching).</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Module nền tảng nhất trong 6 module Infrastructure — không đòi hỏi kiến thức trước, chỉ cần biết Git/GitHub Actions ở mức cơ bản. Đây là bước khởi đầu tự nhiên: mọi hệ thống ML production đều bắt đầu từ câu hỏi "code mới push có an toàn để deploy không?" trước khi hỏi đến Kubernetes hay cloud platform.</p>
+<p>Module <a href="../modules/L7_1_mlops.html"><code>L7_1_mlops.html</code></a> đã dạy đầy đủ vòng đời MLOps (feature store, model registry, drift detection PSI, retrain trigger, canary, training-serving skew) — nhưng nói về CI/CD ở mức khái niệm chung ("automation"), <strong>chưa có 1 pipeline CI/CD cụ thể nào được đọc và mổ xẻ từng dòng</strong>. Module này lấp đúng khoảng trống đó bằng cách đọc file thật của dự án.</p>
+<p><strong>Góc nhìn của bài này khác hẳn <code>L7_1</code></strong>: <code>L7_1</code> là CI/CD <em>chuyên biệt cho vòng đời model</em> (canary rollout theo ngày, training-serving skew, retrain trigger). Bài này là CI/CD <em>tổng quát cho 1 team phát triển phần mềm có AI hỗ trợ</em> — pipeline stages, testing gate cho code có tính non-deterministic, và tự động hoá bảo mật (SAST/SCA/secret scanning, mục 5-6) — những mảng không đặc thù ML, áp dụng cho MỌI service trong <code>predictor</code> (kể cả phần frontend TypeScript không liên quan gì tới model).</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p><strong>CI/CD cho phần mềm thường</strong> giống "kiểm tra chính tả trước khi in sách" — chạy nhanh, kết quả tất định (deterministic): cùng 1 bản thảo, chạy spellcheck 10 lần ra đúng 10 lần cùng 1 kết quả.</p>
+<p><strong>CI/CD cho ML/LLM</strong> giống "kiểm tra chất lượng 1 mẻ bánh mới ra lò" — phải <em>nếm thử</em> (eval), không chỉ đọc công thức (code). Và quan trọng hơn: kết quả nếm có thể khác nhau chút ít giữa các mẻ bánh dù cùng công thức (non-determinism trong training) — 2 lần train cùng code, khác seed hoặc khác data mới nhất, có thể ra model hơi khác nhau. Bạn không thể chỉ "đọc công thức" (review code) để biết bánh có ngon không — phải nếm (eval) thật.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. CI/CD truyền thống — nhắc lại nhanh (điểm khởi đầu dễ)</h3>
+<p>CI (Continuous Integration) = mỗi lần push code, tự động: lint (kiểm tra style) → type-check → build → chạy unit test. CD (Continuous Deployment/Delivery) = nếu tất cả bước trên pass, tự động deploy (hoặc tạo sẵn artifact chờ deploy). Mục tiêu: bắt lỗi sớm, trước khi code chạm production.</p>
+<p>Với phần mềm thường, "đúng" là nhị phân — hàm cộng 2 số hoặc đúng hoặc sai, test 1 lần là đủ để biết mãi mãi (chừng nào code không đổi).</p>
+
+<h3>2. Vì sao ML/LLM cần thêm 2 tầng — đây là phần khó hơn</h3>
+<h4>2.1 Data validation gate — trước khi train</h4>
+<p>Model học từ data. Data lỗi (schema đổi, giá trị NaN tăng đột biến, phân phối lệch) → model học sai mà code vẫn "chạy được" (không crash, không lỗi cú pháp). CI truyền thống không bắt được lỗi này vì nó không đọc data — chỉ đọc code. ML CI/CD cần 1 bước riêng: validate data trước khi cho vào training (schema check, null-rate check, range check).</p>
+<h4>2.2 Model evaluation gate — trước khi deploy</h4>
+<p>Ngay cả khi code compile sạch và data hợp lệ, model mới train ra có thể <strong>tệ hơn</strong> model đang chạy (ít data hơn, overfit, hoặc target shift). CI truyền thống trả lời "code có bug không?" — ML CI/CD phải trả lời thêm câu "model mới có tốt hơn/bằng model cũ không?" bằng 1 con số đo được (accuracy, precision, hoặc business metric), trước khi cho phép "promote" model mới lên production.</p>
+<h4>2.3 Versioning đầy đủ — không chỉ code</h4>
+<p>Phần mềm thường chỉ cần version code (Git commit hash) để tái tạo lại chính xác 1 bản build. ML cần version thêm 2 thứ nữa: <strong>data</strong> (data hôm nay khác data hôm qua, cùng code train ra model khác) và <strong>environment</strong> (version thư viện numpy/xgboost khác nhau có thể đổi kết quả training). Thiếu 1 trong 3 → không thể debug "tại sao model tuần này khác tuần trước".</p>
+
+<h3>3. Testing pyramid ML/LLM — 3 tầng, không dừng ở unit test</h3>
+<p>Testing pyramid truyền thống: nhiều unit test (nhanh, rẻ) ở đáy, ít integration test ở giữa, rất ít end-to-end test ở đỉnh. ML/LLM thêm 1 tầng đáy mới bên dưới cả unit test:</p>
+<pre><code>Tầng 0 (mới, ML-specific): Data quality check
+        — schema đúng? null-rate trong ngưỡng? distribution không lệch bất thường?
+Tầng 1: Unit test (như thường — test hàm tính feature, hàm tính score, không đụng DB thật)
+Tầng 2: Integration test (model load được, predict ra đúng shape, API trả đúng field)
+Tầng 3: Full eval run (model mới so với model cũ trên tập validation — quyết định promote hay không)
+</code></pre>
+<p>Với RAG/LLM app cụ thể, có thêm các điểm hỏng riêng mà pipeline code thường không có khái niệm: <strong>chất lượng retrieval</strong> (có lấy đúng document không), <strong>độ liên quan context</strong> (context lấy về có giúp trả lời đúng không), <strong>độ mới tri thức</strong> (knowledge freshness — dữ liệu retrieval có bị cũ không), <strong>embedding drift</strong> (embedding model đổi version → toàn bộ vector cũ lệch nghĩa).</p>
+
+<h3>4. Nguyên tắc cốt lõi — pipeline không dừng ở deploy</h3>
+<p>Khác biệt tư duy quan trọng nhất: CI/CD code thường coi "deploy thành công" là điểm kết thúc. CI/CD ML/LLM coi deploy là điểm <em>giữa</em> vòng đời — sau deploy phải tiếp tục theo dõi prediction distribution + input drift, và feed ngược kết quả đó thành tín hiệu retrain. Đây chính là vòng lặp đã dạy ở <code>L7_1_mlops.html</code> (drift detection PSI, retrain trigger) — CI/CD là phần "cổng vào" của vòng lặp đó, không phải 1 quy trình độc lập.</p>
+
+<h3>5. Security gate — SAST/SCA/secret scanning (chưa có ở <code>ci.yml</code> hiện tại)</h3>
+<p>Đây là góc hoàn toàn khác 2 gate ML ở mục 2 — không phải "ML cần thêm gì" mà là "CI/CD phần mềm tổng quát nào <code>predictor</code> đang thiếu". 3 loại quét RIÊNG BIỆT, khác cơ chế, hay bị gộp chung thành 1 khái niệm mơ hồ "quét bảo mật":</p>
+<table>
+<tr><th>Loại quét</th><th>Bắt lỗi gì</th><th>Cơ chế</th><th>Công cụ phổ biến 2026</th></tr>
+<tr><td><strong>SAST</strong> (Static Application Security Testing)</td><td>Pattern code nguy hiểm trong chính source (SQL injection ghép chuỗi, hardcoded credential pattern...)</td><td>Phân tích tĩnh AST/pattern-matching trên source — không cần chạy code</td><td>Semgrep — phổ biến nhất 2026, &lt;2 phút cho codebase cỡ vừa, bộ rule OWASP Top 10 sẵn, tích hợp GitHub Actions trực tiếp</td></tr>
+<tr><td><strong>SCA</strong> (Software Composition Analysis)</td><td>Dependency có lỗ hổng đã công bố (CVE) trong <code>requirements.txt</code>/<code>package-lock.json</code></td><td>Đối chiếu version dependency đang dùng với database CVE (NVD, GitHub Security Advisories)</td><td>Dependabot (tích hợp sẵn miễn phí trong GitHub, chỉ cần bật), Trivy, Snyk</td></tr>
+<tr><td><strong>Secret scanning</strong></td><td>API key/password/token bị commit nhầm vào code</td><td>Regex + entropy-based pattern quét trên từng diff mỗi commit</td><td>GitHub secret scanning (tự động cho public repo, bật thủ công cho private), Gitleaks</td></tr>
+</table>
+<p>Best practice 2026: chạy SAST và SCA <strong>song song</strong> (không tuần tự) trên mọi PR bằng <code>needs</code> chỉ khi có phụ thuộc dữ liệu thật — 1 bộ quét đầy đủ chỉ nên cộng thêm dưới 5 phút nếu parallelize đúng. Ngưỡng fail hợp lý: chỉ chặn merge ở mức CRITICAL/HIGH — chặn cả mức INFO khiến pipeline đỏ liên tục và huấn luyện dev thành thói quen lờ đi cảnh báo, phản tác dụng ngược với mục đích của gate.</p>
+
+<h3>6. Testing gate cho code có output non-deterministic (LLM-touching code)</h3>
+<p><code>pytest</code> hiện tại của dự án giả định output tất định (input X → luôn ra đúng 1 Y, test 1 lần biết mãi mãi — đúng như mục 1 đã nói). Code gọi LLM (VD script tạo report của skill <code>daily-investor-report</code>) phá vỡ giả định này: cùng 1 prompt, 2 lần chạy có thể ra 2 câu chữ khác nhau dù cùng nghĩa, cùng đúng. Test kiểu cũ <code>assert output == "Giá tăng do..."</code> sẽ FAIL GIẢ (flaky) dù chất lượng không hề giảm — đây là lỗi thiết kế test, không phải lỗi code. Chuẩn 2026 dùng <strong>4 lớp assertion cộng dồn</strong>, không chỉ 1 lớp duy nhất:</p>
+<pre><code>Lớp 1 — Structural check:    output có đúng schema/shape không? (JSON parse được,
+                              field bắt buộc có mặt) — rẻ, tất định, chạy được như unit test thường.
+Lớp 2 — Invariant check:     điều kiện PHẢI luôn đúng bất kể câu chữ cụ thể (VD: số liệu
+                              trích dẫn khớp DB nguồn, không có field bị cấm xuất hiện —
+                              xem feedback_llm_independence.md) — vẫn rẻ, vẫn tất định.
+Lớp 3 — Semantic similarity: so embedding của output với 1 câu trả lời mẫu (golden) — PASS
+                              nếu đủ GẦN nghĩa dù khác từ ngữ. Đây là lớp giải quyết ĐÚNG
+                              vấn đề non-determinism, thay vì so khớp chuỗi ký tự.
+Lớp 4 — Rubric / judge model: 1 model khác chấm điểm theo tiêu chí định tính (rõ ràng,
+                              đúng giọng văn, không lan man) — đắt nhất, chỉ dùng khi
+                              Lớp 1-3 không đủ phân biệt tốt/xấu.</code></pre>
+<p>Lớp 1-2 chạy được trong CI thường trên MỌI PR (nhanh, rẻ, tất định — không khác gì thêm 1 unit test). Lớp 3-4 tốn thêm ít nhất 1 lời gọi model/embedding — nên chạy ở CI riêng (nightly, hoặc chỉ khi PR đổi prompt/system instruction), không chạy trên mọi PR như lint. Golden set tiêu chuẩn ngành: 100-300 cặp prompt-response đa dạng, không trùng lặp ý — khác hẳn quy mô "chạy lại toàn bộ 86 ticker" (tốn kém, không cần thiết chỉ để test 1 thay đổi prompt nhỏ).</p>
+<div class="callout"><div class="label">📖 Không lặp lại R5.4 — ranh giới rõ giữa 2 bài</div>
+<p><a href="R5_4_prompt_engineering.html"><code>R5_4_prompt_engineering.html</code> mục 4</a> đã dạy prompt versioning + golden dataset ở <strong>TẦNG PROMPT</strong> (khi nào cần tạo thêm eval case mới, <code>prompt_version_id</code> là khoá nối CI/production, ngưỡng chặn merge theo loại thay đổi). Mục này dạy <strong>TẦNG CI GATE</strong> — cơ chế assertion cụ thể (4 lớp cộng dồn) để pipeline tự động ra quyết định pass/fail không phụ thuộc may rủi của đúng 1 lần sinh output. 2 bài bổ trợ nhau: R5.4 trả lời "khi nào cần eval mới", bài này trả lời "eval đó được CHẤM như thế nào để không flaky".</p>
+</div>
+<p>Minh hoạ Lớp 1-2 (chạy được trong <code>pytest</code> thường, tất định, không cần gọi model để test):</p>
+<pre><code># backend/tests/test_report_output_gate.py (minh hoạ cơ chế — không phải file thật)
+def test_report_structural_gate(sample_llm_output):
+    data = json.loads(sample_llm_output)          # Lớp 1: parse được, đúng JSON
+    assert "thesis" in data and "verdict" in data  # Lớp 1: field bắt buộc có mặt
+
+def test_report_invariant_gate(sample_llm_output, db_price_snapshot):
+    data = json.loads(sample_llm_output)
+    # Lớp 2: số liệu LLM trích dẫn phải khớp DB nguồn — không tự bịa số
+    assert data["quoted_price"] == db_price_snapshot["close"]
+    # Lớp 2: field bị cấm (derivative hệ thống tính sẵn) không được xuất hiện
+    # trong input LLM nhận — đúng ranh giới feedback_llm_independence.md
+    assert "combined_score" not in data.get("raw_prompt_context", "")</code></pre>
+
+<h3>7. Ráp lại toàn bộ — pipeline đầy đủ theo đúng thứ tự chạy</h3>
+<p>Ghép mục 1-6 thành 1 sơ đồ duy nhất, đúng thứ tự 1 kỹ sư sẽ thấy khi mở workflow file — phân biệt rõ bước nào chạy SONG SONG (không phụ thuộc nhau) và bước nào phải TUẦN TỰ (bước sau cần kết quả bước trước):</p>
+<pre><code>PR mới được mở
+  │
+  ├──▶ Lint + type-check (ruff, mypy)  ─┐
+  ├──▶ SAST (Semgrep)                   ├─ SONG SONG, độc lập nhau
+  ├──▶ SCA (Dependabot/Trivy)           ┤  (không bước nào cần chờ bước khác)
+  └──▶ Secret scanning (Gitleaks)      ─┘
+         │  (tất cả PASS mới đi tiếp)
+         ▼
+  Unit test (pytest, mock — Lớp 1-2 assertion nếu PR đụng code gọi LLM)
+         │
+         ▼
+  Data validation gate  (schema/null-rate/distribution — mục 2.1)
+         │
+         ▼
+  Coverage floor + Promotion gate  (check_per_file_coverage.py, promotion_gate_check.py)
+         │
+         ▼
+  Merge → CD: deploy → canary/shadow (xem L7_1_mlops.html §7)
+         │
+         ▼
+  Monitor drift + prediction distribution (vòng lặp mục 4, feed ngược retrain)
+         │
+         ▼
+  [Nightly/on-prompt-change riêng, KHÔNG chặn PR]
+  Semantic similarity + rubric-judge eval (Lớp 3-4, golden set 100-300 case)</code></pre>
+<p><strong>Đọc sơ đồ</strong>: 4 bước đầu (lint/SAST/SCA/secret) độc lập hoàn toàn với nhau — đây chính là chỗ "chạy song song tiết kiệm thời gian" nói ở mục 5. Càng xuống dưới, các bước càng phụ thuộc tuần tự (data gate cần code đã pass unit test, promotion gate cần data đã hợp lệ). Lớp 3-4 của testing gate (mục 6) tách hẳn ra khỏi luồng chặn PR — vì chi phí gọi model, không phải vì kém quan trọng hơn.</p>
+
+<table>
+<tr><th>Gate</th><th>Chạy ở đâu</th><th>Chặn merge?</th><th>Vì sao đặt ở đó</th></tr>
+<tr><td>Lint/type-check</td><td>Mọi PR</td><td>Có</td><td>Rẻ, nhanh (&lt;30s), tất định</td></tr>
+<tr><td>SAST/SCA/secret (mục 5)</td><td>Mọi PR, song song</td><td>Có, chỉ mức CRITICAL/HIGH</td><td>Đủ rẻ nếu song song (~90s), rủi ro bảo mật không nên trì hoãn tới nightly</td></tr>
+<tr><td>Unit test + Lớp 1-2 assertion (mục 6)</td><td>Mọi PR</td><td>Có</td><td>Tất định, không tốn gọi model</td></tr>
+<tr><td>Data validation gate (mục 2.1)</td><td>Trước train, không phải mọi PR</td><td>Có, trước khi train chạy</td><td>Chỉ liên quan khi PR đổi pipeline data/feature</td></tr>
+<tr><td>Model evaluation gate (mục 2.2)</td><td>Trước promote, không phải mọi PR</td><td>Có, trước khi deploy model mới</td><td>Cần model mới train xong mới có gì để eval</td></tr>
+<tr><td>Semantic similarity/rubric-judge (Lớp 3-4, mục 6)</td><td>Nightly hoặc khi PR đổi prompt</td><td>Không chặn PR thường, CÓ chặn khi đổi prompt</td><td>Tốn lời gọi model — chạy trên mọi PR là lãng phí nếu PR không đụng prompt</td></tr>
+</table>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Đọc trực tiếp <code>.github/workflows/ci.yml</code> của <code>predictor</code> (nguyên văn, không rút gọn phần quan trọng):</p>
+<pre><code>jobs:
+  backend:
+    name: Backend — lint + type-check + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: ruff lint
+        run: ruff check .
+      - name: mypy type-check
+        run: mypy predict/ --ignore-missing-imports --no-strict-optional
+      - name: pytest
+        run: pytest tests/ -q --tb=short
+        env:
+          DATABASE_URL: ""   # tests use mocks; no live DB needed
+
+      # Test Quality Improvement Plan (ai-trader/10_test-quality-improvement-
+      # plan-2026-08-09.md, P1). Both steps are DB-free by design — no
+      # Postgres service exists in this job (see DATABASE_URL="" above), so
+      # G-M0/G-M0b (which need real scored tickers) run in --skip-db-checks
+      # mode and report SKIP rather than PASS/FAIL for those two.
+
+      - name: Per-file coverage floor (single-source-of-truth files)
+        run: python scripts/check_per_file_coverage.py
+      - name: Promotion gate check (DB-free subset)
+        run: python scripts/promotion_gate_check.py --skip-db-checks
+
+  frontend:
+    name: Frontend — type-check + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: http://localhost:8000
+      - name: Check bundle size
+        run: |
+          SIZE=$(du -sm dist/ | cut -f1)
+          if [ "$SIZE" -gt 10 ]; then
+            echo "::warning::Bundle exceeds 10MB — consider code splitting"
+          fi</code></pre>
+<p><strong>Đọc từng dòng theo đúng tinh thần "gate trước khi promote"</strong>: <code>ruff check</code> + <code>mypy</code> = lint/type-check truyền thống. <code>pytest</code> = unit test, nhưng chạy với <code>DATABASE_URL=""</code> — nghĩa là mọi test cần DB thật đều bị mock hoặc skip. <code>check_per_file_coverage.py</code> = 1 gate ML-specific: bắt buộc coverage sàn cho các file "single-source-of-truth" như <code>senior_score.py</code> (đúng nguyên tắc CLAUDE.md). <code>promotion_gate_check.py --skip-db-checks</code> = chính là "model evaluation gate" nói ở mục 2.2 — nhưng chạy ở chế độ rút gọn (không cần DB thật), vì <strong>2 gate G-M0/G-M0b cần scored ticker thật từ Postgres đang bị skip trong CI</strong>, comment trong file ghi rõ điều này (không phải bịa — trích nguyên văn comment gốc).</p>
+
+<h3>Ví dụ mở rộng — chi phí thời gian thật khi thêm security gate (mục 5), song song vs tuần tự</h3>
+<p>Giả định thời gian chạy thật của từng loại quét trên codebase cỡ <code>backend/</code> (Semgrep cỡ "&lt;2 phút cho codebase vừa" đã dẫn nguồn ở mục 5; SCA/secret scanning theo benchmark điển hình 2026 cho repo cỡ nhỏ-vừa):</p>
+<pre><code>Semgrep (SAST):        90 giây
+Trivy (SCA):            60 giây
+Gitleaks (secret):      15 giây
+Job backend hiện tại (lint+mypy+pytest+coverage+promotion): 180 giây (ước lượng, đo thật cần xem Actions log)
+
+TUẦN TỰ (thêm nối đuôi vào job backend hiện tại):
+  180 + 90 + 60 + 15 = 345 giây tổng cộng
+  → PR nào cũng phải đợi thêm 165 giây (gần 3 phút) so với hiện tại
+
+SONG SONG (3 job riêng, chạy đồng thời với job backend, không nối đuôi):
+  max(180, 90, 60, 15) = 180 giây — bằng ĐÚNG thời gian job backend hiện tại
+  → PR không đợi thêm giây nào, vì 3 job bảo mật xong SỚM HƠN job backend đang có
+
+→ Tiết kiệm 165 giây/PR chỉ nhờ đổi cấu trúc job (song song thay vì nối đuôi) —
+  không đổi công cụ, không giảm độ bao phủ quét, đúng tinh thần "dưới 5 phút nếu
+  parallelize đúng" đã nêu ở mục 5. Đây là lý do best practice 2026 nhấn mạnh
+  <code>needs</code> chỉ nên dùng khi có phụ thuộc dữ liệu THẬT — dùng thừa biến
+  song song thành tuần tự một cách vô tình.</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>CI/CD code thường</th><th>CI/CD ML (predictor hiện tại)</th><th>CI/CD ML/LLM chuẩn 2026 (đầy đủ)</th></tr>
+<tr><td>Lint/type-check</td><td>✅</td><td>✅ ruff + mypy</td><td>✅</td></tr>
+<tr><td>Unit test</td><td>✅</td><td>✅ pytest (mock, không DB thật)</td><td>✅</td></tr>
+<tr><td>Data validation gate</td><td>❌ không cần</td><td>⚠️ có 1 phần (coverage floor cho single-source-of-truth) nhưng không phải data schema check</td><td>✅ schema + null-rate + distribution check trước train</td></tr>
+<tr><td>Model evaluation gate</td><td>❌ không áp dụng</td><td>⚠️ có (<code>promotion_gate_check.py</code>) nhưng chạy <code>--skip-db-checks</code> → 2 gate cần DB thật (G-M0/G-M0b) bị SKIP không phải PASS</td><td>✅ full eval với data thật trước mỗi promote</td></tr>
+<tr><td>DB thật trong CI job</td><td>tuỳ dự án</td><td>❌ không có Postgres service trong job <code>backend</code></td><td>✅ Postgres service (hoặc test container) trong CI</td></tr>
+<tr><td>Drift monitoring tự động sau deploy</td><td>❌ không áp dụng</td><td>⚠️ có nhưng chạy nightly qua <code>reports/consistency/</code>, không wire vào CI/CD workflow</td><td>✅ wire vào cùng pipeline, alert tự động</td></tr>
+<tr><td>Versioning</td><td>Chỉ code (Git)</td><td>Code (Git) + model artifact (<code>backend/models/</code>) — data version chưa có công cụ riêng (không DVC)</td><td>Code + data (DVC) + environment</td></tr>
+<tr><td>Security scanning (SAST/SCA/secret)</td><td>Tuỳ dự án</td><td>❌ Không có job nào trong <code>ci.yml</code> — không Semgrep, không Dependabot bật, không secret scanning riêng</td><td>✅ SAST + SCA song song trên mọi PR, chặn merge ở mức CRITICAL/HIGH</td></tr>
+<tr><td>Image scanning (artifact cuối, không phải source)</td><td>Tuỳ dự án</td><td>❌ Không có — xem lớp thứ 3 bổ sung ở <code>R7_5_containerization.html §6</code></td><td>✅ Trivy/Grype quét image đã build, bắt CVE ở OS package mà SCA bỏ sót</td></tr>
+</table>
+
+<h2>🎯 Ứng dụng vào dự án hiện tại</h2>
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p>4 gap thật, xếp theo chi phí sửa/lợi ích (đọc trực tiếp từ <code>D:\New-jouney\predictor\.github\workflows\ci.yml</code>, không suy đoán):</p>
+<ol>
+<li><strong>Thiếu Postgres service trong job <code>backend</code></strong> — chi phí sửa thấp: <code>docker-compose.yml</code> đã có sẵn cấu hình Postgres 16-alpine với healthcheck (<code>pg_isready</code>) dùng làm mẫu; thêm 1 khối <code>services: postgres:</code> tương tự vào job CI là đủ để chạy được <code>G-M0</code>/<code>G-M0b</code> thật thay vì <code>--skip-db-checks</code>.</li>
+<li><strong>Drift detection chưa wire vào CI/CD</strong> — hiện chạy nightly độc lập qua <code>reports/consistency/</code>, tách rời hoàn toàn khỏi workflow CI. Cải thiện khả thi: thêm 1 step gọi lại script consistency check đó ngay trong CD sau khi deploy, thay vì chỉ dựa vào cron nightly riêng.</li>
+<li><strong>Không có bước train/eval model thật trong CI</strong> — đây là quyết định <em>hợp lý</em>, không phải lỗi: train tốn thời gian/compute, tách khỏi CI nhanh là đúng thiết kế. Nhưng hệ quả là promotion gate DB-dependent phải chạy thủ công/CD riêng — nên ghi rõ trong runbook, không để ai nhầm rằng CI hiện tại đã "gate" đầy đủ.</li>
+<li><strong>Không có bất kỳ bước security scanning nào (SAST/SCA/secret scanning)</strong> — chi phí sửa cực thấp: Dependabot bật miễn phí chỉ bằng 1 lần bật trong GitHub Settings (không cần sửa <code>ci.yml</code>), thêm Semgrep GitHub Action (free tier cho open-source/nội bộ nhỏ) là 1 step ngắn chạy song song job <code>backend</code>. Đây là gap dễ vá nhất trong cả 4 gap liệt kê, nhưng lại KHÔNG liên quan gì đến ML — đúng đặc điểm của gap "CI/CD phần mềm tổng quát" mà module này bổ sung, khác hẳn 3 gap ML-specific ở trên.</li>
+</ol>
+<p><strong>Cụ thể hoá gap 4 cho đúng 2 ngôn ngữ dự án đang dùng</strong> (backend Python 3.12, frontend TypeScript/npm — xem <code>ci.yml</code> mục 2 job <code>backend</code>/<code>frontend</code>):</p>
+<ul>
+<li><strong>Dependabot</strong>: cần 2 khối cấu hình riêng trong <code>.github/dependabot.yml</code> — <code>package-ecosystem: "pip"</code> cho <code>backend/requirements.txt</code>, <code>package-ecosystem: "npm"</code> cho <code>frontend/package-lock.json</code>. Không cấu hình cả 2 = chỉ vá được 1 nửa dependency của hệ thống.</li>
+<li><strong>Semgrep</strong>: ruleset <code>p/python</code> + <code>p/fastapi</code> cho <code>backend/</code> (dự án dùng FastAPI, xem <code>uvicorn main:app</code> ở Dockerfile), <code>p/typescript</code> + <code>p/react</code> cho <code>frontend/</code> — dùng đúng ruleset theo framework, không dùng ruleset generic "tất cả ngôn ngữ" sẽ bỏ sót pattern đặc thù FastAPI/React (VD injection qua query param FastAPI, XSS qua <code>dangerouslySetInnerHTML</code> React).</li>
+<li><strong>Gitleaks</strong>: quan trọng nhất với repo này là chặn commit nhầm <code>ANTHROPIC_API_KEY</code> hoặc connection string Postgres thật (<code>postgresql+asyncpg://predict:predict_secret@...</code> hiện đang là giá trị dev trong <code>docker-compose.yml</code> — không phải secret thật, nhưng pattern tương tự với credential thật cần bị chặn nếu ai đó vô tình paste nhầm vào code).</li>
+</ul>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ol>
+<li><strong>Coi CI code thường và CI ML là 1</strong> — copy pipeline lint/test từ dự án backend thường sang dự án ML mà không thêm data gate + eval gate, tưởng vậy là đủ.</li>
+<li><strong>Đọc <code>promotion_gate_check.py --skip-db-checks</code> pass rồi kết luận "gate đã chạy đầy đủ"</strong> — SKIP không phải PASS; cần phân biệt rõ 2 trạng thái này khi báo cáo trạng thái CI.</li>
+<li><strong>Thêm Postgres service vào CI nhưng seed data giả không đại diện</strong> — chạy được gate không có nghĩa gate đó đáng tin nếu data test không phản ánh data thật.</li>
+<li><strong>Nghĩ rằng thêm DVC/MLflow ngay lập tức là bắt buộc</strong> — với quy mô 1 model XGBoost nhỏ, ưu tiên đúng là thêm Postgres vào CI trước, DVC/MLflow chỉ đáng đầu tư khi số lượng model/dataset tăng đủ lớn để thủ công không còn theo kịp.</li>
+<li><strong>Test code có gọi LLM bằng exact-match assertion</strong> (<code>assert output == "..."</code>) — chắc chắn flaky vì output non-deterministic dù chất lượng không đổi; cần ít nhất Lớp 1-2 (structural/invariant), tốt hơn nữa là thêm Lớp 3 (semantic similarity).</li>
+<li><strong>Chặn merge ở MỌI mức nghiêm trọng của SAST</strong> kể cả INFO — khiến pipeline đỏ liên tục vì noise, dev học cách bỏ qua cảnh báo, phản tác dụng với chính mục đích của gate; chỉ nên chặn ở CRITICAL/HIGH.</li>
+<li><strong>Áp ruleset Semgrep generic cho code tính toán số học (feature engineering, XGBoost)</strong> — code kiểu <code>pandas</code>/<code>numpy</code> hay bị false-positive với rule "hardcoded value" hoặc "unsafe eval" viết cho web backend thông thường; cần tinh chỉnh ruleset theo domain (mục "Cụ thể hoá" ở phần Ứng dụng dự án), không dùng nguyên bộ rule mặc định rồi bực mình tắt hẳn cả gate vì quá nhiều false positive.</li>
+<li><strong>Coi security scanning (SAST/SCA/secret/image) đủ để thay thế Model evaluation gate</strong> — 2 loại gate hoàn toàn khác mục đích: security scanning bắt lỗ hổng BẢO MẬT trong code/dependency/image; evaluation gate bắt model KÉM CHẤT LƯỢNG hơn bản đang chạy. Code có thể an toàn tuyệt đối về bảo mật nhưng model vẫn tệ hơn — 2 gate cần chạy độc lập, không loại trừ nhau.</li>
+</ol>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được vì sao CI/CD ML cần thêm data validation gate + model evaluation gate so với CI/CD code thường.</li>
+<li>Đọc đúng <code>.github/workflows/ci.yml</code> và chỉ ra chính xác dòng nào tương ứng lint, unit test, coverage gate, promotion gate.</li>
+<li>Phân biệt được SKIP và PASS trong ngữ cảnh <code>--skip-db-checks</code> — không báo cáo nhầm.</li>
+<li>Liệt kê đúng 4 gap thật của pipeline hiện tại (3 gap ML-specific + 1 gap security scanning) — không phải gap chung chung từ sách vở.</li>
+<li>Đề xuất được cải thiện chi phí thấp (thêm Postgres service, bật Dependabot) khớp với hạ tầng Docker Compose sẵn có, không đề xuất công cụ không cần thiết ở quy mô này.</li>
+<li>Phân biệt đúng cơ chế 3 loại quét bảo mật SAST/SCA/secret scanning — không gộp chung thành "quét bảo mật" mơ hồ.</li>
+<li>Thiết kế được 4-lớp assertion (structural/invariant/semantic similarity/rubric-judge) cho 1 test case cụ thể có output từ LLM, và biết lớp nào chạy trên mọi PR, lớp nào chỉ chạy nightly/khi đổi prompt.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R6_8_orchestration_frameworks.html">← R6.8 · Orchestration Frameworks</a>
+  <a href="R7_2_kubernetes.html">R7.2 · Kubernetes →</a>
+</div>
+
+</div>
+</body>
+</html>

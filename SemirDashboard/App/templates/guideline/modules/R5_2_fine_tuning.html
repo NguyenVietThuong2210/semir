@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R5.2 · Fine-tuning — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM Augmentation · Điểm 2/5</div>
+  <h1>R5.2 · Fine-tuning</h1>
+  <p class="subtitle">Tiếp tục train 1 model có sẵn để hành vi/kiến thức "ngấm" vào trọng số — và vì sao dự án <code>predictor</code> KHÔNG có đường fine-tune Claude trực tiếp.</p>
+  <div class="level">Độ khó: Khó · Roadmap AI Engineering · Track 1</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<p>Dễ → khó:</p>
+<ul>
+<li><strong>[Dễ]</strong> Định nghĩa fine-tuning bằng 1 câu, phân biệt với RAG/Tool Use ở đúng 1 điểm: kiến thức "ngấm" vào trọng số (weight) thay vì tra cứu lúc chạy (runtime).</li>
+<li><strong>[Trung bình]</strong> Nhớ lại (không cần học lại toán) 4 biến thể fine-tune: full fine-tuning, PEFT, LoRA, QLoRA — biết khi nào chọn cái nào.</li>
+<li><strong>[Trung bình]</strong> Biết chính xác con đường kỹ thuật để fine-tune model Claude cụ thể năm 2026: chỉ qua Amazon Bedrock, không có API fine-tune trực tiếp từ Anthropic.</li>
+<li><strong>[Khó]</strong> Giải thích được vì sao thông tin ở trên KHÔNG chỉ là 1 fact rời rạc, mà CỦNG CỐ quyết định kiến trúc trong <code>CLAUDE.md</code>: closed-loop learning của AI Trader phải retrain XGBoost, không phải retrain Claude.</li>
+<li><strong>[Khó]</strong> Áp dụng đúng bảng quyết định "khi nào fine-tune có lý" để phân biệt use case của Claude (skill báo cáo, đọc dữ liệu mới mỗi ngày) và use case của XGBoost trong <code>senior_score.py</code> (hành vi cố định, cần fine-tune thật).</li>
+<li><strong>[Trung bình]</strong> Áp dụng đúng trình tự quyết định "Prompt → RAG → Fine-tune → Distill" của 2026 để tự trả lời "có nên fine-tune không" cho 1 use case cho trước, không nhảy thẳng vào fine-tune vì cảm tính.</li>
+<li><strong>[Khó]</strong> Thực hiện đúng 3 bước curation dataset trước khi fine-tune (dedup, diversity preservation, contamination check) và giải thích được hậu quả nếu bỏ qua từng bước.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout">
+<div class="label">📖 Cách đọc trang này</div>
+<p>Toán học ĐẦY ĐỦ của fine-tuning (full fine-tuning, PEFT, LoRA — rank + trick khởi tạo ma trận B=0 để tránh catastrophic forgetting, QLoRA 4-bit quantization, bảng so sánh Fine-tune vs Prompt vs RAG theo 4 trục) đã có ở <a href="L4_5_finetuning_lora.html"><code>L4_5_finetuning_lora.html</code></a>. Đọc file đó trước nếu bạn chưa biết LoRA là gì. Trang này KHÔNG lặp lại toán học — chỉ bổ sung 2 phần <code>L4_5</code> chưa có: (1) cập nhật khả dụng fine-tune CHO CHÍNH MODEL CLAUDE năm 2026 (module cũ dạy fine-tuning tổng quát, không nói riêng Claude), (2) hệ quả kiến trúc của điều đó cho dự án <code>predictor</code>.</p>
+</div>
+<p>Độ khó xếp "Khó" vì cần đã hiểu khái niệm gradient descent + kiến trúc transformer trước (xem <code>L4_5</code> và các module Level 4) mới hiểu trọn vẹn vì sao PEFT/LoRA tồn tại. Nếu bạn chỉ cần biết "dự án này có nên fine-tune Claude không" mà không cần hiểu sâu toán — đọc thẳng §3-4 bên dưới.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Nhân viên mới đi đào tạo nội bộ chuyên sâu</div>
+<p>Base model (Claude, GPT...) giống 1 nhân viên mới tốt nghiệp đại học — kiến thức tổng quát rất rộng, nhưng chưa quen quy trình riêng của công ty bạn. Có 2 cách giúp nhân viên đó làm đúng việc:</p>
+<ul>
+<li><strong>Nhắc mỗi lần (Prompt Engineering)</strong>: mỗi khi giao việc, đưa kèm 1 tờ hướng dẫn chi tiết. Nhanh, rẻ, nhưng phải nhắc lại MỖI LẦN — nếu quên đưa hướng dẫn, nhân viên làm sai lại.</li>
+<li><strong>Đào tạo nội bộ (Fine-tuning)</strong>: cho nhân viên đi khoá đào tạo chuyên sâu vài tuần, thực hành trăm tình huống mẫu. Sau đào tạo, nhân viên "nhớ vĩnh viễn" quy trình — không cần nhắc lại mỗi lần. Nhưng đào tạo tốn thời gian/tiền, và nếu đào tạo LỆCH (dữ liệu mẫu quá hẹp) nhân viên có thể "quên bớt" kỹ năng tổng quát khác (catastrophic forgetting) hoặc trở nên cứng nhắc, chỉ giỏi đúng 1 việc đã học.</li>
+</ul>
+<p>Fine-tuning = đào tạo nội bộ. Kiến thức/hành vi mới không nằm trong "tờ hướng dẫn" (prompt) mà nằm ngay trong "bộ não" (trọng số weight) của nhân viên sau đào tạo.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] Fine-tuning là gì — 1 câu, và 1 điểm phân biệt duy nhất cần nhớ</h3>
+<p>Fine-tuning = tiếp tục quá trình train (gradient descent) trên 1 model đã pretrain sẵn, dùng dataset riêng của bạn, để điều chỉnh trọng số (weight) sao cho model "thiên" về hành vi/kiến thức mong muốn.</p>
+<p>Điểm phân biệt duy nhất cần nhớ để không nhầm với RAG/Tool Use: <strong>fine-tune thay đổi WEIGHT (tại thời điểm train, tĩnh sau đó)</strong>; RAG/Tool Use không đụng gì tới weight — chúng thêm thông tin vào CONTEXT tại thời điểm chạy (runtime, động mỗi lần gọi).</p>
+
+<h3>2. [Trung bình] Nhắc lại nhanh 4 biến thể (toán học đầy đủ ở <code>L4_5</code>)</h3>
+<table>
+<tr><th>Biến thể</th><th>Train bao nhiêu % params?</th><th>Cần GPU/VRAM cỡ nào?</th><th>Rủi ro chính</th></tr>
+<tr><td>Full fine-tuning</td><td>100%</td><td>Rất lớn (toàn bộ model + optimizer state)</td><td>Catastrophic forgetting cao nhất, chi phí cao nhất</td></tr>
+<tr><td>PEFT (tổng quát)</td><td>&lt; 1-5%</td><td>Vừa</td><td>Tuỳ kỹ thuật cụ thể bên trong nhóm PEFT</td></tr>
+<tr><td>LoRA</td><td>Thường &lt; 1% (2 ma trận rank thấp)</td><td>Nhỏ — chỉ train 2 ma trận A, B mỗi layer</td><td>Chọn rank quá thấp → thiếu capacity học pattern phức tạp</td></tr>
+<tr><td>QLoRA</td><td>Như LoRA, nhưng base model nén 4-bit</td><td>Nhỏ nhất — chạy được trên 1 GPU tiêu dùng</td><td>Sai số lượng tử hoá (quantization error) nếu cấu hình ẩu</td></tr>
+</table>
+<p>Chi tiết công thức LoRA (phân tích rank, vì sao khởi tạo ma trận B=0 để tránh phá vỡ hành vi ban đầu của model) đã có đầy đủ ở <code>L4_5_finetuning_lora.html §3</code> — không nhắc lại ở đây.</p>
+
+<h3>3. [Trung bình] Cập nhật 2026 — fine-tune CHO CHÍNH MODEL CLAUDE khả dụng thế nào?</h3>
+<p>Nguồn: WebSearch (mixed nguồn chính chủ AWS + blog thứ 3, ghi đầy đủ ở <code>_research_evidence_track1.md</code> mục "File 05 — Claude fine-tuning availability 2026"):</p>
+<ul>
+<li>Fine-tuning cho model Claude <strong>chỉ khả dụng qua Amazon Bedrock</strong> (cụ thể vùng US West Oregon) — <strong>không có API fine-tune trực tiếp từ Anthropic</strong>.</li>
+<li>Đã re-verify (WebSearch tháng 9/2026): <strong>Claude 3 Haiku vẫn là model DUY NHẤT</strong> có fine-tune GA trên Bedrock — không có Sonnet/Opus fine-tune, kể cả các dòng Claude 4.x/4.5/5.x đang live. Đây không còn là "chưa có bằng chứng" mà là xác nhận trực tiếp: tính đến hiện tại, con đường fine-tune GA duy nhất vẫn dừng ở Claude 3 Haiku, một model cũ hơn nhiều so với dòng Claude hiện hành của dự án.</li>
+<li>Kết quả benchmark ví dụ từ 1 case cụ thể (không rõ task, cần cẩn trọng khi trích dẫn): F1 score <strong>+24.6%</strong> sau fine-tune; Haiku đã fine-tune vượt qua base Sonnet 3.5 khoảng <strong>9.9%</strong> trên 1 task riêng.</li>
+</ul>
+<div class="callout danger">
+<div class="label">⚠️ Lưu ý độ tin cậy nguồn</div>
+<p>Đây là finding từ WebSearch (kết quả tổng hợp, không fetch trực tiếp trang gốc) — số liệu F1 +24.6% chỉ có 1 nguồn, không rõ task benchmark cụ thể. Trước khi dùng số này để ra quyết định kỹ thuật thật, verify trực tiếp tại <code>docs.aws.amazon.com/bedrock</code> để xem danh sách model fine-tune-able hiện tại.</p>
+</div>
+
+<h3>4. [Khó] Vì sao điều này CỦNG CỐ (không chỉ liên quan) quyết định kiến trúc CLAUDE.md</h3>
+<p>Dự án <code>predictor</code> dùng Claude qua <strong>Claude Code</strong> — không qua Amazon Bedrock. Nghĩa là ngay cả nếu owner MUỐN fine-tune Claude để nó "tự học" cách đánh giá cổ phiếu, con đường kỹ thuật để làm việc đó (tài khoản Bedrock riêng, region riêng, pipeline train riêng, dataset curation riêng) <strong>không tồn tại</strong> trong stack hiện tại của dự án.</p>
+<p>Đây là 1 lý do kỹ thuật BỔ SUNG (ngoài lý do triết lý "LLM sẽ không phải là 1 feature" đã ghi trong <code>CLAUDE.md</code>) giải thích tại sao closed-loop learning của AI Trader — đúng tinh thần <code>CLAUDE.md</code>: <em>"Score → real trade → real P&amp;L → feed back into retraining the score/weights"</em> — phải retrain <strong>XGBoost trong <code>backend/predict/senior_score.py</code> / model AI Predict</strong>, KHÔNG PHẢI retrain chính Claude. Claude không có "weight" nào trong stack này để retrain, kể cả khi muốn.</p>
+
+<h3>5. [Khó] Catastrophic forgetting — vì sao "đào tạo hẹp" có thể làm nhân viên quên kỹ năng cũ</h3>
+<p>Quay lại analogy: nếu khoá đào tạo nội bộ CHỈ luyện đúng 100 tình huống hẹp, nhân viên có thể trở nên xuất sắc ở 100 tình huống đó nhưng lại "quên" bớt phản xạ tổng quát đã có từ trước (VD quên cách xử lý tình huống lạ chưa từng gặp trong 100 mẫu đào tạo). Đây gọi là <strong>catastrophic forgetting</strong> — hiện tượng weight bị ghi đè quá mạnh bởi dataset fine-tune hẹp, làm mất năng lực tổng quát đã học từ pretrain.</p>
+<p>Toán học đầy đủ về cách LoRA giảm thiểu rủi ro này (khởi tạo ma trận B=0 để model bắt đầu fine-tune từ ĐÚNG hành vi gốc, rồi mới dịch chuyển dần) đã có ở <code>L4_5_finetuning_lora.html §3</code> — không nhắc lại công thức ở đây, chỉ nhấn mạnh trực giác: <strong>fine-tune càng "mạnh tay" (full fine-tuning, dataset hẹp, learning rate cao) → rủi ro catastrophic forgetting càng cao</strong>; đây là lý do PEFT/LoRA (train ít tham số hơn, giữ nguyên phần lớn weight gốc) thường an toàn hơn full fine-tuning cho hầu hết use case thực tế.</p>
+
+<h3>6. [Trung bình] Khi nào KHÔNG nên fine-tune — trình tự quyết định 2026: Prompt → RAG → Fine-tune → Distill</h3>
+<p>Research 2026 (nhiều nguồn hội tụ cùng 1 kết luận, ghi ở <code>_research_evidence_track1.md</code>): <strong>đa số team KHÔNG nên fine-tune</strong>. Trình tự khuyến nghị là quay lại prompt engineering, cải thiện retrieval pipeline, hoặc đầu tư vào eval tốt hơn — theo ĐÚNG thứ tự đó, chưa nên nhảy thẳng vào fine-tune.</p>
+<pre><code>┌──────────────────┐     Prompt Engineering giải quyết được
+│ Prompt Engineering │ ──  ~70% vấn đề hành vi LLM (research 2026,
+└─────────┬─────────┘     verify 2026-09) → LUÔN thử trước tiên
+          │ chưa đủ?
+          ▼
+┌──────────────────┐     Dữ liệu đổi thường xuyên? Cần trích dẫn
+│       RAG         │ ──  nguồn/audit trail? → RAG (weight không
+└─────────┬─────────┘     đổi, tra cứu động, trace được nguồn)
+          │ chưa đủ, HÀNH VI cần ổn định KHÔNG phụ thuộc input mới?
+          ▼
+┌──────────────────┐     Hành vi/style cố định, không đổi theo
+│    Fine-tuning     │ ──  request → đúng use case (xem bảng §"So
+└─────────┬─────────┘     sánh" bên dưới)
+          │ đã có model lớn tốt, cần bản RẺ/NHANH hơn cùng hành vi?
+          ▼
+┌──────────────────┐
+│     Distillation   │ ── Train model nhỏ bắt chước output model lớn
+└──────────────────┘</code></pre>
+<p>2 "cờ đỏ" cho biết fine-tune SAI công cụ, không chỉ ĐẮT hơn — vì fine-tune về bản chất không giải quyết được đúng vấn đề, dù chi bao nhiêu tiền:</p>
+<ul>
+<li><strong>Dữ liệu đổi thường xuyên</strong> (giá, chính sách, tin tức) — fine-tune "nướng" dữ liệu vào trọng số tại 1 thời điểm, lỗi thời ngay khi dữ liệu gốc đổi. RAG thay tài liệu được mà không cần train lại.</li>
+<li><strong>Cần trích dẫn nguồn/audit trail</strong> — model đã fine-tune KHÔNG THỂ chỉ ra chính xác nó "học" câu trả lời từ tài liệu nào (kiến thức đã tan vào hàng triệu trọng số). RAG trả lời VÀ trỏ ngược được tới đúng document đã dùng.</li>
+</ul>
+<p><strong>Worked example — so sánh chi phí cho use case "luôn trích dẫn đúng nguồn tin khi viết nhận định"</strong> (yêu cầu compliance giả định, khác với use case văn phong ở §"Ví dụ cụ thể" bên dưới):</p>
+<table>
+<tr><th>Phương án</th><th>Chi phí (research 2026, verify 2026-09)</th><th>Có giải quyết đúng yêu cầu không?</th></tr>
+<tr><td>RAG (trace nguồn tin qua <code>kb_loader.py</code> + tool call)</td><td>~$0.001-$0.05/query (embedding + 1 LLM call)</td><td><strong>Có</strong> — trả lời kèm đúng document đã dùng, audit được</td></tr>
+<tr><td>Fine-tune (Bedrock, Claude 3 Haiku)</td><td>Chi phí train ban đầu KHÔNG phải phần đắt nhất — ngân sách khuyến nghị <strong>3-5× chi phí train</strong> cho 12 tháng vận hành tiếp theo (adapter versioning, rollback, retrain cadence, theo dõi base-model drift)</td><td><strong>Không</strong> — dù trả thêm 3-5× chi phí bảo trì, model fine-tune vẫn không trỏ lại được document nguồn cụ thể; yêu cầu compliance KHÔNG được giải quyết</td></tr>
+</table>
+<p><strong>Kết luận</strong>: đây không phải trường hợp "cả 2 đều làm được, chỉ khác giá" (tránh false-dichotomy ngược — không nói fine-tune "vô dụng") — fine-tune vẫn hoàn toàn hợp lý cho ĐÚNG use case của nó (hành vi ổn định, xem bảng §"So sánh"). Nhưng cho RIÊNG yêu cầu "trích dẫn nguồn", fine-tune sai công cụ vì lý do CƠ CHẾ (weight không lưu trace nguồn), không chỉ vì lý do chi phí.</p>
+<p>4 câu hỏi tự chẩn đoán nhanh, hỏi TRƯỚC khi bắt đầu curate dataset fine-tune (trả lời "có" cho bất kỳ câu nào → quay lại prompt/RAG trước):</p>
+<ol>
+<li>Đã thử prompt engineering nghiêm túc (few-shot, structured output, system prompt rõ ràng) chưa, hay đang nhảy thẳng vào fine-tune vì "nghe có vẻ mạnh hơn"?</li>
+<li>Dữ liệu làm nền cho hành vi mong muốn có đổi thường xuyên (theo ngày/tuần) không?</li>
+<li>Có cần audit/trace ngược lại nguồn đã dùng để trả lời không?</li>
+<li>Có đủ ngân sách vận hành 3-5× chi phí train cho 12 tháng tiếp theo (§8), hay chỉ tính đủ tiền cho lần train đầu tiên?</li>
+</ol>
+
+<h3>7. [Khó] Data curation cho fine-tuning — dedup, diversity, contamination check</h3>
+<p>Chất lượng dataset fine-tune quan trọng hơn số lượng — research 2026 nhấn mạnh: <em>"chi phí thật không nằm ở compute train, mà ở eval + data curation + lifecycle ownership"</em>. 3 bước curation chính trước khi đưa dataset vào training:</p>
+<ol>
+<li><strong>Deduplication</strong> — embed từng example bằng model nhẹ (sentence-transformer), dùng ANN search (VD FAISS) tìm cặp có cosine similarity cao, verify lại bằng LLM xem có "functionally identical" không (dù diễn đạt khác câu chữ) trước khi loại.</li>
+<li><strong>Diversity preservation</strong> — dedup hiện đại ưu tiên GIỮ ĐA DẠNG hơn là chỉ loại trùng thô: loại 2 mẫu gần giống nhau nhưng vẫn giữ lại đại diện đa dạng cách diễn đạt/tình huống, không dedup tới mức dataset chỉ còn 1 kiểu câu.</li>
+<li><strong>Contamination check</strong> — hash hoặc so sánh embedding giữa tập train và tập eval/benchmark, đảm bảo KHÔNG có mẫu nào lọt cả 2 tập (train-test leakage) — nếu không check, số liệu benchmark sau fine-tune bị thổi phồng giả tạo.</li>
+</ol>
+<p><strong>Worked example</strong> — curate dataset fine-tune văn phong "chuyên gia thận trọng" (nối tiếp use case ở §"Ví dụ cụ thể"), bắt đầu từ 1000 report mẫu thu thập thô:</p>
+<pre><code>1000 mẫu thô
+  − 180 mẫu gần trùng (cosine similarity > 0.92, verify bằng LLM)  → dedup
+  = 820 mẫu
+  − 15 mẫu trùng với tập validation/benchmark nội bộ                → contamination check
+  = 805 mẫu dataset fine-tune cuối cùng
+  → Lấy mẫu ngẫu nhiên 5-10% (≈ 40-80 mẫu) cho judge model chấm điểm
+    chất lượng, loại tiếp mẫu dưới ngưỡng trước khi train chính thức</code></pre>
+<p>Toàn bộ pipeline này (dù dự án không đi tới bước fine-tune Claude thật, xem §4) áp dụng ĐÚNG nguyên xi cho việc curate dữ liệu retrain model XGBoost AI Predict/AI Trader — dedup + contamination check là 2 bước hay bị bỏ sót nhất khi retrain nhanh dưới áp lực deadline.</p>
+<p><strong>Dữ liệu tổng hợp (synthetic data) — bổ trợ, không thay thế 3 bước trên</strong>: khi dataset thật quá ít (VD chưa đủ report mẫu đa dạng), research 2026 cho thấy có thể dùng chính LLM để sinh thêm example tổng hợp nhằm tăng diversity — nhưng dữ liệu synthetic vẫn phải qua ĐỦ 3 bước dedup/diversity/contamination y hệt dữ liệu thật, KHÔNG được coi là "miễn kiểm" chỉ vì do máy sinh ra; thực hành phổ biến là cho 1 judge model chấm điểm ngẫu nhiên 5-10% batch synthetic, loại các dòng dưới ngưỡng trước khi trộn vào dataset chính.</p>
+
+<h3>8. [Khó] Vòng đời vận hành sau khi fine-tune xong — versioning, rollback, retrain cadence</h3>
+<p>Fine-tune xong KHÔNG phải điểm kết thúc — đây là điểm bắt đầu 1 nghĩa vụ vận hành mới, đúng ý "ngân sách 3-5× chi phí train cho 12 tháng tiếp theo" đã nêu ở §6. 3 thực hành vận hành cụ thể:</p>
+<ul>
+<li><strong>Versioning</strong> — mỗi adapter/checkpoint fine-tune phải gắn version rõ ràng (tag theo dataset version + ngày train), giống hệt kỷ luật <code>model_registry</code> đã áp cho XGBoost trong dự án này (rule <code>feedback_registry_all_trainer_paths.md</code>: "Every trainer path writing .joblib must write model_registry via shared helper + REGISTRY GATE check") — không có version rõ ràng, không thể trả lời "adapter đang live là bản train từ dataset nào".</li>
+<li><strong>Rollback plan</strong> — luôn giữ được adapter/base version TRƯỚC ĐÓ sẵn sàng phục hồi nếu adapter mới gây regression (accuracy giảm, style lệch) — không có rollback = phải train lại từ đầu khi phát hiện lỗi.</li>
+<li><strong>Retrain cadence + base-model drift</strong> — lên lịch retrain định kỳ HOẶC theo tín hiệu drift phát hiện được (không phải "train 1 lần xong mãi mãi"); nếu provider cập nhật base model ngầm, adapter cũ có thể không còn tương thích/hiệu quả như lúc train — cần re-validate định kỳ, không giả định adapter "vĩnh viễn đúng".</li>
+</ul>
+<p>3 loại tín hiệu kích hoạt retrain — không phải lúc nào cũng chờ tới lịch cố định:</p>
+<table>
+<tr><th>Loại trigger</th><th>Ví dụ tín hiệu</th><th>Tương đương trong dự án này</th></tr>
+<tr><td>Theo lịch (scheduled)</td><td>Retrain định kỳ mỗi quý/tháng bất kể có dấu hiệu lỗi hay không</td><td>Fleet retrain XGBoost định kỳ cho AI Predict (86 ticker, T+1/3/5)</td></tr>
+<tr><td>Theo drift phát hiện được</td><td>Accuracy/metric live giảm dần so với baseline train</td><td>Gate kiểm tra <code>fwd5_net</code> trước khi cho phép re-weight (Phase R.2/R.5 của AI Trader, verify qua <code>ai_trader_status.py</code>)</td></tr>
+<tr><td>Theo sự cố (incident-driven)</td><td>1 lỗi cụ thể phát hiện qua production (VD case FPT stale price)</td><td>Fix + validate lại ngay, không đợi lịch retrain định kỳ tới</td></tr>
+</table>
+<p>3 loại trigger này không loại trừ nhau — 1 project trưởng thành thường có CẢ 3 chạy song song (lịch cố định làm nền, drift-detection cảnh báo sớm, incident-driven xử lý khẩn cấp).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Tình huống giả định để làm rõ khác biệt: giả sử muốn Claude trong skill <code>daily-investor-report</code> LUÔN viết đúng văn phong "chuyên gia đầu tư thận trọng", không lệch giữa các lần chạy.</p>
+<table>
+<tr><th>Lựa chọn</th><th>Chi phí/công sức</th><th>Khả thi trong stack hiện tại?</th><th>Kết quả</th></tr>
+<tr><td>(A) Prompt Engineering — viết persona rõ trong system prompt</td><td>~0 — chỉ sửa text prompt</td><td>Có — đã áp dụng, xem <code>L5_1_prompt.html §5.3</code> "Hard rules from PredictStock investor report skill"</td><td>Đủ tốt cho use case này (đã dùng trong production)</td></tr>
+<tr><td>(B) Fine-tune Claude 3 Haiku qua Bedrock trên vài trăm report mẫu</td><td>Cần tài khoản AWS Bedrock riêng (US West Oregon), curate dataset vài trăm example, thời gian train + validate</td><td><strong>Không</strong> — dự án dùng Claude qua Claude Code, không qua Bedrock</td><td>Không áp dụng được ngay cả nếu muốn — rào cản hạ tầng, không phải rào cản ý chí</td></tr>
+</table>
+<p><strong>Kết luận từ ví dụ</strong>: (A) không chỉ rẻ hơn — nó là lựa chọn DUY NHẤT khả thi trong stack hiện tại cho việc kiểm soát văn phong Claude. (B) về lý thuyết mạnh hơn cho hành vi ổn định lâu dài, nhưng đòi hỏi hạ tầng dự án không có.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<p>Khi nào fine-tune có lý — kể cả khi không áp dụng cho Claude ở dự án này (bảng đầy đủ theo 4 trục "task-specific behavior/fresh factual knowledge/cost setup/update knowledge" đã có ở <code>L4_5_finetuning_lora.html §7</code>, đây là bản rút gọn dùng để quyết định nhanh):</p>
+<table>
+<tr><th>Đặc điểm use case</th><th>Kỹ thuật thắng</th><th>Ví dụ trong dự án này</th></tr>
+<tr><td>Hành vi/style/format nhất quán, KHÔNG đổi theo mỗi request</td><td>Fine-tuning</td><td>Model AI Predict/AI Trader (XGBoost) — luôn output đúng 1 phân phối xác suất theo đúng 1 format cố định</td></tr>
+<tr><td>Cần đọc dữ liệu MỚI mỗi lần chạy, không phải "nhớ sẵn" 1 hành vi cố định</td><td>Prompt Engineering + Tool Use/RAG</td><td>Claude trong skill báo cáo — mỗi ngày dữ liệu thị trường khác nhau, cần ĐỌC chứ không phải NHỚ</td></tr>
+<tr><td>Kiến thức tra cứu được, ít khi đổi</td><td>RAG</td><td><code>kb_loader.py</code> đọc <code>lessons_learned_patterns.json</code></td></tr>
+<tr><td>Cần trích dẫn/trace ngược nguồn dữ liệu (audit, compliance)</td><td>RAG (fine-tune KHÔNG giải quyết được, xem §6)</td><td>Nhận định LLM cần trỏ lại đúng field/API đã dùng — xem "traceability" ở <code>R5_1 §4</code></td></tr>
+<tr><td>Có sẵn model lớn tốt, cần bản rẻ/nhanh hơn CÙNG hành vi</td><td>Distillation (bước sau fine-tune trong trình tự §6)</td><td>Chưa áp dụng trong dự án — ghi nhận để đối chiếu khi cần</td></tr>
+</table>
+<p><strong>Điểm mấu chốt</strong>: fine-tune thắng khi cần hành vi ổn định KHÔNG phụ thuộc input mới mỗi lần. Đây chính xác là use case của model XGBoost (AI Predict/AI Trader), không phải use case của Claude trong skill báo cáo.</p>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án — fine-tune thật trong <code>predictor</code> nằm ở đâu</div>
+<p>Fine-tune "thật" (theo đúng nghĩa retrain trọng số dựa trên dữ liệu mới) trong dự án này áp dụng cho <strong>model AI Predict/AI Trader (XGBoost)</strong>, thông qua pipeline retraining gắn với <code>backend/predict/senior_score.py</code> và model registry (theo rule <code>feedback_registry_all_trainer_paths.md</code>: "Every trainer path writing .joblib must write model_registry via shared helper + REGISTRY GATE check") — KHÔNG đụng gì tới Claude. Đây chính là lý do <code>CLAUDE.md</code> ghi rõ closed-loop của AI Trader (Phase R, xem <code>ai-trader/7_ai-trader-full-plan-2026-08-08.md</code>) là retrain XGBoost trên P&amp;L thật, chứ không phải "train Claude giỏi đầu tư hơn".</p>
+<p>3 bài học từ §6-8 áp dụng trực tiếp, không cần "dịch" qua ẩn dụ, vào chính pipeline XGBoost:</p>
+<ul>
+<li><strong>Khi nào KHÔNG retrain</strong> (§6) — nếu vấn đề là 1 feature/field bị đọc SAI (bug logic), sửa code rồi validate lại, KHÔNG cần retrain toàn bộ model; retrain chỉ đúng khi vấn đề nằm ở TRỌNG SỐ/feature weighting, không phải mọi bug đều cần fine-tune lại.</li>
+<li><strong>Data curation trước re-weight</strong> (§7) — <code>CLAUDE.md</code> đã ghi rõ "minimum-sample gates before any re-weighting" cho Phase R của AI Trader; đây chính là 1 dạng contamination/quality check ở quy mô nhỏ hơn — không re-weight khi chưa đủ mẫu sạch.</li>
+<li><strong>Registry = versioning bắt buộc</strong> (§8) — rule <code>feedback_registry_all_trainer_paths.md</code> chính là thực thi kỷ luật "mọi checkpoint phải version hoá" đã nêu ở §8, không phải 1 yêu cầu riêng biệt không liên quan.</li>
+</ul>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li>Nghĩ "fine-tune luôn tốt hơn prompt vì nó 'thật sự học'" — sai với use case cần đọc dữ liệu mới mỗi lần (skill báo cáo); fine-tune chỉ thắng khi hành vi ổn định KHÔNG đổi theo input.</li>
+<li>Cố tìm cách fine-tune Claude cho dự án này mà không biết trước con đường kỹ thuật (Bedrock, không phải Anthropic API trực tiếp, không tương thích Claude Code) — tốn thời gian khám phá lại điều đã biết trước.</li>
+<li>Nhảy thẳng vào curate dataset fine-tune trước khi trả lời đủ 4 câu hỏi tự chẩn đoán ở §6 — tốn công curate cho 1 quyết định có thể đã sai ngay từ bước chọn kỹ thuật.</li>
+<li>Nhầm PEFT/LoRA là "1 kỹ thuật khác hoàn toàn" so với full fine-tuning — thực ra LoRA vẫn là fine-tuning, chỉ train ít tham số hơn (2 ma trận rank thấp) để tiết kiệm compute, không phải 1 phạm trù riêng biệt.</li>
+<li>Trích dẫn số liệu benchmark F1 +24.6% như 1 sự thật chắc chắn áp dụng cho mọi task — đây là 1 case cụ thể từ 1 nguồn, không phải universal constant (xem callout độ tin cậy nguồn ở §3).</li>
+<li>Nhầm "dự án không fine-tune Claude" với "dự án không có closed-loop learning" — closed-loop learning VẪN tồn tại (Phase R của AI Trader), chỉ là áp dụng cho XGBoost, không phải Claude.</li>
+<li>Nghĩ chi phí fine-tune chỉ nằm ở lúc TRAIN — bỏ qua chi phí vận hành 3-5× sau đó (versioning, rollback, retrain cadence §8) khiến tổng chi phí thật bị đánh giá thấp hơn nhiều so với thực tế.</li>
+<li>Bỏ qua bước contamination check khi curate dataset — số liệu benchmark "tốt lên sau fine-tune" có thể chỉ là do model đã "nhìn thấy" một phần tập eval trong lúc train (leakage), không phải cải thiện thật.</li>
+<li>Dedup quá tay tới mức chỉ còn 1 kiểu câu/1 tình huống — dataset "sạch" nhưng THIẾU ĐA DẠNG, model fine-tune xong chỉ giỏi đúng những tình huống hẹp đã thấy (liên hệ trực tiếp catastrophic forgetting §5).</li>
+<li>Coi dữ liệu synthetic (do LLM sinh) là "miễn kiểm" vì không phải do người viết tay — vẫn phải qua đủ dedup/diversity/contamination check như dữ liệu thật, nếu không rủi ro nhân bản đúng 1 lỗi/bias của LLM sinh dữ liệu vào toàn bộ dataset.</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích đúng điểm phân biệt duy nhất giữa fine-tuning và RAG/Tool Use (weight vs context).</li>
+<li>Nêu đúng con đường kỹ thuật duy nhất để fine-tune Claude năm 2026 (Amazon Bedrock) và biết dự án này không dùng con đường đó.</li>
+<li>Giải thích được vì sao việc không có đường fine-tune Claude trực tiếp CỦNG CỐ (không chỉ liên quan) quyết định closed-loop learning của AI Trader phải nhắm vào XGBoost.</li>
+<li>Áp dụng đúng bảng "khi nào fine-tune có lý" để phân loại 2 use case cụ thể trong dự án (Claude báo cáo vs XGBoost AI Predict).</li>
+<li>Chỉ ra được ít nhất 1 lý do vì sao số liệu benchmark F1 +24.6% cần được trích dẫn kèm caveat, không phải sự thật tuyệt đối.</li>
+<li>Giải thích được vì sao "cần trích dẫn nguồn/audit trail" là 1 lý do CƠ CHẾ (không chỉ chi phí) khiến fine-tune sai công cụ, dùng đúng ví dụ ở §6.</li>
+<li>Liệt kê đúng 3 bước curation dataset (dedup, diversity preservation, contamination check) và giải thích vì sao thứ tự/cách làm mỗi bước quan trọng.</li>
+<li>Nêu được ít nhất 2 trong 3 thực hành vận hành sau fine-tune (versioning, rollback, retrain cadence) và liên hệ với kỷ luật <code>model_registry</code> đã áp cho XGBoost trong dự án.</li>
+<li>Trả lời đúng cả 4 câu hỏi tự chẩn đoán ở §6 cho 1 use case tự nghĩ ra, kết luận đúng nên/không nên fine-tune.</li>
+<li>Phân biệt được 3 loại trigger retrain (scheduled/drift-detected/incident-driven) và cho ví dụ cụ thể mỗi loại trong dự án.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R5_1_tool_use.html">← R5.1 · Tool Use</a>
+  <a href="R5_3_rag_basics.html">R5.3 · RAG Basics →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L4.2 — Attention + Transformer</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 4 · Module 2</div>
+  <h1>4.2 · Attention + Transformer</h1>
+  <p class="subtitle">Core của mọi LLM hiện đại. Từ Q·K/√d attention → Multi-Head → Transformer block → GPT/BERT architecture.</p>
+  <div class="level">Level 4 · LLM Core · ~50 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Vẽ được scaled dot-product attention từ trí nhớ</li>
+  <li>Giải thích Q, K, V bằng library analogy</li>
+  <li>Implement attention head từ đầu bằng PyTorch</li>
+  <li>Phân biệt Encoder-only (BERT) vs Decoder-only (GPT) vs Encoder-Decoder (T5)</li>
+  <li>Trả lời câu phỏng vấn "Tại sao attention thay LSTM?"</li>
+</ul>
+
+<h2>1. Vấn đề LSTM cần giải quyết</h2>
+
+<p>Trước 2017 (Vaswani), sequence modeling dùng RNN/LSTM. Vấn đề:</p>
+
+<ul>
+  <li><strong>Sequential computation</strong>: mỗi timestep phụ thuộc timestep trước → không parallelize được → chậm train trên GPU</li>
+  <li><strong>Long-range dependency yếu</strong>: gradient qua nhiều timestep → vanish, không capture được context xa</li>
+  <li><strong>Bottleneck hidden state</strong>: LSTM ép mọi context vào 1 vector fixed-size → thông tin loss</li>
+</ul>
+
+<h2>2. Attention — ý tưởng cốt lõi</h2>
+
+<div class="callout">
+<div class="label">🧠 Analogy: library search</div>
+<p>Bạn có <strong>query</strong> "cuốn sách về ML". Library có nhiều books, mỗi book có:</p>
+<ul>
+  <li><strong>Key (K)</strong>: title + tags (giúp match query)</li>
+  <li><strong>Value (V)</strong>: content của book (thông tin thực)</li>
+</ul>
+<p>Attention: compute similarity(Q, K) → biết cuốn nào match nhất → weighted sum V theo similarity → output.</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Ví dụ Vietnamese — Dịch câu "Tôi ăn phở"</div>
+<p>Khi model dịch chữ <strong>"phở"</strong> sang tiếng Anh, nó cần "chú ý" tới các chữ khác trong câu để chọn nghĩa đúng:</p>
+<ul>
+  <li><strong>Q (query) của "phở"</strong>: "tôi cần biết bối cảnh — món ăn hay tên riêng?"</li>
+  <li><strong>K (key) của "ăn"</strong>: "tôi là động từ về ăn uống"</li>
+  <li><strong>K (key) của "tôi"</strong>: "tôi là chủ ngữ, ít giúp nghĩa"</li>
+  <li>Similarity(Q_phở, K_ăn) = <strong>cao</strong> → attention weight 0.7</li>
+  <li>Similarity(Q_phở, K_tôi) = thấp → attention weight 0.1</li>
+  <li>Weighted sum V → context "phở là món ăn" → dịch = <em>"pho (a noodle dish)"</em>, không phải tên người.</li>
+</ul>
+<p><strong>So với LSTM</strong>: LSTM đọc tuần tự "Tôi" → "ăn" → "phở", ép hết ngữ nghĩa vào 1 vector. Attention cho phép "phở" trực tiếp liếc nhìn "ăn" dù chúng ở xa nhau — như đọc lướt cả câu 1 lần rồi mới hiểu.</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Multi-head attention — hội đồng chuyên gia</div>
+<p>1 head attention = 1 chuyên gia đọc câu. Multi-head = mời 8 chuyên gia cùng đọc, mỗi người focus 1 khía cạnh:</p>
+<ul>
+  <li>Head 1: chú ý ngữ pháp (chủ ngữ - động từ)</li>
+  <li>Head 2: chú ý ngữ nghĩa (từ đồng nghĩa)</li>
+  <li>Head 3: chú ý dài hạn (câu trước - câu sau)</li>
+  <li>Head 4: chú ý entity (tên người, địa danh)</li>
+</ul>
+<p>Sau đó concat kết quả 8 head → context hoàn chỉnh. Giống hội đồng review PR: mỗi reviewer bắt 1 loại bug khác nhau.</p>
+</div>
+
+<h3>Scaled dot-product attention (Vaswani 2017)</h3>
+
+<pre><code>Attention(Q, K, V) = softmax(Q·K^T / √d_k) · V
+
+# Q ∈ ℝ^(n×d_k)  n queries
+# K ∈ ℝ^(m×d_k)  m keys
+# V ∈ ℝ^(m×d_v)  m values
+# Output ∈ ℝ^(n×d_v)
+
+# Step-by-step:
+# 1. scores = Q · K^T           # (n×m) similarity matrix
+# 2. scores /= √d_k              # scale để tránh softmax saturate
+# 3. weights = softmax(scores)   # (n×m), each row sum to 1
+# 4. output = weights · V        # (n×d_v)
+</code></pre>
+
+<p><strong>Vì sao chia √d_k?</strong> Nếu d_k lớn (e.g. 64), dot product có magnitude lớn → softmax vào saturation region (đạo hàm ~0) → vanishing gradient. Chia √d_k giữ variance ~1.</p>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Attention từ A đến Z: vì sao chia √d? Vì sao Q, K, V tách? (chi tiết dễ hiểu)</div>
+
+<p><strong>Câu hỏi 1: Vì sao attention chia cho √d? Nghe rất arbitrary nhưng thật ra critical.</strong></p>
+
+<p><strong>Bước 1 — Hiểu attention formula</strong>: attention_weight = softmax(Q·K<sup>T</sup> / √d) · V. Q, K là 2 ma trận, d là chiều của mỗi vector (thường 64 hoặc 128).</p>
+
+<p><strong>Bước 2 — Vấn đề nếu không chia</strong>: Giả sử Q và K entries là số random ~N(0, 1) (giá trị nhỏ quanh 0). Khi tính Q·K<sup>T</sup>, mỗi phần tử = tổng của d phép nhân (dot product). Statistics cơ bản: tổng d biến ngẫu nhiên independent variance 1 = có variance d. Với d=64: std ≈ 8. Với d=512: std ≈ 22.</p>
+
+<p><strong>Bước 3 — Vì sao đây là DISASTER</strong>: Softmax của số có std 22 → output cực kỳ "peaky". Ví dụ: softmax([22, 20, 18, ...]) ≈ [0.87, 0.12, 0.01, ...] — gần như one-hot (chỉ token đầu attention weight ≈ 1, còn lại ≈ 0). Vấn đề với softmax gần one-hot:
+<br>&nbsp;&nbsp;→ Derivative gần 0 (softmax gradient nhỏ khi output extreme).
+<br>&nbsp;&nbsp;→ Backprop không truyền gradient được → không học.
+<br>&nbsp;&nbsp;→ Model attention học 1 lần rồi "đóng băng" — token 1 luôn attend token đầu, không đổi được.</p>
+
+<p><strong>Bước 4 — Fix bằng chia √d</strong>: chia Q·K<sup>T</sup> cho √d giữ variance = 1 (không quan trọng d bao nhiêu). Softmax "smooth" — nhiều token có weight khác 0 → attention phân bố hợp lý → gradient truyền được → học được.</p>
+
+<p><strong>Impact thực tế</strong>: Vaswani 2017 (Attention is All You Need) chỉ ra scaling essential cho attention với d lớn — không chia √d thì model không train được với multi-head + high-dim (d=512 cho base, d=1024 cho big). Nếu bạn implement Transformer từ đầu quên chia √d → loss không giảm hoặc NaN, bạn tưởng "chắc architecture sai" — không, chỉ thiếu 1 phép chia. Đây là bug im lặng phổ biến nhất khi code Transformer from scratch.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Câu hỏi 2: Vì sao Q, K, V là 3 ma trận riêng? Nghe cực kỳ phức tạp.</strong></p>
+
+<p><strong>Bước 1 — Naive attention (dùng chính x)</strong>: Có input x. Naive: attention_score = x · x<sup>T</sup>, weighted_sum = softmax(x·x<sup>T</sup>) · x. Vấn đề: mỗi token dùng cùng 1 representation cho 3 vai trò khác nhau — làm câu hỏi (Q), làm "chào mời" (K), làm nội dung (V). Nhưng 1 token có thể đóng nhiều vai trò khác nhau trong câu.</p>
+
+<p><strong>Bước 2 — Ví dụ trực quan tại sao 1 role không đủ</strong>: Xét câu "Con mèo ngồi trên thảm". Token "mèo":
+<br>&nbsp;&nbsp;• Khi làm Q (đang tìm gì): "tôi cần biết tôi đang ở ĐÂU" → attend vị trí.
+<br>&nbsp;&nbsp;• Khi làm K (đại diện mình cho token khác tìm): "tôi là chủ thể của câu" → attract động từ.
+<br>&nbsp;&nbsp;• Khi làm V (nội dung nếu được select): "tôi mang thông tin đối tượng động vật" → truyền nội dung này.
+<br>3 khía cạnh của "mèo" khác nhau. Nếu chỉ 1 vector đại diện cả 3 → thỏa hiệp, không tối ưu vai trò nào.</p>
+
+<p><strong>Bước 3 — Giải pháp Q/K/V projections</strong>: Học 3 ma trận W_Q, W_K, W_V (mỗi cái d × d params). Q = x · W_Q, K = x · W_K, V = x · W_V. Cùng token x nhưng qua 3 lens khác nhau → có 3 vector đại diện 3 role.</p>
+
+<p><strong>Bước 4 — Ma thuật của projection</strong>: 3 ma trận W_Q, W_K, W_V chỉ 3 × d² params (VD d=768: 1.8M params/layer). Nhưng expressiveness bùng nổ — cùng model biểu diễn được vô số relationship (grammar, semantic, coreference). Đây là <em>algorithmic elegance</em> — thêm ít params, capacity tăng theo cấp số nhân.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Analogy tổng hợp — "Attention là library search"</strong>:
+<br>• Query Q = "tôi muốn tìm cuốn sách về __" (câu hỏi)
+<br>• Key K = title + tag của mỗi cuốn (bảng đề)
+<br>• Value V = nội dung thực trong cuốn
+<br>Attention_score = độ khớp giữa Q và K (softmax) → chọn cuốn nào match. Weighted sum V theo score → tổng hợp nội dung liên quan.
+<br>3 role tách riêng vì: (1) câu hỏi bạn hỏi ≠ (2) title mô tả cuốn ≠ (3) nội dung bên trong. Trộn 3 role = tìm sai, đọc sai.</p>
+
+<p><strong>Cách debug attention (rất khó vì lỗi thầm lặng)</strong>: Trong training, loss vẫn giảm nhưng model nhớ vẹt. Test bằng cách visualize attention weights sau training:
+<br>• Nếu attention_matrix có structure (diagonal for local, off-diagonal for cross-sentence) → model học đúng.
+<br>• Nếu uniform (mọi cell ≈ 1/N) → mask sai hoặc quên chia √d.
+<br>• Nếu chỉ diagonal 1.0 rest 0 → attention collapsed, model chỉ nhìn 1 token → thường do initialization tệ hoặc quá dài chưa fix scaling.</p>
+
+<p><strong>Khi cơ chế vỡ (edge case tiết lộ chiều sâu)</strong>: Với chuỗi rất dài (16k tokens), softmax(QK<sup>T</sup>/√d) trên vector 16k phần tử → attention weights spread mỏng (mỗi token weight ≈ 1/16000). Model không "focus" được vào token quan trọng → performance drop. Fix: sliding window attention (Longformer — chỉ attend 512 tokens gần nhất), sparse attention (BigBird — attend 3 loại: local + random + global), linear attention (Performer — approximation O(N)). Đây là why long-context LLM (200k+ tokens) khó — không chỉ vì memory O(N²) mà còn vì <em>attention distribution collapse</em>. Bạn thấy "200k context" trên spec sheet nhưng chất lượng thực tế drop nhanh sau 32k → đây là nguyên nhân.</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Variance derivation √d bằng số cụ thể + RoPE formula + causal mask</div>
+
+<p><strong>1. Vì sao chia √d — chứng minh bằng số</strong></p>
+<p>Cho <code>q, k ∈ ℝ^d</code>, mỗi entry i.i.d. <code>~ N(0, 1)</code>. Dot product:
+<br><code>q · k = Σᵢ qᵢ · kᵢ</code>
+<br><code>E[q·k] = Σᵢ E[qᵢ]·E[kᵢ] = 0</code> (independence)
+<br><code>Var(q·k) = Σᵢ Var(qᵢ·kᵢ) = Σᵢ (E[qᵢ²]·E[kᵢ²] − 0) = Σᵢ 1·1 = d</code>
+<br>→ std(q·k) = √d.</p>
+
+<p><strong>Ví dụ số d=64</strong>: std ≈ 8. Dot products điển hình ∈ [−24, +24] (3σ). Softmax([24, 20, 16, ...]) ≈ [0.98, 0.018, 0.0003, ...] — gần one-hot. Gradient softmax = <code>diag(p) − p·pᵀ</code> (outer product), khi p ≈ one-hot → gradient ≈ 0.</p>
+
+<p><strong>Sau khi chia √d</strong>: <code>Var(q·k / √d) = d/d = 1</code>. Std ≈ 1. Softmax([3, 2, 1, ...]) ≈ [0.66, 0.24, 0.09, ...] — smooth, gradient healthy.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>2. Vì sao softmax không phải sigmoid?</strong></p>
+<p>Softmax normalize thành probability distribution (Σ = 1) → mỗi query "chia" attention 100% cho m keys. Sigmoid independent per key (mỗi key có attention 0-1 riêng) → tổng có thể > 1 hoặc < 1 → không diễn giải được "weight". Softmax cũng có gradient tự cạnh tranh (raise A ⇒ lower B) → sharp focus. Sigmoid không có → attention lan man.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>3. Multi-head math — concat + projection</strong></p>
+<p>Head hᵢ output shape <code>(L, d_head)</code>. h heads → <code>concat = (L, h·d_head) = (L, d_model)</code>. Sau đó project qua <code>W_O ∈ ℝ^(d_model × d_model)</code>: <code>out = concat · W_O</code>. Params/head: 3·d_model·d_head (Q,K,V) + W_O share. Với d_model=4096, h=32, d_head=128: mỗi layer attention = 4·4096² = 67M params.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>4. Causal mask matrix (cho decoder GPT)</strong></p>
+<pre><code>M = ⎡ 0  −∞ −∞ −∞ ⎤    L=4
+    ⎢ 0   0 −∞ −∞ ⎥    scores' = scores + M
+    ⎢ 0   0  0 −∞ ⎥    softmax(scores') → row t chỉ nhìn cols ≤ t
+    ⎣ 0   0  0  0 ⎦
+
+# PyTorch: mask = torch.triu(torch.full((L,L), -inf), diagonal=1)
+# hoặc: scores.masked_fill_(torch.triu(ones, diagonal=1).bool(), -inf)</code></pre>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>5. RoPE (Rotary Position Embedding) — formula</strong></p>
+<p>Ý tưởng: thay vì add position vector vào embed, XOAY Q và K theo góc phụ thuộc position. Cho vector <code>x ∈ ℝ^d</code> tại position m, chia thành d/2 cặp (x₁,x₂), (x₃,x₄), ...</p>
+<pre><code>Với cặp thứ i, tần số θᵢ = 10000^(−2i/d):
+  ⎡ x'_{2i}   ⎤ = ⎡ cos(m·θᵢ)  −sin(m·θᵢ) ⎤ ⎡ x_{2i}   ⎤
+  ⎣ x'_{2i+1} ⎦   ⎣ sin(m·θᵢ)   cos(m·θᵢ) ⎦ ⎣ x_{2i+1} ⎦
+
+Property MAGIC: (RoPE(q, m)) · (RoPE(k, n)) = f(q, k, m−n)
+→ Dot product PHỤ THUỘC relative position (m−n), không absolute.</code></pre>
+<p>Lợi ích: extrapolate longer context (train 2k, test 8k vẫn OK với NTK scaling). Llama-2/3, DeepSeek, Qwen đều dùng RoPE.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>6. KV-cache size formula</strong></p>
+<p><code>bytes = 2 · L · B · S · H · d_head · bytes_per_elem</code>
+<br>Trong đó: 2 = K+V, L = n_layers, B = batch, S = seq_len, H = n_heads (hoặc n_kv_heads nếu GQA), d_head = dim/head, bytes/elem = 2 (fp16).</p>
+<p><strong>GQA (Grouped-Query Attention) là gì (1 dòng)</strong>: bình thường mỗi Query head có 1 cặp Key/Value head riêng (H heads Q, H heads K, H heads V). GQA cho NHIỀU Query head dùng CHUNG 1 nhóm Key/Value head (VD 64 Q-head chia sẻ chỉ 8 K/V-head) → cache nhỏ hơn 8× vì chỉ cần lưu K,V cho 8 nhóm thay vì 64. Đánh đổi: chất lượng giảm nhẹ (~1%) vì các Q-head trong cùng nhóm "nhìn" chung 1 K/V. Chi tiết đầy đủ + bảng số + trade-off ở <strong>L4.6 (Inference)</strong> mục KV cache.</p>
+<p><strong>Ví dụ Llama-70B, batch=8, ctx=4096</strong>: L=80, H=8 (GQA n_kv=8), d_head=128 → <code>2 · 80 · 8 · 4096 · 8 · 128 · 2 = 10.7 GB</code>. Không GQA (H=64): 85 GB — không fit A100.</p>
+</div>
+
+<h2>3. Implement single attention head — PyTorch</h2>
+
+<pre><code>import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class AttentionHead(nn.Module):
+    def __init__(self, d_model, d_head):
+        super().__init__()
+        self.d_head = d_head
+        self.W_q = nn.Linear(d_model, d_head, bias=False)
+        self.W_k = nn.Linear(d_model, d_head, bias=False)
+        self.W_v = nn.Linear(d_model, d_head, bias=False)
+
+    def forward(self, x, mask=None):
+        # x: (batch, seq_len, d_model)
+        Q = self.W_q(x)   # (batch, seq_len, d_head)
+        K = self.W_k(x)
+        V = self.W_v(x)
+
+        # Attention scores
+        scores = Q @ K.transpose(-2, -1) / (self.d_head ** 0.5)
+        # (batch, seq_len, seq_len)
+
+        # Optional mask (for causal/padding)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+
+        weights = F.softmax(scores, dim=-1)
+        return weights @ V   # (batch, seq_len, d_head)
+</code></pre>
+
+<h2>4. Multi-Head Attention</h2>
+
+<p><em>Nhắc lại thuật ngữ (xem L4.1 mục Embeddings)</em>: <strong>d_model</strong> = số chiều vector đại diện 1 token trong toàn model (VD 512 ở bảng dưới, 4096 ở Llama-7B). Mỗi head bên dưới chỉ "nhìn" 1 lát cắt nhỏ (d_head) của không gian d_model chiều đó — <code>d_head = d_model / n_heads</code>.</p>
+
+<p>Ý tưởng: chạy nhiều attention head parallel với dimensions nhỏ hơn, concat, project. Mỗi head học một "aspect" khác nhau (syntactic, semantic, coreference, etc).</p>
+
+<pre><code>class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model=512, n_heads=8):
+        super().__init__()
+        assert d_model % n_heads == 0
+        self.d_head = d_model // n_heads     # e.g. 64
+        self.n_heads = n_heads
+        self.W_q = nn.Linear(d_model, d_model)
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+        self.W_o = nn.Linear(d_model, d_model)
+
+    def forward(self, x, mask=None):
+        B, L, _ = x.shape
+        # Project + reshape để tách heads
+        Q = self.W_q(x).view(B, L, self.n_heads, self.d_head).transpose(1, 2)
+        K = self.W_k(x).view(B, L, self.n_heads, self.d_head).transpose(1, 2)
+        V = self.W_v(x).view(B, L, self.n_heads, self.d_head).transpose(1, 2)
+        # Q, K, V shape: (B, n_heads, L, d_head)
+
+        scores = Q @ K.transpose(-2, -1) / (self.d_head ** 0.5)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        attn = F.softmax(scores, dim=-1)
+        out = attn @ V                       # (B, n_heads, L, d_head)
+
+        # Concat heads + project
+        out = out.transpose(1, 2).contiguous().view(B, L, -1)
+        return self.W_o(out)
+</code></pre>
+
+<h2>5. Transformer Block</h2>
+
+<p>1 block = Multi-Head Attention → LayerNorm → FFN → LayerNorm, với 2 residual connections.</p>
+
+<pre><code>class TransformerBlock(nn.Module):
+    def __init__(self, d_model=512, n_heads=8, d_ff=2048, dropout=0.1):
+        super().__init__()
+        self.attn = MultiHeadAttention(d_model, n_heads)
+        self.ln1 = nn.LayerNorm(d_model)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Linear(d_ff, d_model),
+        )
+        self.ln2 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, mask=None):
+        # Pre-LN variant (GPT-2+, more stable)
+        x = x + self.dropout(self.attn(self.ln1(x), mask))
+        x = x + self.dropout(self.ffn(self.ln2(x)))
+        return x
+</code></pre>
+
+<div class="callout">
+<div class="label">2 tricks quan trọng</div>
+<ol>
+  <li><strong>Residual connections</strong> (x + sublayer(x)): giúp gradient flow qua nhiều layers (thường 12-96 layer)</li>
+  <li><strong>Layer Normalization</strong>: chuẩn hóa activations per-sample → training stable, converge nhanh</li>
+</ol>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Pre-LN vs Post-LN, FFN 4×, GeGLU vs SwiGLU, residual math</div>
+
+<p><strong>1. Pre-LN vs Post-LN — cùng components, khác thứ tự, khác world</strong></p>
+<pre><code>Post-LN (Vaswani 2017 gốc):    x → Attn → Add → LN → FFN → Add → LN
+Pre-LN  (GPT-2+, Llama, T5):   x → LN → Attn → Add → LN → FFN → Add
+
+Post-LN gradient flow (chain rule):
+  ∂L/∂x qua N layers ~ Π norm-jacobian → có thể vanish/explode với N > 12
+  → Cần warmup learning rate cẩn thận (5k-10k steps) mới train được
+  → Nhạy với hyperparameters
+
+Pre-LN:
+  Residual pathway x → x + f(LN(x)) → gradient identity dominant
+  ∂L/∂x qua N layers → gradient truyền thẳng qua x (bypass sublayer)
+  → Train được N = 100+ layers KHÔNG cần warmup phức tạp
+  → Stability >> Post-LN cho deep models</code></pre>
+
+<p><strong>Nhược Pre-LN</strong>: representation cuối cùng "less normalized" (chồng nhiều residual không LN cuối) → cần thêm 1 <code>final_ln</code> trước output projection. Xiong 2020 chứng minh math: Pre-LN có Lipschitz constant thấp hơn → stable.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>2. Vì sao residual connection — gradient highway</strong></p>
+<p>Không residual: <code>x_{n+1} = f_n(x_n)</code>. <code>∂x_N/∂x_0 = Π f'_n</code> — nhân N Jacobians → vanish/explode.
+<br>Có residual: <code>x_{n+1} = x_n + f_n(x_n)</code>. <code>∂x_N/∂x_0 = Π (I + f'_n) = I + Σ(...)</code> — có thành phần I (identity) luôn ≥ 1 → gradient KHÔNG vanish.
+<br>Đây là why ResNet-152 train được (2015) và why Transformer 100 layer khả thi.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>3. FFN expansion 4× — vì sao con số này</strong></p>
+<p>FFN: <code>x → W₁ (d→4d) → activation → W₂ (4d→d)</code>. Vì sao 4× không phải 2× hay 8×?</p>
+<ul>
+  <li><strong>Params balance</strong>: Attention layer = 4·d² params (Q,K,V,O). FFN = 2·d·(4d) = 8·d². Ratio 2:1 FFN:attention → FFN chiếm 66% params. Vaswani chọn 4× để đạt ratio này empirically tốt.</li>
+  <li><strong>Capacity argument</strong>: FFN là "memory bank" — key-value lookup theo activation (Geva 2021 chứng minh FFN ≈ associative memory). 4× dim đủ để store facts. 2× thiếu, 8× redundant.</li>
+  <li><strong>Modern trend</strong>: SwiGLU cần 3 matrices thay vì 2 — muốn GIỮ NGUYÊN 8d² params như vanilla 4× GeLU thì phải hạ hệ số xuống ~2.67× (8/3), đúng bằng tỉ lệ Llama-1/2 dùng thật (11008/4096 ≈ 2.69×). Llama-3 lại dùng hệ số CAO hơn nữa (3.5×, tức 14336/4096 đúng bằng 3.5) — đây là 1 lựa chọn TĂNG capacity thật (~10.5d² params, nhiều hơn ~31% so với vanilla 8d²), không phải "giữ nguyên params" — xem phép tính chi tiết ở khối code ngay dưới.</li>
+</ul>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>4. GeGLU vs SwiGLU — activation modern</strong></p>
+<pre><code>Vanilla FFN:  FFN(x) = W₂ · GeLU(W₁ · x)
+GLU family:   FFN(x) = W₂ · (W₁·x ⊙ σ(V·x))   [thêm gate V]
+
+GeGLU (T5v1.1):  FFN(x) = W₂ · (GeLU(W₁·x) ⊙ (V·x))
+SwiGLU (Llama):  FFN(x) = W₂ · (Swish(W₁·x) ⊙ (V·x))
+                 Swish(z) = z · σ(z)
+
+# Gated variants: quality ↑ 1-2% MMLU vs vanilla GeLU
+# Cost: 3 matrices thay vì 2 → ở CÙNG d_ff, tốn 1.5× params FFN (3·d·d_ff so với 2·d·d_ff)
+
+# Muốn GIỮ NGUYÊN 8d² params (bằng vanilla 4×/2-matrix):
+#   giải 3·d·d_ff = 8d²  →  d_ff = (8/3)d ≈ 2.67d
+#   → đúng tỉ lệ Llama-1/2 dùng thật (hidden=4096, FFN=11008 ≈ 2.69×4096)
+
+# Llama-3 lại dùng d_ff = 3.5d (hidden=4096, FFN=14336 = đúng 3.5×4096):
+#   3·d·(3.5d) = 10.5d² → NHIỀU HƠN ~31% so với vanilla 8d², không phải "params match"
+#   → đây là quyết định TĂNG capacity thật, không phải giữ nguyên quy mô tham số</code></pre>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>5. Gotchas Transformer thường gặp</strong></p>
+<ul>
+  <li><strong>Attention mask shape</strong>: batched masking. Shape đúng: <code>(B, 1, 1, L)</code> broadcast với scores <code>(B, H, L, L)</code>. Wrong shape → mask sai token → nhìn thấy future → train ok, generate garbage.</li>
+  <li><strong>Padding token attention</strong>: nếu pad không mask → attention score với pad → weighted V bao gồm pad embed → noise.</li>
+  <li><strong>-inf trong fp16</strong>: <code>masked_fill(-inf)</code> có thể overflow → NaN. Dùng <code>-1e4</code> hoặc <code>torch.finfo(dtype).min</code>.</li>
+  <li><strong>LayerNorm vs RMSNorm</strong>: Llama dùng RMSNorm (<code>x / sqrt(mean(x²) + ε) · g</code>) — không subtract mean, chỉ scale. Nhanh 10-15%, quality tương đương.</li>
+</ul>
+
+<p><strong>Numeric example — 32-layer × 4096-dim model (GPT-3 6.7B scale)</strong></p>
+<table>
+<tr><th>Component</th><th>Params</th><th>Memory (fp16)</th></tr>
+<tr><td>Token embed 50k × 4096</td><td>205M</td><td>410 MB</td></tr>
+<tr><td>Attn 32 layer × 4·4096²</td><td>2.15B</td><td>4.3 GB</td></tr>
+<tr><td>FFN 32 layer × 2·4·4096²</td><td>4.29B</td><td>8.6 GB</td></tr>
+<tr><td>LN + output</td><td>~0.2B</td><td>0.4 GB</td></tr>
+<tr><td><strong>Total</strong></td><td>~6.7B</td><td>~13.4 GB</td></tr>
+<tr><td>KV cache ctx=2k, batch=1</td><td>—</td><td>32·32·128·2·2·2048 ≈ 1.07 GB</td></tr>
+<tr><td>FLOPs/forward token</td><td>—</td><td>2·N = 13.4 GFLOPs</td></tr>
+</table>
+</div>
+
+<h2>6. 3 flavors Transformer</h2>
+
+<h3>6.1 Encoder-only (BERT, RoBERTa)</h3>
+<ul>
+  <li>Bidirectional attention (nhìn cả past + future)</li>
+  <li>Pretraining: Masked LM (che 15% token, predict)</li>
+  <li>Dùng cho: classification, NER, question answering</li>
+</ul>
+
+<h3>6.2 Decoder-only (GPT, LLaMA, Claude)</h3>
+<ul>
+  <li>Causal (masked) attention — token t chỉ nhìn được token &le; t</li>
+  <li>Pretraining: next-token prediction</li>
+  <li>Dùng cho: text generation, chat, code</li>
+  <li><strong>Đây là 99% LLM hiện tại</strong></li>
+</ul>
+
+<h3>6.3 Encoder-Decoder (T5, BART, original Transformer)</h3>
+<ul>
+  <li>Encoder bidirectional, Decoder causal + cross-attention lên encoder output</li>
+  <li>Pretraining: denoising / span corruption</li>
+  <li>Dùng cho: translation, summarization</li>
+</ul>
+
+<h2>7. Positional Encoding</h2>
+
+<p>Attention không có notion of order (permutation-equivariant). Phải inject position info.</p>
+
+<pre><code># 3 cách:
+# 1. Sinusoidal (Vaswani 2017 gốc): PE(pos, 2i) = sin(pos / 10000^(2i/d))
+# 2. Learned embedding (BERT, GPT-2): nn.Embedding(max_len, d_model)
+# 3. RoPE (LLaMA, GPT-J): rotary — vào Q, K trước attention, extrapolate tốt
+</code></pre>
+
+<h2>8. Vì sao Transformer beat RNN?</h2>
+
+<table>
+<tr><th></th><th>LSTM/RNN</th><th>Transformer</th></tr>
+<tr><td>Parallelization</td><td>Sequential — chậm</td><td>Fully parallel — GPU-friendly</td></tr>
+<tr><td>Long-range dependency</td><td>Yếu (vanish)</td><td>Direct O(1) — mỗi token thấy mọi token</td></tr>
+<tr><td>Scaling</td><td>Không tốt lắm với more data</td><td>Empirically scale với data + compute (Chinchilla)</td></tr>
+<tr><td>Memory</td><td>O(L)</td><td>O(L²) — hạn chế lớn với long context</td></tr>
+</table>
+
+<div class="callout warn">
+<div class="label">Trade-off</div>
+<p>Transformer O(L²) memory + compute là bottleneck cho long context. Nhiều research: Sparse Attention, Longformer, FlashAttention (2022, wall-clock optim), Mamba (2023, state-space thay attention).</p>
+</div>
+
+<h2>9. FlashAttention (Dao et al. 2022) — cơ chế thật, không chỉ là cái tên hay bị nhắc</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>"FlashAttention" đã được nhắc tới ít nhất 4 lần ở trên (§8 Trade-off, QA Q2, Q5, Evidence) như 1 "cái tên phép màu giải quyết O(L²)" nhưng chưa giải thích NÓ LÀM GÌ THẬT SỰ. Tưởng tượng bạn nấu 1 nồi phở 100 nguyên liệu: cách nấu "ngây thơ" là lấy TỪNG nguyên liệu ra khỏi tủ lạnh (chậm, xa bếp), chế biến 1 chút, CẤT LẠI vào tủ lạnh, rồi lấy nguyên liệu tiếp theo ra — tốn cực nhiều thời gian ĐI LẠI giữa bếp và tủ lạnh dù bản thân việc nấu (compute) không nhiều. FlashAttention giống 1 đầu bếp thông minh: bê CẢ MỘT KHAY nguyên liệu (1 block dữ liệu vừa đủ) ra bàn bếp (bộ nhớ nhanh SRAM) 1 lần, chế biến XONG HẾT khay đó trước khi cất, giảm tối đa số lần đi lại tủ lạnh (bộ nhớ chậm HBM) — dù tổng lượng "nấu" (FLOPs) không đổi, thời gian THỰC TẾ giảm mạnh vì phần "đi lại" mới là nút thắt cổ chai, không phải phần "nấu".</p>
+
+<p><strong>Vấn đề cụ thể</strong>: attention chuẩn (§2-4 ở trên) tính toàn bộ ma trận <code>scores = Q·K^T</code> (kích thước L×L) rồi GHI ra bộ nhớ GPU chính (HBM — High Bandwidth Memory, dung lượng lớn nhưng CHẬM để đọc/ghi), sau đó ĐỌC LẠI để tính softmax, rồi ĐỌC LẠI LẦN NỮA để nhân với V. Với L=16k, ma trận L×L = 256 triệu phần tử — chiếm rất nhiều thời gian ĐỌC/GHI qua lại HBM, dù compute (phép nhân ma trận) tự nó không phải nút thắt trên GPU hiện đại. Đây gọi là <strong>memory-bound</strong> (bị giới hạn bởi băng thông bộ nhớ), không phải compute-bound.</p>
+
+<pre><code># Attention "ngây thơ" (những gì code ở §3-4 thực sự làm khi chạy trên GPU):
+scores = Q @ K.T / sqrt(d)      # (1) GHI ra HBM: ma trận L×L đầy đủ
+weights = softmax(scores)       # (2) ĐỌC lại từ HBM, tính softmax, GHI kết quả ra HBM
+output = weights @ V            # (3) ĐỌC lại từ HBM lần nữa, nhân V
+# → 3 lượt đọc/ghi HBM cho ma trận L×L — với L lớn, đây là phần TỐN THỜI GIAN NHẤT,
+#   không phải phép nhân ma trận (GPU dư thừa compute, thiếu băng thông bộ nhớ)</code></pre>
+
+<p><strong>Cơ chế FlashAttention — 2 mẹo kỹ thuật chính</strong>:</p>
+<pre><code># Mẹo 1 — TILING (chia khối): thay vì tính CẢ ma trận L×L 1 lần, chia Q, K, V
+# thành các KHỐI nhỏ (block) vừa đủ để CẢ khối nằm gọn trong SRAM (bộ nhớ on-chip
+# của GPU — cực nhanh nhưng cực nhỏ, VD ~192KB/SM trên A100, so với HBM ~40-80GB).
+# Vòng lặp ngoài: duyệt qua các block của K, V (load vào SRAM 1 lần)
+# Vòng lặp trong: duyệt qua các block của Q (load vào SRAM), tính attention CHO
+#   BLOCK ĐÓ ngay trong SRAM, cộng dồn kết quả — KHÔNG BAO GIỜ ghi ma trận L×L
+#   đầy đủ ra HBM, chỉ ghi kết quả CUỐI CÙNG (output, kích thước L×d, nhỏ hơn nhiều).
+
+# Mẹo 2 — ONLINE SOFTMAX (softmax "chạy dần", không cần thấy hết hàng 1 lúc):
+# softmax(x_i) = exp(x_i) / Σ exp(x_j) — công thức chuẩn cần biết TOÀN BỘ hàng
+# (mọi x_j) trước khi tính bất kỳ phần tử nào. Nhưng vì tính theo BLOCK (mẹo 1),
+# tại 1 thời điểm chỉ thấy 1 phần của hàng. Online softmax giữ 2 số chạy
+# (running max, running sum) và CẬP NHẬT DẦN mỗi khi thấy thêm 1 block mới —
+# về mặt TOÁN HỌC cho kết quả CHÍNH XÁC TUYỆT ĐỐI giống softmax thường (không
+# phải xấp xỉ), chỉ khác cách TÍNH TUẦN TỰ theo block thay vì cần thấy hết 1 lần.</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: FlashAttention KHÔNG phải "attention xấp xỉ" (approximate attention) như Linformer/Performer (những kỹ thuật đánh đổi độ chính xác lấy tốc độ bằng cách xấp xỉ softmax) — FlashAttention tính ra kết quả TOÁN HỌC CHÍNH XÁC TUYỆT ĐỐI giống hệt attention chuẩn, chỉ khác cách SẮP XẾP LẠI thứ tự tính toán để giảm số lần đọc/ghi HBM. Đây là lý do paper gốc gọi nó "IO-aware EXACT attention" — chữ "exact" ở đây rất có chủ đích, phân biệt với dòng nghiên cứu "sparse/linear attention" đã nhắc ở §8's Trade-off callout.</p>
+
+<p><strong>Backward pass — thêm 1 mẹo thứ 3 (recomputation)</strong>: để tính gradient, backprop thường cần activation đã lưu từ forward (giống nguyên lý đã học ở <code>L3_1_nn_backprop.html</code> §8 gradient checkpointing). Nhưng FlashAttention CỐ TÌNH KHÔNG lưu ma trận attention L×L (vì đó chính là thứ nó tránh ghi ra HBM ở forward) — thay vào đó, backward pass TÍNH LẠI (recompute) các block attention cần thiết ngay trong SRAM, y hệt tinh thần gradient checkpointing: chấp nhận tính lại (thêm compute, vốn đang DƯ THỪA trên GPU) để tránh phải đọc/ghi 1 lượng lớn dữ liệu qua HBM (vốn là nút thắt thật sự).</p>
+
+<table>
+<tr><th></th><th>Attention chuẩn (§2-4)</th><th>FlashAttention (2022)</th><th>Sparse/Linear attention (Longformer, Performer)</th></tr>
+<tr><td>Kết quả toán học</td><td>Chính xác</td><td>Chính xác TUYỆT ĐỐI (giống hệt)</td><td>Xấp xỉ (đánh đổi lấy tốc độ)</td></tr>
+<tr><td>Memory cho ma trận attention</td><td>O(L²) — materialize đầy đủ ra HBM</td><td>O(L) — không bao giờ materialize L×L đầy đủ</td><td>O(L) hoặc O(L·√L) tuỳ kỹ thuật</td></tr>
+<tr><td>Compute (FLOPs)</td><td>O(L²·d)</td><td>O(L²·d) — KHÔNG giảm, chỉ giảm I/O</td><td>Giảm thật (ít cặp token hơn)</td></tr>
+<tr><td>Wall-clock speedup thực đo (paper gốc)</td><td>Baseline</td><td>15% (BERT-large), 3× (GPT-2), 2.4× (Long-Range Arena)</td><td>Tuỳ kỹ thuật, thường đổi lấy quality thấp hơn</td></tr>
+</table>
+
+<p><strong>Insight</strong>: đây là bài học "profiling trước khi optimize" kinh điển ở quy mô GPU — trực giác thông thường nói "giảm FLOPs để tăng tốc", nhưng FlashAttention KHÔNG giảm 1 FLOP nào (compute giữ nguyên O(L²·d)) mà vẫn nhanh hơn 2-3× thực đo, vì nút thắt thật sự là BĂNG THÔNG BỘ NHỚ (memory bandwidth), không phải compute. Đây cũng lý giải vì sao §8's Trade-off callout liệt kê FlashAttention riêng biệt với "Sparse Attention/Longformer/Mamba" — nhóm sau THẬT SỰ giảm compute (đánh đổi coverage/quality), còn FlashAttention chỉ tổ chức lại I/O của đúng 1 phép tính không đổi.</p>
+
+<p><strong>📖 Mở rộng</strong>: FlashAttention-2 (2023) và FlashAttention-3 (2024, tối ưu riêng cho Hopper H100) tiếp tục cải thiện cùng ý tưởng cốt lõi (tiling + online softmax + recomputation) bằng cách tận dụng tốt hơn cấu trúc phần cứng GPU đời mới (warp-level parallelism, tận dụng Tensor Core hiệu quả hơn) — không đổi thuật toán nền tảng, chỉ engineering tốt hơn quanh cùng insight "memory-bound, không phải compute-bound".</p>
+</div>
+
+<h2>10. Interview questions</h2>
+
+<div class="callout">
+<div class="label">Q1: Vì sao chia √d_k?</div>
+<p>Dot product Q·K với d_k=64 có variance ~64 → sau softmax sẽ saturate (gradient ~0). Chia √d_k giữ variance ~1 → softmax không saturate → gradient healthy.</p>
+</div>
+
+<div class="callout">
+<div class="label">Q2: Attention complexity?</div>
+<p>Time O(L² · d), memory O(L²) cho attention matrix. Full-precision GPT-3 175B (96 head/layer) với 4k context: 1 layer, toàn bộ 96 head cùng lúc = 4096² × 4 bytes × 96 heads ≈ 6.4 GB (các layer chạy tuần tự, không cần giữ ma trận attention của TẤT CẢ layer trong bộ nhớ cùng lúc — chỉ 1 layer tại 1 thời điểm). Vẫn là con số khổng lồ cho 1 layer duy nhất — lý do cần FlashAttention.</p>
+</div>
+
+<div class="callout">
+<div class="label">Q3: BERT vs GPT khác gì?</div>
+<p>BERT: encoder-only, bidirectional attention, pretrain masked LM. GPT: decoder-only, causal attention, pretrain next-token. BERT tốt cho classification, GPT tốt cho generation. GPT scale tốt hơn với size → dominant LLM.</p>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Attention formula: Attention(Q, K, V) = ?</p>
+<p class="a">softmax(Q·K^T / √d_k) · V. Compute similarity Q~K, scale, softmax to weights, weighted sum V.</p>
+
+<p class="q">2. Vì sao Multi-Head thay vì 1 head lớn?</p>
+<p class="a">Mỗi head học 1 aspect khác nhau (syntactic, semantic, coreference). Concat rồi project. Empirically better than single head cùng total dim.</p>
+
+<p class="q">3. GPT dùng causal mask nghĩa là gì?</p>
+<p class="a">Token position t chỉ nhìn được token positions ≤ t (không nhìn future). Impl: đặt scores[t, t+1:] = -∞ trước softmax. Bắt buộc cho autoregressive generation.</p>
+
+<p class="q">4. Positional encoding: sinusoidal vs learned vs RoPE. Ưu nhược?</p>
+<p class="a">Sinusoidal: no params, extrapolate ok. Learned: flexible, but capped at max_len train. RoPE: rotate Q,K, extrapolate tốt cho longer context, dùng ở LLaMA/GPT-J.</p>
+
+<p class="q">5. Transformer O(L²) là gì? Ảnh hưởng và giải pháp?</p>
+<p class="a">Attention matrix L×L, memory + compute quadratic với sequence length. 4k tokens ≈ 6.4GB per layer GPT-3 (xem phép tính chi tiết ở Q2 phía trên: 4096² × 4 bytes × 96 heads). Giải pháp: FlashAttention (kernel fusion, 2-4× speedup), sparse attention (Longformer, sliding window), state-space models (Mamba).</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence & implement</div>
+  <ul>
+    <li>Chạy code section 3, 4, 5 trong Google Colab</li>
+    <li>Karpathy's <code>nanoGPT</code>: <a href="https://github.com/karpathy/nanoGPT">github.com/karpathy/nanoGPT</a> — 300 lines PyTorch, full GPT training</li>
+    <li>AI Orchestrator: <code>agents/*.py</code> gọi Claude API — Claude là decoder-only Transformer 200B+ params</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1706.03762">Vaswani et al (2017) — Attention Is All You Need</a> — paper gốc, đọc kỹ Fig 2</li>
+    <li>📄 <a href="https://arxiv.org/abs/1810.04805">Devlin et al (2018) — BERT</a></li>
+    <li>📄 <a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf">Radford et al (2019) — GPT-2</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2005.14165">Brown et al (2020) — GPT-3</a></li>
+    <li>🎥 <a href="https://youtu.be/kCc8FmEb1nY">Karpathy — Let's build GPT from scratch</a> — 2h master class</li>
+    <li>📄 <a href="https://arxiv.org/abs/2205.14135">Dao et al (2022) — FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness</a></li>
+    <li>📖 <a href="http://jalammar.github.io/illustrated-transformer/">Illustrated Transformer (Jay Alammar)</a> — visual explainer</li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L4_1_tokenization.html">← L4.1</a>
+  <a href="L4_3_pretraining.html">L4.3 · LLM Pretraining →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R4.5 · Indexing Strategies (HNSW, IVF) — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Retrieval Techniques · Điểm 5/6</div>
+  <h1>R4.5 · Indexing Strategies (HNSW, IVF)</h1>
+  <p class="subtitle">Không chỉ "graph nhiều tầng" hay "chia cluster" — cơ chế tìm kiếm THẬT bên trong 2 loại ANN index phổ biến nhất, từng bước, tính tay được.</p>
+  <div class="level">Độ khó: Khó · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>Dễ</strong>: nhắc lại vì sao cần ANN index thay vì brute-force (đã học ở R4.1) — ANN đánh đổi 1 chút recall để lấy tốc độ.</li>
+<li><strong>Trung bình</strong>: vẽ được đường đi 1 query greedy search qua các tầng của HNSW, từ entry point tới kết quả cuối.</li>
+<li><strong>Trung bình</strong>: giải thích cơ chế IVF (Voronoi cell + nprobe) và trade-off recall/speed khi tăng/giảm nprobe.</li>
+<li><strong>Khó</strong>: giải thích được vì sao HNSW đạt O(log N) thay vì O(N), và vì sao IVF-PQ tiết kiệm RAM tới 50 lần.</li>
+<li><strong>Khó</strong>: chọn đúng tham số (M, efConstruction, ef, nprobe) cho 1 tình huống cụ thể, phân biệt tham số nào chỉnh được SAU khi build index, tham số nào không.</li>
+<li><strong>Khó</strong>: giải thích đúng cơ chế thật của DiskANN (graph Vamana 1 tầng + PQ trong RAM + full vector trên SSD) — không lặp lại mô tả sai "chỉ là tối ưu cache line" của tài liệu cũ.</li>
+<li><strong>Khó</strong>: phân biệt được "nén ở TẦNG EMBEDDING" (R4.6 §6, trước khi vào bất kỳ index nào) với "nén NGAY TRONG cấu trúc index" (HNSW/IVF tự lưu vector đã quantize), và chọn đúng combo SQ/PQ + HNSW/IVF theo ngân sách RAM cho trước.</li>
+<li><strong>Khó</strong>: đọc và giải thích được hình dạng đường cong recall-latency khi quét <code>ef</code> (HNSW) hay <code>nprobe</code> (IVF) — vì sao có 1 "góc gấp khúc" (knee) và tại sao KHÔNG nên đẩy recall vượt quá góc đó nếu chưa đo trên eval set thật.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Trang này là <strong>phần khó nhất</strong> trong 6 khái niệm — nên đọc sau <a href="R4_1_vector_databases.html">R4.1</a> (đã trả lời "vì sao cần ANN index"). Bảng so sánh đặc tính Flat/HNSW/IVF-PQ/ScaNN-DiskANN (recall/speed/RAM/khi dùng) đã có ở <code>../modules/L5_2_rag.html §4.5</code> — trang này <strong>giải thích cơ chế bên trong</strong> thay vì chỉ liệt kê đặc tính, đúng gap mà module cũ chưa lấp: layer nào build trước, greedy search đi qua node nào, vì sao có nhiều tầng thay vì 1 tầng phẳng.</p>
+<p><strong>[TRAIN-KNOWLEDGE, ổn định]</strong> Cơ chế toán học/cấu trúc dữ liệu HNSW (paper Malkov &amp; Yashunin 2016) và IVF/PQ (Jégou et al.) là kiến thức nền tảng đã có từ trước cutoff train, không đổi theo thời gian — không phải "tin tức 2026".</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy — tìm nhà ở 1 thành phố lạ (HNSW)</div><p>Tầng trên cùng của HNSW giống bản đồ quốc lộ (rất ít điểm, nhảy được xa — từ tỉnh này sang tỉnh khác trong 1 bước). Tầng giữa giống bản đồ đường tỉnh (nhiều điểm hơn, nhảy tầm trung). Tầng đáy giống bản đồ từng con hẻm (đầy đủ mọi node, chỉ nhảy được tới hàng xóm gần). Bạn tìm 1 địa chỉ bằng cách: bắt đầu ở quốc lộ, đi tới nút gần đích nhất có thể → xuống đường tỉnh tại đúng khu vực đó → tiếp tục thu hẹp → cuối cùng dò từng hẻm ở tầng đáy để tìm đúng nhà.</p></div>
+<div class="callout success"><div class="label">💡 Analogy — tìm sách theo khu vực thư viện (IVF)</div><p>Thay vì xếp N vector rải rác, IVF chia không gian vector thành K "khu vực" (cluster, dùng K-means để xác định) — mỗi khu vực có 1 "tâm" (centroid) đại diện. Khi có query, thay vì lục soát cả thư viện, bạn chỉ cần: (1) tìm centroid nào GẦN query nhất (so sánh với K centroid, K &lt;&lt; N, rất nhanh), (2) chỉ lục soát vector THUỘC khu vực đó (và có thể vài khu vực lân cận để tăng recall).</p></div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. HNSW (Hierarchical Navigable Small World)</h3>
+
+<h4>1.1 Cơ chế build (index-time)</h4>
+<p>Mỗi vector được gán ngẫu nhiên vào 1 số tầng cao nhất nó xuất hiện, theo phân phối xác suất giảm dần (càng lên cao càng ít điểm, tương tự skip list trong cấu trúc dữ liệu cổ điển). Ở mỗi tầng, vector được nối với <code>M</code> vector "gần" nhất đã có (tham số <code>M</code> — số kết nối tối đa mỗi node).</p>
+<pre><code># Ví dụ phân phối tầng cho 10,000 vector (minh hoạ, tỉ lệ thường dùng ~1/e mỗi tầng lên)
+Tầng 3 (cao nhất): ~5 vector      ← rất ít, entry point nằm đây
+Tầng 2:            ~50 vector
+Tầng 1:            ~500 vector
+Tầng 0 (đáy):      10,000 vector ← TOÀN BỘ N vector luôn nằm ở đây</code></pre>
+
+<h4>1.2 Cơ chế search (query-time) — greedy search từng tầng</h4>
+<pre><code>1. Bắt đầu ở entry point của tầng CAO NHẤT (1 node cố định, biết trước)
+2. Ở tầng hiện tại: nhìn các "hàng xóm" của node đang đứng, nhảy tới hàng xóm
+   GẦN QUERY HƠN node hiện tại. Lặp lại tới khi không hàng xóm nào gần hơn nữa
+   (đây là "local minimum" ở tầng này)
+3. Đi XUỐNG 1 tầng, dùng chính node vừa dừng làm điểm bắt đầu cho tầng dưới
+   (vì cùng 1 vector xuất hiện ở nhiều tầng — chỉ khác số lượng kết nối)
+4. Lặp lại bước 2-3 cho tới tầng đáy (tầng 0 — chứa TOÀN BỘ N vector)
+5. Ở tầng 0: mở rộng tìm kiếm với ef candidate (không dừng ở local minimum đầu
+   tiên — giữ 1 danh sách ef ứng viên tốt nhất, tiếp tục mở rộng) → trả về top-k</code></pre>
+
+<div class="callout"><div class="label">📖 Ví dụ minh hoạ 1 query đi qua 3 tầng</div><p>Giả sử query Q cần tìm vector gần nhất trong 10,000 vector, index có 3 tầng (như bảng phân phối ở trên):</p>
+<pre><code>Tầng 2 (50 vector): bắt đầu tại entry point E. So Q với hàng xóm của E → nhảy tới
+                     node A (gần Q hơn E). So Q với hàng xóm của A → không ai gần
+                     hơn A nữa → DỪNG tại A (local minimum tầng 2)
+                     ↓ đi xuống tầng 1, bắt đầu tại A
+
+Tầng 1 (500 vector): A giờ có nhiều hàng xóm hơn (tầng dày hơn). So Q với hàng xóm
+                     của A → nhảy tới node B (gần Q hơn A) → tiếp tục tới node C
+                     → không ai gần hơn C → DỪNG tại C
+                     ↓ đi xuống tầng 0, bắt đầu tại C
+
+Tầng 0 (10,000 vector — TOÀN BỘ): C có rất nhiều hàng xóm (tầng đầy đủ). Thay vì
+                     dừng ở local minimum đầu tiên, giữ ef=20 ứng viên tốt nhất,
+                     tiếp tục mở rộng lân cận từng ứng viên → hội tụ về đúng khu
+                     vực chứa vector gần Q nhất → trả về top-k
+
+→ Chỉ mất 3 lượt "nhảy giữa tầng" + vài chục lượt so sánh trong mỗi tầng, thay vì
+  so sánh với cả 10,000 vector như brute-force.</code></pre></div>
+
+<h4>1.3 Vì sao nhanh — O(log N) thay vì O(N)</h4>
+<p>Mỗi tầng thu hẹp không gian tìm kiếm theo cấp số nhân — giống binary search nhưng trên graph thay vì mảng đã sắp xếp. Tầng cao "nhảy xa" bỏ qua phần lớn N vector không liên quan chỉ trong vài bước; chỉ tầng đáy mới cần xem xét kỹ, nhưng đã được thu hẹp về đúng "khu vực" nhờ các tầng trên dẫn đường.</p>
+
+<h4>1.4 Tham số quyết định recall/speed</h4>
+<table>
+<tr><th>Tham số</th><th>Ảnh hưởng</th><th>Chỉnh được SAU khi build (không rebuild)?</th></tr>
+<tr><td><code>M</code></td><td>Số kết nối tối đa mỗi node. Cao hơn = graph dày hơn = recall tốt hơn nhưng RAM/build time tăng</td><td>Không — quyết định lúc build</td></tr>
+<tr><td><code>efConstruction</code></td><td>Số ứng viên xét khi BUILD graph. Chỉ ảnh hưởng chất lượng graph, không ảnh hưởng query-time</td><td>Không — chỉ dùng lúc build</td></tr>
+<tr><td><code>ef</code></td><td>Số ứng viên giữ khi SEARCH (tầng 0). Cao hơn = recall tốt hơn nhưng chậm hơn</td><td><strong>Có</strong> — đây là tham số duy nhất trong 3 cái chỉnh được sau khi build xong</td></tr>
+</table>
+
+<h3>2. IVF (Inverted File Index)</h3>
+
+<h4>2.1 Cơ chế build + search</h4>
+<pre><code>Build: chạy K-means trên toàn bộ N vector → K cluster, mỗi vector gán vào
+       đúng 1 cluster gần centroid nhất (giống Voronoi cell trong hình học)
+
+Search:
+  1. So sánh query với K centroid → tìm nprobe centroid gần nhất
+     (nprobe = số cluster sẽ được lục soát, tham số điều chỉnh được)
+  2. Chỉ brute-force search TRONG các cluster đã chọn (không phải toàn bộ N)
+  3. Trả về top-k trong tập đã lục soát
+
+# nprobe = 1: chỉ soát 1 cluster gần nhất → nhanh nhất nhưng recall thấp nhất
+#            (query có thể nằm gần biên 2 cluster, đáp án đúng lại rơi vào
+#            cluster hàng xóm không được soát)
+# nprobe = K: soát hết mọi cluster → tương đương brute-force (Flat), recall 100%
+#            nhưng mất hết lợi ích tốc độ của IVF
+# Sweet spot: nprobe ≈ 5-10% của K cho hầu hết use case (bench trên eval set thật)</code></pre>
+
+<div class="callout"><div class="label">📖 Ví dụ tính nprobe cho K=1000 cluster</div><p>Với K=1000 cluster (build từ K-means trên toàn bộ dataset), sweet spot nprobe theo rule 5-10% là:</p>
+<pre><code>nprobe_min = 5% × 1000 = 50 cluster
+nprobe_max = 10% × 1000 = 100 cluster
+
+→ Bắt đầu thử nprobe = 50-100, đo recall@10 trên eval set thật:
+  nprobe = 20  → recall@10 = 0.85, latency = 8ms   (quá thấp, dưới sweet spot)
+  nprobe = 50  → recall@10 = 0.94, latency = 15ms  (trong sweet spot)
+  nprobe = 100 → recall@10 = 0.97, latency = 25ms  (trong sweet spot, recall cao hơn)
+  nprobe = 500 → recall@10 = 0.995, latency = 90ms (ngoài sweet spot — gần brute-force,
+                                                      lợi ích recall biên rất nhỏ so với
+                                                      chi phí latency tăng gấp 6×)
+→ Chọn nprobe = 100 nếu ứng dụng chấp nhận 25ms và cần recall cao;
+  chọn nprobe = 50 nếu latency budget chặt hơn.</code></pre></div>
+
+<h4>2.2 Vì sao IVF-PQ (Product Quantization) tiết kiệm RAM tới 50×</h4>
+<p>Đã có số liệu ở <code>L5_2_rag.html §4.5</code> — đây là phần "vì sao": mỗi vector float32 (VD 768 chiều × 4 byte = 3072 byte) được <strong>nén</strong> bằng cách chia thành các sub-vector nhỏ (VD 8 sub-vector × 96 chiều), mỗi sub-vector được thay bằng 1 mã số (index) trỏ tới 1 trong 256 "centroid mẫu" đã học trước cho sub-không-gian đó (256 = vừa đủ 1 byte).</p>
+<pre><code>Trước nén: 1 vector 768 chiều × 4 byte/chiều = 3072 byte
+Sau nén (PQ với 8 sub-vector): 8 sub-vector × 1 byte mã/sub-vector = 8 byte
+
+Tỉ lệ nén = 3072 / 8 = 384× lý thuyết
+(số 50× thường nhắc tới là con số thực tế sau khi tính thêm overhead lưu
+ centroid bảng tra + metadata, không phải tỉ lệ nén thuần tuý của riêng vector)
+
+Đổi lại: mất mát độ chính xác nhỏ, vì dùng centroid đại diện thay giá trị
+thật của từng sub-vector — đây là lý do IVF-PQ có recall thấp hơn 1 chút
+so với IVF thuần hoặc HNSW ở cùng tốc độ.</code></pre>
+
+<h3>3. DiskANN (thuật toán Vamana) — khi CẢ HNSW lẫn IVF-PQ đều không đủ RAM (verify 2026-09)</h3>
+<p><code>L5_2_rag.html §4.5</code> chỉ liệt kê DiskANN/ScaNN 1 dòng bảng ("optimize cache line + SSD read") — mô tả đó CHƯA đúng cơ chế thật, chỉ đúng hiệu ứng bề mặt. Cơ chế thật (nguồn: paper gốc Microsoft Research NeurIPS 2019 + Zilliz/Couchbase kỹ thuật, verify 2026-09):</p>
+<table>
+<tr><th>Thành phần</th><th>Nằm ở đâu</th><th>Vai trò</th></tr>
+<tr><td>Graph Vamana (1 tầng DUY NHẤT, khác HNSW nhiều tầng)</td><td>SSD</td><td>Cấu trúc điều hướng chính — build bằng cùng 1 phép "RobustPrune" (greedy search + tỉa theo tỷ lệ khoảng cách α) chạy 2 lượt với α khác nhau: lượt 1 dùng α=1 (tỉa aggressive, chính lượt này TẠO RA cạnh dài/long-range vì pruning mạnh loại bỏ cạnh trung gian), lượt 2 dùng α cao hơn (~1.2, để đảm bảo liên thông/robustness) — không phải "lượt 1 xoá, lượt 2 thêm" như 2 loại thao tác tách biệt</td></tr>
+<tr><td>Full-precision vector (giá trị gốc, không nén)</td><td>SSD</td><td>Chỉ đọc để tính khoảng cách CHÍNH XÁC ở bước rerank cuối cùng — không phải bước điều hướng chính</td></tr>
+<tr><td>Vector đã nén bằng Product Quantization (PQ, cơ chế giống mục 2.2, VD 32 byte thay vì 512 byte cho vector 128 chiều float32)</td><td>RAM</td><td>Dùng để tính khoảng cách XẤP XỈ nhanh trong lúc điều hướng graph trên SSD — tránh phải đọc full vector (chậm) cho MỌI so sánh trong quá trình duyệt</td></tr>
+</table>
+<p>Hình dung 2 lượt RobustPrune khi build graph Vamana — đây là cơ chế quyết định vì sao graph 1 TẦNG vẫn điều hướng nhanh được, không cần nhiều tầng như HNSW. Cả 2 lượt chạy CÙNG 1 thuật toán (greedy search rồi tỉa cạnh theo tỷ lệ khoảng cách α), chỉ khác giá trị α:</p>
+<pre><code>Trước tỉa (mỗi node nối random với nhiều hàng xóm GẦN, dư thừa):
+
+  A ── B ── C ── D ── E     (toàn cạnh NGẮN, đi từ A tới E cần 4 bước)
+  │    │    │    │    │
+  (nhiều cạnh chồng chéo, dư thừa — B-C và A-B gần như dẫn tới cùng vùng)
+
+Lượt 1 — RobustPrune với α=1 (tỉa AGGRESSIVE):
+  Loại mạnh cạnh trung gian dư thừa → hiệu ứng phụ: các cạnh "sống sót"
+  bắt buộc phải dài hơn để giữ graph liên thông → ĐÂY LÀ LƯỢT TẠO RA
+  cạnh dài (long-range edges), không phải 1 bước "thêm" riêng biệt
+
+  A ─────────────────────── E     (cạnh dài A→E xuất hiện NHƯ HỆ QUẢ của tỉa mạnh)
+  │    │    │    │    │
+  (cạnh ngắn còn sót lại dùng để "dò tinh" ở bước cuối, gần đích)
+
+Lượt 2 — RobustPrune với α cao hơn (~1.2, tỉa NHẸ hơn):
+  Bổ sung lại 1 số cạnh để đảm bảo graph robust/liên thông tốt hơn,
+  không làm mất các cạnh dài đã có từ lượt 1
+
+→ Từ A muốn tới E: đi thẳng theo cạnh dài A→E trong 1 bước (không cần
+  4 bước ngắn A→B→C→D→E) — đây chính là lý do graph 1 TẦNG vẫn nhảy xa
+  được ngay từ đầu, thay thế vai trò "tầng cao nhảy xa" của HNSW (mục 1)
+  bằng "cạnh dài được chọn lọc kỹ" (hệ quả của α=1 pruning) ngay trong
+  CÙNG 1 tầng duy nhất.</code></pre>
+<p><strong>Vì sao đây không phải "HNSW nhưng lưu trên SSD"</strong>: khác biệt cốt lõi là graph Vamana CHỈ CÓ 1 TẦNG (không có cấu trúc nhiều tầng như mục 1) — bù lại bằng chiến lược 2-lượt-tỉa để đảm bảo graph vẫn "navigable" (điều hướng nhanh) dù chỉ 1 tầng phẳng. RAM chỉ giữ bản nén (nhỏ) để việc điều hướng không phải đọc SSD (chậm) ở MỌI bước — chỉ đọc SSD cho vector đầy đủ ở bước cuối để lấy khoảng cách chính xác. Đây chính là ý nghĩa thật của "billion-scale trên 1 máy 64GB RAM" — không phải nhờ "cache CPU tốt hơn" như mô tả cũ, mà nhờ kiến trúc 2 tầng lưu trữ (RAM nén + SSD đầy đủ) tách biệt hẳn khỏi kiến trúc graph nhiều tầng của HNSW.</p>
+<div class="callout"><div class="label">📖 Benchmark thật HNSW vs DiskANN (verify 2026-09, nguồn tổng hợp benchmark thứ 3)</div>
+<pre><code>HNSW (M=32, efSearch=128), toàn bộ trong RAM:
+  p95 latency = 8ms,  recall@10 = 0.97,  RAM cần ≈ 20GB
+
+DiskANN (PQ=8 byte/vector, beamwidth=8, cache 16GB), phần lớn trên SSD:
+  p95 latency = 15ms, recall@50 = 0.95,  NVMe cần ≈ 350GB, RAM cache ≈ 16GB
+
+→ DiskANN chậm hơn ~2× (15ms so với 8ms) nhưng RAM cần CHỈ 16GB thay vì 20GB+
+  cho quy mô này — lợi thế RAM tăng vọt khi N lên tới hàng tỷ (lúc đó HNSW
+  cần hàng trăm GB-terabyte RAM, không khả thi trên 1 máy, còn DiskANN vẫn
+  chỉ cần vài chục GB RAM + đủ dung lượng SSD, vốn RẺ hơn RAM rất nhiều)</code></pre>
+</div>
+
+<h3>4. Rule chọn giữa HNSW, IVF và DiskANN</h3>
+<p>Bắt đầu HNSW (mặc định của hầu hết vector DB hiện đại — Qdrant/Weaviate/pgvector), chỉ chuyển sang IVF-PQ khi RAM vượt ngân sách ở quy mô &gt;100M vector NHƯNG vẫn muốn giữ dữ liệu trong RAM (đánh đổi recall lấy RAM). Nếu ngân sách RAM còn hẹp hơn nữa (hàng trăm triệu tới hàng tỷ vector, không đủ RAM ngay cả cho bản nén IVF-PQ), chuyển sang DiskANN — đánh đổi latency (chậm hơn ~2× so với HNSW thuần RAM) lấy khả năng scale RAM gần như tuyến tính rẻ hơn nhiều so với thêm RAM vật lý. Ở quy mô dự án <code>predictor</code> nếu triển khai (vài nghìn tới vài chục nghìn chunk KB tài chính), HNSW mặc định là dư sức, không cần cân nhắc IVF-PQ hay DiskANN — cả 2 chỉ có ý nghĩa khi N tiến gần mốc trăm triệu-tỷ vector.</p>
+
+<h3>5. Quantization-aware index build — nén NGAY TRONG cấu trúc HNSW/IVF, khác "nén ở tầng embedding" của R4.6 (verify 2026-09)</h3>
+<p><a href="R4_6_chunking_embedding.html">R4.6 §6</a> đã giải thích scalar quantization (int8, nén 4×, mất recall tối thiểu ~1.46%) và binary quantization (1-bit, nén 32×, "vách đá hiệu năng") — áp dụng NGAY LÚC TẠO EMBEDDING, TRƯỚC KHI vector được đưa vào bất kỳ ANN index nào. Câu hỏi mới ở đây: HNSW/IVF có tự làm việc này KHÔNG, hay phải làm riêng ở tầng embedding rồi mới đưa vào index? Câu trả lời: <strong>CẢ HAI đều được</strong> — hầu hết vector DB hiện đại (Qdrant, Weaviate, pgvector qua extension) hỗ trợ build HNSW/IVF với chính SQ/PQ tích hợp NGAY TRONG cấu trúc index, không cần tự quantize thủ công ở tầng ứng dụng trước.</p>
+<pre><code>2 lớp NÉN — độc lập nhưng hay bị nhầm là 1:
+
+  Lớp 1 (R4.6 §6): Nén NGAY LÚC EMBED
+    Embedding model sinh ra float32 → quantize thủ công (int8/binary)
+    → LƯU bản đã nén, index (HNSW/IVF) build TRÊN bản đã nén sẵn đó
+
+  Lớp 2 (mục này): Nén NGAY TRONG chính cấu trúc index
+    Đưa float32 gốc vào → chính engine HNSW/IVF tự quantize nội bộ khi build
+    (VD Qdrant "quantization" config, pgvector <code>halfvec</code>/<code>bit</code> type)
+    → Index tự quản lý cả bản nén (search nhanh) LẪN bản gốc (rerank chính xác)
+
+→ Khác biệt thực hành: Lớp 1 đơn giản hơn (tự kiểm soát hoàn toàn) nhưng MẤT
+  khả năng rerank lại bằng full-precision (đã nén trước khi lưu, không giữ
+  bản gốc); Lớp 2 phức tạp hơn (phụ thuộc tính năng riêng của từng vector DB)
+  nhưng thường tự động giữ CẢ 2 bản (nén để search nhanh + gốc để rerank),
+  đúng chiến lược "binary lọc thô → rescore" đã nêu ở R4.6 §6.</code></pre>
+<p><strong>Rule chọn combo theo ngân sách RAM (nguồn tổng hợp vendor docs 2026)</strong>: LUÔN bắt đầu bằng SQ (int8, nén 4×) — đủ dùng cho phần lớn workload. Chỉ chuyển sang PQ khi mức nén 4× của SQ vẫn KHÔNG đủ vừa ngân sách RAM:</p>
+<table>
+<tr><th>Tình huống RAM</th><th>Combo khuyến nghị</th><th>Vì sao</th></tr>
+<tr><td>Bản SQ (4×) đã đủ vừa RAM</td><td>SQ + HNSW hoặc SQ + IVFFlat</td><td>Giữ nguyên cấu trúc graph/cluster thường, chỉ nén phần lưu trữ vector — đơn giản nhất, mất recall tối thiểu</td></tr>
+<tr><td>Ngay cả bản PQ mới đủ vừa RAM</td><td>IVF-PQ (mục 2.2)</td><td>Cấu trúc cluster của IVF cho phép build bảng centroid PQ RIÊNG theo từng cluster — khớp tự nhiên hơn HNSW (không có khái niệm cluster cố định sẵn để gắn bảng centroid vào)</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Hướng nghiên cứu 2026 — đưa PQ trực tiếp vào graph HNSW (không cần qua IVF), độ tin cậy: paper mới, chưa phổ biến production</div><p>1 hướng nghiên cứu 2026 (AQR-HNSW, arXiv — verify lại trước khi coi là chuẩn ngành) thử nén PQ "nhận biết mật độ" (density-aware) NGAY TRONG graph HNSW: vùng graph DÀY ĐẶC (nhiều candidate cạnh tranh sát nhau, cần phân biệt chính xác) giữ độ nén nông hơn; vùng THƯA nén sâu hơn — kết hợp multi-stage rerank (tính xấp xỉ trước, tính lại chính xác cho ứng viên cuối, cùng tinh thần cascade đã gặp ở <a href="R4_6_chunking_embedding.html">R4.6 §6</a> và <a href="R4_4_reranking_pipelines.html">R4.4 §4</a>). Theo paper: nén 4× kèm QPS tăng 2.5-3.3× ở ngưỡng recall 80-99%, giảm 35-60% phép tính chính xác không cần thiết. Đây là kết quả CẤP PAPER (2026), CHƯA chắc đã có trong bản ổn định của Qdrant/Weaviate/pgvector tại thời điểm đọc — nêu để biết xu hướng "PQ đi thẳng vào HNSW" đang phát triển, không phải khuyến nghị triển khai ngay.</p></div>
+
+<h3>6. Đường cong recall-latency khi quét <code>ef</code> — vì sao có 1 "góc gấp khúc", không phải tăng tuyến tính (verify 2026-09)</h3>
+<p>Mục 1.4 đã liệt kê <code>ef</code> là tham số duy nhất chỉnh được SAU khi build, nhưng chưa cho thấy HÌNH DẠNG của việc tăng ef ảnh hưởng ra sao — khác bảng nprobe ở mục 2.1 (liệt kê từng điểm rời rạc, chưa nhấn mạnh hình dạng đường cong). Benchmark thật 2026 (Redis, production, tháng 3/2026) cho 2 mốc neo quan trọng:</p>
+<pre><code>Từ recall 0.80 → 0.95 (tăng ef vừa phải):  latency tăng ~31%   ← RẺ
+Từ recall 0.95 → 0.99 (tăng ef mạnh hơn):  latency tăng 3-5×   ← ĐẮT hẳn
+
+Dựng lại đường cong minh hoạ từ 2 mốc neo thật này (nội suy các điểm giữa,
+KHÔNG phải số đo trực tiếp — chỉ 2 mốc recall 0.80/0.95/0.99 là có nguồn):
+
+  ef=10   → recall=0.80  latency=10.0ms   (mốc neo giả định làm baseline)
+  ef=50   → recall=0.95  latency=13.1ms   (= 10 × 1.31, ĐÚNG mốc neo +31% đã nêu)
+  ef=200  → recall=0.99  latency=52.4ms   (= 13.1 × 4, lấy hệ số giữa khoảng 3-5×)
+
+  Biểu diễn hình dạng (trục ngang ef, trục dọc latency):
+
+  latency
+    ▲                                          ● ef=200 (0.99, 52.4ms)
+    │                                        ╱
+    │                                     ╱     ← đoạn DỐC (0.95→0.99: +300%)
+    │                              ● ef=50 (0.95, 13.1ms)
+    │                        ╱───              ← đoạn THOẢI (0.80→0.95: +31%)
+    │        ● ef=10 (0.80, 10.0ms)
+    └──────────────────────────────────────▶ ef
+                      "GÓC GẤP KHÚC" nằm quanh recall ~0.95</code></pre>
+<p><strong>Đọc đường cong này thế nào</strong>: 15 điểm phần trăm recall đầu (0.80→0.95) chỉ tốn thêm 31% latency — RẺ. 4 điểm phần trăm recall cuối (0.95→0.99) tốn thêm 300-400% latency — ĐẮT gấp nhiều lần cho lợi ích nhỏ hơn hẳn. Đây chính là "góc gấp khúc" (knee) — điểm mà chi phí biên (marginal cost) của mỗi % recall thêm bắt đầu tăng phi tuyến. Rule thực hành: dừng lại NGAY TRƯỚC góc gấp khúc trừ khi ứng dụng thực sự cần recall &gt;0.95 (VD lĩnh vực rủi ro cao, đúng tinh thần ngưỡng cascade đã nêu ở <a href="R4_4_reranking_pipelines.html">R4.4 §4</a>) — và LUÔN đo góc gấp khúc trên chính eval set/dataset của mình, vì vị trí góc gấp khúc (quanh 0.95 ở benchmark Redis) có thể lệch tuỳ phân phối dữ liệu, không phải 1 hằng số phổ quát.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>So sánh trực tiếp chi phí tìm kiếm brute-force vs HNSW vs IVF cho N = 1,000,000 vector, tìm top-10:</p>
+<pre><code>Brute-force (Flat):
+  So sánh: 1,000,000 lần tính cosine similarity
+  Recall: 100% (luôn đúng)
+  Thời gian ước lượng: ~50-100ms (tuỳ CPU, không song song hoá tốt ở scale này)
+
+HNSW (M=16, ef=50):
+  So sánh: ước lượng ~log(1,000,000) × ef ≈ 20 × 50 = 1,000 lần so sánh
+           (con số minh hoạ bậc độ lớn, không phải công thức chính xác tuyệt đối)
+  Recall: ~95-98%
+  Thời gian ước lượng: ~1-3ms
+
+IVF (K=1000, nprobe=50):
+  So sánh: 1000 centroid (bước 1) + (50/1000 × 1,000,000) = 1000 + 50,000 = 51,000 lần
+  Recall: ~90-95%
+  Thời gian ước lượng: ~5-10ms
+
+→ HNSW nhanh nhất trong ví dụ này vì mỗi tầng thu hẹp theo cấp số nhân (log N),
+  trong khi IVF thu hẹp theo tỉ lệ tuyến tính (nprobe/K) — đây là lý do HNSW
+  thường là lựa chọn mặc định, IVF chỉ thắng thế khi cần tiết kiệm RAM cực mạnh
+  qua Product Quantization (không thể ghép PQ trực tiếp vào HNSW cùng hiệu quả).
+
+Mở rộng lên N = 1,000,000,000 (1 tỷ) — quy mô nơi DiskANN mới thật sự cần thiết:
+  HNSW thuần RAM: neo vào mốc RÕ RÀNG nhất đã tính ở mục 5 (N=1M, dim=768,
+    pre-quant ≈3.17GB/vector-set, chưa tính graph overhead ~20-40% thêm)
+    → RAM tăng tuyến tính theo N → cỡ 1000× ≈ vài TB (không phải "hàng chục
+    TB" nếu neo đúng mốc dim=768 này — số liệu ở mục 3 dùng cấu hình khác
+    (M=32, efSearch=128, ≈20GB) không cùng N/dim nên KHÔNG dùng làm mốc so
+    sánh trực tiếp) — dù là vài TB hay hàng chục TB tuỳ cấu hình thật, kết
+    luận không đổi: KHÔNG khả thi trên 1 máy thường
+  DiskANN: RAM chỉ cần đủ cho bản PQ nén (rẻ hơn full vector hàng chục lần,
+    xem mục 2.2) + cache — theo benchmark thật đã dẫn ở mục 3, khả thi với
+    ~64GB RAM cho toàn bộ 1 tỷ vector, phần còn lại nằm trên SSD (rẻ hơn RAM
+    trên mỗi GB rất nhiều) → đây là lý do DiskANN tồn tại: không phải vì nó
+    "nhanh hơn" HNSW (thực ra chậm hơn ~2×), mà vì nó làm khả thi 1 quy mô
+    mà HNSW thuần RAM không kham nổi bằng phần cứng thông thường.</code></pre>
+
+<h3>Ví dụ mở rộng — áp Scalar Quantization (SQ) NGAY TRONG HNSW, tính tay RAM trước/sau (mục 5)</h3>
+<p>Lấy lại đúng N=1,000,000 vector, dim=768 (khớp ví dụ cosine similarity ở R4.1) làm HNSW thường (M=16), rồi áp SQ int8 (mục 5) — chú ý đây là con số MINH HOẠ để lộ rõ cơ chế, không phải benchmark đo thật (khác hẳn benchmark thật HNSW 8ms/20GB đã dẫn ở mục 3, vốn đo ở 1 N khác không công bố cụ thể):</p>
+<pre><code>TRƯỚC quantization (float32 đầy đủ):
+  Vector: 768 chiều × 4 byte = 3,072 byte/vector
+  Graph overhead (M=16 kết nối tầng đáy × 4 byte/con trỏ + phần tầng trên,
+    ước lượng minh hoạ): ≈ 100 byte/vector
+  Tổng/vector ≈ 3,172 byte
+  Tổng N=1,000,000: 3,172,000,000 byte ≈ 3.17 GB
+
+SAU khi áp SQ int8 (mục 5 — nén NGAY TRONG cấu trúc HNSW, không phải nén
+rồi mới build như R4.6 §6):
+  Vector: 768 chiều × 1 byte = 768 byte/vector    (4× nhỏ hơn, ĐÚNG cơ chế R4.6 §6)
+  Graph overhead: KHÔNG đổi ≈ 100 byte/vector      (con trỏ/cấu trúc graph không nén được)
+  Tổng/vector ≈ 868 byte
+  Tổng N=1,000,000: 868,000,000 byte ≈ 0.87 GB
+
+Tỉ lệ nén TOÀN BỘ INDEX = 3,172 / 868 ≈ 3.65×
+  ← THẤP HƠN mức nén "4×" danh nghĩa của SQ (chỉ đúng cho riêng phần vector)
+  vì graph overhead (con trỏ hàng xóm) KHÔNG hề co lại khi quantize vector
+  — đây chính là ví dụ thật của nguyên tắc BUG-2 (không gộp 2 cost khác nhau
+  làm 1): "nén index" và "nén vector" là 2 đại lượng khác nhau, tỉ lệ nén
+  toàn bộ index LUÔN thấp hơn tỉ lệ nén danh nghĩa của riêng phần vector.</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>Flat (brute-force)</th><th>HNSW</th><th>IVF</th><th>IVF-PQ</th><th>DiskANN (Vamana)</th></tr>
+<tr><td>Độ phức tạp query</td><td>O(N)</td><td>O(log N)</td><td>O(K + N/K × nprobe)</td><td>O(K + N/K × nprobe), nhưng mỗi so sánh rẻ hơn nhờ nén</td><td>~O(log N) trên graph 1 tầng, nhưng mỗi bước có thêm chi phí đọc SSD</td></tr>
+<tr><td>Recall</td><td>100%</td><td>~95-99% (tune bằng ef)</td><td>~90-97% (tune bằng nprobe)</td><td>Thấp hơn IVF thuần 1 chút (mất mát từ nén)</td><td>~95% (recall@1) tới ~95-97% (recall@50, tuỳ beamwidth) theo benchmark mục 3</td></tr>
+<tr><td>RAM</td><td>Cao nhất (lưu full vector)</td><td>Cao (lưu full vector + graph edges)</td><td>Trung bình (lưu full vector + centroid)</td><td>Thấp nhất trong nhóm "toàn bộ trong RAM" (nén ~50× nhờ Product Quantization)</td><td>Thấp nhất tuyệt đối — chỉ cần RAM cho bản PQ nén + cache, phần lớn dữ liệu ở SSD</td></tr>
+<tr><td>Tham số chỉnh sau build</td><td>Không có tham số</td><td><code>ef</code></td><td><code>nprobe</code></td><td><code>nprobe</code></td><td><code>beamwidth</code> + kích thước cache RAM</td></tr>
+<tr><td>Khi dùng</td><td>Dataset rất nhỏ, cần recall 100% tuyệt đối</td><td>Mặc định cho hầu hết use case (&lt;100M vector)</td><td>Cần cân bằng RAM/tốc độ ở quy mô lớn</td><td>Quy mô cực lớn (&gt;100M vector), RAM là ràng buộc cứng nhưng vẫn muốn giữ trong RAM</td><td>Quy mô tỷ vector, RAM không đủ ngay cả cho bản nén — chấp nhận latency cao hơn ~2× để đổi lấy SSD rẻ hơn RAM nhiều</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div><p>Repo <code>predictor</code> <strong>hiện chưa dùng vector DB nào</strong> (đã xác nhận ở R4.1 — grep sạch <code>backend/</code>). Nếu tương lai triển khai semantic search cho KB tài chính (vài nghìn tới vài chục nghìn chunk — quy mô rất nhỏ so với ngưỡng 100M vector nơi IVF-PQ mới thật sự cần thiết), <strong>HNSW mặc định của pgvector là đủ dùng, không cần cân nhắc IVF-PQ</strong>. Điểm cần nhớ khi triển khai: chỉ có tham số <code>ef</code> (search-time) chỉnh được mà không cần rebuild index — nếu cần tune recall/speed sau khi đã deploy, đây là "núm vặn" duy nhất an toàn để chỉnh mà không phải đánh đổi downtime rebuild toàn bộ index. <strong>Về DiskANN (mục 3)</strong>: hoàn toàn không liên quan tới quy mô dự án hiện tại (vài nghìn-vài chục nghìn chunk, cách xa hàng trăm triệu-tỷ vector nơi DiskANN mới cần thiết) — nhưng đáng biết vì <code>pgvectorscale</code> (extension mở rộng cho pgvector, đã nhắc ở <a href="R4_1_vector_databases.html">R4.1</a>) triển khai chính thuật toán StreamingDiskANN — nếu 1 ngày nào đó dự án cần vượt ngưỡng RAM của pgvector HNSW thuần mà VẪN muốn ở lại hệ sinh thái Postgres (không chuyển sang Milvus/hệ thống chuyên biệt khác), đây là đường nâng cấp tự nhiên nhất, không phải đổi toàn bộ hạ tầng.</p></div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li>Nghĩ HNSW "tự nhiên nhanh" mà không hiểu graph nhiều tầng giải quyết vấn đề gì — dẫn tới tune sai tham số (VD tăng <code>efConstruction</code> khi vấn đề thực ra nằm ở <code>ef</code> lúc search, hoặc ngược lại cố chỉnh <code>M</code>/<code>efConstruction</code> sau khi build mà không biết phải rebuild toàn bộ index).</li>
+<li>Chọn IVF-PQ ngay từ đầu vì "tiết kiệm RAM nghe hay" ở quy mô dữ liệu chỉ vài chục nghìn vector — mất mát recall của PQ không đáng đánh đổi khi RAM không phải ràng buộc thật.</li>
+<li>Đặt nprobe = K (soát hết mọi cluster) rồi tưởng đang dùng IVF nhanh — thực chất lúc này IVF tương đương brute-force, mất hết lợi ích tốc độ mà vẫn tốn chi phí quản lý cluster.</li>
+<li>Không đo recall thật trên eval set khi tune ef/nprobe — chỉ dựa vào "cảm giác nhanh hơn" mà không biết đã đánh đổi bao nhiêu recall.</li>
+<li>Nghĩ DiskANN "chỉ là HNSW lưu trên SSD" — sai về cơ chế: DiskANN dùng graph Vamana 1 TẦNG (không nhiều tầng như HNSW) + chiến lược nén PQ trong RAM riêng biệt, không phải HNSW đem nguyên cấu trúc nhiều tầng ra đĩa.</li>
+<li>Chọn DiskANN khi dữ liệu chỉ vài triệu vector (dư sức nằm trong RAM) — DiskANN đánh đổi latency (chậm hơn ~2×) để lấy khả năng scale RAM, đánh đổi này chỉ đáng khi RAM thật sự là ràng buộc cứng ở quy mô trăm triệu-tỷ vector.</li>
+<li>Nhầm "nén 4× ở tầng embedding" (R4.6 §6) với "nén 4× toàn bộ index" — graph/cluster overhead của HNSW/IVF không co lại khi quantize vector, nên tỉ lệ nén thật của TOÀN BỘ index luôn thấp hơn tỉ lệ nén danh nghĩa của riêng phần vector (mục 5, ví dụ 3.65× thay vì 4×).</li>
+<li>Đẩy <code>ef</code>/<code>nprobe</code> lên cao "cho chắc recall" mà không biết mình đã vượt qua góc gấp khúc (knee) — chi phí latency biên sau góc gấp khúc có thể gấp 3-5× cho vài % recall cuối cùng, trong khi trước góc gấp khúc chi phí biên rẻ hơn nhiều (mục 6).</li>
+</ul>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3><ul>
+<li>Vẽ được sơ đồ 1 query đi qua HNSW từ tầng cao nhất xuống tầng đáy, chỉ rõ vì sao mỗi tầng thu hẹp không gian tìm kiếm.</li>
+<li>Phân biệt đúng 3 tham số HNSW (M, efConstruction, ef) — cái nào chỉnh được sau khi build, cái nào không.</li>
+<li>Giải thích được <code>nprobe</code> trong IVF đánh đổi gì, và tính được (ước lượng) nprobe hợp lý cho K=1000 cluster.</li>
+<li>Giải thích được vì sao IVF-PQ tiết kiệm RAM lớn, đổi lại mất gì.</li>
+<li>Chọn đúng giữa HNSW và IVF-PQ cho 1 tình huống quy mô dữ liệu cho trước, và giải thích vì sao dự án <code>predictor</code> hiện tại chỉ cần HNSW mặc định nếu triển khai vector search.</li>
+<li>Mô tả đúng 3 thành phần của DiskANN (graph Vamana 1 tầng trên SSD, PQ nén trong RAM để điều hướng, full vector trên SSD để rerank cuối) — không lặp lại mô tả sai "tối ưu cache line".</li>
+<li>Giải thích được vì sao DiskANN chậm hơn HNSW ~2× nhưng vẫn đáng dùng ở quy mô tỷ vector — đúng bằng lý do RAM/SSD, không phải vì "thuật toán tốt hơn" theo nghĩa tốc độ thuần tuý.</li>
+<li>Phân biệt được nén "ở tầng embedding" (R4.6 §6) và nén "ngay trong cấu trúc index" (mục 5), chọn đúng combo SQ/PQ + HNSW/IVF cho 1 ngân sách RAM cho trước, và tính tay được tỉ lệ nén THẬT của toàn bộ index (luôn thấp hơn tỉ lệ nén danh nghĩa của riêng vector).</li>
+<li>Vẽ được hình dạng đường cong recall-latency khi quét ef/nprobe, chỉ đúng vị trí góc gấp khúc và giải thích vì sao KHÔNG nên vượt qua nó nếu chưa đo trên eval set thật.</li>
+</ul></div>
+
+<div class="nav-bottom">
+  <a href="R4_4_reranking_pipelines.html">← R4.4 · Reranking Pipelines</a>
+  <a href="R4_6_chunking_embedding.html">R4.6 · Chunking &amp; Embedding →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R9.6 · Robotic Agents — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Advanced Steps · Điểm 6/8</div>
+  <h1>R9.6 · Robotic Agents</h1>
+  <p class="subtitle">Vision-Language-Action models — agent điều khiển thực thể vật lý. Không liên quan trực tiếp <code>predictor</code>, nhưng cần biết cho đầy đủ roadmap/phỏng vấn.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>[Dễ]</strong> Định nghĩa Robotic Agents ("Physical AI"/"Embodied AI") bằng 1 câu.</li>
+<li><strong>[Trung bình]</strong> Hiểu kiến trúc chủ đạo 2025-2026: Vision-Language-Action (VLA) models.</li>
+<li><strong>[Dễ]</strong> Nhận biết đúng: mục này không áp dụng trực tiếp cho <code>predictor</code>.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Module ngắn, kiến thức thị trường — không có concept toán học sâu. Không có module nào trong 51 module cũ dạy về robotics/embodied AI — khoảng trắng hoàn toàn được lấp bởi module này.</p>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>LLM văn bản giống 1 người chỉ giao tiếp qua thư từ — nhận chỉ dẫn bằng chữ, trả lời bằng chữ, không bao giờ "chạm" vào thế giới thật. Robotic Agent giống người đó giờ có thêm mắt (camera) và tay chân (actuator) — không chỉ đọc-viết, mà còn NHÌN và HÀNH ĐỘNG trong không gian vật lý thật, với hậu quả vật lý thật (làm rơi đồ, va chạm) nếu tính toán sai.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] Robotic Agents là gì</h3>
+<p>Robotic Agents (hay "Physical AI"/"Embodied AI") là agent điều khiển 1 thực thể vật lý (robot tay máy, robot di động) trong thế giới thật, không chỉ thao tác trên văn bản/API.</p>
+
+<h3>2. [Trung bình] Kiến trúc chủ đạo 2025-2026 — Vision-Language-Action (VLA) models</h3>
+<div class="callout"><div class="label">📖 Giải thích sâu</div>
+<p>Kiến trúc chủ đạo: <strong>Vision-Language-Action (VLA) models</strong> — model nhận đồng thời hình ảnh (camera), ngôn ngữ (chỉ lệnh), và sinh ra <strong>hành động điều khiển</strong> (moment lực khớp robot, toạ độ di chuyển) qua 1 khung quyết định thống nhất, thay vì pipeline rời rạc (nhận diện vật thể → lập kế hoạch → điều khiển) như robot học truyền thống.</p>
+</div>
+<p>"Physical AI" chưa phải thuật ngữ kỹ thuật chuẩn hoá — giới nghiên cứu dùng lẫn với "embodied AI", "embodied reasoning", "robot foundation model", "generalist robot policy". Embodied AI được coi là 1 trụ cột hướng tới AGI vì nó đòi hỏi agent hiểu + hành động trong thế giới vật lý, không chỉ xử lý thông tin trừu tượng.</p>
+
+<h3>3. Kiến trúc thật bên trong 1 VLA model — tách VLM "hiểu" khỏi Action Expert "điều khiển"</h3>
+<p>Mục 2 mô tả VLA ở mức khái niệm ("1 khung quyết định thống nhất"). Kiến trúc phổ biến 2026 (VD dòng model π₀ — "pi-zero") cụ thể hoá bằng 2 khối ghép lại, không phải 1 khối nguyên khối duy nhất như tên gọi "end-to-end" dễ khiến hiểu lầm:</p>
+<table>
+<tr><th>Khối</th><th>Vai trò</th><th>Cơ chế</th></tr>
+<tr><td>VLM backbone</td><td>"Hiểu" — xử lý ảnh camera + chỉ lệnh ngôn ngữ, ra biểu diễn ngữ nghĩa (semantic understanding)</td><td>Kiến trúc vision-language model thông thường, tái sử dụng được từ model đã pretrain trên dữ liệu ảnh+văn bản quy mô lớn (không cần dữ liệu robot để học phần "hiểu")</td></tr>
+<tr><td>Action Expert (tách riêng)</td><td>"Điều khiển" — sinh ra lệnh điều khiển động cơ liên tục (continuous motor command)</td><td>Train bằng <strong>flow matching</strong> — 1 kỹ thuật sinh dữ liệu liên tục (khác cơ chế sinh token rời rạc của LLM văn bản), phù hợp cho tín hiệu điều khiển vật lý cần mượt/liên tục theo thời gian, không phải chuỗi token rời rạc</td></tr>
+</table>
+<p>Vì sao TÁCH thay vì gộp: bài toán "hiểu ảnh + ngôn ngữ" và bài toán "sinh moment lực khớp robot mượt theo 50-100Hz" có bản chất toán học khác hẳn nhau — 1 model ngôn ngữ sinh token rời rạc (đã học ở <code>L4_2_attention_transformer.html</code>) không tự nhiên phù hợp để sinh tín hiệu điều khiển liên tục tần số cao. Kiến trúc 2 khối cho phép mỗi phần dùng đúng cơ chế toán học phù hợp với bản chất dữ liệu của nó, thay vì ép tất cả qua 1 cơ chế sinh token.</p>
+
+<h3>4. Benchmark thật 2026 — đo VLA model bằng gì</h3>
+<p>Khác hẳn benchmark văn bản (MMLU, GSM8K...), VLA model được đo trên các benchmark mô phỏng vật lý có trạng thái (stateful) hoặc robot thật:</p>
+<table>
+<tr><th>Benchmark</th><th>Đo gì</th></tr>
+<tr><td>LIBERO</td><td>Học liên tục nhiều tác vụ thao tác (manipulation) khác nhau — đo khả năng KHÔNG quên tác vụ cũ khi học tác vụ mới</td></tr>
+<tr><td>CALVIN</td><td>Chuỗi lệnh ngôn ngữ dài, robot phải thực hiện nhiều bước liên tiếp theo đúng thứ tự chỉ dẫn</td></tr>
+<tr><td>SIMPLER</td><td>Mô phỏng bám sát điều kiện thật (real-to-sim), giảm khoảng cách giữa kết quả benchmark mô phỏng và hiệu năng khi deploy lên robot thật</td></tr>
+</table>
+<p>1 khảo sát tại ICLR 2026 phân tích <strong>164 submission VLA model</strong> — cho thấy quy mô nghiên cứu VLA đã lớn tương đương các mảng nghiên cứu LLM văn bản chính thống, không còn là ngách nhỏ; xu hướng nổi bật gồm VLA dùng discrete diffusion (khác flow matching ở mục 3) và VLA có thêm bước suy luận tường minh (reasoning) trước khi sinh hành động.</p>
+
+<h3>5. Triển khai thật 2026 — không còn là demo phòng lab</h3>
+<table>
+<tr><th>Hệ thống</th><th>Đơn vị</th><th>Trạng thái 2026</th></tr>
+<tr><td>Helix (bản gốc, 2/2025)</td><td>Figure (Figure 02)</td><td>VLA đầu tiên điều khiển được TOÀN BỘ phần thân trên (upper body) của humanoid; triển khai thật tại nhà máy BMW suốt 2025 (~11 tháng, phụ giúp lắp 30,000+ xe) — nhưng fleet Figure 02 đã NGƯNG hoạt động ~11/2026, thay bằng <strong>Helix 02</strong> (điều khiển FULL body, không chỉ upper) chạy trên phần cứng <strong>Figure 03</strong> từ đầu 2026, không còn là cấu hình "Helix/Figure 02" như mô tả gốc</td></tr>
+<tr><td>Large Behavior Model (2025)</td><td>Boston Dynamics + Toyota Research Institute (hợp tác)</td><td>Huấn luyện "whole-robot large behavior model" cho humanoid Atlas — đây là hợp tác huấn luyện/phần mềm; fleet Atlas giao cho Hyundai và Google DeepMind trong 2026 KHÔNG thuộc hợp tác BD+TRI này, mà thuộc 1 hợp tác riêng BD+Google DeepMind (tích hợp Gemini Robotics, công bố 1/2026, ra mắt Atlas mới tại CES 2026) — 2 hợp tác khác nhau, dễ nhầm vì cùng có Boston Dynamics</td></tr>
+<tr><td>GR00T N1</td><td>NVIDIA</td><td>Model nền tảng mã nguồn mở, 2B tham số, train trên dữ liệu tổng hợp (synthetic) lẫn dữ liệu thu thập thật, hướng tới "generalist humanoid reasoning and control"</td></tr>
+<tr><td>Tesla Optimus</td><td>Tesla</td><td>Chạy ca làm việc nhiều giờ trên dây chuyền lắp ráp con (sub-assembly) ô tô, cùng nhóm "production deployment" với Figure 02</td></tr>
+</table>
+<p>Điểm chung đáng chú ý: cả 4 hệ thống trên đều đã vượt qua giai đoạn "demo quay video" — đang chạy thật trong môi trường sản xuất công nghiệp (nhà máy ô tô), dù vẫn còn giới hạn ở tác vụ lặp lại có cấu trúc (lắp ráp), chưa phải môi trường mở hoàn toàn không kiểm soát.</p>
+
+<h3>6. An toàn vật lý — hệ quả lỗi khác hẳn mọi agent phần mềm đã học trong track R9</h3>
+<div class="callout danger">
+<div class="label">⚠️ Khác biệt căn bản với mọi chủ đề khác trong R9.1-9.5</div>
+<p>1 CLI Agent lỗi (R9.1) làm sai 1 file, có thể revert bằng git. 1 Computer Use agent lỗi (R9.3) click nhầm nút, thiệt hại giới hạn trong sandbox nếu có cô lập đúng. 1 Robotic Agent lỗi có thể gây <strong>va chạm vật lý thật</strong> — làm rơi vỡ, đè trúng người, hỏng thiết bị đắt tiền — hậu quả KHÔNG revert được. Đây là lý do ngành robotics có 1 truyền thống lâu đời về "safety layer" tách biệt hoàn toàn khỏi lớp AI/VLA (VD giới hạn lực vật lý cứng ở tầng phần cứng, dừng khẩn cấp không đi qua model suy luận) — không thể chỉ dựa vào "model được train tốt" như đủ điều kiện an toàn duy nhất, khác hẳn tư duy guardrail phần mềm thuần (sẽ học ở R10).</p>
+</div>
+
+<h3>7. Vấn đề tần số điều khiển — vì sao không gọi VLA model cho MỖI khung hình</h3>
+<p>1 khác biệt kỹ thuật quan trọng, không có tương đương ở agent phần mềm thuần: robot vật lý cần vòng lặp điều khiển chạy ở tần số rất cao (thường 50-200Hz — nghĩa là cập nhật lệnh điều khiển 50-200 lần/giây để chuyển động mượt, không giật cục) — nhưng 1 lượt inference của model VLA lớn (mục 3) chậm hơn nhiều bậc so với tần số đó:</p>
+<pre><code>Vòng lặp điều khiển robot cần:      50-200 lần cập nhật lệnh / giây
+                                     (mỗi lần cách nhau 5-20 mili-giây)
+
+1 lượt inference VLA model lớn:     có thể mất hàng chục tới hàng trăm
+                                     mili-giây (tuỳ kích thước model,
+                                     phần cứng — chậm hơn 1 khung điều
+                                     khiển đơn lẻ RẤT nhiều lần)
+
+→ Nếu gọi model cho MỖI khung điều khiển: robot sẽ "khựng" chờ model
+  trả lời giữa mỗi bước — không khả thi cho chuyển động mượt.</code></pre>
+<p>Giải pháp phổ biến (kỹ thuật <strong>action chunking</strong>): thay vì dự đoán 1 hành động rồi hỏi lại, model dự đoán 1 CHUỖI (chunk) hành động tương lai trong 1 lượt inference — VD 1 lượt gọi model ra luôn 16-100 bước hành động kế tiếp; robot chạy "mở vòng" (open-loop) theo chuỗi đó ở tần số điều khiển thật, chỉ gọi lại model khi gần hết chuỗi hoặc phát hiện lệch trạng thái đáng kể. Đây là lý do kiến trúc VLA (mục 3) tách riêng Action Expert — 1 module NHỎ HƠN, CHUYÊN BIỆT cho việc sinh chuỗi hành động nhanh, độc lập với VLM backbone (nặng hơn nhiều, chỉ cần chạy lại khi ngữ cảnh/nhiệm vụ thay đổi, không cần chạy lại mỗi khung điều khiển).</p>
+<p>Liên hệ ngược: đây là 1 dạng "tách tầng theo tốc độ cần thiết" tương tự tinh thần draft+target 2 KV cache của speculative decoding (đã học ở <code>R2_1_kv_caching.html §8</code>) — 1 phần rẻ/nhanh xử lý phần lớn khối lượng, 1 phần đắt/chậm chỉ can thiệp khi cần — dù cơ chế toán học cụ thể khác hẳn nhau (action chunking không phải "verify lại", nó là "dự đoán trước 1 loạt rồi chạy mở vòng").</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Ví dụ công nghiệp 2026: <strong>LingBot-VLA</strong> (Robbyant, thuộc hệ sinh thái Ant Group) bản gốc (1/2026) huấn luyện trên <strong>20.000 giờ dữ liệu robot 2 tay thật</strong>, 9 cấu hình phần cứng khác nhau. Bản kế tiếp <strong>LingBot-VLA 2.0</strong> (7/2026, mô hình 6B tham số, mã nguồn mở) mở rộng lên <strong>~60.000 giờ dữ liệu</strong> (50.000 giờ quỹ đạo robot trên 20 cấu hình phần cứng + 10.000 giờ video góc nhìn thứ nhất của người), đồng thời mở rộng không gian hành động sang điều khiển đầu, thân, đế di chuyển và bàn tay khéo léo (dexterous hands) — không chỉ tay máy 2 cánh tay như bản gốc. Minh hoạ rõ tốc độ tăng quy mô dữ liệu cần thiết để train 1 VLA model tổng quát (generalist) chỉ trong nửa năm, khác hẳn quy mô dữ liệu cần cho 1 model text-only.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Robot học truyền thống</th><th>VLA model (2025-2026)</th></tr>
+<tr><td>Pipeline</td><td>Rời rạc: nhận diện → lập kế hoạch → điều khiển</td><td>Thống nhất: VLM backbone (hiểu) + Action Expert (điều khiển), xem mục 3</td></tr>
+<tr><td>Input</td><td>Thường chỉ cảm biến/camera</td><td>Camera + ngôn ngữ (chỉ lệnh tự nhiên)</td></tr>
+<tr><td>Cơ chế sinh hành động</td><td>Thường rule-based/lập trình tay cho từng tác vụ</td><td>Flow matching (liên tục) hoặc discrete diffusion — không dùng cơ chế sinh token rời rạc của LLM văn bản</td></tr>
+<tr><td>Tổng quát hoá</td><td>Thường chuyên biệt 1 tác vụ</td><td>Hướng tới "generalist robot policy" — đo bằng LIBERO/CALVIN/SIMPLER (mục 4)</td></tr>
+<tr><td>Đã triển khai thật chưa (2026)?</td><td>Có, nhiều năm (dây chuyền công nghiệp cổ điển)</td><td>Có — Helix/BMW, Optimus, GR00T N1, Atlas (mục 5) — không còn thuần demo</td></tr>
+</table>
+
+<div class="callout danger"><div class="label">⚠️ Không liên quan trực tiếp <code>predictor</code></div>
+<p>Dự án là hệ thống dự đoán/giao dịch chứng khoán thuần phần mềm, không có phần cứng robot. Mục này chỉ cần biết ở mức tổng quan cho đầy đủ roadmap/phỏng vấn — không có đề xuất ứng dụng cụ thể vào dự án.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Nhầm VLA model với vision-language model thuần</strong> — VLA có thêm đầu ra hành động (action), không chỉ mô tả/phân tích ảnh.</p>
+<p><strong>2. Cố tìm ứng dụng gượng ép vào <code>predictor</code></strong> — dự án không có nhu cầu robot, không cần ép buộc liên hệ.</p>
+<p><strong>3. Tưởng VLA là "1 model nguyên khối" xử lý mọi thứ đồng nhất</strong> — thực chất (mục 3) là kiến trúc 2 khối (VLM backbone "hiểu" + Action Expert "điều khiển", train bằng flow matching) ghép lại, không phải 1 mạng neural đơn nhất xử lý y hệt nhau mọi loại dữ liệu.</p>
+<p><strong>4. Nghĩ có thể gọi VLA model cho mỗi khung hình điều khiển như gọi API bình thường</strong> — bỏ qua bài toán tần số (mục 7): vòng lặp điều khiển robot cần 50-200Hz, nhanh hơn nhiều bậc so với 1 lượt inference model lớn; đây là lý do action chunking là kỹ thuật bắt buộc, không phải tối ưu tuỳ chọn.</p>
+<p><strong>5. Coi an toàn robot là "vấn đề của model AI, train tốt là đủ"</strong> — mục 6 đã nêu rõ: hậu quả vật lý không revert được đòi hỏi 1 lớp an toàn phần cứng/hệ thống tách biệt khỏi model suy luận, không thể chỉ dựa vào chất lượng training.</p>
+</div>
+
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Định nghĩa đúng Robotic Agents/Embodied AI bằng 1 câu.</li>
+<li>Giải thích được vì sao VLA model là kiến trúc thống nhất, khác pipeline rời rạc truyền thống.</li>
+<li>Xác nhận đúng: mục này không áp dụng trực tiếp cho <code>predictor</code>.</li>
+<li>Mô tả đúng kiến trúc 2 khối bên trong 1 VLA model (VLM backbone vs Action Expert, mục 3) và vì sao chúng cần cơ chế toán học khác nhau (token rời rạc vs flow matching liên tục).</li>
+<li>Kể tên đúng ít nhất 2/3 benchmark VLA (LIBERO/CALVIN/SIMPLER) và biết mỗi cái đo khía cạnh nào.</li>
+<li>Giải thích được vấn đề tần số điều khiển (mục 7) và cơ chế action chunking giải quyết nó thế nào.</li>
+<li>Giải thích được vì sao hậu quả lỗi của Robotic Agent khác về BẢN CHẤT (vật lý, không revert được) so với mọi agent phần mềm đã học ở R9.1-9.5.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R9_5_self_refinement.html">← R9.5 · Self-Refinement</a>
+  <a href="R9_7_voice_vision_agents.html">R9.7 · Voice and Vision Agents →</a>
+</div>
+
+</div>
+</body>
+</html>

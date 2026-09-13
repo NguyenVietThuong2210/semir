@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L6.6 — Observability</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 6 · Module 6</div>
+  <h1>6.6 · Observability (LangSmith, Tracing, Metrics)</h1>
+  <p class="subtitle">Debug agents like debug distributed systems. Trace/span, cost tracking, error attribution, prompt versioning.</p>
+  <div class="level">Level 6 · Agents · ~25 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>3 pillars: logs, metrics, traces</li>
+  <li>LangSmith / LangFuse setup</li>
+  <li>Cost + token tracking per user</li>
+  <li>Alert design cho agent failure</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Observability bằng ngôn ngữ đời thường</div>
+<p><strong>Điều tra máy bay rơi</strong>: Không tận mắt thấy, không thể phỏng vấn phi công đã chết. Cần:</p>
+<ul>
+  <li><strong>Black box (traces)</strong>: ghi lại từng thao tác cần điều khiển — cần để tái hiện timeline.</li>
+  <li><strong>Radar (metrics)</strong>: latency, altitude, speed — số liệu tổng hợp theo thời gian.</li>
+  <li><strong>Báo cáo phi công (logs)</strong>: text mô tả sự kiện.</li>
+</ul>
+<p><strong>Debug agent LLM</strong>: mỗi run 20 node — không nhìn được từng nội bộ. Cần trace (xem input/output mỗi node), metrics (latency, token cost), logs. LangSmith = "black box recorder" cho agent.</p>
+<p><strong>Key insight</strong>: Nếu không log, khi bug xảy ra tuần sau bạn không thể tái hiện. Log first, ask questions later — nhất là với LLM stochastic.</p>
+</div>
+
+<h2>1. Debug agents = debug distributed systems</h2>
+
+<p>Agent flow spans many LLM calls, tools, DB queries. Failure ở step 5 nhưng cause là prompt step 2. Không có observability = mù.</p>
+
+<h2>2. 3 pillars</h2>
+
+<h3>2.1 Logs</h3>
+<pre><code># Structured, context-linked:
+logger.info("agent_start", agent="engineer", job_id="abc", task_id="T1",
+            tokens_input=1500, model="claude-opus-4-7")
+</code></pre>
+
+<h3>2.2 Metrics</h3>
+<ul>
+  <li>Success rate per agent</li>
+  <li>Latency p50/p95/p99 per agent</li>
+  <li>Token cost per job type</li>
+  <li>QA loop count (indicator complexity/quality)</li>
+  <li>Human gate approval rate</li>
+</ul>
+
+<h3>2.3 Traces</h3>
+<pre><code>Job "abc-123" full trace:
+├─ PM (2s, 800 tokens)
+├─ Analyser (30s, 5000 tokens)
+├─ SpecAnalyze (15s, 2000 tokens)
+├─ human_gate (24h pause)
+├─ TaskDecompose (10s, 1500 tokens)
+├─ Engineer task T1 (60s, 12000 tokens)
+│  ├─ read file X
+│  ├─ read file Y
+│  ├─ edit file Z
+│  └─ bash pytest
+├─ QAVerify T1 (20s, 3000 tokens)
+└─ ...
+
+Total: 27h+ wall-clock (gồm 24h human_gate pause) — 3h 45m active agent compute, 145k tokens, $8.50 cost
+</code></pre>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 3 observability pillars + tools (đọc SAU section 2)</div>
+
+<h4>3 pillars head-to-head</h4>
+<table>
+<tr><th></th><th>Metrics</th><th>Logs</th><th>Traces</th></tr>
+<tr><td><strong>Cách</strong></td><td>Aggregated numbers over time</td><td>Text messages với timestamp</td><td>Request flow qua system</td></tr>
+<tr><td><strong>Storage</strong></td><td>Time-series DB (Prometheus)</td><td>Log store (ES, Loki)</td><td>Trace store (Jaeger, Tempo)</td></tr>
+<tr><td><strong>Query</strong></td><td>PromQL, Grafana</td><td>Full-text search</td><td>Trace ID lookup</td></tr>
+<tr><td><strong>Cardinality</strong></td><td>Low (aggregate)</td><td>High</td><td>Very high</td></tr>
+<tr><td><strong>Cost</strong></td><td>Rẻ nhất</td><td>Trung bình</td><td>Đắt nhất</td></tr>
+<tr><td><strong>Dùng để</strong></td><td>Alerting, dashboards</td><td>Debug specific event</td><td>Trace slow request end-to-end</td></tr>
+<tr><td><strong>Ví dụ agent</strong></td><td>agent_latency_p95=2.3s</td><td>"tool_call failed: timeout"</td><td>User A request → planner → engineer → reviewer nodes</td></tr>
+</table>
+
+<h4>Tools compare</h4>
+<table>
+<tr><th></th><th>LangSmith</th><th>Langfuse</th><th>Weights & Biases</th><th>OpenTelemetry + Jaeger</th></tr>
+<tr><td><strong>Focus</strong></td><td>LangChain/LangGraph native</td><td>OSS alternative</td><td>ML experiment tracking</td><td>Generic distributed tracing</td></tr>
+<tr><td><strong>Hosted</strong></td><td>SaaS + self-host</td><td>SaaS + self-host</td><td>SaaS</td><td>Self-host</td></tr>
+<tr><td><strong>LLM-specific features</strong></td><td>⭐ Prompt playground, eval, dataset</td><td>Prompt versioning, eval</td><td>Prompt tracking (basic)</td><td>Không (generic)</td></tr>
+<tr><td><strong>Cost tracking</strong></td><td>⭐ Native</td><td>Native</td><td>Manual</td><td>Custom instrumentation</td></tr>
+<tr><td><strong>Multi-agent trace</strong></td><td>⭐ Best</td><td>Good</td><td>Limited</td><td>Good</td></tr>
+<tr><td><strong>Best cho</strong></td><td>LangGraph production</td><td>Vendor-neutral OSS</td><td>Fine-tuning experiments</td><td>Non-LangChain stacks</td></tr>
+</table>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Situation</th><th>Chọn</th></tr>
+<tr><td>LangGraph production app</td><td>⭐ LangSmith</td></tr>
+<tr><td>OSS self-host preferred</td><td>Langfuse</td></tr>
+<tr><td>Custom stack (không LangChain)</td><td>OpenTelemetry + Jaeger + Grafana</td></tr>
+<tr><td>ML experiments primarily</td><td>W&B</td></tr>
+<tr><td>Multi-cloud enterprise</td><td>OpenTelemetry (vendor-neutral)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: Không có "observability tại 1 nơi" — cần combine 3 pillars. Startup thường track metrics + logs, quên traces. Bug agent 15-min chạy 8 nodes mà không có trace = 3h debug thay vì 15 phút. Đầu tư traces early = ROI cao nhất.</p>
+</div>
+
+<h3>2.4 OpenTelemetry spans — instrument LLM call thủ công</h3>
+
+<pre><code>from opentelemetry import trace
+tracer = trace.get_tracer("agent")
+
+def llm_call(prompt, model="claude-opus-4-7"):
+    with tracer.start_as_current_span("llm.invoke") as span:
+        # Attributes = key/value cho dashboard filter
+        span.set_attribute("llm.model", model)
+        span.set_attribute("llm.prompt.tokens", count_tokens(prompt))
+        span.set_attribute("llm.temperature", 0.0)
+        span.set_attribute("user.id", ctx.user_id)     # cardinality note — xem giải thích dưới
+
+        try:
+            resp = client.messages.create(model=model, messages=[...])
+            span.set_attribute("llm.completion.tokens", resp.usage.output_tokens)
+            span.set_attribute("llm.cost_usd", compute_cost(resp))
+            span.set_status(trace.StatusCode.OK)
+            return resp
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(trace.StatusCode.ERROR, str(e))
+            raise
+</code></pre>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Cardinality là gì? (định nghĩa trước khi dùng)</div>
+<p><strong>Cardinality = số lượng GIÁ TRỊ KHÁC NHAU mà 1 field/attribute có thể nhận.</strong> Ví dụ: field <code>model</code> chỉ nhận "opus", "sonnet", "haiku" → cardinality = 3 (thấp). Field <code>user.id</code> nhận hàng triệu user khác nhau → cardinality = hàng triệu (cao). Field chứa nguyên câu hỏi user gõ → cardinality gần như vô hạn (mỗi câu 1 giá trị riêng).</p>
+<p><strong>Vì sao quan trọng</strong>: hệ thống metrics (Prometheus) tạo <em>1 time-series riêng cho mỗi tổ hợp giá trị attribute</em>. Field cardinality thấp (10-20 giá trị) → 10-20 series, dashboard mượt. Field cardinality cao (triệu user) → hàng triệu series → DB phình to, query chậm, có thể sập ("cardinality explosion"). Đây là lý do <code>user.id</code> nên gắn vào <strong>span/log</strong> (nơi cardinality cao chấp nhận được) chứ KHÔNG gắn vào <strong>metric label</strong> (nơi cần cardinality thấp).</p>
+</div>
+
+<p><strong>Trace vs Span vs Log — 30-second definition</strong>:</p>
+<ul>
+  <li><strong>Trace</strong> = 1 request end-to-end (job_id="abc"). Chứa nhiều spans.</li>
+  <li><strong>Span</strong> = 1 unit of work (LLM call, DB query, tool exec). Có start/end time, parent span, attributes.</li>
+  <li><strong>Log</strong> = 1 discrete event message ("engineer started task T1"). Gắn vào span thông qua trace_id.</li>
+</ul>
+
+<h3>2.5 Latency percentile — vì sao p50/p95/p99 quan trọng hơn average</h3>
+<pre><code>Runs: [100, 120, 110, 115, 130, 105, 125, 118, 3200, 5000]  # ms
+Sắp xếp tăng dần: [100, 105, 110, 115, 118, 120, 125, 130, 3200, 5000]
+                                                              (vị trí 1..10)
+
+average = 912ms   # (100+120+110+115+130+105+125+118+3200+5000)/10 — bị outlier kéo lên, che dấu vấn đề
+p50 = 118ms       # vị trí 5/10 (nearest-rank) — 50% users experience ≤ this
+p95 = 3200ms      # vị trí 9/10 — 5% users experience > this ← tail latency!
+p99 = 5000ms      # vị trí 10/10 (giá trị lớn nhất) — 1% worst — usually cache miss, cold start, LLM slow token
+
+# Lưu ý: chỉ 10 mẫu là QUÁ ÍT để tính p95/p99 chính xác (mỗi mẫu đại diện 10%,
+# không đủ độ phân giải cho "1% tệ nhất") — ví dụ minh hoạ dùng nearest-rank
+# đơn giản để thấy Ý NGHĨA (percentile lộ tail latency, average thì không).
+# Production thật cần hàng nghìn+ mẫu để p95/p99 có ý nghĩa thống kê thật.
+</code></pre>
+<p><strong>Rule</strong>: SLO (Service Level Objective — cam kết nội bộ về chất lượng dịch vụ, ví dụ "99% request phải xong dưới 500ms") bao giờ cũng viết theo percentile ("p95 &lt; 500ms"), KHÔNG viết average. Average che dấu tail; user Facebook không quan tâm "trung bình 100ms" nếu 1/20 request mất 5s.</p>
+
+<h2>3. LangSmith</h2>
+
+<pre><code># Auto-instrument LangGraph:
+import os
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "..."
+
+# Every node call, LLM invocation, tool call auto-logged to LangSmith cloud.
+# UI shows: nested traces, prompts, outputs, tokens, latency
+</code></pre>
+
+<h3>Alternative: LangFuse (self-host, open-source)</h3>
+<ul>
+  <li>Similar functionality, self-host possible</li>
+  <li>Better cho enterprise with data locality req</li>
+</ul>
+
+<h2>4. Cost tracking</h2>
+
+<pre><code>class TokenUsage(TypedDict):
+    input_tokens: int
+    output_tokens: int
+    cache_hit_tokens: int   # discounted
+    model: str
+
+# Compute cost:
+def cost(usage):
+    p = PRICING[usage["model"]]
+    return (usage["input_tokens"] - usage["cache_hit_tokens"]) × p["in"]
+         + usage["cache_hit_tokens"] × p["cache_in"]
+         + usage["output_tokens"] × p["out"]
+
+# Aggregate per user, per job type, per day
+# Alert if user cost > budget
+</code></pre>
+
+<h2>5. Error attribution</h2>
+
+<p>Agent fail — root cause có thể ở:</p>
+<ul>
+  <li>Prompt (unclear instruction)</li>
+  <li>Retrieved content (bad chunk)</li>
+  <li>Tool (API error, timeout)</li>
+  <li>Model (hallucinate, refuse)</li>
+  <li>Downstream (parse error, schema mismatch)</li>
+</ul>
+
+<pre><code># Track per error:
+class ErrorEvent(TypedDict):
+    job_id: str
+    agent: str
+    step: str
+    error_type: str        # tool_error|parse_error|model_refuse|timeout
+    error_message: str
+    prompt: str            # first 500 chars
+    model: str
+    tokens_used: int
+    timestamp: str
+
+# Analyze errors: group by error_type × agent → identify systemic issues
+</code></pre>
+
+<h3>5.1 Error taxonomy — phân loại để aggregate</h3>
+
+<pre><code># Không dùng raw exception message (cardinality nổ). Dùng finite categories:
+
+class ErrorCategory(str, Enum):
+    LLM_RATE_LIMIT     = "llm.rate_limit"       # 429 from Anthropic
+    LLM_TIMEOUT        = "llm.timeout"          # >60s no response
+    LLM_REFUSAL        = "llm.refusal"          # model refuses to answer
+    LLM_HALLUCINATION  = "llm.hallucination"    # detected via validator
+    TOOL_NOT_FOUND     = "tool.not_found"
+    TOOL_TIMEOUT       = "tool.timeout"
+    TOOL_ERROR_5XX     = "tool.error_5xx"
+    PARSE_ERROR        = "parse.json_decode"    # LLM output không match schema
+    SCHEMA_VIOLATION   = "parse.schema_violation"
+    HITL_REJECTED      = "hitl.rejected"
+    BUDGET_EXCEEDED    = "budget.exceeded"
+
+def classify_error(exc) -> ErrorCategory:
+    if isinstance(exc, RateLimitError): return ErrorCategory.LLM_RATE_LIMIT
+    if isinstance(exc, TimeoutError):   return ErrorCategory.LLM_TIMEOUT
+    if isinstance(exc, JSONDecodeError):return ErrorCategory.PARSE_ERROR
+    # ... explicit mapping
+    return ErrorCategory.UNKNOWN
+</code></pre>
+
+<p><strong>Vì sao</strong>: Prometheus/Grafana query <code>sum by (error_category) (rate(errors_total[5m]))</code> chỉ hoạt động khi cardinality thấp (~10-20 values). Raw exception messages → millions of unique series → alerting bị vô hiệu.</p>
+
+<h2>6. Alerting</h2>
+
+<div class="callout warn">
+<div class="label">Alert rules</div>
+<ul>
+  <li>Success rate &lt; 90% (5-min rolling window)</li>
+  <li>P95 latency &gt; 2× baseline</li>
+  <li>Cost per job spike 3× baseline</li>
+  <li>Human gate reject rate &gt; 30%</li>
+  <li>Tool error rate &gt; 5%</li>
+  <li>Fallback rate to legacy = anything &gt; 0 (V19.5 lesson)</li>
+</ul>
+</div>
+
+<h2>7. Prompt versioning</h2>
+
+<pre><code># Prompt in code = git tracked, easy diff
+# But: A/B test prompts, canary rollout, quick rollback need tooling
+
+# Options:
+# 1. Config file per prompt, hash version, log per call
+prompt_v1 = load("prompts/engineer_v1.md")   # git hash abc123
+prompt_v2 = load("prompts/engineer_v2.md")   # git hash def456
+
+# 2. Prompt management platform (Humanloop, LangSmith prompts)
+# Central UI, version + evaluate + rollout
+</code></pre>
+
+<h2>8. A/B testing agents</h2>
+
+<pre><code>route = hash(user_id) % 100
+if route < 50:
+    agent_config = variant_A   # baseline
+else:
+    agent_config = variant_B   # new
+
+# Log variant per job
+# Compare metrics: quality (approval rate), cost, latency
+# Statistical test → significance → rollout
+</code></pre>
+
+<h2>9. Case study — production debug</h2>
+
+<div class="example-box">
+<div class="title">Debug story: Engineer agent QA loop hit cap</div>
+<p>Alert: QA loop limit (<code>MAX_QA_ITERATIONS=2</code>) reached, job failed.</p>
+<p>Investigate trace: QA fail with "test import error". Engineer retry: modify import. Fail again same error. Loop.</p>
+<p>Root cause (via observation replay): Engineer imported <code>from module import x</code> where module doesn't exist. QA test fail. Engineer read same file, same import, retry same. Stuck.</p>
+<p>Fix: Add code search tool để Engineer verify module exists trước khi import. Also: QA feedback more specific ("module not found" with file location).</p>
+<p>Fix deployed, similar failures dropped 80%.</p>
+</div>
+
+<h2>10. Anti-patterns</h2>
+
+<div class="callout danger">
+<div class="label">Đừng làm</div>
+<ol>
+  <li><strong>Log toàn bộ prompt + response vào Splunk/ELK</strong>: giá lưu trữ nổ, dễ leak PII. Rule: sample 1-5%, mask email/SĐT trước lưu.</li>
+  <li><strong>High-cardinality attributes</strong>: <code>span.set_attribute("query", full_user_input)</code> → mỗi query là 1 series. Rule: attribute chỉ chứa enum values.</li>
+  <li><strong>Alert dựa average</strong>: average latency ok = tail latency có thể tệ. Rule: alert p95/p99.</li>
+  <li><strong>Không track cache hit rate LLM</strong>: prompt caching giảm 90% cost, nhưng nếu bạn thay đổi 1 whitespace trong system prompt → cache miss 100% → hóa đơn nổ. Dashboard hit rate là must-have.</li>
+  <li><strong>Trace sampling 100% ở production</strong>: cost storage + performance overhead. Rule: head-based 10% + tail-based cho error/slow request.</li>
+</ol>
+<p><strong>Head-based vs tail-based sampling — khác nhau ở THỜI ĐIỂM quyết định giữ/bỏ trace</strong>:</p>
+<ul>
+  <li><strong>Head-based</strong>: quyết định NGAY LÚC request bắt đầu, trước khi biết kết quả — ví dụ "random 10% request được bật ghi trace, 90% còn lại tắt hoàn toàn". Rẻ (không tốn overhead ghi trace cho 90% kia), nhưng may rủi: request lỗi có thể rơi vào nhóm 90% không được ghi → mất đúng lúc cần debug nhất.</li>
+  <li><strong>Tail-based</strong>: ghi trace TẠM cho MỌI request, đợi đến khi request xong mới quyết định giữ hay xoá — giữ lại nếu request bị lỗi hoặc chậm bất thường, xoá nếu request bình thường. Đảm bảo không bao giờ bỏ lỡ ca lỗi, nhưng tốn overhead ghi tạm cho 100% request (cần buffer + collector riêng, ví dụ OpenTelemetry Collector với tail_sampling processor).</li>
+</ul>
+<p>Kết hợp cả 2 (như rule ở trên) = vừa tiết kiệm (10% ngẫu nhiên đủ để nhìn xu hướng chung) vừa không mất case lỗi hiếm (tail-based luôn bắt được request bất thường dù nó không lọt vào 10% ngẫu nhiên).</p>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. 3 observability pillars — apply cho agent system.</p>
+<p class="a">Logs (per-step structured events), Metrics (aggregate — success rate, latency, cost), Traces (full nested job execution với parent-child spans).</p>
+
+<p class="q">2. LangSmith auto-instrument LangGraph — setup cần gì?</p>
+<p class="a">Set env LANGCHAIN_TRACING_V2=true, LANGCHAIN_API_KEY. No code change. LangGraph auto-emit spans per node, LLM call, tool call. UI hiển thị nested trace.</p>
+
+<p class="q">3. Alert rule: agent success rate &lt; 90% (5-min window). Ưu tiên fix?</p>
+<p class="a">(1) Identify which agent (Engineer? QA?). (2) Look at recent errors — same type or diverse? (3) Recent prompt change? Model version bump? Traffic spike? (4) Rollback nếu recent deploy. (5) Root cause + fix + monitor.</p>
+
+<p class="q">4. Cost per job spike 3x normal. Investigate?</p>
+<p class="a">(1) Which user / job type spike? (2) Token breakdown: input inflating? (RAG retrieve too much?). Output? (LLM verbose?). (3) Prompt cache miss rate. (4) Model choice — accidentally routing all to Opus? (5) Loop count — QA loop stuck?</p>
+
+<p class="q">5. Agent A/B test — significance requirement?</p>
+<p class="a">Enough sample size (~1000 per variant depending effect size), stratify by user cohort, log variant per job. Chi-square hoặc bootstrap for approval rate. Multi-week rollout để catch weekly patterns.</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://docs.smith.langchain.com/">LangSmith docs</a></li>
+    <li>📖 <a href="https://langfuse.com/">Langfuse (open-source alt)</a></li>
+    <li>📄 <a href="https://opentelemetry.io/docs/concepts/signals/traces/">OpenTelemetry traces concepts</a></li>
+    <li>📝 <a href="https://blog.langchain.dev/langsmith-tracing-for-langgraph/">LangSmith tracing for LangGraph blog</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L6_5_hitl.html">← L6.5</a>
+  <a href="L7_1_mlops.html">L7.1 · MLOps →</a>
+</div>
+
+</div>
+</body>
+</html>

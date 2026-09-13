@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2.2 — Regularization</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 2 · Module 2</div>
+  <h1>2.2 · Regularization Toolbox</h1>
+  <p class="subtitle">L1, L2, dropout, weight decay, early stopping, batch norm, label smoothing — 7 kỹ thuật chống overfit. Áp dụng V18 và LLM.</p>
+  <div class="level">Level 2 · Advanced ML · ~30 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Phân biệt L1 sparse vs L2 shrink</li>
+  <li>Implement dropout bằng NumPy</li>
+  <li>Vì sao Batch Norm giảm overfit + speed up training</li>
+  <li>Early stopping = form of regularization</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Regularization là gì bằng ngôn ngữ đời thường?</div>
+<p><strong>Vấn đề</strong>: Model như học sinh học tủ — nhớ nguyên đề cũ, không hiểu bản chất. Regularization = "phạt" model nếu nó quá tự tin/quá phức tạp, buộc nó học pattern tổng quát.</p>
+<p><strong>Analogy nấu ăn</strong>: Bạn muốn con biết nấu 100 món, không phải học vẹt 100 công thức. Regularization = giới hạn số nguyên liệu được dùng (L1), hoặc phạt nếu công thức quá dài (L2). Con phải tìm cách "làm ít mà đủ" → grasp nguyên lý chung.</p>
+<p><strong>L1 vs L2 trực quan</strong>: L1 như bảo "chỉ được dùng 5 gia vị chính" → nhiều gia vị bị bỏ hẳn (sparse). L2 như bảo "mỗi gia vị chỉ dùng ít thôi" → tất cả gia vị được giảm, không bỏ hẳn (shrink).</p>
+</div>
+
+<h2>1. L1 (Lasso) — sparse</h2>
+
+<pre><code>L_total = L_data + λ · Σ |w_i|
+
+# Đạo hàm: ∂|w|/∂w = sign(w)  (constant magnitude)
+# Effect: push weights toward 0. Nhiều weights = 0 → sparse.
+# Use case: feature selection, high-dim data.
+</code></pre>
+
+<h2>2. L2 (Ridge) — shrink</h2>
+
+<pre><code>L_total = L_data + λ · Σ w_i²
+
+# Đạo hàm: ∂w²/∂w = 2w  (magnitude proportional to w)
+# Effect: shrink large weights nhanh hơn small ones. Không zero.
+# Use case: multicollinearity, smooth predictions. Default choice.
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Vì sao L1 tạo sparsity còn L2 chỉ shrink? (giải thích bằng hình học + gradient)</div>
+
+<p><strong>Ký hiệu</strong>: <code>w</code> = vector weights (trọng số features), <code>L_data</code> = loss của data (VD: MSE), <code>λ</code> = cường độ regularize (điều chỉnh mức phạt).</p>
+
+<p><strong>Objective functions đầy đủ</strong>:</p>
+<pre><code>Ridge (L2):  min_w  ‖y - Xw‖²  +  λ · ‖w‖²₂     với ‖w‖²₂ = Σ w_j²
+Lasso (L1):  min_w  ‖y - Xw‖²  +  λ · ‖w‖₁      với ‖w‖₁  = Σ |w_j|
+</code></pre>
+
+<p><strong>Cách 1 — giải thích qua hình học constraint (Tibshirani 1996)</strong>: Ridge/Lasso tương đương với "minimize loss data" bên trong 1 vùng constraint:</p>
+<pre><code>Ridge:  min ‖y-Xw‖²  s.t.  Σw_j² ≤ t     ← constraint = hình TRÒN (L2 ball)
+Lasso:  min ‖y-Xw‖²  s.t.  Σ|w_j| ≤ t    ← constraint = hình THOI/KIM CƯƠNG (L1 ball, có góc nhọn tại trục)
+
+Trong 2D (w1, w2):
+
+   L2 (Ridge)              L1 (Lasso)
+       ╱─────╲                  ◆
+     ╱         ╲              ╱ ╲
+    │  hình    │            ╱     ╲          ← có 4 "góc nhọn" nằm ĐÚNG trên trục
+    │  tròn   │            ╲     ╱             (w1=0 hoặc w2=0)
+     ╲         ╱              ╲ ╱
+       ╲─────╱                  ◆
+
+Elipse loss contour đi từ ngoài vào (optimal không constraint ở tâm elipse).
+Điểm tiếp xúc đầu tiên giữa elipse và constraint = nghiệm.
+
+→ Với L2 hình tròn TRƠN → tiếp xúc thường ở điểm w_j ≠ 0 → shrink nhưng không zero.
+→ Với L1 hình thoi có GÓC NHỌN tại trục → xác suất tiếp xúc tại góc CAO
+   → w_j = 0 exactly cho 1 số features → SPARSE.
+</code></pre>
+
+<p><strong>Cách 2 — giải thích qua gradient (coordinate descent view)</strong>:</p>
+<pre><code>Ridge gradient: ∂L/∂w_j = -2·X_j^T(y - Xw) + 2λ·w_j
+  Update rule: w_j ← w_j - η·(...  +  2λ·w_j)
+                                     ↑ tỉ lệ với w_j
+  → w_j lớn shrink NHIỀU, w_j nhỏ shrink ÍT
+  → không bao giờ chạm 0 chính xác (asymptotic)
+
+Lasso gradient (subgradient tại w=0):
+  ∂|w_j|/∂w_j = sign(w_j)  nếu w_j ≠ 0
+              = [-1, +1]    nếu w_j = 0  (subdifferential)
+
+  Coordinate descent update (soft-thresholding — Donoho 1995):
+     w_j ← S(w_j_ols, λ)  với
+     S(z, λ) = sign(z) · max(|z| - λ, 0)
+                          ↑ TRỪ hằng số λ, cắt tại 0
+
+  → Nếu |w_j_ols| ≤ λ → w_j = 0 EXACTLY (không phải approximation).
+  → Đây là cơ chế toán học tạo sparsity: soft-thresholding cắt phẳng ở λ.
+</code></pre>
+
+<p><strong>Ví dụ số</strong>: giả sử unregularized weights = [1.0, 0.5, 0.05], λ = 0.1</p>
+<pre><code>L2 (Ridge, gradient shrink): sau vài step → [0.83, 0.42, 0.041]  (tỉ lệ ~17%)
+L1 (Lasso, soft-threshold):  [sign(1.0)·(1.0-0.1), sign(0.5)·(0.5-0.1), sign(0.05)·max(0.05-0.1, 0)]
+                          =  [0.9, 0.4, 0.0]  ← feature 3 bị KILL hoàn toàn
+</code></pre>
+
+<p><strong>Kết luận</strong>: L1 không "kỳ diệu" — nó là hệ quả toán học của hình học có góc nhọn + soft-thresholding. L2 shrink smooth vì hình học tròn + gradient proportional. Nhớ 2 hình + 2 công thức là hiểu bản chất.</p>
+</div>
+
+<h3>Elastic Net = L1 + L2</h3>
+<pre><code>L_total = L_data + α·L1 + β·L2
+
+# Best of both: sparsity + shrinkage. sklearn ElasticNet dùng alpha (default 1.0,
+# tổng cường độ regularize) × l1_ratio (default 0.5, tỉ lệ L1/L2) — không phải
+# 2 hệ số alpha/beta độc lập bằng 0.5 như công thức tổng quát ở trên.
+</code></pre>
+
+<h2>3. Dropout (NN)</h2>
+
+<p>Ý tưởng Hinton (2012): random turn off neurons ở train time → force network không rely 1 neuron → ensemble effect.</p>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Dropout giống gì đời thực?</div>
+<p><strong>Đội bóng đá tập luyện</strong>: HLV bắt 3 tiền vệ chính nghỉ ngẫu nhiên mỗi buổi tập. Kết quả: những cầu thủ khác phải học nhiều vị trí, đội không phụ thuộc 1 ngôi sao. Ngày ra sân thi đấu — tất cả cùng chơi = mạnh hơn.</p>
+<p><strong>Ứng dụng vào NN</strong>: Nếu 1 neuron quá "quan trọng" (nhớ nguyên training example), dropout ngẫu nhiên tắt nó → các neurons khác phải học biểu diễn dự phòng. Inference time bật tất cả → giống 1 ensemble của N model con.</p>
+</div>
+
+<pre><code># Training:
+mask = (np.random.rand(*h.shape) > p).astype(float)   # p = drop prob
+h_dropped = h * mask / (1 - p)   # scale để E[output] không đổi
+
+# Inference: KHÔNG drop, dùng full network.
+</code></pre>
+
+<p>Typical p: 0.1-0.5 (0.5 cho FC layer, 0.1-0.2 cho conv/embedding).</p>
+
+<h2>4. Weight decay</h2>
+
+<p><strong>Weight decay</strong> (suy giảm trọng số) = về Ý TƯỞNG giống L2, nhưng implement (cài đặt) KHÁC: trừ trực tiếp <code>λ·w</code> ở bước UPDATE tham số, không đi qua loss function:</p>
+<pre><code>w -= lr * (grad + λ·w)         # weight decay — trừ λ·w TRỰC TIẾP vào update
+# vs
+w -= lr * grad_with_L2         # L2 through loss — λ·w đã được TRỘN VÀO grad từ trước
+                                # (grad_with_L2 = grad gốc + λ·w, tính chung 1 cục)
+</code></pre>
+<p>Với <strong>SGD (Stochastic Gradient Descent — thuật toán tối ưu cơ bản nhất, học ở L3.2)</strong>, 2 cách viết trên cho ra kết quả TOÁN HỌC Y HỆT NHAU — chỉ là 2 cách viết khác nhau của cùng 1 phép tính. Nhưng với <strong>Adam</strong> (thuật toán tối ưu phổ biến hơn SGD cho deep learning, cũng học ở L3.2), 2 cách này KHÔNG còn tương đương — đây chính là phát hiện của Loshchilov &amp; Hutter (2019).</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Vì sao Adam + L2 KHÔNG tương đương weight decay thật — cơ chế + ví dụ số toy</div>
+<p><strong>Cơ chế</strong>: Adam không dùng chung 1 learning rate cho mọi tham số — nó CHIA gradient của mỗi tham số cho căn bậc 2 của trung bình động bình phương gradient quá khứ của ĐÚNG tham số đó (ký hiệu <code>√v̂ₜ</code>, gọi là "per-parameter RMS" — RMS = Root Mean Square, căn bậc 2 trung bình bình phương). Tham số nào có lịch sử gradient LỚN thì <code>√v̂ₜ</code> lớn → bước cập nhật bị chia nhỏ lại nhiều hơn. Vấn đề: nếu bạn cộng <code>λ·w</code> (số hạng L2) vào gradient TRƯỚC KHI chia cho <code>√v̂ₜ</code> (cách làm "L2 qua loss" ở trên) — thì lượng "phạt" thực tế mà mỗi tham số nhận được bị chia nhỏ khác nhau tuỳ lịch sử gradient của riêng nó, dù <code>λ</code> đặt ra là 1 con số DUY NHẤT áp cho mọi tham số.</p>
+<pre><code>Ví dụ số toy — 2 tham số A và B, cùng λ=0.1, cùng w=1, nhưng lịch sử gradient khác nhau:
+  Tham số A: gradient lịch sử LỚN → √v̂ₜ = 10
+  Tham số B: gradient lịch sử NHỎ → √v̂ₜ = 0.1
+
+Cách "L2 qua loss" (Adam thường, KHÔNG decoupled):
+  Lượng phạt thực nhận = (λ·w) / √v̂ₜ
+  Tham số A: 0.1 × 1 / 10  = 0.01   ← phạt RẤT NHẸ
+  Tham số B: 0.1 × 1 / 0.1 = 1.0    ← phạt NẶNG GẤP 100 LẦN tham số A!
+  → Cùng λ, cùng w, nhưng 2 tham số bị phạt khác nhau 100 lần — không công bằng,
+    không phải điều λ được thiết kế để làm.
+
+Cách "weight decay tách riêng" (AdamW, decoupled):
+  Lượng phạt thực nhận = λ·w trực tiếp, KHÔNG chia cho √v̂ₜ
+  Tham số A: 0.1 × 1 = 0.1
+  Tham số B: 0.1 × 1 = 0.1
+  → Cùng λ, cùng w → cùng lượng phạt, bất kể lịch sử gradient — đúng ý nghĩa
+    "weight decay" ban đầu: mọi trọng số bị suy giảm ĐỀU theo cùng 1 tỷ lệ.</code></pre>
+<p><strong>Insight</strong>: đây không phải khác biệt "cách viết code" thuần tuý — nó là khác biệt Ý NGHĨA TOÁN HỌC thật sự khi kết hợp với 1 optimizer có tốc độ học thích ứng riêng cho từng tham số (adaptive per-parameter learning rate) như Adam. <strong>AdamW</strong> = Adam + weight decay TÁCH RIÊNG (decoupled) khỏi bước tính gradient thích ứng — đây là lựa chọn optimizer MẶC ĐỊNH cho hầu hết việc train Transformer/LLM hiện nay, không phải Adam thường.</p>
+</div>
+
+<h2>5. Early stopping</h2>
+
+<pre><code># Track val loss theo epoch:
+Epoch 1: train 0.8, val 0.75
+Epoch 5: train 0.6, val 0.62
+Epoch 10: train 0.5, val 0.58  ← best val loss
+Epoch 15: train 0.4, val 0.60  ← val start rising
+Epoch 20: train 0.3, val 0.65  ← STOP, restore epoch 10
+
+# Save model at best val, stop khi val không improve N epochs (patience).
+</code></pre>
+
+<p>Không cần thêm term vào loss — chỉ giới hạn iteration. Interpretable, hiệu quả.</p>
+
+<h2>6. Batch Normalization</h2>
+
+<p><strong>Batch Normalization</strong> (chuẩn hoá theo lô — thường viết tắt <strong>BatchNorm</strong> hoặc <strong>BN</strong>) = chuẩn hoá activations (giá trị đầu ra của 1 layer, trước khi đưa vào layer tiếp theo) theo từng mini-batch → ép mean (trung bình) về 0, variance (phương sai — đã học ở L2.1) về 1, rồi scale/shift lại bằng 2 tham số CÓ THỂ HỌC được (learnable params):</p>
+<pre><code>μ = mean(x, batch)              # trung bình của activation x trong batch hiện tại
+σ² = var(x, batch)               # phương sai của activation x trong batch hiện tại
+x_hat = (x - μ) / sqrt(σ² + ε)   # chuẩn hoá về mean=0, var=1 (ε nhỏ, tránh chia 0)
+y = γ · x_hat + β                # γ, β = 2 tham số HỌC ĐƯỢC, cho phép model "hoàn tác"
+                                  # chuẩn hoá nếu thấy không cần (γ=√(σ²+ε), β=μ → y=x)
+</code></pre>
+
+<div class="callout danger">
+<div class="label">⚠️ Chỗ dễ nhầm nhất — lý do BatchNorm hoạt động KHÔNG phải lý do trong paper gốc</div>
+<p>Paper gốc (Ioffe &amp; Szegedy, 2015) giải thích BatchNorm hoạt động vì nó giảm <strong>"internal covariate shift"</strong> (ICS — hiện tượng phân phối (distribution) của input mỗi layer LIÊN TỤC thay đổi trong lúc training, vì các layer trước nó cũng đang thay đổi tham số) — giả thuyết này ĐƯỢC TIN RỘNG RÃI suốt nhiều năm, nhưng đã bị 1 nghiên cứu năm 2018 (Santurkar, Tsipras, Ilyas, Madry — NeurIPS) CHỨNG MINH THỰC NGHIỆM là sai.</p>
+</div>
+
+<p><strong>Thí nghiệm phản chứng của Santurkar et al. (2018) — vì sao ICS không phải lý do thật</strong>: họ train 1 mạng VGG có BatchNorm bình thường, rồi tạo thêm 1 biến thể "BatchNorm + nhiễu": sau bước BatchNorm, họ CHỦ Ý bơm thêm nhiễu ngẫu nhiên (mean khác 0, variance khác 1, đổi mới mỗi bước) vào activation — nghĩa là CỐ TÌNH làm phân phối input mỗi layer dao động MẠNH HƠN cả khi không dùng BatchNorm luôn. Nếu giả thuyết ICS đúng, biến thể "nhiễu" này phải train TỆ HƠN hẳn (vì ICS bị làm tệ đi cố ý). Kết quả đo được: biến thể "BatchNorm + nhiễu" vẫn train nhanh và ổn định GẦN NHƯ Y HỆT BatchNorm thường — cả 2 đều vượt xa mạng KHÔNG có BatchNorm. Điều này tách rời hoàn toàn "BatchNorm giúp ích" khỏi "BatchNorm giảm ICS" — vì ở đây BatchNorm vẫn giúp ích dù ICS đã bị làm tệ hơn cố ý.</p>
+
+<p><strong>Cơ chế thật (được chấp nhận rộng rãi hiện nay)</strong>: BatchNorm làm "mượt" bề mặt tối ưu hoá (optimization landscape — hình dung loss function như 1 địa hình đồi núi, gradient descent là 1 quả bóng lăn xuống dốc tìm điểm thấp nhất). Cụ thể, Santurkar et al. chứng minh (cho 1 số trường hợp đơn giản hoá) rằng BatchNorm cải thiện tính <strong>Lipschitz</strong> (Lipschitzness — 1 khái niệm toán học đo "độ dốc tối đa" của 1 hàm số không đổi đột ngột; hàm "Lipschitz tốt" là hàm có độ dốc thay đổi TỪ TỪ, không có vách đứng bất ngờ) của cả loss lẫn gradient của loss — nói cách khác, gradient ở bước sau DỰ ĐOÁN ĐƯỢC tốt hơn dựa trên gradient ở bước trước, nên có thể dùng learning rate lớn hơn mà không sợ "nhảy quá đà" hay phân kỳ (diverge).</p>
+
+<p><strong>Insight</strong>: đây là bài học phương pháp luận quan trọng không kém bản thân BatchNorm — 1 kỹ thuật có thể HOẠT ĐỘNG TỐT trong thực tế suốt nhiều năm trong khi LỜI GIẢI THÍCH ban đầu về việc "tại sao nó hoạt động" lại sai; luôn phân biệt "kỹ thuật này có work không" (câu trả lời: có, đã đo rất nhiều lần) với "lý do nó work có đúng như tài liệu nói không" (câu trả lời: cần verify độc lập, đúng tinh thần BUG-8 trong quy trình viết tài liệu của dự án này).</p>
+
+<p>Hiệu ứng phụ: (1) hội tụ (convergence) nhanh hơn, (2) chịu được learning rate lớn hơn, (3) hiệu ứng regularize nhẹ (vì mean/variance tính theo batch dao động ngẫu nhiên giữa các batch khác nhau — hoạt động hơi giống 1 dạng data augmentation nhẹ, dù đây chỉ là hiệu ứng phụ, không phải mục đích thiết kế chính).</p>
+
+<h3>Variants</h3>
+<ul>
+  <li><strong>Layer Norm</strong>: normalize per sample (not batch). Dùng ở Transformer.</li>
+  <li><strong>Group Norm</strong>: mix của 2, dùng khi batch nhỏ (small batch memory).</li>
+  <li><strong>RMS Norm</strong>: chỉ chia RMS (không subtract mean). LLaMA dùng.</li>
+</ul>
+
+<h2>7. Label smoothing</h2>
+
+<pre><code># Hard label:  [0, 0, 1]
+# Smoothed:    [0.033, 0.033, 0.933]  (ε=0.1, spread evenly)
+#
+# Công thức: smoothed_k = (1-ε)·hard_k + ε/K   (K = tổng số class)
+# Kiểm tra: vị trí đúng (hard=1): (1-0.1)·1 + 0.1/3 = 0.9 + 0.0333 = 0.9333 ✓
+#           vị trí sai  (hard=0): (1-0.1)·0 + 0.1/3 = 0 + 0.0333   = 0.0333 ✓
+
+# Cross-entropy với soft label → model không push logit → ∞ → less overconfident
+# Common trong Transformer training (ε = 0.1 default).
+</code></pre>
+
+<h3>7.5 Regularization hiện đại (2017-2020) — 2 kỹ thuật ngoài danh sách 7 cổ điển</h3>
+
+<p>7 kỹ thuật ở mục 1-7 đều đã có từ trước 2017 (trừ AdamW, 2019). Sau đó, 2 hướng tiếp cận MỚI xuất hiện, giải quyết vấn đề theo cách khác hẳn — không phạt weights (như L1/L2), không tắt neuron (như Dropout), mà can thiệp vào chính DỮ LIỆU hoặc chính quá trình TỐI ƯU HOÁ.</p>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Mixup (Zhang et al. 2017) — "trộn" 2 ví dụ training thành 1</div>
+<p><strong>Ý tưởng</strong>: thay vì train trên từng ảnh/mẫu dữ liệu RIÊNG BIỆT, Mixup tạo ra 1 mẫu MỚI bằng cách TRỘN TUYẾN TÍNH (linear interpolation — pha trộn theo tỷ lệ, giống pha 2 màu sơn theo tỷ lệ phần trăm) 2 mẫu ngẫu nhiên, CẢ input LẪN label:</p>
+<pre><code>x̃ = λ·x_i + (1-λ)·x_j      # trộn 2 ảnh/input theo tỷ lệ λ
+ỹ = λ·y_i + (1-λ)·y_j      # trộn 2 label THEO ĐÚNG TỶ LỆ Y HỆT
+
+# λ ~ Beta(α, α)  — rút ngẫu nhiên từ phân phối Beta (1 phân phối xác suất
+#                   cho giá trị trong khoảng [0,1], hình dạng phụ thuộc α)
+# α = 1   → λ phân bố ĐỀU trong [0,1] (dùng phổ biến cho CIFAR-10)
+# α = 0.2 → λ thường gần 0 hoặc gần 1 hơn (dùng phổ biến cho ImageNet,
+#           nghĩa là đa số lần trộn vẫn "gần giống" 1 trong 2 ảnh gốc,
+#           ít khi trộn 50/50 hoàn toàn)</code></pre>
+<p><strong>Ví dụ cụ thể</strong>: ảnh mèo (label [1,0]) trộn với ảnh chó (label [0,1]) theo λ=0.7 → ảnh mới = 70% pixel mèo + 30% pixel chó (nhìn mờ, chồng lớp), label mới = [0.7, 0.3] (70% "mèo", 30% "chó") — model phải học dự đoán ĐÚNG TỶ LỆ pha trộn, không chỉ đúng/sai nhị phân.</p>
+<p><strong>Kết quả đo được thật</strong>: trên ImageNet với ResNet-101, Mixup (α=0.2) giảm top-1 error từ 22.1% xuống 21.5%; trên CIFAR-10 với PreAct ResNet-18, giảm error từ 5.6% xuống 4.2% — cải thiện thật, không phải lý thuyết suông.</p>
+<p><strong>Insight</strong>: Mixup buộc model học DECISION BOUNDARY (ranh giới quyết định giữa các class) TUYẾN TÍNH/MƯỢT thay vì ranh giới "cứng, gấp khúc" — model không còn tự tin 100% ở gần ranh giới giữa 2 class, giúp giảm overconfidence tương tự label smoothing (mục 7) nhưng theo cơ chế khác (can thiệp DỮ LIỆU, không phải can thiệp LOSS FUNCTION).</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 SAM — Sharpness-Aware Minimization (Foret et al. 2020) — tìm vùng "đáy phẳng", không chỉ điểm thấp nhất</div>
+<p><strong>Vấn đề nó giải quyết</strong>: gradient descent thông thường chỉ tìm 1 ĐIỂM có loss thấp nhất — nhưng nếu điểm đó nằm trong 1 "hố hẹp, dốc đứng" (sharp minimum) trên bề mặt loss, chỉ cần dữ liệu test hơi khác dữ liệu train 1 chút (phân phối dịch nhẹ) là loss có thể tăng vọt trở lại — model kém generalize dù loss train rất thấp. SAM tìm 1 vùng "đáy RỘNG, PHẲNG" (flat minimum) thay vì điểm đơn lẻ, vì đáy phẳng ổn định hơn khi dữ liệu test hơi lệch khỏi phân phối train.</p>
+<pre><code>Bước 1: tính "nhiễu đối kháng" (adversarial perturbation) — tìm hướng làm
+        loss TĂNG nhiều nhất trong 1 bán kính nhỏ ρ quanh điểm hiện tại:
+        ε̂ = ρ · ∇L(θ) / ‖∇L(θ)‖        (ρ ≈ 0.05 thường dùng)
+
+Bước 2: tính gradient TẠI ĐIỂM ĐÃ BỊ NHIỄU (θ + ε̂), rồi dùng CHÍNH gradient
+        đó để update tham số GỐC θ (không phải điểm bị nhiễu):
+        θ ← θ - lr · ∇L(θ + ε̂)
+
+# Trực giác: nếu quanh θ có 1 hướng mà đi 1 chút (ρ) đã làm loss tăng vọt,
+# bước 2 sẽ "phạt" mạnh hướng đó — buộc tối ưu hoá đi tới vùng mà XUNG QUANH
+# NÓ cũng phẳng, không chỉ bản thân điểm đó thấp.</code></pre>
+<p><strong>Kết quả đo được thật</strong>: trên ImageNet với ResNet-152 (400 epoch), SAM giảm top-1 error từ 20.3% xuống 18.4%; cải thiện dao động từ ~0.4% (ResNet-50, 100 epoch, cải thiện khiêm tốn) tới ~1.9% (ResNet-152, 400 epoch, cải thiện lớn) tuỳ kiến trúc/thời gian train.</p>
+<p><strong>Chi phí đánh đổi</strong>: SAM tốn gấp ĐÔI thời gian train mỗi bước (phải tính gradient 2 lần — 1 lần để tìm ε̂, 1 lần để update thật) — đây là lý do nó chưa phải lựa chọn mặc định cho mọi bài toán, chỉ đáng dùng khi cần generalization tốt hơn và chấp nhận trả thêm chi phí compute.</p>
+</div>
+
+<h2>8. 🔍 So sánh 7 regularization techniques (sau khi đã học từng cái)</h2>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 Bảng compare 7 techniques + decision matrix</div>
+
+<h4>Bảng so sánh chi tiết</h4>
+<table>
+<tr><th>Technique</th><th>Cơ chế</th><th>Effect on weights</th><th>Cost</th><th>Dùng cho</th><th>Trade-off</th></tr>
+<tr><td><strong>L1 (Lasso)</strong></td><td>Thêm λ·Σ|w| vào loss</td><td>Đẩy weights về 0 → SPARSE</td><td>Miễn phí</td><td>Feature selection, high-dim</td><td>Có thể mất feature quan trọng</td></tr>
+<tr><td><strong>L2 (Ridge)</strong></td><td>Thêm λ·Σw² vào loss</td><td>Shrink không zero</td><td>Miễn phí</td><td>Default cho hầu hết model</td><td>Không loại features</td></tr>
+<tr><td><strong>Elastic Net</strong></td><td>L1 + L2</td><td>Sparsity + smoothness</td><td>Miễn phí</td><td>Multicollinear + selection</td><td>2 hyperparams, tune khó</td></tr>
+<tr><td><strong>Dropout</strong></td><td>Random tắt neurons ở train</td><td>Ép ensemble</td><td>+10% train time</td><td>Deep NN, FC layers</td><td>Train slow convergence</td></tr>
+<tr><td><strong>BatchNorm</strong></td><td>Normalize activation batch</td><td>Giữ scale ổn định</td><td>+15% train time</td><td>Vision, CNN, batch ≥ 32</td><td>Không work batch nhỏ</td></tr>
+<tr><td><strong>LayerNorm</strong></td><td>Normalize per sample</td><td>Giống BN per-sample</td><td>+10%</td><td>Transformer, RNN</td><td>Đôi khi tệ hơn BN cho vision</td></tr>
+<tr><td><strong>Early Stopping</strong></td><td>Dừng khi val loss stop cải thiện</td><td>Không đụng weights</td><td>Miễn phí</td><td>Mọi model</td><td>Nhạy patience param</td></tr>
+<tr><td><strong>Weight Decay</strong></td><td>Subtract λ·w khi update</td><td>≡ L2 (correct scale)</td><td>Miễn phí</td><td>AdamW cho LLM</td><td>Adam gốc trộn sai, AdamW fix</td></tr>
+<tr><td><strong>Label Smoothing</strong></td><td>Target 0.9/0.05/0.05</td><td>Soften targets</td><td>Miễn phí</td><td>Classification nhiều class</td><td>Đôi khi tệ cho binary</td></tr>
+</table>
+
+<h4>L1 vs L2 chi tiết — ví dụ visual</h4>
+<pre><code># Cho model có 3 features với weights ban đầu [1.0, 0.5, 0.1]
+
+# L1 (λ=0.1): ∂|w|/∂w = sign(w) = constant
+# → mỗi step subtract 0.1 từ mọi w
+# Sau 10 steps: [0.0, 0.0, 0.0] → SPARSE
+
+# L2 (λ=0.1): ∂w²/∂w = 2w = proportional to w
+# → mỗi step nhân với hệ số CỐ ĐỊNH (1-λ)=0.9 (khác L1: trừ 1 LƯỢNG cố định)
+# → sau 10 step: w_new = w_0 · (1-λ)^10 = w_0 · 0.9^10 = w_0 · 0.3487
+# Sau 10 steps: [1.0×0.3487, 0.5×0.3487, 0.1×0.3487] ≈ [0.35, 0.17, 0.03] → SHRINK
+# (mọi w giảm CÙNG TỈ LỆ ~65%, không giảm CÙNG LƯỢNG tuyệt đối như L1)
+</code></pre>
+
+<h4>Decision tree — chọn cái nào?</h4>
+<pre><code>Model overfit? Nếu KHÔNG → skip regularization.
+├── Tabular XGBoost/RF → max_depth cap + min_child_weight + early_stopping
+├── Linear Regression / Logistic
+│   ├── Feature redundant → L1
+│   ├── All informative → L2
+│   └── Cả 2 → Elastic Net
+├── NN shallow (2-5 layers) → Dropout p=0.2 + L2 wd 1e-4 + early stop
+├── CNN vision → BatchNorm + Dropout p=0.5 + wd
+├── Transformer LLM → LayerNorm + Dropout p=0.1 + AdamW wd 0.01 + label smoothing
+└── RNN LSTM → LayerNorm + Dropout on non-recurrent
+</code></pre>
+
+<h4>Dropout vs BatchNorm compare</h4>
+<table>
+<tr><th></th><th>Dropout</th><th>BatchNorm</th></tr>
+<tr><td>Cơ chế</td><td>Random off neurons</td><td>Normalize activation</td></tr>
+<tr><td>Train effect</td><td>Chậm hơn (noise)</td><td>Nhanh hơn (stable scale)</td></tr>
+<tr><td>Generalization</td><td>Tốt (ensemble effect)</td><td>Trung bình</td></tr>
+<tr><td>Vị trí</td><td>FC layers</td><td>Sau conv, trước activation</td></tr>
+<tr><td>Batch dependency</td><td>Không</td><td>❌ Cần batch ≥ 32</td></tr>
+<tr><td>Combine</td><td colspan="2">✅ Thứ tự: Conv → BN → ReLU → Dropout</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: Regularization KHÔNG "cứ nhiều là tốt". Quá nhiều → underfit. Rule: bắt đầu light, tăng dần đến khi train_acc − val_acc &lt; 5%.</p>
+</div>
+
+<h2>9. Áp dụng vào V18</h2>
+
+<div class="example-box">
+<div class="title">V18 XGBoost regularization</div>
+<ul>
+  <li><code>reg_alpha=0.1</code> (L1) → sparse leaf weights</li>
+  <li><code>reg_lambda=1.0</code> (L2) → shrink leaf weights</li>
+  <li><code>min_child_weight=1</code> → mỗi leaf phải có ≥1 sum hessian (regularizer)</li>
+  <li><code>subsample=0.8</code> + <code>colsample_bytree=0.8</code> → row + column sampling per tree (bagging inside boosting)</li>
+  <li><code>early_stopping_rounds=30</code> → stop training nếu val loss không giảm 30 rounds</li>
+</ul>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy chính — "giới hạn ngân sách để tránh học vẹt"</div>
+<p>Bạn cho con 100k đi chợ nấu 1 mâm cơm. Không giới hạn = con mua đủ 30 nguyên liệu, món ngon nhưng phụ thuộc tất cả (nếu thiếu 1 → sập). Regularization = giới hạn ngân sách.</p>
+<ul>
+  <li><strong>L2 (Ridge) = "mỗi loại nguyên liệu tối đa 5k"</strong>: con vẫn mua 30 loại nhưng ít của mỗi loại — món cân bằng, không phụ thuộc 1 loại nào. Weights bị shrink đều.</li>
+  <li><strong>L1 (Lasso) = "chỉ được mua tối đa 5 loại nguyên liệu"</strong>: con phải chọn 5 loại quan trọng nhất, bỏ 25 loại còn lại → sparse. Feature selection.</li>
+  <li><strong>Elastic Net = "5 loại chính, mỗi loại max 10k"</strong>: kết hợp cả 2 giới hạn.</li>
+</ul>
+</div>
+
+<div class="callout warn">
+<div class="label">⚠️ 3 hiểu lầm phổ biến về regularization</div>
+<ol>
+  <li><strong>"λ càng lớn model càng tốt (chống overfit tốt hơn)"</strong> — SAI. λ quá lớn → weights bị ép về 0 hết → model chỉ dự đoán mean (high bias, underfit). Phải tune λ qua CV, không phải "càng cao càng tốt".</li>
+  <li><strong>"L1 và L2 tương đương nhau, chỉ khác form phạt"</strong> — SAI. L1 tạo sparsity (feature selection tự động) là một tính chất <em>chất</em>, không phải "tương đương L2 mạnh". Chọn L1 khi bạn TIN có nhiều features thừa; L2 khi TIN mọi features đều đóng góp ít nhiều.</li>
+  <li><strong>"Dropout và L2 làm cùng 1 việc, dùng cái nào cũng được"</strong> — SAI. L2 là <em>weight-level</em> constraint (bounded norm). Dropout là <em>activation-level</em> ensemble effect (mỗi mini-batch huấn luyện 1 sub-network). Dùng CẢ 2 cho NN — chúng bù trừ nhau (Wager et al 2013 chứng minh dropout ≈ adaptive L2 nhưng KHÔNG identical).</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. L1 vs L2 — khi nào chọn L1?</p>
+<p class="a">Khi cần sparsity (feature selection, interpretability, high-dim). L1 push nhiều weights về 0 exactly. L2 chỉ shrink, không zero.</p>
+
+<p class="q">2. Dropout p=0.5 nghĩa là gì? Vì sao chia 1-p ở train?</p>
+<p class="a">Drop 50% neurons randomly. Chia 1-p (=0.5) → scale up còn lại 2× để E[output] không đổi. Inference không dropout → activations có magnitude expected.</p>
+
+<p class="q">3. Batch Norm vs Layer Norm — Transformer dùng cái nào? Vì sao?</p>
+<p class="a">Layer Norm. BN normalize per feature dimension across batch → không work với variable-length sequence + different sample lengths. LN normalize per sample → sequence-agnostic. Đó là 1 trong 5 lý do Transformer scale được.</p>
+
+<p class="q">4. Early stopping = regularization? Prove.</p>
+<p class="a">Yes. Limit iterations → limit effective model complexity (weights không tách xa từ init). Empirically tương đương L2 với optimal λ ở gradient descent theory (Yao et al 2007).</p>
+
+<p class="q">5. Label smoothing giúp gì cho LLM?</p>
+<p class="a">LLM output softmax over 50k tokens. Hard label push logit đúng token → ∞ → overconfident, kém generalization. Smooth (ε=0.1) → model tin nhẹ nhàng hơn → calibrated hơn + better BLEU/perplexity ở test.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>V18 config: <code>backend/train_v18_unified.py</code> XGBClassifier params</li>
+    <li>Optuna log: <code>reg_alpha</code>, <code>reg_lambda</code>, <code>min_child_weight</code>, <code>gamma</code></li>
+    <li>V20 pruned (43→17 features, drop 26) = form of regularization qua feature selection</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://jmlr.org/papers/v15/srivastava14a.html">Srivastava et al (2014) — Dropout paper</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1502.03167">Ioffe & Szegedy (2015) — Batch Normalization</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1711.05101">Loshchilov & Hutter (2019) — AdamW / Decoupled Weight Decay</a></li>
+    <li>📖 <a href="https://d2l.ai/chapter_multilayer-perceptrons/weight-decay.html">D2L — Weight Decay</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L2_1_bias_variance.html">← L2.1</a>
+  <a href="L2_3_imbalance.html">L2.3 · Class Imbalance →</a>
+</div>
+
+</div>
+</body>
+</html>

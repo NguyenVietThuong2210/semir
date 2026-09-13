@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R6.7 · AI Agent Design Patterns — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · AI Agents · Điểm 7/8</div>
+  <h1>R6.7 · AI Agent Design Patterns</h1>
+  <p class="subtitle">9 pattern nền tảng đã học đủ ở L6.1 — 5 pattern mới nổi 2025-2026 (Agent-as-a-Judge, Reflection+Tool-use hybrid, Deep Research, Guardrail, Self-Consistency) và ranh giới an toàn khi áp cho AI Trader.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+  <li>Ôn nhanh 9 pattern nền tảng (ReAct, Reflexion, Plan-and-Execute, Tree of Thoughts, chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer) — không học lại chi tiết.</li>
+  <li>Hiểu 2 pattern mới: <strong>Agent-as-a-Judge</strong> và <strong>Reflection + Tool-use hybrid</strong> — khi nào dùng, trade-off gì.</li>
+  <li>Phân biệt "design pattern" (building block tái sử dụng) với "multi-agent systems" (R6.6, kiến trúc rộng) — không nhầm building block với kiến trúc tổng thể.</li>
+  <li>Nhận diện được dự án <code>predictor</code> đã áp dụng đúng 1 trong 2 pattern mới này TRƯỚC KHI nó được đặt tên chính thức.</li>
+  <li>Biết pattern thứ 3 mới nổi — <strong>Deep Research</strong> — và phân biệt được nó với RAG 1-lượt (R5.3) và với Reflexion (L6_1).</li>
+  <li>Biết pattern thứ 4 — <strong>Guardrail</strong> — và chọn đúng chế độ chạy (song song/chặn trước) theo mức độ side-effect của agent.</li>
+  <li>Biết pattern thứ 5 — <strong>Self-Consistency / Majority Voting</strong> — và phân biệt được với Tree of Thoughts (thời điểm đánh giá) lẫn với ensemble ML (vote trên nhiều mẫu decode CÙNG 1 model, không phải nhiều mô hình khác nhau).</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p><a href="L6_1_agent_patterns.html">L6_1_agent_patterns.html</a> đã dạy đủ và sâu: ReAct, Reflexion, Plan-and-Execute, Tree of Thoughts, prompt chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer — 9 pattern này chính là nội dung cốt lõi của "AI Agent Design Patterns", <strong>không lặp lại</strong> ở đây. Trang này chỉ bổ sung 2 pattern <strong>mới nổi 2025-2026</strong> chưa có trong <code>L6_1</code>.</p>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Design pattern giống các "chiêu thức" cơ bản trong võ thuật — mỗi chiêu (ReAct, Reflexion...) giải quyết 1 tình huống cụ thể, tập luyện riêng lẻ được. <strong>Multi-agent systems</strong> (R6.6) giống 1 <em>trận đấu</em> — cách nhiều võ sĩ (agent) phối hợp/đối đầu. Bạn có thể dùng 1 chiêu (design pattern) trong 1 trận 1-đấu-1 (single agent) hoặc trong 1 trận đồng đội (multi-agent) — 2 khái niệm ở 2 tầng khác nhau, không thay thế nhau.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Bảng nhắc nhanh 9 pattern nền tảng (đầy đủ ở L6.1)</h3>
+<table>
+<tr><th>Pattern</th><th>Ý tưởng 1 câu</th></tr>
+<tr><td>ReAct</td><td>Xen kẽ Reasoning (suy luận) và Acting (gọi tool), quan sát kết quả rồi suy luận tiếp</td></tr>
+<tr><td>Reflexion</td><td>Tự phê bình kết quả của chính mình, sửa lại trước khi trả lời cuối</td></tr>
+<tr><td>Plan-and-Execute</td><td>Lập kế hoạch đầy đủ trước, rồi thực thi từng bước theo kế hoạch đã lập</td></tr>
+<tr><td>Tree of Thoughts</td><td>Khám phá nhiều nhánh suy luận song song, chọn nhánh tốt nhất</td></tr>
+<tr><td>Prompt chaining</td><td>Chuỗi lời gọi LLM tuần tự, output bước trước là input bước sau</td></tr>
+<tr><td>Routing</td><td>Phân loại input rồi định tuyến tới đúng "chuyên gia" (prompt/model) xử lý</td></tr>
+<tr><td>Parallelization</td><td>Chạy nhiều lời gọi độc lập song song, gộp kết quả</td></tr>
+<tr><td>Orchestrator-workers</td><td>1 agent điều phối chia việc cho nhiều worker (nền tảng của R6.6)</td></tr>
+<tr><td>Evaluator-optimizer</td><td>1 agent tạo, 1 agent chấm điểm + góp ý, lặp lại tới khi đạt chuẩn</td></tr>
+</table>
+
+<h3>2. Pattern mới #1 — Agent-as-a-Judge</h3>
+<p>LLM-as-a-judge cổ điển (xem <a href="R8_1_llm_as_judge.html">R8_1_llm_as_judge.html</a> mục 1, và mục 4 của chính trang đó cũng đã nhắc sơ lược Agent-as-a-Judge từ góc nhìn evaluation — trang này khai triển sâu hơn từ góc nhìn agent design pattern) là <strong>1 lời gọi LLM đơn</strong> để chấm điểm — đọc output, cho điểm, xong. <strong>Agent-as-a-Judge</strong> khác ở chỗ: giám khảo là <strong>1 agent đầy đủ</strong> — có thể gọi tool, truy hồi bằng chứng, tham vấn nhiều nguồn — trước khi ra phán quyết cuối.</p>
+<pre><code>LLM-as-a-judge (1 lời gọi):
+  input: "PR này có đúng yêu cầu không?" + diff code
+  → LLM đọc, trả điểm ngay
+
+Agent-as-a-Judge (nhiều bước, có tool):
+  Bước 1: đọc diff code
+  Bước 2: GỌI TOOL chạy test suite thật, xem kết quả pass/fail
+  Bước 3: GỌI TOOL đọc thêm file liên quan (không chỉ diff) để hiểu ngữ cảnh
+  Bước 4: tổng hợp bằng chứng từ bước 2-3 → phán quyết cuối
+</code></pre>
+<p><strong>Trade-off</strong>: đắt hơn nhiều lần 1 lệnh gọi LLM đơn (nhiều bước, nhiều tool call). Chỉ đáng dùng khi việc chấm điểm bản thân nó phức tạp — cần đọc nhiều file, chạy test, không chỉ đọc text và đoán.</p>
+<p><strong>Bằng chứng thật (verify nguồn gốc — BUG-8)</strong>: pattern này không phải khái niệm mơ hồ, nó có tên 1 paper cụ thể — <em>"Agent-as-a-Judge: Evaluate Agents with Agents"</em> (arXiv:2410.10934, 10/2024, vẫn là paper nền tảng được trích dẫn tới 2026). Paper xây benchmark riêng <strong>DevAI</strong> (55 tác vụ phát triển phần mềm thật, 365 yêu cầu người dùng phân cấp chi tiết), đánh giá 3 agent lập trình thật (MetaGPT, GPT-Pilot, OpenHands). Kết quả đo được: Agent-as-a-Judge đạt <strong>~90% mức khớp với đánh giá của con người</strong> — vượt xa LLM-as-a-judge cổ điển (1 lệnh gọi đơn) trên đúng loại tác vụ cần suy luận nhiều bước/phức tạp. Đây là lý do trade-off "đắt hơn" ở trên đáng chấp nhận cho tác vụ phức tạp — không phải cảm tính.</p>
+
+<h3>3. Pattern mới #2 — Reflection + Tool-use hybrid</h3>
+<p><em>(Đã verify qua WebSearch 9/2026: literature gọi họ pattern này là "verify-then-correct" hoặc framework cụ thể tên <strong>CRITIC</strong> — dùng tool ngoài để verify bằng chứng trước khi tự sửa; tên "Reflection + Tool-use hybrid" ở đây là tên mô tả chung, cùng bản chất kỹ thuật.)</em></p>
+<p>Reflexion cổ điển (đã dạy ở <code>L6_1</code>) là agent "tự phê bình" bằng <strong>suy luận nội tại</strong> — đọc lại output của chính mình, tự hỏi "có sai không", sửa nếu thấy sai. Vấn đề: suy luận nội tại có thể tự tin sai (agent "tưởng" mình đúng dù thực tế sai).</p>
+<p><strong>Reflection + Tool-use hybrid</strong> khắc phục bằng cách: bước tự phê bình <strong>được phép gọi tool để verify bằng chứng thật</strong> — chạy lại test, query lại database — thay vì chỉ suy luận trong đầu.</p>
+<pre><code>Reflexion cổ điển:
+  "Tôi vừa sửa bug X. Nhìn lại code... có vẻ đúng rồi." (chỉ đọc lại code, KHÔNG chạy gì)
+
+Reflection + Tool-use hybrid:
+  "Tôi vừa sửa bug X. Để chắc chắn, tôi CHẠY LẠI test suite thật."
+  → gọi tool run_tests()
+  → nhận kết quả thật: "3/50 test fail"
+  → phát hiện fix chưa đủ, tiếp tục sửa dựa trên bằng chứng runtime, không chỉ đọc lại code
+</code></pre>
+<p>Đây chính là pattern mà skill <code>verify</code> của Claude Code áp dụng: <em>"drive the affected flow, not just tests or typecheck"</em> — tự phê bình phải đi kèm bằng chứng runtime.</p>
+
+<h3>4. Pattern mới #3 — Deep Research (khác RAG 1-lượt VÀ khác Reflexion)</h3>
+<p>Dễ nhầm Deep Research với RAG cổ điển (đã học ở <code>R5_3_rag_basics.html</code>) vì cả 2 đều "tìm rồi trả lời". Khác biệt cốt lõi: RAG 1-lượt là <strong>1 lần</strong> truy hồi → 1 lần sinh câu trả lời; Deep Research là 1 <strong>VÒNG LẶP</strong> — tìm, đọc, tự đánh giá còn thiếu gì, tìm tiếp để lấp khoảng trống, lặp lại tới khi đủ, rồi mới tổng hợp báo cáo cuối:</p>
+<pre><code>RAG 1-lượt (R5.3):                       Deep Research (vòng lặp):
+  Query → Retrieve (1 lần) → Generate      Plan (đề cương báo cáo cần trả lời gì)
+  (1 bước, dừng ngay sau khi có context)     │
+                                             ▼
+                                        Search → Read/đánh giá kết quả
+                                             │
+                                        Còn khoảng trống/mâu thuẫn? ──YES──┐
+                                             │NO                          │
+                                             ▼                            │
+                                        Synthesize (viết báo cáo cuối)◀───┘
+                                        (lặp lại Search tới khi đủ, KHÔNG cố định 1 lần)</code></pre>
+<p>Khác Reflexion (mục 3, tự phê bình bằng CÁCH ĐỌC LẠI/tool-use để verify): vòng lặp Deep Research tự phê bình để tìm <strong>khoảng trống thông tin BÊN NGOÀI</strong> ("tôi còn thiếu dữ liệu gì để trả lời đủ") — không phải tự phê bình 1 câu trả lời/hành động ĐÃ có sẵn. 2 pattern có thể XẾP CHỒNG lên nhau: 1 hệ Deep Research vẫn có thể áp thêm Reflection+Tool-use hybrid ở bước Synthesize cuối để verify báo cáo trước khi trả về.</p>
+<p>Kiến trúc thật đứng sau các triển khai thương mại (OpenAI Deep Research, Google Deep Research, Claude Research) hầu hết dựng trên đúng mô hình <strong>orchestrator-worker</strong> đã học ở <a href="R6_6_multiagent_systems.html">R6.6</a>: 1 "master agent" lập kế hoạch, sinh nhiều sub-agent tìm kiếm độc lập theo từng hướng, rồi tổng hợp — nghĩa là Deep Research không phải 1 pattern tách biệt hoàn toàn, nó là ReAct/Reflexion (mục 1, 3) + orchestrator-workers (R6.6) ghép lại, áp riêng cho bài toán "viết 1 báo cáo nghiên cứu dài, cần nhiều vòng tìm kiếm".</p>
+
+<h3>5. Pattern mới #4 — Guardrail (kiểm tra input/output, chạy song song hay chặn trước)</h3>
+<p>9 pattern nền tảng (mục 1) đều mô tả agent "làm việc đúng cách" — không pattern nào mô tả riêng việc <strong>kiểm tra agent có đang đi lệch hướng/nhận input độc hại/trả lời sai chuẩn không</strong>. Guardrail lấp đúng khoảng trống này, và tới 2026 nó được coi là pattern hạng nhất (không phải add-on) trong nhiều framework mới (xem thêm <code>OpenAI Agents SDK</code> ở <a href="R6_8_orchestration_frameworks.html">R6.8</a>, và <a href="R10_1_guardrails.html">R10.1</a> cho phần an toàn/nội dung sâu hơn — trang này chỉ nói về Guardrail Ở GÓC ĐỘ 1 design pattern kiến trúc).</p>
+<table>
+<tr><th>Loại</th><th>Chạy khi nào</th><th>Bắt lỗi gì</th></tr>
+<tr><td>Input guardrail</td><td>Trên input NGƯỜI DÙNG gửi vào, trước khi agent chính xử lý</td><td>Câu hỏi lạc đề, nội dung độc hại, yêu cầu ngoài phạm vi agent được thiết kế để xử lý</td></tr>
+<tr><td>Output guardrail</td><td>Trên kết quả CUỐI agent sinh ra, trước khi trả về người dùng</td><td>Độ chính xác, tuân thủ định dạng/chính sách, nội dung không phù hợp lọt qua</td></tr>
+</table>
+<p>Cơ chế <strong>tripwire</strong>: guardrail (có thể là 1 LLM call riêng cần suy luận, hoặc đơn giản là 1 hàm rule-based) phát hiện vi phạm → ném ra 1 exception, DỪNG NGAY luồng xử lý chính, không để agent tiếp tục. Điểm thiết kế quan trọng — 2 chế độ chạy, đánh đổi latency vs an toàn:</p>
+<pre><code>Song song (parallel, mặc định — latency thấp):
+  Guardrail  ──chạy đồng thời──▶ kết quả
+  Agent chính──chạy đồng thời──▶ đã tốn token/đã gọi tool
+  → Nếu guardrail phát hiện vi phạm SAU KHI agent đã lỡ gọi tool/tốn token
+    → dừng được kết quả trả về, nhưng KHÔNG hoàn tác được token/side-effect đã xảy ra.
+
+Chặn trước (blocking — an toàn hơn, chậm hơn):
+  Guardrail ──chạy XONG TRƯỚC──▶ [nếu OK] agent chính mới bắt đầu chạy
+  → Nếu vi phạm, agent chính KHÔNG BAO GIỜ chạy — không tốn token, không side-effect
+    nào xảy ra — đổi lại: luôn cộng thêm latency của guardrail vào TRƯỚC mọi request.</code></pre>
+<p>Khung quyết định: dùng <strong>song song</strong> khi guardrail hiếm khi trigger và hành động của agent không có side-effect tốn kém (VD chỉ sinh text); dùng <strong>chặn trước</strong> khi agent có tool có side-effect thật (ghi dữ liệu, gọi API tốn phí) — đúng tinh thần hard gate đã học ở <a href="R6_5_human_in_the_loop.html">R6.5</a>: hành động không thể hoàn tác thì không thể chấp nhận "lỡ chạy rồi mới phát hiện sai".</p>
+
+<h3>6. Pattern mới #5 — Self-Consistency / Majority Voting (khác Tree of Thoughts ở CÁCH xử lý nhiều hướng giải)</h3>
+<p>Dễ nhầm với Tree of Thoughts (mục 1, đã dạy ở <code>L6_1</code>) vì cả 2 đều "thử nhiều hướng suy luận". Khác biệt cốt lõi nằm ở THỜI ĐIỂM đánh giá:</p>
+<table>
+<tr><th>Tiêu chí</th><th>Tree of Thoughts</th><th>Self-Consistency</th></tr>
+<tr><td>Đánh giá khi nào</td><td>GIỮA CHỪNG — chấm điểm từng bước, cắt nhánh kém SỚM trước khi đi hết</td><td>CHỈ Ở CUỐI — chạy N chuỗi suy luận ĐỘC LẬP tới khi ra đáp án hoàn chỉnh, không đánh giá giữa đường</td></tr>
+<tr><td>Kết hợp kết quả</td><td>Chọn nhánh "thắng" theo điểm đánh giá (search có định hướng)</td><td>Bỏ phiếu đa số (majority vote) trên đáp án CUỐI CÙNG của N chuỗi</td></tr>
+<tr><td>Khi nào hợp lý</td><td>Đánh giá 1 bước trung gian RẺ và ĐÁNG TIN (VD có thể kiểm tra logic từng bước)</td><td>Đánh giá bước trung gian KHÓ/tốn kém hơn hẳn chạy hết chuỗi (VD bài toán chỉ biết đúng/sai ở bước cuối)</td></tr>
+</table>
+<p>Cơ chế: mỗi chuỗi được sinh độc lập dưới decoding có ngẫu nhiên (temperature &gt; 0, khác lời gọi "greedy" xác định duy nhất 1 kết quả) — trực giác đứng sau: đáp án ĐÚNG có xu hướng được nhiều chuỗi suy luận khác nhau cùng "hội tụ" tới, còn đáp án SAI phân tán ngẫu nhiên hơn.</p>
+<p><strong>Worked example</strong> — 5 chuỗi suy luận độc lập cho 1 câu hỏi tính toán, hand-tally kết quả:</p>
+<pre><code>Chuỗi 1: "... → đáp án 42"
+Chuỗi 2: "... → đáp án 38"
+Chuỗi 3: "... → đáp án 42"
+Chuỗi 4: "... → đáp án 42"
+Chuỗi 5: "... → đáp án 38"
+
+Đếm phiếu: 42 → 3 phiếu · 38 → 2 phiếu
+→ Đáp án cuối (majority vote) = 42 — dù chuỗi 2 và 5 (thiểu số) trông "hợp lý"
+  khi đọc riêng lẻ, đa số 3/5 chuỗi độc lập cùng hội tụ về 42 mới là tín hiệu mạnh hơn.</code></pre>
+<p><strong>Bằng chứng thật (verify — BUG-8)</strong>: paper gốc <em>Self-Consistency Improves Chain of Thought Reasoning</em> (Wang et al., ICLR 2023) đo trên PaLM-540B: <strong>+17.9 điểm</strong> trên GSM8K, <strong>+11.0 điểm</strong> trên SVAMP, <strong>+12.2 điểm</strong> trên AQuA so với greedy CoT (1 chuỗi duy nhất, không vote) — mức cải thiện lớn, không phải hiệu ứng nhỏ. Lưu ý quan trọng cho 2026: trên các model suy luận hiện đại hơn (VD nhóm Gemini-2.5), lợi ích vote <strong>bão hoà (plateau) sau khoảng 10-15 mẫu</strong> — thêm chuỗi thứ 16, 20, 30 gần như không tăng thêm gì, vì các chuỗi mới bắt đầu trùng lặp lại đường suy luận đã có, không mang thêm tín hiệu mới. Chi phí: N chuỗi = N× token so với 1 lần gọi — đắt hơn 1 lời gọi đơn nhưng thường RẺ hơn Tree of Thoughts (có thể tốn 10-50× token tuỳ độ sâu/nhánh) vì không cần thêm bước đánh giá trung gian.</p>
+<p><strong>Áp dụng vào <code>predictor</code> — nói thẳng khi KHÔNG áp dụng được</strong>: self-consistency hợp với câu hỏi có đáp án <em>bỏ phiếu được</em> (1 con số, 1 nhãn phân loại) — daily-investor-report hiện không gọi LLM theo kiểu "N lần độc lập rồi vote" cho bất kỳ bước nào; các bước LLM trong pipeline (thesis-reasoning ở <code>postmortem_runner.py</code>, xem R6.6) sinh <strong>nhận định định tính</strong> (văn bản phân tích), không phải 1 con số/nhãn rời rạc để "đếm phiếu đa số" theo nghĩa đúng của pattern này. Đừng nhầm "ensemble nhiều mô hình ML" (đã có sẵn trong AI Predict, các cây quyết định độc lập vote) với self-consistency — 2 cơ chế khác nhau: ensemble ML vote trên NHIỀU MÔ HÌNH đã huấn luyện khác nhau, self-consistency vote trên NHIỀU MẪU decode ngẫu nhiên của CÙNG 1 model.</p>
+
+<h3>7. Khung quyết định — chọn đúng pattern cho đúng "hình dạng" bài toán</h3>
+<p>9 pattern nền tảng (mục 1) + 5 pattern mới (mục 2-6) cộng lại là 14 building block — dễ "biết tên nhưng không biết khi nào dùng cái nào". Bảng dưới nối lại TOÀN BỘ pattern trên trang này theo đặc điểm bài toán, không phải theo tên pattern:</p>
+<table>
+<tr><th>Đặc điểm bài toán</th><th>Pattern phù hợp</th><th>Vì sao</th></tr>
+<tr><td>Cần tool xen kẽ suy luận, biết kết quả tool rồi mới quyết bước tiếp theo</td><td>ReAct</td><td>Không lập kế hoạch cứng trước — mỗi bước phụ thuộc quan sát runtime</td></tr>
+<tr><td>Kế hoạch lập được đầy đủ TRƯỚC, các bước không phụ thuộc phản hồi bất ngờ</td><td>Plan-and-Execute</td><td>Tách lập kế hoạch khỏi thực thi, dễ audit trước khi chạy</td></tr>
+<tr><td>Nhiều hướng giải khả thi, đánh giá bước trung gian RẺ và đáng tin</td><td>Tree of Thoughts</td><td>Cắt nhánh kém sớm, không lãng phí đi hết nhánh sai</td></tr>
+<tr><td>Nhiều hướng giải khả thi, nhưng đánh giá giữa chừng KHÓ/đắt hơn chạy hết</td><td>Self-Consistency (mục 6)</td><td>Vote ở cuối rẻ hơn xây 1 bộ đánh giá trung gian tin cậy</td></tr>
+<tr><td>Task tách được thành mảng CON ĐỘC LẬP, không cần biết nhau</td><td>Parallelization / Orchestrator-workers (nền tảng của R6.6)</td><td>Song song hoá, giữ context lead gọn (đã đo +90.2%, xem R6.6)</td></tr>
+<tr><td>Input đa dạng, cần định tuyến tới đúng "chuyên gia"/model/prompt</td><td>Routing</td><td>Tách bước phân loại khỏi bước xử lý chuyên sâu</td></tr>
+<tr><td>Cần tự sửa kết quả, suy luận nội tại đã đủ tin cậy</td><td>Reflexion</td><td>Rẻ — chỉ đọc lại, không cần tool call thêm</td></tr>
+<tr><td>Cần tự sửa, NHƯNG suy luận nội tại có nguy cơ "tưởng đúng" (đã có tool verify được)</td><td>Reflection + Tool-use hybrid (mục 3)</td><td>Bằng chứng runtime đáng tin hơn suy luận thuần</td></tr>
+<tr><td>Đầu ra cần chấm điểm phức tạp, cần bằng chứng (chạy test, đọc nhiều file)</td><td>Agent-as-a-Judge (mục 2)</td><td>~90% khớp đánh giá người trên tác vụ phức tạp (DevAI)</td></tr>
+<tr><td>Câu hỏi cần tổng hợp nhiều nguồn, chưa biết trước cần tìm gì</td><td>Deep Research (mục 4)</td><td>Vòng lặp tự phát hiện khoảng trống, không cố định 1 lần truy hồi</td></tr>
+<tr><td>Cần chặn input/output độc hại/lạc đề trước/sau khi agent chính xử lý</td><td>Guardrail (mục 5)</td><td>Tripwire dừng luồng, chọn song song/chặn trước theo side-effect</td></tr>
+<tr><td>Đầu ra tạo rồi cần chấm điểm + góp ý, lặp lại tới ngưỡng chất lượng</td><td>Evaluator-optimizer</td><td>Vòng lặp tạo-chấm tách biệt, hội tụ dần</td></tr>
+</table>
+<pre><code>Sơ đồ quyết định nhanh (đơn giản hoá bảng trên thành các câu hỏi tuần tự):
+
+  Cần chặn nội dung độc hại/lạc đề trước/sau khi agent chạy?  ──YES──▶ Guardrail
+        │NO
+  Task tách được thành mảng con ĐỘC LẬP, chạy song song được? ──YES──▶ Parallelization/
+        │NO                                                          Orchestrator-workers
+  Câu hỏi cần tổng hợp nhiều nguồn, chưa biết trước cần tìm gì? ──YES──▶ Deep Research
+        │NO
+  Có nhiều hướng giải khả thi cần khám phá?
+        │YES → đánh giá giữa chừng RẺ, đáng tin?  ──YES──▶ Tree of Thoughts
+        │            │NO ──▶ Self-Consistency
+        │NO
+  Cần tự sửa kết quả của chính mình?
+        │YES → có tool verify bằng chứng được?  ──YES──▶ Reflection+Tool-use hybrid
+        │            │NO ──▶ Reflexion
+        │NO
+  Mặc định (tool xen kẽ suy luận tuần tự) ──▶ ReAct</code></pre>
+<p>Lưu ý quan trọng khép lại khung quyết định (đã nói ở mục 4 cho riêng Deep Research, đúng cho CẢ trang): đa số hệ thống thật là <strong>TỔ HỢP</strong> nhiều pattern xếp chồng, không phải chọn đúng 1 pattern duy nhất rồi dừng — VD Deep Research = ReAct + Reflexion + orchestrator-workers; 1 hệ agent thật có thể vừa dùng Routing (chọn model) vừa ReAct (bên trong mỗi nhánh) vừa Guardrail (bọc ngoài cùng). Bảng trên trả lời "bắt đầu từ đâu cho ĐÚNG NHU CẦU", không phải "chọn 1 rồi thôi".</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Case study thật trong <code>predictor</code> — kỷ luật 2-pass validation đã ghi trong <code>CLAUDE.md</code> chính là 1 dạng Reflection + Tool-use hybrid áp dụng thủ công cho engineering:</p>
+<pre><code>Sự kiện thật (2026-08-09, AI Trader):
+1. Tìm ra score-inversion (điểm số bị đảo dấu) trong senior_score.py
+2. Sub-score decomposition → nghi ngờ ban đầu: flow_score sai
+3. Điều tra sâu hơn → PHÁT HIỆN THẬT: ta_score mới là thành phần sai dấu, không phải flow_score
+4. Implement fix cho ta_score
+5. ĐỘC LẬP RE-DERIVE (không chỉ đọc lại code) — 1 pass QA thứ 2 chạy lại phân tích
+   → phát hiện: pass validation đầu tiên bị nhiễu bởi data noise
+6. Kết quả cuối SAU KHI lọc noise: khác (và tốt hơn) so với báo cáo lần đầu
+
+→ Đây đúng là "reflection" (tự phê bình fix của mình) + "tool-use" (chạy lại phân
+   tích/backtest thật, không chỉ đọc lại code) — pattern được áp dụng THỦ CÔNG trước
+   khi khái niệm "Reflection + Tool-use hybrid" được đặt tên chính thức trong ngành.
+</code></pre>
+<p>Case study thứ 2 — áp Guardrail (mục 5) vào chính pipeline <code>daily-investor-report</code>: 8-check QA self-gate của skill này (đã nhắc ở <code>R3_6_orchestration_frameworks.html §1.2</code> dưới vai trò "evaluator") CHÍNH LÀ 1 output guardrail — chạy SAU khi report đã được viết xong, kiểm tra trước khi coi report "hoàn tất". Vì bước ghi report ra file không phải hành động tốn phí/khó hoàn tác (chỉ ghi file HTML, không phải giao dịch thật), pipeline chọn đúng chế độ <strong>chặn trước</strong> theo nghĩa rộng — QA gate PHẢI pass trước khi report được coi là bản chính thức, không chạy song song rồi mới kiểm tra sau.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>LLM-as-a-judge</th><th>Agent-as-a-Judge</th></tr>
+<tr><td>Số bước</td><td>1 lời gọi</td><td>Nhiều bước, có tool call</td></tr>
+<tr><td>Chi phí</td><td>Thấp</td><td>Cao hơn nhiều lần</td></tr>
+<tr><td>Khi nào dùng</td><td>Chấm điểm đơn giản, đọc text là đủ</td><td>Chấm điểm phức tạp, cần bằng chứng runtime (chạy test, đọc nhiều file)</td></tr>
+</table>
+<table>
+<tr><th>Tiêu chí</th><th>RAG 1-lượt (R5.3)</th><th>Deep Research</th></tr>
+<tr><td>Số vòng truy hồi</td><td>1, cố định</td><td>Nhiều, dừng khi tự đánh giá đã đủ</td></tr>
+<tr><td>Có bước lập kế hoạch trước không</td><td>Không</td><td>Có — đề cương báo cáo trước khi tìm</td></tr>
+<tr><td>Phù hợp cho</td><td>Câu hỏi tra cứu đơn giản, 1 nguồn đủ trả lời</td><td>Báo cáo dài, cần tổng hợp nhiều nguồn/nhiều góc nhìn</td></tr>
+</table>
+<table>
+<tr><th>Tiêu chí</th><th>Reflexion cổ điển</th><th>Reflection + Tool-use hybrid</th></tr>
+<tr><td>Cơ chế tự phê bình</td><td>Suy luận nội tại (đọc lại, tự hỏi)</td><td>Gọi tool verify bằng chứng thật</td></tr>
+<tr><td>Rủi ro</td><td>Tự tin sai (agent "tưởng" đúng)</td><td>Thấp hơn — có bằng chứng runtime</td></tr>
+<tr><td>Chi phí</td><td>Thấp (chỉ suy luận)</td><td>Cao hơn (thêm tool call)</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p>Nguyên tắc <em>"implement → independent re-derivation, not just re-reading the code → fix real gaps found → redeploy"</em> đã ghi trong <code>CLAUDE.md</code> (kỷ luật 2-pass validation cho AI Trader) chính là bằng chứng dự án đã áp dụng đúng Reflection + Tool-use hybrid. Bài học cho mọi thay đổi tương lai liên quan score formula: <strong>không bao giờ coi "đọc lại code thấy có vẻ đúng" là đủ</strong> — luôn chạy lại phân tích/backtest thật (tool-use) trước khi kết luận đã sửa đúng, đúng tinh thần <code>ai-trader/VALIDATION_CHECKLIST.md</code>.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li><strong>Dùng Agent-as-a-Judge cho mọi việc chấm điểm, kể cả việc đơn giản</strong> — lãng phí, LLM-as-a-judge đơn giản đã đủ cho phần lớn trường hợp.</li>
+<li><strong>Coi "đọc lại code" là đã reflection đầy đủ</strong> — thiếu bước tool-use verify bằng chứng thật, dễ tự tin sai (đúng bài học 2026-08-09 ở trên).</li>
+<li><strong>Nhầm "design pattern" với "multi-agent systems"</strong> — 1 pattern (VD orchestrator-workers) có thể dùng bên trong 1 hệ single-agent-nhiều-bước hoặc 1 hệ multi-agent thật; pattern là building block, không phải bản thân kiến trúc.</li>
+<li><strong>Đề xuất Agent-as-a-Judge làm "giám khảo" quyết định mua/bán trong AI Trader execution path</strong> — dù đóng khung là "chỉ chấm điểm", nếu điểm đó ảnh hưởng trực tiếp quyết định trade real-time, đây vẫn là biến LLM thành 1 feature có trọng số — vi phạm <code>CLAUDE.md</code>. Agent-as-a-Judge trong <code>predictor</code> chỉ nên dùng cho việc offline (VD chấm chất lượng code, chấm chất lượng report) không phải chấm điểm 1 lệnh trade.</li>
+<li><strong>Coi Deep Research là "RAG nhưng chạy nhiều lần cho chắc"</strong> — thiếu điểm mấu chốt: vòng lặp Deep Research có bước TỰ ĐÁNH GIÁ khoảng trống thông tin để quyết định có tìm tiếp hay không, không phải chỉ lặp lại truy hồi 1 cách máy móc theo số lần cố định.</li>
+<li><strong>Luôn dùng guardrail chế độ song song (mặc định) kể cả khi agent có tool side-effect thật</strong> — sai theo mục 5: side-effect đã xảy ra thì guardrail phát hiện SAU cũng không hoàn tác được; phải đổi sang chặn trước cho đúng trường hợp này.</li>
+<li><strong>Nhầm Self-Consistency (mục 6) với Tree of Thoughts</strong> — khác nhau ở THỜI ĐIỂM đánh giá (cuối cùng vs giữa chừng); dùng self-consistency cho bài toán có thể đánh giá SỚM và RẺ là lãng phí (chạy N chuỗi hết tới cuối tốn hơn cắt nhánh sớm).</li>
+<li><strong>Nhầm self-consistency (vote nhiều mẫu decode CÙNG 1 model) với ensemble ML (vote nhiều MÔ HÌNH khác nhau đã huấn luyện, đã dùng trong AI Predict)</strong> — 2 cơ chế bỏ phiếu khác bản chất, không thể dùng số liệu benchmark của cái này để biện minh cho cái kia.</li>
+<li><strong>Cố chọn ĐÚNG 1 pattern rồi dừng lại (mục 7)</strong> — đa số hệ thống thật là tổ hợp nhiều pattern xếp chồng; khung quyết định mục 7 là điểm bắt đầu, không phải danh sách "chọn 1 trong 14".</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li><input type="checkbox" disabled> Kể đủ 9 pattern nền tảng từ <code>L6_1</code> không cần tra bảng (ít nhất tên + ý tưởng 1 câu).</li>
+<li><input type="checkbox" disabled> Phân biệt được Agent-as-a-Judge với LLM-as-a-judge bằng đúng tiêu chí "có tool call hay không".</li>
+<li><input type="checkbox" disabled> Giải thích được case study 2026-08-09 (ta_score) là ví dụ thật của Reflection + Tool-use hybrid, không chỉ là "sửa bug thông thường".</li>
+<li><input type="checkbox" disabled> Phân biệt được "design pattern" (building block) với "multi-agent systems" (R6.6, kiến trúc) bằng ví dụ tự nghĩ ra.</li>
+<li><input type="checkbox" disabled> <strong>Tự confirm: không đề xuất LLM làm live scoring feature của AI Trader</strong> — kể cả dưới vỏ bọc "Agent-as-a-Judge chấm điểm trade".</li>
+<li><input type="checkbox" disabled> Trích được số liệu benchmark thật của Agent-as-a-Judge (DevAI, 55 tác vụ, ~90% khớp đánh giá người) thay vì chỉ nói "nó tốt hơn" chung chung.</li>
+<li><input type="checkbox" disabled> Vẽ được vòng lặp Deep Research (mục 4) và giải thích đúng khác biệt với RAG 1-lượt (R5.3) VÀ với Reflexion (mục 3) — 2 khác biệt riêng biệt, không gộp làm 1.</li>
+<li><input type="checkbox" disabled> Giải thích được cơ chế tripwire và chọn đúng chế độ song song/chặn trước (mục 5) cho 1 tình huống agent có side-effect cụ thể.</li>
+<li><input type="checkbox" disabled> Phân biệt được Self-Consistency với Tree of Thoughts bằng đúng tiêu chí "thời điểm đánh giá" (cuối vs giữa chừng), tự tally lại được worked example 5-chuỗi bằng tay ra đúng đáp án đa số.</li>
+<li><input type="checkbox" disabled> Trích được đúng số liệu benchmark gốc của self-consistency (PaLM-540B, +17.9/+11.0/+12.2 điểm trên GSM8K/SVAMP/AQuA) và biết điểm bão hoà ~10-15 mẫu trên model hiện đại.</li>
+<li><input type="checkbox" disabled> Dùng được khung quyết định mục 7 để chọn đúng pattern bắt đầu cho 1 bài toán mới tự nghĩ ra, và giải thích được vì sao hệ thống thật thường tổ hợp nhiều pattern chứ không chọn đúng 1.</li>
+</ul>
+</div>
+
+<div class="nav-bottom"><a href="R6_6_multiagent_systems.html">← R6.6 · Multi-agent Systems</a><a href="R6_8_orchestration_frameworks.html">R6.8 · Orchestration Frameworks →</a></div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2.7 · Rate Limits &amp; Retries — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM APIs · Điểm 7/8</div>
+  <h1>R2.7 · Rate Limits / Batching / Retries</h1>
+  <p class="subtitle">Vì sao "retry" không đơn giản là <code>while True: try/except</code> — 3 nguyên tắc production, và 2 loại rate limit dễ nhầm khi gọi LLM cho hàng chục ticker liên tiếp.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Phân loại đúng lỗi API nào retryable, lỗi nào không — tránh retry vô ích hoặc retry sai lầm.</li>
+<li>Thiết kế được 1 retry/backoff strategy đúng chuẩn production: exponential backoff + jitter.</li>
+<li>Giải thích được vì sao idempotency là 1 phần bắt buộc của retry an toàn, không phải tùy chọn.</li>
+<li>Phân biệt 2 loại rate limit (RPM và TPM) và biết Batch API có hạn mức tách biệt khỏi API đồng bộ.</li>
+<li>Giải thích được vì sao circuit breaker là 1 lớp KHÁC retry+backoff, không phải "retry mạnh hơn" — và tại sao production cần cả 2 cùng lúc, xếp đúng thứ tự trong 1 stack resilience đầy đủ.</li>
+<li>So sánh được cơ chế tier RPM/TPM giữa Anthropic và OpenAI, biết Anthropic đã ngừng bán Priority Tier — tránh thiết kế roadmap scale dựa trên tính năng đã dừng.</li>
+<li>Giải thích được vì sao backpressure (token bucket queuing, priority lanes, load shedding) là 1 tầng KHÁC retry+backoff/circuit breaker — bảo vệ toàn hệ thống thay vì chỉ 1 request/1 endpoint.</li>
+<li>Phân biệt được bulkhead pattern (cô lập tài nguyên) với circuit breaker (cô lập thời gian) — 2 trục cô lập khác nhau, không phải 2 phiên bản của cùng 1 ý tưởng.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Batching + streaming (Message Batches API giảm giá, continuous batching phía server) đã có ở <code>../modules/L5_5_cost_latency.html §6</code>. <strong>Retry với backoff production-grade là gap thật</strong> — mảng này chưa được viết thành 1 mục riêng ở đâu trong curriculum trước bài này.</p>
+<p><strong>Prerequisite</strong>: không bắt buộc kiến thức trước, nhưng hiểu bối cảnh "gọi LLM cho nhiều ticker liên tiếp" (đã nói ở R2.4) sẽ giúp thấy rõ vì sao retry quan trọng ở quy mô lớn hơn 1 request đơn lẻ.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Bạn gọi điện cho 1 quán ăn đang bận, máy báo "đường dây đang bận". Gọi lại ngay lập tức, liên tục, dồn dập — làm cho quán còn bận hơn (và có thể bạn bị chặn số). Cách đúng: đợi 1 lúc, gọi lại; nếu vẫn bận, đợi lâu hơn nữa rồi mới gọi tiếp. Đó là backoff. Nếu máy báo "số điện thoại không tồn tại" (lỗi không thể sửa bằng cách gọi lại), gọi lại mãi mãi cũng vô ích — bạn cần sửa số điện thoại trước.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vì sao "while True: retry" là sai lầm kinh điển</h3>
+<div class="callout danger"><div class="label">⚠️ Sai lầm kinh điển</div>
+<pre><code># SAI — retry vô hạn, không backoff, không phân biệt lỗi
+def call_llm(prompt):
+    while True:
+        try:
+            return client.messages.create(...)
+        except Exception:
+            continue   # retry storm — nếu API đang rate-limit bạn, bạn spam nó
+                       # nhanh hơn, làm tình hình TỆ HƠN, có thể tự làm nghẽn chính mình</code></pre>
+</div>
+<p>Vấn đề không chỉ là "không lịch sự với server" — retry storm thật sự làm chậm quá trình hồi phục, vì server đang quá tải lại nhận thêm traffic dồn dập từ chính client đang cố retry.</p>
+
+<h3>2. Nguyên tắc 1 — Phân loại lỗi trước khi quyết định retry</h3>
+<table>
+<tr><th>Loại lỗi</th><th>Retryable?</th><th>Lý do</th></tr>
+<tr><td>429 (rate limit)</td><td>Có</td><td>Lỗi tạm thời, giới hạn sẽ reset sau 1 khoảng thời gian</td></tr>
+<tr><td>5xx (server overload/lỗi)</td><td>Có</td><td>Lỗi phía server, có thể tự hồi phục</td></tr>
+<tr><td>400 (bad request — schema sai)</td><td>Không</td><td>Lỗi logic của chính request — retry mãi cũng ra lỗi y hệt</td></tr>
+<tr><td>401 (auth sai)</td><td>Không</td><td>Retry không sửa được key/token sai, chỉ tốn thời gian và có thể bị khóa thêm</td></tr>
+</table>
+
+<h3>3. Nguyên tắc 2 — Exponential backoff + jitter</h3>
+<p>Mỗi lần retry đợi lâu hơn lần trước theo cấp số nhân (exponential), cộng thêm 1 khoảng random nhỏ (jitter) để tránh "thundering herd" — hàng trăm client cùng retry đúng 1 giây, tạo ra 1 đợt spike traffic mới ngay khi server vừa hồi phục.</p>
+<pre><code>import random, time
+
+def call_with_retry(fn, max_retries=5, base_delay=1.0):
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except RateLimitError:                     # retryable
+            if attempt == max_retries - 1:
+                raise
+            delay = base_delay * (2 ** attempt) + random.uniform(0, 1)  # backoff + jitter
+            time.sleep(delay)
+        except (BadRequestError, AuthError):        # KHÔNG retryable
+            raise   # fail fast — retry không cứu được lỗi logic/auth</code></pre>
+
+<h3>4. Nguyên tắc 3 — Idempotency</h3>
+<p>Nếu request có tác dụng phụ (VD ghi vào DB sau khi LLM trả lời), retry có thể ghi trùng dữ liệu — cần idempotency key hoặc kiểm tra "đã ghi chưa" trước khi ghi lại.</p>
+
+<h3>4b. Circuit breaker — lớp phòng thủ KHÁC retry+backoff, không phải "retry mạnh tay hơn"</h3>
+<p>Retry + backoff (mục 2-3) xử lý tốt lỗi <em>rải rác, tạm thời</em> — 1 request lỗi, đợi 1 chút, thử lại, thường thành công. Nhưng nếu provider đang gặp sự cố <em>kéo dài</em> (VD downtime 10 phút), retry-with-backoff vẫn tiếp tục gửi request (dù giãn cách xa hơn theo cấp số nhân) — tốn thời gian chờ, tốn tài nguyên, và tệ hơn: <strong>không có cách nào biết "nên dừng hẳn" thay vì tiếp tục backoff mãi</strong>.</p>
+<p><strong>Circuit breaker</strong> giải quyết đúng khoảng trống này — nó theo dõi tỷ lệ lỗi trong 1 cửa sổ thời gian, và có 3 trạng thái:</p>
+<table>
+<tr><th>Trạng thái</th><th>Hành vi</th><th>Chuyển sang trạng thái nào</th></tr>
+<tr><td><strong>Closed</strong> (đóng — bình thường)</td><td>Cho request đi qua bình thường, đồng thời đếm tỷ lệ lỗi</td><td>Chuyển <strong>Open</strong> nếu tỷ lệ lỗi vượt ngưỡng (VD &gt;50% lỗi trong 1 phút)</td></tr>
+<tr><td><strong>Open</strong> (mở — chặn hẳn)</td><td>KHÔNG gửi request tới provider nữa — trả lỗi/fallback ngay lập tức, không tốn thời gian chờ timeout</td><td>Sau 1 khoảng "cooldown" cố định, chuyển <strong>Half-Open</strong></td></tr>
+<tr><td><strong>Half-Open</strong> (thử dò)</td><td>Cho 1 số ít request đi qua để "thăm dò" xem provider đã hồi phục chưa</td><td>Thành công → về <strong>Closed</strong>; vẫn lỗi → về lại <strong>Open</strong>, kéo dài cooldown</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Vì sao cần cả 2, không phải chọn 1</div>
+<p>Retry+backoff và circuit breaker giải quyết 2 quy mô sự cố khác nhau, xếp chồng theo đúng thứ tự trong 1 request thực tế:</p>
+<pre><code>Request muốn gửi
+     │
+     ▼
+[1] Request queue / backpressure (mục 6) — chặn TRƯỚC khi gửi nếu sắp chạm RPM/TPM
+     │  chưa chạm rate limit, cho qua
+     ▼
+[2] Circuit breaker (mục 4b) — Closed/Half-Open thì cho qua; Open thì CHẶN HẲN
+     │  cho qua (breaker chưa phát hiện lỗi hàng loạt)
+     ▼
+[3] Gọi API thật
+     │
+     ├─ Thành công ─────────────────────────────────► xong
+     │
+     └─ Lỗi rải rác (429/5xx)
+              │
+              ▼
+        [4] Retry + backoff + jitter (mục 2-3) — thử lại vài lần, giãn cách tăng dần
+              │
+              ├─ Thành công sau vài lần retry ───────► xong
+              └─ Vẫn lỗi, hoặc breaker đã chuyển Open ► fallback sang provider phụ</code></pre>
+<ul>
+<li><strong>Bỏ circuit breaker</strong>: hệ thống vẫn "sống" được với lỗi rải rác, nhưng tốn rất nhiều thời gian dò dẫm (backoff ngày càng dài) khi gặp downtime thật.</li>
+<li><strong>Bỏ retry</strong>: hệ thống mất khả năng tự phục hồi những lỗi thoáng qua rất phổ biến (1 request timeout ngẫu nhiên).</li>
+<li>→ Không phải câu hỏi "dùng cái nào" — production nghiêm túc dùng cả 2, đúng vai trò riêng của từng lớp.</li>
+</ul>
+</div>
+
+<h3>5. Rate limits — 2 loại giới hạn cần phân biệt</h3>
+<p>Request-per-minute (RPM) và token-per-minute (TPM) là 2 hạn mức tách biệt. 1 request "nhẹ" (ít token) có thể không chạm RPM nhưng dồn nhiều ticker liên tiếp có thể chạm TPM nếu mỗi ticker gửi vài nghìn token (system prompt lớn — xem R2.2, R2.4).</p>
+<p>Đã verify lại (WebSearch 9/2026): Batch API (đã có ở <code>L5_5_cost_latency.html §6</code>) có rate limit <strong>tách biệt</strong> khỏi API đồng bộ (không ăn vào quota RPM/TPM interactive), xử lý async với SLA 24h (thực tế thường xong trong 2-6 giờ với batch cỡ chục nghìn request) và giá giảm đúng 50% cả input lẫn output token so với API sync (áp dụng cả cho cache read/write) — đây là lý do batch phù hợp cho workload lớn không cần real-time (VD report cuối ngày) hơn là cố nhồi hết vào API đồng bộ rồi tự retry khi chạm limit.</p>
+
+<p>Rate limit không cố định — tăng theo <strong>usage tier</strong> (dựa trên tổng chi tiêu lịch sử + thời gian, không phải trả tiền là lên tier ngay). So sánh thật giữa 2 provider (WebSearch 9/2026) cho thấy đây không phải "ai hào phóng hơn" mà là 2 mô hình tier khác hẳn về độ dốc:</p>
+<table>
+<tr><th></th><th>Anthropic (Claude Sonnet)</th><th>OpenAI</th></tr>
+<tr><td>Số tier</td><td>Tier 1-4 + Enterprise riêng</td><td>5 tier, dựa trên tổng chi tiêu cộng dồn</td></tr>
+<tr><td>Điều kiện lên tier</td><td>Cả tổng tiền đã nạp LẪN thời gian đã trôi qua (không "trả nhiều tiền 1 lần" là lên tier ngay)</td><td>Chủ yếu theo tổng chi tiêu cộng dồn, tự động</td></tr>
+<tr><td>Tier thấp nhất (RPM / input TPM)</td><td>~50 RPM / ~30,000 TPM</td><td>Thấp hơn, tăng dần theo spend</td></tr>
+<tr><td>Tier cao nhất (RPM)</td><td>~4,000 RPM (Tier 4)</td><td>10,000+ RPM — cao hơn 1 bậc độ lớn so với trần của Anthropic</td></tr>
+<tr><td>"Priority Tier" (mua thêm quota ưu tiên)</td><td><strong>Đã ngừng bán</strong> — chưa từng hỗ trợ Opus 5/Sonnet 5, không phải hướng scale cho workload mới</td><td>Có cơ chế tương đương ở 1 số gói (verify lại tài liệu chính chủ tại thời điểm build, số liệu này đổi nhanh)</td></tr>
+<tr><td>Khuyến nghị khi cần &gt;2,000 request đồng thời/phút</td><td>Cần nâng lên Tier 4 hoặc trao đổi hạn mức riêng với Anthropic</td><td>Tier cao hơn thường đã đủ nhờ trần RPM lớn hơn nhiều</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Đừng thiết kế roadmap dựa trên tính năng đã dừng bán</div>
+<p>Anthropic đã ngừng bán "Priority Tier" (gói mua thêm quota ưu tiên) — nếu tài liệu nội bộ hoặc kế hoạch scale cũ có nhắc tới việc "mua Priority Tier khi cần thêm RPM", đây là thông tin đã lỗi thời. Hướng đúng khi cần vượt hạn mức hiện tại là nâng usage tier tự nhiên (qua lịch sử chi tiêu + thời gian) hoặc làm việc trực tiếp với Anthropic cho nhu cầu Enterprise — không có "đường tắt mua thêm" như trước.</p>
+</div>
+
+<h3>6. Backpressure — exponential backoff bảo vệ 1 request, KHÔNG bảo vệ cả hệ thống</h3>
+<p>Mục 1-4b đã học retry+backoff+jitter và circuit breaker — cả 2 đều nhìn từ góc độ <strong>1 lời gọi API riêng lẻ</strong>. Nhưng trong 1 hệ thống thật (VD 1 pipeline xử lý 86 ticker liên tiếp, hoặc 1 AI agent gọi chuỗi 10-20 lời gọi API liên tiếp cho 1 tác vụ), backoff của TỪNG request riêng lẻ không giải quyết được 4 vấn đề ở tầng hệ thống:</p>
+<ul>
+<li><strong>Token đã lãng phí</strong>: request bị 429 vẫn có thể đã tốn phần input token trước khi bị từ chối (tuỳ lỗi xảy ra ở giai đoạn nào).</li>
+<li><strong>Connection pool bị cạn kiệt</strong>: nhiều request đang "treo" chờ backoff cùng lúc chiếm hết số connection cho phép, khiến request MỚI (kể cả loại ưu tiên cao) cũng không có chỗ để chạy.</li>
+<li><strong>Hàng đợi phía sau</strong>: 50 request khác đang xếp hàng phía sau request vừa bị 429 vẫn tiếp tục gửi tới, không biết hệ thống phía trước đang quá tải.</li>
+<li><strong>Traffic pattern trông giống tấn công</strong>: 1 AI agent gọi chuỗi 10-20 lời gọi API liên tiếp trong thời gian ngắn (1 tác vụ multi-step) tạo ra pattern traffic khó phân biệt với 1 đợt tấn công DDoS dưới góc nhìn rate-limit truyền thống theo request-per-minute đơn thuần.</li>
+</ul>
+<p>Nghiên cứu 2026 mô tả rõ: <strong>"exponential backoff xử lý được độ bền của 1 lời gọi, nhưng không làm gì cho token lãng phí, connection pool, hay 50 request khác đang xếp hàng phía sau"</strong> — cần thêm 1 tầng riêng, gọi chung là <strong>backpressure</strong>, với vài kỹ thuật cụ thể:</p>
+<table>
+<tr><th>Kỹ thuật backpressure</th><th>Cơ chế</th><th>Giải quyết đúng vấn đề nào</th></tr>
+<tr><td>Token bucket queuing</td><td>Hàng đợi request được cấp "token" (không phải LLM token — token điều tiết tốc độ) theo tốc độ cố định; request phải có token mới được gửi đi, request thừa phải đợi trong hàng đợi thay vì gửi ngay rồi nhận lỗi</td><td>Chặn traffic vượt rate limit TỪ TRƯỚC khi gửi, thay vì gửi rồi mới xử lý lỗi 429</td></tr>
+<tr><td>Priority lanes</td><td>Chia hàng đợi thành nhiều "làn" theo mức ưu tiên — request quan trọng (VD retry lần cuối trước khi báo lỗi hẳn cho user) được ưu tiên xử lý trước request có thể trì hoãn (VD batch job nền)</td><td>Đảm bảo request quan trọng không bị chặn bởi request kém quan trọng hơn khi hệ thống bận</td></tr>
+<tr><td>Token-aware circuit breaker</td><td>Circuit breaker (mục 4b) mở không chỉ dựa trên tỷ lệ lỗi, mà còn dựa trên tốc độ tiêu thụ TPM — dự đoán sắp chạm rate limit TRƯỚC khi thật sự bị 429</td><td>Chủ động tránh chạm rate limit, thay vì phản ứng SAU khi đã bị từ chối</td></tr>
+<tr><td>Load shedding</td><td>Chủ động TỪ CHỐI 1 phần request có chủ đích khi hệ thống quá tải (thay vì cố nhận hết rồi tất cả cùng chậm/lỗi) — chọn hy sinh 1 phần nhỏ để phần còn lại vẫn chạy ổn định</td><td>Tránh trạng thái "sustained overload oscillation" (hệ thống dao động liên tục giữa quá tải và phục hồi, không bao giờ ổn định thật)</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Vì sao đây KHÔNG phải "thay thế" retry+backoff/circuit breaker</div>
+<p>Backpressure hoạt động Ở TẦNG KHÁC (toàn hệ thống, trước khi request được gửi) so với retry+backoff (từng request, sau khi lỗi xảy ra) và circuit breaker (nhóm request tới 1 endpoint, phát hiện lỗi hàng loạt). Production nghiêm túc xếp chồng CẢ 3: backpressure hạn chế request gửi ra ngay từ đầu để không vượt rate limit; circuit breaker chặn hẳn khi phát hiện endpoint đang lỗi hàng loạt; retry+backoff xử lý nốt phần lỗi rải rác còn sót lại sau 2 lớp trên. Không lớp nào "thừa" — mỗi lớp bắt 1 loại sự cố khác nhau.</p>
+</div>
+
+<h3>7. Bulkhead pattern — cô lập TÀI NGUYÊN, không phải cô lập THỜI GIAN như circuit breaker</h3>
+<p>Circuit breaker (mục 4b) cô lập theo <strong>thời gian</strong>: tạm dừng gọi 1 endpoint trong 1 khoảng thời gian khi phát hiện lỗi hàng loạt. <strong>Bulkhead pattern</strong> cô lập theo <strong>tài nguyên</strong>: chia hệ thống thành các "khoang" riêng biệt (concurrency pool, hàng đợi, hạn mức riêng) cho từng tenant/workflow/loại tác vụ, để 1 phần bị lỗi/quá tải không kéo sập phần còn lại — tên gọi mượn từ kết cấu khoang kín trên tàu thuỷ (1 khoang bị thủng không làm chìm cả tàu).</p>
+<table>
+<tr><th></th><th>Circuit breaker (mục 4b)</th><th>Bulkhead pattern</th></tr>
+<tr><td>Trục cô lập</td><td>Thời gian — tạm dừng gọi trong 1 khoảng, sau đó thử lại</td><td>Tài nguyên — chia riêng pool/quota cho từng phần, không phụ thuộc thời gian</td></tr>
+<tr><td>Bảo vệ khỏi</td><td>1 endpoint/provider đang lỗi hàng loạt</td><td>1 tenant/workflow "tham lam" chiếm hết tài nguyên chung, làm phần khác đói tài nguyên dù bản thân phần đó không lỗi gì</td></tr>
+<tr><td>Ví dụ áp dụng cho pipeline nhiều ticker</td><td>Nếu Claude API sập, dừng gọi cho MỌI ticker trong 1 khoảng thời gian</td><td>Dành riêng 1 phần quota/concurrency cho "ticker ưu tiên cao" (VD nhóm HIGHLIGHT chính), tách khỏi phần dùng cho các tác vụ phụ (VD backfill dữ liệu lịch sử) — dù cả 2 cùng gọi 1 API, 1 tác vụ backfill chạy runaway không ăn hết quota của phần report chính</td></tr>
+</table>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>So sánh hành vi khi gặp lỗi 429 giữa retry sai và retry đúng, cho 1 vòng lặp gọi LLM nhiều ticker liên tiếp:</p>
+<pre><code>Kịch bản: 86 request liên tiếp, request thứ 40 bị 429 (rate limit)
+
+Retry SAI (while True không backoff):
+  Request 40 lỗi → gọi lại NGAY LẬP TỨC → có thể vẫn đang trong cửa sổ rate limit → lỗi tiếp
+  → gọi lại ngay → lỗi tiếp → ... → có thể loop hàng trăm lần trong vài giây, tốn CPU vô ích
+  → rủi ro: bị provider tạm khóa thêm vì pattern giống spam
+
+Retry ĐÚNG (exponential backoff + jitter, base_delay=1.0):
+  Lần 1: đợi 1.0 + random(0,1) giây ≈ 1.0-2.0s rồi thử lại
+  Lần 2 (nếu vẫn lỗi): đợi 2.0 + random(0,1) giây ≈ 2.0-3.0s
+  Lần 3 (nếu vẫn lỗi): đợi 4.0 + random(0,1) giây ≈ 4.0-5.0s
+  → tổng thời gian chờ tăng dần, cho server thời gian hồi phục,
+    và jitter đảm bảo không phải mọi client đều gọi lại cùng 1 mili-giây</code></pre>
+
+<p><strong>Cùng kịch bản đó, nhưng nếu 40 request ĐẦU TIÊN đều lỗi 5xx liên tiếp (dấu hiệu downtime thật, không phải rate limit thoáng qua)</strong> — so sánh hành vi khi CÓ và KHÔNG có circuit breaker:</p>
+<pre><code>KHÔNG có circuit breaker (chỉ retry+backoff cho từng request độc lập):
+  Ticker 1: lỗi → backoff 1-2s → lỗi → backoff 2-3s → lỗi → backoff 4-5s → hết max_retries → raise
+  Ticker 2: LẶP LẠI ĐÚNG quy trình đó từ đầu (không "nhớ" ticker 1 vừa fail toàn bộ)
+  ... × 86 ticker → mỗi ticker tốn ~7-10s dò dẫm vô ích trước khi raise
+  → Tổng thời gian LÃNG PHÍ: có thể 86 × ~8s ≈ 11.5 PHÚT chỉ để phát hiện "provider đang sập"
+
+CÓ circuit breaker (ngưỡng: >50% lỗi trong 10 request gần nhất → mở):
+  Ticker 1-10: thử bình thường (Closed) → ghi nhận tỷ lệ lỗi
+  Sau ticker ~6-7 (đã vượt 50% lỗi): breaker chuyển Open NGAY
+  Ticker 8-86: KHÔNG gọi API nữa — trả lỗi/fallback tức thì (0 thời gian chờ)
+  Sau cooldown (VD 60s): breaker tự chuyển Half-Open, thử 1 request thăm dò
+  → Tổng thời gian lãng phí: ~7 lần thử đầu (thay vì 86 lần) + 1 lần thăm dò mỗi cooldown
+  → Phát hiện + phản ứng với downtime nhanh hơn RẤT NHIỀU, không "dò dẫm" lại từ đầu
+    cho từng ticker riêng lẻ như khi chỉ có retry đơn thuần</code></pre>
+
+<p><strong>Ví dụ minh hoạ bulkhead pattern (mục 7)</strong> — kịch bản giả định: dự án chạy đồng thời 2 loại tác vụ gọi cùng 1 API Claude — (a) <code>daily-investor-report</code> mode <code>all</code> (86 ticker, ưu tiên cao, cần xong đúng giờ) và (b) 1 job backfill phân tích lịch sử (ưu tiên thấp, không gấp, nhưng có thể vô tình gọi hàng nghìn request nếu có bug):</p>
+<pre><code>KHÔNG có bulkhead — dùng chung 1 pool quota/concurrency:
+  Job backfill (b) có bug, vô tình gửi 5,000 request liên tiếp trong vài phút
+  → Chạm TPM/RPM chung → daily-investor-report (a) ĐANG CHẠY cùng lúc cũng bị 429
+  → Report quan trọng bị trễ/lỗi vì 1 bug ở job KHÔNG liên quan, dù bản thân
+    Claude API không hề gặp sự cố gì — đây không phải lỗi provider, là lỗi
+    thiết kế "dùng chung tài nguyên không giới hạn" giữa 2 workflow khác mức ưu tiên
+
+CÓ bulkhead — tách riêng pool cho (a) và (b):
+  (a) daily-investor-report: dành riêng 1 hạn mức concurrency/TPM cố định,
+      KHÔNG bị (b) ảnh hưởng dù (b) có gửi bao nhiêu request
+  (b) backfill: dùng phần quota CÒN LẠI, nếu chạm giới hạn của riêng nó thì
+      tự bị chặn/chậm lại — nhưng KHÔNG lan sang ảnh hưởng (a)
+  → Bug ở job (b) chỉ làm job (b) chậm/lỗi, report chính (a) vẫn chạy đúng giờ</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Nút thắt</th><th>Công cụ giải quyết</th><th>Mục nào</th></tr>
+<tr><td>Request lỗi rải rác (429, 5xx)</td><td>Retry + exponential backoff + jitter</td><td>§3 bài này</td></tr>
+<tr><td>Provider downtime kéo dài, lỗi hàng loạt</td><td>Circuit breaker (Closed→Open→Half-Open), fallback provider phụ</td><td>§4b bài này</td></tr>
+<tr><td>Request lỗi do bad request/auth</td><td>Fail fast, không retry — sửa request/key</td><td>§2 bài này</td></tr>
+<tr><td>Retry gây ghi trùng dữ liệu</td><td>Idempotency key / kiểm tra trước khi ghi</td><td>§4 bài này</td></tr>
+<tr><td>Chạm TPM khi gọi nhiều ticker liên tiếp</td><td>Batch API (rate limit tách biệt), hoặc giãn request</td><td>§5 bài này, <code>L5_5 §6</code></td></tr>
+<tr><td>Throughput thấp khi gọi nhiều ticker</td><td>Batch API, continuous batching phía server</td><td><code>L5_5 §6</code>, <code>L4_6 §4</code></td></tr>
+<tr><td>Token lãng phí + connection pool cạn kiệt ở tầng hệ thống</td><td>Backpressure (token bucket queuing, priority lanes, load shedding)</td><td>§6 bài này</td></tr>
+<tr><td>1 workflow "tham lam" chiếm hết quota chung, ảnh hưởng workflow khác</td><td>Bulkhead pattern (pool/quota riêng theo tenant/workflow)</td><td>§7 bài này</td></tr>
+</table>
+
+<p>Bảng thứ 2 — xếp lại toàn bộ 5 resilience pattern đã học theo đúng trục hoạt động, để không nhầm "cái nào thay cái nào":</p>
+<table>
+<tr><th>Pattern</th><th>Trục bảo vệ</th><th>Kích hoạt khi nào</th><th>Phạm vi ảnh hưởng</th></tr>
+<tr><td>Retry + backoff + jitter</td><td>Độ bền 1 request đơn lẻ</td><td>Sau khi 1 request lỗi (429/5xx)</td><td>Chỉ request đó</td></tr>
+<tr><td>Circuit breaker</td><td>Thời gian — tạm dừng gọi 1 endpoint</td><td>Khi tỷ lệ lỗi vượt ngưỡng trong 1 cửa sổ</td><td>Mọi request tới CÙNG 1 endpoint, trong lúc breaker Open</td></tr>
+<tr><td>Bulkhead</td><td>Tài nguyên — cô lập pool/quota</td><td>Luôn bật, không cần "kích hoạt" theo sự kiện lỗi</td><td>Chỉ tenant/workflow được cấp phát trong pool đó</td></tr>
+<tr><td>Backpressure (token bucket, priority lanes)</td><td>Tốc độ gửi request TRƯỚC khi lỗi xảy ra</td><td>Luôn bật, điều tiết theo tốc độ cấu hình</td><td>Toàn hệ thống — mọi request đi qua hàng đợi chung</td></tr>
+<tr><td>Load shedding</td><td>Chấp nhận từ chối 1 phần để giữ ổn định phần còn lại</td><td>Khi hệ thống phát hiện đang/sắp quá tải</td><td>1 phần request bị từ chối có chủ đích, phần còn lại được bảo vệ</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Quy trình <code>daily-investor-report</code> (<code>.claude/skills/daily-investor-report/SKILL.md</code>) mode <code>all</code> gọi LLM cho nhiều ticker tuần tự trong 1 lần chạy — đây là candidate tự nhiên để hỏi: "đang retry kiểu gì khi 1 trong số các lần gọi bị rate-limit hoặc timeout?" Nếu hiện tại là "chạy hết, cái nào lỗi thì thiếu trong report", thêm 1 lớp retry-with-backoff có phân loại lỗi (như code mẫu §3) là cải thiện độ tin cậy KHÔNG đụng vào logic phân tích/score — an toàn theo đúng ranh giới CLAUDE.md. Về idempotency, rule <em>"Never overwrite an existing same-minute report file (append timestamp suffix instead)"</em> (ghi trong SKILL.md) chính là 1 dạng bảo vệ idempotency thủ công ở tầng file-system, cùng tinh thần với nguyên tắc 3 ở trên dù không phải retry LLM call.</p>
+<p><strong>Về bulkhead (mục 7)</strong>: nếu dự án chạy song song nhiều loại tác vụ gọi Claude (report hàng ngày + bất kỳ job nghiên cứu/backfill nào trong tương lai), tách riêng "ngân sách" gọi API cho từng loại tác vụ (dù chỉ là quy ước đơn giản — VD giới hạn số request/phút cho job nền thấp hơn hẳn report chính) là 1 biện pháp phòng ngừa rẻ tiền, tránh đúng kịch bản "job phụ có bug làm chậm report chính" minh hoạ ở ví dụ số bên trên.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Retry cả lỗi không retryable</strong> — retry mãi 1 request 400 (schema sai) vẫn ra lỗi y hệt, chỉ tốn thời gian và có thể khiến hệ thống trông như đang "treo" thay vì báo lỗi ngay.</p>
+<p><strong>2. Backoff không có jitter</strong> — nếu nhiều client cùng retry theo đúng cùng 1 lịch trình (VD luôn đợi đúng 2s, 4s, 8s), chúng sẽ đồng loạt gọi lại cùng lúc, tạo ra 1 đợt spike mới ngay khi server vừa hồi phục.</p>
+<p><strong>3. Quên idempotency khi request có side effect</strong> — retry 1 request đã thành công ở server nhưng response bị mất giữa đường (timeout phía client) có thể dẫn đến ghi trùng dữ liệu nếu không kiểm tra trạng thái trước khi ghi lại.</p>
+<p><strong>4. Coi circuit breaker là "phiên bản retry mạnh hơn" rồi chỉ implement 1 trong 2</strong> — chúng giải quyết 2 quy mô sự cố khác nhau (rải rác vs downtime kéo dài); thiếu circuit breaker, hệ thống tốn rất nhiều thời gian dò dẫm backoff khi provider thật sự sập; thiếu retry, hệ thống mất khả năng tự phục hồi lỗi thoáng qua rất phổ biến.</p>
+<p><strong>5. Lập kế hoạch scale dựa trên "mua thêm Priority Tier"</strong> — Anthropic đã ngừng bán tính năng này; roadmap cần dựa trên lộ trình nâng usage tier tự nhiên hoặc thoả thuận Enterprise riêng.</p>
+<p><strong>6. Nghĩ retry+backoff+jitter đã "đủ" để hệ thống chịu tải tốt</strong> — theo mục 6, backoff chỉ bảo vệ 1 request riêng lẻ; hàng chục request khác vẫn có thể tiếp tục dồn vào 1 endpoint đang quá tải nếu không có backpressure ở tầng hệ thống (token bucket queuing, load shedding) — đặc biệt nguy hiểm với AI agent gọi chuỗi 10-20 lời gọi liên tiếp, dễ tạo pattern giống DDoS.</p>
+<p><strong>7. Gộp chung circuit breaker và bulkhead pattern vì cùng là "cô lập lỗi"</strong> — chúng cô lập theo 2 trục khác nhau (thời gian vs tài nguyên); thiếu bulkhead, 1 workflow "tham lam" (VD job backfill chạy runaway) có thể chiếm hết quota chung dù bản thân API không hề lỗi — circuit breaker không giúp gì cho tình huống này vì không có tỷ lệ lỗi nào để "mở" breaker.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Phân loại đúng 4 loại lỗi API cho trước (429, 5xx, 400, 401) thành retryable/không retryable, kèm lý do.</li>
+<li>Code được 1 hàm retry có exponential backoff + jitter + phân loại lỗi retryable/non-retryable.</li>
+<li>Giải thích được vì sao thiếu jitter có thể gây ra 1 đợt spike traffic mới.</li>
+<li>Phân biệt được RPM và TPM, chỉ ra tình huống chạm TPM dù không chạm RPM.</li>
+<li>Giải thích được vì sao Batch API phù hợp hơn API đồng bộ cho workload lớn không cần real-time.</li>
+<li>Vẽ được đúng thứ tự 4 lớp trong 1 resilience stack đầy đủ (request queue → circuit breaker → retry+backoff+jitter → fallback) và giải thích vai trò riêng của circuit breaker so với retry.</li>
+<li>Biết Anthropic đã ngừng bán Priority Tier — không đề xuất "mua thêm quota ưu tiên" như 1 hướng scale còn khả dụng.</li>
+<li>Kể tên ≥3 kỹ thuật backpressure (token bucket queuing, priority lanes, token-aware circuit breaker, load shedding) và giải thích chúng giải quyết vấn đề gì mà retry+backoff không giải quyết được.</li>
+<li>Phân biệt đúng bulkhead pattern (cô lập tài nguyên theo tenant/workflow) và circuit breaker (cô lập theo thời gian khi phát hiện lỗi) — cho 1 tình huống cụ thể, chọn đúng pattern cần áp dụng.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R2_6_multimodal_models.html">← R2.6 · Multi-modal</a>
+  <a href="R2_8_cost_performance.html">R2.8 · Cost/Performance →</a>
+</div>
+
+</div>
+</body>
+</html>

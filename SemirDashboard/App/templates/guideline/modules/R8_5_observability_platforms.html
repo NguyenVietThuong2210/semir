@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R8.5 · Observability Platforms — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Observability &amp; Evaluation · Điểm 5/6</div>
+  <h1>R8.5 · Observability Platforms</h1>
+  <p class="subtitle">Không có "platform tốt nhất" — chỉ có platform đúng cho đúng stack + hình dạng team. 6 platform lớn 2026, mỗi cái tối ưu cho 1 tình huống khác nhau.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Kể tên đúng 6 platform observability lớn 2026: LangSmith, Langfuse, Arize, Braintrust, Helicone, W&amp;B Weave.</li>
+<li>So sánh đúng điểm mạnh + tiêu chí chọn từng platform cho từng tình huống cụ thể.</li>
+<li>Hiểu vì sao "platform hot nhất" không phải tiêu chí chọn đúng — phải chọn theo stack hiện có.</li>
+<li>Tính được chi phí thực tế theo mô hình giá seat-based vs usage-based cho 1 quy mô cụ thể — biết mô hình nào scale tốt hơn khi team/traffic lớn dần.</li>
+<li>Phân biệt platform OTel-native (schema mở, dễ đổi backend) với platform proprietary-first (schema riêng, OTel chỉ là lối phụ) — hệ quả tới chi phí đổi vendor sau này.</li>
+<li>Đánh giá trung thực hiện trạng dự án <code>predictor</code> chưa dùng platform nào — biết khi nào cần bắt đầu dùng.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p><a href="../modules/L6_6_observability.html">L6.6 — Observability</a> đã dạy 3 pillar (logs/metrics/traces), OTel span thủ công, cost tracking, error taxonomy, alerting, prompt versioning, A/B testing, và đã cover 2/6 platform (LangSmith + Langfuse, bảng "W&amp;B" ở đó chỉ nói ML-experiment-tracking chung chung, chưa nói riêng sản phẩm Weave cho LLM). Trang này bổ sung 4 platform còn thiếu (Arize, Braintrust, Helicone, W&amp;B Weave) để có bức tranh đầy đủ 2026, cộng thêm góc nhìn CHI PHÍ THẬT theo mô hình giá — không dạy lại 3 pillar hay cách tự viết OTel span. Độ khó xếp <strong>Dễ</strong>: đây chủ yếu là kiến thức "biết để chọn đúng công cụ", không có cơ chế toán học/thuật toán phức tạp (trừ phần tính chi phí ở mục 6, vẫn chỉ là số học cơ bản).</p>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Chọn observability platform giống chọn <strong>máy chẩn đoán ở garage sửa xe</strong>. Có garage chuyên 1 hãng xe (VD garage Toyota chính hãng) — máy chẩn đoán của họ tích hợp sâu với đúng hãng đó, đọc được mọi mã lỗi riêng của Toyota, nhưng vô dụng nếu đem xe Honda vào (giống LangSmith — tích hợp sâu nhất với LangChain/LangGraph). Có garage "mở", tự trang bị máy chẩn đoán đa năng, chủ garage tự host, không phụ thuộc hãng xe nào, chi phí kiểm soát được (giống Langfuse — mã nguồn mở, self-host). Có chuỗi garage lớn kiêm luôn dịch vụ bảo hiểm, giám sát cả xe mới lẫn xe cũ nhiều đời (giống Arize — có cả traditional ML monitoring, không chỉ LLM). Có garage cam kết "xe phải qua kiểm định trước khi giao", biến kiểm tra thành bước bắt buộc trong quy trình (giống Braintrust — eval-driven development, CI/CD gate). Và có dịch vụ "cắm thiết bị theo dõi vào xe trong 5 phút, không cần tháo máy" (giống Helicone — đổi 1 base URL là có trace ngay).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. LangSmith &amp; Langfuse (ôn nhanh — đã dạy sâu ở <code>L6_6</code>)</h3>
+<p><strong>LangSmith</strong>: tích hợp sâu nhất với LangChain/LangGraph — xem được node-by-node state diff trong graph, replay lại 1 trace cũ trên model version mới để so sánh. Vô nghĩa nếu stack không dùng LangChain/LangGraph vì phần lớn giá trị nằm ở tích hợp sâu đó.</p>
+<p><strong>Langfuse</strong>: mã nguồn mở hoàn toàn, self-host được, unlimited user ở mọi tier trả phí — nay thuộc ClickHouse (sau sáp nhập). Phù hợp khi cần kiểm soát hoàn toàn dữ liệu (không gửi ra ngoài) hoặc ngân sách hạn chế.</p>
+
+<h3>2. Arize — mở rộng khỏi LLM thuần</h3>
+<p>Arize khác 4 platform còn lại ở điểm: nó không chỉ giám sát LLM, mà còn giám sát <strong>traditional ML models</strong> (model cổ điển như XGBoost, regression...) — cùng 1 dashboard theo dõi cả 2 loại. Bản mã nguồn mở là <strong>Phoenix</strong>, self-host miễn phí license; bản <strong>Arize AX</strong> thêm enterprise support (SLA, hỗ trợ trực tiếp). Chọn Arize khi team cần eval rigor cao (nhiều test thống kê nghiêm ngặt) VÀ đã có traditional ML pipeline cần monitor chung 1 chỗ với LLM — không phải xây 2 hệ thống giám sát riêng.</p>
+
+<h3>3. Braintrust — eval-driven development</h3>
+<p>Braintrust tối ưu cho triết lý "eval là 1 bước bắt buộc, không phải việc làm sau khi đã deploy". Nó có CI/CD gate tích hợp sẵn: mỗi lần merge code, eval set tự động chạy và có thể <strong>chặn merge</strong> nếu điểm giảm dưới ngưỡng — giống unit test bắt buộc nhưng cho chất lượng LLM output. Free tier (Starter, tái cấu trúc 3/2026): 1 GB processed data + 10.000 eval score/tháng, retention 14 ngày, unlimited user — billing đổi từ "theo span" sang "theo GB data xử lý". Chọn Braintrust khi team muốn "shift-left" (đưa eval lên sớm trong vòng đời phát triển, trước khi deploy) thay vì chỉ đo sau khi đã lên production.</p>
+
+<h3>4. Helicone — tích hợp nhanh nhất</h3>
+<p>Helicone hoạt động như 1 <strong>proxy</strong> — route mọi lệnh gọi API LLM qua proxy của nó, chỉ cần đổi 1 base URL trong code, không cần sửa logic gì khác, là có trace ngay lập tức (latency, token, cost mỗi lệnh gọi). Đánh đổi: ít tính năng eval sâu (rubric, judge tích hợp) hơn 4 platform còn lại — vì bản chất nó là lớp quan sát mỏng đặt trước API, không phải 1 framework eval đầy đủ. Giá theo request (request-based), không theo seat — chi phí tăng tuyến tính, dễ dự đoán hơn mô hình seat-based khi traffic tăng.</p>
+
+<h3>5. W&amp;B Weave — platform thứ 6, xuất phát từ ML-experiment-tracking</h3>
+<p>Weights &amp; Biases (W&amp;B) vốn nổi tiếng với ML-experiment-tracking (theo dõi run huấn luyện model cổ điển) — <strong>Weave</strong> là sản phẩm LLM-observability xây THÊM trên nền đó, tới 2026 đã đủ trưởng thành để cạnh tranh trực tiếp với LangSmith/Arize/Helicone. Cơ chế: decorator <code>@weave.op</code> tự động track MỌI lệnh gọi LLM (input/output/cost/latency/eval metric) không cần cấu hình tay — tương tự tinh thần <code>@observe</code> đã học ở <code>R8_4</code>.</p>
+<table>
+<tr><th>Điểm mạnh</th><th>Hạn chế đã ghi nhận 2026</th></tr>
+<tr><td>1 dashboard DUY NHẤT cho cả training experiment (fine-tune) lẫn LLM app observability</td><td>Trọng tâm sản phẩm vẫn là ML-experiment-tracking — Weave là add-on, chưa sâu bằng platform LLM-first</td></tr>
+<tr><td>Setup nhanh (decorator, không cấu hình phức tạp)</td><td>Giá gắn liền gói W&amp;B tổng thể, không tách riêng cho riêng nhu cầu LLM</td></tr>
+<tr><td>Có free tier để thử</td><td>Hỗ trợ OpenInference/OpenTelemetry là phụ, schema chính vẫn là schema riêng của W&amp;B (khác Arize Phoenix — OTel-native ngay từ đầu, xem mục 7)</td></tr>
+</table>
+<p>Chọn Weave khi: đội đã đầu tư sâu vào hệ sinh thái W&amp;B cho huấn luyện model cổ điển/fine-tune, muốn 1 nơi duy nhất theo dõi CẢ 2 loại workload thay vì 2 công cụ tách rời.</p>
+<p>Dễ nhầm lẫn với lý do chọn Arize (mục 2) — cả 2 đều "giám sát chung LLM + ML cổ điển", nhưng khác nhau ở ĐIỂM XUẤT PHÁT kiến trúc: Arize/Phoenix được thiết kế LLM-first ngay từ đầu rồi mở rộng sang ML cổ điển; Weave được thiết kế ML-training-first (kế thừa toàn bộ hạ tầng W&amp;B đã có) rồi mở rộng thêm sang LLM. Hệ quả thực tế: Arize/Phoenix có độ sâu tính năng LLM-specific (eval rigor, OTel-native) tốt hơn; Weave có độ liền mạch với workflow huấn luyện model cổ điển đã quen thuộc tốt hơn.</p>
+
+<h3>6. Giá thật 2026 — seat-based vs usage-based, quy đổi cụ thể</h3>
+<p>2 mô hình giá phổ biến khác hẳn nhau ở cách SCALE khi team/traffic lớn dần:</p>
+<ul>
+<li><strong>LangSmith</strong> (seat-based + usage): $39/seat/tháng + $0.50/1.000 trace cơ bản (gói Plus, <em>verify 2026-06</em>) — CHƯA gồm add-on riêng (Deployment/Engine/Fleet/Sandboxes/LLM Gateway) tính phí thêm.</li>
+<li><strong>Langfuse</strong> (usage-based, không seat fee): self-host miễn phí license (chỉ tốn compute tự vận hành); Langfuse Cloud có 4 tier Hobby (free) → <strong>Core</strong> ($29/tháng) → Pro ($199/tháng, thêm SOC2/ISO27001 + retention 3 năm) → Enterprise ($2,499/tháng) — tính theo trace/observation/score, không phụ thuộc số người dùng (<em>verify 2026-06</em>).</li>
+<li><strong>Arize</strong>: tính theo dung lượng lưu trữ, ~$3/GB phát sinh thêm (<em>verify 2026-06</em>); bản Phoenix mã nguồn mở tự host miễn phí license.</li>
+<li><strong>Helicone</strong> (request-based) và <strong>Braintrust</strong> (theo GB data xử lý, mục 3) cũng thuộc nhóm usage-based như Langfuse — không tính phí seat, chi phí gắn trực tiếp với khối lượng THẬT SỰ đi qua hệ thống.</li>
+</ul>
+<div class="callout">
+<div class="label">📖 Worked example — quy mô nhỏ (đúng tình huống 1 dự án cá nhân)</div>
+<pre><code>Giả định: 1 seat, 10.000 trace/tháng (mức khởi điểm hợp lý nếu predictor bắt đầu
+dùng 1 platform observability cho phần LLM thesis)
+
+LangSmith Plus: 1×$39 (seat) + (10.000/1.000)×$0.50 = $39 + $5 = $44/tháng
+                (CHƯA gồm add-on Deployment/Gateway nếu cần)
+
+Langfuse Cloud Core: từ $29/tháng + usage nhỏ ở mức 10k trace → xấp xỉ $29-35/tháng
+Langfuse self-host: $0 phí license (chỉ tốn compute tự host, không tính ở đây)
+
+→ Ở QUY MÔ NHỎ (1 người, ít trace), chênh lệch chưa lớn — nhưng mô hình seat-based
+  của LangSmith sẽ tăng TUYẾN TÍNH theo số người dùng thêm vào (mỗi thành viên mới
+  +$39/tháng dù họ không tăng lượng trace), trong khi Langfuse chỉ tăng theo usage
+  thật (trace/observation), không phạt thêm phí khi thêm người xem dashboard.</code></pre>
+</div>
+<p>Đối chiếu bên ngoài (không tự tính lại được vì thiếu chi tiết từng dòng phí add-on): trang so sánh chính chủ của Langfuse (Langfuse tự so với LangSmith — không phải bên thứ 3 trung lập, đọc với sự dè dặt tương xứng) ở quy mô LỚN hơn nhiều (500.000 trace/tháng, 5 seat, retention 12 tháng) ghi nhận LangSmith Plus ~$3.895/tháng so với Langfuse <strong>Pro</strong> ~$621/tháng (retention 12 tháng cần tier Pro $199/tháng nền, không phải Core, <em>verify 2026-06</em>) — cùng HƯỚNG kết luận với ví dụ tự tính ở trên: mô hình seat-based bất lợi hơn hẳn khi team lớn dần, mô hình usage-based scale tuyến tính và dễ dự đoán hơn.</p>
+
+<h3>7. OTel-native vs proprietary-first — hệ quả tới chi phí đổi vendor sau này</h3>
+<p>1 trục lựa chọn khác, độc lập với giá: platform lưu trữ trace theo <strong>schema mở (OpenTelemetry/OpenInference)</strong> ngay từ đầu, hay theo <strong>schema riêng (proprietary)</strong> và chỉ hỗ trợ OTel như 1 lối phụ. Liên hệ trực tiếp <code>gen_ai.*</code> namespace đã học ở <code>R8_6</code>: nếu instrumentation viết đúng chuẩn OTel GenAI ngay từ đầu, đổi platform sau này gần như không cần viết lại code — nhưng ĐIỀU KIỆN là platform đích phải đọc hiểu tốt schema mở đó, không phải mọi platform đều ưu tiên việc này như nhau.</p>
+<table>
+<tr><th>Platform</th><th>Quan hệ với OTel/OpenInference</th></tr>
+<tr><td>Arize (Phoenix)</td><td>OTel-native ngay từ đầu — kiến trúc xây trên chuẩn mở, dễ đổi backend nhất trong 6 platform</td></tr>
+<tr><td>Langfuse</td><td>Hỗ trợ tốt, mã nguồn mở nên schema minh bạch, dễ kiểm tra/tuỳ biến</td></tr>
+<tr><td>LangSmith, W&amp;B Weave</td><td>Schema riêng (proprietary) là chính, OTel/OpenInference chỉ là lối tích hợp phụ — chi phí chuyển đổi cao hơn nếu sau này đổi platform</td></tr>
+<tr><td>Helicone</td><td>Proxy layer — ít phụ thuộc schema trace phức tạp, chi phí chuyển đổi thấp vì chỉ cần đổi lại base URL</td></tr>
+</table>
+<pre><code>Instrumentation viết theo gen_ai.* (OTel GenAI, xem R8.6)
+        │
+        ├──▶ Arize/Phoenix   (đọc trực tiếp, KHÔNG cần code adapter riêng)
+        ├──▶ Langfuse        (đọc trực tiếp, hỗ trợ tốt)
+        └──▶ LangSmith/Weave (cần lớp adapter/export riêng sang schema proprietary
+                              của từng platform — code KHÔNG chạy thẳng được)
+
+→ Cùng 1 lần viết instrumentation, chi phí đổi ngang giữa Arize/Langfuse gần
+  bằng 0 (chỉ đổi endpoint export); đổi sang/từ LangSmith hoặc Weave tốn thêm
+  công viết/bảo trì lớp chuyển đổi schema.</code></pre>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p><strong>Flowchart chọn platform bằng câu hỏi tuần tự</strong> (dùng để quyết định nhanh):</p>
+<pre><code>Q1: Stack có dùng LangChain/LangGraph không?
+    → CÓ → xét LangSmith trước (tích hợp sâu nhất, ít việc phải làm thêm)
+    → KHÔNG → qua Q2
+
+Q2: Có traditional ML model cần giám sát chung với LLM không?
+    → CÓ → xét Arize (Phoenix mã nguồn mở nếu muốn self-host miễn phí)
+    → KHÔNG → qua Q3
+
+Q3: Ngân sách hạn chế / cần self-host toàn bộ (không gửi data ra ngoài)?
+    → CÓ → Langfuse
+    → KHÔNG → qua Q4
+
+Q4: Muốn eval là 1 bước bắt buộc trong CI/CD, chặn merge nếu điểm kém?
+    → CÓ → Braintrust
+    → KHÔNG → qua Q5
+
+Q5: Chỉ cần trace nhanh, tối thiểu công sức tích hợp, không cần eval sâu?
+    → CÓ → Helicone
+    → KHÔNG → qua Q6
+
+Q6: Team đã đầu tư sâu vào W&amp;B cho huấn luyện model cổ điển/fine-tune, muốn
+    1 dashboard chung cho cả training experiment lẫn LLM app?
+    → CÓ → W&amp;B Weave
+    → KHÔNG → quay lại Q1-Q5, chọn theo tiêu chí gần nhất (không có "mặc định")
+</code></pre>
+<p><strong>Ví dụ tích hợp Helicone (minh hoạ mức đơn giản của proxy pattern)</strong>:</p>
+<pre><code># Trước (gọi trực tiếp API):
+client = AnthropicClient(base_url="https://api.anthropic.com")
+
+# Sau (route qua Helicone proxy — chỉ đổi 1 dòng):
+client = AnthropicClient(base_url="https://gateway.helicone.ai",
+                          headers={"Helicone-Auth": "Bearer HELICONE_KEY"})
+# Không sửa logic gọi API nào khác. Mọi lệnh gọi giờ có trace latency/token/cost
+# tự động xuất hiện trên dashboard Helicone.
+</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Platform</th><th>Điểm mạnh</th><th>License/pricing</th><th>Khi nào chọn</th></tr>
+<tr><td><strong>LangSmith</strong> (đã dạy <code>L6_6</code>)</td><td>Node-by-node state diff, replay trên model version mới</td><td>Đóng, tính theo trace/tháng</td><td>Stack dùng LangChain/LangGraph</td></tr>
+<tr><td><strong>Langfuse</strong> (đã dạy <code>L6_6</code>)</td><td>Mã nguồn mở hoàn toàn, unlimited user mọi tier</td><td>Mở (self-host free), nay thuộc ClickHouse</td><td>Cần self-host, ngân sách hạn chế, không gửi data ra ngoài</td></tr>
+<tr><td><strong>Arize</strong> <em>(mới)</em></td><td>Giám sát chung LLM + traditional ML</td><td>Phoenix mở (free), Arize AX đóng (enterprise)</td><td>Cần eval rigor cao + đã có traditional ML cần monitor chung</td></tr>
+<tr><td><strong>Braintrust</strong> <em>(mới)</em></td><td>CI/CD gate tích hợp — eval chặn merge</td><td>Free tier 1GB data + 10K eval/tháng (từ 3/2026, billing theo GB không theo span)</td><td>Team muốn eval bắt buộc trong CI/CD, không phải sau deploy mới đo</td></tr>
+<tr><td><strong>Helicone</strong> <em>(mới)</em></td><td>Đổi 1 base URL là có trace ngay, không sửa code</td><td>Free tier + request-based, dễ dự đoán</td><td>Cần observability nhanh, tối thiểu công sức tích hợp</td></tr>
+<tr><td><strong>W&amp;B Weave</strong> <em>(mới)</em></td><td>1 dashboard chung training experiment + LLM app</td><td>Free tier, Pro $60/tháng, Enterprise tuỳ chỉnh (<em>verify 2026-06</em>)</td><td>Đã đầu tư sâu vào hệ sinh thái W&amp;B cho ML training</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p>Grep toàn repo <code>predictor</code> cho các từ khoá <code>langfuse</code>, <code>langsmith</code>, <code>arize</code>, <code>braintrust</code>, <code>helicone</code>, <code>weave</code> — <strong>không có kết quả trong code thực thi</strong>, chỉ xuất hiện trong tài liệu curriculum/roadmap (<code>guideline/</code>) và 1 vài plan doc <code>ai-trader/</code> nhắc đến khái niệm OTel ở mức lý thuyết. Nói thẳng: dự án hiện tại <strong>chưa tích hợp bất kỳ platform observability chuyên dụng nào</strong> cho phần LLM (thesis-writing trong <code>daily-investor-report</code>). Việc "quan sát" hiện nay hoàn toàn dựa vào Self-QA Gate tự viết (8 check, xem trang R8.4) + log console — đủ dùng cho quy mô hiện tại (chạy theo lịch, không phải real-time production traffic lớn). Nếu dự án mở rộng sang LLM hybrid mode với tần suất gọi cao hơn nhiều, đáng xem xét <strong>Langfuse</strong> trước tiên theo flowchart ở trên (ưu tiên self-host, ngân sách một dự án cá nhân) — không nên chọn LangSmith vì <code>predictor</code> không dùng LangChain/LangGraph, và không nên chọn W&amp;B Weave vì dự án không có hạng mục huấn luyện model cổ điển nào cần chung dashboard.</p>
+<p>Áp đúng worked example mục 6 vào quy mô thật của dự án: <code>predictor</code> hiện chỉ có 1 người vận hành, chạy theo lịch (không phải traffic liên tục) — đúng kịch bản "1 seat, traffic thấp" đã tính ở mục 6, nơi Langfuse (self-host miễn phí hoặc Cloud từ $29/tháng) rẻ hơn LangSmith ($44/tháng cho cùng khối lượng) mà KHÔNG mất tính năng cần thiết (tracing + eval cơ bản đã đủ, không cần node-by-node LangGraph state diff vì <code>predictor</code> không dùng LangGraph).</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Chọn platform theo "hot nhất trên Twitter/HN"</strong> thay vì theo stack thật đang dùng — LangSmith vô nghĩa nếu không dùng LangChain/LangGraph, giá trị chính của nó (node-by-node state diff) không áp dụng được.</p>
+<p><strong>2. Nghĩ phải chọn 1 platform "tốt nhất duy nhất"</strong> — thực tế nhiều team dùng kết hợp (VD Helicone cho trace nhanh + Braintrust cho eval gate CI/CD).</p>
+<p><strong>3. Bỏ qua chi phí self-host thật</strong> (compute, maintenance) khi so Langfuse với các SaaS khác — "miễn phí license" không có nghĩa "miễn phí vận hành".</p>
+<p><strong>4. Vội tích hợp 1 platform quan sát phức tạp</strong> trong khi quy mô hệ thống còn nhỏ và Self-QA Gate tự viết đã đủ dùng — over-engineering sớm.</p>
+<p><strong>5. So sánh giá seat-based và usage-based ở CÙNG 1 mốc traffic hiện tại</strong> mà quên tính xu hướng khi team/traffic lớn dần — seat-based có thể rẻ hơn lúc nhỏ nhưng tăng nhanh hơn hẳn khi thêm người (mục 6).</p>
+<p><strong>6. Chọn W&amp;B Weave chỉ vì quen thuộc thương hiệu</strong> — bỏ qua việc Weave vẫn là add-on chưa sâu bằng platform LLM-first cho riêng nhu cầu observability.</p>
+<p><strong>7. Bỏ qua trục OTel-native vs proprietary-first khi chọn</strong> — chọn platform proprietary-first (mục 7) mà không lường trước chi phí viết lại instrumentation nếu sau này cần đổi vendor.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Kể đúng tên 6 platform + đúng 1 điểm mạnh riêng biệt của từng platform (không nhầm lẫn giữa các platform).</li>
+<li>Dùng đúng flowchart 6 câu hỏi để chọn platform cho 1 tình huống giả định mới.</li>
+<li>Giải thích được vì sao "platform hot nhất" không phải tiêu chí chọn đúng.</li>
+<li>Tính được chi phí LangSmith (seat + trace) vs Langfuse (usage-based) cho 1 quy mô cụ thể, giải thích vì sao 2 mô hình giá scale khác nhau khi team lớn dần.</li>
+<li>Giải thích được sự khác biệt OTel-native (Arize/Langfuse) vs proprietary-first (LangSmith/Weave) và hệ quả tới chi phí đổi vendor.</li>
+<li>Nêu đúng hiện trạng thật của dự án <code>predictor</code> (chưa dùng platform nào, dựa vào Self-QA Gate tự viết) — không bịa ra platform đang được dùng.</li>
+<li>Tự confirm: không đề xuất đưa field hệ thống tính sẵn vào input của 1 judge/eval được thiết kế để độc lập, kể cả khi eval đó chạy trên 1 trong 6 platform này.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R8_4_component_evals.html">← R8.4 · Component-level Evals</a>
+  <a href="R8_6_agent_instrumentation.html">R8.6 · Agent Instrumentation →</a>
+</div>
+
+</div>
+</body>
+</html>

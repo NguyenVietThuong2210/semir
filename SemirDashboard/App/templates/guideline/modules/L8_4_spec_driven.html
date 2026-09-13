@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L8.4 — Spec-Driven Development</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 8 · Module 4</div>
+  <h1>8.4 · Spec-Driven Development (SDD, SpecKit)</h1>
+  <p class="subtitle">Framework để AI agents build software correctly. Spec là source of truth, không phải code. Constitution, DoD, task decomposition. Case study ai_orchestrator SpecAnalyze + TaskDecompose agents.</p>
+  <div class="level">Level 8 · AI Artifacts · ~30 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Định nghĩa SDD, difference vs traditional TDD/BDD</li>
+  <li>SpecKit — GitHub's SDD framework</li>
+  <li>Constitution + DoD (Definition of Done)</li>
+  <li>ai_orchestrator SpecAnalyze workflow</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Spec-Driven Development bằng ngôn ngữ đời thường</div>
+<p><strong>Xây nhà không bản vẽ</strong>: Chủ nhà nói "xây tôi 1 căn 3 tầng đẹp". Thợ mộc + thợ điện + thợ nước mỗi người hiểu 1 kiểu. Kết quả: cửa mở ra tường, ổ điện đặt trong bồn tắm, cầu thang dẫn thẳng vào phòng ngủ chị dâu. Cảnh này quen chưa?</p>
+<p><strong>Có spec chi tiết trước</strong>: Bản vẽ ghi rõ "phòng khách 30m², cửa hướng Đông, 4 ổ điện tường A". Mọi thợ đọc cùng 1 bản → thi công đúng. Đó là SDD.</p>
+<p><strong>AI code assistant</strong>: Nếu bảo "viết chatbot cho tôi" → LLM đoán mò. Nếu đưa spec chi tiết (endpoints, data model, error handling, tests) → LLM code chính xác + có thể verify.</p>
+<p><strong>SpecKit</strong>: framework để viết spec có cấu trúc: constitution.md (nguyên tắc chung) → feature-N.md (spec từng tính năng) → tasks/ (chia nhỏ 30-90 phút). AI Orchestrator SpecAnalyze agent chuyên làm việc này.</p>
+</div>
+
+<h2>1. Vấn đề SDD giải quyết</h2>
+
+<div class="callout danger">
+<div class="label">AI-generated code failure modes</div>
+<ol>
+  <li>Ambiguous requirement → LLM assume incorrectly</li>
+  <li>Missing edge cases → code work happy path fail production</li>
+  <li>Underspecified acceptance → "done" undefined</li>
+  <li>Constitution violation → code breaks project principles</li>
+  <li>Duplicated concerns → 5 agents implement same thing 5 ways</li>
+</ol>
+</div>
+
+<p><strong>SDD (Spec-Driven Development)</strong>: instead spec being informal doc, spec là formal artifact — validated, decomposed, tracked. LLM implement từ spec (not from vague prompt).</p>
+
+<h2>1.5 · BDD / Gherkin cho AI feature — test-first LLM development</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🥒 Deep-dive — BDD, Gherkin, prompt regression suite</div>
+
+<h4>Vấn đề — LLM feature không testable như code truyền thống</h4>
+<p>Function <code>add(2,3)==5</code> deterministic → 1 unit test đủ. LLM <code>summarize(article)</code> stochastic → 1 example không cover. Cần BDD (Behavior-Driven Development) với scenario matrix.</p>
+
+<h4>Gherkin cho LLM feature</h4>
+<pre><code>Feature: Investor thesis generation for VN stocks
+  As a retail investor
+  I want AI to write thesis with grounded numbers
+  So that I don't get fooled by hallucinated data
+
+  Background:
+    Given data collector đã chạy successfully
+    And embedded JSON có 30 tickers với fields: cc, senior_score, verdict
+
+  Scenario: Thesis references only grounded numbers
+    Given ticker "VNM" với cc=0.72 và senior_score=8
+    When LLM generate thesis
+    Then mọi số % trong thesis phải xuất hiện trong embedded JSON
+    And regex "\d+(\.\d+)?%" mỗi match phải grep-verify được
+
+  Scenario: Divergence detection
+    Given ticker "FPT" với ai_signal=UP và senior_score=BEARISH
+    When LLM generate thesis
+    Then output PHẢI chứa "divergence_note"
+    And verdict PHẢI KHÔNG được "STRONG BUY"
+
+  Scenario: Confidence out-of-range drops pick
+    Given ticker "XYZ" với cc=0.45
+    When LLM generate thesis
+    Then ticker phải bị drop khỏi top picks
+</code></pre>
+
+<h4>Prompt regression suite — architecture</h4>
+<pre><code>tests/prompts/
+├── scenarios.yaml           # Gherkin scenarios
+├── fixtures/
+│   ├── vnm_normal.json      # input snapshot
+│   ├── fpt_divergence.json
+│   └── xyz_low_cc.json
+├── expected/
+│   ├── vnm_normal.assertions.yaml   # regex, JSON path checks
+│   └── ...
+└── runner.py                # loop scenarios, LLM call, assert
+
+# CI:
+# On every prompt change (git diff SKILL.md §19):
+#   pytest tests/prompts/ -k "grounded_numbers or divergence or confidence_range"
+# Fail block merge.
+</code></pre>
+
+<h4>Assertion types cho LLM output</h4>
+<table>
+<tr><th>Assertion</th><th>Deterministic?</th><th>Ví dụ</th></tr>
+<tr><td><strong>Regex presence</strong></td><td>Yes</td><td>Output có <code>divergence_note</code>?</td></tr>
+<tr><td><strong>Grounded number check</strong></td><td>Yes</td><td>Mọi số % phải có trong input JSON</td></tr>
+<tr><td><strong>Schema validation</strong></td><td>Yes</td><td>JSON parse + Pydantic validate</td></tr>
+<tr><td><strong>Forbidden phrase</strong></td><td>Yes</td><td>Không được có "I think", "maybe"</td></tr>
+<tr><td><strong>Semantic similarity</strong></td><td>Fuzzy</td><td>Embedding sim với reference &gt; 0.85</td></tr>
+<tr><td><strong>LLM-as-judge rubric</strong></td><td>Fuzzy</td><td>Judge score &gt; 4/5 cho "coherence"</td></tr>
+</table>
+
+<h4>VN scenario — PredictStock §19 as BDD case</h4>
+<p>SKILL.md §19 (Pre-Thesis Discipline Checklist, 7 bước — anchor giá, verify chart_pattern, v.v.) và §20's QA checklist (mã C1-C19, VD C1 = "didn't anchor the price", C11 = "recommending BUY on broken pattern") là những discipline check tương đương tinh thần Gherkin scenario ở trên, enforce bởi <code>llm_qa_checklist.py</code>. Đây là BDD ở production — fail check → rename file <code>_FAILED.html</code>, không publish. Đây là why §19 tồn tại: FPT bug tháng 6/2026 không có check tương đương → không catch. Sau đó §19/§20 ra đời = scenario matrix, mỗi check 1 automated assertion.</p>
+
+<h4>Anti-pattern</h4>
+<ul>
+  <li><strong>Test bằng "manual eyeball"</strong>: run 3 prompts, look OK → ship. Prompt change ngày mai break silent. Fix: automated regression suite trong CI.</li>
+  <li><strong>Only happy path</strong>: test 1 ticker bình thường. Miss edge (divergence, low cc). Fix: scenario matrix cover mỗi rule.</li>
+</ul>
+
+<h4>Interview Q&A</h4>
+<ol>
+  <li><strong>Q: BDD cho LLM khác BDD truyền thống?</strong> A: Assertion không thể strict equality (LLM stochastic). Dùng regex + schema + semantic sim + LLM-judge. Fixture snapshot input để reproducible, temperature=0 để giảm noise.</li>
+  <li><strong>Q: Prompt regression suite chạy khi nào?</strong> A: (1) Trên mỗi prompt/SKILL.md change (pre-commit), (2) Nightly cross-model check (Claude 4.6 vs 4.7 output drift), (3) Post-provider-update trigger.</li>
+  <li><strong>Q: Vì sao Gherkin không JSON test cases?</strong> A: Gherkin human-readable, PM/business viết được. JSON tests eng-only. SDD chú trọng spec là source of truth — PM viết scenario, eng implement + LLM code. Common language critical.</li>
+</ol>
+</div>
+
+<h2>2. SpecKit (GitHub 2025)</h2>
+
+<p>Framework từ GitHub encourage SDD với AI code generation:</p>
+
+<pre><code>Structure:
+├── spec/
+│   ├── constitution.md      ← project principles (immutable)
+│   ├── feature-{n}.md       ← feature spec
+│   └── tasks/
+│       ├── task-1.md        ← decomposed tasks
+│       └── task-2.md
+├── src/                     ← implementation
+└── tests/                   ← from acceptance criteria
+</code></pre>
+
+<h3>Constitution</h3>
+
+<pre><code># constitution.md example:
+- All money handling MUST use decimal.Decimal, not float
+- API responses MUST include request_id in header
+- No feature launches without health check
+- Database migrations MUST be backward compatible
+- Security: no PII in logs, redact at ingress
+
+# Immutable across features. Guards project integrity.
+</code></pre>
+
+<h3>Feature spec</h3>
+
+<pre><code># feature-auth.md
+## Requirement
+Enable users login with email + password.
+
+## Acceptance criteria (DoD)
+1. Endpoint POST /auth/login accepts {email, password}
+2. Returns 200 + JWT token if valid
+3. Returns 401 + error message if invalid
+4. Password stored as bcrypt hash
+5. Rate limit: 5 attempts / IP / minute
+6. Audit log on every attempt
+
+## Constitution compliance
+- Uses decimal (n/a — no money)
+- Request_id header (yes, via middleware)
+- Health check (yes, existing)
+- PII: password redacted from logs (yes)
+
+## Non-goals
+- Social login (future)
+- MFA (future)
+- Password reset (separate spec)
+</code></pre>
+
+<h2>3. ai_orchestrator SDD flow</h2>
+
+<div class="example-box">
+<div class="title">2 dedicated agents cho SDD</div>
+<p>File: <code>agents/spec_analyze.py</code>, <code>agents/task_decompose.py</code></p>
+
+<p><strong>SpecAnalyze</strong>: nhận Analyser output, validate against constitution + SDD principles, output findings.</p>
+
+<pre><code>class SpecAnalysisFinding(TypedDict):
+    pass_name: str
+    # "duplication" | "ambiguity" | "underspecification"
+    # | "constitution" | "coverage"
+    severity: str  # CRITICAL|HIGH|MEDIUM|LOW
+    location: str  # "spec.md §3.2"
+    description: str
+    suggestion: str
+
+class SpecAnalysisReport(TypedDict):
+    findings: list[SpecAnalysisFinding]
+    summary: str
+    approved: bool  # True only if no CRITICAL/HIGH findings
+</code></pre>
+
+<p>Findings example:</p>
+<ul>
+  <li>[HIGH] Ambiguity in auth requirement (§2.3): "user login" — via email? SSO? Missing.</li>
+  <li>[MEDIUM] Underspecified error format — spec says "return error" but not schema.</li>
+  <li>[CRITICAL] Constitution violation — money field not decimal.</li>
+</ul>
+
+<p><strong>TaskDecompose</strong>: sau spec approved, break vào fine-grained engineering tasks:</p>
+
+<pre><code># Real schema, orchestrator/context.py:
+class Task(TypedDict):
+    id: str  # T1, T2, ...
+    title: str
+    description: str
+    priority: int
+    status: str
+    phase: str
+    depends_on: list[str]  # task IDs
+    parallel: bool
+
+# Example decomposition of auth feature:
+T1: "Create login endpoint skeleton" (30 min)
+T2: "Add password hash + verify" (45 min, depends T1)
+T3: "Generate JWT token" (30 min, depends T2)
+T4: "Add rate limit middleware" (60 min, depends T1)
+T5: "Write integration tests" (60 min, depends T1-T4)
+</code></pre>
+</div>
+
+<h2>4. Constitution enforcement</h2>
+
+<div class="callout">
+<div class="label">Machine-verifiable constitution</div>
+<p>Not all constitution rules automatable. Split:</p>
+<ul>
+  <li><strong>Machine-checkable</strong>: linter rules (no float for money), Grep patterns, unit tests</li>
+  <li><strong>SpecAnalyze-checkable</strong>: LLM reads spec, flag violations</li>
+  <li><strong>Human-checkable</strong>: subjective (naming quality)</li>
+</ul>
+<p>Balance: automate what possible, human catch rest.</p>
+</div>
+
+<h2>5. TDD vs BDD vs SDD comparison</h2>
+
+<table>
+<tr><th></th><th>TDD (Test-Driven)</th><th>BDD (Behavior-Driven)</th><th>SDD (Spec-Driven)</th></tr>
+<tr><td>Source of truth</td><td>Tests</td><td>Scenarios (Given-When-Then)</td><td>Specs (Constitution + DoD)</td></tr>
+<tr><td>Author</td><td>Developer</td><td>Product + Dev</td><td>Product + Dev + LLM</td></tr>
+<tr><td>Best cho</td><td>Refactor safety</td><td>Requirements clarity</td><td>AI-generated code</td></tr>
+<tr><td>Overhead</td><td>Low</td><td>Medium</td><td>Higher (formal spec)</td></tr>
+<tr><td>Gap addressed</td><td>Regression</td><td>Miscommunication</td><td>LLM assumption errors</td></tr>
+</table>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh TDD vs BDD vs SDD chi tiết (đọc SAU section 5 basic table)</div>
+
+<h4>Ví dụ concrete — cùng feature "user login" viết bằng 3 methods</h4>
+<pre><code>=== TDD (Test-Driven) ===
+Step 1: Viết test TRƯỚC
+def test_login_success():
+    user = create_user("alice", "pass123")
+    result = login("alice", "pass123")
+    assert result.success == True
+
+Step 2: Chạy test → FAIL (function chưa có)
+Step 3: Viết code minimum để pass
+def login(username, password): ...
+
+Step 4: Refactor
+Focus: correctness thông qua tests. Ngắn feedback loop.
+
+=== BDD (Behavior-Driven) ===
+Step 1: Viết scenario ngôn ngữ tự nhiên trước
+Feature: User login
+  Scenario: Successful login
+    Given a user "alice" with password "pass123"
+    When they submit login form
+    Then they should be redirected to dashboard
+    And their session should be active
+
+Step 2: Convert scenario → executable tests (Cucumber)
+Step 3: Implement code
+
+Focus: Product + Dev cùng ngôn ngữ. Tránh miscommunication.
+
+=== SDD (Spec-Driven) ===
+Step 1: Viết Spec formal
+constitution.md:
+  - Auth uses bcrypt (min cost=12)
+  - Sessions expire 24h
+  - Rate limit: 5 attempts / 15 min per IP
+
+feature-023-login.md:
+  ## API
+  POST /login
+  Request: { username: string, password: string }
+  Response: { session_token: string, expires_at: ISO8601 }
+
+  ## Edge cases
+  - Wrong password → 401, don't leak "user not exists"
+  - Rate limited → 429 with Retry-After header
+
+  ## DoD (Definition of Done)
+  - [ ] Endpoint implemented
+  - [ ] 15 unit tests (correct + edge)
+  - [ ] Integration test with Postgres
+  - [ ] OpenAPI schema updated
+  - [ ] Logs redact password
+
+Step 2: Give spec to LLM (Claude Code) → generate code
+Step 3: Validate against DoD checklist
+
+Focus: LLM cần contract chi tiết. Nếu spec mơ hồ → LLM đoán → bug.
+</code></pre>
+
+<h4>Bảng compare 12 dimensions</h4>
+<table>
+<tr><th></th><th>TDD</th><th>BDD</th><th>SDD</th></tr>
+<tr><td><strong>Source of truth</strong></td><td>Tests (code)</td><td>Scenarios (Gherkin)</td><td>Specs (markdown)</td></tr>
+<tr><td><strong>Ngôn ngữ</strong></td><td>Code</td><td>Business language</td><td>Structured markdown + schema</td></tr>
+<tr><td><strong>Author</strong></td><td>Developer</td><td>Product + Dev</td><td>Product + Dev + LLM</td></tr>
+<tr><td><strong>Order</strong></td><td>Test → Code → Refactor</td><td>Scenario → Test → Code</td><td>Spec → LLM → Code → Validate DoD</td></tr>
+<tr><td><strong>Overhead</strong></td><td>Low (tests là output tự nhiên)</td><td>Medium (scenarios formal)</td><td>Higher (spec formal, DoD checklist)</td></tr>
+<tr><td><strong>Gap addressed</strong></td><td>Regression</td><td>Miscommunication PM ↔ Dev</td><td>LLM assumption errors</td></tr>
+<tr><td><strong>Code coverage</strong></td><td>High</td><td>High (via tests)</td><td>Depend (DoD)</td></tr>
+<tr><td><strong>Refactor safety</strong></td><td>⭐ Best</td><td>Good</td><td>Depend on tests</td></tr>
+<tr><td><strong>PM/QA readable</strong></td><td>Không</td><td>⭐ Yes (Given-When-Then)</td><td>Yes (markdown)</td></tr>
+<tr><td><strong>Version control friendly</strong></td><td>Yes (code)</td><td>Yes (Gherkin files)</td><td>Yes (markdown + JSON schema)</td></tr>
+<tr><td><strong>AI-augmented</strong></td><td>Partial (LLM viết code từ test)</td><td>Partial</td><td>⭐ Native (LLM đọc spec generate code)</td></tr>
+<tr><td><strong>Best cho</strong></td><td>Human dev, refactor</td><td>PM + Dev collaboration</td><td>AI Coding agents (Cursor/Claude/Copilot)</td></tr>
+</table>
+
+<h4>Decision matrix — chọn method nào?</h4>
+<table>
+<tr><th>Situation</th><th>Chọn</th></tr>
+<tr><td>Human developer, legacy code</td><td>TDD</td></tr>
+<tr><td>PM viết requirements, Dev implement</td><td>BDD</td></tr>
+<tr><td>Team dùng Cursor/Claude/Copilot heavy</td><td>⭐ SDD</td></tr>
+<tr><td>Startup MVP (không có PM formal)</td><td>TDD (fast)</td></tr>
+<tr><td>Enterprise với PM + QA process</td><td>BDD + SDD combo</td></tr>
+<tr><td>Multi-agent SDLC (như ai_orchestrator)</td><td>SDD required</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: 2024-2025 trend rõ ràng — LLM code assistants (Cursor, Claude Code, Copilot) đang shift dev methodology từ TDD → SDD. Vì <em>LLM cần contract</em>, không chỉ tests. Startup mà dùng AI coding heavy nên adopt SpecKit hoặc equivalent SDD framework.</p>
+</div>
+
+<h2>6. LLM code quality patterns</h2>
+
+<h3>6.1 Spec review checklist</h3>
+
+<pre><code>Before pass spec to Engineer LLM, verify:
+□ Requirement clear (no "should", "maybe", "consider")
+□ Acceptance criteria measurable
+□ Edge cases enumerated
+□ Constitution compliance stated
+□ Non-goals explicit (prevent scope creep)
+□ Dependencies listed
+□ Test scenarios include failure cases
+□ Success metric defined
+</code></pre>
+
+<h3>6.2 Golden path + Failure paths</h3>
+
+<pre><code># Not just happy path:
+Test cases MUST include:
+- Golden path (typical success)
+- Boundary (empty input, huge input)
+- Invalid input (malformed)
+- Concurrent (race conditions)
+- Failure (dependency down, timeout)
+- Recovery (retry logic)
+</code></pre>
+
+<h2>7. SpecKit implementation từ đầu</h2>
+
+<pre><code># tools/spec_analyze.py
+
+async def analyze_spec(spec_text: str, constitution: str) -> SpecAnalysisReport:
+    prompt = f"""
+    Constitution:
+    {constitution}
+
+    Feature spec:
+    {spec_text}
+
+    Analyze the spec for:
+    1. Duplication: any part duplicating existing feature?
+    2. Ambiguity: unclear terms or assumptions?
+    3. Underspecification: missing edge cases?
+    4. Constitution violation: any rule broken?
+    5. Coverage: acceptance criteria include failure paths?
+
+    Return JSON with findings + severity + location + suggestion.
+    Approve only if no CRITICAL/HIGH.
+    """
+    result = await claude.messages.create(
+        model="claude-opus-4-7",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_schema", "schema": SpecAnalysisReport.__annotations__}
+    )
+    return json.loads(result.content)
+</code></pre>
+
+<h2>8. Common pitfalls</h2>
+
+<div class="callout warn">
+<ol>
+  <li><strong>Spec bloat</strong>: 20-page spec cho 1h task → engineer skim → miss things. Fix: right-size spec to feature complexity.</li>
+  <li><strong>Living spec drift</strong>: spec written, code diverge over time. Fix: spec + code cross-reference, update spec on change.</li>
+  <li><strong>Rubber-stamp SpecAnalyze</strong>: agent auto-approve → provide value. Fix: prompt engineer for CRITICAL detection, calibrate approval threshold.</li>
+  <li><strong>Task decomposition too fine</strong>: 100 tasks 10-min each → overhead high. Fix: sweet spot 30-90 min tasks.</li>
+</ol>
+</div>
+
+<h2>9. AI-augmented dev workflow</h2>
+
+<pre><code>User → Idea
+   ↓
+PM Agent → Structured requirements
+   ↓
+Analyser Agent → Technical spec + data/API contracts
+   ↓
+SpecAnalyze Agent → Findings → HITL approval
+   ↓
+TaskDecompose Agent → Fine-grained tasks
+   ↓
+Engineer Agent × N tasks → Code (mỗi task verify bởi QAVerify Agent)
+   ↓
+Reviewer + QA + Security → Multi-gate
+   ↓
+Deploy + Retrospective → Learn
+</code></pre>
+
+<p>This is what ai_orchestrator does (11 real agents: PM, Analyser, SpecAnalyze, TaskDecompose, Engineer, QAVerify, Reviewer, Security, QA, Deploy, Retrospective). Full SDLC automated except human gates.</p>
+
+<h2>10. Interview cheat sheet</h2>
+
+<div class="callout">
+<ol>
+  <li>"SDD vs TDD" → SDD: spec is source of truth (LLM implement from spec). TDD: tests are source (test-first). Complement each other. SDD prevents assumption bugs; TDD prevents regression.</li>
+  <li>"When SDD overhead worth it?" → AI-generated code, safety-critical, cross-team collaboration, greenfield. Not: quick prototype, exploratory research.</li>
+  <li>"Constitution examples?" → Money = decimal, PII logging, health checks, backward-compatible migrations, naming conventions.</li>
+  <li>"How measure SDD success?" → Fewer rework loops, faster onboarding new agents/devs, fewer production bugs from ambiguity, reduced spec review time (SpecAnalyze catch issues).</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. SDD 3 lợi thế đối với AI code generation?</p>
+<p class="a">(1) Spec formal reduce LLM assumption errors. (2) Constitution enforce cross-feature consistency. (3) DoD explicit make "done" measurable, prevent scope creep.</p>
+
+<p class="q">2. SpecAnalyze finding "CRITICAL" — pipeline gì xảy ra?</p>
+<p class="a">Approved=False. Human gate reject → back Analyser để redesign. Max spec revisions (V2 plan: 2). Nếu exceed → fail-forward tới Retrospective.</p>
+
+<p class="q">3. Task decompose sweet spot?</p>
+<p class="a">30-90 min per task. Too fine (10 min): overhead orchestration. Too coarse (4h): agent lose context mid-task, fail localization difficult.</p>
+
+<p class="q">4. Constitution rule example machine-checkable?</p>
+<p class="a">"No float for money" → grep <code>float\(</code> in money-related files. Linter rule. Custom mypy plugin verify decimal.Decimal type. Detects violation pre-commit.</p>
+
+<p class="q">5. SDD overhead worth it cho 1h prototype?</p>
+<p class="a">Không. Overhead vs benefit skewed for short work. Skip SDD, use LLM interactively. SDD shine cho: features 1+ day, team collaboration, safety-critical, AI-augmented pipelines.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>ai_orchestrator: <code>agents/spec_analyze.py</code>, <code>agents/task_decompose.py</code></li>
+    <li>Constitution: <code>d:/New-jouney/ai_orchestrator/CLAUDE.md</code> "Core Rules"</li>
+    <li>Report schema: <code>orchestrator/context.py::SpecAnalysisReport</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://github.com/github/spec-kit">GitHub SpecKit</a></li>
+    <li>📖 <a href="https://en.wikipedia.org/wiki/Specification_by_example">Specification by Example (Adzic)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2404.11470">SWE-agent paper (Yang 2024)</a> — inspired SDD workflows</li>
+    <li>📝 <a href="https://cucumber.io/docs/bdd/">BDD introduction (Cucumber)</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L8_3_mcp_deep.html">← L8.3</a>
+  <a href="L8_5_ai_alignment.html">L8.5 · AI Alignment →</a>
+</div>
+
+</div>
+</body>
+</html>

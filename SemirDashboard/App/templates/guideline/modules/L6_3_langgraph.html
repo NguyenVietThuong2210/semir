@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L6.3 — LangGraph Deep-Dive</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 6 · Module 3</div>
+  <h1>6.3 · LangGraph Deep-Dive</h1>
+  <p class="subtitle">Từ concept nodes/edges/state → production graph (~18 nodes thật, sơ đồ giản lược dưới đây) + 11 agents của AI Orchestrator. Case study rất chi tiết.</p>
+  <div class="level">Level 6 · Agents · ~60 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Giải thích tại sao LangGraph ra đời (giải quyết pain của LangChain chain)</li>
+  <li>Vẽ graph (giản lược) AI Orchestrator từ trí nhớ</li>
+  <li>Implement 1 subgraph 3-node bằng LangGraph</li>
+  <li>Sử dụng conditional_edges cho routing deterministic</li>
+  <li>Debug graph với LangSmith tracing</li>
+  <li>Trả lời: LangGraph vs Autogen vs CrewAI khác gì</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 LangGraph bằng ngôn ngữ đời thường</div>
+<p><strong>Sơ đồ quy trình công ty (SOP)</strong>: Đơn hàng vào → nếu &lt;10tr chuyển kế toán duyệt → nếu &gt;10tr chuyển giám đốc → nếu bị reject quay lại sales chỉnh sửa → ...</p>
+<ul>
+  <li><strong>LangChain</strong>: Chỉ list "làm bước A rồi B rồi C" — thẳng, không rẽ nhánh. Đơn giản nhưng cứng nhắc.</li>
+  <li><strong>LangGraph</strong>: Là graph — có node (bước), edge (chuyển tiếp), conditional edge (rẽ nhánh dựa điều kiện), loop (quay lại). Như BPMN cho AI.</li>
+</ul>
+<p><strong>Ví dụ agent code review</strong>: node "engineer viết code" → node "test" → nếu fail thì quay lại engineer sửa (loop); nếu pass thì node "reviewer" → nếu reviewer reject thì quay engineer; approve thì node "merge". LangChain không thể express loop này gọn.</p>
+<p><strong>State = "áo đang may dở"</strong> truyền giữa các nodes. Mỗi node đọc state, làm việc của mình, ghi state mới.</p>
+</div>
+
+<h2>1. Vì sao LangGraph?</h2>
+
+<p><strong>LangChain classic</strong> (2022) dùng linear chain — LLM output → next LLM. Vấn đề:</p>
+<ul>
+  <li>Không có cycle (retry, loop)</li>
+  <li>Không có state persistent across calls</li>
+  <li>Không có conditional routing</li>
+  <li>Không parallelize được</li>
+</ul>
+
+<p><strong>LangGraph</strong> (2024) mượn ý tưởng state machine + workflow engine: node = agent/function, edge = transition, state = TypedDict shared. Được LangChain team release để build agent production-grade.</p>
+
+<div class="callout success">
+<div class="label">Key insight</div>
+<p>Multi-agent system = <strong>directed graph</strong> với deterministic routing. Control plane = Python logic, không phải LLM decide next node. Predictable, testable, auditable — đúng SDLC.</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — LangGraph vs LangChain: paradigm shift, không phải "thêm feature" (chi tiết dễ hiểu)</div>
+
+<p><strong>Câu hỏi thực tế</strong>: Bạn đọc "LangGraph = LangChain + branching + loops". Nghe nhẹ nhàng. Nhưng khi build agent thật, bạn dùng LangChain, code 3000 lines, tuần 2 muốn thêm retry logic → phát hiện phải refactor toàn bộ. Vì sao? Vì đây không phải "thêm feature" — đây là <em>đổi paradigm</em>. Hiểu paradigm quyết định chọn đúng framework.</p>
+
+<p><strong>Bước 1 — LangChain: paradigm "function composition"</strong></p>
+<p>Ý tưởng: mỗi step là 1 function. Chain = ghép nhiều function lại. Output function A = input function B.</p>
+<pre><code>result = generate(retrieve(embed(prompt)))
+      = LLMChain(query_chain=SQLChain(analyze_chain(user_input)))
+</code></pre>
+<p>Đặc điểm: pipeline <em>immutable</em>, luồng đi thẳng, mỗi function xử lý input → output. Không có "shared state" chung. Không có memory ngoài context của mỗi function.</p>
+
+<p><strong>Bước 2 — LangGraph: paradigm "state machine"</strong></p>
+<p>Ý tưởng: có <em>1 state global</em> (dict chứa mọi thông tin). Mỗi node đọc state, làm việc, ghi state mới. Edges định nghĩa "sau node A đi đâu" (có thể conditional).</p>
+<pre><code>State = {"messages": [], "current_task": "", "retry_count": 0, "human_feedback": None}
+
+Node A: đọc state.current_task → làm việc → ghi state.messages.append(result)
+Edge: nếu state.retry_count &lt; 3 và có error → quay lại Node A. Ngược lại → Node B.
+</code></pre>
+<p>Đặc điểm: state mutable, có thể quay lại (loop), có thể pause (human-in-loop), có thể save/load (checkpointing).</p>
+
+<p><strong>Bước 3 — Vì sao paradigm shift matter? 5 use case LangChain KHÔNG làm được</strong>:</p>
+
+<table>
+<tr><th>Use case</th><th>Vì sao LangChain fail</th><th>LangGraph giải quyết thế nào</th></tr>
+<tr><td>1. Retry với refinement</td><td>Function không quay lại chính nó được</td><td>Conditional edge quay Node A nếu có error</td></tr>
+<tr><td>2. Reflexion (agent tự phê bình)</td><td>Không có state để nhớ mistake</td><td>State giữ mistake list, next iteration đọc</td></tr>
+<tr><td>3. Multi-agent share context</td><td>Mỗi function isolated</td><td>Shared state — mọi node đọc/ghi cùng dict</td></tr>
+<tr><td>4. Human-in-loop pause/resume</td><td>Chain phải chạy hết một mạch</td><td>Interrupt node → save state → wait human → resume</td></tr>
+<tr><td>5. Streaming intermediate output</td><td>Chỉ thấy output cuối chain</td><td>Every state transition = event → stream</td></tr>
+</table>
+
+<p>LangChain hack được 1-2 (thêm memory, callbacks) nhưng 3+ hầu như impossible. Nếu bạn cần 3+ use case → LangGraph từ đầu.</p>
+
+<p><strong>Analogy đời thực</strong>:</p>
+<ul>
+<li>LangChain = dây chuyền lắp ráp thẳng. A → B → C → D. Mỗi trạm làm 1 việc. Xe không quay lại được. Nếu trạm C phát hiện lỗi → phải làm xong C rồi mới đến D → mới báo cáo.</li>
+<li>LangGraph = văn phòng có nhiều bộ phận + bảng thông tin chung. Ai cũng đọc bảng, ai cũng có thể ghi bảng. Nhân viên A phát hiện bug → ghi bảng → nhân viên B đọc → quay lại A với thông tin mới. Có nút "pause để chờ sếp duyệt".</li>
+</ul>
+
+<p><strong>Bước 4 — Khi nào dùng cái nào (cheat sheet)</strong>:</p>
+<table>
+<tr><th>Nhu cầu</th><th>Chọn</th><th>Vì sao</th></tr>
+<tr><td>RAG basic (embed → retrieve → generate)</td><td>LangChain</td><td>Linear, biết trước steps</td></tr>
+<tr><td>Summarize document</td><td>LangChain</td><td>1 pass, không cần state</td></tr>
+<tr><td>Agent với tools + reasoning loop</td><td>LangGraph</td><td>Cần loop, cần state</td></tr>
+<tr><td>Multi-agent (SDLC 11 agents)</td><td>LangGraph</td><td>Shared state critical</td></tr>
+<tr><td>Human-in-loop workflow</td><td>LangGraph</td><td>Pause/resume built-in</td></tr>
+<tr><td>Chatbot có memory qua nhiều session</td><td>LangGraph</td><td>Checkpointing</td></tr>
+</table>
+
+<p><strong>Hậu quả nếu chọn sai</strong>: Startup A chọn LangChain vì "đơn giản hơn". Build chatbot 2 tuần. Product manager yêu cầu thêm "user can pause, edit prompt, resume". LangChain không support. Rewrite bằng LangGraph = 3 tuần thêm. Tổng 5 tuần cho feature mà nếu chọn LangGraph từ đầu chỉ 2 tuần. <em>3 tuần bị waste</em>.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>State design — điều KHÓ nhất khi dùng LangGraph</strong></p>
+
+<p><strong>Bước 1 — State là API của agent</strong>. Node A ghi field X, Node B đọc field X. Nếu bạn thay đổi schema state → phải update mọi node. State design sai = refactor liên tục.</p>
+
+<p><strong>Bước 2 — 2 anti-pattern</strong>:</p>
+<ul>
+<li><em>State quá đơn giản</em>: chỉ 1 field <code>text</code>. Nodes không biết state đang ở stage nào, retry bao nhiêu lần, có human feedback chưa. Agent mù.</li>
+<li><em>State quá phức tạp</em>: 20+ nested dict fields. Merge conflict khi 2 node ghi cùng field. Debug khó — không biết field nào đang bị đâu ảnh hưởng.</li>
+</ul>
+
+<p><strong>Bước 3 — Sweet spot: 5-10 fields, mỗi field 1 nhiệm vụ rõ</strong>:</p>
+<pre><code>class AgentState(TypedDict):
+    messages: list[BaseMessage]      # conversation history
+    current_task: str                # what agent doing now
+    retry_count: int                 # for retry logic
+    tool_results: list[dict]         # outputs from tool calls
+    human_feedback: str | None       # from HITL if any
+    error: str | None                # error to surface
+</code></pre>
+<p>Dùng TypedDict enforce schema — IDE catch bug typo field. State merge với reducer function (Annotated + operator.add cho list) để tránh conflict.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Checkpointing — killer feature quyết định LangGraph win production</strong></p>
+
+<p><strong>Vấn đề</strong>: Agent chạy 15 phút, 8 nodes. Node thứ 6 (LLM call) — API rate limit → 500 error. Nếu không checkpoint → restart từ Node 1 → mất 10 phút work + $2 LLM cost + user chờ đôi.</p>
+
+<p><strong>PostgresSaver giải quyết</strong>: Sau mỗi node, LangGraph tự save state vào Postgres. Khi resume, load state của Node 5 (last successful) → tiếp Node 6. Không mất progress.</p>
+
+<p><strong>Bonus — time travel</strong>: User muốn quay Node 3 với input khác → load state Node 3 từ DB → run tiếp. Debug + HITL cực dễ.</p>
+
+<p><strong>Vì sao AutoGen/CrewAI thua LangGraph production?</strong> Checkpointing là afterthought (bolted-on) trong 2 framework kia. LangGraph built-in — mọi state có persistent option. Production reliability = win.</p>
+
+<p><strong>Khi LangGraph vỡ</strong>: State quá lớn (embed 100 documents vào state → 500MB). Mỗi node serialization cost cao (5 giây). Fix: đưa large data ra external store (Redis/S3), state chỉ giữ reference (URL/key). State nhỏ, fetch data khi cần. Đây là trade-off design bạn phải cân — không escape được.</p>
+
+<p><strong>Take-away tổng hợp</strong>:</p>
+<ol>
+<li>LangChain vs LangGraph = paradigm khác (function composition vs state machine), không phải "thêm feature".</li>
+<li>Chọn dựa vào 5 use case: retry, reflexion, multi-agent, HITL, streaming. Có 1 trong 5 → LangGraph.</li>
+<li>State design quyết định expressiveness. 5-10 fields, TypedDict enforce.</li>
+<li>Checkpointing built-in = production reliability. Đây là why LangGraph thắng AutoGen/CrewAI cho production.</li>
+</ol>
+</div>
+
+<h2>2. Core concepts</h2>
+
+<h3>2.1 State — dict shared across nodes</h3>
+
+<pre><code>from typing import TypedDict, Annotated
+from langgraph.graph import StateGraph, END
+from operator import add
+
+class State(TypedDict):
+    input: str
+    intermediate: list[str]
+    final: str
+    # Annotated + reducer function cho concurrent updates
+    logs: Annotated[list, add]
+</code></pre>
+
+<h3>2.2 Node — function nhận state, return update</h3>
+
+<pre><code>def analyser(state: State) -> dict:
+    result = f"Analysed: {state['input']}"
+    return {"intermediate": [result]}   # partial update, LangGraph merge
+
+def engineer(state: State) -> dict:
+    impl = f"Implemented from: {state['intermediate']}"
+    return {"final": impl}
+</code></pre>
+
+<h3>2.3 Edge — transition</h3>
+
+<pre><code>graph = StateGraph(State)
+graph.add_node("analyser", analyser)
+graph.add_node("engineer", engineer)
+
+graph.set_entry_point("analyser")
+graph.add_edge("analyser", "engineer")   # unconditional
+graph.add_edge("engineer", END)          # terminate
+
+app = graph.compile()
+result = await app.ainvoke({"input": "Build a login form"})
+</code></pre>
+
+<h3>2.4 Conditional edge — routing</h3>
+
+<pre><code>def route_after_qa(state: State) -> str:
+    if state.get("qa_passed"):
+        return "deploy"
+    if state.get("qa_iterations", 0) >= 3:
+        return "failed"
+    return "engineer"   # retry
+
+graph.add_conditional_edges(
+    "qa",
+    route_after_qa,
+    {
+        "deploy": "deploy",
+        "failed": "failed_terminal",
+        "engineer": "engineer",   # loop back!
+    }
+)
+</code></pre>
+
+<h2>3. AI Orchestrator graph — sơ đồ giản lược</h2>
+
+<p>Đây là graph production của <code>d:\New-jouney\ai_orchestrator</code> (1512 lines <code>orchestrator/graph.py</code>, thực tế có ~18 <code>add_node()</code> — 11 agent nodes + 7 control/gate/terminal nodes như <code>clarification_gate</code>, <code>human_gate</code>, <code>task_dispatcher</code>). Sơ đồ dưới đây đơn giản hóa, không vẽ đủ mọi control node:</p>
+
+<pre><code>                              ┌── query ─────► Analyser ─► DONE
+                              │
+                              ├── test ──────► Analyser ─► QA ─► DONE
+                              │
+                    User ────►│ PM (detect intent)
+Request                       │
+                              ├── review ────► Analyser ─► Reviewer ─► DONE
+                              │
+                              ├── bug_fix ──► [clarify?] ─► Analyser ─► Engineer ─► QA ─┐
+                              │                                                          │
+                              │                                              ≤2× retry ──┘
+                              │
+                              └── feature ──► [clarify?] ─► Analyser ─► SpecAnalyze
+                                                                          │
+                                                                    [HUMAN GATE]
+                                                                          │
+                                                                    TaskDecompose
+                                                                          │
+                                                    ┌────Build Sprint────┴─────┐
+                                                    │  Engineer(T_i)             │
+                                                    │       ↓                    │
+                                                    │  QAVerify(T_i) ─────► T+1  │
+                                                    └─────────────┬──────────────┘
+                                                                  │  all tasks done
+                                                                  ▼
+                                                    Reviewer ─► Security ─► QA ─► Deploy ─► Retrospective ─► DONE
+                                                                                                              │
+                                                                                                              └── on any critical failure ─► FAILED
+</code></pre>
+
+<h3>3.1 State — ProjectContext</h3>
+
+<p>File: <code>orchestrator/context.py</code>. TypedDict với ~40 fields tracking mọi state qua pipeline:</p>
+
+<pre><code>class ProjectContext(TypedDict, total=False):
+    # Identity
+    project_id: str
+    job_id: str
+
+    # User input + routing
+    initial_request: str
+    pipeline_intent: str          # query|test|review|bug_fix|feature
+    needs_clarification: bool
+
+    # Reports (each agent output)
+    pm_report: dict
+    analyser_report: dict
+    spec_analysis_report: SpecAnalysisReport
+    task_decomposition: dict
+    engineer_report: dict
+    reviewer_report: dict
+    security_report: dict
+    qa_report: dict
+    deploy_report: dict
+    retrospective_report: RetrospectiveReport
+
+    # Loop counters
+    qa_iterations: int
+    spec_revisions: int
+    verify_iterations: int
+
+    # Kanban tracking
+    kanban_board: list[KanbanCard]
+    current_task_index: int
+
+    # Audit
+    agent_events: list[AgentEvent]
+    interrupt_reason: str          # for human_gate
+    ...
+</code></pre>
+
+<h3>3.2 Deterministic routing (key principle)</h3>
+
+<pre><code>def route_pm(state: ProjectContext) -> str:
+    """After PM, decide next state."""
+    if state.get("needs_clarification"):
+        return "clarification_gate"
+
+    intent = state.get("pipeline_intent", "feature")
+    if intent == "query":
+        return "analyser_query"
+    if intent in ("test", "review", "bug_fix"):
+        return "analyser"
+    return "analyser"   # feature also → analyser → spec_analyze
+
+
+def route_qa(state: ProjectContext) -> str:
+    """After QA verdict, decide next."""
+    qa = state.get("qa_report", {})
+    if qa.get("verdict") == "pass":
+        return "deploy"
+
+    iters = state.get("qa_iterations", 0)
+    if iters >= MAX_QA_ITERATIONS:
+        # Too many retries → fail forward
+        return "retrospective_failed"
+
+    # Fail-minor: engineer retry
+    if qa.get("severity") in ("minor", "medium"):
+        return "engineer_retry"
+
+    # Fail-major: go back to analyser (redesign)
+    return "analyser_qa_fail"
+
+
+graph.add_conditional_edges("qa", route_qa, {
+    "deploy": "deploy",
+    "engineer_retry": "engineer",
+    "analyser_qa_fail": "analyser",
+    "retrospective_failed": "retrospective",
+})
+</code></pre>
+
+<div class="callout warn">
+<div class="label">CRUCIAL: control plane không dùng LLM</div>
+<p>Routing là Python if/else, testable với unittest. LLM chỉ ở trong node (do reasoning), không quyết định flow. Đây là design principle của LangGraph — <strong>dumb control plane</strong>.</p>
+<p>Ngược lại: Autogen dùng LLM để chose next speaker → hard to reason about, khó reproduce bugs.</p>
+</div>
+
+<h3>3.3 Human-in-the-loop (HITL)</h3>
+
+<p><code>interrupt_before</code> làm graph pause tại node, đợi user approve/reject. Lưu ý code dưới dùng 2 cơ chế khác nhau cùng lúc: <code>interrupt_before=["human_gate"]</code> (khai báo lúc compile — "dừng TRƯỚC node này") và <code>interrupt(...)</code> gọi bên trong hàm node (lúc runtime — đóng gói dữ liệu gửi cho UI + nhận lại giá trị khi resume). Chi tiết đầy đủ + decision matrix ở <a href="L6_5_hitl.html">L6.5 · Human-in-the-Loop</a>; ở đây chỉ xem qua cách nó nằm trong graph tổng thể:</p>
+
+<pre><code>from langgraph.types import interrupt
+
+def human_gate(state: ProjectContext) -> dict:
+    """Pause for spec approval."""
+    approval = interrupt({
+        "reason": "spec_review",
+        "spec": state["spec_analysis_report"],
+        "prompt": "Approve this spec? (yes/no + comments)",
+    })
+    return {"spec_approved": approval["approved"], "user_feedback": approval.get("feedback")}
+
+# Compile with checkpointer
+saver = AsyncPostgresSaver(pool)
+app = graph.compile(
+    checkpointer=saver,
+    interrupt_before=["human_gate"],
+)
+
+# Runtime:
+config = {"configurable": {"thread_id": job_id}}
+result = await app.ainvoke(initial_state, config=config)
+# ↑ pauses at human_gate
+
+# Later, after user approves via UI:
+await app.ainvoke(Command(resume={"approved": True, "feedback": "LGTM"}), config=config)
+</code></pre>
+
+<h3>3.4 Checkpointing — persistence + resume</h3>
+
+<p>AsyncPostgresSaver auto-checkpoint state sau mỗi node. Nếu crash, resume từ điểm dừng:</p>
+
+<pre><code># Checkpoint format trong Postgres (schema đầy đủ ở L6.4 §3):
+# Table: checkpoints
+# ├── thread_id (job_id)
+# ├── checkpoint_id (v001, v002, ...)
+# ├── parent_id (cột riêng — link tới checkpoint trước, KHÔNG nằm trong metadata)
+# ├── state (JSONB - full ProjectContext)
+# └── metadata (task, source, agent — không chứa parent)
+
+# Resume:
+state = await app.aget_state(config)   # load latest
+print(state.next)   # ["human_gate"] — biết đang chờ ở đâu
+</code></pre>
+
+<h2>4. Node example — Engineer agent</h2>
+
+<pre><code>async def engineer_node(state: ProjectContext) -> dict:
+    """Implements 1 task from kanban board."""
+    # Get current task
+    idx = state.get("current_task_index", 0)
+    board = state["kanban_board"]
+    task = board[idx]
+
+    # Load context: spec + code files + previous agents' reports
+    prompt = build_engineer_prompt(
+        task=task,
+        spec=state["spec_analysis_report"],
+        codebase_summary=await _scan_project_files(state["project_id"]),
+        analyser=state["analyser_report"],
+    )
+
+    # Call backend (Claude API or Claude Code CLI)
+    backend = get_backend()
+    response = await backend.acall(
+        system_prompt=ENGINEER_SYSTEM,
+        user_prompt=prompt,
+    )
+
+    # Parse + validate
+    result = parse_engineer_output(response)
+
+    # Update board + agent events
+    task["column"] = "in_review"
+    task["artifacts"] = result["files_changed"]
+    task["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    event = AgentEvent(
+        agent="engineer",
+        timestamp=now_iso(),
+        status="completed",
+        tokens_used=response["usage"]["total"],
+        duration_seconds=response["latency"],
+        task_id=task["id"],
+        note=f"Implemented {task['title']}",
+    )
+
+    return {
+        "engineer_report": result,
+        "kanban_board": board,     # updated
+        "agent_events": [event],   # appended via reducer
+    }
+</code></pre>
+
+<h2>5. Testing subgraphs</h2>
+
+<pre><code>import pytest
+from unittest.mock import AsyncMock
+
+@pytest.mark.asyncio
+async def test_qa_fail_minor_routes_to_engineer():
+    state = {
+        "qa_report": {"verdict": "fail", "severity": "minor"},
+        "qa_iterations": 1,
+    }
+    assert route_qa(state) == "engineer_retry"
+
+@pytest.mark.asyncio
+async def test_qa_max_retry_routes_to_failed():
+    state = {
+        "qa_report": {"verdict": "fail", "severity": "minor"},
+        "qa_iterations": 3,   # exceeded MAX_QA_ITERATIONS=2
+    }
+    assert route_qa(state) == "retrospective_failed"
+
+@pytest.mark.asyncio
+async def test_engineer_node_mocked_backend(mocker):
+    mocker.patch("orchestrator.backends.get_backend", return_value=MockBackend())
+    state = {"kanban_board": [{"id": "T1", "title": "test", "column": "in_progress"}], ...}
+    result = await engineer_node(state)
+    assert "engineer_report" in result
+    assert result["kanban_board"][0]["column"] == "in_review"
+</code></pre>
+
+<h2>6. LangGraph vs alternatives</h2>
+
+<table>
+<tr><th></th><th>LangGraph</th><th>AutoGen</th><th>CrewAI</th></tr>
+<tr><td>Routing</td><td>Python (deterministic)</td><td>LLM decide next speaker</td><td>Task queue + roles</td></tr>
+<tr><td>State</td><td>TypedDict shared</td><td>Chat history</td><td>Task inputs/outputs</td></tr>
+<tr><td>Cycle support</td><td>Native (via conditional edges)</td><td>Yes (rounds)</td><td>Limited</td></tr>
+<tr><td>HITL</td><td>interrupt_before native</td><td>UserProxy agent</td><td>Manual</td></tr>
+<tr><td>Persistence</td><td>Postgres/Redis/Sqlite savers</td><td>Không native</td><td>Không native</td></tr>
+<tr><td>Best cho</td><td>Production SDLC agents (như AI Orchestrator)</td><td>Chatty multi-agent brainstorm</td><td>Simple sequential roles</td></tr>
+</table>
+
+<h2>7. Common pitfalls</h2>
+
+<div class="callout danger">
+<div class="label">5 mistakes phổ biến</div>
+<ol>
+  <li><strong>State update overwrite thay merge</strong>: return {"agent_events": [event]} với reducer <code>add</code> sẽ append; không có reducer sẽ overwrite. Đọc kỹ Annotated.</li>
+  <li><strong>Infinite loop</strong>: conditional edge quay lại node đã visit mà không counter → hang. Fix: track iteration + max threshold.</li>
+  <li><strong>LLM in control plane</strong>: dùng LLM để route → non-deterministic, khó debug. Rule: routing = Python.</li>
+  <li><strong>No checkpointing</strong>: crash mất progress. Luôn dùng PostgresSaver/SqliteSaver ở production.</li>
+  <li><strong>Sync blocking in async node</strong>: gọi sync `requests.get()` blocks event loop. Dùng httpx.AsyncClient hoặc asyncio.to_thread.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. LangGraph khác LangChain classic thế nào?</p>
+<p class="a">LangChain classic = linear chain, no cycle, no state. LangGraph = state machine với node/edge/state, conditional routing, checkpointing, HITL native. Được build cho agent production.</p>
+
+<p class="q">2. Vì sao "dumb control plane" quan trọng?</p>
+<p class="a">Routing bằng Python if/else → deterministic, testable, auditable. Bug tại routing = fix code. Ngược lại, LLM route = non-deterministic, khó reproduce bug, không thể unit test.</p>
+
+<p class="q">3. Implement conditional edge: sau QA fail-minor retry engineer max 2 lần, fail-major back analyser max 2 lần.</p>
+<p class="a">Xem code section 3.2. Track qa_iterations + spec_revisions counters trong state. Route function check severity + iter count → return next node name.</p>
+
+<p class="q">4. Human-in-the-loop trong LangGraph work thế nào?</p>
+<p class="a">interrupt_before=["human_gate"] tại compile. Runtime, graph chạy đến gate rồi return với state.next=["human_gate"]. UI show data cho user. User approve, gọi ainvoke với Command(resume=...) → graph tiếp tục.</p>
+
+<p class="q">5. Checkpointing = gì? Vì sao cần production?</p>
+<p class="a">Auto-save state sau mỗi node vào Postgres/Sqlite. Nếu crash/restart, resume từ điểm dừng cuối. Cần cho: long-running graph (hours), HITL (đợi user), failover, audit trail.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence — đọc code AI Orchestrator</div>
+  <ul>
+    <li><code>d:/New-jouney/ai_orchestrator/orchestrator/graph.py</code> — full graph definition (1512 lines)</li>
+    <li><code>orchestrator/context.py</code> — ProjectContext TypedDict với 40+ fields</li>
+    <li><code>orchestrator/backends/claude_code_backend.py</code> — backend abstraction</li>
+    <li><code>agents/pm.py, analyser.py, engineer.py, qa_verify.py, ...</code> — 11 agent nodes</li>
+    <li><code>tests/</code> — unit + integration tests cho routing functions</li>
+    <li><code>CLAUDE.md</code> section "Architecture" — human-readable overview</li>
+    <li>Chạy: <code>docker compose up</code> + curl <code>/api/pipeline</code> — trigger real flow</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/">LangGraph official docs</a> — must-read</li>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/tutorials/introduction/">LangGraph Quick Start tutorial</a></li>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/how-tos/human_in_the_loop/">HITL patterns</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2308.08155">AutoGen paper (Wu et al 2023)</a> — competitor comparison</li>
+    <li>🎥 <a href="https://youtu.be/aHCDrAbH_go">LangGraph deep-dive video (Harrison Chase)</a></li>
+    <li>📝 <a href="https://blog.langchain.dev/langgraph-multi-agent-workflows/">Multi-agent workflows blog</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L6_2_multiagent.html">← L6.2</a>
+  <a href="L6_4_checkpointing.html">L6.4 · Checkpointing →</a>
+</div>
+
+</div>
+</body>
+</html>

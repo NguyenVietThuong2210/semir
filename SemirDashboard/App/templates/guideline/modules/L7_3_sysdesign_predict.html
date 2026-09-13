@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L7.3 — System Design Mock 1</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 7 · Module 3</div>
+  <h1>7.3 · System Design Mock 1 — Stock Prediction System</h1>
+  <p class="subtitle">45-min interview walkthrough using PredictStock as base. Requirements → high-level → components → deep-dive. Answer template + evaluator scoring rubric.</p>
+  <div class="level">Level 7 · Interview · ~45 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Structure 45-min system design answer</li>
+  <li>Communicate trade-offs explicitly</li>
+  <li>Handle follow-up questions</li>
+  <li>Score yourself với rubric</li>
+</ul>
+
+<h2>Prompt</h2>
+
+<div class="callout">
+<div class="label">Interviewer</div>
+<p>"Design a stock prediction system cho VN market. 86 tickers, provide UP/DOWN/FLAT predictions với confidence. Users query API real-time cho trading decisions."</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 System Design ML bằng ngôn ngữ đời thường</div>
+<p><strong>Xây nhà cho khách</strong>: Nếu bắt tay vào xây ngay không hỏi khách — sẽ ra căn nhà 5 phòng ngủ trong khi khách chỉ cần 2. Hỏi trước: bao nhiêu người ở? ngân sách? khi nào cần dọn vào? có yêu cầu đặc biệt (thang máy, sân vườn)?</p>
+<p><strong>ML system design</strong>: 5 phút đầu KHÔNG code, chỉ hỏi:</p>
+<ul>
+  <li><strong>SLA</strong>: latency p95 &lt; bao nhiêu? throughput QPS?</li>
+  <li><strong>Accuracy</strong>: target bao nhiêu? có bias/fairness constraint?</li>
+  <li><strong>Cost budget</strong>: $10/ngày hay $10k/ngày?</li>
+  <li><strong>Data</strong>: bao nhiêu, có label, refresh rate?</li>
+  <li><strong>User</strong>: retail hay B2B? Vietnam only hay global?</li>
+</ul>
+<p>Skip step này = design chuông vàng nhưng khách cần chuông giấy.</p>
+</div>
+
+<h2>1. Requirements gathering (5 min)</h2>
+
+<p><strong>Ask clarifying questions before diving into design.</strong></p>
+
+<pre><code>Q: How many users / QPS?
+A: 1000 daily active, peak 50 QPS.
+
+Q: Prediction horizon?
+A: T+1, T+3, T+5 days.
+
+Q: Latency SLA?
+A: p95 &lt; 500ms.
+
+Q: Update frequency?
+A: Predictions refresh daily post-market-close.
+
+Q: What data available?
+A: OHLCV history 5+ years, foreign flow, news headlines.
+
+Q: Real money involved?
+A: Advisory only, not auto-execute. Regulatory: disclaimer required.
+
+Q: Existing infrastructure?
+A: Postgres, some Redis, no GPU cluster yet.
+</code></pre>
+
+<h2>2. High-level design (10 min)</h2>
+
+<pre><code>┌──────────┐       ┌────────────┐       ┌──────────┐
+│  Client  │──────▶│  API       │──────▶│  Model   │
+│  (web)   │       │  Gateway   │       │  Serving │
+└──────────┘       └────────────┘       └──────────┘
+                          │                    ▲
+                          ▼                    │
+                   ┌────────────┐       ┌──────────┐
+                   │  Cache     │       │  Feature │
+                   │  (Redis)   │       │  Store   │
+                   └────────────┘       └──────────┘
+                                              ▲
+                                              │
+       ┌───────────────────────────────┐     │
+       │  Nightly Training Pipeline    │     │
+       │  ┌─────────┐  ┌───────────┐   │     │
+       │  │  Data   │─▶│  Feature  │───┼─────┘
+       │  │  Fetch  │  │  Compute  │   │
+       │  └─────────┘  └───────────┘   │
+       │              ↓                │
+       │        ┌───────────┐          │
+       │        │  Model    │          │
+       │        │  Train    │─┐        │
+       │        └───────────┘ │        │
+       │                      ▼        │
+       │              ┌────────────┐   │
+       │              │  Registry  │   │
+       │              └────────────┘   │
+       └───────────────────────────────┘
+</code></pre>
+
+<h2>3. Data flow (10 min)</h2>
+
+<h3>Nightly (training + prediction)</h3>
+<pre><code>1. 15:35 VN (post-close): fetch new day OHLCV from VCI API
+2. Compute features (RSI, MACD, MA, foreign flow) → feature store
+3. Predict for all 86 tickers with current model
+4. Store predictions + explanations in Postgres (prediction_log)
+5. Weekly: retrain on last 5 years, validate, register if better
+</code></pre>
+
+<h3>Real-time (user query)</h3>
+<pre><code>1. User → GET /api/predict/FPT
+2. API → Redis cache lookup (TTL 5min)
+3. Cache miss → Postgres prediction_log latest
+4. Compose response: signal, confidence, features, disclaimer
+5. Return + populate cache
+
+Latency: ~20ms if cache hit, ~50ms if Postgres read (prediction đã precompute), ~200ms nếu phải compute model trực tiếp (fallback hiếm gặp — prediction thường đã có sẵn từ batch đêm trước)
+</code></pre>
+
+<h2>4. Component deep-dive (15 min)</h2>
+
+<h3>Model architecture (V18-inspired)</h3>
+<ul>
+  <li>2-stage XGBoost, cả 2 stage đều binary: Direction gate (DIR vs FLAT) → UP vs DOWN. Output 3-way UP/DOWN/FLAT là kết quả ghép của 2 stage binary, không có classifier 3-class nào</li>
+  <li>Per-ticker training (86 individual models)</li>
+  <li>Sample weights: class balance + recency decay + label clarity</li>
+  <li>Calibration: Platt (stage 1) + Isotonic (stage 2) — <em>calibration</em> = chỉnh model output score cho khớp xác suất thực tế (model nói "70% tin UP" thì thực tế phải đúng ~70% số lần). Platt = fit 1 đường sigmoid đơn giản (ít data cũng ổn). Isotonic = fit đường bậc thang tự do hơn, chính xác hơn nhưng cần nhiều data hơn để không overfit.</li>
+  <li>Composite confidence: weighted sum of 4 signals</li>
+</ul>
+
+<h3>Feature engineering</h3>
+<ul>
+  <li>~80 features: technical, flow, cross-asset, calendar</li>
+  <li>Compute in <code>features_v18.py::build_v18_features()</code> shared train + inference (no skew)</li>
+  <li>Test: hash input → hash features stable across runs</li>
+</ul>
+
+<h3>Serving</h3>
+<ul>
+  <li>FastAPI + async Postgres</li>
+  <li>TTLCache in-memory (fast) → Redis (shared) → Postgres (source)</li>
+  <li>Docker container, 2 instances behind load balancer</li>
+</ul>
+
+<h3>Training pipeline</h3>
+<ul>
+  <li>Airflow DAG: fetch → features → train per ticker (parallel workers) → validate → register</li>
+  <li>Time-series CV với gap (avoid label leak)</li>
+  <li>Optuna hyperparameter search (50 trials)</li>
+  <li>ECE calibration check (target &lt; 0.02) — <strong>ECE (Expected Calibration Error)</strong>: chia prediction thành bins theo confidence (0-10%, 10-20%...), so % thực tế đúng trong mỗi bin với confidence trung bình bin đó, lấy trung bình chênh lệch (weighted theo số sample). ECE thấp = "model nói bao nhiêu % tin thì đúng bấy nhiêu %" (well-calibrated), không phải chỉ accuracy cao.</li>
+</ul>
+
+<h3>Monitoring</h3>
+<ul>
+  <li>Prediction accuracy vs actual outcome (label after T+5)</li>
+  <li>PSI on top-10 features (drift alert)</li>
+  <li>7-day rolling hit rate per ticker (V20 Slice 5 pattern)</li>
+  <li>Latency, error rate, cost</li>
+</ul>
+
+<h2>5. Scaling considerations (5 min)</h2>
+
+<h3>If 10× traffic</h3>
+<ul>
+  <li>API: add instances behind LB, stateless scale horizontal</li>
+  <li>DB: read replicas + connection pooling</li>
+  <li>Cache: Redis cluster for larger dataset</li>
+  <li>Feature compute: batch offline, cache heavy features</li>
+</ul>
+
+<h3>If 10× tickers (860)</h3>
+<ul>
+  <li>Train pipeline: parallelize across ticker workers</li>
+  <li>Consider group models (sector-level)</li>
+  <li>Storage: partition prediction_log by ticker + date</li>
+</ul>
+
+<h2>5.5 Capacity planning + rate limit (senior detail)</h2>
+
+<h3>Capacity math — 50 QPS peak, p95 &lt; 500ms</h3>
+<pre><code>Assumption:
+  - Cache hit rate 80% (predictions refresh daily, hot tickers repeat)
+  - Cache-hit path: 20ms (Redis + serialize)
+  - Cache-miss path: 50ms (Postgres query + compose — prediction đã precompute,
+    không phải tính lại model; case hiếm phải compute trực tiếp ~200ms không tính vào average này)
+
+Effective per-request latency = 0.8×20 + 0.2×50 = 26ms average
+
+Concurrency requirement (Little's Law):
+  N = throughput × latency = 50 req/s × 0.026s = 1.3 concurrent
+
+→ 1 FastAPI worker (async) đủ handle. Chạy 2 replicas cho HA/rolling deploy.
+</code></pre>
+
+<div class="callout">
+<div class="label">💡 Little's Law bằng ngôn ngữ đời thường</div>
+<p>Quán cafe có khách đến 50 người/giờ (throughput), mỗi người ngồi trung bình 30 phút (latency) → số khách ĐANG NGỒI trong quán cùng lúc (concurrency) = 50 × 0.5h = 25 người. Đó là công thức <code>N = throughput × latency</code> — dùng để tính cần bao nhiêu "chỗ ngồi" (worker/thread/connection) để phục vụ hết khách mà không ai phải đứng chờ ngoài cửa.</p>
+</div>
+
+<pre><code>Postgres load:
+  Cache miss rate 20% × 50 QPS = 10 QPS on Postgres
+  Query: SELECT ... WHERE ticker=? AND date=today LIMIT 1 → 5ms indexed
+  → 10 × 5ms = 50ms/s DB time = 5% of 1 core. Massive headroom.
+
+Redis load:
+  50 QPS × 2 ops (GET + SETNX) = 100 ops/s. Redis handles 100k+ ops/s. Non-issue.
+</code></pre>
+
+<h3>Rate limit — token bucket per user</h3>
+
+<div class="callout">
+<div class="label">💡 Token bucket bằng ngôn ngữ đời thường</div>
+<p>Mỗi user có 1 "xô" chứa tối đa <code>burst</code> token (ví dụ 20). Xô tự động rót thêm token vào với tốc độ <code>rate</code> token/giây (ví dụ 10/s), không vượt quá miệng xô. Mỗi request tiêu 1 token. Xô hết token → request bị từ chối (429) cho tới khi rót thêm. Ưu điểm so với đếm request đơn giản: cho phép burst ngắn hạn (xô đầy sẵn) nhưng vẫn giới hạn tốc độ trung bình dài hạn.</p>
+</div>
+
+<pre><code>from redis import Redis
+
+def rate_limit(user_id, rate=10, burst=20):
+    # 10 req/s sustained, 20 burst
+    key = f"rl:{user_id}"
+    now = time.time()
+    # Lua script atomic: current tokens = min(burst, tokens + rate*elapsed)
+    tokens = redis.eval(TOKEN_BUCKET_LUA, keys=[key],
+                        args=[rate, burst, now, 1])
+    if tokens < 0:
+        raise HTTPException(429, "rate limit exceeded")
+
+# Tier by user plan:
+#   free:   5 req/s, burst 10
+#   pro:    20 req/s, burst 50
+#   enterprise: 200 req/s, custom SLA
+</code></pre>
+
+<h3>3-tier cache — latency budget breakdown</h3>
+<pre><code>Request
+   │
+   ▼
+L1 in-process TTLCache (5s TTL)  ── hit 50% ──► return, 0.1ms
+   │ miss (50%)
+   ▼
+L2 Redis (5min TTL)              ── hit 30% ──► return, 2ms
+   │ miss (20%)
+   ▼
+L3 Postgres (source of truth)    ── always hits, 50ms ──► return + backfill L1/L2
+</code></pre>
+<table>
+<tr><th>Tier</th><th>Hit rate</th><th>Latency</th><th>Contribution</th></tr>
+<tr><td>L1 in-process TTLCache (5s TTL)</td><td>50%</td><td>0.1ms</td><td>0.05ms</td></tr>
+<tr><td>L2 Redis (5min TTL)</td><td>30%</td><td>2ms</td><td>0.6ms</td></tr>
+<tr><td>L3 Postgres (source)</td><td>20%</td><td>50ms</td><td>10ms</td></tr>
+<tr><td colspan="3"><strong>Effective average</strong></td><td><strong>~11ms</strong></td></tr>
+</table>
+
+<h2>6. Failure modes</h2>
+
+<div class="callout warn">
+<div class="label">5 concerns interviewer expect</div>
+<ol>
+  <li><strong>Silent failure</strong>: model swap serves wrong version. Mitigation: version stamp + smoke test + consistency cron (V19.5 lesson)</li>
+  <li><strong>Data quality</strong>: VCI API return partial data → bad features. Mitigation: schema validation + freshness check</li>
+  <li><strong>Retrain drift</strong>: new model worse than old. Mitigation: A/B canary + rollback</li>
+  <li><strong>Compliance</strong>: prediction perceived as investment advice. Mitigation: disclaimer + advisory-only role</li>
+  <li><strong>Regulatory</strong>: VN SBV data restrictions. Mitigation: source VCI (licensed provider), audit trail</li>
+</ol>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh Architecture options cho Stock Prediction System (đọc SAU sections 2-6)</div>
+
+<h4>3 architecture patterns compare</h4>
+<table>
+<tr><th></th><th>Batch daily</th><th>Real-time</th><th>Hybrid batch+real-time</th></tr>
+<tr><td><strong>Cách</strong></td><td>Compute predictions overnight cho tất cả tickers</td><td>Predict on-demand khi user query</td><td>Batch precompute + real-time refresh khi trading</td></tr>
+<tr><td><strong>Latency</strong></td><td>&lt;10ms (cache lookup)</td><td>200-500ms (model inference)</td><td>&lt;50ms hybrid</td></tr>
+<tr><td><strong>Cost</strong></td><td>Rẻ (1× compute/day)</td><td>Đắt (per query)</td><td>Trung bình</td></tr>
+<tr><td><strong>Freshness</strong></td><td>Stale sau close</td><td>Real-time luôn fresh</td><td>Fresh trong trading hours</td></tr>
+<tr><td><strong>Complexity</strong></td><td>Đơn giản</td><td>Cao</td><td>Trung bình</td></tr>
+<tr><td><strong>Best for</strong></td><td>Daily reports (V18 skill)</td><td>Trading bot real-time</td><td>⭐ Trader-facing app (V18 hiện tại)</td></tr>
+</table>
+
+<h4>Storage layer options</h4>
+<table>
+<tr><th></th><th>Postgres (V18 dùng)</th><th>TimescaleDB</th><th>ClickHouse</th><th>Redis</th></tr>
+<tr><td><strong>Type</strong></td><td>Relational</td><td>Postgres extension time-series</td><td>Columnar analytics</td><td>Key-value in-mem</td></tr>
+<tr><td><strong>OHLCV storage</strong></td><td>OK (index by date+ticker)</td><td>⭐ Native time-series</td><td>⭐ Analytics fast</td><td>Cache only</td></tr>
+<tr><td><strong>Query speed</strong></td><td>Good</td><td>Very good</td><td>Excellent</td><td>Fastest (single key)</td></tr>
+<tr><td><strong>Cost</strong></td><td>Standard</td><td>Similar to PG</td><td>Standalone</td><td>Memory cost</td></tr>
+<tr><td><strong>V18 dùng vì</strong></td><td>Simple, đủ scale hiện tại, dùng chung với business data</td><td colspan="3">Nếu scale lên 10k+ tickers → TimescaleDB</td></tr>
+</table>
+
+<h4>Model serving compare</h4>
+<table>
+<tr><th></th><th>In-process (V18 dùng)</th><th>gRPC service</th><th>KServe</th><th>Triton</th></tr>
+<tr><td><strong>Cách</strong></td><td>Load model vào FastAPI process</td><td>Model service riêng</td><td>K8s ML serving</td><td>NVIDIA model server</td></tr>
+<tr><td><strong>Latency</strong></td><td>Fastest (no network)</td><td>+5-10ms network</td><td>+10-20ms</td><td>Optimized cho GPU</td></tr>
+<tr><td><strong>Scale</strong></td><td>Vertical (bigger box)</td><td>Horizontal (multiple services)</td><td>Auto-scale K8s</td><td>Multi-model GPU</td></tr>
+<tr><td><strong>Best for</strong></td><td>Small model, low QPS</td><td>Multiple clients (Python + JS)</td><td>Enterprise ML</td><td>Deep learning inference</td></tr>
+</table>
+
+<h4>V18 architecture decision retrospective</h4>
+<p><strong>V18 chọn</strong>: Hybrid batch + real-time + Postgres + In-process serving. Vì:</p>
+<ol>
+<li>Universe 86 tickers small → in-process serving đủ.</li>
+<li>Trading hours daily → hybrid batch precompute + real-time refresh work well.</li>
+<li>Business data + ML data cùng Postgres → operational simplicity.</li>
+<li>XGBoost model load rất nhanh (~200ms) → không cần persistent serving.</li>
+</ol>
+
+<p><strong>Khi cần scale lên</strong>: 10k tickers → TimescaleDB. Multi-language clients → gRPC service. GPU-based NN → KServe/Triton.</p>
+
+<p><strong>Insight quan trọng</strong>: System design không phải "chọn best tech". Là "chọn tech phù hợp với constraints hiện tại + roadmap 12 tháng". Enterprise architect chọn Kubernetes cho 5 dev + 100 users = over-engineer.</p>
+</div>
+
+<h2>6.5 Anti-patterns (say aloud để score senior)</h2>
+
+<div class="callout danger">
+<ol>
+  <li><strong>Feature skew train vs serve</strong>: compute RSI khác nhau ở train pipeline vs API → prediction drift. Rule: shared <code>features_v18.py::build_v18_features()</code>, hash-checked cả 2 side.</li>
+  <li><strong>Model version implicit</strong>: "latest.pkl" symlink → không rollback được. Rule: immutable versioned dirs <code>models/v20_20260701/</code>.</li>
+  <li><strong>No calibration monitor</strong>: model confidence 0.9 nhưng actual accuracy 0.6 → user tin nhầm. Track ECE weekly.</li>
+  <li><strong>Cache invalidate on write not on model swap</strong>: swap model xong cache vẫn serve prediction cũ → mismatch signal vs displayed features (V19.5 lesson).</li>
+  <li><strong>No graceful degrade</strong>: DB down → 500 error. Rule: 3-tier fallback (cache → heuristic → "NO SIGNAL").</li>
+</ol>
+</div>
+
+<h2>7. Follow-up questions</h2>
+
+<pre><code>Q: "Model accuracy 60% - deploy or not?"
+A: Depends on baseline (3-class random = 42%) + business ROI.
+   Skill score = (0.60-0.42)/(1-0.42) = 0.31 → có edge.
+   If PnL simulation positive after cost → yes.
+
+Q: "How measure success post-deploy?"
+A: (1) Prediction hit rate (rolling 30d) vs baseline.
+   (2) BUY signal PnL simulation (paper trade).
+   (3) Calibration ECE monitoring.
+   (4) User engagement (view rate, session length).
+
+Q: "V18 fails, degrade gracefully?"
+A: 3 fallback tiers: (1) Cached prediction (up to 24h old with WARN),
+   (2) Baseline heuristic (RSI + MA rule), (3) Return "NO SIGNAL" — user knows model unavailable.
+</code></pre>
+
+<h2>8. Scoring rubric (self-eval)</h2>
+
+<table>
+<tr><th>Aspect</th><th>1 (poor)</th><th>3 (good)</th><th>5 (senior)</th></tr>
+<tr><td>Clarify requirements</td><td>Skip questions</td><td>Ask 3-4</td><td>Ask 6+ including edge cases</td></tr>
+<tr><td>High-level design</td><td>1 box</td><td>Standard blocks</td><td>Data + serving + monitoring separate</td></tr>
+<tr><td>Trade-offs</td><td>1 option</td><td>Compare 2</td><td>3 options + rationale</td></tr>
+<tr><td>Scale reasoning</td><td>Skip</td><td>Numbers</td><td>Bottleneck analysis</td></tr>
+<tr><td>Failure modes</td><td>1-2</td><td>3-4</td><td>5+ với mitigations</td></tr>
+<tr><td>Real-world hooks</td><td>Generic</td><td>Some concrete</td><td>Cite lessons (V19.5-style)</td></tr>
+</table>
+
+<div class="qa-gate">
+<h3>✅ Practice</h3>
+<p>Chọn 1 use case khác, tự practice 45-min:</p>
+<ul>
+  <li>Design a fraud detection system cho e-commerce</li>
+  <li>Design a recommendation system cho Momo</li>
+  <li>Design a content moderation cho Zalo</li>
+</ul>
+<p>Recording 15-45-45 (5 clarify, 10 high-level, 15 deep-dive, 5 scale, 5 failure). Review + iterate.</p>
+</div>
+
+<div class="nav-bottom">
+  <a href="L7_2_deployment.html">← L7.2</a>
+  <a href="L7_4_sysdesign_agent.html">L7.4 · System Design 2 →</a>
+</div>
+
+</div>
+</body>
+</html>

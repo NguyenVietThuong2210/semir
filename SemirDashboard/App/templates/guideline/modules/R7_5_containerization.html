@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R7.5 · Containerization — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Infrastructure · Điểm 5/6</div>
+  <h1>R7.5 · Containerization</h1>
+  <p class="subtitle">Audit trực tiếp <code>backend/Dockerfile</code> thật của dự án theo chuẩn 2026 — 4 điểm đúng, 4 điểm thiếu, xếp theo thứ tự chi phí/lợi ích.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>[Dễ]</strong> Đọc hiểu 1 Dockerfile thật, nhận diện các dòng làm đúng best-practice.</li>
+<li><strong>[Trung bình]</strong> Liệt kê 4 thiếu sót so với chuẩn 2026: multi-stage build, non-root user, worker config, healthcheck.</li>
+<li><strong>[Khó]</strong> Xếp thứ tự ưu tiên fix theo chi phí/lợi ích — không phải fix tất cả cùng lúc.</li>
+<li><strong>[Trung bình]</strong> Phân biệt distroless/Chainguard với <code>slim</code> image, và đánh đổi bảo mật-lấy-tiện-debug đi kèm.</li>
+<li><strong>[Trung bình→Khó]</strong> Phân biệt image scanning (Trivy/Grype) với SAST/SCA đã học ở <code>R7.1</code> — quét lớp nào, bỏ sót gì nếu thiếu.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Module ngắn, thực hành — không có khái niệm mới cần học trước, chỉ cần đọc hiểu Dockerfile cơ bản.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Container image giống 1 vali đóng gói cho chuyến đi. Multi-stage build giống việc KHÔNG mang theo cả bộ dụng cụ may đồ (compiler) sau khi đã may xong quần áo (build artifact) — chỉ mang quần áo đã may xong. Non-root user giống việc không đưa chìa khóa nhà (root access) cho hành lý — nếu vali bị mất/mở trộm (container bị compromise), kẻ trộm không có toàn quyền.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] Dockerfile thật của dự án — đọc trước khi đánh giá</h3>
+<pre><code>FROM python:3.12-slim
+WORKDIR /app
+RUN apt-get update \
+    &amp;&amp; apt-get install -y --no-install-recommends curl libgomp1 \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+RUN mkdir -p models
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]</code></pre>
+
+<h3>2. [Trung bình] Điểm ĐÚNG — theo chuẩn 2026</h3>
+<ul>
+<li><code>python:3.12-slim</code> — base image nhỏ, không phải full Ubuntu.</li>
+<li><code>--no-install-recommends</code> + xoá <code>/var/lib/apt/lists/*</code> — giảm layer size.</li>
+<li><code>COPY requirements.txt</code> TRƯỚC <code>COPY . .</code> — tận dụng Docker layer caching (sửa code không phải cài lại dependency).</li>
+<li><code>libgomp1</code> cài đúng vì XGBoost cần OpenMP runtime.</li>
+</ul>
+
+<h3>3. [Trung bình] Điểm THIẾU — so với chuẩn 2026</h3>
+<ol>
+<li>Không có <strong>multi-stage build</strong> — build tool (pip cache, compiler nếu cần) vẫn nằm trong image cuối, làm image to hơn cần thiết.</li>
+<li>Chạy <strong>root user</strong> (không có <code>USER appuser</code>) — rủi ro bảo mật nếu container bị compromise.</li>
+<li><code>--workers 1</code> — đúng cho dev/staging nhưng production thật cần nhiều worker hoặc 1 process manager (gunicorn+uvicorn workers) để tận dụng multi-core.</li>
+<li>Không có <code>HEALTHCHECK</code> trong Dockerfile (dù <code>docker-compose.yml</code> có định nghĩa healthcheck ở tầng compose) — vẫn nên có ở tầng image để dùng được ngoài Compose, VD trên K8s.</li>
+</ol>
+
+<h3>4. [Khó] Multi-stage build — vì sao quan trọng cho ML image, nhưng chưa cấp bách ở đây</h3>
+<p>ML/LLM image thường cần compiler (build numpy/scipy từ source nếu không có wheel sẵn) hoặc pip cache lớn. Multi-stage build tách "giai đoạn build" (có compiler, cache) và "giai đoạn runtime" (chỉ copy artifact đã build xong) — giảm image cuối từ hàng GB xuống có thể vài trăm MB, giảm attack surface, giảm thời gian pull image khi scale.</p>
+
+<h3>5. [Trung bình] Distroless/Chainguard — đi xa hơn <code>slim</code>, bỏ luôn cả package manager</h3>
+<p><code>python:3.12-slim</code> (đang dùng, mục 1-2) đã là bước đầu đúng hướng — nhưng vẫn còn nguyên hệ điều hành Debian tối giản (shell, <code>apt</code>, coreutils). Trào lưu 2026 đi xa hơn: <strong>distroless</strong> — image chỉ chứa đúng ứng dụng + runtime dependency thật sự cần, KHÔNG có shell/package manager/debug tool. Chainguard là nhà cung cấp tiêu biểu: build lại từ nguồn MỖI ĐÊM để vá lỗ hổng mới nhất, công bố &gt;2,000 image "zero known CVE" kèm SBOM + ký Sigstore sẵn.</p>
+<table>
+<tr><th></th><th><code>python:3.12-slim</code> (đang dùng)</th><th>Distroless/Chainguard</th></tr>
+<tr><td>Có shell (<code>/bin/sh</code>)?</td><td>Có</td><td>Không (bản production; bản <code>-dev</code> có shell để debug, không dùng cho production)</td></tr>
+<tr><td>Có package manager (<code>apt</code>)?</td><td>Có</td><td>Không</td></tr>
+<tr><td>Attack surface nếu container bị compromise</td><td>Kẻ tấn công có shell → dò tiếp được hệ thống</td><td>Không có shell để chạy lệnh tiếp — giới hạn mạnh hành động sau khi khai thác</td></tr>
+<tr><td>Debug trực tiếp trong container (<code>docker exec ... sh</code>)</td><td>Được</td><td>KHÔNG được ở bản production — phải debug qua log/bản <code>-dev</code> riêng</td></tr>
+<tr><td>Đánh đổi</td><td>Dễ debug, quen thuộc</td><td>Bảo mật tốt hơn hẳn, nhưng quy trình debug phải đổi thói quen (không còn <code>exec</code> vào xem trực tiếp)</td></tr>
+</table>
+<p><strong>Không phải "luôn luôn nên đổi sang distroless"</strong> — đây là đánh đổi bảo mật-lấy-tiện-debug thật, không phải nâng cấp miễn phí: team quen <code>docker exec</code> để debug nhanh sự cố production sẽ mất thói quen đó, cần đầu tư logging/observability tốt hơn để bù lại.</p>
+
+<h3>6. [Trung bình] Image scanning trong CI — Trivy/Grype quét chính ARTIFACT đã build, khác SAST/SCA quét SOURCE</h3>
+<p>Dễ nhầm với security gate đã học ở <code>R7_1_cicd.html §5</code> (SAST quét source code, SCA quét file khai báo dependency như <code>requirements.txt</code>) — <strong>image scanning</strong> quét lớp thứ 3: chính IMAGE ĐÃ BUILD, bao gồm cả gói hệ điều hành nền (Debian packages trong <code>python:3.12-slim</code>) mà SCA không nhìn thấy vì chúng không nằm trong <code>requirements.txt</code>.</p>
+<table>
+<tr><th>Công cụ</th><th>Phạm vi quét</th><th>Đặc điểm 2026</th></tr>
+<tr><td><strong>Trivy</strong></td><td>Image, filesystem, Git repo, IaC, Kubernetes, secret, license — tất cả trong 1 binary</td><td>All-in-one, tự sinh SBOM và quét lỗ hổng cùng lúc — phù hợp muốn 1 công cụ duy nhất</td></tr>
+<tr><td><strong>Grype + Syft</strong></td><td>Image/filesystem — chuyên sâu, ghép cặp với Syft để sinh SBOM riêng</td><td>Modular hơn — SBOM từ Syft dùng lại được cho scanner khác; khớp version chính xác, ít false-positive hơn ở edge-case package</td></tr>
+</table>
+<p><strong>3 lớp quét đầy đủ của 1 pipeline CI/CD trưởng thành</strong> (nối lại <code>R7_1 §5</code>): SAST quét LOGIC trong source → SCA quét DEPENDENCY khai báo → Image scanning quét ARTIFACT CUỐI CÙNG (bao gồm cả OS packages ẩn mà 2 lớp trên không thấy). Bỏ lớp thứ 3 nghĩa là 1 CVE trong <code>libgomp1</code> hay chính base image Debian (không nằm trong <code>requirements.txt</code> nên SCA bỏ sót) có thể lọt qua toàn bộ pipeline.</p>
+
+<h3>7. [Trung bình] BuildKit cache mount — tăng tốc build lặp lại, khác hẳn Docker layer cache (mục 2)</h3>
+<p>Layer caching (đã đúng ở mục 2 — <code>COPY requirements.txt</code> trước <code>COPY . .</code>) chỉ tái dùng được TOÀN BỘ layer nếu <code>requirements.txt</code> không đổi 1 ký tự nào. BuildKit cache mount đi xa hơn: giữ lại cache CỦA CHÍNH pip (thư mục <code>~/.cache/pip</code>) XUYÊN QUA nhiều lần build khác nhau, kể cả khi <code>requirements.txt</code> CÓ đổi — chỉ tải lại đúng package mới/đổi version, không tải lại từ đầu toàn bộ dependency:</p>
+<pre><code># syntax=docker/dockerfile:1
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+# --mount=type=cache: thư mục /root/.cache/pip được BuildKit giữ lại
+# giữa các lần build, không bị xoá khi container/layer kết thúc như cache thường</code></pre>
+<p>Lợi ích rõ nhất khi CI build lại image nhiều lần/ngày (mỗi PR 1 lần) và dependency ML nặng (numpy/scipy/xgboost có wheel lớn) — không phải khi build hiếm (1 lần/tuần), lúc đó chi phí thiết lập cache mount không bù lại được nhiều.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Fix rẻ nhất, lợi ích rõ nhất — thêm non-root user (chỉ 2 dòng):</p>
+<pre><code># Thêm vào Dockerfile, sau khi cài dependency:
+RUN useradd --create-home appuser
+USER appuser
+# Toàn bộ phần còn lại của Dockerfile giữ nguyên</code></pre>
+
+<h3>Ví dụ mở rộng — image scanning thêm vào CI, dùng đúng cấu trúc song song đã học ở <code>R7.1</code></h3>
+<pre><code># .github/workflows/ci.yml — thêm 1 job mới, KHÔNG nối đuôi job backend (đúng nguyên tắc R7.1 §5)
+  image-scan:
+    name: Container image scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (không push)
+        run: docker build -t predictor-api:ci ./backend
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: predictor-api:ci
+          severity: CRITICAL,HIGH   # đúng ngưỡng đã khuyến nghị ở R7.1 §5 — bỏ qua INFO/LOW
+          exit-code: "1"            # fail job nếu có CVE mức chặn</code></pre>
+
+<h3>Ví dụ mở rộng — ước lượng minh hoạ tác động multi-stage build lên kích thước image</h3>
+<p><strong>Số liệu dưới đây là ƯỚC LƯỢNG MINH HOẠ cơ chế, không phải đo thật trên image <code>predictor</code></strong> (cần chạy <code>docker images</code> thật để có số chính xác) — nhưng tỷ lệ tương đối phản ánh đúng cơ chế đã học ở mục 4:</p>
+<pre><code>Base image hiện tại (python:3.12-slim, KHÔNG multi-stage):
+  python:3.12-slim base                     ≈ 130 MB
+  + apt packages (curl, libgomp1)           ≈  15 MB
+  + pip cache tạm thời trong layer build    ≈  80 MB (nếu không dùng --no-cache-dir đúng cách)
+  + toàn bộ site-packages (numpy/xgboost/fastapi...) ≈ 350 MB
+  + source code + models/                   ≈  20 MB
+  Tổng ước lượng: ≈ 595 MB
+
+Multi-stage (giai đoạn build có pip cache + compiler nếu cần, giai đoạn runtime
+CHỈ copy site-packages đã cài xong + source, không mang theo cache/compiler):
+  python:3.12-slim base (runtime stage)     ≈ 130 MB
+  + apt packages runtime-only (libgomp1)    ≈   5 MB (không cần curl nếu chỉ dùng cho healthcheck dev)
+  + site-packages COPY từ build stage       ≈ 350 MB (không đổi — vẫn cần đúng lượng này để chạy)
+  + source code + models/                   ≈  20 MB
+  Tổng ước lượng: ≈ 505 MB
+
+→ Giảm ước lượng ≈ 90 MB (~15%) — ít ấn tượng hơn con số "hàng GB xuống vài trăm MB"
+  hay nghe trong tài liệu tổng quát, vì Dockerfile hiện tại CHƯA build từ source (không
+  compiler nặng) — đúng nhận định ở mục 4: lợi ích multi-stage lớn nhất khi có bước
+  compile/cache lớn bị bỏ lại; với <code>predictor</code> (chỉ <code>pip install</code> wheel có sẵn),
+  lợi ích khiêm tốn hơn nhiều so với ML image cần tự compile từ source.</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Fix</th><th>Chi phí</th><th>Lợi ích</th><th>Ưu tiên</th></tr>
+<tr><td>Thêm <code>USER appuser</code> (non-root)</td><td>Rất thấp (2 dòng)</td><td>Bảo mật rõ ràng</td><td>1 — làm ngay</td></tr>
+<tr><td>Thêm <code>HEALTHCHECK</code> vào Dockerfile</td><td>Thấp</td><td>Nhất quán khi chạy ngoài Compose (K8s)</td><td>2 — làm sớm</td></tr>
+<tr><td>Multi-stage build</td><td>Trung bình (cần test lại build)</td><td>Giảm image size, giảm attack surface</td><td>3 — chưa cấp bách (image hiện đã đủ nhỏ)</td></tr>
+<tr><td>Đổi <code>--workers 1</code> → nhiều worker</td><td>Thấp, nhưng cần đo tải thật</td><td>Tận dụng multi-core khi traffic tăng</td><td>4 — làm khi có nhu cầu tải thật</td></tr>
+<tr><td>Thêm image scanning (Trivy) vào CI</td><td>Thấp (1 GitHub Action)</td><td>Bắt CVE ở OS packages mà SCA (<code>R7.1</code>) bỏ sót</td><td>2 — làm sớm, cùng đợt với security gate <code>R7.1</code></td></tr>
+<tr><td>Đổi sang distroless/Chainguard base image</td><td>Trung bình-cao (đổi quy trình debug, test lại kỹ)</td><td>Bảo mật cao nhất (zero-CVE, không shell để khai thác tiếp)</td><td>5 — cân nhắc khi đã trưởng thành observability, chưa cấp bách</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Image hiện tại của <code>predictor</code> (dùng <code>python:3.12-slim</code> + <code>pip install</code> trực tiếp, không compile source) đã đủ nhỏ — chưa cấp bách cần multi-stage build. Cải thiện đáng làm nhất theo thứ tự ưu tiên: (1) thêm <code>USER appuser</code> (non-root) — chi phí thấp, lợi ích bảo mật rõ; (2) thêm <code>HEALTHCHECK</code> vào Dockerfile (không chỉ compose) để nhất quán nếu sau này chạy ngoài Compose.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Bỏ qua non-root user vì "chạy được là được"</strong> — rủi ro bảo mật thật nếu container bị compromise, chi phí sửa gần như bằng 0.</p>
+<p><strong>2. Làm multi-stage build trước khi cần</strong> — nếu image đã đủ nhỏ (không compile từ source), lợi ích chưa tương xứng với công sức test lại build pipeline.</p>
+<p><strong>3. Tăng số worker mà không đo tải thật trước</strong> — thêm worker không đúng lúc có thể gây tranh chấp tài nguyên (CPU/memory) thay vì tăng throughput.</p>
+<p><strong>4. Đổi sang distroless "cho chắc" mà chưa có kế hoạch debug thay thế</strong> — mất khả năng <code>docker exec ... sh</code> vào container production; nếu chưa có logging/observability đủ tốt, sự cố production sẽ khó điều tra hơn hẳn, đánh đổi không tương xứng ở giai đoạn team chưa sẵn sàng.</p>
+<p><strong>5. Coi image scanning (Trivy/Grype) là dư thừa vì "đã có SCA rồi"</strong> — SCA chỉ nhìn thấy dependency khai báo trong <code>requirements.txt</code>/<code>package-lock.json</code>; CVE trong package hệ điều hành nền (base image) chỉ image scanning mới bắt được.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Đọc <code>backend/Dockerfile</code> thật và liệt kê đúng 4 điểm đúng + 4 điểm thiếu.</li>
+<li>Xếp đúng thứ tự ưu tiên fix theo chi phí/lợi ích (đã mở rộng thành 5 mục, gồm image scanning và distroless).</li>
+<li>Giải thích được vì sao multi-stage build quan trọng cho ML image nói chung, nhưng chưa cấp bách cho <code>predictor</code> cụ thể.</li>
+<li>Viết được 2 dòng code thêm non-root user vào Dockerfile.</li>
+<li>Giải thích được đánh đổi bảo mật-lấy-tiện-debug của distroless/Chainguard, không coi đây là nâng cấp miễn phí.</li>
+<li>Phân biệt đúng 3 lớp quét bảo mật CI/CD (SAST nguồn / SCA dependency khai báo / image scanning artifact cuối) và biết lớp nào bắt được CVE mà 2 lớp còn lại bỏ sót.</li>
+<li>Giải thích được BuildKit cache mount khác Docker layer cache thường ở điểm nào, và khi nào lợi ích đủ lớn để đáng dùng.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R7_4_model_routing.html">← R7.4 · Model Routing</a>
+  <a href="R7_6_llm_deployment.html">R7.6 · LLM Deployment →</a>
+</div>
+
+</div>
+</body>
+</html>

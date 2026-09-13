@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L1.2 — Feature Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 1 · Module 2</div>
+  <h1>1.2 · Feature Engineering</h1>
+  <p class="subtitle">Cách máy tính "nhìn" cổ phiếu: từ OHLCV thô → 79 features V18. Implementation chi tiết cho 5 features quan trọng nhất.</p>
+  <div class="level">Level 1 · Foundations · ~30 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Hiểu vì sao feature engineering là "80% công việc ML"</li>
+  <li>Implement 5 features cốt lõi từ đầu (không dùng library): RSI, MACD, MA, BB, Volume ratio</li>
+  <li>Phân biệt <strong>leaking features</strong> (sai) vs <strong>rolling features</strong> (đúng)</li>
+  <li>Giải thích V20 vì sao thêm 5 nhóm mới (regime-vol, cross-sectional, liquidity, correlation, momentum-div)</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Feature engineering bằng ngôn ngữ đời thường</div>
+<p><strong>Nấu bún bò Huế</strong>: Cùng nồi + thịt, đầu bếp giỏi dùng đủ gia vị (mắm ruốc, sả, ớt, sa tế, huyết heo) → xuất sắc. Đầu bếp chỉ có muối + tiêu → lỏng. <em>Feature = gia vị</em>. Model là nồi, data là thịt.</p>
+<p><strong>V18</strong>: Chỉ feed close price = đầu bếp thiếu gia vị. Thêm RSI (áp lực mua/bán), MACD (xu hướng), volume z-score (bất thường), foreign flow (dòng tiền ngoại) → model "nếm" thị trường ở nhiều góc.</p>
+</div>
+
+<h2>1. Vì sao features quan trọng?</h2>
+
+<div class="callout">
+  <div class="label">Nguyên tắc vàng</div>
+  <p><strong>"Garbage in, garbage out"</strong> — model không tự tạo signal. Nếu features không chứa thông tin dự đoán, model không thể học ra dù XGBoost siêu mạnh. Trong công nghiệp ML, feature engineering thường chiếm <strong>70-80% thời gian</strong>, model architecture chỉ 20%.</p>
+</div>
+
+<p>Ví dụ: cho model 3 features {open, high, low, close, volume}. Model chỉ thấy 5 số. Nhưng senior trader "thấy" mỗi ngày:</p>
+<ul>
+  <li>Momentum: giá đang tăng/giảm bao nhiều ngày liên tiếp</li>
+  <li>Volatility regime: biến động mấy tuần gần đây so với trung bình 60 phiên</li>
+  <li>Overbought/oversold: RSI 30/70 threshold</li>
+  <li>Trend structure: giá vs MA20/50/200</li>
+  <li>Support/resistance: giá gần đáy cũ / đỉnh cũ nào</li>
+</ul>
+<p>Feature engineering = <strong>encode kiến thức chuyên gia thành số cho model</strong>.</p>
+
+<h2>2. 5 features cốt lõi — implement từ đầu</h2>
+
+<h3>2.1 Moving Average (MA)</h3>
+<p>Trung bình cộng của n phiên gần nhất. Đơn giản nhưng cực mạnh — smoothing noise, xác định trend.</p>
+<pre><code>def ma(close: pd.Series, window: int) -> pd.Series:
+    return close.rolling(window=window, min_periods=window).mean()
+
+# Ví dụ:
+ma20 = ma(df['close'], 20)     # MA ngắn hạn
+ma50 = ma(df['close'], 50)     # MA trung hạn
+ma200 = ma(df['close'], 200)   # MA dài hạn
+
+# Feature derived:
+above_ma20 = (df['close'] > ma20).astype(int)   # 1 nếu trên MA20
+ma20_pct = (df['close'] - ma20) / ma20 * 100    # khoảng cách %
+golden_cross = ((ma20 > ma50) & (ma20.shift(1) &lt;= ma50.shift(1))).astype(int)
+</code></pre>
+
+<h3>2.2 Relative Strength Index (RSI)</h3>
+<p>Đo động lượng, range 0-100. Giá trị > 70 = quá mua, < 30 = quá bán. Chuẩn 14 phiên.</p>
+<pre><code>def rsi(close: pd.Series, window: int = 14) -> pd.Series:
+    delta = close.diff()
+    gain = delta.where(delta > 0, 0).rolling(window).mean()
+    loss = -delta.where(delta &lt; 0, 0).rolling(window).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức RSI = 100 − 100/(1+RS)?</div>
+<p><strong>Câu hỏi</strong>: Tại sao RSI có dạng lạ như vậy, không phải chỉ là "trung bình gain / trung bình loss"?</p>
+
+<p><strong>Bước 1 — Ý tưởng thô</strong>: J. Welles Wilder (1978) muốn 1 con số đo "sức mua vs sức bán". Idea đầu tiên:</p>
+<pre><code>RS = avg_gain / avg_loss    # Relative Strength
+</code></pre>
+<ul>
+<li>Nếu chỉ tăng: avg_loss = 0 → RS = ∞. Xấu (không bounded).</li>
+<li>Nếu chỉ giảm: avg_gain = 0 → RS = 0.</li>
+<li>Cân bằng: RS = 1.</li>
+</ul>
+
+<p><strong>Bước 2 — Vấn đề: RS không bounded</strong>. Trader muốn 1 con số [0, 100] dễ đọc (30 = oversold, 70 = overbought). Cần transform.</p>
+
+<p><strong>Bước 3 — Transform RS → [0, 100]</strong>:</p>
+<pre><code>RSI = 100 × RS / (1 + RS)     # đưa về [0, 100)
+    = 100 × 1 / (1/RS + 1)    # đại số biến đổi
+    = 100 − 100 / (1 + RS)    # dạng phổ biến
+</code></pre>
+<p>Verify các case:</p>
+<ul>
+<li>Chỉ tăng: RS → ∞ → RSI → 100 (quá mua tuyệt đối).</li>
+<li>Chỉ giảm: RS = 0 → RSI = 0 (quá bán tuyệt đối).</li>
+<li>Cân bằng: RS = 1 → RSI = 50.</li>
+</ul>
+
+<p><strong>Intuition</strong>: RSI = "phần trăm energy đang là mua" trong window 14 phiên. RSI 70 = 70% energy mua vs 30% bán → có thể đảo chiều (mean-revert). Bounded [0,100] là why trader tin dùng.</p>
+</div>
+
+<h3>2.3 MACD (Moving Average Convergence Divergence)</h3>
+<p>Trend + momentum trong 1 indicator. 3 dòng: MACD, Signal, Histogram.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 EMA (Exponential Moving Average) khác MA thường thế nào?</div>
+<p>MA (mục 2.1) = trung bình cộng đơn giản — 20 phiên gần nhất <em>trọng số bằng nhau</em>. EMA cho phiên <strong>gần đây trọng số cao hơn</strong> phiên xa, giảm dần theo cấp số nhân (exponential decay) — giống ý tưởng recency weight ở L1.5.</p>
+<pre><code>EMA_t = α · close_t + (1 - α) · EMA_{t-1}     với α = 2/(span+1)
+
+# span=12 → α = 2/13 ≈ 0.154
+# Phiên hôm nay đóng góp 15.4%, phiên hôm qua 15.4%×(1-0.154)=13%, ... giảm dần</code></pre>
+<p><strong>Ví dụ 3 phiên</strong>: close = [10, 11, 12], span=2 (α=2/3=0.667).</p>
+<pre><code>EMA_1 = 10                                   (khởi tạo = giá đầu)
+EMA_2 = 0.667×11 + 0.333×10 = 10.67
+EMA_3 = 0.667×12 + 0.333×10.67 = 11.56       ← lệch gần giá mới nhất (12) hơn MA thường (11)</code></pre>
+<p><strong>Vì sao MACD dùng EMA chứ không MA?</strong> EMA phản ứng nhanh hơn với thay đổi giá gần đây (không "trễ" như MA cộng đều), phù hợp bắt tín hiệu momentum/trend đổi chiều sớm hơn. Đánh đổi: EMA nhạy noise hơn MA.</p>
+</div>
+
+<pre><code>def macd(close, fast=12, slow=26, sig=9):
+    ema_fast = close.ewm(span=fast).mean()
+    ema_slow = close.ewm(span=slow).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=sig).mean()
+    hist = macd_line - signal_line
+    return macd_line, signal_line, hist
+
+# Feature: MACD crossover
+macd_bullish = ((macd_line > signal_line) & (macd_line.shift(1) &lt;= signal_line.shift(1))).astype(int)
+</code></pre>
+
+<h3>2.4 Bollinger Bands (BB)</h3>
+<p>MA20 ± 2 standard deviation. Encode volatility + mean-reversion.</p>
+<pre><code>def bollinger(close, window=20, std=2):
+    mid = close.rolling(window).mean()
+    band = close.rolling(window).std() * std
+    upper = mid + band
+    lower = mid - band
+    return mid, upper, lower
+
+# Feature: position trong band (0-1)
+bb_position = (close - lower) / (upper - lower)   # 0 = touch lower, 1 = touch upper
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức Bollinger Band = MA ± 2σ?</div>
+<p><strong>Câu hỏi</strong>: Tại sao ± 2 standard deviation, không phải 1σ hay 3σ?</p>
+<p><strong>Bước 1 — Nhắc lại thống kê</strong>: Nếu data phân phối chuẩn (Gaussian), khoảng [mean − 2σ, mean + 2σ] chứa ~95% quan sát (rule 68-95-99.7).</p>
+<p><strong>Bước 2 — Áp dụng vào giá</strong>: Nếu giá dao động bình thường quanh MA20, thì ~95% ngày sẽ trong band ± 2σ. Ngày nào <em>chọc thủng band</em> → outlier → tín hiệu mean-reversion (giá sắp về MA) hoặc breakout (trend mạnh).</p>
+<p><strong>Bước 3 — Vì sao không phải 3σ?</strong> 3σ = 99.7% → chỉ 3 signal / 1000 ngày → quá ít event. 1σ = 68% → 320 signal / 1000 → quá nhiều noise. 2σ là sweet spot: signal đủ hiếm để đáng chú ý, nhưng đủ nhiều để backtest.</p>
+<p><strong>Caveat</strong>: Giá cổ phiếu KHÔNG thực sự Gaussian (fat tails). Nhưng 2σ vẫn work như heuristic mạnh — Bollinger 1980s đã kiểm chứng qua backtests thực tế.</p>
+</div>
+
+<h3>2.5 Volume ratio</h3>
+<p>Volume hôm nay so với trung bình → phát hiện anomaly.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Z-score là gì? (dùng liên tục từ đây trở đi)</div>
+<p><strong>Định nghĩa</strong>: z-score đo "1 giá trị cách trung bình bao nhiêu độ lệch chuẩn (standard deviation)".</p>
+<pre><code>z = (x - mean) / std</code></pre>
+<p><strong>Ví dụ cụ thể</strong>: Volume hôm nay VNM = 5 triệu cổ phiếu. Volume trung bình 20 phiên = 3 triệu, độ lệch chuẩn 20 phiên = 0.8 triệu.</p>
+<pre><code>z = (5 - 3) / 0.8 = 2.5</code></pre>
+<p>Đọc là "volume hôm nay cao hơn trung bình 2.5 độ lệch chuẩn" — theo phân phối chuẩn, việc này chỉ xảy ra ~0.6% thời gian → bất thường rõ rệt (so sánh Bollinger Band ± 2σ ở mục 2.4, cùng logic).</p>
+<p><strong>Vì sao dùng z-score thay vì % raw?</strong> Z-score tự động thích nghi theo "độ biến động bình thường" của từng ticker/từng giai đoạn — VNM biến động ít hơn NVL, z-score làm 2 ticker so sánh được trên cùng 1 thang đo (điều mà volume raw hay % raw không làm được).</p>
+</div>
+
+<pre><code>volume_20d = df['volume'].rolling(20).mean()
+vol_ratio = df['volume'] / volume_20d       # 1.5 = volume gấp 1.5× TB20
+vol_zscore = (df['volume'] - volume_20d) / df['volume'].rolling(20).std()
+</code></pre>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh Feature TỐT vs TỆ — 5 tiêu chí + VNM case (đọc SAU khi đã hiểu 5 features cốt lõi ở mục 2)</div>
+
+<p>Giờ ta đã biết RSI, MACD, Bollinger Bands, volume ratio, MA — 5 features cốt lõi ở mục 2. Vấn đề tiếp theo: <strong>trong 100 candidate features, keep cái nào drop cái nào?</strong> Đây là 5 tiêu chí phân biệt tốt/tệ.</p>
+
+<table>
+<tr><th>Tiêu chí</th><th>Feature TỐT (ví dụ)</th><th>Feature TỆ (ví dụ)</th></tr>
+<tr><td><strong>1. Có tín hiệu dự đoán</strong></td><td><code>rsi_14</code> — tương quan 0.35 với return T+1. Model học được.</td><td><code>ticker_hash</code> — random hash. Correlation 0.001. Vô ích.</td></tr>
+<tr><td><strong>2. Stable qua thời gian</strong></td><td><code>volume_zscore_20</code> — pattern ổn định từ 2020 đến nay.</td><td><code>days_since_covid</code> — chỉ ý nghĩa 2020-2022. Drift.</td></tr>
+<tr><td><strong>3. Không leak future</strong></td><td><code>ma20</code> tính tại T dùng close T-20 đến T. OK.</td><td><code>ma20_centered</code> dùng T-10 đến T+10. <strong>LEAK</strong>. CV đẹp, live sập.</td></tr>
+<tr><td><strong>4. Không multicollinear</strong></td><td><code>rsi_14</code> + <code>macd_hist</code>: mean revert vs momentum. Complementary.</td><td><code>ma5</code>+<code>ma10</code>+<code>ma20</code>: correlation 0.98. Redundant.</td></tr>
+<tr><td><strong>5. Available in production</strong></td><td><code>close_prev_day</code> — có ngay khi close.</td><td><code>analyst_consensus_next_week</code> — chỉ có sau. Useless prediction time.</td></tr>
+</table>
+
+<h4>Ví dụ VNM — 3 cách encode "giá", chất lượng khác 9×</h4>
+<pre><code># Feature A: close_price_raw
+# → giá thô. VNM = 67.5
+# Vấn đề: absolute price không có ý nghĩa cross-ticker (VNM 67 vs HDB 27)
+# CV improvement: +0.5% (weak)
+
+# Feature B: return_1d = (close_today - close_yesterday) / close_yesterday
+# → return %  = 0.45%
+# Scale đồng nhất, so sánh được cross-ticker.
+# CV improvement: +2.1% (moderate)
+
+# Feature C: return_1d_zscore_60d
+# → return_1d normalized theo mean/std ticker qua 60 ngày = +1.2σ
+# Model biết "+0.45% với VNM là RẤT tăng" vs "với NVL là bình thường"
+# CV improvement: +4.5% (strong) ⭐
+</code></pre>
+<p><strong>Nhận xét</strong>: Cùng thông tin, encode khác → CV improvement khác 9× (4.5%/0.5%). Đây là nghệ thuật feature engineering.</p>
+
+<h4>Bảng 96 features V18+V20 chia 5 nhóm (79 V18 + 17 V20 sau prune)</h4>
+<table>
+<tr><th>Nhóm</th><th># features</th><th>Ví dụ</th><th>Ý nghĩa</th></tr>
+<tr><td>1. Price action</td><td>15</td><td>return_1d, gap_pct, body_ratio, high_low_ratio</td><td>Hành vi giá ngắn hạn</td></tr>
+<tr><td>2. Momentum</td><td>18</td><td>rsi_14, macd_hist, cci_20, momentum_5d</td><td>Xu hướng ngắn/trung hạn</td></tr>
+<tr><td>3. Volume + Flow</td><td>12</td><td>volume_zscore_20, obv_slope, mfi_14, foreign_net_5d</td><td>Áp lực mua/bán</td></tr>
+<tr><td>4. Volatility</td><td>10</td><td>atr_14, bb_position, realized_vol_20d</td><td>Rủi ro + regime</td></tr>
+<tr><td>5. Cross-asset + Market</td><td>41</td><td>vnindex_momentum_5, sp500_return_5d, sector_breadth</td><td>Bối cảnh thị trường (bao gồm 17 feature V20 giữ lại sau SHAP prune)</td></tr>
+</table>
+
+<p><strong>V20 SHAP prune lesson</strong>: V20 thử nghiệm 43 feature ứng viên mới, sau audit SHAP chỉ giữ lại 17 (drop 26 feature contribution &lt; 0.5% — "dead"). Drop → CV không đổi + train nhanh hơn + interpretable hơn. "More features = better" là SAI — chất lượng &gt; số lượng.</p>
+</div>
+
+<h2>3. 🚨 LOOK-AHEAD BIAS — nguy hiểm nhất</h2>
+
+<div class="callout danger">
+  <div class="label">Câu hỏi phỏng vấn kinh điển</div>
+  <p>"Bạn compute RSI của ngày T. Được dùng giá đóng ngày T+1 không?" → <strong>KHÔNG</strong>. Đó là look-ahead bias. Trong production ngày T, bạn chưa biết giá T+1. Model train với leaking future info sẽ trông có vẻ 90% accurate trên test — nhưng deploy sẽ chết.</p>
+</div>
+
+<p>Cách check: mọi feature ngày T phải chỉ dùng data <code>&le; T</code>. Trong pandas:</p>
+<pre><code># ✅ ĐÚNG — chỉ dùng past
+rsi_t = rsi(close.iloc[:t+1], 14).iloc[-1]
+
+# ❌ SAI — sử dụng future
+rsi_t_bad = rsi(close, 14).iloc[t]   # rolling backward — có thể leak
+
+# Kiểm tra: chạy code với close[t+1:] = NaN, RSI at t phải không đổi
+</code></pre>
+
+<h2>4. V20 — 5 nhóm feature mới (2026-07)</h2>
+
+<p>V18 có 79 features (RSI/MA/BB/MACD/Volume + Cross-asset). V20 thêm 5 nhóm dựa trên nghiên cứu factor model + microstructure:</p>
+
+<table>
+<tr><th>Nhóm</th><th>Features</th><th>Rationale</th></tr>
+<tr><td>Regime volatility</td><td>vol_5d/60d, vol_5d_zscore, vol_regime_shift, vol_pct_rank</td><td>Term structure vol báo trước trend shift</td></tr>
+<tr><td>Cross-sectional rank</td><td>cs_return_20d_zscore, cs_volume_20d_zscore, cs_rank_20d</td><td>Vị thế trong sector — mean-reversion signal</td></tr>
+<tr><td>Liquidity</td><td>vol_log_ratio_60d, spread_proxy, amihud_illiquidity</td><td>Microstructure anomaly precede price moves</td></tr>
+<tr><td>Correlation regime</td><td>corr_vn30_20d, corr_vn30_60d, corr_regime_shift</td><td>Beta shift = regime change</td></tr>
+<tr><td>Momentum divergence</td><td>ret_5d/60d, ret_short_long_diverge, ret_zscore</td><td>Trend exhaustion signal</td></tr>
+</table>
+
+<div class="example-box">
+  <div class="title">🧪 SHAP evidence — features nào thực sự work?</div>
+  <p>Sau Slice 3.5 (context plumbing fix), analysis 15 pilot artifacts cho thấy:</p>
+  <ul>
+    <li><code>ret_5d_over_60d</code>: 93% adoption trong top-50 (V20 top-2 feature!)</li>
+    <li><code>corr_regime_shift</code>: 100% adoption</li>
+    <li><code>days_to_tet</code>: 100% adoption (calendar effect strong ở VN market)</li>
+    <li><code>vol_5d_over_60d</code>: 89% adoption</li>
+  </ul>
+  <p>File: <code>reports/_baselines/v20_slice_3_5_signoff.json</code></p>
+</div>
+
+<h2>5. Common pitfalls</h2>
+
+<ul>
+  <li><strong>Constant feature</strong>: nếu feature giống nhau ở mọi row → 0 importance. V19.5 bị: sector_ohlcv passed nguyên df → cross-sectional constant → 0 importance.</li>
+  <li><strong>High collinearity</strong>: MA20 và MA21 correlate 0.99 → 1 trong 2 dư. XGBoost handle được nhưng inflates feature count.</li>
+  <li><strong>Categorical với high cardinality</strong>: 1000 sectors → one-hot 1000 columns → sparse, over-fit.</li>
+  <li><strong>Scale không đồng nhất</strong>: Tree-based không cần scale, nhưng neural nets cần standardize.</li>
+</ul>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Vì sao feature engineering chiếm 80% thời gian ML?</p>
+<p class="a">Vì model không tự tạo signal. Feature encode domain knowledge thành số. Model architecture chỉ khai thác signal đã có sẵn.</p>
+
+<p class="q">2. Cho pandas Series close. Viết hàm compute RSI(14) từ đầu (không dùng library).</p>
+<p class="a">Xem code section 2.2. Key: delta = close.diff(), gain/loss = separate rolling means, rs = gain/loss, rsi = 100 - 100/(1+rs).</p>
+
+<p class="q">3. Look-ahead bias là gì? Cho ví dụ cụ thể và cách detect.</p>
+<p class="a">Dùng info tương lai để build feature quá khứ. VD: compute label bằng close[t+5], nhưng feature dùng shift(-1) sai. Detect: mask future data ra NaN, feature at t phải không đổi.</p>
+
+<p class="q">4. Vì sao XGBoost không cần standardize feature nhưng neural net cần?</p>
+<p class="a">Tree split dựa threshold rời rạc, invariant với scale. NN dùng gradient descent — features scale khác nhau → gradient dominant bởi feature scale lớn → training không ổn định.</p>
+
+<p class="q">5. Bạn có feature RSI + MA5 + MA20 + MA50. Bạn thấy MA5 correlate 0.98 với MA20. Có nên drop MA5 không?</p>
+<p class="a">Nếu dùng linear model: có (giải quyết multicollinearity). Nếu tree-based: không bắt buộc drop nhưng nên (giảm feature count → tránh overfit, cải thiện SHAP interpretability). V20 Slice 3 drop feature adoption < 30%.</p>
+
+</div>
+
+<div class="callout" style="background: rgba(239,68,68,0.08); border-left-color: #ef4444">
+<div class="label">❌ Sai lầm thường gặp vs ✅ Thực tế</div>
+<ul>
+  <li><strong>❌ "Cứ throw hết indicators vào model, XGBoost tự chọn"</strong> → ✅ XGBoost handle multicollinearity nhưng SHAP-based importance sẽ noisy → khó explain. V20 audit prune 43 feature ứng viên xuống 17, drop 26 "dead" → CV bằng nhau nhưng interpret dễ hơn.</li>
+  <li><strong>❌ "Look-ahead bias chỉ xảy ra với label"</strong> → ✅ Cũng xảy ra với feature. VD: <code>rolling.mean()</code> mặc định centered ở pandas cũ = leak. Luôn set <code>closed='left'</code> hoặc dùng <code>.shift(1)</code>.</li>
+  <li><strong>❌ "Standardize features cho tree-based model"</strong> → ✅ Vô ích. Tree split theo threshold, invariant với scale. Standardize chỉ cần cho NN/linear/kNN.</li>
+  <li><strong>❌ "Feature correlation cao = bad"</strong> → ✅ Với tree, không quan trọng lắm. Với linear model, thì có (multicollinearity → coefficient bất ổn).</li>
+</ul>
+</div>
+
+<h2>6. 🎓 Interview-style Q&A</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q1: "Bạn implement RSI(14) và deploy. Live prediction lệch hoàn toàn với backtest. Debug?"</div>
+<p><strong>Model answer</strong>: "3 hypothesis theo priority: (1) Look-ahead bias — check rolling window có touch future data không (test: mask close[t+1:] = NaN, RSI[t] có đổi không). (2) Different formula — Wilder original dùng smoothed moving average (α=1/14), simple rolling mean khác nhau ở tails. (3) Missing values handling — pandas <code>rolling.mean()</code> min_periods default 1 sẽ return giá trị partial → skew đầu series. Fix: <code>min_periods=window</code>."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q2: "80 features V18, bạn nghi 20 là noise. Cách audit khoa học?"</div>
+<p><strong>Model answer</strong>: "Multi-signal audit: (1) SHAP mean |value| per feature → drop bottom quartile if &lt; 0.5% total. (2) Permutation importance — shuffle 1 feature, re-eval; nếu accuracy không giảm → noise. (3) Correlation với target trên rolling window — feature nào correlation drift về 0 = concept drift. Combine 3 signal, drop feature fail 2/3. Never drop dựa 1 signal."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q3: "Vì sao V18 dùng <code>volume_zscore_20</code> thay vì <code>volume</code> raw?"</div>
+<p><strong>Model answer</strong>: "Ba lý do: (1) Cross-ticker normalization — VNM volume 1M vs NVL 20M không so sánh được scale; z-score đưa về cùng thang. (2) Regime robust — z-score adapt theo baseline 20 phiên, market-cap-agnostic. (3) Model learn dễ hơn — 'z=+2σ' là universal signal 'bất thường cao', model không cần học per-ticker threshold."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q4: "Feature engineering tự động (autoML) đang hot. Có nên bỏ manual features?"</div>
+<p><strong>Model answer</strong>: "No, hybrid. AutoML (Featuretools, TSFresh) good cho generate 1000s candidate features nhưng không có domain sense — sinh nhiều garbage. Best practice: manual domain features (RSI, MFI, sector rotation) làm core → autoML sinh interaction/lag features → SHAP filter. V18 phân tích ~200 candidate, chỉ giữ 79."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q5: "Định nghĩa nhanh: leak, drift, multicollinearity."</div>
+<p><strong>Model answer</strong>:
+<br>• <strong>Leak</strong>: feature chứa info tương lai (label peek). Fix: strict causal split + shift.
+<br>• <strong>Drift</strong>: distribution feature/label thay đổi qua thời gian. Fix: monitor + retrain.
+<br>• <strong>Multicollinearity</strong>: 2+ features correlate cao → linear model coefficient bất ổn, tree không sao. Fix: drop redundant, hoặc dùng regularization L1.</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li><code>backend/predict/features_v18.py</code> line 621: <code>build_v18_features()</code> — 79 features V18</li>
+    <li><code>backend/predict/build_v20_features.py</code> — V20 43 features mới (schema hash 135d88ef9404d1dc)</li>
+    <li><code>reports/_baselines/v20_slice_3_5_signoff.json</code> — SHAP adoption analysis</li>
+    <li><code>reports/_baselines/v20_slice_3_signoff.json</code> — prune 43 → 17 features</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 Alice Zheng — <em>Feature Engineering for Machine Learning</em> (O'Reilly, 2018)</li>
+    <li>📝 <a href="https://www.investopedia.com/terms/r/rsi.asp">Investopedia — RSI, MACD, Bollinger</a> giải thích cho investor</li>
+    <li>📄 Amihud (2002) — <em>Illiquidity and stock returns</em> (paper gốc của Amihud measure)</li>
+    <li>🎥 <a href="https://youtu.be/6g4O5UOH304">Feature engineering trong practice — Kaggle GM talk</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L1_1_ml_intro.html">← L1.1</a>
+  <a href="L1_3_trees_xgboost.html">L1.3 · Trees → XGBoost →</a>
+</div>
+
+</div>
+</body>
+</html>

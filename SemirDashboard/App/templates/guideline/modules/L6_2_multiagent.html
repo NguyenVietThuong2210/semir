@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L6.2 — Multi-Agent (AI Orchestrator Overview)</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 6 · Module 2</div>
+  <h1>6.2 · Multi-Agent Systems — AI Orchestrator Overview</h1>
+  <p class="subtitle">11 agents phối hợp thực hiện full SDLC. Roles, communication protocols, hierarchy. Zoom out từ LangGraph impl.</p>
+  <div class="level">Level 6 · Agents · ~35 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Kể 11 agents của AI Orchestrator + role mỗi cái</li>
+  <li>Understand agent communication via shared state (ProjectContext)</li>
+  <li>Recognize supervisor vs peer patterns</li>
+  <li>Design multi-agent system cho new use case</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Multi-agent bằng ngôn ngữ đời thường</div>
+<p><strong>Xưởng may áo dài</strong>: 1 người không thể may 1 áo dài đẹp một mình. Chia việc: Thiết kế → Cắt vải → May → Thêu → QC → Đóng gói. Mỗi thợ chuyên môn khác nhau, giao tiếp qua "áo đang làm dở" (state).</p>
+<p><strong>AI Orchestrator</strong>: SpecAnalyze (phân tích yêu cầu) → TaskDecompose (chia task nhỏ) → Engineer (viết code) → Reviewer (review) → Tester (test) → PRWriter (viết PR). Mỗi agent = 1 role chuyên biệt.</p>
+<p><strong>Vì sao không dùng 1 agent to</strong>? Vì mỗi role cần system prompt riêng, tool set riêng, thậm chí model tier riêng (Engineer dùng Opus, PRWriter dùng Haiku). Chia nhỏ = specialize + cheaper.</p>
+</div>
+
+<h2>1. Agent roles trong AI Orchestrator</h2>
+
+<table>
+<tr><th>Agent</th><th>Input</th><th>Output</th><th>Role</th></tr>
+<tr><td>PM</td><td>User request</td><td>Structured tasks + DoD + pipeline_intent</td><td>Requirement analysis</td></tr>
+<tr><td>Analyser</td><td>PM tasks</td><td>Technical spec + data/API contracts</td><td>System design</td></tr>
+<tr><td>SpecAnalyze</td><td>Analyser spec</td><td>Findings + approved flag</td><td>SDD constitution check*</td></tr>
+<tr><td>TaskDecompose</td><td>Approved spec</td><td>Fine-grained tasks + acceptance criteria</td><td>Sprint planning</td></tr>
+<tr><td>Engineer</td><td>Task + codebase</td><td>Code changes + report</td><td>Implementation</td></tr>
+<tr><td>QAVerify</td><td>Engineer diff for task T<sub>i</sub></td><td>Per-task pass/fail + notes</td><td>Task-level verification (build-sprint loop, before final Reviewer/QA gate)</td></tr>
+<tr><td>Reviewer</td><td>Engineer output + spec</td><td>Code review findings</td><td>Quality gate</td></tr>
+<tr><td>Security</td><td>Code artifacts</td><td>bandit/pip-audit results pass/warn/fail</td><td>Security gate</td></tr>
+<tr><td>QA</td><td>Implementation + DoD</td><td>Test results + defects</td><td>Functional verification</td></tr>
+<tr><td>Deploy</td><td>Approved code</td><td>Smoke test results on port 9000</td><td>Deployment verification</td></tr>
+<tr><td>Retrospective</td><td>All prior reports</td><td>Lessons learned + root cause</td><td>Learning + audit</td></tr>
+</table>
+
+<p style="color: var(--text-dim); font-size: 0.92em;">* <strong>SDD</strong> = Spec-Driven Development — quy trình bắt viết đặc tả (spec) rõ ràng TRƯỚC khi code, thay vì code trước hỏi sau. <strong>"Constitution check"</strong> = SpecAnalyze so spec vừa viết với 1 tập rule cố định của dự án ("hiến pháp" — ví dụ "mọi API phải có auth", "không hardcode secret") — giống việc 1 đạo luật mới phải không trái Hiến pháp mới được thông qua. Nếu spec vi phạm rule nào → <code>approved=False</code>, trả về Analyser sửa lại, không cho đi tiếp tới TaskDecompose.</p>
+
+<h2>2. Communication — shared state</h2>
+
+<pre><code># All agents read/write ProjectContext (single dict)
+# Not direct message passing
+
+class ProjectContext(TypedDict):
+    initial_request: str
+    pipeline_intent: str
+    pm_report: dict
+    analyser_report: dict
+    spec_analysis_report: dict
+    kanban_board: list[KanbanCard]
+    engineer_report: dict
+    reviewer_report: dict
+    # ... 40+ fields
+</code></pre>
+
+<p>Why shared state không message passing?</p>
+<ul>
+  <li>Testable: state hoàn toàn deterministic từ inputs</li>
+  <li>Checkpointable: save/restore any point</li>
+  <li>Auditable: every agent read/write logged</li>
+  <li>Simpler: no message queue / broker infrastructure</li>
+</ul>
+
+<h2>3. Hierarchy — Supervisor pattern</h2>
+
+<pre><code>            Supervisor (LangGraph runtime + Python router)
+                      │
+     ┌─── PM ────┬─── Analyser ────┬─── Engineer ────┬─── Deploy ───┐
+     │           │                  │                  │              │
+   Report      Report              Report            Report          Report
+     │           │                  │                  │              │
+     └───────────┴──────────────────┴──────────────────┴──────────────┘
+                          ProjectContext (shared state)
+</code></pre>
+
+<p>Supervisor không dùng LLM. Python function decide next agent dựa state fields.</p>
+
+<h2>4. Design multi-agent — 4 questions</h2>
+
+<div class="callout">
+<div class="label">Answer these để design multi-agent system</div>
+<ol>
+  <li>What roles bạn cần? (list unique functions)</li>
+  <li>How agents pass info? (shared state vs direct message)</li>
+  <li>Who decides next agent? (supervisor Python vs LLM route)</li>
+  <li>How handle loops + failures? (max iterations, escalation paths)</li>
+</ol>
+</div>
+
+<h2>5. Peer-to-peer pattern (alternative)</h2>
+
+<pre><code>Instead of supervisor: agents talk to each other directly.
+E.g., AutoGen chat pattern: UserProxy + Assistant + Critic conversation
+
+Pros:
+- Emergent collaboration
+- More flexible
+
+Cons:
+- Non-deterministic
+- Harder debug
+- More tokens (conversation overhead)
+</code></pre>
+
+<p>Best cho brainstorming / creative tasks. Không phù hợp SDLC.</p>
+
+<h2>6. Blackboard + Consensus (voting) patterns</h2>
+
+<h3>6.1 Blackboard — shared "bảng thông báo"</h3>
+<pre><code># Analogy: bảng thông báo ký túc xá — ai có info mới thì viết lên,
+# ai cần thì đọc. Không direct message.
+
+class Blackboard:
+    facts: dict[str, Any] = {}
+    subscribers: dict[str, list[Callable]] = {}
+
+    def post(self, key, value, source_agent):
+        self.facts[key] = {"value": value, "source": source_agent, "ts": now()}
+        for cb in self.subscribers.get(key, []):
+            cb(value)    # trigger interested agents
+
+    def read(self, key): return self.facts.get(key)
+
+# E-commerce fraud detection: RiskAgent posts "user_score=0.8",
+# FraudAgent subscribes, wakes up when score>0.7 → deep investigation.
+</code></pre>
+<p>Blackboard tốt khi (1) agents heterogeneous (Python + external service), (2) opportunistic — ai có info thì đóng góp, không schedule.</p>
+
+<h3>6.2 Consensus / Voting — 3 LLMs bỏ phiếu</h3>
+<pre><code>async def consensus_predict(question, models=[claude, gpt4, gemini]):
+    votes = await asyncio.gather(*[m.predict(question) for m in models])
+    # Majority vote
+    tally = Counter(votes)
+    winner, count = tally.most_common(1)[0]
+    confidence = count / len(models)   # 3/3=1.0, 2/3=0.67
+    if count < len(models) // 2 + 1:   # strict majority required (not a float threshold —
+        return {"verdict": "abstain", "reason": "no consensus", "votes": votes}  # 2/3=0.6666... would sit ON a "<0.67" cutoff and wrongly abstain
+    return {"verdict": winner, "confidence": confidence}
+</code></pre>
+<p>Dùng khi (1) high-stakes decision (approve loan, flag fraud), (2) trade-off cost 3× nhưng error rate giảm mạnh (Anthropic + OpenAI + Gemini ít khi cùng sai một kiểu).</p>
+
+<h3>6.3 Swarm/Mesh — không có leader</h3>
+<pre><code># All agents = peers. Handoff qua "role" field in message.
+# OpenAI Swarm framework example (Swarm là experimental/educational project,
+# đã được thay thế bởi OpenAI Agents SDK — nhưng cơ chế handoff mô tả dưới đây
+# vẫn đúng với cách Swarm hoạt động lúc đó):
+
+@agent
+def triage(msg):
+    if "refund" in msg: return handoff(refund_agent)
+    if "tech" in msg: return handoff(tech_agent)
+    return respond("How can I help?")
+
+# Không có supervisor. Agent quyết định handoff cho peer.
+</code></pre>
+<p>Trade-off: linh hoạt (agent mới plug-in dễ) nhưng khó debug (loop giữa 3 agents pass tay nhau).</p>
+
+<h2>7. Marketplace pattern</h2>
+
+<pre><code>Agents bid on tasks, best bidder wins.
+- Task publisher post task with criteria
+- Multiple agents evaluate, submit bids (confidence, cost)
+- Router pick winner
+
+# Used ở scale-out: many capable agents, pick best per task
+</code></pre>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 4 multi-agent orchestration patterns (đọc SAU sections 3-6)</div>
+
+<table>
+<tr><th></th><th>Supervisor</th><th>Peer-to-peer</th><th>Hierarchical</th><th>Marketplace</th></tr>
+<tr><td><strong>Cấu trúc</strong></td><td>1 leader + N workers</td><td>N agents ngang hàng chat</td><td>Cây tầng nhiều levels</td><td>Auction — agents bid task</td></tr>
+<tr><td><strong>Analogy</strong></td><td>Manager giao task team</td><td>Nhóm bạn cùng brainstorm</td><td>Công ty nhiều department</td><td>Freelancer platform</td></tr>
+<tr><td><strong>Control flow</strong></td><td>Centralized</td><td>Decentralized</td><td>Multi-tier</td><td>Market-driven</td></tr>
+<tr><td><strong>Scaling agents</strong></td><td>Trung bình (leader bottleneck)</td><td>Tệ (chat O(N²))</td><td>Tốt</td><td>Tốt (loose coupling)</td></tr>
+<tr><td><strong>Predictability</strong></td><td>Cao</td><td>Thấp (emergent)</td><td>Cao</td><td>Trung bình</td></tr>
+<tr><td><strong>Debug</strong></td><td>Dễ (trace leader decisions)</td><td>Khó (emergent behavior)</td><td>Trung bình</td><td>Khó (market dynamics)</td></tr>
+<tr><td><strong>Best for</strong></td><td>Task rõ ràng, workflow chuẩn</td><td>Creative brainstorm, hypothesis</td><td>Enterprise SDLC</td><td>Task pool, load balancing</td></tr>
+<tr><td><strong>Framework</strong></td><td>LangGraph supervisor</td><td>AutoGen GroupChat</td><td>LangGraph nested graphs</td><td>Custom / KServe</td></tr>
+<tr><td><strong>Ví dụ</strong></td><td>AI Orchestrator: SpecAnalyze → Engineer → Reviewer → PRWriter</td><td>Brainstorm 5 agents đưa ý tưởng feature</td><td>CEO → VP → Manager → Engineer</td><td>Task queue, agents grab jobs</td></tr>
+</table>
+
+<h4>Ví dụ concrete — task "fix bug in auth.py"</h4>
+<pre><code>=== Supervisor ===
+Supervisor: "Assign bug fix to Engineer + Reviewer"
+Engineer: propose diff
+Supervisor: send to Reviewer
+Reviewer: approve
+Supervisor: merge
+Turns: 4 sequential, predictable
+
+=== Peer-to-peer (AutoGen) ===
+Engineer, Tester, Security agent all chat:
+- Engineer: propose diff
+- Tester: run tests, report
+- Security: audit security implication
+- Engineer: iterate based on both
+Turns: 8-20, emergent solution, might loop
+
+=== Hierarchical ===
+Team Lead → assign to sub-team (Engineer + QA)
+Engineer proposes → QA validates → Team Lead reviews
+Turns: same as Supervisor but with escalation layer
+
+=== Marketplace ===
+Task posted: "fix auth.py bug, difficulty medium, deadline 2h"
+Agents bid: Engineer bids "1h", Bugsnag bot bids "30 min"
+Cheapest bidder wins task
+</code></pre>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Requirement</th><th>Chọn</th></tr>
+<tr><td>Predictable SDLC workflow</td><td>⭐ Supervisor (LangGraph)</td></tr>
+<tr><td>Creative brainstorming</td><td>Peer-to-peer (AutoGen GroupChat)</td></tr>
+<tr><td>Enterprise multi-team simulation</td><td>Hierarchical</td></tr>
+<tr><td>Load balancing across many agents</td><td>Marketplace</td></tr>
+<tr><td>Coding SDLC (như AI Orchestrator)</td><td>Supervisor</td></tr>
+<tr><td>Research assistant (arxiv exploration)</td><td>Peer-to-peer</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: 2024-2025 90% production multi-agent apps dùng Supervisor pattern (LangGraph) — predictable + debuggable. Peer-to-peer thú vị nhưng khó debug production. Bắt đầu Supervisor, chỉ escalate khi cần emergent behavior.</p>
+</div>
+
+<h2>8. VN scenario — Shopee-style customer support (multi-agent)</h2>
+
+<div class="example-box">
+<div class="title">4-agent hierarchy cho Shopee VN support</div>
+<pre><code>User: "đơn hàng #A123 chưa giao 5 ngày rồi, tôi muốn hoàn tiền"
+
+Triage agent (Haiku, $0.001):
+  intent = REFUND + LATE_DELIVERY  → route OrderAgent + RefundAgent parallel
+
+OrderAgent (Sonnet + tools: query_shipment):
+  → lookup #A123 → "stuck at Đà Nẵng hub 3 ngày"
+
+RefundAgent (Sonnet + tools: refund_policy_kb, wallet_credit):
+  → policy: >48h late = eligible full refund
+  → propose: hoàn 350k vào ShopeePay
+
+Supervisor (Python — không LLM):
+  if OrderAgent.evidence == "late" AND RefundAgent.eligible == True:
+      auto_approve if amount < 500k else human_gate
+  → auto_approve → execute wallet_credit(350000)
+
+Response agent (Haiku):
+  → viết reply tiếng Việt lịch sự, xin lỗi khách, thông báo hoàn tiền
+</code></pre>
+<p><strong>Insight</strong>: Split roles theo cost tier. Triage/Response dùng Haiku (rẻ), Business logic dùng Sonnet, Supervisor dùng Python. 1 request full lifecycle ~$0.02 thay vì $0.15 nếu dùng Opus xuyên suốt.</p>
+</div>
+
+<h2>9. Anti-patterns</h2>
+
+<div class="callout danger">
+<div class="label">Đừng làm</div>
+<ol>
+  <li><strong>LLM route control flow</strong>: cho LLM quyết "next agent = ?" → non-deterministic, không unit test được. Rule: Python router.</li>
+  <li><strong>Không giới hạn loop</strong>: QA fail → Engineer retry → QA fail → ... infinite. Luôn <code>max_iter</code> + progress detection.</li>
+  <li><strong>Shared state global mutable</strong>: mọi agent write bất cứ field nào → race + hard debug. Rule: mỗi agent chỉ write field của mình.</li>
+  <li><strong>Full context vào mỗi agent</strong>: PM report 5k tokens gửi cho mọi agent → token cost N× lãng phí. Rule: pass slice cần thiết.</li>
+  <li><strong>Chatty peer-to-peer khi supervisor đủ</strong>: brainstorm 5 agents cho task "fix typo" → overengineered. Match pattern complexity với task complexity.</li>
+</ol>
+</div>
+
+<h2>10. Case study — pipeline_intent routing</h2>
+
+<div class="example-box">
+<div class="title">Same 11 agents, 5 different flows</div>
+<p>PM detect intent → shape pipeline:</p>
+<ul>
+  <li><code>query</code>: PM → Analyser → DONE (2 agents)</li>
+  <li><code>test</code>: PM → Analyser → QA → DONE (3 agents)</li>
+  <li><code>review</code>: PM → Analyser → Reviewer → DONE</li>
+  <li><code>bug_fix</code>: PM → Analyser → Engineer → QA → DONE (retry ≤2×)</li>
+  <li><code>feature</code>: full 11-agent pipeline với human gate</li>
+</ul>
+<p>Adaptive complexity: cheap tasks skip agents. Expensive full SDLC for features. Cost proportional to task ambition.</p>
+</div>
+
+<h2>11. Failure handling — 3 modes</h2>
+
+<div class="callout warn">
+<ol>
+  <li><strong>Retry with fix</strong>: QA fail-minor → Engineer retry với QA feedback (max 2 loops, <code>MAX_QA_ITERATIONS</code>)</li>
+  <li><strong>Escalate back</strong>: QA fail-major → back Analyser để redesign (max 2 loops)</li>
+  <li><strong>Fail forward</strong>: unrecoverable → Retrospective → FAILED terminal (learn from failure)</li>
+</ol>
+</div>
+
+<h2>12. Observability</h2>
+
+<pre><code># Track agent_events per iteration:
+class AgentEvent(TypedDict):
+    agent: str
+    timestamp: str
+    status: str    # started, completed, error
+    tokens_used: int
+    duration_seconds: float
+    note: str
+    task_id: Optional[str]
+
+# Metrics:
+- Total tokens per project
+- Agent latency distribution
+- QA loop count (indicator complexity)
+- Success rate per pipeline_intent
+- Human gate approval rate
+</code></pre>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. 11 agents AI Orchestrator theo SDLC order.</p>
+<p class="a">PM → Analyser → SpecAnalyze → TaskDecompose → Engineer → QAVerify → Reviewer → Security → QA → Deploy → Retrospective. (SpecAnalyze + TaskDecompose chỉ intent=feature; QAVerify chạy per-task trong build sprint, tách biệt với QA cuối.)</p>
+
+<p class="q">2. Shared state vs message passing — vì sao Anthropic + LangGraph chọn shared?</p>
+<p class="a">(1) Deterministic testing (state = pure function of inputs). (2) Checkpointable (save/restore any time). (3) No broker infrastructure. (4) Auditable (every read/write logged).</p>
+
+<p class="q">3. Supervisor pattern vs Peer-to-peer — recommend nào cho code assistant?</p>
+<p class="a">Supervisor. Code review chuỗi predictable (PM → Eng → Review → QA). Peer-to-peer nhiều tokens + non-deterministic. Supervisor Python cheap, testable, auditable.</p>
+
+<p class="q">4. Failure escalation — 3 tiers explain.</p>
+<p class="a">(1) Retry với fix (QA fail-minor → Eng again). (2) Escalate back (fail-major → Analyser redesign). (3) Fail forward (unrecoverable → Retrospective learn from failure, terminate FAILED).</p>
+
+<p class="q">5. Adaptive complexity via pipeline_intent — impact economics?</p>
+<p class="a">Query costs ~$0.1 (2 agents). Feature costs ~$5-20 (11 agents). Not paying for SDLC overhead khi user chỉ ask question. $5/$0.1=50× đến $20/$0.1=200× cost reduction tùy độ phức tạp feature, so với việc chạy full pipeline cho mọi request.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>Agents: <code>d:/New-jouney/ai_orchestrator/agents/</code> — 11 files (incl. <code>qa_verify.py</code>, distinct from <code>qa.py</code>)</li>
+    <li>ProjectContext: <code>orchestrator/context.py</code> (40+ fields)</li>
+    <li>CLAUDE.md section "Architecture" — human overview</li>
+    <li>Graph def: <code>orchestrator/graph.py</code> (1512 lines)</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📝 <a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2308.08155">AutoGen paper (peer-to-peer alternative)</a></li>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/tutorials/multi_agent/agent_supervisor/">LangGraph supervisor pattern tutorial</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L6_1_agent_patterns.html">← L6.1</a>
+  <a href="L6_3_langgraph.html">L6.3 · LangGraph →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R3.2 · Reranking — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · RAG · Điểm 2/6</div>
+  <h1>R3.2 · Reranking</h1>
+  <p class="subtitle">Tầng thứ 2 của retrieval — vì sao gần như mọi hệ RAG chất lượng cao đều cần nó, không chỉ là "tối ưu thêm cho vui".</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Phân biệt chính xác bi-encoder (retrieval) và cross-encoder (reranking) — khác nhau về kiến trúc, không chỉ về tên gọi.</li>
+<li>Giải thích bằng số tại sao không thể chạy cross-encoder trên toàn bộ corpus, mà phải qua 2 tầng.</li>
+<li>Vẽ được sơ đồ pipeline 2 tầng: triệu documents → top-100 → top-5.</li>
+<li>Nhận diện được hệ thống nào trong dự án hiện tại KHÔNG có tầng rerank, và đánh giá đó có phải vấn đề hay không.</li>
+<li>Biết thêm 1 kiến trúc thứ 3 (late interaction/ColBERT) nằm giữa bi-encoder và cross-encoder, và khi nào nó đáng cân nhắc hơn cả 2 đầu.</li>
+<li>Nhận diện được ít nhất 1 thất bại thật của reranker LM (bị đánh lừa bởi từ vựng giống nhau, yếu với so sánh số liệu/thời gian) — tránh coi rerank là "phép màu" luôn đúng.</li>
+<li>Hiểu vì sao điểm reranker không phải xác suất calibrated và hậu quả thực hành khi đặt ngưỡng lọc tuyệt đối sai cách.</li>
+<li>Biết thêm knowledge distillation như 1 hướng tối ưu chi phí/latency khi reranker có sẵn không đáp ứng nổi ngân sách production.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Cơ chế bi-encoder vs cross-encoder, code pipeline, và 3 lựa chọn reranker cụ thể (Cohere Rerank v3, bge-reranker-v2-m3, Jina Reranker) đã dạy đầy đủ ở module khác. Trang này bổ sung phần lý giải "vì sao 2 tầng là kiến trúc gần như bắt buộc" và áp dụng vào case study thật của dự án.</p>
+<table>
+<tr><th>Module</th><th>Nội dung</th><th>Quan hệ với trang này</th></tr>
+<tr><td><code>../modules/L9_1_advanced_rag.html §4</code></td><td>Cross-encoder reranking, code pipeline, so sánh 3 reranker cụ thể</td><td>Đọc TRƯỚC — nền tảng kỹ thuật đầy đủ</td></tr>
+<tr><td><code>../modules/L5_2_rag.html</code></td><td>Pipeline RAG 3-phase, vị trí rerank trong luồng tổng thể</td><td>Bối cảnh — rerank nằm giữa retrieval và generation</td></tr>
+</table>
+<p>Độ khó <strong>Trung bình</strong>: khái niệm dễ hình dung qua analogy, nhưng phần lý luận độ phức tạp tính toán (§ Cơ chế chi tiết) cần một chút kiên nhẫn đọc số liệu.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Retrieval (bi-encoder) giống việc 1 thư viện lớn quét nhanh toàn bộ giá sách để lấy ra 100 cuốn "có vẻ liên quan" chỉ bằng cách nhìn bìa sách — bìa sách đã được mô tả sẵn (embedding tính trước), so sánh cực nhanh.</p>
+<p>Reranking (cross-encoder) giống 1 chuyên gia đọc kỹ 100 cuốn đó CÙNG với câu hỏi cụ thể của bạn, rồi xếp hạng lại. Chậm hơn nhiều nhưng chính xác hơn hẳn, vì chuyên gia "đọc" câu hỏi và nội dung sách CÙNG LÚC — thay vì so 2 bản tóm tắt độc lập như bi-encoder.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Khác biệt kiến trúc — không chỉ là "chậm hơn thì chính xác hơn"</h3>
+<ul>
+<li><strong>Bi-encoder</strong>: mã hoá query và document RIÊNG BIỆT thành 2 vector, rồi so sánh bằng cosine similarity. Document embedding tính SẴN từ trước (offline, 1 lần) — lúc query chỉ cần encode query rồi so.</li>
+<li><strong>Cross-encoder</strong>: ghép query + document thành 1 chuỗi input duy nhất, đưa cả 2 qua model CÙNG LÚC, xuất ra 1 điểm số duy nhất. Vì model "thấy" cả 2 cùng lúc, nó bắt được tương tác chi tiết giữa từng từ trong query và document — thứ bi-encoder không làm được vì đã tách rời 2 bước encode.</li>
+</ul>
+<pre><code>BI-ENCODER — encode RIÊNG BIỆT, chỉ so sánh vector SAU khi đã encode xong:
+
+  Query ────encode────> Vector_Q ─┐
+                                   ├─ cosine similarity ──> điểm số
+  Document ─encode (offline)─> Vector_D ─┘
+  (Vector_D đã có sẵn từ trước — không tính lại mỗi lần có query mới)
+
+CROSS-ENCODER — ghép chung 1 input, encode CÙNG LÚC:
+
+  [Query + Document] ──────cùng 1 model────> 1 điểm số duy nhất
+  (không có "vector tính sẵn" nào để tái sử dụng — phải chạy lại
+   toàn bộ model cho MỖI cặp query+doc)</code></pre>
+
+<h3>2. Vì sao không chạy cross-encoder cho toàn bộ corpus</h3>
+<p>Cross-encoder có độ phức tạp O(query × doc) tại query-time — mỗi lần có query mới, phải chạy lại model cho TỪNG cặp (query, document). Với 1 triệu document, đó là 1 triệu lần chạy model full — quá chậm để dùng trực tiếp.</p>
+<p>Bi-encoder có độ phức tạp O(query) tại query-time — vì document embedding đã tính sẵn offline, lúc query chỉ cần 1 lần encode query rồi so sánh vector (phép toán rẻ, có thể dùng ANN index để nhanh hơn nữa). Nhưng đổi lại, recall (độ phủ) thấp hơn cross-encoder ở cùng top-k, vì nó không "đọc" tương tác chi tiết.</p>
+<p>Giải pháp 2 tầng dùng đúng công cụ đúng việc: bi-encoder thu hẹp từ triệu → hàng trăm (rẻ), cross-encoder tinh chỉnh từ hàng trăm → top-5/10 (đắt hơn/doc nhưng chỉ chạy trên tập nhỏ).</p>
+<pre><code>1,000,000 documents
+      │  bi-encoder (embedding cosine sim, ANN index)
+      ▼
+   top-100  (rẻ để lấy, recall vừa đủ)
+      │  cross-encoder (concat query+doc → BERT → 1 score)
+      ▼
+   top-5   (đắt hơn/doc nhưng chỉ áp dụng cho 100, không phải 1 triệu)
+      │
+      ▼ gửi vào context window của LLM</code></pre>
+
+<h3>3. Ví dụ số cụ thể — thứ tự đổi sau khi rerank</h3>
+<p>Giả sử query "cổ phiếu ngân hàng nào đang quá bán" trả về 5 ứng viên từ bi-encoder (điểm cosine similarity), sau đó cross-encoder chấm lại điểm relevance thật:</p>
+<pre><code>Bi-encoder top-5 (theo cosine similarity, KHÔNG đọc query+doc cùng lúc):
+1. Doc A "Tổng quan ngành ngân hàng Q3"      cos=0.81
+2. Doc B "VCB RSI 28, MACD cắt lên"          cos=0.78
+3. Doc C "Lãi suất huy động ngân hàng tăng"  cos=0.77
+4. Doc D "BID quá bán theo RSI, volume tăng" cos=0.75
+5. Doc E "Tin tức M&amp;A ngành ngân hàng"       cos=0.74
+
+Cross-encoder rerank (đọc query + từng doc CÙNG LÚC):
+1. Doc D "BID quá bán theo RSI, volume tăng" score=0.94  ← đúng trọng tâm câu hỏi
+2. Doc B "VCB RSI 28, MACD cắt lên"          score=0.91  ← đúng trọng tâm câu hỏi
+3. Doc A "Tổng quan ngành ngân hàng Q3"      score=0.42  ← liên quan ngành nhưng lạc đề "quá bán"
+4. Doc C "Lãi suất huy động ngân hàng tăng"  score=0.31
+5. Doc E "Tin tức M&amp;A ngành ngân hàng"       score=0.20</code></pre>
+<p>Nhận xét quan trọng: bi-encoder xếp Doc A hạng 1 vì nó "nói chung chung về ngân hàng" nên cosine similarity cao với mọi khía cạnh của query. Cross-encoder phát hiện Doc A KHÔNG thực sự trả lời "cổ phiếu nào quá bán" — nó đẩy Doc A xuống hạng 3 và đưa 2 document có tín hiệu "quá bán" cụ thể (Doc D, Doc B) lên đầu. Đây chính là giá trị thực của rerank: sửa lỗi mà bi-encoder mắc phải do so sánh 2 embedding độc lập.</p>
+
+<h3>4. Pipeline pseudo-code — nối 2 tầng lại</h3>
+<p>Code pipeline chi tiết với 3 lựa chọn reranker cụ thể (Cohere Rerank v3, bge-reranker-v2-m3, Jina Reranker) đã có ở <code>L9_1_advanced_rag.html §4</code>. Ở đây chỉ minh hoạ khung tổng quát để thấy rõ 2 tầng nối với nhau ở đâu:</p>
+<pre><code>def retrieve_and_rerank(query: str, top_k_retrieve=100, top_k_final=5):
+    # Tầng 1 — bi-encoder, rẻ, chạy trên toàn corpus
+    query_emb = bi_encoder.encode(query)
+    candidates = vector_db.search(query_emb, k=top_k_retrieve)  # top-100
+
+    # Tầng 2 — cross-encoder, đắt hơn/doc, chỉ chạy trên top-100
+    pairs = [(query, doc.text) for doc in candidates]
+    scores = cross_encoder.predict(pairs)  # 1 score cho mỗi cặp
+
+    reranked = sorted(zip(candidates, scores), key=lambda x: -x[1])
+    return reranked[:top_k_final]  # top-5 gửi vào context LLM</code></pre>
+<p>Điểm mấu chốt về hiệu năng: <code>cross_encoder.predict(pairs)</code> chỉ chạy 100 lần (kích thước <code>top_k_retrieve</code>), không chạy trên toàn bộ corpus — đây chính là chỗ 2 tầng "gặp nhau" để giữ chi phí thực tế.</p>
+
+<h3>5. Tầng thứ 3 hay bị bỏ sót — Late interaction (ColBERT): không phải "chỉ có 2 lựa chọn"</h3>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân</div><p>Trình bày reranking như "chỉ có 2 lựa chọn: bi-encoder nhanh-kém-chính-xác HOẶC cross-encoder chậm-chính-xác" là bỏ sót 1 điểm quan trọng: có 1 họ kiến trúc thứ 3 — <strong>late interaction</strong> (ColBERT và các biến thể) — lấy phần lớn tốc độ của bi-encoder VÀ phần lớn độ chính xác của cross-encoder, bằng cách trì hoãn (late) bước so khớp tương tác thay vì bỏ hẳn nó như bi-encoder hay làm ngay từ đầu như cross-encoder.</p></div>
+<p>Cơ chế: ColBERT mã hoá query và document THÀNH TỪNG VECTOR CHO MỖI TOKEN (không gộp thành 1 vector duy nhất như bi-encoder truyền thống) — document-token-vectors vẫn tính SẴN offline (giữ được lợi thế index trước của bi-encoder). Lúc query-time, thay vì 1 phép cosine similarity duy nhất, nó tính <strong>MaxSim</strong>: với mỗi token trong query, tìm token nào trong document giống nhất, rồi cộng các max đó lại thành điểm tổng. Phép tính này rẻ hơn nhiều so với chạy lại cả model cross-encoder, nhưng vẫn "nhìn thấy" tương tác ở mức token — thứ bi-encoder gộp-1-vector hoàn toàn bỏ lỡ.</p>
+<table>
+<tr><th>Tiêu chí</th><th>Bi-encoder</th><th>Late interaction (ColBERT)</th><th>Cross-encoder</th></tr>
+<tr><td>Đơn vị vector hoá</td><td>1 vector / toàn bộ document</td><td>1 vector / mỗi token trong document</td><td>Không lưu vector — chạy lại model mỗi lần</td></tr>
+<tr><td>Document embedding tính trước?</td><td>Có (offline)</td><td>Có (offline, nhưng nhiều vector hơn/doc)</td><td>Không thể — cần query để tính</td></tr>
+<tr><td>Phép so khớp tại query-time</td><td>1 cosine similarity</td><td>MaxSim — max theo từng token query rồi cộng lại</td><td>Chạy nguyên transformer trên cặp (query, doc)</td></tr>
+<tr><td>Độ chính xác</td><td>Thấp nhất</td><td>Gần cross-encoder ("near cross-encoder precision")</td><td>Cao nhất</td></tr>
+<tr><td>Tốc độ ở tải cao (p50 latency, theo benchmark 2026)</td><td>Rất nhanh</td><td>~20-23ms ở 40 QPS — vẫn ổn định dưới tải</td><td>Có thể vượt 100% utilization, queue delay lớn ở QPS cao</td></tr>
+<tr><td>Chi phí lưu trữ</td><td>Thấp — 1 vector/doc</td><td>Cao hơn hẳn — 1 vector/token (giảm bớt nhờ residual compression ở bản mới)</td><td>Không cần lưu vector nào cho doc</td></tr>
+<tr><td>Vai trò thực tế</td><td>Tầng 1 — thu hẹp triệu → trăm</td><td>Có thể thay cross-encoder ở tầng 2 khi cần cân bằng tốc độ/độ chính xác ở QPS cao</td><td>Tầng 2 khi query ít, cần độ chính xác cao nhất, không quan tâm QPS lớn</td></tr>
+</table>
+<p>Kết luận: đây KHÔNG phải "ColBERT thay thế cross-encoder vì tốt hơn ở mọi mặt" — nó là 1 điểm cân bằng khác trên cùng đường cong trade-off tốc độ/chính xác/chi phí lưu trữ. Hệ thống phục vụ hàng chục nghìn query/giây (search engine lớn) hưởng lợi rõ từ ColBERT hơn cross-encoder thuần; hệ thống ít query, mỗi query cần độ chính xác tối đa (VD nghiên cứu pháp lý, y tế) vẫn có thể chọn cross-encoder thuần.</p>
+
+<h3>6. Reranker không phải "phép màu" — thất bại khi nào</h3>
+<p>Nghiên cứu 2025-2026 (đánh giá 6 loại LM reranker trên nhiều bộ dữ liệu, gồm cả dữ liệu chuyên biệt như DRUID) phát hiện: reranker dựa trên language model có thể <strong>bị đánh lừa bởi độ giống nhau về mặt từ vựng bề mặt</strong> — 1 document lẫn tạp (distractor) dùng nhiều từ giống hệt query nhưng KHÔNG trả lời đúng ý, đôi khi vẫn được reranker chấm điểm cao hơn document đúng nhưng diễn đạt khác từ ngữ. Trên 1 số bộ dữ liệu khó, reranker LM còn thua cả baseline BM25 (thuần lexical, rẻ hơn nhiều).</p>
+<p>Điểm liên quan trực tiếp tới dữ liệu tài chính (loại dữ liệu dự án này xử lý): reranker dựa trên encoder có xu hướng dựa vào khớp từ vựng/ngữ nghĩa nông, nên hoạt động KÉM khi câu hỏi đòi hỏi <strong>so sánh số liệu, ràng buộc thời gian, hoặc suy luận nhân quả</strong> — VD phân biệt "RSI 28 hôm nay" và "RSI 28 tuần trước" chỉ khác nhau ở mốc thời gian, không khác nhiều về từ vựng; hay so sánh "biên lợi nhuận gộp 41.2%" và "39.2%" — 2 con số khác nhau nhưng câu văn xung quanh gần như giống hệt. Đây là lý do KHÔNG NÊN coi "đã thêm rerank" đồng nghĩa "hết lo về độ chính xác" khi query có yếu tố số liệu/thời gian — loại câu hỏi rất phổ biến trong phân tích chứng khoán.</p>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân</div><p>"Có rerank thì luôn tốt hơn không rerank" cũng là 1 dạng nhị phân cần cẩn thận — đúng ĐA SỐ trường hợp (xem ví dụ Doc A/B/C/D/E ở mục 3), nhưng KHÔNG phải luôn luôn: với câu hỏi cần so số liệu/thời gian chính xác, cross-encoder có thể vẫn bị nhiễu bởi câu văn gần giống nhau về mặt chữ, và 1 rule đơn giản dựa trên trích xuất số liệu (regex/structured parsing) đôi khi đáng tin hơn cả reranker cho riêng loại câu hỏi đó.</p></div>
+
+<h3>6.1 Gotcha ít được nhắc: điểm reranker KHÔNG PHẢI xác suất, không so được giữa các query</h3>
+<p>1 giới hạn thực hành khác — độc lập với vấn đề "bị đánh lừa" ở mục 6 — là vấn đề <strong>hiệu chỉnh điểm số (score calibration)</strong>. Phần lớn reranker tối ưu để xếp thứ tự ĐÚNG TƯƠNG ĐỐI trong 1 danh sách ứng viên (relative ranking), KHÔNG tối ưu để điểm số có ý nghĩa TUYỆT ĐỐI giống nhau giữa các câu hỏi khác nhau hay giữa các model khác nhau.</p>
+<table>
+<tr><th>Tình huống</th><th>Vấn đề cụ thể</th></tr>
+<tr><td>Điểm 0.7 ở query A vs điểm 0.7 ở query B</td><td>Có thể tương ứng với 2 mức độ liên quan hoàn toàn khác nhau (VD 90% relevant ở query A nhưng chỉ 30% ở query B) — "đúng tương đối, sai tuyệt đối"</td></tr>
+<tr><td>Đổi từ reranker này sang reranker khác</td><td>Mọi ngưỡng (threshold) đã tinh chỉnh cho model cũ PHẢI hiệu chỉnh lại từ đầu — không thể mang nguyên ngưỡng 0.5 sang model mới và kỳ vọng hoạt động giống hệt</td></tr>
+<tr><td>1 số reranker cụ thể (VD Voyage rerank-3.5, theo báo cáo thực nghiệm)</td><td>Có xu hướng luôn trả điểm quanh mức ~0.5 bất kể mức độ liên quan thật — khiến việc đặt ngưỡng lọc gần như vô nghĩa</td></tr>
+</table>
+<p>Hệ quả thực hành: KHÔNG nên hardcode 1 ngưỡng tuyệt đối (VD "chỉ giữ chunk có score &gt; 0.6") rồi coi đó là chuẩn áp dụng mãi mãi hoặc áp dụng chung cho MỌI loại câu hỏi — ngưỡng đó chỉ đúng cho ĐÚNG 1 model, ĐÚNG 1 phân bố câu hỏi đã đo thử. Nếu cần lọc theo ngưỡng tuyệt đối trong production, phải hiệu chỉnh riêng cho model đang dùng (đo trên tập câu hỏi đại diện của chính hệ thống) thay vì tin vào 1 con số nghe "hợp lý" từ tài liệu model khác.</p>
+
+<h3>7. Pointwise vs Pairwise vs Listwise — 3 cách LLM có thể dùng để rerank</h3>
+<p>Khi dùng chính 1 LLM (không phải cross-encoder chuyên dụng) làm reranker, có 3 chiến lược prompt khác nhau, chi phí tăng dần:</p>
+<table>
+<tr><th>Chiến lược</th><th>Cách hoạt động</th><th>Chi phí tương đối</th><th>Chất lượng thực đo (2026)</th></tr>
+<tr><td>Pointwise</td><td>Chấm điểm từng cặp (query, doc) độc lập — giống cross-encoder nhưng dùng LLM tổng quát thay vì model chuyên dụng</td><td>Thấp nhất trong 3 cách LLM, nhưng vẫn ~10× chi phí so với cross-encoder chuyên dụng</td><td>Hầu như không đáng — độ chính xác thấp hơn cross-encoder chuyên dụng dù đắt hơn nhiều</td></tr>
+<tr><td>Pairwise</td><td>So sánh từng cặp document (A hay B liên quan hơn?) — cần O(K log K) đến O(K²) lượt so sánh</td><td>Đắt nhất — tăng theo bậc 2 với số document</td><td>Thường đạt chất lượng cao nhất trong 3 cách, nhưng chi phí thường không tương xứng ở quy mô lớn</td></tr>
+<tr><td>Listwise</td><td>Đưa cả danh sách ứng viên vào 1 lần gọi, LLM trả về thứ tự xếp hạng (kỹ thuật "sliding window" kiểu RankGPT khi danh sách dài hơn context)</td><td>~9× chi phí, ~35-40% latency cao hơn so với cross-encoder chuyên dụng (số liệu benchmark 2026)</td><td>Cải thiện khiêm tốn so với cross-encoder chuyên dụng đã calibrate tốt — nhiều benchmark cho thấy KHÔNG đủ bù chi phí</td></tr>
+</table>
+<p>Kết luận benchmark 2026 đáng chú ý: <strong>1 cross-encoder chuyên dụng đã calibrate tốt thường đạt hoặc vượt chất lượng của LLM listwise reranker, với chi phí cao hơn ~9× và latency cao hơn ~35-40%</strong> (đúng số liệu ở bảng trên — 1 LLM tổng quát chạy qua API luôn đắt hơn 1 model chuyên dụng nhỏ chạy tự host, dù không lệch tới mức 2-3 bậc độ lớn). Đây là bằng chứng cụ thể cho nguyên tắc "phức tạp hơn (dùng LLM to hơn để rerank) không tự động đồng nghĩa tốt hơn" — cùng tinh thần tránh false-dichotomy đã nói ở đầu trang.</p>
+
+<h3>8. Bảng reranker cụ thể — số liệu benchmark thật (verify 2026-09)</h3>
+<table>
+<tr><th>Reranker</th><th>Kiến trúc</th><th>Điểm mạnh theo benchmark</th><th>License / triển khai</th></tr>
+<tr><td>Cohere Rerank 4</td><td>Cross-encoder, managed API</td><td>Lựa chọn "ít ma sát nhất" cho managed path — không cần tự host</td><td>Thương mại, gọi qua API</td></tr>
+<tr><td>BGE-reranker-v2-m3</td><td>Cross-encoder, đa ngôn ngữ</td><td>Nhẹ, dễ tự host, tốc độ suy luận nhanh, hỗ trợ đa ngôn ngữ (gồm tiếng Việt)</td><td>Open-license — lựa chọn self-host phổ biến nhất</td></tr>
+<tr><td>Jina-reranker-v3</td><td>Listwise, cửa sổ ngữ cảnh 131k token, xử lý tới 64 doc/lượt</td><td>61.94 nDCG@10 trên BEIR; 81.33% Hit@1 ở latency 188ms — tầng hiếm hoi dưới 200ms</td><td>Có bản open + managed</td></tr>
+<tr><td>ColBERT (late interaction)</td><td>Late interaction, MaxSim</td><td>p50 latency ~20-23ms ở 40 QPS — ổn định hơn cross-encoder thuần khi tải cao</td><td>Open-source, cần hạ tầng lưu vector theo token (tốn storage hơn)</td></tr>
+<tr><td>Zerank 2</td><td>Cross-encoder tối ưu production</td><td>ELO cao nhất (~1638) trong khảo sát tổng hợp 2026 — xếp hạng tổng thể tốt nhất trong nhóm test</td><td>Verify license/API riêng trước khi chọn cho production</td></tr>
+</table>
+<p>Không có 1 reranker "tốt nhất tuyệt đối" — bảng trên nên đọc theo đúng tiêu chí ưu tiên của hệ thống cụ thể (latency cứng dưới 200ms? cần tự host vì lý do dữ liệu nhạy cảm? đa ngôn ngữ tiếng Việt?), không phải chọn theo tên nghe quen nhất.</p>
+
+<h3>9. Knowledge distillation — "nén" cross-encoder lớn thành reranker nhỏ, nhanh hơn</h3>
+<p>1 hướng tối ưu khác chưa nhắc: thay vì chọn 1 model cố định từ bảng ở mục 8, có thể tự huấn luyện 1 reranker RIÊNG nhỏ hơn/nhanh hơn bằng <strong>knowledge distillation</strong> — dùng 1 cross-encoder lớn (hoặc thậm chí 1 LLM) làm "giáo viên" (teacher) để dạy lại 1 model nhỏ hơn (student) bắt chước cách chấm điểm của giáo viên, mà không cần chạy model lớn ở production.</p>
+<table>
+<tr><th>Kỹ thuật nén</th><th>Cơ chế</th><th>Đánh đổi</th></tr>
+<tr><td>Knowledge distillation</td><td>Model nhỏ (student) học bắt chước output của model lớn (teacher) trên tập dữ liệu huấn luyện</td><td>Cần 1 teacher đủ tốt + tập dữ liệu huấn luyện riêng; đổi lại student nhanh hơn nhiều lần khi serving</td></tr>
+<tr><td>Quantization</td><td>Giảm độ chính xác số học của trọng số (VD float32 → int8/4-bit)</td><td>Giảm chi phí tính toán/bộ nhớ đáng kể, đánh đổi 1 phần độ chính xác — mức giảm phụ thuộc kỹ thuật quantize cụ thể</td></tr>
+<tr><td>Pruning</td><td>Loại bỏ trọng số/attention head dư thừa, ít đóng góp vào kết quả cuối</td><td>Giảm kích thước model, cần tinh chỉnh lại sau khi cắt để tránh mất chất lượng đáng kể</td></tr>
+<tr><td>Intermediate-layer compression</td><td>Nén ở các tầng giữa của cross-encoder thay vì nén đều toàn bộ model</td><td>Nghiên cứu 2026 ghi nhận đây là điểm cân bằng hiệu năng/hiệu quả tốt hơn nén đồng đều toàn bộ layer</td></tr>
+</table>
+<p>Điểm thú vị: chính cross-encoder — dù đắt để chạy trực tiếp trên corpus lớn (lý do cần kiến trúc 2 tầng ở mục 2) — lại là 1 "giáo viên" distillation RẤT tốt, vì nó tạo ra tín hiệu huấn luyện chất lượng cao cho model nhỏ hơn. Đây là lý do distillation thường dùng cross-encoder làm gốc, không phải bi-encoder hay 1 model yếu hơn.</p>
+<p>Khi nào đáng đầu tư: chỉ khi hệ thống ĐÃ xác định rõ 1 reranker có sẵn (bảng mục 8) đáp ứng đúng chất lượng cần nhưng KHÔNG đáp ứng nổi ngân sách latency/chi phí ở quy mô traffic thật — tự distill 1 model riêng là công việc kỹ thuật đáng kể (cần data, huấn luyện, đánh giá lại), không phải bước mặc định cho mọi dự án mới bắt đầu.</p>
+<p>Checklist tối thiểu trước khi bắt tay tự distill 1 reranker (không phải quyết định làm cho vui):</p>
+<ol>
+<li>Đã đo thật traffic/QPS mục tiêu và xác nhận reranker managed/open-source có sẵn KHÔNG đáp ứng nổi ngân sách latency/chi phí ở quy mô đó.</li>
+<li>Đã chọn được 1 "teacher" đủ mạnh (thường là cross-encoder top bảng mục 8) để tạo tín hiệu huấn luyện chất lượng cao.</li>
+<li>Có sẵn (hoặc có thể tạo) 1 tập dữ liệu (query, document, relevance) đại diện đúng phân bố câu hỏi thật của hệ thống — không dùng tạm dữ liệu benchmark công khai không liên quan lĩnh vực.</li>
+<li>Có quy trình đánh giá lại (eval) độc lập để xác nhận student model không mất quá nhiều chất lượng so với teacher trước khi thay thế trong production.</li>
+</ol>
+<table>
+<tr><th>Lựa chọn</th><th>Effort ban đầu</th><th>Chi phí vận hành dài hạn</th></tr>
+<tr><td>Dùng thẳng reranker managed (Cohere Rerank 4...)</td><td>Thấp nhất — chỉ gọi API</td><td>Trả theo lượt gọi, tăng tuyến tính theo traffic</td></tr>
+<tr><td>Tự host reranker open-source có sẵn (BGE-v2-m3...)</td><td>Vừa — cần hạ tầng serving</td><td>Chi phí hạ tầng cố định, không tăng theo lượt gọi kiểu API</td></tr>
+<tr><td>Tự distill 1 student model riêng</td><td>Cao nhất — cần data + huấn luyện + eval</td><td>Có thể rẻ hơn managed API ở traffic rất lớn, nhưng cần duy trì pipeline huấn luyện lại định kỳ</td></tr>
+</table>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Minh hoạ bằng số cụ thể để thấy rõ khoảng cách chi phí giữa 2 lựa chọn (giả định 1 lần chạy cross-encoder mất ~5ms/cặp trên GPU tầm trung):</p>
+<table>
+<tr><th>Kịch bản</th><th>Số lần chạy cross-encoder</th><th>Thời gian ước tính</th></tr>
+<tr><td>Chạy cross-encoder trên toàn bộ 1,000,000 doc</td><td>1,000,000</td><td>~83 phút / query — không khả thi</td></tr>
+<tr><td>2 tầng: bi-encoder → top-100 → cross-encoder</td><td>100</td><td>~0.5 giây / query — khả thi</td></tr>
+</table>
+<p>Chênh lệch không phải "nhanh hơn 1 chút" — nó là khác biệt giữa <strong>chạy được production</strong> và <strong>không chạy được</strong>. Đây là lý do kiến trúc 2 tầng gần như luôn xuất hiện trong mọi hệ RAG nghiêm túc, không phải 1 tuỳ chọn nâng cao.</p>
+
+<h3>3.1 Ví dụ số cụ thể — khi reranker bị đánh lừa bởi số liệu giống nhau về chữ (nối tiếp mục 6)</h3>
+<p>Minh hoạ cùng khuôn mẫu với ví dụ Doc A-E ở mục 3, nhưng lần này cho thấy giới hạn thật của cross-encoder khi câu hỏi cần phân biệt CHÍNH XÁC theo mốc thời gian — query: "RSI của VCB hôm nay là bao nhiêu?"</p>
+<pre><code>Ứng viên sau bi-encoder (cả 2 đều nói về "RSI VCB", cosine similarity gần bằng nhau):
+  Doc X: "RSI của VCB hôm nay (15/9) là 28, vùng quá bán"
+  Doc Y: "RSI của VCB tuần trước (08/9) là 28, vùng quá bán"
+
+Cross-encoder rerank — CÓ THỂ chấm điểm gần bằng nhau cho cả 2:
+  Doc X: score=0.89   Doc Y: score=0.87
+  → Chênh lệch rất nhỏ, dễ bị đảo thứ tự bởi nhiễu ngẫu nhiên của model,
+    vì phần lớn câu chữ 2 document GIỐNG HỆT NHAU — khác biệt mấu chốt
+    chỉ nằm ở 1 cụm ngày tháng nhỏ ("hôm nay" vs "tuần trước", "15/9" vs "08/9").
+</code></pre>
+<p>Đây chính xác là kiểu lỗi mục 6 mô tả: reranker dựa trên khớp ngữ nghĩa/từ vựng không được thiết kế để ưu tiên 1 con số/mốc ngày cụ thể khi phần còn lại của câu gần như giống hệt nhau. Với loại câu hỏi này, kiểm tra bổ sung bằng rule tường minh (VD lọc theo trường <code>date</code> trong metadata TRƯỚC khi đưa vào reranker, xem <code>R3_3_data_preparation.html §5</code> về metadata enrichment) đáng tin hơn là phó mặc hoàn toàn cho cross-encoder tự phân biệt.</p>
+
+<h3>3.2 Ví dụ số cụ thể — vì sao 1 ngưỡng "score &gt; 0.5" cứng sẽ hỏng nếu dự án nâng cấp <code>kb_loader.py</code> lên semantic search</h3>
+<p>Nối tiếp gotcha ở mục 6.1, áp trực tiếp vào tình huống GIẢ ĐỊNH dự án này nâng cấp <code>kb_loader.py</code> lên vector search + rerank (chưa xảy ra — xem <code>R3_5_retrieval_generation.html</code>). Giả sử kỹ sư đặt cứng ngưỡng lọc "chỉ giữ chunk có rerank score &gt; 0.5" để tránh nhồi chunk không liên quan vào prompt gửi Claude:</p>
+<pre><code>Query 1: "MACD là gì" (câu hỏi định nghĩa đơn giản, rất "dễ" với reranker)
+  Top-1 sau rerank: score = 0.93 → ngưỡng 0.5 lọc ĐÚNG, giữ lại chunk tốt
+
+Query 2: "so sánh RSI và MACD cho việc bắt đáy ngắn hạn" (câu hỏi phức hợp hơn)
+  Top-1 sau rerank: score = 0.46 → ngưỡng 0.5 LOẠI BỎ chunk này dù nó
+    có thể vẫn là chunk liên quan nhất trong toàn bộ candidate — chỉ vì
+    câu hỏi phức tạp hơn khiến điểm tuyệt đối của MỌI ứng viên đều thấp hơn,
+    không phải vì chunk đó thực sự kém liên quan hơn chunk ở Query 1.</code></pre>
+<p>Bài học: nếu có ngày dự án cần lọc theo ngưỡng tuyệt đối, ngưỡng đó phải được hiệu chỉnh trên chính tập câu hỏi tài chính/tiếng Việt của dự án (không mượn con số "0.5 nghe hợp lý" từ tài liệu 1 reranker tiếng Anh tổng quát) — hoặc an toàn hơn, dùng thứ hạng tương đối (luôn lấy top-3 sau rerank, như mục 2 đã dạy) thay vì ngưỡng tuyệt đối, để tránh đúng lỗi calibration này.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>Bi-encoder (retrieval)</th><th>Cross-encoder (reranking)</th></tr>
+<tr><td>Encode query + doc</td><td>Riêng biệt, độc lập</td><td>Cùng lúc, ghép chung 1 input</td></tr>
+<tr><td>Document embedding</td><td>Tính sẵn offline</td><td>Không có khái niệm "embedding sẵn" — phải chạy lại mỗi lần</td></tr>
+<tr><td>Độ phức tạp tại query-time</td><td>O(query)</td><td>O(query × doc)</td></tr>
+<tr><td>Tốc độ</td><td>Rất nhanh (dùng ANN index)</td><td>Chậm hơn nhiều lần/cặp</td></tr>
+<tr><td>Độ chính xác (cùng top-k)</td><td>Thấp hơn</td><td>Cao hơn rõ rệt</td></tr>
+<tr><td>Dùng ở tầng nào trong pipeline</td><td>Tầng 1 — thu hẹp từ triệu xuống trăm</td><td>Tầng 2 — tinh chỉnh từ trăm xuống top-5/10</td></tr>
+</table>
+
+<h3>Bảng quyết định — chọn công cụ nào cho tầng rerank</h3>
+<table>
+<tr><th>Tình huống</th><th>Lựa chọn hợp lý nhất</th><th>Vì sao</th></tr>
+<tr><td>QPS thấp, cần độ chính xác tối đa, có ngân sách gọi API</td><td>Cross-encoder managed (Cohere Rerank 4)</td><td>Ít ma sát vận hành nhất, không cần tự host</td></tr>
+<tr><td>QPS thấp/vừa, cần tự host vì dữ liệu nhạy cảm, đa ngôn ngữ (có tiếng Việt)</td><td>BGE-reranker-v2-m3</td><td>Open-license, nhẹ, nhanh, đa ngôn ngữ tốt</td></tr>
+<tr><td>QPS rất cao (hàng chục nghìn query/giây), cần ổn định latency dưới tải</td><td>Late interaction (ColBERT)</td><td>p50 latency ổn định dưới tải cao hơn cross-encoder thuần, đổi lại tốn storage</td></tr>
+<tr><td>Query cần so sánh số liệu/thời gian chính xác (rất phổ biến trong phân tích tài chính)</td><td>Rule tường minh (filter theo metadata) TRƯỚC, rerank model SAU</td><td>Cross-encoder/LM reranker có thể bị đánh lừa bởi câu chữ giống nhau khi khác biệt chỉ nằm ở 1 con số/ngày (xem mục 3.1, 6)</td></tr>
+<tr><td>Chưa có ngân sách hạ tầng, corpus nhỏ, đã biết trước tên mục cần tra</td><td>Không cần reranker nào — exact-match đủ</td><td>Đúng hiện trạng <code>kb_loader.py</code> của dự án — xem "Ứng dụng dự án" bên dưới</td></tr>
+</table>
+
+<h3>Bảng calibration — nên tin điểm reranker ở mức nào</h3>
+<table>
+<tr><th>Cách dùng điểm reranker</th><th>Có tin cậy được không?</th><th>Vì sao</th></tr>
+<tr><td>So sánh thứ hạng NỘI BỘ trong CÙNG 1 lần gọi (top-1 &gt; top-2 &gt; ...)</td><td>Có</td><td>Đây chính là mục tiêu model được huấn luyện để làm tốt — xếp hạng tương đối trong 1 danh sách</td></tr>
+<tr><td>Đặt 1 ngưỡng tuyệt đối cố định áp dụng cho MỌI câu hỏi (VD "chỉ giữ score &gt; 0.5")</td><td>Không, trừ khi đã hiệu chỉnh riêng</td><td>Điểm tuyệt đối phụ thuộc độ khó câu hỏi, không phải hằng số phổ quát (xem ví dụ mục 3.2)</td></tr>
+<tr><td>So sánh điểm giữa 2 reranker KHÁC NHAU</td><td>Không</td><td>Mỗi model có thang điểm/calibration riêng — 0.7 ở model A không nghĩa là gì so với 0.7 ở model B</td></tr>
+<tr><td>Dùng điểm để quyết định "có nên hỏi lại user" (elicitation-style, liên hệ <code>R3_1_mcp.html</code>)</td><td>Cẩn trọng</td><td>Cần ngưỡng đã hiệu chỉnh + fallback rõ ràng khi điểm nằm ở vùng không chắc chắn, không dùng 1 số tuyệt đối chưa kiểm chứng</td></tr>
+</table>
+
+<h2>🎯 Ứng dụng vào dự án hiện tại</h2>
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Hệ thống <code>kb_loader.py</code> (<code>.claude/skills/daily-investor-report/scripts/kb_loader.py</code>) hiện tại <strong>không có tầng rerank nào</strong>. Nó dùng exact substring match trên heading (<code>anchor.lower() in heading_text.lower()</code>, hàm <code>_extract_section</code> dòng 36-84, điều kiện match ở dòng 58) để tìm section, không phải similarity ranking hay bi-encoder nào cả.</p>
+<p>Điều này ổn với quy mô hiện tại: 7 KB file, heading đã biết trước (VD gọi <code>load_sector_playbook("Ngân hàng")</code> với tên sector cố định — xem dòng 100-104). Không có "top-100 ứng viên cần xếp hạng lại" vì bài toán không phải tìm kiếm mở — nó là tra cứu theo tên đã biết.</p>
+<p>Nếu KB mở rộng sang free-text query (VD user hỏi tự do "có tin gì về ngành thép gần đây" thay vì gọi hàm với tên cố định), lúc đó mới cần retrieval + rerank thật — không thể tiếp tục exact-match heading vì không còn 1 tên chính xác để match nữa.</p>
+<p>Điểm cần nhớ nếu retrieval + rerank thật được thêm vào sau này: dữ liệu skill xử lý là dữ liệu tài chính CÓ ràng buộc thời gian rất nặng (giá, chỉ báo kỹ thuật thay đổi từng phiên) — đúng loại câu hỏi mà mục 6/3.1 cảnh báo reranker LM dễ nhầm. Thiết kế đúng sẽ là lọc theo <code>date</code>/<code>ticker</code> ở tầng metadata (kết hợp với <code>R3_3_data_preparation.html</code>) TRƯỚC khi đưa ứng viên vào bất kỳ reranker semantic nào, không phó mặc hoàn toàn việc phân biệt "hôm nay" vs "tuần trước" cho model.</p>
+<p>Về calibration (mục 6.1/3.2): nếu tương lai hệ thống cần tự động lọc "chunk đủ liên quan để đưa vào prompt Claude" bằng 1 ngưỡng số, KHÔNG nên mượn ngưỡng mặc định từ tài liệu reranker (thường tính trên benchmark tiếng Anh tổng quát) — phải tự đo trên 1 tập câu hỏi tài chính tiếng Việt đại diện của chính dự án trước khi tin số đó. Về distillation (mục 9): ở quy mô hiện tại (7 KB, chưa có traffic lớn), đầu tư tự huấn luyện 1 reranker riêng là over-engineering rõ ràng — chỉ đáng cân nhắc lại nếu hệ thống tương lai phải phục vụ rerank cho traffic lớn mà chi phí gọi reranker managed (Cohere Rerank 4 chẳng hạn) trở thành gánh nặng thật.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p>Bỏ qua tầng rerank vì "top-k từ bi-encoder trông cũng ổn" — sai khác rõ rệt khi query phức tạp hoặc corpus có nhiều document gần giống nhau về chủ đề nhưng khác biệt về chi tiết quan trọng.</p>
+<p>Chạy cross-encoder trực tiếp trên toàn bộ corpus vì nghĩ "chính xác hơn thì cứ dùng luôn" — bỏ qua chi phí tính toán khiến hệ thống không chạy nổi ở quy mô thật (xem bảng thời gian ở trên).</p>
+<p>Nhầm lẫn "hệ thống có rerank" với "hệ thống có sắp xếp lại kết quả bằng bất kỳ rule nào" — rerank đúng nghĩa kỹ thuật là dùng cross-encoder (hoặc mô hình tương đương học tương tác query-doc), không phải sort theo ngày tháng hay độ dài văn bản.</p>
+<p>Nghĩ "reranking chỉ có 2 lựa chọn bi-encoder hoặc cross-encoder" — bỏ sót họ late interaction (ColBERT) nằm giữa, cân bằng tốc độ/độ chính xác/chi phí lưu trữ khác hẳn 2 đầu kia, đáng cân nhắc riêng khi QPS cao.</p>
+<p>Coi "đã thêm cross-encoder" là hết lo về độ chính xác, kể cả với câu hỏi cần so sánh số liệu/thời gian chính xác — nghiên cứu 2025-2026 cho thấy reranker dựa trên LM vẫn có thể bị đánh lừa bởi độ giống từ vựng bề mặt, đặc biệt yếu ở dạng câu hỏi phổ biến trong phân tích tài chính (so số, ràng buộc thời gian).</p>
+<p>Mặc định "dùng LLM to để rerank (listwise) luôn tốt hơn cross-encoder chuyên dụng vì LLM thông minh hơn" — benchmark thực tế cho thấy ngược lại: cross-encoder chuyên dụng calibrate tốt thường bằng hoặc vượt LLM listwise reranker, với chi phí thấp hơn ~9× và latency thấp hơn ~35-40% (đúng số liệu ở mục 7).</p>
+<p>Đặt cứng 1 ngưỡng điểm reranker tuyệt đối (VD "score &gt; 0.5") rồi coi đó là chuẩn dùng mãi mãi cho mọi câu hỏi — điểm reranker chỉ đáng tin ở mức so sánh THỨ HẠNG trong cùng 1 lần gọi, không phải 1 con số tuyệt đối phổ quát; đổi model hoặc gặp câu hỏi khó hơn đều làm ngưỡng cũ sai lệch.</p>
+<p>Bỏ qua knowledge distillation như 1 lựa chọn khi ngân sách latency/chi phí không đáp ứng nổi reranker có sẵn — mặc định "phải chấp nhận chậm/đắt vì đó là cái giá của độ chính xác" trong khi thực ra có thể tự huấn luyện 1 student model nhỏ hơn từ chính cross-encoder đang dùng làm teacher.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được analogy "thủ thư quét bìa sách" vs "chuyên gia đọc kỹ" và ánh xạ đúng sang bi-encoder/cross-encoder.</li>
+<li>Vẽ được sơ đồ 2 tầng và giải thích đúng độ phức tạp O(query) vs O(query × doc).</li>
+<li>Tính được (bằng ước lượng) vì sao chạy cross-encoder trên toàn corpus không khả thi ở quy mô triệu document.</li>
+<li>Xác định đúng: <code>kb_loader.py</code> hiện tại có tầng rerank không, và giải thích vì sao thiếu nó KHÔNG phải lỗi ở quy mô hiện tại.</li>
+<li>Nêu được điều kiện cụ thể sẽ khiến dự án cần thêm rerank thật.</li>
+<li>Giải thích được cơ chế MaxSim của late interaction (ColBERT) và vì sao nó nằm giữa bi-encoder/cross-encoder về trade-off, không phải "thay thế hoàn toàn" cái nào.</li>
+<li>Kể được ít nhất 1 tình huống cụ thể reranker LM có thể thất bại (bị đánh lừa bởi độ giống từ vựng, yếu với so sánh số liệu/thời gian) — và liên hệ tới loại câu hỏi tài chính của dự án.</li>
+<li>Phân biệt đúng 3 chiến lược pointwise/pairwise/listwise khi dùng LLM làm reranker, và nêu đúng số liệu benchmark cho thấy cross-encoder chuyên dụng thường thắng về chi phí/hiệu năng.</li>
+<li>Giải thích được vì sao điểm reranker không phải xác suất calibrated, và tại sao KHÔNG nên đặt 1 ngưỡng tuyệt đối chung cho mọi câu hỏi/mọi model.</li>
+<li>Giải thích được cơ chế knowledge distillation (teacher-student) để nén cross-encoder lớn thành reranker nhỏ hơn, và biết khi nào đáng đầu tư công sức này.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R3_1_mcp.html">← R3.1 · MCP</a>
+  <a href="R3_3_data_preparation.html">R3.3 · Data Preparation →</a>
+</div>
+
+</div>
+</body>
+</html>

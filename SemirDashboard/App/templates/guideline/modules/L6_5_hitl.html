@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L6.5 — Human-in-the-Loop</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 6 · Module 5</div>
+  <h1>6.5 · Human-in-the-Loop (HITL)</h1>
+  <p class="subtitle">Interrupt gates, approval flows, edit/reject patterns. Cân bằng automation với human oversight cho high-stakes agent actions.</p>
+  <div class="level">Level 6 · Agents · ~25 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>3 HITL patterns: approve, edit, redirect</li>
+  <li>Implement interrupt_before + Command(resume=...)</li>
+  <li>UI design cho approval flow</li>
+  <li>Timeout + auto-approve fallback</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Human-in-the-Loop bằng ngôn ngữ đời thường</div>
+<p><strong>Xe tự lái Tesla</strong>: Tự chạy 99% tình huống ngon lành. 1% cần người can thiệp: đèn đỏ hư, tai nạn phía trước, biển báo mờ. Xe dừng, alert tài xế → tài xế quyết định.</p>
+<p><strong>AI agent</strong>: LLM đề xuất "chuyển 500tr từ tài khoản A sang B" → không nên tự thực hiện. Pause, hỏi human "confirm chuyển tiền?" → human duyệt → thực thi. HITL cho quyết định rủi ro cao/không đảo được.</p>
+<p><strong>3 patterns HITL</strong>:</p>
+<ul>
+  <li><strong>Approve/reject</strong>: user Y/N.</li>
+  <li><strong>Edit</strong>: user chỉnh sửa output LLM trước khi thực thi.</li>
+  <li><strong>Interactive</strong>: LLM hỏi làm rõ khi câu hỏi mơ hồ (Cursor "which file did you mean?").</li>
+</ul>
+</div>
+
+<h2>1. Vì sao HITL?</h2>
+
+<ul>
+  <li>High-stakes actions: deploy prod, send money, delete data</li>
+  <li>Compliance: regulated industries require human sign-off</li>
+  <li>Quality: agent 90% correct, need human catch 10% edge cases</li>
+  <li>Learning: human feedback improves system over time</li>
+  <li>Trust: user comfort with automation gradually</li>
+</ul>
+
+<h2>2. 3 HITL patterns</h2>
+
+<h3>2.1 Approve / Reject</h3>
+<pre><code># Simplest: binary decision
+Agent produce spec → pause → user click "Approve" / "Reject"
+
+# Reject → back to agent với reason, retry
+# Approve → continue pipeline
+</code></pre>
+
+<h3>2.2 Edit</h3>
+<pre><code># User modify agent output before continue
+Agent generate code → user edit → user confirm → deploy
+
+# UI shows diff, user makes changes, save
+</code></pre>
+
+<h3>2.3 Redirect</h3>
+<pre><code># User change direction mid-pipeline
+Agent implementing feature X → user say "actually do Y instead"
+System back to analyser với new requirement
+</code></pre>
+
+<div class="callout warn">
+<div class="label">⚠️ Common confusion — Redirect vs Interactive Q&A</div>
+<p>Bảng so sánh ngay dưới đây dùng tên "Interactive Q&A" thay vì "Redirect" — dễ tưởng đây là pattern thứ 4. Thực ra chúng là <strong>2 biến thể của cùng ý tưởng "đổi hướng"</strong>, khác nhau ở <em>ai chủ động bấm nút dừng</em>:</p>
+<ul>
+  <li><strong>Redirect</strong> = <em>user</em> chủ động ngắt ngang khi agent đang chạy bình thường (không ai hỏi gì cả) — "Agent implementing feature X → user tự nói 'thôi làm Y đi'". Agent không ngờ trước việc này.</li>
+  <li><strong>Interactive Q&A</strong> = <em>agent</em> chủ động dừng lại và hỏi vì nó phát hiện mơ hồ ("which file did you mean?") — agent biết trước nó cần hỏi, user chỉ trả lời câu hỏi cụ thể.</li>
+</ul>
+<p>Cả 2 đều dùng chung cơ chế kỹ thuật (<code>interrupt()</code> + graph quay lại node trước), nên bảng dưới gộp chung 1 cột để so sánh gọn — nhưng khi thiết kế UI, nhớ tách rõ: Redirect cần nút "Change direction" luôn hiển thị; Interactive Q&A chỉ xuất hiện khi agent tự yêu cầu.</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 3 HITL patterns (đọc SAU section 2)</div>
+
+<table>
+<tr><th></th><th>Approve/Reject</th><th>Edit before execute</th><th>Interactive Q&A</th></tr>
+<tr><td><strong>Cách</strong></td><td>Y/N binary decision</td><td>User có thể chỉnh output trước execute</td><td>LLM hỏi user khi mơ hồ</td></tr>
+<tr><td><strong>User effort</strong></td><td>Rất thấp (1 click)</td><td>Medium (edit UI)</td><td>Medium (trả lời câu hỏi)</td></tr>
+<tr><td><strong>Latency impact</strong></td><td>Chờ user click</td><td>Chờ user chỉnh sửa</td><td>Multi-round</td></tr>
+<tr><td><strong>Best for</strong></td><td>Rủi ro cao, action rõ ràng (send email, chuyển tiền)</td><td>Content review (draft PR, generated report)</td><td>Task mơ hồ, cần clarify</td></tr>
+<tr><td><strong>Ví dụ</strong></td><td>"Send $10,000 to X?" [Y/N]</td><td>"Here's the PR description, edit if needed"</td><td>"Which file did you mean: auth.py hay authentication.py?"</td></tr>
+<tr><td><strong>Framework support</strong></td><td>LangGraph interrupt</td><td>Interrupt + state edit</td><td>Interrupt + LLM tool_call</td></tr>
+<tr><td><strong>Cost</strong></td><td>1 turn extra</td><td>1 turn extra</td><td>2-5 turns</td></tr>
+<tr><td><strong>Fallback</strong></td><td>Timeout → reject</td><td>Timeout → use as-is</td><td>Timeout → best guess</td></tr>
+</table>
+
+<h4>Ví dụ concrete — AI code assistant deploy 3 patterns</h4>
+<pre><code>=== Approve/Reject ===
+Agent: "I'm about to force-push to main. Confirm?" [Y/N]
+User: Y → execute
+Simple, fast, but limited flexibility.
+
+=== Edit before execute ===
+Agent: "Here's the PR description [3 paragraphs]. Edit or approve."
+User: chỉnh 1 câu → approve
+Better content quality but more effort.
+
+=== Interactive Q&A ===
+Agent: "You said 'fix the bug' — which file?
+       Option 1: auth.py:42 (last edited)
+       Option 2: test_auth.py:15 (test file)"
+User: "Option 1"
+Agent: continues
+Best cho ambiguous tasks but slower.
+</code></pre>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Nhu cầu</th><th>Chọn</th></tr>
+<tr><td>Financial transactions</td><td>⭐ Approve/Reject với 2FA</td></tr>
+<tr><td>Content creation (draft)</td><td>Edit before execute</td></tr>
+<tr><td>Coding assistant</td><td>Interactive Q&A + Edit</td></tr>
+<tr><td>Deletion / destructive</td><td>Approve/Reject với typed confirmation</td></tr>
+<tr><td>Email sending</td><td>Edit before execute</td></tr>
+<tr><td>Data analysis (safe)</td><td>Không HITL cần</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: Cursor Composer là hybrid — mặc định Edit pattern (accept/reject diff), interrupt cho Interactive khi ambiguous. Đây là why Cursor UX beat Copilot early — HITL layered đúng cho coding.</p>
+</div>
+
+<h2>3. LangGraph implementation</h2>
+
+<div class="callout">
+<div class="label">interrupt_before vs interrupt() — 2 thứ khác nhau, dùng CÙNG NHAU</div>
+<p>Code dưới đây dùng cả 2 — dễ tưởng bị trùng lặp. Thực ra chúng làm 2 việc khác nhau, bổ sung cho nhau:</p>
+<ul>
+  <li><strong><code>interrupt_before=["human_gate"]</code></strong> khai báo LÚC COMPILE graph — nói với LangGraph "trước khi chạy node tên <code>human_gate</code>, luôn dừng lại". Đây là cấu hình tĩnh, áp dụng cho mọi lần chạy graph này.</li>
+  <li><strong><code>interrupt(payload)</code></strong> gọi LÚC RUNTIME, bên TRONG thân hàm node — nó không chỉ dừng, mà còn <em>đóng gói dữ liệu</em> (payload) gửi ra ngoài cho UI hiển thị, và khi resume, giá trị user trả về (qua <code>Command(resume=...)</code>) chính là return value của lời gọi <code>interrupt()</code> đó.</li>
+</ul>
+<p>Nói cách khác: <code>interrupt_before</code> trả lời câu hỏi "graph dừng Ở ĐÂU", còn <code>interrupt()</code> trả lời câu hỏi "dừng thì GỬI GÌ cho user và NHẬN GÌ khi tiếp tục". Chỉ dùng <code>interrupt_before</code> mà không có <code>interrupt()</code> trong node vẫn dừng được, nhưng UI sẽ không có payload rõ ràng để hiển thị.</p>
+</div>
+
+<pre><code>from langgraph.types import interrupt, Command
+
+def human_gate(state: ProjectContext) -> dict:
+    """Pause for spec approval."""
+    # interrupt() pauses graph, returns None to caller
+    result = interrupt({
+        "reason": "spec_review",
+        "spec": state["spec_analysis_report"],
+        "prompt": "Approve this spec? (yes/no + optional comments)",
+    })
+    return {
+        "spec_approved": result["approved"],
+        "user_feedback": result.get("feedback", ""),
+    }
+
+# Compile with interrupt_before
+app = graph.compile(
+    checkpointer=saver,
+    interrupt_before=["human_gate"],
+)
+
+# Runtime: graph runs until pauses at human_gate
+config = {"configurable": {"thread_id": job_id}}
+result = await app.ainvoke(initial_input, config=config)
+# result contains __interrupt__ signal
+
+# Later, after user approves via UI:
+await app.ainvoke(
+    Command(resume={"approved": True, "feedback": "LGTM"}),
+    config=config,
+)
+</code></pre>
+
+<h2>4. UI design</h2>
+
+<div class="callout">
+<div class="label">UX principles</div>
+<ol>
+  <li><strong>Show context</strong>: what agent produced, why paused</li>
+  <li><strong>Compare</strong>: side-by-side with alternatives (if any)</li>
+  <li><strong>Explain</strong>: agent's reasoning, confidence</li>
+  <li><strong>Actionable</strong>: Approve / Edit / Reject buttons + comment box</li>
+  <li><strong>Estimate</strong>: how long until agent needs next input</li>
+</ol>
+</div>
+
+<pre><code>┌─── Spec Approval Required ─────────────────────────┐
+│                                                     │
+│  Agent: SpecAnalyze | Confidence: 85%              │
+│                                                     │
+│  Findings:                                          │
+│  • [HIGH] Ambiguity in auth requirement (§2.3)     │
+│  • [MEDIUM] Missing error handling (§4.1)          │
+│                                                     │
+│  [View Full Spec]  [Edit Spec]  [Approve]  [Reject]│
+│                                                     │
+│  Comments (optional):                               │
+│  ┌─────────────────────────────────────┐           │
+│  │                                     │           │
+│  └─────────────────────────────────────┘           │
+│                                                     │
+│  ⏱ Estimated agent time after approval: 15 min    │
+└─────────────────────────────────────────────────────┘
+</code></pre>
+
+<h2>5. Auto-approve fallback</h2>
+
+<div class="callout warn">
+<div class="label">Timeout strategy</div>
+<p>User đi vacation 3 ngày không approve → agent waste checkpointed state. Options:</p>
+<ol>
+  <li><strong>Timeout auto-reject</strong>: sau N hours, treat as reject, fail job</li>
+  <li><strong>Timeout auto-approve</strong>: risky, chỉ cho low-stakes decisions</li>
+  <li><strong>Escalate</strong>: notify secondary approver</li>
+  <li><strong>Preserve</strong>: pause indefinitely (default), notify user via email</li>
+</ol>
+<p>AI Orchestrator: preserve + email notification. Cost checkpoint storage → cleanup 30 days.</p>
+</div>
+
+<h2>6. Notification patterns</h2>
+
+<ul>
+  <li>Push notification (mobile app)</li>
+  <li>Email digest (batch multiple approvals)</li>
+  <li>Slack/Teams webhook (team collaboration)</li>
+  <li>In-app dashboard (persistent list)</li>
+</ul>
+
+<h2>7. Multi-approver</h2>
+
+<pre><code># N-of-M approval: require k approvals from set of M reviewers
+def multi_approve_gate(state):
+    approvals = interrupt({
+        "type": "multi_approval",
+        "required_k": 2,
+        "eligible_approvers": ["u1", "u2", "u3", "u4"],
+    })
+    if len(approvals["approved_by"]) >= 2:
+        return {"approved": True}
+    return {"approved": False, "reason": "insufficient approvals"}
+</code></pre>
+
+<h2>8. Audit trail</h2>
+
+<pre><code>class ApprovalEvent(TypedDict):
+    gate_name: str
+    approver: str
+    decision: str        # approve|reject|edit
+    timestamp: str
+    original_content: dict
+    edited_content: Optional[dict]
+    comments: str
+    duration_pending_sec: int
+
+# Log every approval decision → compliance trail
+</code></pre>
+
+<h2>9. HITL pain points</h2>
+
+<div class="callout danger">
+<ol>
+  <li><strong>Approval fatigue</strong>: user click "approve" without reading → defeat purpose. Fix: batch reviews, quality assurance sampling.</li>
+  <li><strong>Latency killer</strong>: user response = hours. Total pipeline days. Fix: async notification, prioritize by risk.</li>
+  <li><strong>Dropout</strong>: user không complete approval. Fix: reminders, escalation, timeout policy.</li>
+  <li><strong>Race condition</strong>: 2 users approve simultaneously → conflict. Fix: version state, optimistic locking.</li>
+</ol>
+<p><strong>Optimistic locking là gì?</strong> Thay vì khoá database khi user A mở màn hình approval (pessimistic — chặn user B luôn), hệ thống gắn 1 số <code>version</code> vào state. Khi user A bấm Approve, request gửi kèm <code>version=5</code> (bản họ đang xem). Server chỉ chấp nhận nếu <code>version</code> hiện tại trong DB vẫn = 5; nếu user B đã approve trước đó và version đã tăng lên 6, request của A bị từ chối với lỗi "state đã thay đổi, tải lại". "Optimistic" vì hệ thống <em>giả định ít khi xung đột</em> nên không khoá trước — chỉ kiểm tra và từ chối nếu phát hiện xung đột lúc ghi, rẻ hơn khoá pessimistic nhưng cần code xử lý "reload + báo lỗi" cho user.</p>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. 3 HITL patterns describe briefly.</p>
+<p class="a">(1) Approve/Reject binary. (2) Edit — user modify then continue. (3) Redirect — change pipeline direction.</p>
+
+<p class="q">2. LangGraph interrupt_before vs interrupt() inside node — khác biệt?</p>
+<p class="a">interrupt_before: pause BEFORE node executes. interrupt() called inside node: pause DURING node with data package. interrupt() flexible, allows agent produce data first then wait for user to inspect.</p>
+
+<p class="q">3. User đi vacation 3 ngày, không approve. System should?</p>
+<p class="a">Preserve checkpoint + email reminders. High-stakes: escalate to secondary approver after 24h. Low-stakes: consider auto-approve with timeout. Cleanup abandoned threads after 30 days.</p>
+
+<p class="q">4. Multi-approver 2-of-4 flow — implement outline?</p>
+<p class="a">interrupt() returns list of approvals. Track approver IDs. Continue when count &gt;= k. Handle timeouts per approver. Audit each decision.</p>
+
+<p class="q">5. Approval fatigue — fix?</p>
+<p class="a">(1) Reduce gate count — only high-stakes. (2) Batch similar reviews (approve 10 SFT samples at once). (3) Sampling QA (auto-approve 90%, human check 10%). (4) Delegate to trusted sub-agent for routine. (5) Track approval time — if too fast (&lt;2s), warn user.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>ai_orchestrator: <code>orchestrator/graph.py</code> — <code>human_gate</code> node + interrupt_before</li>
+    <li>Runner resume: <code>runner.py::resume_with_approval()</code></li>
+    <li>UI: <code>frontend/src/pages/HumanGate.tsx</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/how-tos/human_in_the_loop/">LangGraph HITL docs</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2108.00941">Wu et al — A Survey of Human-in-the-loop for Machine Learning</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L6_4_checkpointing.html">← L6.4</a>
+  <a href="L6_6_observability.html">L6.6 · Observability →</a>
+</div>
+
+</div>
+</body>
+</html>

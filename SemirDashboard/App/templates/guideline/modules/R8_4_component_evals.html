@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R8.4 · Component-level Evals — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Observability &amp; Evaluation · Điểm 4/6</div>
+  <h1>R8.4 · Component-level Evals</h1>
+  <p class="subtitle">Chấm 1 span/1 quyết định đơn lẻ trong cô lập — cách duy nhất trả lời "công đoạn nào trong pipeline 5-10 bước đang gây lỗi". Dự án <code>predictor</code> đã làm đúng tinh thần này từ trước khi khái niệm được đặt tên.</p>
+  <div class="level">Độ khó: Khó · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Định nghĩa chính xác component-level (step-wise) evaluation — khác gì với trajectory-level đã học ở trang trước.</li>
+<li>Hiểu pattern <code>@observe</code> — biến mỗi bước trong pipeline thành 1 unit test độc lập.</li>
+<li>Giải thích vì sao tracing không chỉ cho biết metric nào fail, mà còn hé lộ failure mode mới chưa từng viết metric để đo.</li>
+<li>Nhận diện chính xác 8 check Self-QA Gate của <code>daily-investor-report</code> là 1 dạng component-level eval thủ công — biết ánh xạ đúng từng check với đúng bước trong pipeline.</li>
+<li>Chọn đúng LOẠI metric (deterministic vs LLM-judge) theo đúng LOẠI component đang chấm — không dùng LLM-judge đắt tiền cho thứ deterministic check được.</li>
+<li>Thiết kế được 1 chuỗi eval nhiều lớp (layered) cho 1 pipeline, tránh chi phí LLM-judge chấm MỌI span ở quy mô lớn.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p><a href="../modules/L9_3_agent_eval.html">L9.3 — Agent Evaluation</a> có nhắc đến trajectory-level evaluation nhưng <strong>chưa tách riêng methodology component-level thành 1 mục độc lập</strong> — hiện đang gộp chung vào trajectory-level. Đây là gap thật mà trang này lấp đầy: tách bạch rõ ràng "nhìn cả chuỗi bước" (trajectory, trang R8.3) khỏi "nhìn từng bước riêng lẻ trong cô lập" (component, trang này). Độ khó <strong>Khó</strong> vì đòi hỏi phân biệt tinh tế 2 khái niệm rất gần nhau, và vì phần ứng dụng dự án cần đọc hiểu chính xác 1 pipeline thật nhiều bước.</p>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Đánh giá cả 1 dây chuyền sản xuất ô tô bằng cách lái thử xe thành phẩm (end-to-end) cho biết xe chạy tốt hay không, nhìn cả quá trình lắp ráp từ đầu đến cuối (trajectory) cho biết quy trình có hợp lý không — nhưng cả 2 đều KHÔNG cho biết chính xác <strong>trạm nào trên dây chuyền lắp sai</strong>. Component-level eval giống việc đặt 1 <strong>trạm kiểm tra chất lượng SAU MỖI công đoạn</strong> (lắp động cơ → kiểm tra riêng động cơ; lắp khung → kiểm tra riêng khung; sơn → kiểm tra riêng lớp sơn) — mỗi trạm kiểm tra hoàn toàn độc lập với các trạm khác, không quan tâm công đoạn trước/sau làm gì, chỉ hỏi đúng 1 câu: "công đoạn NÀY có đạt chuẩn không?".</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Định nghĩa chính xác — khác trajectory-level ở đâu</h3>
+<p>Component-level (step-wise) evaluation chấm <strong>1 span/1 quyết định đơn lẻ trong cô lập</strong> — VD: chấm riêng "LLM span đã chọn đúng tool và sinh đúng tham số chưa" mà không quan tâm bước sau đó agent làm gì tiếp, không quan tâm bước trước đó đã đúng hay sai. Khác với trajectory-level (trang R8.3) nhìn <strong>cả chuỗi bước liên kết với nhau</strong> để hỏi "đường đi tổng thể có hợp lý không", component-level cắt rời từng bước ra khỏi chuỗi rồi chấm độc lập — giống như tháo rời 1 công đoạn ra khỏi dây chuyền để kiểm tra riêng nó, không quan tâm dây chuyền tổng thể.</p>
+<table>
+<tr><th></th><th>Trajectory-level (R8.3)</th><th>Component-level (trang này)</th></tr>
+<tr><td>Đơn vị chấm</td><td>Chuỗi N bước liên kết</td><td>1 bước/1 span, tách rời khỏi chuỗi</td></tr>
+<tr><td>Câu hỏi</td><td>"Đường đi tổng thể có hợp lý không?"</td><td>"Bước NÀY, tách riêng, có đúng không?"</td></tr>
+<tr><td>Phụ thuộc bước khác?</td><td>Có — đánh giá quan hệ giữa các bước</td><td>Không — mỗi bước chấm độc lập, song song được</td></tr>
+</table>
+
+<h3>2. Vì sao đây là cách duy nhất trả lời "điểm nghẽn ở đâu"</h3>
+<p>Khi pipeline có 5-10 bước (retriever → tool call → sub-agent → tổng hợp), 1 điểm số end-to-end hoặc 1 điểm trajectory duy nhất không đủ chi tiết để trả lời "retriever nào, tool nào, sub-agent nào đang là điểm nghẽn/gây lỗi".</p>
+<pre><code>1 điểm end-to-end duy nhất:  "Pipeline đạt 72% chất lượng"  → sửa ở đâu? Không biết.
+
+Tách từng component:
+  retrieve_context()      → context relevance = 0.90  (tốt)
+  call_price_tool()       → argument correctness = 0.60  (KÉM ← đây!)
+  synthesize_thesis()     → faithfulness = 0.85  (tốt)
+
+→ Biết ngay ưu tiên sửa call_price_tool(), không phải đoán mò cả pipeline hoặc
+  sửa lan man cả 3 bước.</code></pre>
+
+<h3>3. Cách implement thực tế 2026 — pattern <code>@observe</code></h3>
+<p>Dùng decorator kiểu <code>@observe</code> (pattern phổ biến ở Langfuse/Braintrust) để biến MỖI bước trong trajectory thành <strong>1 unit test độc lập</strong>: mỗi lần agent chạy, mỗi span tự động được chấm điểm theo metric riêng của nó, không phải chờ đến cuối pipeline mới biết đúng/sai.</p>
+<pre><code># Pattern minh hoạ (không phải code thật trong repo — mô tả ý tưởng chuẩn 2026)
+@observe(metric="context_relevance")
+def retrieve_context(ticker):
+    ...
+    return context
+
+@observe(metric="argument_correctness")
+def call_price_tool(ticker, days):
+    ...
+    return price_data
+
+@observe(metric="faithfulness")
+def synthesize_thesis(context, price_data):
+    ...
+    return thesis
+
+# Mỗi decorator tự động: (1) log input/output thành 1 span riêng,
+# (2) áp đúng metric của bước đó, (3) ghi điểm vào hệ thống observability
+# — độc lập với việc pipeline tổng thể cuối cùng có "thành công" hay không.
+</code></pre>
+<p>Tracing (đã dạy <code>L6_6</code>) là xương sống của cách làm này — nó không chỉ cho biết metric nào fail, mà còn <strong>hé lộ failure mode mới bạn chưa từng viết metric để đo</strong> (VD đọc trace thấy 1 bước luôn mất 8 giây bất thường — không có metric nào báo "chậm bất thường" trước đó, nhưng nhìn trace trực tiếp mới phát hiện). Kết hợp tracing với human review định kỳ để liên tục cập nhật bộ eval khi agent "trôi dạt" hành vi theo thời gian.</p>
+<div class="callout">
+<div class="label">📖 Phân biệt với 4-lớp assertion CI/CD đã học ở <code>R7_1</code></div>
+<ul>
+<li><code>R7_1_cicd.html §6</code>: 4 lớp assertion (structural/invariant/semantic similarity/rubric-judge) chạy Ở TẦNG CI/CD — trước khi merge code, trên 1 golden dataset cố định, KHÔNG có traffic thật.</li>
+<li>Component-level eval ở trang này chạy Ở TẦNG RUNTIME/OBSERVABILITY — trên mỗi lần pipeline chạy thật (production), qua <code>@observe</code>/tracing, với dữ liệu thật luôn thay đổi.</li>
+<li><strong>2 tầng bổ trợ nhau, không thay thế</strong>: CI/CD bắt lỗi TRƯỚC khi code lên production; component-level eval bắt lỗi DÙ code đã pass CI nhưng dữ liệu thật (VD 1 API bên ngoài trả về format lạ) gây lỗi mà golden dataset tĩnh không mô phỏng được.</li>
+</ul>
+</div>
+
+<h3>4. Chọn đúng LOẠI metric theo LOẠI component — không phải mọi component đều cần LLM-judge</h3>
+<p>1 pipeline thật thường có nhiều LOẠI component khác nhau (retriever, generator/LLM, tool call, router/quyết định rẽ nhánh) — mỗi loại có 1 loại lỗi đặc trưng riêng, và quan trọng hơn: <strong>không phải loại nào cũng cần LLM-judge đắt tiền để chấm</strong>. Nhiều lỗi có thể bắt bằng kiểm tra <strong>deterministic</strong> (rẻ, tức thời, không cần gọi model nào thêm).</p>
+<table>
+<tr><th>Loại component</th><th>Lỗi đặc trưng</th><th>Cách chấm phù hợp</th></tr>
+<tr><td>Retriever (bước truy hồi trong RAG)</td><td>Lấy nhầm chunk không liên quan, bỏ sót chunk quan trọng</td><td>LLM-judge — context precision/recall (công thức đầy đủ đã có ở <code>L9_1_advanced_rag.html §6.5</code>, không lặp lại ở đây)</td></tr>
+<tr><td>Generator/LLM (bước tổng hợp câu trả lời)</td><td>Bịa thông tin không có trong context (hallucination)</td><td>LLM-judge — faithfulness (công thức đầy đủ cũng ở <code>L9_1</code> §6.5)</td></tr>
+<tr><td>Tool call (bước gọi API/function)</td><td>Sai tham số, sai kiểu dữ liệu, thiếu field bắt buộc</td><td><strong>Deterministic</strong> — validate JSON schema, KHÔNG cần LLM-judge (lỗi kiểu này có đáp án đúng/sai rõ ràng)</td></tr>
+<tr><td>Router/quyết định rẽ nhánh</td><td>Chọn sai nhánh logic tiếp theo</td><td><strong>Deterministic</strong> nếu có ground-truth nhãn sẵn; LLM-judge nếu quyết định mang tính chủ quan (VD "câu hỏi này có cần thêm ngữ cảnh không")</td></tr>
+</table>
+<p>2 bẫy đối xứng thường gặp khi bỏ qua bảng phân loại này:</p>
+<ul>
+<li><strong>Bẫy 1 — đổ oan cho generator</strong>: thấy câu trả lời cuối sai, ĐOÁN generator bị hallucination, đi sửa prompt mãi không hết lỗi — trong khi lỗi thật nằm ở retriever không lấy đúng chunk. Không prompt nào cứu được context rỗng/sai ngay từ đầu.</li>
+<li><strong>Bẫy 2 — đổ oan cho retriever</strong>: tối ưu retriever mãi (đổi embedding, tăng top-k) trong khi retriever đã đúng — generator mới là nơi bỏ qua hoặc diễn giải sai context đã được cung cấp đầy đủ.</li>
+</ul>
+<p>Chấm ĐÚNG loại component (đúng bảng ở trên) mới tránh được việc sửa nhầm chỗ trong cả 2 bẫy này.</p>
+
+<h3>5. Chiến lược nhiều lớp (layered evaluation) — tiết kiệm chi phí LLM-judge</h3>
+<p>Thực hành 2026: xếp tầng kiểm tra từ RẺ → ĐẮT, chỉ leo lên tầng đắt hơn khi tầng rẻ không đủ để kết luận:</p>
+<pre><code>Lớp 1 — Deterministic (rẻ nhất, chạy MỌI lần, tức thời)
+    ↓ format sai / schema fail → FAIL ngay, không cần lớp sau
+Lớp 2 — Heuristic (rẻ, quy tắc đơn giản: độ dài, từ khoá cấm, ngưỡng số)
+    ↓ vi phạm rule rõ ràng → FAIL ngay, không cần lớp sau
+Lớp 3 — LLM-as-judge (đắt hơn, cần cho sắc thái/ngữ nghĩa — faithfulness, relevance)
+    ↓ vẫn không chắc chắn / case biên → escalate
+Lớp 4 — Con người (đắt nhất, dùng để calibrate lại Lớp 3, không chạy mọi lần)
+</code></pre>
+<p>Vì sao thứ tự RẺ→ĐẮT quan trọng:</p>
+<ul>
+<li>Chạy Lớp 3 (LLM-judge) cho MỌI span của MỌI request là lãng phí — phần lớn lỗi thật (sai schema, thiếu field, sai kiểu) đã bị Lớp 1-2 bắt được với chi phí gần bằng 0.</li>
+<li>Lớp 3 chỉ nên xử lý đúng phần việc nó giỏi nhất: đánh giá NGỮ NGHĨA (context có liên quan không, câu trả lời có bịa không) — thứ Lớp 1-2 không có khả năng đánh giá.</li>
+<li>Lớp 4 (người) chỉ dùng để calibrate định kỳ Lớp 3 (đúng kỹ thuật đã học ở <code>R8_1</code> mục 5) — không dùng người để chấm mọi case, quá đắt và quá chậm.</li>
+</ul>
+
+<h3>6. Sampling ở tầng component-level — không chấm 100% span bằng LLM-judge</h3>
+<p>Ngay cả sau khi đã tách lớp (mục 5), chấm Lớp 3 (LLM-judge) cho 100% traffic production vẫn tốn. Nguyên tắc giống head-based/tail-based sampling đã học ở <code>L6_6</code> cho tracing, áp dụng lại cho EVAL (không chỉ log trace):</p>
+<ul>
+<li><strong>Head-based cho Lớp 3</strong>: sample ngẫu nhiên 1 tỷ lệ nhỏ (VD 5-10%) traffic để chấm LLM-judge liên tục — đủ để theo dõi xu hướng drift theo thời gian, không cần chấm hết.</li>
+<li><strong>Tail-based cho Lớp 1-2</strong>: chấm 100% case đã FAIL ở Lớp 1-2 bằng Lớp 3 (nếu cần hiểu sâu hơn lý do) — không bỏ lỡ case lỗi rõ ràng chỉ vì nó rơi ngoài mẫu ngẫu nhiên 5-10%.</li>
+</ul>
+<div class="callout">
+<div class="label">📖 Worked example — chi phí Lớp 3 nếu chấm 100% vs sample 10%</div>
+<pre><code>Pipeline chạy 86 ticker/ngày × 3 component cần LLM-judge (retriever, generator,
+router chủ quan) = 258 lệnh gọi judge/ngày nếu chấm 100%.
+Giả sử mỗi lệnh gọi judge ≈ $0.002 (model rẻ, input ngắn theo rubric có cấu trúc):
+
+Chấm 100%:  258 × $0.002 × 30 ngày = $15.48/tháng
+Sample 10%: 26 × $0.002 × 30 ngày  = $1.56/tháng  (+100% case Lớp 1-2 FAIL, thường
+                                                    rất ít nên không đổi nhiều)
+
+→ Giảm ~90% chi phí Lớp 3 mà vẫn đủ mẫu (26/ngày × 30 ngày = 780 mẫu/tháng) để
+  theo dõi xu hướng drift theo thời gian — số nhỏ so với ngân sách nhưng đây là
+  minh hoạ đơn giá giả định, không phải giá thật của bất kỳ model cụ thể nào.</code></pre>
+</div>
+
+<h2>🔢 Ví dụ cụ thể — 8 Self-QA Check là component-level eval thật</h2>
+<p><code>.claude/skills/daily-investor-report/SKILL.md</code> §11 (Self-QA Gate, MANDATORY) định nghĩa đúng 8 check, mỗi check chấm ĐÚNG 1 bước/1 khía cạnh trong pipeline, hoàn toàn độc lập với các check khác — đây là bằng chứng thực tế dự án áp dụng đúng tinh thần component-level eval:</p>
+<table>
+<tr><th>#</th><th>Check</th><th>Chấm bước nào trong pipeline (component)</th><th>Loại chấm (mục 4)</th></tr>
+<tr><td>1</td><td>Universe Completeness</td><td>Step 1 (backbone fetch) — đúng số lượng ticker kỳ vọng (30 vn30 / 82 all, theo hằng số <code>EXPECTED_COUNT</code> hiện hành trong code — bản thân hằng số này đang lệch so với độ dài thật của <code>HIGHLIGHT_GROUP</code>, đã tăng lên 86 theo <code>R2_1_kv_caching.html</code>, chưa cập nhật lại) có mặt trong output</td><td>Deterministic — đếm số</td></tr>
+<tr><td>2</td><td>Data Freshness</td><td>Toàn bộ nguồn dữ liệu đầu vào (price/prediction/volume/foreign/news/ohlcv) — mỗi nguồn tự chấm tuổi dữ liệu riêng, không phụ thuộc nguồn khác</td><td>Deterministic — so sánh timestamp</td></tr>
+<tr><td>3</td><td>Top Picks Quality</td><td>Step 4 (top picks, sector cap 2) — riêng bước chọn top 5 buy/sell, không liên quan bước render</td><td>Deterministic — kiểm tra ngưỡng RR</td></tr>
+<tr><td>4</td><td>Anti-Hallucination</td><td>Step 7 (render) — mọi số liệu trong HTML phải khớp verbatim với JSON payload nguồn</td><td>Deterministic — so khớp chuỗi/số verbatim</td></tr>
+<tr><td>5</td><td>Schema Compliance</td><td>Step 3 (build ticker payload) — mọi field bắt buộc phải có mặt cho mọi ticker</td><td>Deterministic — validate field tồn tại</td></tr>
+<tr><td>6</td><td>File Operations</td><td>Step 7 (I/O cuối) — file HTML/JSON tồn tại đúng path, đúng kích thước, lessons_learned.jsonl được append đúng số dòng</td><td>Deterministic — kiểm tra filesystem</td></tr>
+<tr><td>7</td><td>HTML Validity</td><td>Step 7 (render) — cấu trúc HTML hợp lệ (doctype, meta, balanced tag) tách biệt khỏi nội dung số liệu (check 4)</td><td>Deterministic — parse cấu trúc</td></tr>
+<tr><td>8</td><td>Track Record Continuity</td><td>Step 6 (lessons learned) — riêng việc đọc/tính thống kê 30 ngày từ <code>lessons_learned.jsonl</code></td><td>Deterministic — tính thống kê</td></tr>
+</table>
+<p><strong>Quan sát đáng chú ý, nối lại mục 4-5</strong>: cả 8/8 check đều là <strong>Lớp 1 (deterministic)</strong> theo đúng phân loại ở mục 4-5 — dự án hiện KHÔNG dùng bất kỳ Lớp 3 (LLM-judge) nào cho Self-QA Gate. Đây không phải thiếu sót: cả 8 khía cạnh đang kiểm tra (đếm số, so timestamp, so khớp verbatim, validate field, kiểm tra file, parse cấu trúc, tính thống kê) đều có đáp án đúng/sai rõ ràng, không cần đánh giá NGỮ NGHĨA — đúng tinh thần "chỉ leo lên Lớp 3 khi Lớp 1-2 không đủ" đã nêu ở mục 5. Nếu dự án sau này thêm 1 check kiểu "thesis LLM viết ra có mạch lạc logic không" (không có đáp án nhị phân rõ ràng), ĐÓ mới là lúc cần Lớp 3 thật sự — và khi đó phải áp đúng rule LLM independence đã học ở <code>R8_1</code>.</p>
+<p>Mỗi check trả về đúng 1 <code>qa_result</code> có structure cố định (trích SKILL.md §11):</p>
+<pre><code>{
+  "stamp": "20260622_1530",
+  "mode": "vn30",
+  "checks": [
+    {"id":1,"name":"Universe Completeness","status":"PASS","detail":"30/30"},
+    {"id":2,"name":"Data Freshness","status":"PASS","detail":"max 22m"},
+    {"id":3,"name":"Top Picks Quality","status":"PASS","detail":"10/10 RR&gt;=1.3"},
+    {"id":4,"name":"Anti-Hallucination","status":"PASS","detail":"247/247"},
+    {"id":5,"name":"Schema Compliance","status":"PASS","detail":"all fields"},
+    {"id":6,"name":"File Operations","status":"PASS","detail":"4 files"},
+    {"id":7,"name":"HTML Validity","status":"PASS","detail":"clean"},
+    {"id":8,"name":"Track Record Continuity","status":"PASS","detail":"hit 58.3%"}
+  ],
+  "summary": "8/8 PASS"
+}
+</code></pre>
+<p>Đây chính là cấu trúc dữ liệu 1 hệ thống <code>@observe</code>-style sẽ sinh ra — chỉ khác là được viết thủ công thành 1 khối kiểm tra ở cuối pipeline thay vì decorator tự động gắn vào từng hàm. Nếu bất kỳ check nào FAIL, HTML được đổi tên thành <code>..._FAILED.html</code>, lý do FAIL ghi vào <code>qa.json</code>, và tiến trình exit non-zero — đúng nguyên tắc "mỗi component có gate riêng, fail 1 component là gate cả pipeline", không phải "trung bình cộng điểm rồi coi là pass".</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tầng eval</th><th>Câu hỏi trả lời</th><th>Ví dụ trong <code>daily-investor-report</code></th></tr>
+<tr><td>End-to-end</td><td>Báo cáo cuối có dùng được không?</td><td>"8/8 PASS" tổng — 1 con số duy nhất</td></tr>
+<tr><td>Trajectory-level</td><td>Các bước có nối tiếp hợp lý không?</td><td>VD Step 2.5 backfill có chạy đúng khi Step 2 thiếu ticker không (nhìn quan hệ 2 bước)</td></tr>
+<tr><td>Component-level</td><td>Bước NÀY, tách riêng, có đúng không?</td><td>8 check độc lập ở bảng trên — mỗi check không quan tâm 7 check còn lại</td></tr>
+</table>
+<table>
+<tr><th>Lớp (mục 5)</th><th>Chi phí</th><th>Bắt được loại lỗi nào</th><th>Chạy tần suất</th></tr>
+<tr><td>Lớp 1 — Deterministic</td><td>~$0</td><td>Sai schema, thiếu field, sai kiểu dữ liệu</td><td>100% mọi request</td></tr>
+<tr><td>Lớp 2 — Heuristic</td><td>~$0</td><td>Vi phạm rule đơn giản (độ dài, từ khoá cấm)</td><td>100% mọi request</td></tr>
+<tr><td>Lớp 3 — LLM-judge</td><td>Trung bình-cao</td><td>Lỗi ngữ nghĩa (hallucination, relevance, coherence)</td><td>Sample 5-10% + 100% case Lớp 1-2 FAIL</td></tr>
+<tr><td>Lớp 4 — Người</td><td>Cao nhất</td><td>Calibrate lại Lớp 3, case biên Lớp 3 không chắc</td><td>Định kỳ (VD 30-50 case/đợt calibrate)</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>.claude/skills/daily-investor-report/scripts/collect_and_build.py</code> có cấu trúc nhiều bước rõ ràng (Step 1 backbone → Step 2 TA computation → Step 2.5 backfill → Step 3 build payload → Step 4 top picks → Step 5 full analysis → Step 6 lessons learned → Step 6.5 senior blocks → Step 7 render) — đây CHÍNH LÀ 1 trajectory nhiều component, và <strong>8 check trong Self-QA Gate (<code>SKILL.md</code> §11) đã là 1 dạng component-level eval thủ công</strong>: Check 1 kiểm tra riêng bước resolve universe, Check 4 kiểm tra riêng bước render anti-hallucination, Check 8 kiểm tra riêng bước lessons-learned continuity, v.v — mỗi check gắn với 1 component cụ thể trong pipeline, không phải 1 điểm số end-to-end duy nhất. Đây là bằng chứng thực tế dự án đã áp dụng đúng tinh thần component-level eval <strong>trước khi khái niệm được đặt tên chính thức trong ngành</strong> — không cần xây lại từ đầu, chỉ cần ghi nhận rõ ràng đây LÀ component-level eval khi viết tài liệu nội bộ/trả lời phỏng vấn.</p>
+<p>Nếu dự án sau này mở rộng có tính năng RAG thật (VD tra cứu báo cáo tài chính dài, cần retriever thật thay vì tool call cố định), bảng phân loại ở mục 4 áp dụng trực tiếp: bước retrieve sẽ cần thêm context precision/recall (LLM-judge, công thức ở <code>L9_1</code>), còn 8 check hiện tại vẫn giữ nguyên là Lớp 1 cho phần dữ liệu số/cấu trúc — 2 lớp KHÔNG thay thế nhau, cộng dồn lại thành 1 hệ thống component-level eval đầy đủ hơn.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Chỉ đo end-to-end mà bỏ qua component-level</strong> — biết "hệ thống tệ" nhưng không biết sửa ở đâu, giống chỉ lái thử xe thành phẩm mà không kiểm tra riêng từng trạm lắp ráp.</p>
+<p><strong>2. Gộp nhiều check độc lập thành 1 điểm trung bình duy nhất</strong> — làm mất khả năng biết chính xác component nào fail (VD "7/8 check pass, điểm trung bình 87%" nghe ổn nhưng nếu check FAIL đúng là Anti-Hallucination thì đây là lỗi nghiêm trọng cần chặn release, không phải lỗi "trừ điểm nhẹ").</p>
+<p><strong>3. Nhầm component-level với trajectory-level</strong> — tưởng chấm từng bước tách rời là đã đủ để biết "quy trình tổng thể có hợp lý không" (đó là câu hỏi của trajectory-level, xem trang R8.3).</p>
+<p><strong>4. Dùng LLM-judge cho lỗi deterministic</strong> (VD sai schema JSON) — vừa tốn tiền vừa CHẬM hơn 1 phép validate tức thời, và LLM-judge còn có thể tự sai (mục 4-5).</p>
+<p><strong>5. Đổ oan sai component</strong> — chấm câu trả lời sai rồi đoán bừa "chắc do generator hallucinate" mà không kiểm tra retriever trước, hoặc ngược lại (2 bẫy đối xứng ở mục 4) — sửa nhầm chỗ, tốn thời gian mà không hết lỗi.</p>
+<p><strong>6. Chạy LLM-judge cho 100% traffic</strong> khi sample 5-10% đã đủ tín hiệu xu hướng (mục 6) — đốt tiền không cần thiết cho tín hiệu không tăng thêm bao nhiêu.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Định nghĩa đúng component-level eval + phân biệt rõ với trajectory-level (không nhầm lẫn 2 khái niệm).</li>
+<li>Giải thích pattern <code>@observe</code> biến mỗi bước thành 1 unit test độc lập như thế nào.</li>
+<li>Kể đúng tối thiểu 5/8 check Self-QA Gate + ánh xạ đúng bước pipeline tương ứng.</li>
+<li>Giải thích vì sao 1 điểm trung bình duy nhất (thay vì 8 check tách biệt) sẽ che mất lỗi nghiêm trọng.</li>
+<li>Chọn đúng cách chấm (deterministic hay LLM-judge) cho 4 loại component (retriever/generator/tool/router) — không mặc định dùng LLM-judge cho mọi thứ.</li>
+<li>Vẽ được sơ đồ 4 lớp evaluation (deterministic → heuristic → LLM-judge → người) + giải thích vì sao thứ tự này tiết kiệm chi phí.</li>
+<li>Tính được chi phí LLM-judge khi chấm 100% vs sample 10%, giải thích khi nào sampling đủ và khi nào cần chấm 100% (case đã FAIL ở lớp rẻ hơn).</li>
+<li>Phân biệt đúng component-level eval (runtime, mỗi lần chạy thật) với 4-lớp assertion CI/CD của <code>R7_1</code> (tiền-deploy, golden dataset tĩnh).</li>
+<li>Tự confirm: không đề xuất đưa field hệ thống tính sẵn vào input của 1 judge/eval được thiết kế để độc lập.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R8_3_agent_evaluation.html">← R8.3 · Agent Evaluation</a>
+  <a href="R8_5_observability_platforms.html">R8.5 · Observability Platforms →</a>
+</div>
+
+</div>
+</body>
+</html>

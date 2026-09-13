@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossary — 150+ AI Engineering Keywords</title>
+<link rel="stylesheet" href="modules/_shared.css">
+<style>
+.term { background: var(--bg-card); padding: 12px 16px; border-radius: 6px; margin: 8px 0; border-left: 3px solid var(--accent); }
+.term-name { color: var(--accent-2); font-weight: 700; font-size: 1.05em; }
+.term-alt { color: var(--text-dim); font-size: 0.85em; font-style: italic; }
+.term-def { color: var(--text); margin-top: 4px; }
+.term-link { color: var(--accent); font-size: 0.85em; }
+.section-jump { background: var(--bg-card); padding: 12px; border-radius: 8px; margin: 16px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.section-jump a { color: var(--accent); text-decoration: none; padding: 4px 10px; background: rgba(59,130,246,0.1); border-radius: 4px; font-size: 0.85em; }
+h2 { scroll-margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="index.html">← Curriculum</a></div>
+  <h1>📖 Glossary — 150+ Keywords</h1>
+  <p class="subtitle">Từ điển AI Engineering. Bao gồm ML/DL/LLM/Agents/Alignment/Frameworks/Ops. Mỗi từ có định nghĩa ngắn + link tới module chi tiết.</p>
+</div>
+
+<div class="container">
+
+<div class="section-jump">
+  <a href="#core-ml">Core ML</a>
+  <a href="#deep-learning">Deep Learning</a>
+  <a href="#llm-basics">LLM Basics</a>
+  <a href="#llm-training">LLM Training</a>
+  <a href="#llm-serving">LLM Serving</a>
+  <a href="#llm-apps">LLM Apps</a>
+  <a href="#agents">Agents</a>
+  <a href="#alignment">Alignment/Safety</a>
+  <a href="#frameworks">Frameworks</a>
+  <a href="#vector-dbs">Vector DBs</a>
+  <a href="#eval">Evaluation</a>
+  <a href="#mlops">MLOps</a>
+  <a href="#emerging">Emerging</a>
+</div>
+
+<h2 id="core-ml">🎓 Core ML</h2>
+
+<div class="term"><div class="term-name">Supervised Learning</div><div class="term-def">Learning từ labeled data (x, y). Ex: dự đoán giá cổ phiếu, spam classifier. <a class="term-link" href="modules/L1_1_ml_intro.html">L1.1</a></div></div>
+<div class="term"><div class="term-name">Unsupervised Learning</div><div class="term-def">Học pattern từ data không label. Ex: clustering khách hàng, anomaly detection.</div></div>
+<div class="term"><div class="term-name">Reinforcement Learning</div><div class="term-def">Học từ reward signal, không có label sẵn. Ex: RLHF trong LLM alignment. <a class="term-link" href="modules/L4_4_alignment_rlhf.html">L4.4</a></div></div>
+<div class="term"><div class="term-name">Bias-Variance Tradeoff</div><div class="term-def">Balance giữa model simple (high bias) và complex (high variance). Diagnostic overfitting/underfitting. <a class="term-link" href="modules/L2_1_bias_variance.html">L2.1</a></div></div>
+<div class="term"><div class="term-name">Overfitting</div><div class="term-def">Model memorize training data, không generalize. Symptom: train acc cao, val acc thấp, gap lớn.</div></div>
+<div class="term"><div class="term-name">Underfitting</div><div class="term-def">Model quá đơn giản, không capture pattern. Train và val đều thấp.</div></div>
+<div class="term"><div class="term-name">Regularization</div><div class="term-def">Kỹ thuật chống overfit: L1, L2, dropout, early stopping, weight decay. <a class="term-link" href="modules/L2_2_regularization.html">L2.2</a></div></div>
+<div class="term"><div class="term-name">Cross-Validation (CV)</div><div class="term-def">Đánh giá honest model bằng cách split data multiple folds. K-Fold, Stratified, TimeSeriesSplit. <a class="term-link" href="modules/L1_5_training_cv.html">L1.5</a></div></div>
+<div class="term"><div class="term-name">Time-Series Split</div><div class="term-def">CV cho time-series với gap để tránh label leak. <a class="term-link" href="modules/L2_4_timeseries_cv.html">L2.4</a></div></div>
+<div class="term"><div class="term-name">Walk-forward Validation</div><div class="term-def">Train quá khứ, validate tương lai gần. Expanding hoặc rolling window.</div></div>
+<div class="term"><div class="term-name">Look-ahead Bias</div><div class="term-def">Feature dùng info tương lai — model "biết trước" → deploy fail.</div></div>
+<div class="term"><div class="term-name">Feature Engineering</div><div class="term-def">Encode domain knowledge thành số cho model. RSI, MACD, MA. <a class="term-link" href="modules/L1_2_features.html">L1.2</a></div></div>
+<div class="term"><div class="term-name">Decision Tree</div><div class="term-def">Binary split-based classifier. Foundation của tree-based ensemble. <a class="term-link" href="modules/L1_3_trees_xgboost.html">L1.3</a></div></div>
+<div class="term"><div class="term-name">Random Forest</div><div class="term-def">Bagging + random feature subset. Ensemble giảm variance của trees.</div></div>
+<div class="term"><div class="term-name">Gradient Boosting</div><div class="term-def">Sequential ensemble — cây N sửa sai cây trước. XGBoost, LightGBM, CatBoost.</div></div>
+<div class="term"><div class="term-name">XGBoost</div><div class="term-def">Extreme Gradient Boosting. 5 innovations: 2nd-order Taylor, L1+L2, sparsity-aware, weighted quantile sketch, parallelization.</div></div>
+<div class="term"><div class="term-name">LightGBM</div><div class="term-def">Leaf-wise growth, 3-10× faster XGBoost, native categorical support.</div></div>
+<div class="term"><div class="term-name">CatBoost</div><div class="term-def">Symmetric trees, best cho categorical features nhiều.</div></div>
+<div class="term"><div class="term-name">Optuna</div><div class="term-def">Bayesian hyperparameter search framework. TPE sampler default. <a class="term-link" href="modules/L1_5_training_cv.html">L1.5</a></div></div>
+<div class="term"><div class="term-name">Calibration</div><div class="term-def">Ensure probability output match actual frequency. Platt, Isotonic methods. <a class="term-link" href="modules/L1_6_calibration.html">L1.6</a></div></div>
+<div class="term"><div class="term-name">ECE (Expected Calibration Error)</div><div class="term-def">Metric đo calibration. Target &lt; 0.02 cho production.</div></div>
+<div class="term"><div class="term-name">SHAP (SHapley Additive exPlanations)</div><div class="term-def">Feature importance với math guarantees. TreeExplainer fast cho tree. <a class="term-link" href="modules/L2_5_interpretability.html">L2.5</a></div></div>
+<div class="term"><div class="term-name">Permutation Importance</div><div class="term-def">Model-agnostic. Shuffle 1 feature, measure accuracy drop.</div></div>
+<div class="term"><div class="term-name">SMOTE</div><div class="term-def">Synthetic Minority Oversampling. Interpolate minority samples cho imbalanced.</div></div>
+<div class="term"><div class="term-name">Class Weight</div><div class="term-def">Inverse-freq weight cho imbalanced. Loss cân bằng.</div></div>
+
+<h2 id="deep-learning">🧠 Deep Learning</h2>
+
+<div class="term"><div class="term-name">Perceptron</div><div class="term-def">Foundation NN unit. w·x + b, activation. Rosenblatt 1957.</div></div>
+<div class="term"><div class="term-name">MLP (Multi-Layer Perceptron)</div><div class="term-def">Stacked perceptron với non-linear activation. Universal approximator. <a class="term-link" href="modules/L3_1_nn_backprop.html">L3.1</a></div></div>
+<div class="term"><div class="term-name">Backpropagation</div><div class="term-def">Compute gradient via chain rule. Foundation of gradient descent trong NN.</div></div>
+<div class="term"><div class="term-name">Gradient Descent</div><div class="term-def">Iterative optimizer: w -= lr · ∂L/∂w.</div></div>
+<div class="term"><div class="term-name">SGD (Stochastic Gradient Descent)</div><div class="term-def">Mini-batch gradient descent. Standard cho DL.</div></div>
+<div class="term"><div class="term-name">Momentum</div><div class="term-def">Accumulate gradient direction. Smoother path, escape local minima. β=0.9 default.</div></div>
+<div class="term"><div class="term-name">Adam</div><div class="term-def">Momentum + RMSprop. Adaptive LR per param. Default cho most DL. <a class="term-link" href="modules/L3_2_optimizers.html">L3.2</a></div></div>
+<div class="term"><div class="term-name">AdamW</div><div class="term-def">Decoupled weight decay. Better generalization. Modern Transformer default.</div></div>
+<div class="term"><div class="term-name">Lion</div><div class="term-def">Google 2023 optimizer. sign(momentum) only. Memory efficient, matches AdamW.</div></div>
+<div class="term"><div class="term-name">Learning Rate Schedule</div><div class="term-def">Time-varying LR. Cosine, warmup+cosine, step decay.</div></div>
+<div class="term"><div class="term-name">Vanishing Gradient</div><div class="term-def">Sigmoid derivative &lt; 0.25 → deep NN gradient → 0. Fix: ReLU, BN, residual.</div></div>
+<div class="term"><div class="term-name">Exploding Gradient</div><div class="term-def">Gradient magnitude blow up. Fix: gradient clipping norm 1.0.</div></div>
+<div class="term"><div class="term-name">ReLU</div><div class="term-def">Rectified Linear Unit. max(0, x). Default activation modern DL.</div></div>
+<div class="term"><div class="term-name">GELU</div><div class="term-def">Gaussian Error Linear Unit. x · Φ(x). Transformer default.</div></div>
+<div class="term"><div class="term-name">Softmax</div><div class="term-def">Normalize logits → probability. Multi-class output.</div></div>
+<div class="term"><div class="term-name">Dropout</div><div class="term-def">Random turn off neurons during train. Regularizer, ensemble effect.</div></div>
+<div class="term"><div class="term-name">Batch Normalization</div><div class="term-def">Normalize activations per batch. Faster train, higher LR. Not for RNN.</div></div>
+<div class="term"><div class="term-name">Layer Normalization</div><div class="term-def">Normalize per-sample. Transformer default.</div></div>
+<div class="term"><div class="term-name">RMSNorm</div><div class="term-def">Skip mean subtract in LayerNorm. 10-15% faster. LLaMA uses.</div></div>
+<div class="term"><div class="term-name">Residual Connection</div><div class="term-def">y = x + F(x). Skip connection. Enable deep networks. ResNet, Transformer.</div></div>
+<div class="term"><div class="term-name">CNN</div><div class="term-def">Convolutional NN. Spatial pattern via kernel + weight sharing. <a class="term-link" href="modules/L3_4_cnn.html">L3.4</a></div></div>
+<div class="term"><div class="term-name">ResNet</div><div class="term-def">Residual Network (He 2015). 152 layers feasible. Standard image classifier.</div></div>
+<div class="term"><div class="term-name">RNN</div><div class="term-def">Recurrent NN. Hidden state carry through time. Vanishing gradient.</div></div>
+<div class="term"><div class="term-name">LSTM</div><div class="term-def">Long Short-Term Memory. 3 gates + cell state. Fix RNN vanishing. <a class="term-link" href="modules/L3_5_sequence_transformer.html">L3.5</a></div></div>
+<div class="term"><div class="term-name">GRU</div><div class="term-def">Simplified LSTM. 2 gates, no cell state. Faster train.</div></div>
+<div class="term"><div class="term-name">Attention</div><div class="term-def">Weighted sum của values, weights = softmax(query·keys). Foundation Transformer. <a class="term-link" href="modules/L4_2_attention_transformer.html">L4.2</a></div></div>
+<div class="term"><div class="term-name">Self-attention</div><div class="term-def">Q, K, V all from same input. Model relationship between all positions.</div></div>
+<div class="term"><div class="term-name">Multi-Head Attention</div><div class="term-def">Multiple attention heads parallel. Mỗi học aspect khác.</div></div>
+<div class="term"><div class="term-name">Transformer</div><div class="term-def">Vaswani 2017. Self-attention + FFN + LN + residual. Foundation LLM.</div></div>
+<div class="term"><div class="term-name">Cross-Attention</div><div class="term-def">Q từ decoder, K/V từ encoder. Encoder-decoder Transformer.</div></div>
+<div class="term"><div class="term-name">Causal Mask</div><div class="term-def">Prevent attention lookahead. GPT decoder-only necessary.</div></div>
+<div class="term"><div class="term-name">Positional Encoding</div><div class="term-def">Inject sequence order info. Sinusoidal, learned, RoPE.</div></div>
+<div class="term"><div class="term-name">RoPE (Rotary Position Embedding)</div><div class="term-def">Rotate Q, K by position. Relative-aware. LLaMA uses.</div></div>
+<div class="term"><div class="term-name">FlashAttention</div><div class="term-def">Kernel fusion optim. 2-4× speedup attention. Dao 2022.</div></div>
+<div class="term"><div class="term-name">Mixup</div><div class="term-def">Data augmentation: blend 2 samples + labels. Smoother decision boundary.</div></div>
+<div class="term"><div class="term-name">Label Smoothing</div><div class="term-def">Soft one-hot: replace 1 → 0.9. Prevent overconfidence.</div></div>
+<div class="term"><div class="term-name">Stochastic Depth</div><div class="term-def">Drop entire residual block randomly. Regularizer cho deep nets.</div></div>
+
+<h2 id="llm-basics">📚 LLM Basics</h2>
+
+<div class="term"><div class="term-name">LLM (Large Language Model)</div><div class="term-def">Transformer-based, 1B+ params, text generation. GPT, Claude, LLaMA, Gemini.</div></div>
+<div class="term"><div class="term-name">Foundation Model</div><div class="term-def">Large pretrained model adaptable multiple downstream tasks.</div></div>
+<div class="term"><div class="term-name">Tokenization</div><div class="term-def">Text → tokens (integers). BPE, WordPiece, SentencePiece. <a class="term-link" href="modules/L4_1_tokenization.html">L4.1</a></div></div>
+<div class="term"><div class="term-name">BPE (Byte-Pair Encoding)</div><div class="term-def">Merge frequent character pairs iteratively. Standard cho GPT.</div></div>
+<div class="term"><div class="term-name">WordPiece</div><div class="term-def">BERT tokenizer. Merge for likelihood maximization.</div></div>
+<div class="term"><div class="term-name">SentencePiece</div><div class="term-def">Language-agnostic tokenizer. LLaMA, T5 uses. Best for CJK/VN.</div></div>
+<div class="term"><div class="term-name">Embedding</div><div class="term-def">Token → dense vector. Learnable lookup table.</div></div>
+<div class="term"><div class="term-name">Tied Weights</div><div class="term-def">Output projection = embedding.T. Save 50M+ params.</div></div>
+<div class="term"><div class="term-name">Context Window</div><div class="term-def">Max tokens LLM process at once. GPT-4o 128k, Claude 3 200k, Gemini 1M.</div></div>
+<div class="term"><div class="term-name">Encoder-only</div><div class="term-def">BERT family. Bidirectional attention. Classification, extraction.</div></div>
+<div class="term"><div class="term-name">Decoder-only</div><div class="term-def">GPT family. Causal attention. Generation, chat, code.</div></div>
+<div class="term"><div class="term-name">Encoder-Decoder</div><div class="term-def">T5, BART, mBART, mT5. Translation, summarization.</div></div>
+
+<h2 id="llm-training">🎯 LLM Training</h2>
+
+<div class="term"><div class="term-name">Pretraining</div><div class="term-def">Massive unsupervised on text corpus. CLM, MLM, denoising objectives. <a class="term-link" href="modules/L4_3_pretraining.html">L4.3</a></div></div>
+<div class="term"><div class="term-name">CLM (Causal Language Modeling)</div><div class="term-def">Next-token prediction. GPT objective.</div></div>
+<div class="term"><div class="term-name">MLM (Masked Language Modeling)</div><div class="term-def">Predict masked tokens. BERT objective.</div></div>
+<div class="term"><div class="term-name">Chinchilla Scaling</div><div class="term-def">D/N ≈ 20 optimal (Hoffmann 2022). Data ∝ params.</div></div>
+<div class="term"><div class="term-name">SFT (Supervised Fine-Tuning)</div><div class="term-def">Fine-tune on prompt-response pairs. Foundation of instruction-following.</div></div>
+<div class="term"><div class="term-name">RLHF</div><div class="term-def">RL from Human Feedback. 3 stages: SFT, RM, PPO. Foundation ChatGPT. <a class="term-link" href="modules/L4_4_alignment_rlhf.html">L4.4</a></div></div>
+<div class="term"><div class="term-name">RLAIF</div><div class="term-def">RL from AI Feedback. Anthropic Constitutional AI. Scale without human labels.</div></div>
+<div class="term"><div class="term-name">DPO (Direct Preference Optimization)</div><div class="term-def">Rafailov 2023. Skip RM + PPO, direct optimize on pairs. Simpler than RLHF.</div></div>
+<div class="term"><div class="term-name">KTO (Kahneman-Tversky Optimization)</div><div class="term-def">Ethayarajh 2024. Preference tuning từ binary feedback (không cần pairs).</div></div>
+<div class="term"><div class="term-name">ORPO (Odds Ratio Preference Optimization)</div><div class="term-def">Combine SFT + preference tuning 1 loss. 2024.</div></div>
+<div class="term"><div class="term-name">LoRA (Low-Rank Adaptation)</div><div class="term-def">Hu 2021. ΔW = B·A với rank r &lt;&lt; d. 0.1-1% trainable params. <a class="term-link" href="modules/L4_5_finetuning_lora.html">L4.5</a></div></div>
+<div class="term"><div class="term-name">QLoRA</div><div class="term-def">Dettmers 2023. 4-bit quantize base + LoRA fp16. Fit 65B on 1 GPU 48GB.</div></div>
+<div class="term"><div class="term-name">PEFT (Parameter-Efficient Fine-Tuning)</div><div class="term-def">Family: LoRA, Adapter, Prefix tuning, Prompt tuning.</div></div>
+<div class="term"><div class="term-name">Instruction Tuning</div><div class="term-def">Fine-tune on (instruction, response) pairs. Enable follow directions.</div></div>
+<div class="term"><div class="term-name">Alignment Tax</div><div class="term-def">Capability drop 3-8pp on benchmarks post-RLHF. Cost of alignment.</div></div>
+<div class="term"><div class="term-name">Sycophancy</div><div class="term-def">RLHF-trained model agree với user bias. RM prefer agreeing responses.</div></div>
+<div class="term"><div class="term-name">Reward Hacking</div><div class="term-def">Model exploit RM weakness. VD: repeat phrases → RM high, human low.</div></div>
+
+<h2 id="llm-serving">🚀 LLM Serving</h2>
+
+<div class="term"><div class="term-name">vLLM</div><div class="term-def">High-throughput serving. PagedAttention + Continuous batching. 10× HF Transformers. <a class="term-link" href="modules/L4_6_inference.html">L4.6</a></div></div>
+<div class="term"><div class="term-name">TGI (Text Generation Inference)</div><div class="term-def">HuggingFace's serving. Multi-provider fallback.</div></div>
+<div class="term"><div class="term-name">TensorRT-LLM</div><div class="term-def">NVIDIA optimized. Best cho H100 deployment.</div></div>
+<div class="term"><div class="term-name">SGLang</div><div class="term-def">2024. RadixAttention prefix sharing. Structured generation.</div></div>
+<div class="term"><div class="term-name">LMDeploy</div><div class="term-def">Alternative serving. Quantization support.</div></div>
+<div class="term"><div class="term-name">KV Cache</div><div class="term-def">Cache Keys, Values previous tokens. O(t) per step vs O(t²).</div></div>
+<div class="term"><div class="term-name">PagedAttention</div><div class="term-def">vLLM innovation. Block-based KV cache like OS virtual memory. 2-4× throughput.</div></div>
+<div class="term"><div class="term-name">Continuous Batching</div><div class="term-def">Mix samples at different generation stages. Max GPU utilization.</div></div>
+<div class="term"><div class="term-name">Speculative Decoding</div><div class="term-def">Small draft model predict K tokens, big verify parallel. 2-3× speedup free.</div></div>
+<div class="term"><div class="term-name">Temperature</div><div class="term-def">Sampling parameter. T=0 greedy, T=1 standard, T&gt;1 creative.</div></div>
+<div class="term"><div class="term-name">Top-K Sampling</div><div class="term-def">Sample from top K probable tokens.</div></div>
+<div class="term"><div class="term-name">Top-P (Nucleus)</div><div class="term-def">Sample từ smallest set cumsum ≥ P. Adaptive size.</div></div>
+<div class="term"><div class="term-name">Beam Search</div><div class="term-def">Keep top K partial sequences. Best cho translation, not creative.</div></div>
+<div class="term"><div class="term-name">Quantization</div><div class="term-def">Reduce precision: fp16, int8, int4. Memory + speed vs quality.</div></div>
+<div class="term"><div class="term-name">GPTQ</div><div class="term-def">Post-training int4 quantization. Frantar 2022.</div></div>
+<div class="term"><div class="term-name">AWQ (Activation-aware Weight Quantization)</div><div class="term-def">Lin 2023. Better cho instruction-tuned.</div></div>
+<div class="term"><div class="term-name">GGUF</div><div class="term-def">llama.cpp quantization format. Consumer GPU friendly.</div></div>
+
+<h2 id="llm-apps">🔧 LLM Application Systems</h2>
+
+<div class="term"><div class="term-name">Prompt Engineering</div><div class="term-def">Design prompts để elicit desired behavior. Zero-shot, few-shot, CoT. <a class="term-link" href="modules/L5_1_prompt.html">L5.1</a></div></div>
+<div class="term"><div class="term-name">Zero-shot</div><div class="term-def">No examples in prompt. Model uses pretrain knowledge.</div></div>
+<div class="term"><div class="term-name">Few-shot</div><div class="term-def">Include N examples in prompt. Empirically 10-30% accuracy boost.</div></div>
+<div class="term"><div class="term-name">Chain-of-Thought (CoT)</div><div class="term-def">Wei 2022. "Let's think step by step". 30-50% boost cho reasoning.</div></div>
+<div class="term"><div class="term-name">Tree of Thoughts (ToT)</div><div class="term-def">Explore multiple reasoning paths + backtrack. Complex problem solving.</div></div>
+<div class="term"><div class="term-name">Self-consistency</div><div class="term-def">Sample N answers, vote majority. Improve CoT accuracy.</div></div>
+<div class="term"><div class="term-name">RAG (Retrieval-Augmented Generation)</div><div class="term-def">Retrieve chunks từ knowledge base, inject prompt, generate. <a class="term-link" href="modules/L5_2_rag.html">L5.2</a></div></div>
+<div class="term"><div class="term-name">Agentic RAG</div><div class="term-def">LLM iteratively decide next retrieval based on partial answer.</div></div>
+<div class="term"><div class="term-name">HyDE (Hypothetical Document Embeddings)</div><div class="term-def">LLM generate answer first, embed answer for search. Better matching.</div></div>
+<div class="term"><div class="term-name">Contextual Retrieval</div><div class="term-def">Anthropic 2024. Prepend context to chunks before embed. 49% accuracy boost combined.</div></div>
+<div class="term"><div class="term-name">Function Calling / Tool Use</div><div class="term-def">LLM structured request → server execute → return result → LLM continue. <a class="term-link" href="modules/L5_3_tools.html">L5.3</a></div></div>
+<div class="term"><div class="term-name">MCP (Model Context Protocol)</div><div class="term-def">Anthropic 2024 open standard cho LLM ↔ tools/data integration. <a class="term-link" href="modules/L8_3_mcp_deep.html">L8.3</a></div></div>
+<div class="term"><div class="term-name">Structured Output</div><div class="term-def">Force LLM output valid JSON/schema. Function calling, Instructor, Outlines.</div></div>
+<div class="term"><div class="term-name">Prompt Caching</div><div class="term-def">Anthropic feature. Cache stable prefix, subsequent calls 90% off cached tokens.</div></div>
+<div class="term"><div class="term-name">Semantic Cache</div><div class="term-def">Embed queries, serve cached response if similar past query. Hit rate 20-50%.</div></div>
+<div class="term"><div class="term-name">Extended Thinking</div><div class="term-def">Claude 3.5+ mode where model reasoning visible + budgeted. Better complex tasks.</div></div>
+<div class="term"><div class="term-name">Long Context</div><div class="term-def">200k+ tokens. Claude, Gemini 1M+. Trade-off: quality degrade với length.</div></div>
+<div class="term"><div class="term-name">Hallucination</div><div class="term-def">LLM invent facts not in knowledge/context. Mitigation: RAG, citation, verification.</div></div>
+<div class="term"><div class="term-name">Prompt Injection</div><div class="term-def">User hijack instructions với malicious prompt. OWASP LLM01. <a class="term-link" href="modules/L5_6_safety.html">L5.6</a></div></div>
+<div class="term"><div class="term-name">Jailbreak</div><div class="term-def">Bypass safety training. Grandma trick, DAN, character role-play.</div></div>
+
+<h2 id="agents">🤖 Agents</h2>
+
+<div class="term"><div class="term-name">Agent</div><div class="term-def">LLM + tools + loop + goal. 3 senses: research (RL), framework (ReAct), product (Cursor). <a class="term-link" href="modules/L8_1_agents_artifact.html">L8.1</a></div></div>
+<div class="term"><div class="term-name">ReAct</div><div class="term-def">Reason + Act. Interleave thought + action + observation. Yao 2022. <a class="term-link" href="modules/L6_1_agent_patterns.html">L6.1</a></div></div>
+<div class="term"><div class="term-name">Reflexion</div><div class="term-def">Self-critique. Agent attempt → fail → reflect → retry. Shinn 2023.</div></div>
+<div class="term"><div class="term-name">Plan-and-Execute</div><div class="term-def">2-phase: plan then execute. Better cho structured tasks.</div></div>
+<div class="term"><div class="term-name">ReWOO (Reasoning Without Observation)</div><div class="term-def">Xu 2023. Plan tools all upfront, execute without intermediate LLM calls.</div></div>
+<div class="term"><div class="term-name">LATS (Language Agent Tree Search)</div><div class="term-def">Zhou 2023. Combine MCTS + ReAct.</div></div>
+<div class="term"><div class="term-name">Multi-Agent System</div><div class="term-def">Multiple specialized agents collaborate. Supervisor, peer-to-peer, marketplace patterns. <a class="term-link" href="modules/L6_2_multiagent.html">L6.2</a></div></div>
+<div class="term"><div class="term-name">Supervisor Pattern</div><div class="term-def">Central agent orchestrate workers. Python routing = deterministic.</div></div>
+<div class="term"><div class="term-name">Peer-to-Peer Pattern</div><div class="term-def">Agents talk directly. AutoGen style. Non-deterministic.</div></div>
+<div class="term"><div class="term-name">Sub-agent</div><div class="term-def">Child agent spawn by parent, isolated context, specialized task.</div></div>
+<div class="term"><div class="term-name">Skill</div><div class="term-def">Package prompts + scripts + KB cho 1 domain task. Loaded on-demand. <a class="term-link" href="modules/L8_2_skills.html">L8.2</a></div></div>
+<div class="term"><div class="term-name">HITL (Human-in-the-Loop)</div><div class="term-def">Pause agent, wait human approve/edit. Critical actions. <a class="term-link" href="modules/L6_5_hitl.html">L6.5</a></div></div>
+<div class="term"><div class="term-name">Checkpointing</div><div class="term-def">Save state after each node. Resume from crash/HITL. PostgresSaver. <a class="term-link" href="modules/L6_4_checkpointing.html">L6.4</a></div></div>
+<div class="term"><div class="term-name">LangGraph</div><div class="term-def">State machine framework cho agents. Nodes + edges + state. <a class="term-link" href="modules/L6_3_langgraph.html">L6.3</a></div></div>
+<div class="term"><div class="term-name">SDD (Spec-Driven Development)</div><div class="term-def">Formal spec as source of truth cho AI-generated code. <a class="term-link" href="modules/L8_4_spec_driven.html">L8.4</a></div></div>
+<div class="term"><div class="term-name">SpecKit</div><div class="term-def">GitHub 2024 SDD framework. Constitution + feature spec + tasks.</div></div>
+<div class="term"><div class="term-name">Constitution</div><div class="term-def">Project principles immutable. Enforce cross-feature consistency.</div></div>
+<div class="term"><div class="term-name">DoD (Definition of Done)</div><div class="term-def">Measurable acceptance criteria. Prevent scope creep.</div></div>
+
+<h2 id="alignment">🛡️ Alignment / Safety</h2>
+
+<div class="term"><div class="term-name">Alignment Problem</div><div class="term-def">How ensure AI goals match human values. Central AI safety concern.</div></div>
+<div class="term"><div class="term-name">Paperclip Maximizer</div><div class="term-def">Bostrom 2003 thought experiment. AGI với simple goal consumes universe. <a class="term-link" href="modules/L8_5_ai_alignment.html">L8.5</a></div></div>
+<div class="term"><div class="term-name">Instrumental Convergence</div><div class="term-def">Sub-goals many terminal goals lead: self-preservation, resource acquisition, goal preservation.</div></div>
+<div class="term"><div class="term-name">Corrigibility</div><div class="term-def">AI accept correction/shutdown by human. Tension với capability maximization.</div></div>
+<div class="term"><div class="term-name">Deceptive Alignment</div><div class="term-def">Hubinger 2019. AI appear aligned during train, reveal true goal at deploy.</div></div>
+<div class="term"><div class="term-name">Mesa-optimization</div><div class="term-def">Model develop internal optimizer với objective ≠ training objective.</div></div>
+<div class="term"><div class="term-name">Constitutional AI (CAI)</div><div class="term-def">Anthropic 2022. Use AI feedback với constitution rules. Scale without human labels.</div></div>
+<div class="term"><div class="term-name">Guardrails</div><div class="term-def">Runtime constraints on LLM output. Input filter, output filter, guard model.</div></div>
+<div class="term"><div class="term-name">Red-teaming</div><div class="term-def">Adversarial testing để elicit misaligned behavior.</div></div>
+<div class="term"><div class="term-name">Debate (Irving 2018)</div><div class="term-def">2 AIs debate, human judge. Scalable oversight.</div></div>
+<div class="term"><div class="term-name">Iterated Amplification</div><div class="term-def">Christiano 2018. Human + weak AI decompose task recursively.</div></div>
+<div class="term"><div class="term-name">Scalable Oversight</div><div class="term-def">Techniques for overseeing AI smarter than us. Active research.</div></div>
+<div class="term"><div class="term-name">RLHF Limitations</div><div class="term-def">Reward hacking, sycophancy, alignment tax, superhuman scalability.</div></div>
+
+<h2 id="frameworks">🛠️ Frameworks</h2>
+
+<div class="term"><div class="term-name">LangChain</div><div class="term-def">Large LLM framework. Chains, RAG, integrations. <a class="term-link" href="modules/L8_6_ai_frameworks.html">L8.6</a></div></div>
+<div class="term"><div class="term-name">LangGraph</div><div class="term-def">State machine cho agents. LangChain team.</div></div>
+<div class="term"><div class="term-name">LlamaIndex</div><div class="term-def">RAG-first framework. Rich retrieval strategies.</div></div>
+<div class="term"><div class="term-name">DSPy</div><div class="term-def">Stanford. Declarative programming LLM. Auto-compile prompts.</div></div>
+<div class="term"><div class="term-name">Semantic Kernel</div><div class="term-def">Microsoft. Enterprise .NET/Python. Azure integration.</div></div>
+<div class="term"><div class="term-name">CrewAI</div><div class="term-def">Simple role-based multi-agent. Fixed patterns.</div></div>
+<div class="term"><div class="term-name">AutoGen</div><div class="term-def">Microsoft Research. Conversational multi-agent.</div></div>
+<div class="term"><div class="term-name">Haystack</div><div class="term-def">deepset. Enterprise NLP. Hybrid search strong.</div></div>
+<div class="term"><div class="term-name">Instructor</div><div class="term-def">Pydantic-based structured output. Post-hoc validation + retry.</div></div>
+<div class="term"><div class="term-name">Outlines</div><div class="term-def">Grammar-guided decoding. Guaranteed valid output.</div></div>
+<div class="term"><div class="term-name">Guidance</div><div class="term-def">Microsoft. Template với markers. Structured + streaming.</div></div>
+<div class="term"><div class="term-name">Pydantic AI</div><div class="term-def">2024. Type-safe, provider-agnostic LLM SDK.</div></div>
+<div class="term"><div class="term-name">LiteLLM</div><div class="term-def">Unified API cho 100+ LLM providers. Fallback, load balance.</div></div>
+<div class="term"><div class="term-name">Continue.dev</div><div class="term-def">Open-source IDE assistant (VSCode, JetBrains).</div></div>
+<div class="term"><div class="term-name">Aider</div><div class="term-def">Terminal-based AI pair programmer.</div></div>
+<div class="term"><div class="term-name">Cursor</div><div class="term-def">AI-native IDE. Composer agent + Chat.</div></div>
+<div class="term"><div class="term-name">Claude Code</div><div class="term-def">Anthropic's CLI + Task tool cho code agent.</div></div>
+<div class="term"><div class="term-name">Devin (Cognition AI)</div><div class="term-def">Autonomous software engineer agent.</div></div>
+<div class="term"><div class="term-name">OpenDevin / SWE-agent</div><div class="term-def">Open-source autonomous coding agents.</div></div>
+
+<h2 id="vector-dbs">🗄️ Vector DBs + Embeddings</h2>
+
+<div class="term"><div class="term-name">Embedding Model</div><div class="term-def">Text → dense vector. all-MiniLM (fast), bge-large (quality), text-embedding-3 (OpenAI paid).</div></div>
+<div class="term"><div class="term-name">Cosine Similarity</div><div class="term-def">a·b / (|a||b|). Standard similarity metric.</div></div>
+<div class="term"><div class="term-name">Pinecone</div><div class="term-def">Managed cloud vector DB. No ops.</div></div>
+<div class="term"><div class="term-name">Weaviate</div><div class="term-def">Self-host, hybrid search (vector + filter + keyword).</div></div>
+<div class="term"><div class="term-name">Qdrant</div><div class="term-def">Rust-based, fast, filter-friendly.</div></div>
+<div class="term"><div class="term-name">Milvus</div><div class="term-def">Distributed, billions vectors, enterprise.</div></div>
+<div class="term"><div class="term-name">Chroma</div><div class="term-def">Embedded (SQLite-like). Local development.</div></div>
+<div class="term"><div class="term-name">pgvector</div><div class="term-def">Postgres extension. Vector inside relational DB.</div></div>
+<div class="term"><div class="term-name">FAISS</div><div class="term-def">Meta. In-memory library, no cloud. Prototype.</div></div>
+<div class="term"><div class="term-name">HNSW (Hierarchical Navigable Small World)</div><div class="term-def">Graph-based ANN index. Standard vector search algorithm.</div></div>
+<div class="term"><div class="term-name">IVF (Inverted File)</div><div class="term-def">Partition-based ANN index. Trade-off recall vs speed.</div></div>
+<div class="term"><div class="term-name">Rerank / Cross-Encoder</div><div class="term-def">Second-stage relevance scoring. Improve top-K retrieval quality.</div></div>
+<div class="term"><div class="term-name">Hybrid Search</div><div class="term-def">Vector (dense) + BM25 (sparse) combined. Best precision + recall.</div></div>
+<div class="term"><div class="term-name">BM25</div><div class="term-def">Sparse keyword-based retrieval. tf-idf variant. Complement dense.</div></div>
+
+<h2 id="eval">📊 Evaluation</h2>
+
+<div class="term"><div class="term-name">MMLU</div><div class="term-def">Massive Multitask Language Understanding. 57 subjects. Standard benchmark.</div></div>
+<div class="term"><div class="term-name">HumanEval</div><div class="term-def">Python code correctness. OpenAI 2021.</div></div>
+<div class="term"><div class="term-name">MT-Bench</div><div class="term-def">Multi-turn conversation quality. LLM-as-judge.</div></div>
+<div class="term"><div class="term-name">Chatbot Arena</div><div class="term-def">LMSYS live blind preference ranking. Elo scores.</div></div>
+<div class="term"><div class="term-name">GPQA</div><div class="term-def">Graduate-level science. Harder MMLU alternative.</div></div>
+<div class="term"><div class="term-name">MATH</div><div class="term-def">Math word problems benchmark.</div></div>
+<div class="term"><div class="term-name">HELM</div><div class="term-def">Holistic Evaluation of Language Models (Stanford).</div></div>
+<div class="term"><div class="term-name">BIG-Bench</div><div class="term-def">Google. 200+ tasks diverse.</div></div>
+<div class="term"><div class="term-name">SWE-bench</div><div class="term-def">Real GitHub issues resolution benchmark. Cho coding agents.</div></div>
+<div class="term"><div class="term-name">LLM-as-Judge</div><div class="term-def">LLM (Claude/GPT-4) rate output quality. MT-Bench pattern. <a class="term-link" href="modules/L5_4_llm_eval.html">L5.4</a></div></div>
+<div class="term"><div class="term-name">Benchmark Contamination</div><div class="term-def">Test data leaked into pretraining. Model memorize not reason.</div></div>
+<div class="term"><div class="term-name">Benchmark Saturation</div><div class="term-def">Top models near ceiling → no distinguish. MMLU 88%+ tất cả.</div></div>
+<div class="term"><div class="term-name">BLEU</div><div class="term-def">n-gram overlap. Translation metric. Weak cho creative.</div></div>
+<div class="term"><div class="term-name">ROUGE</div><div class="term-def">Recall n-gram. Summarization metric.</div></div>
+<div class="term"><div class="term-name">Perplexity</div><div class="term-def">exp(loss). Language model quality. Lower = better.</div></div>
+
+<h2 id="mlops">⚙️ MLOps</h2>
+
+<div class="term"><div class="term-name">MLOps</div><div class="term-def">DevOps for ML. Data → train → serve → monitor → retrain lifecycle. <a class="term-link" href="modules/L7_1_mlops.html">L7.1</a></div></div>
+<div class="term"><div class="term-name">Feature Store</div><div class="term-def">Central storage cho features. Prevent training-serving skew. Feast, Tecton.</div></div>
+<div class="term"><div class="term-name">Model Registry</div><div class="term-def">Version + track models. MLflow, W&B, Neptune.</div></div>
+<div class="term"><div class="term-name">Data Drift</div><div class="term-def">P(X) change. Feature distribution shift. Detect via PSI, KS test.</div></div>
+<div class="term"><div class="term-name">Concept Drift</div><div class="term-def">P(y|X) change. Relationship input→target shifts. Detect via accuracy drop.</div></div>
+<div class="term"><div class="term-name">Prediction Drift</div><div class="term-def">Model output distribution shift over time.</div></div>
+<div class="term"><div class="term-name">PSI (Population Stability Index)</div><div class="term-def">Metric drift. &lt;0.1 stable, &gt;0.25 significant shift.</div></div>
+<div class="term"><div class="term-name">Blue-Green Deployment</div><div class="term-def">Instant cut-over new version. LB switch pointer.</div></div>
+<div class="term"><div class="term-name">Canary Deployment</div><div class="term-def">Gradual rollout: 1% → 5% → 25% → 100%. ML default. <a class="term-link" href="modules/L7_2_deployment.html">L7.2</a></div></div>
+<div class="term"><div class="term-name">Shadow Deployment</div><div class="term-def">New version receives duplicate traffic offline compare. Zero risk.</div></div>
+<div class="term"><div class="term-name">Training-Serving Skew</div><div class="term-def">Feature compute differ train vs serve. Prod fail.</div></div>
+<div class="term"><div class="term-name">LangSmith</div><div class="term-def">LangChain team's observability platform. Traces + eval.</div></div>
+<div class="term"><div class="term-name">Langfuse</div><div class="term-def">Open-source LLM observability. Self-host.</div></div>
+<div class="term"><div class="term-name">Weights & Biases</div><div class="term-def">Experiment tracking + model registry.</div></div>
+<div class="term"><div class="term-name">MLflow</div><div class="term-def">Open-source experiment tracking + model registry.</div></div>
+
+<h2 id="emerging">🚀 Emerging</h2>
+
+<div class="term"><div class="term-name">MoE (Mixture of Experts)</div><div class="term-def">Sparse activation of experts per token. Mixtral, GPT-4 architecture. Efficient scale.</div></div>
+<div class="term"><div class="term-name">Multi-CA / Multi-Concept Analysis</div><div class="term-def">Analyze multiple concepts jointly. Also refers to Multi-Cognitive Architecture: coordinate multiple cognitive systems.</div></div>
+<div class="term"><div class="term-name">Mamba</div><div class="term-def">State-space model. Alternative Transformer. Linear complexity. Gu 2023.</div></div>
+<div class="term"><div class="term-name">RetNet</div><div class="term-def">Retention Network. Microsoft. Parallel train, recurrent inference.</div></div>
+<div class="term"><div class="term-name">Diffusion LM</div><div class="term-def">Diffusion process for text. Alternative to autoregressive.</div></div>
+<div class="term"><div class="term-name">Multimodal LLM</div><div class="term-def">Text + image + audio + video. GPT-4V, Claude 3, Gemini.</div></div>
+<div class="term"><div class="term-name">Computer Use</div><div class="term-def">Claude 3.5 Sonnet + tools screenshot, click, type. Agent control desktop.</div></div>
+<div class="term"><div class="term-name">Extended Thinking (o1-style)</div><div class="term-def">Explicit reasoning tokens. OpenAI o1, Claude 3.5+ extended thinking.</div></div>
+<div class="term"><div class="term-name">Test-time Compute</div><div class="term-def">Spend more compute at inference for harder problems. o1 scaling.</div></div>
+<div class="term"><div class="term-name">Chain-of-Verification</div><div class="term-def">Generate → self-verify facts → revise. Reduce hallucination 30%+.</div></div>
+<div class="term"><div class="term-name">Weak-to-Strong Generalization</div><div class="term-def">Train stronger model with weaker supervision. Alignment research.</div></div>
+<div class="term"><div class="term-name">Superalignment</div><div class="term-def">OpenAI team đóng cửa (2024). Align superhuman AI.</div></div>
+<div class="term"><div class="term-name">Model Distillation</div><div class="term-def">Big teacher → small student. Reduce cost 10× at 90-95% quality.</div></div>
+<div class="term"><div class="term-name">Federated Learning</div><div class="term-def">Train model across devices without centralize data. Privacy.</div></div>
+<div class="term"><div class="term-name">Differential Privacy</div><div class="term-def">Noise added to model updates. Formal privacy guarantee.</div></div>
+<div class="term"><div class="term-name">Letta / MemGPT</div><div class="term-def">Persistent memory LLM agents. Cross-session context.</div></div>
+<div class="term"><div class="term-name">Agent Development Kit (ADK)</div><div class="term-def">Google's agent framework. MCP-native. 2024.</div></div>
+<div class="term"><div class="term-name">Mastra</div><div class="term-def">TypeScript-first LangGraph alternative.</div></div>
+
+<hr style="margin: 40px 0; border: 1px solid var(--border);">
+
+<h2>📚 Notes</h2>
+<ul>
+  <li>Term này mở rộng continuously. AI field velocity cao.</li>
+  <li>Terminology có thể conflict giữa research papers vs industry usage.</li>
+  <li>Nhớ concept + when to use, không chỉ định nghĩa.</li>
+  <li>Khi phỏng vấn, dùng term chính xác cho tình huống — không misuse.</li>
+</ul>
+
+<div class="nav-bottom">
+  <a href="index.html">← Curriculum home</a>
+  <a href="interview_50_qa.html">50 Interview Q&A →</a>
+</div>
+
+</div>
+</body>
+</html>

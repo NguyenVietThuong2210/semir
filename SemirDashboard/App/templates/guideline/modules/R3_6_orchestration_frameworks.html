@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R3.6 · LLM Orchestration Frameworks — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · RAG · Điểm 6/6</div>
+  <h1>R3.6 · LLM Orchestration Frameworks</h1>
+  <p class="subtitle">Không phải "framework nào tốt nhất" mà là "có cần framework hay không" — khung quyết định áp trực tiếp vào use case skill-based của dự án.</p>
+  <div class="level">Độ khó: Dễ · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Nhắc lại nhanh danh sách framework chính (LangChain, LangGraph, LlamaIndex, DSPy, CrewAI, AutoGen...) và vai trò từng loại.</li>
+<li>Áp dụng được khung quyết định "có cần framework hay không" — điều mà module cũ giả định bạn ĐÃ chọn framework nên chưa dạy.</li>
+<li>Giải thích được vì sao skill <code>daily-investor-report</code> không dùng bất kỳ orchestration framework nào, và đó là lựa chọn ĐÚNG chứ không phải thiếu sót.</li>
+<li>Nhận diện đúng 3 trigger cụ thể sẽ khiến dự án NÊN cân nhắc 1 framework thật trong tương lai.</li>
+<li>Phân biệt được "Workflow" (đường đi cố định) và "Agent" (đường đi do LLM tự quyết định) theo đúng định nghĩa của Anthropic, và gọi tên đúng 5 pattern workflow composable.</li>
+<li>Trích dẫn được số liệu thật về chi phí (latency overhead, độ sâu stack trace debug) và mức độ áp dụng framework ở quy mô enterprise — tránh cả 2 cực đoan "framework luôn cần" và "framework luôn thừa".</li>
+<li>Giải thích được cơ chế thật của DSPy (5 primitive: Signature/Module/Program/Metric/Optimizer) thay vì chỉ nhớ tên "framework tối ưu prompt".</li>
+<li>Trích dẫn được nghiên cứu 2026 cho thấy multi-agent không tự động thắng single-agent, và biết áp dụng nó như 1 câu hỏi cần đo TRƯỚC câu hỏi "cần framework multi-agent nào".</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>So sánh chi tiết LangChain/LangGraph/LlamaIndex/DSPy/Semantic Kernel/CrewAI/AutoGen/Haystack/Instructor-Outlines-Pydantic AI, decision matrix, và anti-patterns đã có RẤT đầy đủ ở module framework AI. Trang này bổ sung khung quyết định "trước khi chọn framework nào, hỏi có cần framework không" — bước module cũ bỏ qua vì giả định bạn đã quyết định dùng framework.</p>
+<table>
+<tr><th>Module</th><th>Nội dung</th><th>Quan hệ với trang này</th></tr>
+<tr><td><code>../modules/L8_6_ai_frameworks.html</code></td><td>So sánh đầy đủ 9 framework, decision matrix, anti-patterns §12</td><td>Đọc TRƯỚC — nền tảng kỹ thuật đầy đủ</td></tr>
+<tr><td><code>../modules/L6_4_checkpointing.html</code></td><td>PostgresSaver pattern cho LangGraph — checkpoint/resume state</td><td>Liên quan tới trigger #1 khi nào NÊN dùng framework</td></tr>
+</table>
+<p>Độ khó xếp <strong>Dễ</strong>: không cần kiến thức toán/kỹ thuật sâu, chủ yếu là tư duy đánh giá trade-off — phù hợp đọc như 1 checklist quyết định trước khi bắt tay code bất kỳ hệ thống multi-step nào.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Chọn orchestration framework giống chọn có nên thuê 1 công ty quản lý dự án chuyên nghiệp hay tự điều phối 1 nhóm 3 người làm việc cố định mỗi ngày. Nếu công việc chỉ có 3 bước lặp lại y hệt mỗi ngày (fetch → viết → gửi báo cáo), thuê công ty quản lý dự án chỉ thêm chi phí và độ trễ giao tiếp không cần thiết. Nếu dự án có 50 người, nhiều nhóm con phối hợp phức tạp, cần theo dõi tiến độ real-time — lúc đó công cụ quản lý chuyên nghiệp mới thực sự đáng tiền.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Nhắc nhanh 9 framework (chi tiết đầy đủ ở L8_6)</h3>
+<table>
+<tr><th>Nhóm</th><th>Framework</th><th>Vai trò chính</th></tr>
+<tr><td>Orchestration đồ thị trạng thái</td><td>LangGraph</td><td>Điều phối multi-agent có state, cần checkpoint/resume</td></tr>
+<tr><td>Orchestration tuyến tính/chain</td><td>LangChain</td><td>Chuỗi bước gọi LLM + tool, abstraction đa-provider</td></tr>
+<tr><td>Data framework cho RAG</td><td>LlamaIndex</td><td>Index hoá + truy vấn dữ liệu, tối ưu cho RAG</td></tr>
+<tr><td>Prompt optimization</td><td>DSPy</td><td>Tối ưu prompt tự động bằng dữ liệu thay vì tay viết</td></tr>
+<tr><td>Multi-agent role-based</td><td>CrewAI, AutoGen</td><td>Nhiều agent với vai trò riêng biệt phối hợp giải 1 task</td></tr>
+<tr><td>Structured output</td><td>Instructor, Outlines, Pydantic AI</td><td>Ép LLM output đúng schema định trước</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Cập nhật (verify 2026-09)</div><p>AutoGen (Microsoft) đã được kế thừa bởi <strong>Microsoft Agent Framework</strong> — dự án mới hợp nhất AutoGen và Semantic Kernel thành 1 SDK duy nhất. Tên "AutoGen" vẫn còn hữu ích để hiểu khái niệm multi-agent role-based (và nhiều tài liệu 2026 vẫn nhắc tới nó như tên lịch sử), nhưng khi chọn công cụ MỚI cho dự án thật, kiểm tra Microsoft Agent Framework trước thay vì tra riêng AutoGen. Các framework còn lại trong bảng (LangGraph, LangChain, LlamaIndex, DSPy, CrewAI) vẫn đang được maintain tích cực tính đến 2026-09 — không đổi.</p></div>
+
+<h3>1.1 Workflows vs Agents — phân loại gốc của chính Anthropic, áp trực tiếp được vào dự án này</h3>
+<p>Trước khi hỏi "framework nào", Anthropic (bài "Building Effective Agents") đề xuất phân biệt 2 khái niệm hay bị gộp lẫn — và khuyến nghị dùng pattern ĐƠN GIẢN NHẤT đạt yêu cầu, chỉ leo thang lên "agent" thật khi workflow không đủ:</p>
+<table>
+<tr><th></th><th>Workflow</th><th>Agent</th></tr>
+<tr><td>Đường đi được xác định</td><td>TRƯỚC, bằng code cố định (predefined code paths)</td><td>ĐỘNG, do chính LLM quyết định bước tiếp theo dựa trên kết quả bước trước</td></tr>
+<tr><td>Độ xác định (determinism)</td><td>Cao — luôn chạy đúng thứ tự đã định</td><td>Thấp hơn — LLM có thể chọn hướng đi khác nhau giữa các lần chạy</td></tr>
+<tr><td>Khi nào dùng</td><td>Khi CÓ THỂ hardcode được đường đi và vẫn đạt chất lượng chấp nhận được</td><td>Khi KHÔNG THỂ hardcode trước đường đi, nhưng vẫn kiểm chứng được tiến độ từng bước</td></tr>
+<tr><td>Khuyến nghị của Anthropic</td><td colspan="2" style="text-align:center">Dùng pattern ĐƠN GIẢN NHẤT vượt qua được evaluation — thường là workflow, thậm chí chỉ 1 lệnh gọi LLM được "tool hoá" tốt; chỉ thêm agent thật sự khi pattern đơn giản hơn đã chứng minh KHÔNG đủ</td></tr>
+</table>
+<p>Áp trực tiếp: pipeline của <code>daily-investor-report</code> (fetch → phân tích → viết → QA gate) là 1 <strong>workflow</strong> đúng nghĩa — đường đi cố định, biết trước từng bước — KHÔNG phải "agent" theo định nghĩa này dù nó chạy bằng LLM (Claude Code). Đây là lý do sâu hơn (không chỉ "không cần framework") giải thích vì sao skill này không cần LangGraph: bản chất công việc là workflow xác định, không phải bài toán cần 1 agent tự quyết định đường đi.</p>
+
+<h3>1.2 Năm pattern workflow có thể ghép được — vốn từ vựng chung để mô tả pipeline mà không cần framework</h3>
+<p>Anthropic đặt tên 5 pattern workflow COMPOSABLE (ghép được với nhau) — hữu ích như 1 "vốn từ vựng" để mô tả kiến trúc pipeline chính xác, kể cả khi implement bằng code Python thuần, không dùng framework:</p>
+<table>
+<tr><th>Pattern</th><th>Cơ chế</th><th>Ví dụ liên hệ dự án</th></tr>
+<tr><td>Prompt chaining</td><td>Chuỗi lệnh gọi LLM tuần tự, output bước trước là input bước sau, có "gate" kiểm tra kết quả trung gian</td><td><code>daily-investor-report</code>: fetch data → phân tích → viết thesis → QA gate là 1 chuỗi chaining có gate (8-check QA)</td></tr>
+<tr><td>Routing</td><td>1 classifier/LLM định tuyến input sang handler chuyên biệt theo loại task</td><td><code>kb_loader.py</code> — router tĩnh if/else (đã học ở <code>R3_4</code>) là 1 dạng Routing KHÔNG dùng LLM để phân loại</td></tr>
+<tr><td>Parallelization</td><td>2 biến thể: Sectioning (chia nhỏ task, chạy song song từng phần độc lập) và Voting (chạy CÙNG 1 task nhiều lần lấy nhiều góc nhìn)</td><td>Chạy phân tích song song cho nhiều ticker trong watchlist cố định (10 mã CEO/FPT/VIC/...) — mỗi ticker là 1 "section" độc lập</td></tr>
+<tr><td>Orchestrator-workers</td><td>1 LLM trung tâm chia nhỏ task ĐỘNG (không định trước subtask), giao cho worker LLM, rồi tổng hợp kết quả</td><td>Khác Parallelization ở chỗ subtask KHÔNG cố định trước — ví dụ giả định: "AI Orchestrator" điều phối nhiều agent con nhắc ở <code>L6_2_multiagent.html</code></td></tr>
+<tr><td>Evaluator-optimizer</td><td>1 LLM sinh câu trả lời, 1 LLM khác (hoặc rule) đánh giá + phản hồi, lặp lại tới khi đạt chuẩn</td><td>8-check QA self-gate của <code>daily-investor-report</code> đóng vai trò evaluator — tuy hiện tại là rule-based, không phải 1 LLM call riêng đánh giá</td></tr>
+</table>
+<p>Điểm quan trọng: cả 5 pattern này ĐỀU implement được bằng code Python thuần (như dự án đang làm), KHÔNG bắt buộc phải có LangGraph/CrewAI mới "làm được" — framework chỉ cung cấp sẵn 1 bộ khung (state object, node, edge...) để không phải tự viết lại từ đầu khi pattern trở nên phức tạp (nhiều nhánh điều kiện, cần checkpoint/resume).</p>
+
+<h3>1.3 Đào sâu DSPy — "tối ưu prompt tự động" nghĩa là gì CỤ THỂ (không chỉ 1 dòng mô tả trong bảng)</h3>
+<p>Bảng ở mục 1 chỉ ghi DSPy là "tối ưu prompt tự động bằng dữ liệu". Cơ chế thật gồm 5 khối nguyên thuỷ (primitives) ghép với nhau, khác hẳn việc tự tay viết prompt:</p>
+<table>
+<tr><th>Primitive</th><th>Vai trò</th></tr>
+<tr><td>Signature</td><td>Đặc tả KHAI BÁO (declarative) input/output — VD "nhận (câu hỏi, context) → trả (câu trả lời)", không viết prompt tay</td></tr>
+<tr><td>Module</td><td>1 chiến lược gọi LLM cụ thể để hiện thực signature — VD <code>Predict</code> (gọi thẳng), <code>ChainOfThought</code> (thêm bước suy luận), <code>ReAct</code> (xen kẽ suy luận + hành động)</td></tr>
+<tr><td>Program</td><td>Nhiều Module ghép lại thành 1 pipeline hoàn chỉnh</td></tr>
+<tr><td>Metric</td><td>Hàm chấm điểm định lượng "chương trình chạy tốt tới đâu" trên tập dữ liệu huấn luyện</td></tr>
+<tr><td>Optimizer ("compile")</td><td>Thuật toán tự động thử/sửa prompt + few-shot example để tối đa hoá Metric — đây là bước thay thế việc kỹ sư tự tay chỉnh sửa prompt</td></tr>
+</table>
+<p>Vài optimizer cụ thể tính tới 2026: <strong>MIPROv2</strong> (tìm kiếm kiểu Bayesian trên không gian instruction + demo mẫu), <strong>GEPA</strong> (optimizer kiểu phản tư/reflective mới hơn), <strong>SIMBA</strong>, <strong>BootstrapFewShot</strong> (tự sinh few-shot example từ chính dữ liệu huấn luyện), và <strong>OPRO</strong> (chính LLM đóng vai trò optimizer — tự đề xuất instruction mới dựa trên lịch sử các instruction đã thử cùng điểm số của chúng trong context, KHÔNG train 1 model riêng nào).</p>
+<p>Điểm mấu chốt hay bị hiểu lầm: DSPy không "viết prompt hộ bạn 1 lần rồi xong" — nó cần (1) dữ liệu huấn luyện đại diện, (2) 1 hàm Metric đo đúng thứ bạn quan tâm, (3) 1 lượt "compile" tốn thời gian/chi phí gọi LLM để tìm prompt tối ưu. Đây là lý do DSPy phù hợp nhất khi ĐÃ có sẵn dữ liệu đánh giá và prompt tay viết thủ công đã chạm trần chất lượng — không phải công cụ đầu tiên nên cầm lên khi mới bắt đầu 1 dự án LLM.</p>
+
+<h3>1.4 Phát hiện nghiên cứu 2026 hay bị bỏ qua: multi-agent THƯỜNG KHÔNG thắng single-agent</h3>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân — chiều ngược lại cũng nguy hiểm</div><p>Dễ mặc định "hệ thống nhiều agent phối hợp (multi-agent) luôn mạnh hơn 1 agent đơn lẻ vì chia việc ra nhiều 'bộ não'". Nhiều nghiên cứu độc lập công bố năm 2026 cho thấy điều NGƯỢC LẠI thường xảy ra trong thực nghiệm có kiểm soát chi phí công bằng — đây không phải lý do bỏ hẳn multi-agent, mà là lý do phải ĐO THẬT trước khi mặc định nó tốt hơn.</p></div>
+<table>
+<tr><th>Nghiên cứu</th><th>Phát hiện</th></tr>
+<tr><td>"The Illusion of Multi-Agent Advantage" (6/2026, audit 6 framework tự thiết kế multi-agent: DyLAN, MAS-Zero, AFlow, ADAS, MaAS, MAS-Orchestra)</td><td>Hệ multi-agent tự động hiếm khi thắng 1 agent đơn mạnh (Chain-of-Thought + Self-Consistency) khi tính đủ chi phí — dù multi-agent có thể đắt hơn tới 10 lần</td></tr>
+<tr><td>Nghiên cứu Stanford (multi-hop reasoning, cùng ngân sách reasoning token)</td><td>Single-agent bằng hoặc vượt multi-agent khi giữ ngân sách token suy luận NGANG NHAU — nghĩa là lợi thế multi-agent trước đó có thể chỉ tới từ việc nó ĐƯỢC PHÉP dùng nhiều token hơn, không phải kiến trúc tốt hơn</td></tr>
+<tr><td>Nghiên cứu Google (tác vụ suy luận tuần tự)</td><td>Phối hợp multi-agent làm GIẢM hiệu năng 39-70% so với single-agent trên tác vụ suy luận cần tính tuần tự chặt chẽ</td></tr>
+</table>
+<p>Vì sao điều này quan trọng cho khung quyết định của trang này: nó bổ sung 1 lớp câu hỏi TRƯỚC CẢ câu hỏi "cần framework nào" — đó là "có thật sự cần NHIỀU agent phối hợp không, hay 1 agent đơn được thiết kế tốt (prompt tốt, tool tốt) đã đủ". Nếu câu trả lời là "1 agent đơn đủ", thì không chỉ framework multi-agent (LangGraph, CrewAI, AutoGen) trở nên không cần thiết — bản thân KIẾN TRÚC multi-agent cũng chưa chắc đáng đầu tư, bất kể có dùng framework hay tự viết tay.</p>
+<p>Liên hệ trực tiếp <code>L6_2_multiagent.html</code> ("AI Orchestrator" điều phối nhiều agent con, nhắc nhiều lần trong các trang R3 khác): trước khi thiết kế orchestrator với nhiều agent con, nghiên cứu 2026 này gợi ý nên có 1 bước đo lường thật — so sánh phương án "nhiều agent con chuyên biệt" với phương án "1 agent đơn, cùng ngân sách token/chi phí, prompt được thiết kế tốt" — trước khi mặc định multi-agent là kiến trúc đúng.</p>
+
+<h4>1.4.1 Ví dụ minh hoạ — "chia việc cho nhiều agent" có thể chỉ là ảo giác về ngân sách token</h4>
+<pre><code>Task: phân tích 1 ticker (VD VNM) theo 3 khía cạnh: kỹ thuật, cơ bản, tin tức
+
+❌ Cách "trực giác": 3 agent con chuyên biệt + 1 agent tổng hợp
+   Agent A (kỹ thuật) → 2,000 token   Agent B (cơ bản) → 2,000 token
+   Agent C (tin tức)  → 2,000 token   Agent D (tổng hợp 3 kết quả) → 1,500 token
+   TỔNG: ~7,500 token, 4 lượt gọi LLM tuần tự/song song, thêm độ trễ
+   điều phối giữa các agent.
+
+✅ Cách "single-agent, cùng ngân sách": 1 agent đọc cả 3 khía cạnh
+   trong 1 lượt, với prompt đủ tốt để tự tổ chức phân tích theo 3 phần
+   Agent duy nhất, ngân sách 7,500 token NHƯ NHAU → 1 lượt gọi LLM,
+   không có độ trễ điều phối, không rủi ro 1 agent con "hiểu sai" ngữ
+   cảnh mà agent tổng hợp không phát hiện ra.
+
+Theo các nghiên cứu ở bảng trên: KHÔNG có gì đảm bảo cách "trực giác"
+  (4 agent) cho kết quả tốt hơn cách "single-agent" ở CÙNG 7,500 token
+  — chỉ có ĐO THẬT trên chính use case mới trả lời được, không suy diễn
+  từ trực giác "chia nhỏ việc ra thì mỗi phần sẽ làm tốt hơn".</code></pre>
+<p>Đây không phải khẳng định "multi-agent luôn sai" (vẫn có use case multi-agent thắng rõ, VD khi các agent con cần công cụ/quyền hạn khác nhau không thể gộp vào 1 context) — mà là lời nhắc: chi phí điều phối (coordination overhead) giữa các agent là CÓ THẬT, và lợi ích phải được đo, không được giả định.</p>
+
+<h3>2. Khung quyết định — "có cần framework hay không" (điểm bổ sung của trang này)</h3>
+<p><code>L8_6_ai_frameworks.html §12</code> đã liệt kê anti-pattern dùng framework quá tay. Câu hỏi cần trả lời TRƯỚC khi mở tài liệu bất kỳ framework nào:</p>
+<ol>
+<li><strong>Số bước trong pipeline có cố định không?</strong> Nếu luôn chạy đúng N bước theo thứ tự tuyến tính, không cần đồ thị điều kiện phức tạp — không cần LangGraph.</li>
+<li><strong>Có cần swap nhiều LLM provider không?</strong> Nếu chỉ dùng 1 provider cố định (VD chỉ Claude qua Claude Code), không cần lớp abstraction đa-provider của LangChain.</li>
+<li><strong>Đội ngũ có ưu tiên đọc trực tiếp source hơn học API riêng không?</strong> Với đội nhỏ, code Python thuần thường dễ bảo trì hơn học thêm 1 API riêng của framework.</li>
+<li><strong>Đã ĐO thật rằng nhiều agent phối hợp thắng 1 agent đơn ở CÙNG ngân sách chi phí/token chưa?</strong> (bổ sung sau khi có nghiên cứu mục 1.4) Nếu chưa đo, đừng mặc định multi-agent tốt hơn — framework multi-agent (LangGraph multi-node, CrewAI, AutoGen) chỉ đáng cân nhắc SAU KHI câu hỏi kiến trúc này đã có câu trả lời thực nghiệm, không phải trước.</li>
+</ol>
+<p>Nếu cả 4 câu trả lời đều nghiêng về "không cần" — framework tốt nhất lúc này là <strong>không dùng framework nào cả</strong>, và kiến trúc tốt nhất có thể vẫn chỉ là 1 agent đơn được thiết kế tốt.</p>
+
+<h3>3. Case study thật — skill <code>daily-investor-report</code></h3>
+<p>Skill <code>daily-investor-report</code> KHÔNG dùng bất kỳ orchestration framework nào — không LangChain, không LlamaIndex. Nó là 1 file <code>SKILL.md</code> mô tả quy trình bằng ngôn ngữ tự nhiên cộng vài script Python nhỏ (<code>kb_loader.py</code>, <code>capture_screenshots.py</code>) chạy trực tiếp bằng Claude Code.</p>
+<p>Đây không phải thiếu sót — nó đúng theo nguyên tắc "framework tốt nhất là không cần framework" vì thoả cả 3 câu hỏi đầu ở §2 (pipeline cố định — fetch → phân tích → viết → QA; chỉ dùng 1 provider — Claude qua Claude Code; đội ngũ ưu tiên đọc source trực tiếp) và câu hỏi thứ 4 (đo multi-agent vs single-agent) không áp dụng vì skill này vốn đã là single-agent, không có nhiều agent con nào cần so sánh (xem "Ví dụ cụ thể" bên dưới).</p>
+
+<h3>4. Minh hoạ chi phí ẩn khi dùng framework cho pipeline đơn giản</h3>
+<p>So sánh 2 cách viết CÙNG 1 pipeline 3 bước cố định (fetch → phân tích → viết report) — 1 bằng script thuần, 1 bằng LangGraph (giả định, minh hoạ khái niệm):</p>
+<pre><code># Cách 1 — script Python thuần (đúng với hiện trạng dự án)
+def run_daily_report():
+    data = fetch_market_data()
+    analysis = analyze(data)
+    report = write_report(analysis)
+    return report
+# Đọc 4 dòng là hiểu toàn bộ luồng. Debug: đặt breakpoint bất kỳ dòng nào.
+
+# Cách 2 — LangGraph (thêm cho pipeline này, không cần thiết)
+graph = StateGraph(ReportState)
+graph.add_node("fetch", fetch_market_data)
+graph.add_node("analyze", analyze)
+graph.add_node("write", write_report)
+graph.add_edge("fetch", "analyze")
+graph.add_edge("analyze", "write")
+graph.set_entry_point("fetch")
+app = graph.compile()
+# Cần học thêm: StateGraph, node, edge, compile — 5 khái niệm mới
+# để làm được đúng việc mà cách 1 làm bằng 4 dòng code thường.</code></pre>
+<p>Cách 2 KHÔNG sai — nó chỉ trả giá (thêm khái niệm phải học, thêm lớp abstraction phải debug qua) mà không nhận lại lợi ích tương ứng, vì pipeline này không có nhánh điều kiện phức tạp hay cần checkpoint/resume để bù lại chi phí đó.</p>
+
+<h3>4.1 Chi phí framework bằng số thật — không chỉ trực giác "nhiều khái niệm hơn"</h3>
+<p>Khảo sát kỹ thuật 2026 lượng hoá được phần "chi phí ẩn" đã nói ở trên bằng số liệu cụ thể, không chỉ cảm tính:</p>
+<table>
+<tr><th>Chỉ số</th><th>Số liệu</th></tr>
+<tr><td>Độ trễ thêm mỗi lệnh gọi qua framework (LangChain-class)</td><td>~20-80ms/lần gọi — framework wrap mỗi model call/tool call/memory operation trong 1 lớp class riêng</td></tr>
+<tr><td>Độ sâu stack trace khi debug lỗi production</td><td>15-40 frame code nội bộ framework — đội có kỹ sư junior tốn nhiều giờ hơn/sự cố vì debug qua framework là 1 kỹ năng khác debug Python thường</td></tr>
+<tr><td>Xu hướng 2026 ghi nhận</td><td>Nhiều team production được báo cáo "âm thầm" viết lại từ LangChain sang gọi SDK provider trực tiếp (Anthropic SDK/OpenAI SDK) khi chỉ cần 1-2 lệnh gọi LLM đằng sau 1 hàm sạch</td></tr>
+<tr><td>Ngưỡng latency nhạy cảm</td><td>Nếu ngân sách latency khắt khe (&lt;300ms p95), MỖI lớp abstraction đều đáng kể — đây là 1 tín hiệu cụ thể nên bỏ qua framework</td></tr>
+</table>
+<p>Bối cảnh quan trọng để không rơi vào cực đoan ngược lại: framework KHÔNG "đã lỗi thời toàn bộ" — lý do value proposition ban đầu của LangChain (chuẩn hoá API không đồng nhất giữa các provider LLM năm 2022) giảm dần vì bản thân các provider đã tự hội tụ API gần giống nhau, nhưng vấn đề framework giải quyết ngày nay đã DỊCH CHUYỂN sang state management, quyền hạn (authority), khôi phục lỗi (recovery), đánh giá (evaluation) — đúng những thứ LangGraph mạnh (đồ thị trạng thái + checkpoint, xem <code>L6_4_checkpointing.html</code>). Kết luận không phải "framework tệ" mà là "framework nào giải quyết đúng vấn đề NÀO, ở quy mô NÀO".</p>
+
+<h3>4.2 Hệ sinh thái framework 2026 — số liệu áp dụng thật, tránh chọn theo cảm tính</h3>
+<table>
+<tr><th>Framework</th><th>Chỉ số phổ biến (verify 2026-09)</th><th>Ghi chú</th></tr>
+<tr><td>LangGraph</td><td>~34% agent-framework citation trong tài liệu kiến trúc production tại doanh nghiệp ≥1,000 nhân sự (Gartner, Q1/2026); vượt CrewAI về GitHub star đầu 2026</td><td>Được ưa chuộng ở enterprise nhờ kiến trúc đồ thị map tự nhiên sang audit trail/rollback point</td></tr>
+<tr><td>CrewAI</td><td>Từ 2,800 sao (1/2024) lên ~31,200-47,800 sao tuỳ thời điểm đo (tăng >1,000%); ~60% Fortune 500 có áp dụng</td><td>Tăng trưởng nhanh nhất về số tương đối; mạnh ở use case tự động hoá nội dung/quy trình nghiệp vụ</td></tr>
+<tr><td>Tỷ lệ doanh nghiệp lớn chạy ≥1 agent production</td><td>61% (Gartner 2026) — tăng từ 18% (2024)</td><td>Cho thấy hệ sinh thái agent nói chung đã trưởng thành nhanh, không riêng framework nào</td></tr>
+</table>
+<p>Đọc đúng cách: số liệu tăng trưởng ấn tượng của framework là bằng chứng chúng ĐANG giải quyết vấn đề thật ở QUY MÔ ENTERPRISE (nhiều agent, cần audit trail, nhiều đội cùng maintain) — không phải bằng chứng "mọi dự án, kể cả 1 skill nội bộ đơn giản, đều nên dùng framework". 2 sự thật này không mâu thuẫn nhau, đúng tinh thần khung quyết định 3 câu hỏi ở mục 2.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Áp khung quyết định §2 vào chính pipeline của skill <code>daily-investor-report</code>, từng câu hỏi 1:</p>
+<pre><code>Câu hỏi 1: Số bước pipeline cố định không?
+  → Có. Luôn đúng thứ tự: fetch data → chạy 8-check QA gate → viết report → lưu HTML.
+  → Không cần đồ thị điều kiện phức tạp (không cần LangGraph).
+
+Câu hỏi 2: Cần swap nhiều LLM provider không?
+  → Không. Chỉ dùng Claude, chạy trực tiếp qua Claude Code (chính agent này).
+  → Không cần lớp abstraction đa-provider (không cần LangChain).
+
+Câu hỏi 3: Đội ngũ ưu tiên đọc source hơn học API riêng?
+  → Có. 1 người vận hành, ưu tiên debug trực tiếp bằng cách đọc kb_loader.py.
+  → Không cần học thêm API riêng của 1 framework.
+
+Kết luận: cả 3 câu đều nghiêng "không cần" → pipeline hiện tại (script Python
+  thuần + Claude Code) là lựa chọn ĐÚNG, không phải giải pháp tạm bợ.
+
+Câu hỏi 4 (bổ sung, mục 1.4): Đã đo multi-agent thắng single-agent chưa?
+  → Không áp dụng — skill này vốn đã là single-agent (1 Claude Code chạy
+    tuần tự qua các bước), không có nhiều "agent con" nào đang cạnh tranh
+    hay phối hợp với nhau để mà cần đo. Câu hỏi này chỉ thật sự liên quan
+    khi thiết kế "AI Orchestrator" nhiều agent con (L6_2_multiagent.html).</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tình huống</th><th>Cần framework?</th><th>Vì sao</th></tr>
+<tr><td>Skill báo cáo hàng ngày, luôn chạy đúng bước cố định (fetch → QA → render)</td><td>Không</td><td>Pipeline tuyến tính, không rẽ nhánh phức tạp — script thuần đủ, dễ debug hơn</td></tr>
+<tr><td>AI Orchestrator điều phối nhiều agent con, cần resume nếu container restart giữa chừng</td><td>Có (LangGraph + PostgresSaver)</td><td>Cần checkpoint/state persistence — tự viết lại tốn công sức lớn, rủi ro bug cao hơn dùng thư viện đã kiểm chứng</td></tr>
+<tr><td>Cần chạy A/B nhiều LLM provider cho cùng 1 task</td><td>Có (LangChain/LiteLLM-style routing)</td><td>Lớp abstraction đa-provider giảm chi phí bảo trì khi swap qua lại nhiều provider</td></tr>
+<tr><td>Prototype thử nghiệm nhanh 1 ý tưởng RAG mới trong 1 buổi chiều</td><td>Tuỳ</td><td>Nếu quen 1 framework thì dùng để prototype nhanh, nhưng đừng mang thẳng vào production nếu chưa đánh giá lại overhead</td></tr>
+<tr><td>Đang cân nhắc tách 1 task thành nhiều agent con chuyên biệt để "cho khoẻ"</td><td>Chưa chắc cần framework HAY multi-agent</td><td>Theo mục 1.4, nên đo thử 1 agent đơn (cùng ngân sách token) trước — nhiều nghiên cứu 2026 cho thấy single-agent thường bằng hoặc thắng, framework multi-agent lúc đó chỉ thêm chi phí không cần thiết</td></tr>
+</table>
+
+<h3>Bảng optimizer DSPy — chọn optimizer nào (bổ sung mục 1.3)</h3>
+<table>
+<tr><th>Optimizer</th><th>Cơ chế</th><th>Khi nào phù hợp</th></tr>
+<tr><td>BootstrapFewShot</td><td>Tự sinh few-shot example từ chính dữ liệu huấn luyện có sẵn</td><td>Điểm khởi đầu rẻ nhất, phù hợp khi đã có 1 tập ví dụ (input, output) đúng chuẩn</td></tr>
+<tr><td>MIPROv2</td><td>Tìm kiếm kiểu Bayesian trên không gian instruction + demo mẫu</td><td>Cần tối ưu sâu hơn BootstrapFewShot, chấp nhận nhiều lượt gọi LLM hơn lúc compile</td></tr>
+<tr><td>GEPA</td><td>Optimizer kiểu phản tư (reflective) — mới hơn, tự đánh giá lại lý do 1 prompt thất bại</td><td>Bài toán phức tạp mà tối ưu kiểu tìm kiếm thuần (MIPROv2) chưa đủ hiệu quả</td></tr>
+<tr><td>OPRO</td><td>Không train model riêng nào — chính LLM đọc lại lịch sử (instruction đã thử, điểm số tương ứng) ngay trong context, rồi tự đề xuất instruction mới tốt hơn ở vòng kế tiếp</td><td>Cần tối ưu instruction độc lập với việc chọn few-shot example</td></tr>
+</table>
+
+<h2>🎯 Ứng dụng vào dự án hiện tại</h2>
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Giữ nguyên hiện trạng: skill <code>daily-investor-report</code> tiếp tục chạy bằng script Python thuần + Claude Code, KHÔNG cần thêm LangGraph/LangChain trừ khi 1 trong 3 trigger dưới đây xảy ra thật.</p>
+<p>3 trigger cụ thể NÊN cân nhắc 1 framework thật (không phải bây giờ, nhưng đáng biết để nhận ra đúng lúc):</p>
+<ul>
+<li>Khi 1 orchestrator cần nhiều agent con phối hợp có state phức tạp, cần checkpoint/resume (<code>L6_4_checkpointing.html</code> đã có PostgresSaver pattern cho LangGraph) — lúc đó LangGraph đáng cân nhắc hơn tự viết state machine tay.</li>
+<li>Khi cần chạy A/B nhiều LLM provider cho cùng 1 task — lúc đó lớp abstraction routing giảm chi phí bảo trì.</li>
+<li>Khi số bước trong pipeline không còn cố định — cần rẽ nhánh động dựa trên kết quả bước trước theo cách không thể biểu diễn gọn bằng if/else Python.</li>
+</ul>
+<p>Về phát hiện nghiên cứu multi-agent (mục 1.4): nếu tương lai "AI Orchestrator" (<code>L6_2_multiagent.html</code>) được thiết kế thật, bài học áp dụng trực tiếp là KHÔNG mặc định kiến trúc nhiều agent con chuyên biệt là lựa chọn đúng chỉ vì nó "nghe có tổ chức hơn" — nên có 1 bước đo thử so sánh với 1 agent đơn (cùng ngân sách token) trước khi cam kết vào kiến trúc multi-agent, đúng tinh thần "Every quant fix must be validated against real data" đã ghi trong CLAUDE.md cho AI Trader — cùng kỷ luật đó áp dụng hợp lý cho quyết định kiến trúc agent.</p>
+<p>Về DSPy (mục 1.3): dự án hiện tại viết prompt tay trực tiếp trong <code>SKILL.md</code> và code Python — đây là lựa chọn hợp lý vì DSPy chỉ đáng đầu tư khi ĐÃ có ngân sách xây dựng eval set + Metric định lượng cho chất lượng output, thứ dự án hiện tại đo bằng 8-check QA gate thủ công hơn là 1 hàm Metric tự động kiểu DSPy.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p>Học xong 1 framework rồi cố nhét nó vào mọi project, kể cả khi task đơn giản hơn framework overhead nó mang lại — đây là anti-pattern #1 trong <code>L8_6 §12</code>.</p>
+<p>Đưa 1 orchestration framework vào project chỉ vì "ai cũng dùng" — nếu pipeline cố định và nhỏ, code Python thuần thường rẻ hơn để maintain và dễ debug hơn nhiều.</p>
+<p>Coi việc KHÔNG dùng framework là "chưa trưởng thành về kỹ thuật" — sai, <code>daily-investor-report</code> là ví dụ ngược lại đúng đắn: pipeline có thứ tự cố định chạy tốt bằng script Python thuần + Claude Code, không cần LangGraph.</p>
+<p>Chiều ngược lại cũng là 1 lỗi cần tránh: kết luận "framework đã lỗi thời/kém giá trị" chỉ vì có chi phí overhead — sai, số liệu tăng trưởng thật (61% doanh nghiệp lớn chạy agent production, LangGraph ~34% citation kiến trúc enterprise) cho thấy framework giải quyết đúng vấn đề thật ở QUY MÔ enterprise (state phức tạp, audit trail, nhiều đội cùng maintain) — vấn đề là chọn ĐÚNG công cụ cho ĐÚNG quy mô, không phải "framework tốt" hay "framework tệ" một cách tuyệt đối.</p>
+<p>Nhầm lẫn "Workflow" và "Agent" theo định nghĩa của Anthropic — gọi mọi pipeline chạy bằng LLM là "agent" dù đường đi hoàn toàn cố định (như <code>daily-investor-report</code>) là dùng sai thuật ngữ; Workflow (đường đi định trước) và Agent (đường đi do LLM tự quyết định) là 2 khái niệm khác nhau, ảnh hưởng trực tiếp tới việc có cần framework hỗ trợ hay không.</p>
+<p>Mặc định "nhiều agent phối hợp luôn mạnh hơn 1 agent" mà không đo — nhiều nghiên cứu độc lập 2026 (Stanford, Google, "The Illusion of Multi-Agent Advantage") cho thấy single-agent thường bằng hoặc thắng multi-agent ở cùng ngân sách chi phí/token, đôi khi multi-agent còn làm GIẢM hiệu năng 39-70% trên tác vụ suy luận tuần tự.</p>
+<p>Coi DSPy là "công cụ viết prompt hộ" đơn giản — bỏ qua việc nó cần 3 thứ đầu vào thật (dữ liệu huấn luyện, hàm Metric, ngân sách compile) mới hoạt động đúng nghĩa; không có 3 thứ đó, DSPy không có gì để tối ưu.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Kể tên đúng ít nhất 5/9 framework đã học và vai trò chính của mỗi loại.</li>
+<li>Áp dụng đúng khung quyết định 4 câu hỏi vào 1 use case bất kỳ được đưa ra.</li>
+<li>Giải thích được vì sao skill <code>daily-investor-report</code> không dùng framework là lựa chọn ĐÚNG, không phải thiếu sót.</li>
+<li>Kể đúng 3 trigger cụ thể sẽ khiến dự án nên cân nhắc 1 framework thật.</li>
+<li>Phân biệt được "dùng framework để prototype nhanh" và "mang thẳng prototype đó vào production mà chưa đánh giá overhead".</li>
+<li>Phân biệt đúng Workflow và Agent theo định nghĩa Anthropic, và xác định đúng <code>daily-investor-report</code> thuộc loại nào.</li>
+<li>Kể tên và mô tả đúng ít nhất 3/5 pattern workflow composable (prompt chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer), liên hệ được với 1 phần cụ thể trong pipeline của dự án.</li>
+<li>Trích được số liệu thật (latency overhead 20-80ms/call, stack trace 15-40 frame) làm bằng chứng cho chi phí framework, đồng thời không rơi vào kết luận cực đoan "framework luôn tệ".</li>
+<li>Trích được ít nhất 1 nghiên cứu 2026 cho thấy multi-agent không tự động thắng single-agent, và giải thích được hệ quả của phát hiện này lên quyết định "có cần framework multi-agent" (câu hỏi trước cả câu hỏi đó là "có cần multi-agent").</li>
+<li>Kể đúng 5 primitive của DSPy (Signature, Module, Program, Metric, Optimizer) và giải thích được 3 điều kiện đầu vào cần có trước khi DSPy phát huy tác dụng.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R3_5_retrieval_generation.html">← R3.5 · Retrieval + Generation</a>
+  <a href="R4_1_vector_databases.html">R4.1 · Retrieval Techniques — Vector Databases →</a>
+</div>
+
+</div>
+</body>
+</html>

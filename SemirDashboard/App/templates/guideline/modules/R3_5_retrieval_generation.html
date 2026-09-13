@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R3.5 · Retrieval data and generation — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · RAG · Điểm 5/6</div>
+  <h1>R3.5 · Retrieval data and generation</h1>
+  <p class="subtitle">Bước cuối cùng của RAG — và case study quan trọng nhất của toàn bộ chủ đề: <code>kb_loader.py</code> có phải "RAG thật" không?</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Giải thích được context window budget math — vì sao top-3 sau rerank tốt hơn top-20 raw.</li>
+<li>Phân biệt CHÍNH XÁC "retrieval-augmented generation" (khái niệm rộng) và "RAG vector-based" (1 cách hiện thực hoá cụ thể).</li>
+<li>Đối chiếu đầy đủ <code>kb_loader.py</code> (exact-match) với RAG vector-based qua 1 bảng so sánh 6 tiêu chí.</li>
+<li>Xác định đúng điều kiện khi nào nâng cấp từ exact-match lên vector search là XỨNG ĐÁNG, khi nào là over-engineering.</li>
+<li>Biết thêm hybrid search (BM25 + vector) là lựa chọn thứ 3 thường thắng cả 2 phương pháp đơn lẻ theo benchmark thật, đặc biệt trên dữ liệu tài chính.</li>
+<li>Đánh giá đúng debate "long-context LLM có thay thế RAG không" bằng bảng trade-off, không kết luận theo cảm tính "công nghệ mới hơn thì thay thế cái cũ".</li>
+<li>Phân biệt được citation correctness và citation faithfulness — hiểu vì sao "có trích dẫn" không đồng nghĩa "câu trả lời thực sự dựa vào nguồn đó".</li>
+<li>So sánh được các embedding model phổ biến (Voyage, OpenAI, Cohere, BGE, self-host) theo benchmark/giá/latency thay vì chọn theo tên quen thuộc.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Context window budget math (top-k sau rerank, không nhồi hết chunks) đã dạy đầy đủ ở module RAG cơ bản. Trang này bổ sung case study thật, so sánh trực tiếp "retrieval giả" (KB loader hiện tại của dự án) với "retrieval thật" (vector-based) — để thấy rõ ranh giới giữa 2 khái niệm hay bị gộp lẫn.</p>
+<table>
+<tr><th>Module</th><th>Nội dung</th><th>Quan hệ với trang này</th></tr>
+<tr><td><code>../modules/L5_2_rag.html §4.7</code></td><td>Context window budget math chi tiết</td><td>Đọc TRƯỚC — nền tảng phần "Cơ chế chi tiết" §1</td></tr>
+<tr><td><code>../modules/R3_2_reranking.html</code></td><td>Vì sao 2 tầng bi-encoder/cross-encoder tồn tại</td><td>Bước NGAY TRƯỚC bước generation trong pipeline</td></tr>
+</table>
+<p>Độ khó xếp <strong>Trung bình</strong>: khái niệm không khó, nhưng đòi hỏi tư duy phân biệt cẩn thận — dễ nhầm "có retrieve rồi generate" với "làm RAG đúng chuẩn vector search", đây chính là nhầm lẫn trang này muốn sửa.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Đây là bước cuối cùng trong pipeline RAG — sau khi có "nguyên liệu" (retrieved chunks đã rerank), đầu bếp (LLM) phải nấu ra món ăn hoàn chỉnh (câu trả lời), không phải bê nguyên nguyên liệu sống ra bàn cho khách. Nhồi 20 chunk thô vào context giống bê cả rổ rau chưa nấu ra bàn — khách (LLM) phải tự "nấu" trong đầu, dễ lẫn lộn, tốn công vô ích.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Generation quality phụ thuộc retrieval quality — chuỗi nhân quả</h3>
+<p>Chunk kém → context kém → answer kém, dù LLM có mạnh đến đâu. Đây là lý do 2 bước trước generation — Data preparation (<code>R3_3</code>) và Reranking (<code>R3_2</code>) — luôn được đầu tư TRƯỚC khi tối ưu prompt generation. Tối ưu prompt trên context bẩn giống trang trí lại 1 món ăn đã hỏng nguyên liệu — không cứu được chất lượng cuối cùng.</p>
+<p><code>L5_2_rag.html §4.7</code> đã dạy: không nhồi hết chunks vào context, top-3 sau rerank thường tốt hơn top-20 raw, vì context dài làm loãng tín hiệu quan trọng và tốn budget token một cách lãng phí.</p>
+
+<h3>1.1 Ví dụ số — vì sao top-3 sau rerank thắng top-20 raw</h3>
+<p>Giả sử context window budget dành cho retrieved chunks là 2,000 token, mỗi chunk trung bình 150 token:</p>
+<table>
+<tr><th>Chiến lược</th><th>Số chunk đưa vào context</th><th>Token dùng</th><th>Tín hiệu/nhiễu</th></tr>
+<tr><td>Top-20 raw (không rerank)</td><td>13 chunk (2000/150, phần còn lại bị cắt)</td><td>~1,950</td><td>Nhiều chunk không liên quan lọt vào vì bi-encoder recall thấp ở top-k lớn</td></tr>
+<tr><td>Top-3 sau rerank</td><td>3 chunk</td><td>~450</td><td>Cả 3 đều liên quan cao (đã qua cross-encoder lọc), còn dư 1,550 token cho phần khác của prompt</td></tr>
+</table>
+<p>Top-3 sau rerank không chỉ rẻ hơn — nó còn CHÍNH XÁC hơn, vì cross-encoder đã loại bỏ chunk nhiễu trước khi tới generation. Nhồi thêm chunk không đồng nghĩa thêm thông tin hữu ích; nhiều khi nó chỉ thêm nhiễu khiến LLM khó xác định đâu là tín hiệu quan trọng.</p>
+
+<h3>1.2 Debate 2026: context window LLM đã lên tới hàng triệu token — RAG có "chết" chưa?</h3>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân</div><p>Với context window hiện đại (Claude ~1M token, Gemini 3 Pro ~2M, Llama 4 Scout ~10M), có lập luận cực đoan "cứ nhồi thẳng toàn bộ tài liệu vào context, khỏi cần RAG nữa". Đây là hiểu sai nhị phân THEO CHIỀU NGƯỢC LẠI với lỗi threading/asyncio đã nêu ở đầu trang — lần này là tưởng "công nghệ mới (long-context) thay thế hoàn toàn công nghệ cũ (RAG)" trong khi thực tế cả 2 ĐỀU hoạt động, mỗi bên mạnh ở 1 loại bài toán khác nhau.</p></div>
+<table>
+<tr><th>Tiêu chí</th><th>RAG (retrieval có chọn lọc)</th><th>Long-context (nhồi toàn bộ tài liệu)</th></tr>
+<tr><td>Độ chính xác khi tài liệu lớn, phần liên quan chỉ là 1 phần nhỏ</td><td>Cao hơn — chỉ đưa phần liên quan, giảm nhiễu</td><td>Thấp hơn — mô hình phải tự "mò" phần liên quan giữa hàng triệu token</td></tr>
+<tr><td>Chi phí suy luận (inference cost)</td><td>Thấp — attention chỉ chạy trên vài nghìn token context</td><td>Cao hơn nhiều — attention scale gần bậc 2 theo độ dài input</td></tr>
+<tr><td>Khả năng suy luận xuyên suốt nhiều phần tài liệu (cross-document reasoning)</td><td>Hạn chế hơn — chỉ thấy các chunk đã retrieve, có thể bỏ lỡ liên kết giữa các phần không được chọn</td><td>Tốt hơn — model "thấy" toàn bộ tài liệu, dễ nối thông tin rải rác nhiều chỗ</td></tr>
+<tr><td>Cập nhật dữ liệu mới</td><td>Dễ — chỉ cần index thêm document mới</td><td>Khó hơn — bị giới hạn bởi kiến thức train + phải nhồi lại toàn bộ context mỗi lần</td></tr>
+<tr><td>Kết luận nghiên cứu 2026</td><td colspan="2" style="text-align:center">Không bên nào thắng tuyệt đối — phụ thuộc loại task, độ dài tài liệu, và chất lượng retrieval; xu hướng nghiên cứu mới nhất là KẾT HỢP cả 2 (dùng RAG để lọc thô, rồi nhồi phần đã lọc vào 1 context vẫn khá dài) thay vì chọn 1 trong 2 cực đoan</td></tr>
+</table>
+<p>Áp vào bài học chính của trang này: "top-3 sau rerank tốt hơn top-20 raw" (mục 1.1) KHÔNG bị phủ định bởi context window lớn hơn — vấn đề không phải "có đủ chỗ chứa hay không" mà là mô hình vẫn dễ bị nhiễu bởi thông tin không liên quan dù còn thừa chỗ trong context. Context lớn hơn giúp giảm áp lực phải cắt gọt cực đoan, nhưng không loại bỏ giá trị của việc lọc trước khi generation.</p>
+
+<h3>1.3 Cơ chế cụ thể vì sao context dài vẫn "mất" thông tin — hiện tượng Lost in the Middle</h3>
+<p>Lý do kỹ thuật cụ thể (không chỉ nói chung chung "context dài gây nhiễu"): LLM có xu hướng thiên lệch attention theo hình chữ U — token ở ĐẦU và ở CUỐI context nhận được nhiều "chú ý" hơn hẳn token ở GIỮA, bất kể mức độ liên quan thực sự. Đây gọi là hiện tượng <strong>Lost in the Middle</strong>, và 1 phần nguyên nhân kỹ thuật tới từ chính cơ chế RoPE (Rotary Position Embedding) — dùng phổ biến trong LLM hiện đại — vốn tạo hiệu ứng suy giảm dần theo khoảng cách, khiến model tự nhiên ưu tiên 2 đầu chuỗi.</p>
+<table>
+<tr><th>Chỉ số</th><th>Số liệu nghiên cứu</th></tr>
+<tr><td>Mức độ suy giảm hiệu năng khi thông tin liên quan nằm ở GIỮA context (so với đầu/cuối)</td><td>Có thể giảm hơn 30% trên các tác vụ như suy luận số học, QA trắc nghiệm, đánh giá văn bản, xếp hạng đoạn văn</td></tr>
+<tr><td>Vị trí được ưu tiên tự nhiên bởi model</td><td>Đầu context (primacy) và cuối context (recency) — GIỮA bị "bỏ quên" nhiều nhất</td></tr>
+</table>
+<p>Hệ quả thực hành trực tiếp: nếu 1 pipeline RAG (hoặc phần "Data thị trường thật" chèn vào prompt như ở mục "Ví dụ cụ thể" bên dưới) đưa nhiều đoạn context vào cùng lúc, nên SẮP XẾP đoạn quan trọng nhất ở ĐẦU hoặc CUỐI prompt, không chôn nó ở giữa 1 khối context dài — đây là 1 mitigation thực tế được khuyến nghị cùng với retrieval 2 tầng (thu hẹp + rerank, đã học ở <code>R3_2</code>) và hybrid search (mục 2.3 bên dưới).</p>
+
+<h3>1.4 Giới hạn thật của bước generation — trích dẫn (citation) không đồng nghĩa với "đã dùng thật"</h3>
+<p>Ngay cả khi retrieval hoàn hảo và context đã lọc sạch (top-3 sau rerank, không Lost-in-the-Middle), bước generation vẫn có 1 giới hạn RIÊNG mà 2 bước trước không sửa được: LLM có thể trích dẫn 1 nguồn "trông có vẻ đúng" trong khi thực ra câu trả lời đến từ kiến thức tham số (parametric memory) của chính model, không phải từ context vừa retrieve. Nghiên cứu 2026 gọi hiện tượng này là <strong>"post-rationalized citation"</strong> — model sinh câu trả lời trước (từ những gì nó đã "học thuộc" lúc train), rồi mới gắn 1 trích dẫn nghe hợp lý vào sau, chứ trích dẫn đó KHÔNG thực sự ảnh hưởng nhân quả tới nội dung câu trả lời.</p>
+<table>
+<tr><th>Khái niệm</th><th>Ý nghĩa</th></tr>
+<tr><td>Citation correctness (đúng về nội dung)</td><td>Document được trích dẫn CÓ thực sự chứa thông tin hỗ trợ câu trả lời hay không</td></tr>
+<tr><td>Citation faithfulness (đúng về nhân quả)</td><td>Document đó có THỰC SỰ là nguồn model dựa vào để sinh câu trả lời, hay chỉ là 1 trích dẫn gắn thêm sau khi câu trả lời đã hình thành từ nơi khác</td></tr>
+<tr><td>Số liệu ghi nhận (khảo sát 2026)</td><td>Tới ~57% trích dẫn trong 1 số hệ RAG được đánh giá là "post-rationalized" — đúng về nội dung nhưng KHÔNG đúng về nhân quả</td></tr>
+<tr><td>Biến thể nguy hiểm khác: "citation-shaped hallucination"</td><td>Model trích 1 document CÓ THẬT nhưng đã LỖI THỜI, trình bày như thể vẫn còn đúng ở hiện tại — nguồn có thật, nhưng thời điểm áp dụng sai</td></tr>
+</table>
+<p>Vì sao đáng học riêng ở bước generation (không phải lỗi của retrieval): dù retrieval trả về ĐÚNG document liên quan nhất, model vẫn có thể "phớt lờ" nó và trả lời theo kiến thức cũ đã học, rồi trích dẫn ngược lại document đó cho có vẻ đáng tin — đây là lý do groundedness (mức độ câu trả lời thực sự bám vào context) cần đánh giá RIÊNG, không suy ra tự động chỉ vì "có citation" hay "retrieval đã tìm đúng".</p>
+
+<h4>1.4.1 Ví dụ minh hoạ post-rationalized citation — dạng lỗi trông "vô hại" nhất</h4>
+<pre><code>Retrieved context (đúng, liên quan): "## MACD\nMACD là chỉ báo động lượng,
+  tính bằng hiệu 2 đường EMA 12 và EMA 26. Tín hiệu mua khi đường MACD
+  cắt lên đường signal."
+
+Câu hỏi: "Giải thích MACD được tính như thế nào?"
+
+❌ Generation post-rationalized (model trả lời từ kiến thức đã học,
+   KHÔNG thực sự đọc kỹ context, nhưng vẫn gắn citation cho có):
+   "MACD được tính bằng hiệu giữa EMA 12 và EMA 26 [nguồn: KB2/MACD].
+   Ngoài ra MACD còn dùng đường signal EMA 9 để tạo tín hiệu giao cắt."
+   → Câu "đường signal EMA 9" KHÔNG có trong context vừa retrieve —
+     model tự thêm từ kiến thức nền, rồi gắn CHUNG 1 citation cho
+     toàn bộ đoạn, tạo cảm giác "cả đoạn đều có nguồn" dù chỉ câu đầu
+     thực sự bám context.
+
+✅ Generation grounded đúng (chỉ khẳng định điều context THẬT SỰ có):
+   "Theo tài liệu tham khảo, MACD được tính bằng hiệu giữa EMA 12 và
+   EMA 26, và tín hiệu mua xuất hiện khi đường MACD cắt lên đường
+   signal [nguồn: KB2/MACD]." (không thêm chi tiết ngoài context nếu
+   không chắc chắn nó cũng nằm trong nguồn đã trích)</code></pre>
+<p>Đây không phải lỗi "bịa hoàn toàn" dễ nhận ra — nó nguy hiểm hơn vì phần lớn câu trả lời ĐÚNG và CÓ citation hợp lệ, chỉ lẫn thêm 1 chi tiết ngoài nguồn mà người đọc khó phân biệt nếu không tự đối chiếu lại nguyên văn context.</p>
+<table>
+<tr><th>Cách đo groundedness</th><th>Cơ chế</th><th>Đánh đổi</th></tr>
+<tr><td>LLM-as-judge</td><td>Dùng 1 LLM khác chấm điểm "câu trả lời có bám sát context không"</td><td>Đạt ~80% mức đồng thuận với đánh giá con người theo khảo sát 2026 — nhanh, rẻ, nhưng không hoàn hảo</td></tr>
+<tr><td>Human evaluation</td><td>Người review đọc thủ công, đối chiếu câu trả lời với context gốc</td><td>Chính xác nhất nhưng chậm, tốn công, không scale được cho lượng lớn output</td></tr>
+<tr><td>Đếm found/cited (như <code>kb_loader.py</code> hiện tại)</td><td>Đo tỷ lệ excerpt được load có thực sự xuất hiện trong output</td><td>Rẻ, tự động hoàn toàn, nhưng chỉ đo "có xuất hiện" — không đo được "có thực sự là nguồn nhân quả" (như mục 1.4 đã phân biệt)</td></tr>
+</table>
+
+<h3>2. Case study cốt lõi — <code>kb_loader.py</code> có phải "RAG thật" không?</h3>
+<p>Đây là câu hỏi hay bị hiểu sai nhất khi học RAG: "có retrieve rồi generate" KHÔNG đồng nghĩa với "làm RAG theo nghĩa vector-search". Cần tách 2 khái niệm:</p>
+<ul>
+<li><strong>Retrieval-augmented generation (nghĩa rộng)</strong>: bất kỳ pipeline nào retrieve context → augment prompt → generate. Đây là 1 KIẾN TRÚC, không quy định CÁCH retrieval phải làm bằng gì.</li>
+<li><strong>RAG vector-based (nghĩa hẹp, thường bị mặc định khi nói "RAG")</strong>: 1 cách hiện thực hoá CỤ THỂ của kiến trúc trên, dùng embedding + cosine similarity để tìm chunk liên quan.</li>
+</ul>
+<p><code>kb_loader.py</code> (<code>.claude/skills/daily-investor-report/scripts/kb_loader.py</code>) là ví dụ hoàn hảo để thấy ranh giới này: nó ĐÚNG LÀ retrieval-augmented generation (đọc KB → đưa vào prompt → Claude sinh nhận định), nhưng retrieval của nó KHÔNG dùng vector search — nó dùng exact substring match trên heading (<code>anchor.lower() in heading_text.lower()</code>, hàm <code>_extract_section</code> dòng 36-84 của file, điều kiện match ở dòng 58).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Minh hoạ cụ thể luồng thật của <code>kb_loader.py</code> khi skill gọi <code>load_indicator("MACD")</code>:</p>
+<pre><code>1. Skill gọi: kb_loader.load_indicator("MACD")
+2. _extract_section("technical_indicators.md", "MACD") chạy:
+   - Đọc toàn bộ file technical_indicators.md vào RAM (cache trong _kb_cache)
+   - Duyệt từng dòng, tìm regex ^(##+)\s+(.+)$ khớp heading H2/H3
+   - Với mỗi heading, check: "macd" in heading_text.lower() ?
+   - Khớp tại dòng có heading "## MACD" -> start_idx = dòng đó
+   - Tìm heading tiếp theo CÙNG CẤP -> end_idx = dòng đó
+   - Cắt content[start_idx:end_idx] = trọn vẹn section MACD
+3. Trả về dict {kb_file, anchor, heading, content, word_count}
+4. Kết quả được ghép vào prompt gửi cho Claude (bước "augment")
+5. Claude đọc context này + data thị trường thật -> viết nhận định (bước "generate")</code></pre>
+<p>Không có bước nào ở đây tính embedding, không có vector DB, không có cosine similarity — toàn bộ "retrieval" là so khớp chuỗi con trên tên heading đã biết trước.</p>
+
+<h3>2.1 Cấu trúc prompt "augment" thật trong luồng skill</h3>
+<p>Sau khi <code>kb_loader.py</code> trả về section, nội dung được ghép vào prompt theo cấu trúc gần đúng sau (minh hoạ khái niệm, không phải nguyên văn prompt thật của skill):</p>
+<pre><code>[System/Instruction]: Bạn là nhà đầu tư chuyên nghiệp, đọc dữ liệu thị trường
+  và tài liệu tham khảo bên dưới để viết nhận định.
+
+[Retrieved context — từ kb_loader.load_indicator("MACD")]:
+## MACD
+MACD là chỉ báo động lượng, tính bằng hiệu 2 đường EMA...
+Tín hiệu mua khi đường MACD cắt lên đường signal.
+
+[Data thị trường thật]: VNM giá 68,500 (+1.2%), MACD cắt lên signal hôm nay...
+
+[Yêu cầu]: Viết nhận định về VNM dựa trên tín hiệu MACD ở trên.</code></pre>
+<p>Đây là bước "augment" (chèn context vào prompt) rồi "generate" (Claude sinh nhận định) — đúng 2 giai đoạn cuối của kiến trúc retrieval-augmented generation, bất kể retrieval ở trên dùng cơ chế gì.</p>
+
+<h3>2.2 Ứng dụng thật của mục 1.4 vào chính <code>kb_loader.py</code> — "found" khác "cited", nhưng "cited" cũng chưa chắc "faithful"</h3>
+<p><code>kb_loader.py</code> (dòng 184-213) đã CÓ SẴN 1 cơ chế phân biệt gần với "citation correctness" ở mục 1.4, dù được đặt tên khác: <code>_log_reference()</code> ghi lại mỗi lần 1 section được LOAD (<code>found=True</code>), còn <code>mark_cited()</code> chỉ được gọi khi excerpt đó THỰC SỰ xuất hiện trong thesis cuối cùng (<code>cited=True</code>). <code>get_usefulness_stats()</code> (dòng 202-213) tính ra <code>found_rate</code> và <code>cited_rate</code> để đo tỷ lệ "load về nhưng không dùng" (<code>wasted_loads</code>).</p>
+<pre><code># .claude/skills/daily-investor-report/scripts/kb_loader.py (dòng 193-213)
+def mark_cited(self, kb_id: str, section: str):
+    """L8 (2026-06-30): mark a reference as ACTUALLY used in rendered output.
+    Distinguishes 'found' (excerpt loaded) from 'cited' (excerpt used in thesis)."""
+    ...
+
+def get_usefulness_stats(self) -&gt; dict:
+    return {
+        "found_rate": ...,   # % lần load có tìm thấy section
+        "cited_rate": ...,   # % lần TÌM THẤY mà thực sự lọt vào thesis
+        "wasted_loads": ...  # found nhưng không cited
+    }</code></pre>
+<p>Đây là cơ chế đo <strong>citation correctness</strong> (excerpt có thật trong output không) — nhưng KHÔNG đo được <strong>citation faithfulness</strong> theo đúng nghĩa mục 1.4: kể cả khi 1 excerpt được đánh dấu <code>cited=True</code> (nó XUẤT HIỆN trong thesis), hệ thống hiện tại không xác minh được liệu Claude có THỰC SỰ dựa vào excerpt đó để suy luận, hay chỉ chèn nó vào như 1 trích dẫn hợp lý trong khi nhận định chính đã hình thành từ hiểu biết chung của model. Đây KHÔNG phải lỗ hổng cần vá ngay — với vai trò "research source" hiện tại của KB (theo CLAUDE.md, LLM đọc raw market data + KB để hình thành ý kiến, không phải 1 pipeline cần audit trail nhân quả nghiêm ngặt) — nhưng là giới hạn NÊN BIẾT nếu sau này cần chứng minh "nhận định X thực sự dựa trên nguồn Y" ở mức độ chặt chẽ hơn.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th><code>kb_loader.py</code> hiện tại (dự án)</th><th>RAG vector-based "thật"</th></tr>
+<tr><td>Cách tìm chunk</td><td>Exact substring match trên heading (<code>anchor.lower() in heading_text.lower()</code>)</td><td>Cosine similarity giữa query embedding và chunk embedding</td></tr>
+<tr><td>Cần embedding model?</td><td>Không</td><td>Có (VD <code>voyage-4-large</code> — dòng Voyage 4, phát hành 2026-01, thay thế <code>voyage-3-large</code> làm model top RTEB leaderboard của Voyage AI, verify 2026-09)</td></tr>
+<tr><td>Cần vector DB?</td><td>Không — đọc thẳng file <code>.md</code>, cache bằng dict trong RAM (<code>_section_cache</code>)</td><td>Có (pgvector/Qdrant/...)</td></tr>
+<tr><td>Query dạng nào xử lý tốt</td><td>Query có tên khớp gần đúng với heading đã biết trước (VD tên indicator, tên sector)</td><td>Query tự do, semantic (VD "cổ phiếu nào giống VNM về mặt định giá")</td></tr>
+<tr><td>Chi phí vận hành</td><td>~0 (không network call, không GPU)</td><td>Cần index + serving embedding model</td></tr>
+<tr><td>Đúng khi nào</td><td>Không gian truy vấn nhỏ, có thể liệt kê hết trước (7 KB, tên cố định)</td><td>Không gian truy vấn lớn/mở, không đoán trước hết</td></tr>
+</table>
+<p><strong>Bài học cốt lõi</strong>: KHÔNG PHẢI mọi hệ thống "retrieve rồi generate" đều là RAG theo nghĩa vector-search. <code>kb_loader.py</code> là 1 kiến trúc retrieval-augmented generation đúng nghĩa rộng, dùng retrieval đơn giản (exact match) thay vì semantic search — đây là lựa chọn kỹ thuật HỢP LÝ ở quy mô hiện tại, không phải "làm RAG sai" hay "RAG chưa hoàn thiện".</p>
+
+<h3>2.3 Tầng thứ 3 hay bị bỏ qua trong bảng so sánh nhị phân — Hybrid search (lexical + vector)</h3>
+<div class="callout danger"><div class="label">⚠️ Tránh hiểu sai nhị phân</div><p>Bảng ở mục 2 dễ bị đọc thành "chỉ có 2 lựa chọn: exact-match HOẶC vector search". Thực tế phổ biến nhất trong production 2026 là <strong>hybrid search</strong> — chạy CẢ retrieval lexical (BM25/exact-match) VÀ vector search song song, rồi hợp nhất kết quả (thường bằng Reciprocal Rank Fusion, xem <code>R3_4_multistep_retrieval.html §2.5</code>). Đây không phải "thoả hiệp yếu hơn cả 2" — nhiều benchmark cho thấy nó THẮNG cả 2 phương pháp đơn lẻ.</p></div>
+<table>
+<tr><th>Benchmark (2026)</th><th>BM25/lexical đơn lẻ</th><th>Vector/dense đơn lẻ</th><th>Hybrid (kết hợp)</th></tr>
+<tr><td>WANDS (e-commerce, NDCG)</td><td>0.6983</td><td>0.6953</td><td>0.7497 (+7.4% so với tốt nhất trong 2 cái đơn lẻ)</td></tr>
+<tr><td>1 benchmark tổng hợp khác, Recall@10</td><td>65%</td><td>78%</td><td>91%</td></tr>
+<tr><td>Tài liệu tài chính (text + bảng trộn lẫn), Recall@5 sau rerank</td><td colspan="2" style="text-align:center">—</td><td>0.816 (pipeline hybrid + neural rerank 2 tầng)</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Phát hiện phản trực giác — liên quan trực tiếp tới dữ liệu tài chính</div><p>1 benchmark 2026 trên tài liệu tài chính phát hiện: <strong>BM25 (lexical thuần) THẮNG dense retrieval hiện đại nhất</strong> trên chính loại dữ liệu này — đi ngược lại giả định phổ biến "semantic search luôn thắng lexical search". Lý do hợp lý: văn bản tài chính có rất nhiều mã ticker, thuật ngữ chuyên ngành, số liệu chính xác — những thứ khớp CHÍNH XÁC theo từ (exact keyword match) quan trọng hơn khớp "ý nghĩa gần giống". Đây là bằng chứng thực nghiệm CỦNG CỐ thêm cho lập luận đã có ở mục 2: retrieval đơn giản (lexical/exact-match) không hề "kém cỏi" một cách tuyệt đối cho dữ liệu tài chính — nó có thể THẮNG semantic search tuỳ ngữ cảnh, không chỉ "tạm chấp nhận được ở quy mô nhỏ".</p></div>
+<p>Ứng với <code>kb_loader.py</code>: nếu tương lai cần retrieval semantic thật, kết luận đúng theo bằng chứng trên KHÔNG PHẢI "bỏ hẳn exact-match rồi chuyển sang thuần vector search" — mà nên cân nhắc hybrid (giữ lại lexical matching + thêm vector search) làm kiến trúc mục tiêu, đúng tinh thần "cả 2 đều hoạt động, kết hợp thường tốt hơn từng cái riêng lẻ" xuyên suốt toàn bộ chuỗi trang R3 này.</p>
+
+<h3>2.4 Nếu THẬT SỰ cần chọn embedding model cho phần "vector-based" — bảng so sánh cụ thể (verify 2026-09)</h3>
+<p>Bảng ở mục 2 mới nói "cần 1 embedding model" chung chung. Nếu ngày đó đến (theo đúng điều kiện ở mục 3 bên dưới), đây là các lựa chọn thật với số liệu benchmark/giá/latency cụ thể để so sánh — không phải chọn theo tên nghe quen:</p>
+<table>
+<tr><th>Model</th><th>MTEB average (benchmark tổng hợp)</th><th>Giá / 1M token</th><th>Latency ước tính (embed 100 token)</th></tr>
+<tr><td>Voyage (dòng flagship, VD voyage-3.5/voyage-2)</td><td>~67.8% — dẫn đầu trong khảo sát tổng hợp</td><td>~$0.100</td><td>~100-180ms (qua API)</td></tr>
+<tr><td>OpenAI text-embedding-3-large</td><td>~64.6%</td><td>~$0.130</td><td>~150-250ms</td></tr>
+<tr><td>BGE-large-en-v1.5 (self-host)</td><td>~63.9%</td><td>Chi phí hạ tầng tự host thay vì trả theo token</td><td>~5-15ms nếu self-host trên GPU riêng — nhanh nhất trong bảng</td></tr>
+<tr><td>Cohere embed-v4</td><td>~63.1% (embed-english-v3.0 tham chiếu)</td><td>~$0.100 — rẻ hơn ~23% so với OpenAI text-embedding-3-large ở trên (0.13 → 0.10)</td><td>~80-150ms (bản light)</td></tr>
+<tr><td>NV-Embed-v2 / Qwen3-Embedding-8B (self-host, open-source)</td><td>72.31 / 70.58 — vượt cả model API thương mại trên benchmark công khai</td><td>Chi phí hạ tầng tự host (cần GPU đủ mạnh)</td><td>Phụ thuộc hạ tầng tự host</td></tr>
+</table>
+<p>Đọc bảng đúng cách: điểm MTEB cao nhất KHÔNG tự động đồng nghĩa "tốt nhất cho dự án này" — self-host (BGE, NV-Embed, Qwen3-Embedding) đổi lấy latency thấp/chi phí biên gần 0 bằng việc phải tự vận hành hạ tầng GPU; managed API (Voyage, OpenAI, Cohere) đổi lấy vận hành đơn giản bằng chi phí theo token và latency mạng. Đây là cùng 1 dạng trade-off "chi phí vận hành vs độ trễ/kiểm soát" đã lặp lại xuyên suốt các trang R3 khác (MCP, reranker) — không phải câu hỏi mới.</p>
+
+<h3>3. Bài tập tự đánh giá — khi nào nâng cấp lên vector search?</h3>
+<table>
+<tr><th>Tình huống</th><th>Nâng cấp lên vector search?</th><th>Vì sao</th></tr>
+<tr><td>Skill gọi KB bằng tên cố định đã biết trước (VD "MACD", "Ngân hàng")</td><td>Không</td><td>Không gian truy vấn liệt kê hết được — exact-match đủ, nhanh, rẻ hơn</td></tr>
+<tr><td>User được phép gõ câu hỏi tự do bất kỳ để tra KB</td><td>Có</td><td>Không thể liệt kê hết mọi cách diễn đạt có thể — cần semantic search để bắt được ý dù từ ngữ khác nhau</td></tr>
+<tr><td>Số lượng KB file tăng từ 7 lên hàng trăm, không còn nhớ hết tên</td><td>Có</td><td>If/else router tĩnh không còn liệt kê xuể — cần retrieval semantic để tìm đúng nguồn</td></tr>
+<tr><td>KB vẫn 7 file, chỉ thêm nội dung mới vào file cũ</td><td>Không</td><td>Cấu trúc truy vấn không đổi — vẫn có thể gọi bằng tên heading cố định</td></tr>
+</table>
+
+<h2>🎯 Ứng dụng vào dự án hiện tại</h2>
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Nâng cấp <code>kb_loader.py</code> lên vector search CHỈ đáng làm khi cần thật: nếu tương lai muốn hỗ trợ free-text query vào KB (không phải gọi hàm với tên cố định như <code>load_indicator("MACD")</code>), đó là lúc thêm embedding + vector search + reranking (<code>R3_2_reranking.html</code>). Không làm trước khi có nhu cầu thật, tránh over-engineering.</p>
+<p>Ranh giới CLAUDE.md cần giữ: mọi retrieval/generation ở KB này phục vụ vai trò "research source" của LLM (đọc KB → viết nhận định) — không dùng kết quả retrieval để tính điểm số sống thay cho <code>backend/predict/senior_score.py</code>. Đây là quy tắc tách biệt LLM khỏi vai trò 1 feature có trọng số học được.</p>
+<p>Về citation faithfulness (mục 1.4/2.2): cơ chế <code>found</code>/<code>cited</code> hiện tại của <code>kb_loader.py</code> đã là 1 bước đo lường TỐT HƠN đa số hệ RAG (nhiều hệ thống không đo gì cả) — nhưng nếu tương lai cần chứng minh chặt chẽ hơn "nhận định X thực sự dựa trên nguồn Y" (VD phục vụ audit/compliance), cần bổ sung 1 bước xác minh nhân quả (VD yêu cầu Claude trích dẫn NGUYÊN VĂN đoạn đã dùng để suy luận, không chỉ tên section) — đây là hướng cải tiến khả thi, không phải phải-làm-ngay.</p>
+<p>Về embedding model (mục 2.4): bảng so sánh chỉ có ý nghĩa NẾU dự án thật sự tiến tới vector search. Ở hiện trạng, câu hỏi "chọn Voyage hay BGE" là câu hỏi CHƯA CẦN ĐẶT RA — đúng tinh thần chung của toàn trang: không tối ưu 1 quyết định (chọn embedding model) trước khi xác nhận có cần bước đó (vector search) hay không.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p>Gọi mọi hệ thống "đọc file rồi trả lời" là "RAG" mà không phân biệt exact-match retrieval và semantic vector retrieval — 2 kiến trúc khác hẳn về chi phí, độ chính xác, và khi nào phù hợp.</p>
+<p>Nghĩ <code>kb_loader.py</code> "chưa phải RAG hoàn chỉnh" và cần nâng cấp ngay — sai, nó là lựa chọn kỹ thuật đúng ở quy mô 7 KB file cố định; nâng cấp chỉ đáng giá khi query space thực sự trở nên tự do/mở.</p>
+<p>Nhồi toàn bộ 20 chunk raw vào context thay vì lọc top-k sau rerank — tốn budget token, loãng tín hiệu quan trọng, generation dễ lạc trọng tâm.</p>
+<p>Nghĩ context window hàng triệu token (Claude, Gemini, Llama 4 Scout) đã làm RAG "lỗi thời" nên bỏ hẳn retrieval, nhồi thẳng toàn bộ tài liệu — sai, chi phí suy luận tăng gần bậc 2 theo độ dài input và độ chính xác vẫn giảm khi tài liệu lớn mà phần liên quan chỉ là 1 phần nhỏ; xu hướng nghiên cứu 2026 là KẾT HỢP RAG + long-context, không phải chọn 1 bỏ 1.</p>
+<p>Coi hybrid search (BM25 + vector) là "giải pháp nửa vời cho ai chưa quyết định được" — sai, nhiều benchmark 2026 cho thấy hybrid THẮNG cả 2 phương pháp đơn lẻ, đặc biệt trên dữ liệu tài chính nơi BM25 thuần từng thắng cả dense retrieval hiện đại.</p>
+<p>Coi "có trích dẫn nguồn" (citation) là bằng chứng đủ cho "câu trả lời đáng tin" — tới ~57% trích dẫn trong 1 số khảo sát RAG là "post-rationalized" (gắn vào sau khi câu trả lời đã hình thành từ nơi khác), citation correctness (đúng nội dung) khác hẳn citation faithfulness (đúng nhân quả).</p>
+<p>Chọn embedding model theo điểm benchmark (MTEB) cao nhất mà không xét chi phí vận hành/latency phù hợp với hệ thống — model tốt nhất trên leaderboard công khai không tự động là lựa chọn đúng cho mọi ràng buộc hạ tầng/ngân sách cụ thể.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Phân biệt được "retrieval-augmented generation" (nghĩa rộng) và "RAG vector-based" (nghĩa hẹp) bằng lời của chính mình.</li>
+<li>Giải thích được vì sao <code>kb_loader.py</code> là retrieval-augmented generation nhưng không phải RAG vector-based.</li>
+<li>Điền đúng ít nhất 4/6 hàng trong bảng so sánh <code>kb_loader.py</code> vs RAG vector-based mà không nhìn lại bài.</li>
+<li>Nêu đúng điều kiện cụ thể khi nào nâng cấp KB hiện tại lên vector search là xứng đáng.</li>
+<li>Giải thích được chuỗi nhân quả "chunk kém → context kém → answer kém" và liên hệ đúng tới 2 bước trước generation (data prep, rerank).</li>
+<li>Giải thích được hybrid search (BM25 + vector) là gì, và trích được ít nhất 1 số liệu benchmark cho thấy nó thắng cả 2 phương pháp đơn lẻ.</li>
+<li>Nêu được phát hiện phản trực giác "BM25 thắng dense retrieval trên tài liệu tài chính" và giải thích lý do hợp lý (khớp chính xác ticker/thuật ngữ/số liệu quan trọng hơn khớp ý nghĩa gần đúng).</li>
+<li>Giải thích được vì sao context window hàng triệu token KHÔNG làm RAG lỗi thời — nêu đúng 2 lý do (chi phí suy luận, độ chính xác khi tài liệu lớn).</li>
+<li>Phân biệt được citation correctness và citation faithfulness, và giải thích được "post-rationalized citation" là gì bằng ví dụ của chính mình.</li>
+<li>Đọc code <code>kb_loader.py</code> (<code>mark_cited</code>, <code>get_usefulness_stats</code>) và giải thích được nó đo được gì (found vs cited) và CHƯA đo được gì (faithfulness nhân quả).</li>
+<li>So sánh được ít nhất 3 embedding model theo tiêu chí benchmark/giá/latency, và giải thích được vì sao "điểm MTEB cao nhất" không tự động là lựa chọn đúng.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R3_4_multistep_retrieval.html">← R3.4 · Multi-step Retrieval</a>
+  <a href="R3_6_orchestration_frameworks.html">R3.6 · Orchestration Frameworks →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>50 Interview Q&A — AI Engineer</title>
+<link rel="stylesheet" href="modules/_shared.css">
+<style>
+.qa-section { margin: 32px 0; }
+.qa-item { background: var(--bg-card); border-radius: 8px; padding: 20px; margin: 16px 0; border-left: 4px solid var(--accent); }
+.qa-item .qn { color: var(--accent); font-weight: 700; font-size: 1.05em; margin-bottom: 8px; }
+.qa-item .a { color: var(--text); margin: 8px 0; }
+.qa-item .evidence { background: rgba(6,182,212,0.06); border-left: 2px solid var(--accent-3); padding: 8px 12px; margin-top: 12px; border-radius: 4px; font-size: 0.9em; }
+.qa-item .evidence-title { color: var(--accent-3); font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.section-jump { background: var(--bg-card); padding: 12px; border-radius: 8px; margin: 16px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.section-jump a { color: var(--accent); text-decoration: none; padding: 4px 10px; background: rgba(59,130,246,0.1); border-radius: 4px; font-size: 0.85em; }
+.difficulty { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 700; margin-left: 8px; }
+.difficulty.easy { background: rgba(34,197,94,0.2); color: #86efac; }
+.difficulty.medium { background: rgba(245,158,11,0.2); color: #fcd34d; }
+.difficulty.hard { background: rgba(239,68,68,0.2); color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="index.html">← Curriculum</a></div>
+  <h1>💬 50 Interview Q&A</h1>
+  <p class="subtitle">Common questions cho AI Engineer role ở VN + regional tech. Mỗi câu có: answer, evidence link module, ví dụ từ 2 projects.</p>
+  <div class="level">50 Q&A · 5 categories · ~4h prep</div>
+</div>
+
+<div class="container">
+
+<div class="section-jump">
+  <a href="#ml-fundamentals">🎓 ML Fundamentals (10)</a>
+  <a href="#deep-learning">🧠 Deep Learning (10)</a>
+  <a href="#llm">📚 LLM (10)</a>
+  <a href="#agents-systems">🤖 Agents/Systems (10)</a>
+  <a href="#production-behavioral">⚙️ Production + Behavioral (10)</a>
+</div>
+
+<!-- ═══════════════════════════ ML FUNDAMENTALS ═══════════════════════════ -->
+<div class="qa-section" id="ml-fundamentals">
+<h2>🎓 ML Fundamentals</h2>
+
+<div class="qa-item">
+<div class="qn">Q1. Explain machine learning trong 1 câu. <span class="difficulty easy">EASY</span></div>
+<div class="a">ML là xây dựng thuật toán học "quy luật" từ dữ liệu, thay vì lập trình quy luật thủ công. Tom Mitchell định nghĩa formal: performance tại task T (đo bằng P) cải thiện khi có nhiều experience E.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L1_1_ml_intro.html">L1.1 · ML Intro</a>. Applied V18: T = predict UP/DOWN/FLAT, E = 1250 phiên OHLCV/ticker, P = cross-validated accuracy (60.5%).</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q2. Bias vs Variance — explain và cách detect. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Bias = systematic error (model quá đơn giản, miss pattern). Variance = spread across training sets (model quá phức tạp, nhạy noise). Detect via learning curves: high bias (both train + val low), high variance (train cao, val thấp, gap lớn). Trade-off: reduce one usually increases other. Regularization giảm variance tăng bias, nếu tune tốt beat both.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L2_1_bias_variance.html">L2.1</a>. Ví dụ V19.5: cv +0.61pp trong training nhưng deploy fail — high variance qua feature adoption chưa detect được (V20 Slice 3 SHAP prune fix).</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q3. K-Fold random tại sao không dùng được cho time-series? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">K-Fold random shuffle rồi split → test set chứa data từ tương lai (relative to some train samples). Data leak. Model "biết trước" → test score inflate, deploy fail. Fix: TimeSeriesSplit (train quá khứ, val tương lai gần), thêm gap ≥ label horizon để tránh label leak. Purged K-Fold + embargo (De Prado 2018) cho label overlap.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L2_4_timeseries_cv.html">L2.4</a>. V18 dùng <code>TimeSeriesSplit(n_splits=3, gap=5)</code> trong <code>train_v18_unified.py</code>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q4. XGBoost 5 innovations vs GBM classic? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">(1) 2nd-order Taylor approximation — dùng cả gradient + Hessian, converge nhanh hơn. (2) L1 + L2 regularization trên leaf weights. (3) Weighted quantile sketch cho fast split proposals. (4) Sparsity-aware — handle missing values natively. (5) Parallel + cache-aware — multi-threading + optimized memory access.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L1_3_trees_xgboost.html">L1.3</a>. V18/V19.5/V20 all use XGBoost + LightGBM ensemble. Paper: Chen & Guestrin 2016 (KDD).</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q5. Class imbalance — 5 techniques handle? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">(1) Class weight (inverse freq). (2) SMOTE oversampling minority (synthetic interpolation). (3) Undersampling majority (throw data). (4) Focal loss (down-weight easy examples). (5) Threshold tuning post-training (optimize F1 hoặc business metric). V18 combine: class weight + 2-stage cascade + gate threshold tuning cho FLAT dominant (50%) problem.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L2_3_imbalance.html">L2.3</a>. V18 sample weight formula 3 components trong <code>backend/train_v18_unified.py</code>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q6. Calibration là gì? Vì sao matter cho trading? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Calibrated model: probability output match actual frequency (P=0.7 → đúng 70% lần). XGBoost by default overconfident. Fix: post-training Platt scaling (sigmoid, small data) hoặc Isotonic regression (flexible, cần &gt;1000 samples). ECE metric đo calibration — target &lt;0.02. Cho trading: uncalibrated confidence → EV compute sai → position size wrong.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L1_6_calibration.html">L1.6</a>. V18 dùng Platt cho stage 1 (binary gate), Isotonic cho stage 2 (3-class). ECE audit ở <code>reports/_baselines/v19_5_ece_audit.json</code>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q7. Overfitting — 5 fixes ưu tiên. <span class="difficulty easy">EASY</span></div>
+<div class="a">(1) More data (best if possible). (2) Regularization (L1/L2, dropout, weight decay). (3) Simpler model (giảm depth, layers). (4) Early stopping (dựa val loss). (5) Feature selection (drop noise features). (6) Ensemble (bagging giảm variance). (7) Data augmentation (image, text).</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Modules <a href="modules/L2_1_bias_variance.html">L2.1</a> + <a href="modules/L2_2_regularization.html">L2.2</a>. V20 prune 43→17 features = form of regularization.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q8. SHAP vs Permutation Importance vs Gain? <span class="difficulty hard">HARD</span></div>
+<div class="a">Gain (XGBoost native): fast, biased toward high-cardinality features. Permutation: model-agnostic, shuffle 1 feature check accuracy drop — slow but honest. SHAP: game-theoretic, satisfies 3 properties (local accuracy, missingness, consistency) — TreeExplainer fast cho tree models, KernelExplainer O(2^features) infeasible large. SHAP additive: sum(SHAP) + base = prediction exactly.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L2_5_interpretability.html">L2.5</a>. V20 Slice 3 dùng <code>clf2_xgb.feature_importances_</code> (gain-based) trên 45 artifacts để prune features với adoption &lt;30%.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q9. Look-ahead bias — cho ví dụ + cách detect. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Feature at time T dùng info từ T+K (tương lai). Ví dụ: <code>volume.rolling(20).mean()</code> tại row T tính cả row T (window inclusive) — nhẹ leak. Hoặc feature dùng <code>close.shift(-1)</code>. Detect: mask future data ra NaN, re-compute features, at time T must be unchanged. Fix: chỉ shift positive, hoặc <code>rolling(20).mean().shift(1)</code> để exclude current.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L1_2_features.html">L1.2</a>. V19.5 Slice 10 replay caveat: model trained on full history → replay có look-ahead bias, hit rate inflate 5-15pp vs real production.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q10. Optuna vs Grid search vs Random search — khi nào chọn? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Grid: exponential trials với params. Feasible chỉ khi &lt;5 params, small ranges. Random: constant trials, baseline comparison. Optuna (Bayesian TPE): learn từ trials trước, pick smarter → 50-100 trials thường đủ cho 9+ params. V18 Optuna 50 trials search 9 params (n_estimators, depth, lr, subsample, colsample, alpha, lambda, min_child, gamma) — Grid would need 5^9 = 2M trials.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L1_5_training_cv.html">L1.5</a>. V18 <code>train_v18_unified.py:415</code> Optuna objective function.</div>
+</div>
+
+</div>
+
+<!-- ═══════════════════════════ DEEP LEARNING ═══════════════════════════ -->
+<div class="qa-section" id="deep-learning">
+<h2>🧠 Deep Learning</h2>
+
+<div class="qa-item">
+<div class="qn">Q11. Vanishing gradient — 3 fixes historical. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Sigmoid/tanh max derivative ~0.25 → deep NN gradient nhân liên tục → về 0. Fixes: (1) ReLU (derivative = 1 khi z&gt;0). (2) Batch/Layer Norm (stabilize distribution activations). (3) Residual connections (gradient path direct qua skip). (4) Better init (Glorot/He). (5) Skip: switch RNN → Transformer với attention direct O(1) connection.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Modules <a href="modules/L3_1_nn_backprop.html">L3.1</a> + <a href="modules/L3_5_sequence_transformer.html">L3.5</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q12. Adam vs SGD momentum — production choice? <span class="difficulty hard">HARD</span></div>
+<div class="a">Adam: adaptive LR per param via 1st + 2nd moments. Fast convergence, work-out-of-box. Default cho most DL 2015+. But: generalize worse than SGD cho computer vision task (Wilson 2017). SGD + Momentum + long cosine schedule beat Adam cho ImageNet training. AdamW (decoupled weight decay) fix generalization gap — modern Transformer default. Rule: AdamW cho Transformer/LLM, SGD Momentum cho CNN.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L3_2_optimizers.html">L3.2</a>. LLaMA training uses AdamW + cosine schedule + warmup.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q13. BatchNorm vs LayerNorm — Transformer chọn cái nào? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">LayerNorm. BatchNorm normalize per feature across batch — assumes samples in batch similar. Transformer variable-length sequences + padding → BN statistics contaminated. LayerNorm normalize per sample independent → sequence-length-agnostic. Modern LLMs (LLaMA) use RMSNorm — skip mean subtract, 10-15% faster than LayerNorm, comparable quality.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Modules <a href="modules/L3_3_dl_regularization.html">L3.3</a> + <a href="modules/L4_2_attention_transformer.html">L4.2</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q14. Attention formula + tại sao chia √d_k? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Attention(Q, K, V) = softmax(Q·K^T / √d_k) · V. Chia √d_k vì d_k lớn (e.g., 64) → dot product magnitude lớn → softmax saturate (derivative ~0) → vanishing gradient. Scale factor giữ variance ~1 → softmax không saturate → gradient healthy. Named "scaled dot-product attention" (Vaswani 2017).</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_2_attention_transformer.html">L4.2</a>. Code implementation PyTorch.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q15. Multi-Head Attention vs Single-Head — lý do dùng multi? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Multi head học multiple aspects khác nhau (syntactic, semantic, coreference). VD: head 1 học subject-verb agreement, head 2 học pronoun resolution. Concat outputs + project. Empirically better than single head cùng total dim. Cost: same param count nhưng expressiveness cao hơn.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_2_attention_transformer.html">L4.2</a>. Standard 8-16 heads for base models, 64+ for large.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q16. Vì sao Transformer parallelize được nhưng RNN không? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">RNN: h_t phụ thuộc h_{t-1} → phải compute sequential (mỗi timestep chờ trước xong). Transformer self-attention: mỗi position compute independent — Q, K, V compute parallel cho all positions, sau đó attention matrix parallel. → GPU-friendly, scale với data + compute. Reason chính Transformer thay RNN dominant post-2017.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L3_5_sequence_transformer.html">L3.5</a> chronological summary.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q17. LSTM 3 gates function — describe. <span class="difficulty easy">EASY</span></div>
+<div class="a">Forget gate (f): control lượng past memory (c_{t-1}) giữ. Input gate (i): control new info admit vào cell. Output gate (o): control lượng cell state (c_t) expose làm hidden state (h_t). Cell state = persistent memory linear flow qua time (gradient không vanish). Hidden state = output for this timestep.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L3_5_sequence_transformer.html">L3.5</a>. Hochreiter & Schmidhuber 1997.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q18. Dropout — impl + inference behavior? <span class="difficulty easy">EASY</span></div>
+<div class="a">Training: mask = (rand &gt; p), output = x * mask / (1-p). "/(1-p)" scale up để E[output] không đổi (inverted dropout). Inference: KHÔNG drop, use full network. Prevents co-adaptation neurons, ensemble effect qua random subnetworks. Typical p: 0.1 for conv/embedding, 0.5 for FC.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Modules <a href="modules/L2_2_regularization.html">L2.2</a> + <a href="modules/L3_3_dl_regularization.html">L3.3</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q19. CNN win vs Transformer cho image — condition? <span class="difficulty hard">HARD</span></div>
+<div class="a">CNN inductive bias (locality + translation invariance) advantage khi data limited (&lt; 10M images). ViT beat CNN chỉ khi data ~10M+ (JFT-300M scale). ImageNet-1k (1.3M) CNN vẫn competitive. Cost: CNN faster inference (specialized ops). Modern: ConvNeXt (2022) - CNN redesigned với Transformer insights - match ViT quality. Best-of-both.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L3_4_cnn.html">L3.4</a>. Dosovitskiy 2020 ViT paper.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q20. NN cho V18 (79 features, 1250 samples tabular) — win XGBoost? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Không. Features tabular đã handcrafted, không có spatial/sequence structure. NN inductive bias không applicable. XGBoost dominant cho tabular:  handle categorical, missing values native, mixed scales without normalization, interpretability higher. Empirically Kaggle top tabular đều tree-based. NN win khi: data size &gt;100k+, deep semantic structure (text/image/speech).</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L3_1_nn_backprop.html">L3.1</a> section 7 comparison table. V18 chose XGBoost đúng đắn.</div>
+</div>
+
+</div>
+
+<!-- ═══════════════════════════ LLM ═══════════════════════════ -->
+<div class="qa-section" id="llm">
+<h2>📚 Large Language Models</h2>
+
+<div class="qa-item">
+<div class="qn">Q21. BPE tokenization algorithm — 4 bước. <span class="difficulty easy">EASY</span></div>
+<div class="a">(1) Init vocab với characters + special tokens. (2) Compute frequency of adjacent character pairs in corpus. (3) Merge most frequent pair → new token in vocab. (4) Repeat until vocab size hits target (e.g., 50k). Tokenize: greedy longest match trong vocab. VN cost cao 2-3× English vì diacritics + tone marks split thành multiple tokens.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_1_tokenization.html">L4.1</a>. Sennrich 2016 BPE for NMT paper.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q22. Encoder-only vs Decoder-only vs Encoder-Decoder — use case? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Encoder-only (BERT, RoBERTa): bidirectional attention, MLM pretrain. Best cho classification, NER, extraction. Decoder-only (GPT, LLaMA, Claude): causal attention, next-token pretrain. Best cho generation, chat, code — 99% modern LLMs. Encoder-Decoder (T5, BART, mBART, mT5): encoder bidirectional + decoder causal + cross-attention. Best cho translation, summarization.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_2_attention_transformer.html">L4.2</a>. Decoder-only dominant vì scale better với data + compute.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q23. Chinchilla scaling law — D/N optimal + implication. <span class="difficulty hard">HARD</span></div>
+<div class="a">Hoffmann 2022: for optimal compute, D (data tokens) ≈ 20 × N (params). GPT-3 175B × 300B tokens = D/N = 1.7 → under-trained. Chinchilla 70B × 1.4T tokens = D/N = 20 → beat GPT-3. Modern (2024+): D/N &gt; 25 common — over-train smaller model for cheaper inference (LLaMA-2 70B × 2T = 28.6). Trade-off: 1-time train cost vs ongoing inference cost.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_3_pretraining.html">L4.3</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q24. RLHF 3 stages + purpose. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">(1) SFT (Supervised Fine-Tuning): fine-tune on ~10k human demonstrations (prompt→ideal response). Teach follow instructions. (2) Reward Model (RM): train classifier predict human preference từ ~100k pairwise comparisons. Loss: -log σ(r(chosen) - r(rejected)). (3) PPO: RL policy against RM reward, với KL penalty vs SFT to prevent drift. Total: SFT + RM data + PPO training.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_4_alignment_rlhf.html">L4.4</a>. Ouyang 2022 InstructGPT paper.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q25. DPO vs RLHF — simplification? <span class="difficulty hard">HARD</span></div>
+<div class="a">Rafailov 2023 shows: optimal PPO solution có closed form. Skip explicit RM + PPO stages. DPO loss trực tiếp: -log σ(β · [log(π(chosen|x)/π_ref(chosen|x)) - log(π(rejected|x)/π_ref(rejected|x))]). 2 stages (SFT, DPO) vs RLHF's 3. Only 2 models in memory (policy + ref) vs RLHF's 4. 1 hyperparam (β) vs many PPO hyperparams. Match RLHF quality empirically. Adopted by Zephyr, Tulu, LLaMA-3 chat, Mistral.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_4_alignment_rlhf.html">L4.4</a>. Rafailov et al 2023.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q26. LoRA — init B=0 lý do? Rank choice? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">ΔW = B·A. Init B=0 → ΔW = 0 → model start identical to base pretrained. Học từ zero drift → stable training, không catastrophic forgetting. Rank r: 4-8 (0.1% params, small domain shift), 16-32 (0.5%, most tasks — default), 64-128 (2-5%, large domain shift medical/legal). Apply typically to attention Q, V projections. Aggressive: also K, O, FFN.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_5_finetuning_lora.html">L4.5</a>. Hu 2021 LoRA paper.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q27. KV cache size calculation — LLaMA-70B 4k context batch 8? <span class="difficulty hard">HARD</span></div>
+<div class="a">Formula: 2 (K + V) × n_layers × n_heads × d_head × seq_len × dtype_bytes × batch. LLaMA-70B: 80 layers × 64 heads × 128 d_head × 2 (K+V) × 4096 tokens × 2 bytes (fp16) × 8 batch = 42 GB. Cần A100 80GB just cho KV cache. Insight: memory hungry. Solutions: PagedAttention (vLLM), grouped-query attention (fewer KV heads), quantized KV cache.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_6_inference.html">L4.6</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q28. Top-P vs Top-K sampling — trade-off? <span class="difficulty easy">EASY</span></div>
+<div class="a">Top-K: sample từ K probable tokens fixed. Simple, không adaptive. Top-P (nucleus, Holtzman 2019): sample từ smallest set whose cumsum ≥ P. Adaptive size: confident distribution (peak sharp) → small set. Flat distribution → larger set. Empirically top-P (0.9) better cho creative gen. Combine common: top-K + top-P + temperature.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L4_6_inference.html">L4.6</a>. Code example section 1.4.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q29. Prompt caching Anthropic — cost savings? <span class="difficulty easy">EASY</span></div>
+<div class="a">Mark stable prefix (system prompt, few-shot) as cacheable. First call: pay full price to write cache. Subsequent calls (within 5-min TTL): cached prefix charged 10% price. Savings: 90% on cached tokens. Real: app với 5000-token system prompt called 100x/hour. Uncached $0.075/call. Cached $0.008/call. 89% cost reduction just for system prompt portion.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L5_5_cost_latency.html">L5.5</a>. Anthropic prompt caching docs.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q30. Fine-tune vs Prompt engineer vs RAG — chọn cái nào? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Task-specific behavior/style: fine-tune (LoRA cheapest). Fresh factual knowledge: RAG (instant update). Simple prompt customization: prompt engineer (free). Cost: prompt eng cheapest but least powerful; RAG medium (retrieval overhead); fine-tune highest setup nhưng cheaper inference. Update knowledge: prompt eng easy, RAG instant, fine-tune needs retrain. Real: often combine (fine-tune style + RAG fresh data).</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L5_2_rag.html">L5.2</a> section 7 comparison table.</div>
+</div>
+
+</div>
+
+<!-- ═══════════════════════════ AGENTS / SYSTEMS ═══════════════════════════ -->
+<div class="qa-section" id="agents-systems">
+<h2>🤖 Agents / Systems</h2>
+
+<div class="qa-item">
+<div class="qn">Q31. Agent 3 nghĩa. Difference? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">(1) Research: autonomous perceive-act-learn system (RL policy). (2) Framework: LLM + tools + loop (ReAct, LangChain agent). (3) Product: specialized assistant (Cursor, Devin, Claude Code). Curriculum L6 focus framework; L8 focus product/production sense. Interview thường mix — clarify what interviewer mean.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L8_1_agents_artifact.html">L8.1</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q32. LangGraph vs Autogen — architecture khác gì? <span class="difficulty hard">HARD</span></div>
+<div class="a">LangGraph: state machine với Python routing (deterministic control plane). Node = agent, edge = transition, state = TypedDict shared. Testable, checkpointable, auditable. AutoGen: peer-to-peer conversational multi-agent. LLM decide next speaker → non-deterministic. Chat history = state. LangGraph better cho production SDLC pipelines (ai_orchestrator uses). AutoGen better cho brainstorming, research.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Modules <a href="modules/L6_3_langgraph.html">L6.3</a> + <a href="modules/L8_6_ai_frameworks.html">L8.6</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q33. Vì sao "dumb control plane" quan trọng cho multi-agent? <span class="difficulty hard">HARD</span></div>
+<div class="a">Routing bằng Python if/else = deterministic. Same input → same route. Testable với unit test (mock state, check next node). Auditable (log every routing decision với reason). Reproducible bugs. Ngược lại: LLM route → non-deterministic. Same input, different route. Cannot reproduce production bug. Cannot unit test. Anthropic Building Effective Agents recommend deterministic control plane.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L6_3_langgraph.html">L6.3</a>. ai_orchestrator's 10 agents follow this rigidly.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q34. RAG failure modes — 5 common + fixes. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">(1) No relevant chunk in top-K → LLM hallucinate. Fix: increase K, better chunking, add rerank. (2) Chunk has info but LLM không dùng → prompt engineer (ép cite chunks, CoT). (3) Embedding domain mismatch (English model, VN docs) → multilingual embed or fine-tune. (4) Stale data — doc updated but vector DB not synced → incremental indexing. (5) Prompt injection via retrieved content → sanitize + role tag.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L5_2_rag.html">L5.2</a> section 6.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q35. MCP 4 primitives. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Tools: LLM invokable functions với side effects (get_price). Resources: read-only data browsable by URI (stocks://prices/FPT). Prompts: templated workflows selectable (analyze_stock template). Sampling: server request LLM completion (reverse direction, for agentic tools inside server). MCP standardize across LLM providers — 1 server work with Claude Desktop, Cursor, VSCode Claude.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L8_3_mcp_deep.html">L8.3</a>. Anthropic 2024 announcement.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q36. Human-in-the-Loop 3 patterns. <span class="difficulty easy">EASY</span></div>
+<div class="a">(1) Approve/Reject: binary decision. Simplest. (2) Edit: user modify agent output then continue. (3) Redirect: user change pipeline direction (agent had wrong requirements). LangGraph impl: interrupt_before hoặc interrupt() inside node. Runtime pauses, user reviews via UI, agent resumes với Command(resume=...). Postgres checkpointer persist state across pause.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L6_5_hitl.html">L6.5</a>. ai_orchestrator spec approval flow.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q37. Checkpointing — vì sao cần production? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">(1) Long-running graphs (30 min - 2h feature pipeline) — crash without checkpoint mất progress, user re-run từ đầu. (2) HITL: pause chờ user approve hours-days later. (3) Debug: replay state any point. (4) Multi-instance safety: Postgres row lock ensures 1 worker per job. (5) Audit trail compliance. Options: MemorySaver (dev), SqliteSaver (local), AsyncPostgresSaver (prod).</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L6_4_checkpointing.html">L6.4</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q38. Skill vs Agent vs Tool — differentiate. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Skill: package (SKILL.md + scripts + KB) cho 1 domain task, loaded on-demand. Reusable across sessions. Agent: LLM + tools + loop + goal — running entity. Per session. Tool: atomic capability (Read, Write, Bash) — building block. Relation: Skill triggers Agent that use Tools. Ex: daily-investor-report skill invoke Claude agent that uses Read, Write, Bash tools.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L8_2_skills.html">L8.2</a>. Real skill: <code>.claude/skills/daily-investor-report/SKILL.md</code> 1322 lines.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q39. Sub-agent isolation lợi ích 4 điểm. <span class="difficulty easy">EASY</span></div>
+<div class="a">(1) Context protection: main agent context không polluted bởi search results 10k lines. (2) Specialization: sub-agent prompt tuned cho task (Explore rất tốt tại grep, không tốt code write). (3) Parallelization: N sub-agents chạy đồng thời. (4) Cost optimization: sub-agent dùng cheaper model (Haiku) cho simple tasks, main dùng Opus cho reasoning.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L8_1_agents_artifact.html">L8.1</a>. Claude Code Task tool spawn subagent_type.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q40. Paperclip maximizer lesson? <span class="difficulty hard">HARD</span></div>
+<div class="a">Bostrom 2003 thought experiment: AGI với simple goal "maximize paperclips" consumes Trái Đất, solar system, galaxy. Humanity extinct (atoms convert to paperclips). Lesson: <strong>optimal AI following simple goal literally = catastrophe</strong>. Even benign goal → tail outcomes disastrous. Cannot rely on "just tell AI what to do". Need complex value alignment. Related: instrumental convergence, corrigibility problem, deceptive alignment.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L8_5_ai_alignment.html">L8.5</a>. Standard AI safety canonical example.</div>
+</div>
+
+</div>
+
+<!-- ═══════════════════════════ PRODUCTION + BEHAVIORAL ═══════════════════════════ -->
+<div class="qa-section" id="production-behavioral">
+<h2>⚙️ Production + Behavioral</h2>
+
+<div class="qa-item">
+<div class="qn">Q41. Training-serving skew — prevention? <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Feature compute differ train vs serve → prediction offset → prod accuracy drop. Common: pandas rolling(20).mean() train vs NumPy convolution serve — subtle differences. Prevention: (1) Shared code path (V18 uses <code>features_v18.py::build_v18_features()</code> for both). (2) Assert test: same input → same features across paths. (3) Feature store (Feast, Tecton) single source. (4) Contract tests trong CI.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L7_1_mlops.html">L7.1</a>. V19.5 dead: shape mismatch T1 vs T3/T5 = variant of skew.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q42. Canary vs Blue-Green vs Shadow deployment. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Blue-Green: instant cut-over LB pointer. Rollback instant. Cost 2× temporary. Best cho monolith stateless. Canary: gradual rollout 1% → 5% → 25% → 100%. Monitor at each stage. Best cho ML models (real-world verify). Shadow: duplicate request offline compare — user chỉ see old model. Zero risk. Best cho architecture change major. V20 uses shadow → canary → blue-green sequence.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L7_2_deployment.html">L7.2</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q43. Silent ML failure — vì sao dangerous và cách detect? <span class="difficulty hard">HARD</span></div>
+<div class="a">Traditional software: bug → exception → stack trace → alerting → fix. ML: bug → wrong prediction served silently → users lose money weeks before notice. V19.5 case: 14 blue-chip tickers fell back to v1 legacy for weeks (shape mismatch). Detection: (1) Loud error logging (WARNING → ERROR). (2) Metrics: fallback_rate = 0 target, alert &gt;0. (3) Consistency cron: 7d rolling hit rate drop &gt;10pp → alert. (4) Shadow deployment compare.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L2_6_ml_system_design.html">L2.6</a>. V19.5 failure post-mortem 7 root causes.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q44. Design stock prediction system — 5 key components. <span class="difficulty hard">HARD</span></div>
+<div class="a">(1) Data pipeline: fetch OHLCV nightly from VCI → Postgres. (2) Feature engineering: shared code path features_v18.py cả train + inference. (3) Model serving: FastAPI + 2-stage XGBoost + Redis cache + TTLCache. (4) Training pipeline: Airflow DAG, TimeSeriesSplit CV + Optuna, register best model. (5) Monitoring: 7d rolling hit rate, PSI drift detect, cost alerts. Total: 200ms p95 latency, $180/month for 1M req/day.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L7_3_sysdesign_predict.html">L7.3</a> full 45-min walkthrough.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q45. Design multi-agent code assistant — architecture. <span class="difficulty hard">HARD</span></div>
+<div class="a">(1) User Interface: web + IDE plugin. (2) API Gateway: FastAPI auth + rate limit. (3) Orchestrator: LangGraph deterministic Python routing, 10 agents (PM/Analyser/SpecAnalyze/TaskDecompose/Engineer/Reviewer/Security/QA/Deploy/Retrospective). (4) LLM Backend: Claude API + Claude Code CLI. (5) State: Postgres checkpoints + Redis queue. (6) Observability: LangSmith + Prometheus. Adaptive complexity: query (2 agents) vs feature (10 agents) same graph.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L7_4_sysdesign_agent.html">L7.4</a>. ai_orchestrator real implementation.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q46. STAR framework — behavioral question pattern. <span class="difficulty easy">EASY</span></div>
+<div class="a">S (Situation): context — what/when/where. T (Task): your responsibility + goal. A (Action): what YOU did (specific, "I" not "we"). R (Result): outcome với numbers. Meta-lesson: end với what you learned. Common questions: (1) debug production issue. (2) disagree stakeholder. (3) architecture decision. (4) failure recovery. (5) learn fast. Prep 8-10 stories cover 90% questions.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L7_6_behavioral_kit.html">L7.6</a>. 5 stories từ 2 projects với numbers + evidence.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q47. Tell me about a time you debugged production issue. <span class="difficulty medium">MEDIUM</span></div>
+<div class="a">Story: V19.5 silent fallback. S: deployed V19.5 246 artifacts, metrics +0.61pp. T: user reported LLM thesis stale prices. A: traced 7 root causes (partial retrain, silent WARNING fallback, in-place dir overwrite, skipped gates, cache masking, docker patches lost, JSON corrupted). Designed V20 với 7 counter-measures. R: rolled back 30min, V20 100% shape consistency, zero fallback 90 days. Meta: fail-loud > fail-silent in ML.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L7_6_behavioral_kit.html">L7.6</a> Story 1. Real evidence <code>v20-master-execution-plan.md</code> §0.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q48. AI safety concerns hỏi phỏng vấn senior — approach? <span class="difficulty hard">HARD</span></div>
+<div class="a">Balance principle (Bostrom paperclip, alignment problem) với practical (production defense in depth). Không alarmist ("AI will kill us"), không dismissive ("just prompt eng"). Show vocabulary: instrumental convergence, corrigibility, deceptive alignment, mesa-optimization. Show practical: 7-layer defense (base training RLHF/CAI, system prompt, input filter, constrained decoding, output filter, guard model, HITL). Cite Anthropic Constitutional AI + Building Effective Agents.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Module <a href="modules/L8_5_ai_alignment.html">L8.5</a> + <a href="modules/L5_6_safety.html">L5.6</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q49. Deploy LLM production 1000 QPS p95 &lt;500ms — strategy? <span class="difficulty hard">HARD</span></div>
+<div class="a">(1) Model choice: Llama-13B fine-tuned for domain (vs 70B). (2) vLLM serving với PagedAttention + Continuous batching (10× HF throughput). (3) 4-bit quantization (AWQ or GPTQ) — 4× memory saving, 2-3% quality loss acceptable. (4) Streaming SSE — perceived latency lower. (5) Prompt caching cho stable prefixes. (6) GPU auto-scaling (H100 min 1 warm + HPA on queue depth). (7) Multi-LoRA nếu multi-tenant. (8) Semantic cache 20-50% hit rate.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Modules <a href="modules/L4_6_inference.html">L4.6</a> + <a href="modules/L5_5_cost_latency.html">L5.5</a> + <a href="modules/L7_2_deployment.html">L7.2</a>.</div>
+</div>
+
+<div class="qa-item">
+<div class="qn">Q50. What's next in AI Engineering 2025-2026? <span class="difficulty hard">HARD</span></div>
+<div class="a">(1) Agents mainstream production (post ChatGPT chat era). (2) MCP standardize integration (any LLM + any tool). (3) Extended thinking (o1-style, test-time compute scaling). (4) Multimodal default (text + image + audio + video). (5) Long context 1M+ tokens change RAG dynamics. (6) On-device LLM (Phi, Gemma nano) — privacy + latency. (7) Constitutional AI scale với AI feedback. (8) SDD (Spec-Driven Development) enterprise adoption. (9) Multi-agent orchestration mature (ai_orchestrator pattern). Career: shift from prompt engineer → AI system designer.</div>
+<div class="evidence"><div class="evidence-title">Evidence</div>Modules L8 (all 6). AI moves fast — stay updated via arXiv, LangChain blog, Anthropic research page, Chinese AI research (Deepseek, Qwen).</div>
+</div>
+
+</div>
+
+<!-- ═══════════════════════════ META TIPS ═══════════════════════════ -->
+<div class="callout success" style="margin-top: 40px;">
+<div class="label">💡 Delivery tips</div>
+<ol>
+  <li><strong>Numbers over adjectives</strong>: "60.5% accuracy" not "good accuracy". "30-min rollback" not "quick rollback".</li>
+  <li><strong>Own it "I"</strong>: I designed, I traced, I proposed. Give team credit separately.</li>
+  <li><strong>Show meta-lesson</strong>: end story với what you learned + how changed approach.</li>
+  <li><strong>Be specific</strong>: names, dates, exact metrics. Not vague "recently".</li>
+  <li><strong>Structure answer</strong>: bullet-point in your head — cover 3 points max per question.</li>
+  <li><strong>Cite sources</strong>: reference papers (Vaswani 2017), tools (LangGraph), or your own case studies.</li>
+  <li><strong>Rehearse aloud</strong>: 2-3 min max per story. Record + review.</li>
+</ol>
+</div>
+
+<div class="nav-bottom">
+  <a href="glossary.html">← Glossary</a>
+  <a href="index.html">← Curriculum home</a>
+</div>
+
+</div>
+</body>
+</html>

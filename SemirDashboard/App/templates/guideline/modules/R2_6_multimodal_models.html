@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2.6 · Multi-modal Models — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM APIs · Điểm 6/8</div>
+  <h1>R2.6 · Multi-modal Models</h1>
+  <p class="subtitle">Vì sao model "nhìn thấy ảnh" về bản chất không khác gì "đọc thêm 1 đoạn text" — cơ chế vision encoder, và 3 use case thực tế cho 1 dự án chứng khoán.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Giải thích được cơ chế kỹ thuật: ảnh → patch → vision encoder → embedding → xen kẽ vào chuỗi token text.</li>
+<li>Biết giới hạn thật của multi-modal input hiện tại (ảnh tĩnh mạnh, video-native còn hạn chế ở 1 số dòng model) để không thiết kế hệ thống dựa trên khả năng chưa chắc đã có.</li>
+<li>Nhận diện 3 use case multi-modal khả thi cho 1 dự án chứng khoán, và biết use case nào đã được làm 1 phần trong dự án.</li>
+<li>Tính được chi phí token phát sinh khi dùng ảnh thay vì text đã OCR sẵn, để quyết định đúng khi nào nên/không nên gửi ảnh.</li>
+<li>Kể được 3 thế hệ kiến trúc multi-modal (contrastive/bridged two-tower → adapter bolt-on → native multimodal pretraining) và giải thích khác biệt thật giữa "gắn thêm mắt cho LLM" và "1 model học đồng thời nhiều modal từ đầu".</li>
+<li>Phân biệt đúng "OCR-free (VLM đọc trực tiếp)" và "OCR truyền thống + LLM đọc text" là 2 lựa chọn có ưu/nhược riêng theo loại tài liệu, không phải "VLM luôn thắng vì mới hơn".</li>
+<li>So sánh được 3 kiến trúc xử lý audio (cascaded ASR-LLM, half-cascade, native audio) và biết Whisper vẫn có vai trò thật, không "đã lỗi thời".</li>
+<li>Phân biệt được multimodal embeddings (bài toán retrieval/tìm kiếm, cần precompute) với vision LLM hiểu 1 ảnh (bài toán generation/understanding trong 1 lần gọi) — 2 use case khác nhau dù cùng "đa phương thức".</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Đây là <strong>gap thật</strong> — trước bài này, curriculum chỉ nhắc rải rác đến multi-modal, chưa có phần riêng nào giải thích cơ chế. Nền tảng kiến trúc liên quan đã có ở <code>../modules/L3_4_cnn.html</code> (CNN — tiền thân của vision encoder) và <code>../modules/L4_2_attention_transformer.html</code> (attention — cơ chế transformer decoder xử lý chuỗi token sau khi ảnh đã thành embedding).</p>
+<p><strong>Prerequisite</strong>: hiểu sơ bộ khái niệm embedding vector và self-attention. Nếu multi-modal là bài đầu tiên bạn đọc trong track này, có thể đọc trước R2.1 (KV Caching) để quen với cách transformer xử lý chuỗi token trước.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Model text-only giống người chỉ đọc được chữ nổi Braille bằng tay — cần ai đó "dịch" hình ảnh sang mô tả bằng chữ trước khi hiểu được. Model multi-modal giống người vừa đọc chữ vừa nhìn ảnh trực tiếp — không cần bước dịch trung gian, nên hiểu được cả những thứ khó diễn đạt bằng lời (bố cục biểu đồ, màu sắc heatmap, vị trí tương đối giữa các phần tử trên màn hình).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Cơ chế kỹ thuật — 4 bước, [TRAIN-KNOWLEDGE ổn định]</h3>
+<pre><code>Ảnh đầu vào
+   │  [1] cắt patch (VD lưới 14×14 pixel/ô)
+   ▼
+[Patch 1] [Patch 2] [Patch 3] ... [Patch N]
+   │  [2] mỗi patch qua Vision Encoder
+   │      (thường ViT — Vision Transformer, xây trên nền CNN/attention —
+   │       xem L3_4_cnn.html, L4_2_attention_transformer.html)
+   ▼
+[Embedding 1] [Embedding 2] ... [Embedding N]
+   │  [3] cùng "ngôn ngữ số" với embedding của token text
+   ▼
+[text] [text] [Embedding 1] [Embedding 2] ... [text]
+   │  [4] xen kẽ vào chuỗi — transformer decoder xử lý y hệt text thuần
+   ▼
+Transformer decoder (1 luồng xử lý DUY NHẤT cho cả ảnh và text)</code></pre>
+<div class="callout"><div class="label">📖 Ý nghĩa của bước 4</div>
+<p>Về bản chất, sau bước 3, model "nhìn thấy ảnh" không khác gì "đọc thêm 1 đoạn text" — phần transformer decoder xử lý ảnh và text theo cùng 1 cơ chế attention, không có 2 luồng xử lý tách biệt. Điểm khác biệt duy nhất nằm ở bước encode đầu vào (ảnh cần vision encoder, text thì tokenize trực tiếp).</p>
+</div>
+
+<h3>1b. 3 thế hệ kiến trúc — vì sao "gắn thêm mắt" và "học đồng thời" không giống nhau</h3>
+<p>4 bước ở mục 1 mô tả đúng cơ chế hiện tại, nhưng che mất 1 sự thật lịch sử quan trọng: cách "gắn ảnh vào LLM" đã tiến hoá qua 3 thế hệ kiến trúc khác hẳn nhau, không phải luôn luôn là "patch → encoder → embedding → xen kẽ" như mô tả gọn ở trên:</p>
+<table>
+<tr><th>Thế hệ</th><th>Cách hoạt động</th><th>Ví dụ</th><th>Hạn chế cố hữu</th></tr>
+<tr><td>1. Contrastive / bridged two-tower</td><td>2 mạng riêng biệt — 1 mạng học hình ảnh, 1 mạng học text — được huấn luyện để 2 loại embedding "khớp" nhau trong cùng 1 không gian vector (VD CLIP so khớp ảnh-caption), rồi 1 lớp cầu nối (Flamingo) ghép chúng lại</td><td>CLIP, Flamingo</td><td>2 mạng học tách biệt từ đầu, lớp cầu nối chỉ "dịch" sau khi cả 2 đã học xong — hiểu biết chéo-modal (VD vị trí tương đối của 2 vật thể) bị giới hạn bởi chất lượng lớp cầu nối</td></tr>
+<tr><td>2. LLM-backbone adapter ("gắn mắt cho LLM")</td><td>Lấy 1 LLM text-only đã train sẵn, "gắn thêm" 1 vision encoder + lớp adapter nhỏ để chuyển embedding ảnh sang "ngôn ngữ" mà LLM hiểu — đây chính là mô tả 4 bước ở mục 1</td><td>LLaVA, phần lớn model open-weight 2023-2024</td><td>Backbone text được train mà "chưa từng thấy ảnh" — adapter phải "dạy" nó hiểu ảnh sau này, thường yếu hơn về suy luận sâu kết hợp text+ảnh cùng lúc</td></tr>
+<tr><td>3. Native multimodal pretraining</td><td>1 "thân" (trunk) DUY NHẤT được train từ đầu trên hỗn hợp text, ảnh, tài liệu, audio, video cùng lúc — không có khái niệm "LLM gốc" rồi "gắn thêm" gì cả</td><td>GPT-5 vision, Claude Opus 4.7, Gemini 3 Pro (2025-2026)</td><td>Tốn chi phí train ban đầu cao hơn nhiều (phải có đủ dữ liệu đa modal chất lượng ngay từ đầu), nhưng suy luận chéo-modal tự nhiên hơn hẳn 2 thế hệ trước</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Vì sao đây không mâu thuẫn với mục 1</div>
+<p>Mục 1 mô tả đúng "hình dạng cuối cùng" của dữ liệu khi tới transformer decoder (ảnh đã thành embedding, xen kẽ với token text) — điều này đúng cho CẢ 3 thế hệ. Khác biệt nằm ở việc embedding ảnh đó "học được" tốt đến đâu và học CÙNG LÚC với text hay học SAU rồi mới ghép — đây là lý do 2 model cùng "hỗ trợ ảnh" có thể khác nhau rất xa về khả năng suy luận chéo-modal thật sự (VD "vật gì ở góc trên bên phải, nó liên quan gì tới con số ở dòng dưới" — loại câu hỏi cần model thật sự "nghĩ" bằng cả 2 modal cùng lúc).</p>
+</div>
+
+<h3>2. Khả năng thật của Claude — verify lại 9/2026</h3>
+<p>Theo tài liệu chính chủ (<code>platform.claude.com/docs/.../vision</code>) và kết quả search: dòng Claude hỗ trợ text + image input xuyên suốt các thế hệ model, vision subsystem đủ mạnh để đọc biểu đồ phức tạp và OCR ảnh chụp chất lượng kém.</p>
+<div class="callout danger"><div class="label">⚠️ Giới hạn cần biết — verify lại 9/2026, vẫn đúng</div>
+<p>Xác nhận: tính đến 9/2026, Claude vẫn <strong>KHÔNG có native video input</strong> ở API lõi — không tự xử lý file video end-to-end. Thực tế phổ biến vẫn là "tách frame → gửi ảnh tĩnh" nếu cần xử lý nội dung video (có 1 plugin cộng đồng "claude-video-vision" làm việc này hộ, không phải khả năng gốc của model). Đừng thiết kế hệ thống giả định model tự nuốt được 1 file video nguyên vẹn mà chưa tự kiểm tra tài liệu chính chủ tại thời điểm build.</p>
+</div>
+
+<p>Đặt cạnh nhau để thấy rõ đây KHÔNG phải giới hạn chung của "mọi LLM đa phương thức" — mà là khác biệt thật giữa các dòng model flagship 2025-2026, đến từ chính thế hệ kiến trúc ở mục 1b (native multimodal pretraining thường đi kèm hỗ trợ modal rộng hơn ngay từ đầu):</p>
+<table>
+<tr><th>Model family (2026)</th><th>Ảnh tĩnh</th><th>Video native (không cần tách frame thủ công)</th><th>Audio native</th><th>Context window</th></tr>
+<tr><td>Claude (Opus/Sonnet/Haiku 4.x+)</td><td>Có, mạnh</td><td>Không — phải tách frame thành ảnh tĩnh</td><td>Không native ở API lõi</td><td>Lớn, nhưng không phải lớn nhất trong nhóm này</td></tr>
+<tr><td>GPT-5 vision</td><td>Có, mạnh</td><td>Hạn chế/qua xử lý riêng, không phải input end-to-end đầy đủ như Gemini</td><td>1 phần (tuỳ endpoint)</td><td>Lớn</td></tr>
+<tr><td>Gemini 3 Pro</td><td>Có, mạnh</td><td><strong>Có</strong> — native video input, xử lý trực tiếp file video</td><td><strong>Có</strong> — native audio input</td><td>Tới 1M token — lớn nhất trong nhóm</td></tr>
+</table>
+<p><strong>Ý nghĩa thiết kế</strong>: nếu 1 tính năng thật sự cần hiểu nội dung video (không chỉ vài khung hình rời rạc — VD hiểu chuyển động, trình tự thời gian trong 1 đoạn video), Claude hiện không phải lựa chọn phù hợp nhất về mặt kỹ thuật thuần tuý — đây là dữ kiện khách quan để cân nhắc, không mâu thuẫn với việc dự án vẫn ưu tiên Claude cho vai trò "research source" (CLAUDE.md) vì lý do khác (chất lượng suy luận văn bản, tích hợp Claude Code, không phải vì lý do multi-modal).</p>
+
+<h3>3. Ba use case thực tế cho 1 dự án chứng khoán</h3>
+<ol>
+<li><strong>Đọc trực tiếp ảnh chụp bảng giá/chart kỹ thuật</strong> — thay vì pipeline OCR + parse text trước, gửi ảnh thẳng cho model đọc bố cục biểu đồ (nến, đường MA, volume bar) trực tiếp.</li>
+<li><strong>Đọc PDF báo cáo tài chính (BCTC) bằng vision</strong> — thay vì pipeline OCR + regex tách bảng số liệu, vốn dễ vỡ khi layout PDF thay đổi.</li>
+<li><strong>QA visual cho pipeline report</strong> — dùng vision model kiểm tra ảnh chụp report HTML có vỡ layout không, thay vì chỉ kiểm tra bằng code (so khớp DOM/CSS).</li>
+</ol>
+<p>Cả 3 use case này vẫn giữ đúng ranh giới CLAUDE.md: LLM đóng vai "research source"/QA layer, không phải "closed-loop scoring feature" — không đề xuất nào ở đây đưa LLM vào vòng lặp tính điểm sống.</p>
+
+<h3>4. Modal thứ 3 chưa nhắc: âm thanh — cascaded ASR-LLM, half-cascade, và native audio (lại 1 trục trade-off, không phải "cách cũ đã lỗi thời")</h3>
+<p>Toàn bộ mục 1-3 nói về ảnh (vision). Âm thanh (audio/giọng nói) là 1 modal khác, với đúng dạng câu hỏi trade-off đã lặp lại nhiều lần trong bài này (giống hệt OCR-vs-VLM ở mục so sánh dưới) — 3 cách kiến trúc xử lý, KHÔNG phải "cách mới thay thế hoàn toàn cách cũ":</p>
+<table>
+<tr><th>Kiến trúc</th><th>Cơ chế</th><th>Ưu điểm</th><th>Nhược điểm</th></tr>
+<tr><td><strong>Cascaded ASR-LLM</strong> (VD Whisper → text LLM)</td><td>Bước 1: model ASR (Automatic Speech Recognition, VD Whisper) transcribe giọng nói thành text; Bước 2: LLM text-only xử lý transcript đó như văn bản thường</td><td>Dễ build, tận dụng được Whisper (đã train rất tốt cho riêng speech), 2 thành phần có thể nâng cấp độc lập</td><td>Mất thông tin phi-ngôn-từ (ngữ điệu, cảm xúc, tạm dừng, âm thanh nền) vì transcript chỉ còn chữ; thêm latency ở bước decode-encode trung gian; tối ưu 2 thành phần riêng rẽ, không tối ưu chung 1 mục tiêu (suboptimal cho joint speech-language modeling)</td></tr>
+<tr><td><strong>Half-cascade</strong></td><td>Audio đầu vào được xử lý native (không transcribe trước), nhưng suy luận vẫn dựa trên LLM text-based; output có thể qua thêm bước speech synthesis</td><td>Cân bằng giữa modularity (dễ thay từng phần) và latency thấp hơn cascaded đầy đủ</td><td>Vẫn không giữ được 100% thông tin audio xuyên suốt như native đầy đủ</td></tr>
+<tr><td><strong>Native audio</strong> (VD Qwen2-Audio, Qwen2.5-Omni, Gemini native audio)</td><td>1 mạng neural DUY NHẤT xử lý và suy luận trực tiếp trong "không gian audio" — không có bước transcribe trung gian nào</td><td>Giữ được nhiều thông tin audio nhất xuyên suốt pipeline (ngữ điệu, âm thanh nền, overlap giọng nói)</td><td>Cần dữ liệu huấn luyện đa phương thức quy mô lớn + chi phí train đắt hơn nhiều</td></tr>
+</table>
+<div class="callout"><div class="label">📖 Whisper vẫn có vai trò thật, không "đã lỗi thời" — đúng tinh thần tránh false-dichotomy</div>
+<p>Ngành đang dịch chuyển hướng native audio, nhưng Whisper (nền tảng cho cascaded/half-cascade) vẫn đóng vai trò làm "audio encoder" trong nhiều kiến trúc audio-LLM hiện đại, kể cả khi không dùng ở dạng cascaded thuần túy — vì nó được train rất tốt riêng cho speech. Hạn chế thật của Whisper: được train chủ yếu trên dữ liệu giọng nói, nên biểu diễn yếu cho nhạc/âm thanh môi trường — các audio-LLM dùng Whisper làm encoder phải bù bằng cách train thêm trên dữ liệu non-speech quy mô lớn. Đây lại đúng 1 ví dụ trade-off khác, không phải "công cụ cũ đã chết" — Whisper vẫn là lựa chọn hợp lý khi task chỉ cần hiểu NỘI DUNG lời nói (không cần ngữ điệu/âm thanh nền), và native audio mới cần thiết khi bài toán thực sự phụ thuộc vào thông tin phi-ngôn-từ.</p>
+</div>
+<p><strong>Liên hệ dự án</strong>: dự án hiện không có use case audio (không xử lý ghi âm cuộc họp NĐHCĐ, không phân tích giọng điệu phát ngôn viên...). Nếu tương lai có nhu cầu này (VD tóm tắt audio 1 buổi công bố thông tin doanh nghiệp), câu hỏi quyết định giống hệt mục 3/OCR-vs-VLM: có cần hiểu SẮC THÁI (tự tin/do dự trong giọng nói) hay chỉ cần NỘI DUNG lời nói — vế đầu cần native audio, vế sau cascaded ASR-LLM (rẻ hơn, đơn giản hơn) đã đủ.</p>
+
+<h3>5. Multimodal embeddings cho retrieval — 1 use case KHÁC "vision LLM hiểu 1 ảnh", dễ nhầm vì cùng nghe "đa phương thức"</h3>
+<p>Mục 1-4 nói về model ĐỌC/HIỂU trực tiếp 1 ảnh/audio cụ thể trong 1 lần gọi (generation/understanding). <strong>Multimodal embeddings</strong> giải quyết 1 bài toán khác hẳn: <strong>tìm kiếm/truy xuất</strong> ảnh/tài liệu liên quan trong 1 kho lớn (hàng nghìn-hàng triệu item) — đây là bài toán retrieval/RAG (xem thêm R3, chủ đề RAG), không phải "hiểu sâu 1 ảnh":</p>
+<table>
+<tr><th>Cách tiếp cận</th><th>Cơ chế</th><th>Độ trễ truy vấn</th><th>Phù hợp nhất khi</th></tr>
+<tr><td>Vision LLM xếp hạng trực tiếp</td><td>Đưa TẤT CẢ ảnh ứng viên + câu hỏi vào cùng 1 lần gọi, để LLM tự xếp hạng/chọn</td><td>Cao — phải gọi model mỗi lần truy vấn, và bị giới hạn bởi số ảnh nhét vừa 1 context</td><td>Kho nhỏ (vài chục ảnh), cần suy luận phức tạp để so sánh</td></tr>
+<tr><td>Multimodal embedding models (VD Gemini Embedding 2, Cohere Embed 4, CLIP/SigLIP mở)</td><td>Tính TRƯỚC 1 vector embedding cho mỗi ảnh/tài liệu trong kho, lưu vào vector store; lúc truy vấn chỉ cần so khớp vector câu hỏi với vector đã lưu (rẻ, nhanh)</td><td>Thấp — phần tính embedding đã làm trước (offline), truy vấn chỉ là 1 phép so khớp vector</td><td>Kho lớn (hàng nghìn-hàng triệu item), cần latency thấp, độ chính xác "đủ tốt" quan trọng hơn suy luận sâu</td></tr>
+<tr><td>Page-as-image retrieval (VD ColPali, ColQwen2)</td><td>Coi nguyên 1 TRANG tài liệu (kể cả bảng/biểu đồ phức tạp) như 1 "ảnh" để embedding, bỏ qua bước OCR/parse layout hoàn toàn</td><td>Thấp (embedding tính trước, giống dòng trên)</td><td>Tài liệu có layout phức tạp (bảng, biểu đồ) mà OCR/parse text dễ vỡ — xem lại mục so sánh OCR-vs-VLM bên dưới, đây là 1 biến thể áp dụng ý tưởng đó vào retrieval</td></tr>
+</table>
+<p><strong>Nghiên cứu 2026 đáng chú ý</strong>: so sánh trực tiếp cho thấy dùng LLM đa phương thức tổng quát (GPT-4.1, Claude Sonnet 4.6) để xếp hạng ảnh cho ra chất lượng NGANG BẰNG với model embedding chuyên dụng (Gemini Embedding 2) trên 1 số benchmark — nhưng 1 khi đã tính trước (precompute) được embedding, cách tiếp cận embedding luôn thắng rõ về latency cho ứng dụng cần phản hồi nhanh. Đây lại là 1 ví dụ trade-off, không phải "model tổng quát yếu hơn" — chỉ là bài toán retrieval quy mô lớn có đặc thù riêng (cần rẻ + nhanh cho MỖI truy vấn) mà LLM tổng quát không được thiết kế tối ưu cho.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Use case #3 (QA visual) là use case <strong>đã được làm 1 phần</strong> trong dự án — verify trực tiếp qua file thật:</p>
+<pre><code># Đã tồn tại trong repo (verify bằng Glob):
+.claude/skills/daily-investor-report/scripts/capture_screenshots.py
+.claude/skills/daily-investor-report/scripts/test_investor_report_ui.py
+.claude/skills/daily-investor-report/reports/_qa/screenshots/*.png
+
+# Các script này chụp ảnh report HTML sau khi build (VD 20260623_204627/00_full_ui.png,
+# 01_header.png, 02_executive_summary.png, ... 14_qa_panel.png — chụp từng phần UI riêng biệt)
+
+# Phần multi-modal CHƯA có, có thể bổ sung tự nhiên:
+# → gửi các ảnh này cho 1 vision model, hỏi "bố cục có vỡ không, có phần tử nào chồng lên nhau không"
+# → đây là mở rộng của pipeline QA có sẵn, không phải xây từ đầu</code></pre>
+
+<p><strong>Ví dụ minh hoạ riêng cho mục 5 (multimodal embeddings)</strong> — 1 use case GIẢ ĐỊNH, chưa có trong dự án, để làm rõ khác biệt "retrieval" và "understanding": "tìm trong lịch sử 5 năm của 86 ticker, ngày nào có chart pattern GIỐNG chart hôm nay nhất" (pattern-matching kỹ thuật bằng hình ảnh biểu đồ nến):</p>
+<pre><code># Cách A — Vision LLM hiểu trực tiếp (generation/understanding, đã nói ở mục 1-3):
+# Gửi TỪNG CẶP (chart hôm nay, 1 chart lịch sử) cho Claude, hỏi "2 chart này giống nhau
+# đến mức nào". Với 5 năm × 86 ticker ≈ hàng chục nghìn chart lịch sử → hàng chục nghìn
+# lần gọi API CHỈ ĐỂ so sánh 1 ngày — chi phí và latency không khả thi ở quy mô này.
+
+# Cách B — Multimodal embeddings (retrieval, mục 5):
+# Bước 1 (làm 1 LẦN, offline): với MỌI chart lịch sử, tính trước 1 embedding vector
+#   bằng 1 multimodal embedding model (VD CLIP/SigLIP mở, hoặc Cohere Embed 4),
+#   lưu vào vector store cùng metadata (ticker, ngày).
+# Bước 2 (mỗi lần cần tra cứu): tính embedding cho chart HÔM NAY, so khớp cosine
+#   similarity với toàn bộ vector đã lưu — trả về top-K ngày có similarity cao nhất.
+#   Đây chỉ là 1 phép toán vector, không gọi LLM — nhanh, rẻ, scale tốt với kho lớn.
+# Bước 3 (TUỲ CHỌN, chỉ cho top-K kết quả): dùng vision LLM (Cách A) để XÁC NHẬN/
+#   giải thích lý do giống nhau cho vài kết quả top đầu — kết hợp cả 2 cách,
+#   đúng tinh thần bảng so sánh mục 5: embedding lọc thô quy mô lớn, LLM giải thích sâu
+#   cho số lượng nhỏ đã lọc — không phải chọn 1 trong 2.</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>Gửi ảnh trực tiếp (multi-modal)</th><th>OCR trước rồi gửi text</th></tr>
+<tr><td>Hiểu bố cục/vị trí tương đối</td><td>Tốt — model "nhìn" trực tiếp</td><td>Mất — OCR chỉ trả text tuần tự, không giữ layout</td></tr>
+<tr><td>Chi phí token</td><td>Cao hơn — công thức xấp xỉ <code>tokens ≈ (width px × height px) / 750</code>; ảnh độ phân giải trung bình (chưa downsample) thường quy đổi ~1000-1500 token, nhưng full-res screenshot có thể cao hơn nhiều (xem callout cập nhật 4.7 bên dưới)</td><td>Thấp hơn nếu text đã OCR gọn</td></tr>
+<tr><td>Độ ổn định khi layout nguồn thay đổi</td><td>Ổn định hơn — không phụ thuộc regex/parser cứng</td><td>Dễ vỡ — regex tách bảng có thể sai khi layout đổi</td></tr>
+<tr><td>Phù hợp nhất khi</td><td>Cần hiểu bố cục (chart, bảng phức tạp, QA UI)</td><td>Text đã OCR sẵn đủ tốt, không cần hiểu layout</td></tr>
+</table>
+
+<p>Bảng thứ 2 — đào sâu đúng 1 chỗ dễ hiểu lầm nhất: "VLM đọc trực tiếp ảnh" (OCR-free) không phải bản nâng cấp thay thế hoàn toàn OCR truyền thống. Benchmark 2026 cho thấy đây vẫn là trade-off theo loại tài liệu, không phải 1 chiều thắng tuyệt đối:</p>
+<table>
+<tr><th>Tiêu chí</th><th>OCR truyền thống + regex/parser</th><th>OCR-free (VLM đọc trực tiếp ảnh)</th></tr>
+<tr><td>Độ chính xác text in rõ, layout đơn giản</td><td>Cao, ổn định, có thể còn CHÍNH XÁC HƠN VLM ở dạng bảng chuẩn</td><td>Tốt nhưng 1 số benchmark 2026 cho thấy vẫn <strong>thua</strong> OCR chuyên dụng ở đúng loại tài liệu này (thiếu bước "đọc ký tự tường minh" nên đôi khi đoán nhầm ký tự nhìn giống nhau)</td></tr>
+<tr><td>Chữ viết tay / annotation không chuẩn</td><td>Yếu — model OCR train trên font in, thường fail hoàn toàn</td><td>Tốt hơn hẳn — hiểu ngữ cảnh vị trí/hình dạng thay vì chỉ nhận diện ký tự đơn lẻ</td></tr>
+<tr><td>Layout phức tạp, bảng lồng bảng, đa cột</td><td>Dễ vỡ khi regex/parser giả định 1 cấu trúc cố định</td><td>Tốt hơn rõ rệt — theo 1 benchmark 2026, độ chính xác tăng từ ~OCR-baseline lên 42-67% trên tài liệu đa cấu trúc phức tạp</td></tr>
+<tr><td>Tính xác định (determinism)</td><td>Cao — cùng input luôn ra cùng output (rule-based)</td><td>Thấp hơn — vẫn là suy luận xác suất của LLM, có thể lệch nhẹ giữa các lần chạy</td></tr>
+<tr><td>Chi phí</td><td>Rẻ hơn (không tốn token ảnh/LLM call)</td><td>Đắt hơn — tốn token ảnh (xem callout cập nhật độ phân giải bên dưới)</td></tr>
+<tr><td>Kết hợp cả 2 (hybrid)</td><td colspan="2">Thực tế production 2026: dùng OCR chuyên dụng cho bảng số liệu chuẩn (cần độ chính xác + tính xác định cao — VD số liệu BCTC), dùng VLM cho phần layout bất định/chữ viết tay/ảnh chụp góc nghiêng — không phải chọn 1 bỏ 1</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p>Use case QA visual (#3 ở trên) là mở rộng tự nhiên nhất vì hạ tầng đã có sẵn: <code>capture_screenshots.py</code> và <code>test_investor_report_ui.py</code> trong <code>.claude/skills/daily-investor-report/scripts/</code> đã tạo ra chuỗi ảnh QA cho mỗi phần UI của report (verify thật — VD thư mục <code>reports/_qa/screenshots/feedback_20260623_204627/00_full_ui.png</code> … <code>14_qa_panel.png</code> tồn tại đúng trong repo). Bước "gửi ảnh cho vision model để verify bố cục" là bổ sung 1 bước xử lý, không phải xây pipeline QA từ đầu — và không vi phạm ranh giới CLAUDE.md vì đây là QA layer, không phải scoring feature. <strong>Lưu ý chi phí nếu triển khai thật</strong>: nên downsample screenshot xuống dưới ngưỡng cạnh dài ~1568px trước khi gửi (xem callout cập nhật 4.7 bên dưới) — full-res screenshot gốc gửi thẳng có thể tốn token gấp nhiều lần không cần thiết cho 1 tác vụ chỉ cần "có vỡ layout hay không".</p>
+<p><strong>Audio (mục 4) và multimodal embeddings (mục 5) hiện KHÔNG có use case trong dự án</strong> — dự án không xử lý dữ liệu giọng nói, và quy mô dữ liệu ảnh hiện tại (screenshot QA, số lượng nhỏ) chưa tới ngưỡng cần retrieval embedding. Ghi nhận ở đây để làm rõ ranh giới thật của "áp dụng được" — 2 phần này là kiến thức nền tảng chuẩn bị cho tương lai (VD nếu làm pattern-matching biểu đồ như ví dụ giả định ở trên), không phải action item cần làm ngay.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Cập nhật 2026 — ảnh độ phân giải cao có thể tốn ~3× token so với trước</div>
+<ul>
+<li><strong>Thay đổi</strong>: model dòng Claude 4.7 trở lên nâng trần độ phân giải ảnh từ 1568px lên 2576px cạnh dài — ảnh gửi lên được xử lý ở độ phân giải CAO HƠN thay vì tự động downscale về mức cũ.</li>
+<li><strong>Hệ quả chi phí</strong>: bị tính token theo đúng độ phân giải cao hơn đó — 1 ảnh full-res có thể tốn tới ~3× token so với model đời trước cho cùng 1 ảnh (VD 1 screenshot ước tính $0.023 trước đây có thể lên ~$0.071).</li>
+<li><strong>Không có cách "quay lại"</strong>: không có tham số API nào để giữ giới hạn cũ.</li>
+<li><strong>Hệ quả thiết kế</strong>: muốn kiểm soát chi phí phải tự downsample ảnh ở phía client TRƯỚC khi gửi — đặc biệt quan trọng cho use case QA visual (gửi hàng loạt screenshot) nếu triển khai ở quy mô lớn.</li>
+</ul>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Gửi ảnh độ phân giải cao khi text OCR sẵn đã đủ, hoặc gửi full-res khi không cần</strong> — tốn token multi-modal không cần thiết (thường ~1000-1500 token/ảnh đã downsample, nhưng có thể gấp ~3× với model 4.7+ nếu gửi ảnh full-res chưa qua downsample — xem callout cập nhật) cho trường hợp không cần hiểu layout, chỉ cần nội dung text.</p>
+<p><strong>2. Giả định model xử lý video end-to-end</strong> — theo tài liệu tìm được, thực tế phổ biến vẫn là tách frame thành ảnh tĩnh; thiết kế hệ thống dựa trên "gửi thẳng file video" có thể không hoạt động như kỳ vọng.</p>
+<p><strong>3. Bỏ qua chi phí token khi so sánh 2 phương án (ảnh vs OCR text)</strong> — quyết định "dùng ảnh cho tiện" mà không tính vào cost anatomy (R2.8) trước khi triển khai ở quy mô lớn (VD chạy cho hàng chục ticker mỗi ngày).</p>
+<p><strong>4. Coi VLM (OCR-free) là "bản nâng cấp thay thế OCR truyền thống" một cách tuyệt đối</strong> — benchmark 2026 cho thấy với văn bản in rõ/layout đơn giản, OCR chuyên dụng vẫn chính xác và ổn định hơn (có tính xác định, cùng input luôn ra cùng output); VLM chỉ thắng rõ rệt ở layout phức tạp/chữ viết tay. Với dữ liệu cần độ chính xác tuyệt đối và tái lập được (VD số liệu BCTC), loại bỏ hẳn OCR truyền thống để chuyển 100% sang VLM là quyết định rủi ro, không phải "luôn luôn tốt hơn vì mới hơn".</p>
+<p><strong>5. Nhầm "model hỗ trợ ảnh" với "model hiểu chéo-modal sâu"</strong> — theo mục 1b, model thế hệ "adapter bolt-on" (gắn vision encoder vào LLM có sẵn) và model "native multimodal pretraining" đều "đọc được ảnh", nhưng khả năng suy luận kết hợp thật sự giữa ảnh và text khác nhau đáng kể — không nên coi mọi model "hỗ trợ multi-modal" là ngang hàng nhau.</p>
+<p><strong>6. Coi native audio "luôn tốt hơn" cascaded ASR-LLM, nên Whisper "đã lỗi thời"</strong> — Whisper vẫn là lựa chọn hợp lý khi task chỉ cần nội dung lời nói (không cần ngữ điệu/âm thanh nền); native audio chỉ đáng chi phí train/vận hành cao hơn khi bài toán thực sự cần thông tin phi-ngôn-từ.</p>
+<p><strong>7. Gộp chung "multimodal embeddings cho retrieval" với "vision LLM hiểu 1 ảnh"</strong> — đây là 2 bài toán khác nhau (tìm kiếm trong kho lớn cần precompute + latency thấp, so với hiểu sâu 1 ảnh cụ thể trong 1 lần gọi); dùng nhầm vision LLM tổng quát để làm retrieval quy mô lớn (gọi lại model mỗi truy vấn) tốn kém và chậm hơn nhiều so với dùng embedding đã precompute.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Trình bày được 4 bước cơ chế: patch → vision encoder → embedding → xen kẽ vào chuỗi token.</li>
+<li>Giải thích được vì sao "model nhìn ảnh" về bản chất giống "đọc thêm text" ở tầng transformer decoder.</li>
+<li>Chỉ ra được giới hạn thật hiện tại về video-native input, và hệ quả thiết kế nếu bỏ qua giới hạn này.</li>
+<li>Với 1 tình huống cho trước, quyết định đúng nên gửi ảnh hay OCR trước, dựa trên nhu cầu hiểu layout và chi phí token.</li>
+<li>Kể tên được use case multi-modal đã có sẵn hạ tầng trong dự án (QA visual) và chỉ ra file cụ thể.</li>
+<li>Kể tên đúng 3 thế hệ kiến trúc multi-modal (contrastive/bridged two-tower, adapter bolt-on, native multimodal pretraining) và giải thích khác biệt về khả năng suy luận chéo-modal.</li>
+<li>Với 1 loại tài liệu cho trước (VD "bảng số liệu BCTC in rõ" vs "ảnh chụp góc nghiêng có ghi chú tay"), chọn đúng giữa OCR truyền thống, VLM OCR-free, hoặc kết hợp cả 2 — không mặc định VLM luôn thắng.</li>
+<li>So sánh được 3 kiến trúc xử lý audio (cascaded ASR-LLM, half-cascade, native audio) và biết Whisper vẫn có vai trò thật, không "đã lỗi thời".</li>
+<li>Phân biệt được multimodal embeddings (bài toán retrieval/tìm kiếm, cần precompute) với vision LLM hiểu 1 ảnh (bài toán generation/understanding trong 1 lần gọi) — 2 use case khác nhau dù cùng "đa phương thức".</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R2_5_structured_outputs.html">← R2.5 · Structured Outputs</a>
+  <a href="R2_7_rate_limits_retries.html">R2.7 · Rate Limits/Retries →</a>
+</div>
+
+</div>
+</body>
+</html>

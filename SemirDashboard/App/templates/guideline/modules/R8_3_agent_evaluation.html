@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R8.3 · AI Agent Evaluation — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Observability &amp; Evaluation · Điểm 3/6</div>
+  <h1>R8.3 · AI Agent Evaluation</h1>
+  <p class="subtitle">3 câu hỏi khác nhau cần 3 tầng đo khác nhau: "task có xong không?", "đường đi có hợp lý không?", "thành phần nào gây lỗi?". Khung 3-lớp dễ nhớ hơn 4-tier pyramid cho phỏng vấn.</p>
+  <div class="level">Độ khó: Khó · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Vẽ được khung <strong>3 tầng eval agent</strong>: end-to-end / trajectory-level / component-level — và ánh xạ đúng sang 4-tier pyramid (Unit/Integration/Online/E2E) đã học ở <code>L9_3</code>.</li>
+<li>Kể tên + định nghĩa đúng 12 metric trong metric catalogue 2026 (task completion, step efficiency, argument correctness...).</li>
+<li>Phân biệt "task thành công" (outcome) với "đường đi hợp lý" (trajectory) — biết 1 agent có thể thành công NHỜ MAY MẮN qua đường đi sai.</li>
+<li>Phân biệt cơ chế train <strong>Process Reward Model (PRM)</strong> vs <strong>Outcome Reward Model (ORM)</strong> — 2 cách chấm trajectory-level khác hẳn nhau, không chỉ 1 LLM-judge đọc lại.</li>
+<li>Kể tên + phân biệt đúng 4 benchmark agent 2026 chưa có ở <code>L9_3</code>: GAIA, WebArena, SWE-bench, τ²-bench.</li>
+<li>Tính được <strong>pass^k</strong> (độ tin cậy qua k lần thử) và phân biệt với pass@k cổ điển — biết vì sao 2 số này lệch nhau rất xa khi per-trial reliability chưa cao.</li>
+<li>Áp dụng đúng khung 3 tầng vào pipeline thật của <code>collect_and_build.py</code>.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p><a href="../modules/L9_3_agent_eval.html">L9.3 — Agent Evaluation</a> đã dạy rất sâu: 4-tier eval pyramid (Unit → Integration → Online → E2E), metric catalogue task-level/trajectory-level/safety, LLM-as-judge pitfalls + fix, trace-driven debugging, failure taxonomy, case study AI Orchestrator. Trang này <strong>không lặp lại core</strong> — chỉ bổ sung 1 cách nhìn khác (khung 3 lớp, dễ nhớ hơn khi phỏng vấn) và mở rộng metric catalogue. Độ khó xếp <strong>Khó</strong> vì phân biệt rạch ròi 3 tầng — đặc biệt hiểu đúng vì sao "thành công" và "đúng đường đi" là 2 khái niệm tách biệt — đòi hỏi tư duy hệ thống, không phải chỉ thuộc định nghĩa.</p>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Đánh giá 1 chuyến đi xe từ Hà Nội vào Sài Gòn có 3 cách hỏi hoàn toàn khác nhau. <strong>End-to-end</strong>: "xe có đến Sài Gòn không?" — chỉ quan tâm kết quả cuối. <strong>Trajectory-level</strong>: "xe đi đường nào để đến — có đi vòng qua Campuchia không dù cuối cùng vẫn tới, có tốn xăng gấp đôi mức cần thiết không?" — quan tâm CHẤT LƯỢNG con đường, không chỉ đích đến. <strong>Component-level</strong>: "động cơ có hoạt động đúng không, hệ thống lái có phản hồi đúng không, bánh xe nào bị mòn" — quan tâm TỪNG BỘ PHẬN của xe, tách biệt khỏi việc xe có đến đích hay không. 1 xe có thể đến đích (end-to-end PASS) dù đi đường vòng lãng phí (trajectory FAIL) và dù phanh đã gần hỏng (component FAIL) — 3 tầng đo 3 thứ độc lập, không suy ra lẫn nhau.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vì sao cần 3 tầng thay vì 1 con số duy nhất</h3>
+<p>Nếu chỉ đo end-to-end (task completion rate), hệ thống có thể báo "95% task thành công" trong khi thực tế agent đang đi đường vòng cực kỳ tốn kém (nhiều lệnh gọi LLM dư thừa, retry vô ích) hoặc dùng đúng tool nhưng sai tham số ở 1 bước rồi tự sửa được ở bước sau nhờ may mắn. 3 tầng cho phép tách bạch 3 câu hỏi độc lập:</p>
+<table>
+<tr><th>Tầng</th><th>Câu hỏi trả lời</th><th>Ánh xạ sang 4-tier pyramid (<code>L9_3</code>)</th></tr>
+<tr><td><strong>End-to-end</strong></td><td>Task có thành công không? (outcome)</td><td>Tương ứng tier "Online" + "E2E" — real user task, production traffic</td></tr>
+<tr><td><strong>Trajectory-level</strong></td><td>Đường đi có hiệu quả/hợp lý không? (process)</td><td>Tương ứng tier "Integration" — golden set, LLM judge chấm cả đường đi</td></tr>
+<tr><td><strong>Component-level</strong></td><td>Thành phần nào (retriever/tool/sub-agent) gây lỗi?</td><td>Tương ứng tier "Unit" — per-agent, per-tool, mock deterministic</td></tr>
+</table>
+<p>Khung 3 lớp này không thay thế 4-tier pyramid — nó là <strong>góc nhìn khác của cùng 1 hệ thống</strong>: 4-tier pyramid trả lời "test ở giai đoạn nào trong vòng đời phát triển" (unit test lúc code, integration test trước khi merge, online eval sau khi deploy); còn 3-layer trả lời "câu hỏi nào đang được đo" bất kể giai đoạn nào. 2 khung chiếu lên nhau như bảng trên.</p>
+
+<h3>2. Metric catalogue 2026 mở rộng — 12 metric phủ đủ 3 tầng</h3>
+<table>
+<tr><th>Metric</th><th>Tầng</th><th>Đo gì</th></tr>
+<tr><td>Task completion</td><td>End-to-end</td><td>Task có đạt mục tiêu cuối cùng không (boolean hoặc %)</td></tr>
+<tr><td>Answer relevancy</td><td>End-to-end</td><td>Câu trả lời cuối có liên quan đến câu hỏi ban đầu không</td></tr>
+<tr><td>Safety</td><td>End-to-end</td><td>Output có vi phạm guardrail/policy không</td></tr>
+<tr><td>Latency</td><td>End-to-end</td><td>Thời gian hoàn thành task</td></tr>
+<tr><td>Cost</td><td>End-to-end</td><td>Tổng token/tiền cho 1 task</td></tr>
+<tr><td>Step efficiency</td><td>Trajectory-level</td><td>Số bước thực tế so với số bước tối thiểu cần thiết</td></tr>
+<tr><td>Plan adherence</td><td>Trajectory-level</td><td>Agent có bám sát kế hoạch đã đề ra ban đầu không</td></tr>
+<tr><td>Plan quality</td><td>Trajectory-level</td><td>Kế hoạch ban đầu có hợp lý, khả thi không</td></tr>
+<tr><td>Reasoning quality</td><td>Trajectory-level</td><td>Lập luận giữa các bước có mạch lạc, không nguỵ biện</td></tr>
+<tr><td>Faithfulness</td><td>Trajectory-level</td><td>Kết luận có bám sát bằng chứng thu thập được trong quá trình đi, không bịa</td></tr>
+<tr><td>Tool correctness</td><td>Component-level</td><td>Agent có chọn ĐÚNG tool cho tình huống không</td></tr>
+<tr><td>Argument correctness</td><td>Component-level</td><td>Tool được gọi đúng tham số không (đúng tool nhưng sai tham số vẫn là lỗi)</td></tr>
+</table>
+<p>Lưu ý <strong>tool correctness</strong> và <strong>argument correctness</strong> là 2 metric tách biệt — 1 agent có thể chọn đúng tool (VD gọi API giá cổ phiếu) nhưng truyền sai tham số (VD sai mã ticker hoặc sai khung thời gian), hoặc ngược lại chọn nhầm tool nhưng vô tình tham số vẫn "đúng cú pháp". Gộp chung 2 metric này sẽ che mất loại lỗi thật đang xảy ra.</p>
+
+<h3>3. Vì sao "thành công" và "đúng đường đi" là 2 khái niệm tách biệt</h3>
+<p>Ví dụ agent phân tích cổ phiếu: agent được giao task "tính điểm rủi ro của FPT". Agent gọi nhầm API lấy dữ liệu VNM thay vì FPT ở bước 2 (lỗi tool argument), phát hiện dữ liệu trả về "không khớp mã" ở bước 3, tự sửa và gọi lại đúng FPT ở bước 4, cuối cùng ra điểm rủi ro đúng ở bước 5. <strong>End-to-end PASS</strong> (điểm rủi ro cuối cùng đúng) nhưng <strong>trajectory-level và component-level đều phải FAIL</strong> ở bước 2 (argument correctness sai). Nếu chỉ đo end-to-end, lỗi này không bao giờ bị phát hiện cho đến khi 1 lần "may mắn tự sửa" không xảy ra và agent trả về kết quả sai hoàn toàn — lúc đó mới biết agent có 1 lỗi tiềm ẩn đã tồn tại từ lâu.</p>
+
+<h3>4. Process Reward Model (PRM) vs Outcome Reward Model (ORM) — 2 cách CHẤM trajectory khác cơ chế</h3>
+<p><code>L9_3</code> dạy trajectory-level bằng 1 LLM-judge đọc lại toàn bộ trace rồi cho điểm định tính. Có 1 hướng khác — không dùng LLM-judge free-form mà <strong>huấn luyện hẳn 1 reward model chuyên biệt</strong> để chấm điểm, khác nhau ở cơ chế NHÃN dùng để train:</p>
+<table>
+<tr><th></th><th>Outcome Reward Model (ORM)</th><th>Process Reward Model (PRM)</th></tr>
+<tr><td>Nhãn huấn luyện</td><td>1 nhãn DUY NHẤT cho cả trajectory (thành công/thất bại cuối cùng)</td><td>1 nhãn RIÊNG cho MỖI bước (bước này đúng/sai/có tiến triển không)</td></tr>
+<tr><td>Tín hiệu trả về</td><td>1 điểm số cho toàn bộ trajectory</td><td>1 chuỗi điểm số, mỗi phần tử ứng với 1 bước</td></tr>
+<tr><td>Định vị lỗi</td><td>Không — chỉ biết trajectory tốt/xấu tổng thể</td><td>Có — chỉ đúng bước nào bắt đầu sai</td></tr>
+<tr><td>Độ tin cậy cho reasoning phức tạp</td><td>Thấp hơn (nghiên cứu 2026 xác nhận)</td><td>Cao hơn đáng kể — tín hiệu dày (dense) hơn hẳn</td></tr>
+<tr><td>Chi phí xây dựng</td><td>Rẻ hơn (chỉ cần nhãn outcome)</td><td>Đắt hơn (cần nhãn từng bước, tốn công gán nhãn hơn)</td></tr>
+</table>
+<div class="callout">
+<div class="label">📖 Worked example — áp PRM vào lại đúng ví dụ HPG 5 bước</div>
+<pre><code>Trajectory HPG (5 bước, xem lại mục 2): bước 4 xử lý sentiment rỗng SAI.
+
+ORM (1 nhãn cuối): task "hoàn thành" → reward = 1.0 cho CẢ trajectory
+  → không có tín hiệu nào chỉ ra bước 4 có vấn đề, dù thực tế nó sai.
+
+PRM (nhãn từng bước, 1=đúng, 0=sai):
+  bước 1: 1   bước 2: 1   bước 3: 1   bước 4: 0   bước 5: 1
+  → reward trung bình 4/5 = 0.8, và QUAN TRỌNG HƠN: biết CHÍNH XÁC bước 4 là
+    nơi cần sửa — đúng thứ ORM không bao giờ cho biết được.</code></pre>
+</div>
+<p>PRM không thay thế LLM-judge trajectory-level của <code>L9_3</code> — 2 cách bổ trợ: LLM-judge free-form linh hoạt, không cần data huấn luyện riêng, dùng được ngay; PRM cần đầu tư nhãn từng bước trước nhưng cho tín hiệu dày và rẻ hơn NHIỀU lần khi chạy ở quy mô lớn (không tốn 1 lệnh gọi LLM đắt tiền mỗi lần chấm).</p>
+
+<h3>5. Bức tranh benchmark 2026 rộng hơn AgentBench/MT-Bench/τ-bench</h3>
+<p><code>L9_3</code> đã dạy AgentBench, MT-Bench, τ-bench. 4 benchmark khác, mỗi cái đo 1 khía cạnh khác:</p>
+<table>
+<tr><th>Benchmark</th><th>Domain</th><th>Cơ chế chấm điểm</th></tr>
+<tr><td><strong>GAIA</strong></td><td>Câu hỏi tổng hợp cần duyệt web + dùng tool + suy luận đa bước, hướng con người thật hỏi</td><td>So khớp câu trả lời cuối với đáp án chuẩn (exact match sau chuẩn hoá)</td></tr>
+<tr><td><strong>WebArena</strong></td><td>Website mô phỏng thật (tự host, không phải web thật) để agent thao tác</td><td>Executable scoring — kiểm tra TRẠNG THÁI cuối của website (VD đơn hàng đã tạo đúng chưa) + trajectory replay để tái phân tích từng bước</td></tr>
+<tr><td><strong>SWE-bench</strong></td><td>Sửa lỗi phần mềm thật — GitHub issue thật + repo thật</td><td>Patch agent sinh ra phải làm PASS bộ test ẩn (hidden test suite) — chấm bằng cách CHẠY CODE THẬT, không phải LLM-judge đọc text</td></tr>
+<tr><td><strong>τ²-bench</strong></td><td>Mở rộng τ-bench: môi trường "dual-control" — CẢ agent lẫn user đều có thể gọi tool</td><td>Giống τ-bench (pass^k, xem mục 6) nhưng mô phỏng đúng tình huống thật hơn: user có thể tự thao tác thay vì chỉ trả lời câu hỏi</td></tr>
+</table>
+<p>Điểm chung đáng chú ý: GAIA chấm bằng khớp đáp án gần-đúng (quasi-exact-match, dễ làm nhưng có thể bị "đối phó" bằng câu trả lời đúng format mà sai bản chất); WebArena và SWE-bench chấm bằng <strong>trạng thái thực thi được / test thực thi được</strong> — khách quan hơn vì không phụ thuộc phán đoán chủ quan của 1 LLM-judge. AgentBench KHÔNG thuộc gọn 1 trong 2 nhóm này — nó dùng metric khác nhau theo từng môi trường con (Success Rate cho OS/DB — bản thân đã là chấm theo TRẠNG THÁI THỰC THI, không phải khớp đáp án; F1 cho Knowledge Graph; Win Rate cho Digital Card Game) — 1 benchmark hỗn hợp, không nằm cùng nhóm thuần tuý với GAIA.</p>
+
+<h3>6. pass^k — metric độ tin cậy của τ-bench, khác pass@k cổ điển</h3>
+<p><code>pass@k</code> (quen thuộc từ benchmark code như HumanEval): xác suất ÍT NHẤT 1 trong k lần thử thành công — đo khả năng TỐI ĐA nếu được thử nhiều lần, tương tự khái niệm "aptitude" đã học ở <code>R8_2</code> mục 4 (khác domain: đó là hội thoại, đây là agent gọi tool, nhưng cùng bản chất thống kê). τ-bench đề xuất thêm <code>pass^k</code>: xác suất TẤT CẢ k lần thử đều thành công — đo ĐỘ TIN CẬY, tương tự khái niệm "unreliability" ở <code>R8_2</code> nhưng lật ngược dấu (pass^k cao = tin cậy cao).</p>
+<div class="callout">
+<div class="label">📖 Worked example — vì sao pass@k và pass^k phân kỳ nhanh</div>
+<pre><code>Giả sử agent có tỷ lệ thành công per-trial p = 0.8 (độc lập giữa các lần thử)
+
+pass@k = 1 - (1-p)^k     (ít nhất 1/k lần thành công)
+  pass@1 = 1 - 0.2^1 = 0.80
+  pass@2 = 1 - 0.2^2 = 1 - 0.04 = 0.96
+  pass@4 = 1 - 0.2^4 = 1 - 0.0016 = 0.9984   ← gần như CHẮC CHẮN có 1 lần ăn may
+
+pass^k = p^k             (TẤT CẢ k lần đều thành công)
+  pass^1 = 0.8^1 = 0.80
+  pass^2 = 0.8^2 = 0.64
+  pass^4 = 0.8^4 = 0.4096                    ← dưới 50%, dù pass@4 gần 100%
+
+→ Cùng 1 agent, cùng p=0.8: pass@4 nói "gần như luôn có cách ra kết quả đúng nếu
+  thử 4 lần", pass^4 nói "chưa tới 50% khả năng agent làm đúng CẢ 4/4 lần liên
+  tiếp". Agent phục vụ khách hàng thật cần pass^k cao (đúng MỌI LẦN được gọi),
+  không phải pass@k cao (chỉ cần đúng 1 lần trong nhiều lần thử lại).</code></pre>
+</div>
+<p>Ý nghĩa thực hành: báo cáo "agent đạt 92% task completion" (thường ngầm hiểu kiểu pass@k hoặc trung bình nhiều lần) có thể che giấu 1 agent cực kỳ THẤT THƯỜNG (per-trial p thấp nhưng bù lại bằng cách thử nhiều lần) — production cần biết cả pass^k để biết agent có đáng tin CHO 1 LẦN GỌI DUY NHẤT hay không, vì hầu hết use case thật (user hỏi 1 lần, cần đúng ngay) gần với pass^1 hơn là pass@k.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Áp khung 3 tầng vào 1 trajectory giả lập của agent nghiên cứu cổ phiếu (5 bước):</p>
+<pre><code>Bước 1: Nhận task "Đánh giá HPG có nên mua tuần này không?"
+Bước 2: Gọi tool get_price_history(ticker="HPG", days=90)      → OK
+Bước 3: Gọi tool get_technical_indicators(ticker="HPG")         → OK
+Bước 4: Gọi tool get_news_sentiment(ticker="HPG", days=30)      → trả về rỗng
+         (agent KHÔNG kiểm tra rỗng, vẫn coi như sentiment = "neutral")
+Bước 5: Tổng hợp: "HPG có kỹ thuật tốt, sentiment trung lập, khuyến nghị MUA"
+
+Chấm 3 tầng:
+- End-to-end:      task có "hoàn thành" không? → CÓ (agent trả lời có kết luận)
+- Trajectory-level: reasoning quality → FAIL (không nên coi rỗng = neutral,
+                    đây là giả định ẩn không được kiểm chứng)
+- Component-level: bước 4 (tool get_news_sentiment) → argument correctness PASS
+                    (tool gọi đúng tham số) nhưng xử lý kết quả rỗng SAI
+                    (lỗi nằm ở logic xử lý output, không phải ở lệnh gọi tool)
+</code></pre>
+<p>Đây là ví dụ điển hình: end-to-end không phát hiện được lỗi vì agent vẫn "ra được 1 câu trả lời có vẻ hợp lý" — chỉ component-level mới lộ ra chính xác bước 4 là nơi có lỗi logic. Áp PRM (mục 4) vào đúng trajectory 5 bước này: nhãn từng bước sẽ là <code>[1,1,1,0,1]</code> (bước 4 = 0 vì xử lý rỗng sai) — reward trung bình 4/5=0.8, khớp đúng kết luận component-level đã tìm ra bằng LLM-judge đọc lại, nhưng PRM cho con số này KHÔNG cần 1 lệnh gọi LLM-judge riêng mỗi lần chấm.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>End-to-end</th><th>Trajectory-level</th><th>Component-level</th></tr>
+<tr><td>Đơn vị đo</td><td>Cả task</td><td>Toàn bộ chuỗi bước</td><td>1 bước/1 span đơn lẻ</td></tr>
+<tr><td>Phát hiện lỗi "thành công nhờ may mắn"?</td><td>Không</td><td>Có (1 phần)</td><td>Có (đầy đủ nhất)</td></tr>
+<tr><td>Chi phí eval</td><td>Thấp (1 điểm/task)</td><td>Trung bình</td><td>Cao (mỗi span 1 phép chấm)</td></tr>
+<tr><td>Dùng để làm gì</td><td>Theo dõi outcome production</td><td>Đánh giá chất lượng quy trình suy luận</td><td>Debug — biết chính xác thành phần nào cần sửa</td></tr>
+<tr><td>Tương ứng tier <code>L9_3</code></td><td>Online / E2E</td><td>Integration</td><td>Unit</td></tr>
+</table>
+<table>
+<tr><th>Tiêu chí</th><th>ORM</th><th>PRM</th><th>LLM-judge trajectory (<code>L9_3</code>)</th></tr>
+<tr><td>Cần huấn luyện riêng?</td><td>Có (nhãn outcome)</td><td>Có (nhãn từng bước, đắt hơn)</td><td>Không — chỉ cần viết prompt</td></tr>
+<tr><td>Định vị đúng bước lỗi?</td><td>Không</td><td>Có</td><td>Có (nhưng qua đọc-hiểu, không có cấu trúc cố định)</td></tr>
+<tr><td>Chi phí per-eval ở quy mô lớn</td><td>Thấp (1 forward pass model nhỏ)</td><td>Thấp (1 forward pass/bước)</td><td>Cao (1 lệnh gọi LLM đắt/trajectory)</td></tr>
+<tr><td>Linh hoạt khi đổi tiêu chí chấm</td><td>Thấp — phải train lại</td><td>Thấp — phải train lại</td><td>Cao — sửa prompt là dùng ngay</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>.claude/skills/daily-investor-report/scripts/collect_and_build.py</code> có cấu trúc nhiều bước rõ ràng, đây chính là 1 trajectory thật: <strong>Step 1</strong> backbone fetch → <strong>Step 2</strong> TA computation (song song 10 worker) → <strong>Step 2.5</strong> backfill <code>/predict</code> cho ticker thiếu → <strong>Step 3</strong> build ticker payload + verdict → <strong>Step 4</strong> top picks (sector cap 2) → <strong>Step 5</strong> full analysis cho mọi ticker → <strong>Step 6</strong> lessons learned → <strong>Step 6.5</strong> senior-level global blocks → <strong>Step 7</strong> render + QA. Áp khung 3 tầng: <strong>end-to-end</strong> = báo cáo HTML cuối có render đủ, đúng schema không (đo bởi Self-QA Gate, xem trang R8.4); <strong>trajectory-level</strong> = có bước nào bị bỏ qua âm thầm không (VD Step 2.5 backfill không chạy dù có ticker thiếu ở Step 2, nhưng Step 3 vẫn "tự vá" bằng giá trị mặc định — giống ví dụ HPG ở trên); <strong>component-level</strong> = chính là 8 check trong Self-QA Gate, mỗi check gắn với đúng 1 bước cụ thể trong pipeline (đào sâu ở trang R8.4).</p>
+<p>Liên hệ pass^k (mục 6): pipeline chạy 1 lần/ngày cho toàn bộ 86 ticker <code>HIGHLIGHT_GROUP</code> — mỗi ticker là 1 "trial" độc lập của cùng 1 trajectory 8-bước.</p>
+<pre><code>Giả định Self-QA Gate (8 check, xem R8.4) ghi nhận 84/86 ticker PASS cả 8 check
+trong 1 ngày chạy — per-ticker reliability ước lượng:
+  p ≈ 84/86 ≈ 0.977
+
+Pipeline chạy 1 LẦN/ngày cho mỗi ticker, KHÔNG "thử lại tới khi đúng rồi lấy lần
+tốt nhất" — nên con số đáng báo cáo đúng bản chất là pass^1, không phải pass@k:
+  pass^1 = p = 0.977
+
+Nếu lỡ có ai báo cáo theo hướng "thử 3 lần, lấy lần tốt nhất" (pass@3, SAI bản
+chất cho use case này):
+  pass@3 = 1 - (1-0.977)^3 = 1 - 0.023^3 ≈ 1 - 0.0000122 ≈ 0.99999
+  → con số đẹp giả tạo, không phản ánh đúng cách hệ thống thực sự vận hành
+    (chạy 1 lần/ngày, không retry-rồi-chọn-lần-tốt-nhất cho từng ticker).</code></pre>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<p>(1) Chỉ đo end-to-end task completion rồi kết luận hệ thống "khoẻ" — bỏ sót lỗi tiềm ẩn agent "may mắn" tự sửa được. (2) Gộp chung tool correctness và argument correctness thành 1 metric — che mất việc phân biệt "chọn sai tool" với "chọn đúng tool, sai tham số". (3) Coi trajectory-level và component-level là 1 — trajectory-level nhìn CẢ CHUỖI bước có hợp lý không, component-level nhìn TỪNG bước tách biệt (đào sâu riêng ở trang tiếp theo). (4) Dùng ORM khi cần định vị lỗi chính xác từng bước — ORM chỉ cho biết trajectory tổng thể tốt/xấu, không chỉ ra bước nào sai (mục 4). (5) Báo cáo "task completion 92%" mà không nói rõ đó là pass@k hay pass^k — 2 con số này có thể lệch nhau rất xa (mục 6), và quyết định production chỉ nên dựa vào pass^k khi use case thật là "1 lần gọi, cần đúng ngay".</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Vẽ được 3 tầng eval agent (end-to-end / trajectory / component) + ánh xạ đúng sang 4-tier pyramid của <code>L9_3</code>.</li>
+<li>Giải thích được ví dụ cụ thể 1 agent "thành công nhờ may mắn" — end-to-end PASS nhưng trajectory/component FAIL.</li>
+<li>Phân biệt đúng tool correctness vs argument correctness bằng ví dụ, không gộp chung.</li>
+<li>Phân biệt đúng cơ chế train PRM vs ORM + giải thích vì sao PRM định vị lỗi được còn ORM thì không.</li>
+<li>Kể đúng 4 benchmark mới (GAIA/WebArena/SWE-bench/τ²-bench) + phân biệt benchmark chấm bằng thực thi code/trạng thái (WebArena, SWE-bench) với benchmark chấm bằng khớp đáp án gần-đúng (GAIA) — và biết AgentBench là trường hợp hỗn hợp, không thuộc gọn nhóm nào.</li>
+<li>Tính được pass@k và pass^k cho cùng 1 giá trị p, giải thích vì sao 2 số phân kỳ nhanh khi p chưa cao.</li>
+<li>Cho được ví dụ thật từ <code>collect_and_build.py</code> cho cả 3 tầng.</li>
+<li>Tự confirm: không đề xuất đưa field hệ thống tính sẵn vào input của 1 judge/eval được thiết kế để độc lập.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R8_2_multiturn_evals.html">← R8.2 · Multi-turn Evals</a>
+  <a href="R8_4_component_evals.html">R8.4 · Component-level Evals →</a>
+</div>
+
+</div>
+</body>
+</html>

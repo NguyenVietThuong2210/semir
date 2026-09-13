@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2.6 — ML System Design (V19.5 Death)</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 2 · Module 6</div>
+  <h1>2.6 · ML System Design — 7 root causes V19.5 chết</h1>
+  <p class="subtitle">Case study production ML failure. 7 distinct root causes → mỗi cái sống 1 mình → cùng nhau fatal. 7 counter-measures cho V20.</p>
+  <div class="level">Level 2 · Advanced ML · ~35 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Kể 7 root causes V19.5 fail bằng trí nhớ</li>
+  <li>Design principle: fail-loud vs fail-silent</li>
+  <li>Multi-horizon atomicity concept</li>
+  <li>Kể story STAR cho interview: "1 lần bạn debug production ML bug"</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 ML System Design bằng ngôn ngữ đời thường</div>
+<p><strong>V19.5 death case = Sinh viên đêm trước thi cắn mì gói + học 12 tiếng liên tục</strong>:</p>
+<ul>
+<li>Không nghỉ (no staged rollout)</li>
+<li>Không có kế hoạch backup nếu buồn ngủ (no rollback plan)</li>
+<li>Ăn mì gói xấu → đau bụng (bad data)</li>
+<li>Café quá liều → tay run (model overtuned)</li>
+</ul>
+<p>→ 7 yếu tố cascade thành 1 thảm họa. ML system cũng vậy — không phải 1 lỗi mà chuỗi lỗi cùng lúc gây sập.</p>
+<p><strong>Bài học</strong>: Rollout từ từ, có monitoring, có nút "STOP" instant, có backup plan. Đừng dựa "code đúng là đủ" — cần discipline của cả process.</p>
+</div>
+
+<h2>1. Timeline V19.5 failure</h2>
+
+<pre><code>2026-06-28: V18 stable (79 features, cv 60.53%)
+2026-06-29 → 06-30: Phase 7 retrain (~26h) → v19_5/ dir
+2026-06-30: cv_acc mean 61.14% (+0.61pp) → sign-off looks good
+2026-07-01 sáng: user báo "FPT price stale trong LLM thesis"
+2026-07-01 chiều: dig deep → phát hiện 14 blue-chip fallback v1 legacy
+                   (BUY_hit rate thực = 0.32 vs V18 baseline 0.60)
+2026-07-01 tối: rollback về V18 79-feat + tier-3 gate deploy
+</code></pre>
+
+<h2>2. 7 root causes</h2>
+
+<table>
+<tr><th>#</th><th>Root cause</th><th>Evidence</th></tr>
+<tr>
+  <td>1</td>
+  <td>Retrain covered only T1, not T3/T5</td>
+  <td><code>FPT.t1</code>: 98 features. <code>FPT.t3</code>, <code>FPT.t5</code>: 73 features (stale V18)</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Silent v1 fallback on shape mismatch</td>
+  <td>Log: <code>[v18] FPT inference failed (X has 98 features, scaler expects 73) — falling back to v1</code>. WARNING không ERROR.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>models/v18/</code> overwritten in-place</td>
+  <td>3 versions mixed (79 / 98 / mismatched) — rollback ambiguous</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Roll-up gates skipped (Slice 9, 10)</td>
+  <td>Missing <code>slice_9_signoff.json</code>, <code>slice_10_signoff.json</code></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Router/DB cache masks stale after model swap</td>
+  <td>Post-rollback: FPT vẫn returned v1 4h vì DB row pinned</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>docker compose --force-recreate</code> resets in-container patches</td>
+  <td>Tier-3 gate lost after recreate</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>Slice 1 JSON corrupted (<code>+0.0104</code> non-JSON literals)</td>
+  <td><code>json.decoder.JSONDecodeError line 12</code></td>
+</tr>
+</table>
+
+<h2>3. Meta-lesson</h2>
+
+<div class="callout danger">
+<div class="label">Silent failure là killer</div>
+<p>V19.5 sản xuất 246 model artifacts, chạy 26h, sign-off metrics đẹp — nhưng serve 0 improvement cho user vì inference broke lặng lẽ. Traditional software throw exception → alerting fires → debug. ML pipeline log WARNING, tiếp tục serve wrong prediction. Users lose money silently.</p>
+<p><strong>V20's #1 goal không phải accuracy, mà là NO silent failure.</strong></p>
+</div>
+
+<h3>3.5 Lý thuyết đứng sau — "Hidden Technical Debt in Machine Learning Systems" (Sculley et al. 2015)</h3>
+
+<p>Case study V19.5 ở mục 1-2 không phải hiện tượng riêng lẻ — nó là ví dụ THỰC TẾ của những "nợ kỹ thuật" (technical debt — chi phí ẩn tích luỹ khi làm tắt, phải "trả" sau này dưới dạng bug/bảo trì khó) mà 1 paper rất nổi tiếng (Sculley et al., NeurIPS 2015) đã đặt tên chính thức từ trước. Paper này giải thích TẠI SAO hệ thống ML dễ tích luỹ nợ kỹ thuật hơn hẳn phần mềm thường:</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 3 khái niệm quan trọng nhất của paper — cơ chế + ví dụ</div>
+<p><strong>Entanglement (rối vào nhau) / nguyên tắc CACE ("Changing Anything Changes Everything" — đổi 1 thứ nhỏ là đổi hết mọi thứ)</strong>: trong phần mềm thường, 1 hàm số A và 1 hàm số B thường ĐỘC LẬP — sửa A không ảnh hưởng B nếu chúng không gọi nhau trực tiếp. Nhưng trong 1 model ML, mọi input feature bị TRỘN LẪN vào nhau qua trọng số (weights) đã học chung — không feature nào thực sự "cô lập". <strong>Ví dụ</strong>: thêm 1 feature MỚI "giờ trong ngày" vào model gian lận (fraud) — feature này không chỉ đơn thuần "thêm 1 tín hiệu", nó còn ÂM THẦM làm model học lại TRỌNG SỐ của feature "số tiền giao dịch" đã có sẵn, có thể phá vỡ 1 ngưỡng quyết định đã tinh chỉnh kỹ trước đó — dù không ai sửa 1 dòng code nào liên quan tới feature "số tiền".</p>
+<p><strong>Undeclared consumers (người tiêu thụ không khai báo)</strong>: output của 1 model (điểm số, dự đoán) được ghi ra 1 API/file/log — rồi 1 hệ thống/team KHÁC âm thầm bắt đầu ĐỌC dữ liệu đó làm input cho việc riêng của họ, mà đội sở hữu model không hề biết. <strong>Ví dụ</strong>: điểm xếp hạng gợi ý sản phẩm được log vào 1 bảng dữ liệu chung — 6 tháng sau, 1 dashboard marketing khác âm thầm đọc đúng cột đó để tính ngân sách chiến dịch email — không ai trong đội train lại model gợi ý biết về sự phụ thuộc "vô hình" này, nên 1 lần retrain bình thường có thể âm thầm làm hỏng dashboard marketing đó mà không ai cảnh báo trước.</p>
+<p><strong>Correction cascades (chuỗi vá lỗi chồng chất)</strong>: khi output của model A "gần đúng nhưng chưa đủ" cho 1 nhu cầu mới B, thay vì SỬA LẠI model A cho đúng, kỹ sư thường XÂY THÊM 1 model B THỨ HAI để "vá" lỗi của A. Hệ quả: nếu sau này CẢI THIỆN model A (làm nó chính xác hơn) — hệ thống TỔNG THỂ có thể lại TỆ ĐI, vì model B đã được tinh chỉnh riêng để vá ĐÚNG KIỂU LỖI CŨ của A, không phải để làm việc với A phiên bản mới. Đây gọi là "improvement deadlock" — cải thiện 1 phần lại làm hại toàn hệ thống.</p>
+<p><strong>Insight</strong>: cả 3 khái niệm đều chỉ ra CÙNG 1 sự thật — nợ kỹ thuật trong ML không chỉ tới từ "code viết ẩu" (như phần mềm thường), mà tới từ chính BẢN CHẤT của việc model học pattern từ dữ liệu: mọi phần đều ngầm liên kết với nhau, không có ranh giới module rõ ràng như code truyền thống. Đây là lý do các counter-measure ở mục 4 (versioning nghiêm ngặt, schema hash, atomic retrain) không phải "quá cẩn thận" — chúng là cách DỰNG LẠI ranh giới module mà bản chất ML tự nhiên không có sẵn.</p>
+</div>
+
+<h2>4. 7 V20 counter-measures</h2>
+
+<h3>4.1 Multi-horizon atomicity</h3>
+<pre><code># In train_v18_unified.py:
+if not (t1_ok and t3_ok and t5_ok):
+    for h in [1, 3, 5]:
+        Path(f"{OUTPUT_DIR}/{ticker}.t{h}.joblib").unlink(missing_ok=True)
+    raise RuntimeError(f"{ticker}: partial retrain aborted, no artifact retained")
+</code></pre>
+
+<h3>4.2 Fallback = loud error</h3>
+<pre><code># Was: logger.warning(f"[v18] falling back to v1")
+# Now: logger.error(f"[v18] falling back to v1") + metric_v18_fallback_total{ticker=X}++
+# Alert on fallback rate > 0
+</code></pre>
+
+<h3>4.3 Immutable versioned dirs</h3>
+<pre><code># NEVER in-place edit to /app/models/v18/
+# Always write to /app/models/v20-candidate/
+# Cut-over = single `mv` + engine restart
+</code></pre>
+
+<h3>4.4 Model-swap invalidation protocol</h3>
+<pre><code>1. Write new artifacts to v20-candidate/
+2. Run consistency gate
+3. INSERT INTO model_registry (version='v20', activated_at, model_dir)
+4. DELETE FROM prediction_log WHERE created_at > NOW() - INTERVAL '2 days'
+5. mv v20-candidate → v20
+6. docker restart predictor-api-1
+7. Smoke test 10 tickers; if ver ≠ v20 anywhere → freeze + rollback
+</code></pre>
+
+<h3>4.5 Container source-of-truth</h3>
+<ul>
+  <li>Patches land in host <code>backend/</code>, git commit</li>
+  <li><code>docker compose build --no-cache</code> bake patches vào image</li>
+  <li><code>docker cp</code> = diagnostic only, không prod deploy</li>
+</ul>
+
+<h3>4.6 Artifact self-validation</h3>
+<pre><code># Every JSON written:
+json.loads(open(path).read())   # verify parseable
+# Every joblib written:
+a = joblib.load(path)
+assert a['scaler'].n_features_in_ == len(a['feature_names'])
+</code></pre>
+
+<h3>4.7 Explicit tier system</h3>
+<pre><code>Tier A: cv_skill ≥ 0.15, ECE ≤ 0.01, ≥ 500 samples → full V20 features
+Tier B: cv_skill ≥ 0.05, ECE ≤ 0.02, ≥ 300     → V20-conservative
+Tier C: cv_skill < 0.05                          → V20_TIER_3_SKIP set, hard-skip
+Tier G: gated (veto rules fire > 30% backtest)   → downgrade FLAT
+</code></pre>
+
+<h2>4b. Deep dive — 4 khái niệm production ML thường bị hand-wave</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 (1) Model Registry — schema đầy đủ (không phải chỉ "1 folder chứa model")</div>
+
+<p><strong>Định nghĩa</strong>: Model Registry = "sổ hộ khẩu" của mọi model artifact trong company. Ai train, khi nào, dùng data nào, metric bao nhiêu, đang production hay đã retired. Tương tự Git nhưng cho model.</p>
+
+<p><strong>Schema SQL tối thiểu</strong>:</p>
+<pre><code>CREATE TABLE model_registry (
+  model_id         VARCHAR PRIMARY KEY,        -- 'v20_slice6_20260701_abc123'
+  model_name       VARCHAR NOT NULL,           -- 'stock_direction_predictor'
+  version          VARCHAR NOT NULL,           -- 'v20.1.3'
+  stage            VARCHAR NOT NULL,           -- 'staging' | 'production' | 'archived'
+  artifact_uri     VARCHAR NOT NULL,           -- 's3://models/v20/abc123.joblib'
+  feature_schema_hash VARCHAR NOT NULL,        -- SHA256 của feature names + dtypes
+                                               -- dùng để check train/serve skew
+  training_data_uri VARCHAR,                   -- 's3://data/2026-06-30-snapshot/'
+  training_data_hash VARCHAR,                  -- SHA của dataset (reproducibility)
+  training_code_git_sha VARCHAR NOT NULL,      -- commit SHA của training script
+  hyperparams      JSON,                       -- {'max_depth':6, 'lr':0.05, ...}
+  metrics_offline  JSON,                       -- {'cv_acc':0.611,'pr_auc':0.72}
+  metrics_online   JSON,                       -- populated after deploy: live acc, latency
+  created_by       VARCHAR NOT NULL,           -- user hoặc CI job
+  created_at       TIMESTAMP NOT NULL,
+  activated_at     TIMESTAMP,                  -- khi chuyển sang production
+  retired_at       TIMESTAMP,
+  parent_model_id  VARCHAR,                    -- lineage: model này base trên model nào
+  CONSTRAINT unique_active_per_name
+    EXCLUDE (model_name WITH =) WHERE (stage = 'production')
+    -- CHỈ 1 model production per name tại 1 thời điểm
+);
+</code></pre>
+
+<p><strong>Vì sao mỗi field</strong>: <code>feature_schema_hash</code> chống train/serve skew (§3 dưới). <code>training_code_git_sha</code> reproducible (rerun exact model). <code>parent_model_id</code> lineage để rollback tuyến tính. <code>stage</code> constraint tránh 2 model production cùng lúc (bug V19.5).</p>
+
+<p>Tools thực tế: MLflow Model Registry, Weights & Biases, Vertex AI Model Registry, SageMaker Model Registry. Đều implement schema tương đương.</p>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 (2) Feature Store — vai trò + kiến trúc 2 tier</div>
+
+<p><strong>Vấn đề</strong>: Team A tính feature <code>rsi_14</code> khi training. Team B tính lại khi serving. 2 phiên bản khác nhau (window boundary khác, timezone khác, missing value handling khác) → prediction sai. Đây là <strong>train/serve skew</strong> qua feature.</p>
+
+<p><strong>Feature Store = 1 nơi tính feature, 2 nơi tiêu thụ</strong>:</p>
+<pre><code>┌─────────────────────────┐
+│   Raw data sources      │  (data lake, streaming Kafka)
+│   prices, volume, news  │
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
+│  Feature Store          │  ← ĐỊNH NGHĨA CHỈ 1 LẦN
+│  compute rsi_14, mfi... │
+└─────┬───────────┬───────┘
+      │           │
+      ▼           ▼
+┌──────────┐  ┌──────────┐
+│ Offline  │  │  Online  │
+│ store    │  │  store   │
+│ (S3,     │  │ (Redis,  │
+│  Parquet)│  │ DynamoDB)│
+│ TRAINING │  │ SERVING  │
+└──────────┘  └──────────┘
+   │              │
+   ▼              ▼
+Batch train    Real-time inference
+ (Airflow)      (API endpoint)
+</code></pre>
+
+<p><strong>Guarantee quan trọng</strong>: Cùng 1 định nghĩa feature, cùng 1 code path. Offline store dùng cho training (historical, batch). Online store cache latest cho low-latency serving. Feature Store đảm bảo consistency giữa 2 store thông qua materialization job.</p>
+
+<p><strong>Point-in-time correctness</strong>: Khi query training data at time <code>t</code>, feature store chỉ trả về giá trị features tại thời điểm <code>≤ t</code> (không dùng future). Đây là "as-of join" — chống look-ahead leak automatically. Không có feature store, team hay quên → CV inflated.</p>
+
+<p>Tools: Feast (open source), Tecton, Hopsworks, Vertex AI Feature Store.</p>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 (3) Training-Serving Skew — 4 nguồn gốc + detect</div>
+
+<p><strong>Định nghĩa</strong>: khoảng cách giữa "input model thấy khi train" và "input model thấy khi serve". Chỉ cần 1 pixel khác = prediction có thể sai lệch.</p>
+
+<p><strong>4 nguồn gốc phổ biến</strong>:</p>
+<ol>
+  <li><strong>Code skew</strong>: Training dùng pandas <code>.rolling(20).mean()</code>, serving dùng Java loop tính lại → boundary condition khác (NaN handling). <em>Fix</em>: dùng cùng codebase/binary (Feature Store).</li>
+  <li><strong>Data skew</strong>: Training data batch (T+1 EOD), serving data streaming (real-time, chưa settle) → cùng feature có value khác. <em>Fix</em>: match data freshness ở training với serving.</li>
+  <li><strong>Distribution skew (data drift)</strong>: Train trên 2023 data, serve 2026 data → input distribution shift. Model không "sai code" nhưng OOD. <em>Fix</em>: monitor input statistics + retrain schedule.</li>
+  <li><strong>Label skew (concept drift)</strong>: Correlation X→Y thay đổi (VD: post-COVID market behavior khác pre-COVID). <em>Fix</em>: monitor prediction quality online.</li>
+</ol>
+
+<p><strong>Detection at write time</strong>: khi save model artifact, tính hash của <code>(feature_names, dtypes, preprocessing_config)</code>. Khi serving load, tính lại hash từ input pipeline → phải match. Đây chính là <em>V19.5 bị bug</em> — không có hash check → shape mismatch chạy vào silent fallback.</p>
+
+<pre><code># In training:
+schema = {'features': X.columns.tolist(), 'dtypes': X.dtypes.astype(str).tolist()}
+schema_hash = hashlib.sha256(json.dumps(schema, sort_keys=True).encode()).hexdigest()
+joblib.dump({'model': clf, 'schema_hash': schema_hash, 'scaler': scaler}, path)
+
+# In serving:
+artifact = joblib.load(path)
+input_hash = compute_schema_hash(request_features)
+if input_hash != artifact['schema_hash']:
+    raise RuntimeError(f"TRAIN/SERVE SKEW DETECTED: {input_hash} != {artifact['schema_hash']}")
+    # LOUD FAIL — not silent fallback!
+</code></pre>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 (4) Canary Deployment — chi tiết 3 stage + rollback trigger</div>
+
+<p><strong>Canary</strong> = "chim hoàng yến" thợ mỏ mang xuống đường hầm — chim chết = có gas độc, người thoát ra. Trong ML: 1 phần nhỏ traffic đi vào model mới, so sánh liên tục với model cũ, nếu mới tệ → rollback trước khi ảnh hưởng đông user.</p>
+
+<pre><code>Stage 0: Baseline shadow (BEFORE canary)
+  Traffic:   100% → model_v18 (old)
+             100% → model_v20 (new, shadow — không serve, chỉ log)
+  Duration:  24-48h
+  Compare:   agreement rate, prediction distribution, latency
+  Gate:      if agreement < 90% → investigate before proceeding
+
+Stage 1: Canary 5%
+  Traffic:   95% → v18
+              5% → v20 (real serve)
+  Duration:  1-2h (nhiều tickers scale nhỏ) — 24h (few tickers scale lớn)
+  Metrics:   live accuracy (via prediction_feedback), latency p99,
+             error rate, business KPI (BUY hit rate)
+  Auto-rollback triggers:
+    - error rate > 2× baseline
+    - latency p99 > 1.5× baseline
+    - live acc drop > 5pp
+    - fallback rate > 0%   ← V20 rule
+
+Stage 2: Canary 25%
+  Traffic:   75% → v18
+             25% → v20
+  Duration:  4-24h
+  (same triggers, tighter threshold: acc drop > 3pp)
+
+Stage 3: Full rollout 100%
+  Traffic:   0% → v18 (kept warm for 7 days for rollback)
+           100% → v20
+  Monitoring: 7-day post-deploy vigilance
+
+Rollback: single config flip (feature flag) — no code deploy
+  ROLLBACK_TIME_SLA: < 5 minutes end-to-end
+</code></pre>
+
+<p><strong>Statistical gate ở mỗi stage</strong>: dùng sequential test (SPRT — giải thích cơ chế ngay dưới) hoặc Bayesian A/B thay vì fixed-horizon test (kiểm định với CỠ MẪU CỐ ĐỊNH, phải đợi đủ N mẫu mới được kết luận). Sequential cho phép "stop early if clearly worse" (rollback sớm) hoặc "stop early if clearly better" (promote sớm) — không cần đợi hết N mẫu nếu bằng chứng đã đủ rõ ràng từ sớm.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 SPRT (Sequential Probability Ratio Test, Wald 1945) — vì sao dừng SỚM được mà vẫn giữ đúng độ tin cậy thống kê</div>
+<p><strong>Ý tưởng cốt lõi</strong>: thay vì cố định trước "phải thu thập đúng N mẫu rồi mới kết luận" (fixed-horizon test — cách làm thống kê cổ điển), SPRT theo dõi 1 "tỷ lệ khả năng" (likelihood ratio — đo xem dữ liệu quan sát được ỦNG HỘ giả thuyết nào hơn) TÍCH LUỸ DẦN sau MỖI mẫu mới, và dừng lại NGAY khi tỷ lệ đó đã đủ thuyết phục — không cần đợi tới N cố định.</p>
+<pre><code>Λ_n = Π f(x_i; θ₁) / f(x_i; θ₀)     # tích luỹ qua từng mẫu x_i mới quan sát được
+                                      # θ₀ = giả thuyết "không đổi/model cũ tốt như cũ"
+                                      # θ₁ = giả thuyết "model mới THỰC SỰ khác/tốt hơn"
+
+Ngưỡng trên A = (1-β)/α    → nếu Λ_n VƯỢT A → dừng, KẾT LUẬN model mới THỰC SỰ khác
+Ngưỡng dưới B = β/(1-α)    → nếu Λ_n RỚT dưới B → dừng, KẾT LUẬN model mới KHÔNG khác
+
+# α = xác suất chấp nhận nhầm "có khác biệt" khi thực ra KHÔNG có (false positive)
+# β = xác suất bỏ sót "có khác biệt" khi thực ra CÓ (false negative)
+# Λ_n nằm GIỮA B và A → CHƯA đủ bằng chứng, tiếp tục thu thập thêm mẫu</code></pre>
+<p><strong>Ví dụ số minh hoạ cơ chế</strong> (không phải chạy đủ trial thật, chỉ minh hoạ công thức): giả sử α=β=0.05, kiểm định "tỷ lệ thắng model mới = 50% (không đổi)" vs "tỷ lệ thắng = 60% (thực sự tốt hơn)":</p>
+<pre><code>A = (1-0.05)/0.05 = 19
+B = 0.05/(1-0.05) ≈ 0.0526
+
+Mỗi lần model mới THẮNG 1 sample, nhân Λ với 0.6/0.5 = 1.2
+Mỗi lần model mới THUA 1 sample, nhân Λ với 0.4/0.5 = 0.8
+
+→ Nếu model mới thắng liên tục nhiều lần, Λ tăng nhanh, sớm VƯỢT 19 → dừng
+  sớm, kết luận "model mới tốt hơn thật" mà KHÔNG cần đợi đủ 1000 mẫu cố định.
+→ Nếu model mới thua liên tục, Λ giảm nhanh, sớm RỚT dưới 0.0526 → dừng sớm,
+  kết luận "không có khác biệt", tiết kiệm thời gian canary không cần thiết.</code></pre>
+<p><strong>Insight</strong>: đây chính xác là lý do bảng "Auto-rollback triggers" ở Stage 1-2 phía trên có thể phản ứng NHANH (1-2h thay vì phải đợi đủ số mẫu cố định trước khi dám kết luận) — nếu model mới THỰC SỰ tệ, bằng chứng tích luỹ nhanh sẽ vượt ngưỡng B sớm, kích hoạt rollback trước khi ảnh hưởng nhiều traffic hơn.</p>
+</div>
+
+<p><strong>Vì sao 3 stage thay vì 1</strong>: 5%→25%→100% cho phép detect issue với power tăng dần. Nếu bug chỉ hiện ra tại scale (VD: race condition trong caching), 25% stage sẽ bắt trước khi lên 100%. Skip stages = giả sử không có scale-dependent bug (nguy hiểm).</p>
+
+<p><strong>Ứng dụng V19.5 fail</strong>: nếu có canary 5% + auto-rollback trigger "fallback rate &gt; 0%", V19.5 đã bị rollback trong 1-2h (thay vì 3 ngày user mất tiền). Đây là ROI cụ thể của discipline.</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh ML System Design frameworks + V19.5 case (đọc SAU khi đã hiểu timeline/root-causes/counter-measures ở mục 1-4b)</div>
+
+<p><strong>Câu hỏi thực tế</strong>: Design ML system — có checklist gì đảm bảo không sập? Đây là 3 framework phổ biến + tổng hợp lại case study V19.5 (thực tế đã sập, chi tiết ở mục 1-4b trên).</p>
+
+<h4>3 framework thiết kế ML system phổ biến</h4>
+
+<table>
+<tr><th></th><th>Chip Huyen Framework (DMLS)</th><th>Google's Rules of ML</th><th>MLOps Maturity Model</th></tr>
+<tr><td>Focus</td><td>End-to-end lifecycle</td><td>Practical rules từ Google</td><td>Level 0-5 progression</td></tr>
+<tr><td>Cấu trúc</td><td>7 stages: Problem → Data → Feature → Model → Deploy → Monitor → Update</td><td>43 rules ordered by priority</td><td>Level 0 (manual) → Level 5 (full auto)</td></tr>
+<tr><td>Best for</td><td>System design interview + build 0→1</td><td>Team đã build product, cần discipline</td><td>Assess maturity, plan improvement</td></tr>
+<tr><td>Nhược</td><td>Broad, không đi sâu ops</td><td>Không cover data engineering</td><td>Tự chấm dễ bias</td></tr>
+</table>
+
+<h4>V19.5 case dissected — 7 root causes cascade (tóm tắt lại mục 1-2 trên)</h4>
+
+<pre><code>=== Root cause analysis ===
+
+┌──────────────────────────────────────────────────────────────┐
+│ #1: Feature drift silent                                     │
+│    - V19.5 dùng 3 features mới (macd_signal_slope, ...)      │
+│    - Training data compute ok, live data không có (bug ETL)  │
+│    - Model không throw error, chỉ dùng NaN → prediction tệ   │
+│                                                              │
+│ #2: T3/T5 artifacts thiếu features                           │
+│    - T1 artifact có 98 features                              │
+│    - T3/T5 artifact chỉ 73 features (lỗi merge)              │
+│    - Predict fallback về v1 legacy (silent)                  │
+│                                                              │
+│ #3: No canary rollout                                        │
+│    - Deploy 100% traffic ngay                                │
+│    - Không có 5% canary test 1 giờ đầu                       │
+│                                                              │
+│ #4: No consistency check between train/serve                 │
+│    - Train pipeline dùng feature set A                       │
+│    - Serve pipeline dùng feature set B                       │
+│    - Không kiểm tra A ≡ B khi deploy                         │
+│                                                              │
+│ #5: Silent logging                                           │
+│    - Fallback v1 legacy chỉ log warning                      │
+│    - Warning trong 3TB logs, không alert                     │
+│                                                              │
+│ #6: No SLI/SLO on model quality                              │
+│    - Track uptime, latency                                   │
+│    - Không track CV accuracy live vs expected                │
+│                                                              │
+│ #7: No rollback plan tested                                  │
+│    - Rollback từng test trước đó                             │
+│    - Đến khi cần, phát hiện DB migration incompatible → 4h  │
+└──────────────────────────────────────────────────────────────┘
+
+TỔNG: 7 nguyên nhân cùng nhau tạo ra thảm họa
+Không cái nào một mình đủ để crash
+Nhưng cascade → 14 tickers legacy fallback 3 ngày → mất trust user
+</code></pre>
+
+<h4>Bảng so sánh V19.5 (sập) vs V20 (guard rails)</h4>
+
+<table>
+<tr><th>Concern</th><th>V19.5 (sập)</th><th>V20 (sau lesson learned)</th></tr>
+<tr><td>Feature drift</td><td>Silent NaN</td><td>Feature validation cron mỗi 5 phút, alert if NaN &gt; 1%</td></tr>
+<tr><td>Artifact consistency</td><td>Không check</td><td>Slice 5 consistency cron: validate T1/T3/T5 artifacts có cùng feature set</td></tr>
+<tr><td>Rollout</td><td>100% ngay</td><td>Canary 5% → 25% → 100% với 15 phút monitoring mỗi step</td></tr>
+<tr><td>Train/serve skew</td><td>Không có guard</td><td>Feature schema hash lưu trong artifact, serve check hash match</td></tr>
+<tr><td>Fallback logging</td><td>Warning silent</td><td>Fallback = ERROR log + Slack alert immediate</td></tr>
+<tr><td>Model quality SLO</td><td>Không có</td><td>Track live CV vs expected. Alert if delta &gt; 3%.</td></tr>
+<tr><td>Rollback</td><td>Untested, 4h</td><td>Tested weekly, &lt;5 min via config flip</td></tr>
+</table>
+
+<h4>ML System Design checklist (10 câu hỏi phỏng vấn)</h4>
+
+<p>Khi được hỏi "design ML system for X", hỏi 10 câu này trước khi vẽ:</p>
+
+<ol>
+  <li><strong>Business goal</strong>: Product metric là gì? Revenue? Retention? User satisfaction?</li>
+  <li><strong>ML metric proxy</strong>: Accuracy? Precision? F1? Bounded by business goal?</li>
+  <li><strong>Data availability</strong>: Có bao nhiêu labeled data? Refresh rate? Ownership?</li>
+  <li><strong>Latency SLA</strong>: p95 &lt; 100ms? 1s? 5s? Batch OK?</li>
+  <li><strong>Throughput</strong>: QPS? Peak vs average?</li>
+  <li><strong>Retrain frequency</strong>: Daily? Weekly? Monthly? Trigger-based (drift)?</li>
+  <li><strong>Fallback</strong>: Model down thì làm gì? Cache? Rule-based? Return null?</li>
+  <li><strong>Monitoring</strong>: Track gì? Accuracy? Latency? Data drift? Concept drift?</li>
+  <li><strong>Rollback</strong>: Bao lâu để rollback? Feature flag? Version tag?</li>
+  <li><strong>Team + oncall</strong>: Ai debug 3AM? Runbook?</li>
+</ol>
+
+<p><strong>Insight quan trọng</strong>: Bạn có thể có model state-of-the-art nhưng nếu không có 10 items trên = system sẽ sập. V19.5 chứng minh: model đủ tốt (V18) nhưng deploy tệ = mất tất cả.</p>
+
+<h4>4 tầng testing cho ML system</h4>
+
+<table>
+<tr><th>Tầng</th><th>Test gì?</th><th>Frequency</th><th>Ví dụ</th></tr>
+<tr><td>1. Unit test</td><td>Function đơn lẻ (compute_rsi, predict)</td><td>Every commit</td><td>test_rsi returns [0, 100]</td></tr>
+<tr><td>2. Integration test</td><td>Pipeline components together</td><td>Every commit</td><td>test_full_predict_flow gives valid output</td></tr>
+<tr><td>3. Model quality test</td><td>Backtest performance</td><td>Every retrain</td><td>test_cv_accuracy &gt; 0.55</td></tr>
+<tr><td>4. Production shadow test</td><td>New model run parallel với old, compare</td><td>Before deploy</td><td>test_no_regression_vs_v18 &gt; 24h</td></tr>
+</table>
+
+<p>V19.5 sập vì thiếu tầng 3 + 4 (chỉ có 1 + 2).</p>
+</div>
+
+<h2>5. STAR story cho interview</h2>
+
+<div class="example-box">
+<div class="title">💬 Kể tại phỏng vấn</div>
+<p><strong>S (Situation)</strong>: "In my stock prediction project V19.5, we retrained 246 model artifacts over 26h and metrics showed +0.61pp cv accuracy improvement — looked like clear win."</p>
+<p><strong>T (Task)</strong>: "But when a user reported price staleness in AI reports, I dug in and discovered production was silently serving legacy v1 models for 14 blue-chip tickers."</p>
+<p><strong>A (Action)</strong>: "I traced 7 distinct root causes: partial retrain (only T1, not T3/T5), silent fallback logging as WARNING not ERROR, in-place dir overwrite that broke rollback, skipped roll-up gates, cache masking staleness, and 2 more. I designed V20 execution plan with 7 counter-measures, including atomic multi-horizon retrain, loud fallback with alerting, immutable versioned dirs, and shape-consistency validation at write time."</p>
+<p><strong>R (Result)</strong>: "V20 Slice 6 full retrain succeeded with 100% shape consistency, zero silent failures, and consistency cron alerts on any hit-rate drop &gt; 10pp. Rolled back safely, no user impact. Documented all 7 root causes in v20-master-execution-plan.md — became team's playbook for ML production changes."</p>
+<p><strong>Meta lesson</strong>: "Silent failure in ML is the killer — traditional software throws exceptions, ML serves wrong predictions and users lose money silently. The #1 job of an ML engineer is not accuracy, it's making failures loud."</p>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. 7 root causes V19.5 (memorize).</p>
+<p class="a">(1) Partial retrain T1 only. (2) Silent fallback WARNING. (3) In-place dir overwrite. (4) Skip roll-up gates. (5) Cache masking. (6) Force-recreate reset patches. (7) JSON corrupted.</p>
+
+<p class="q">2. Vì sao WARNING vs ERROR matters?</p>
+<p class="a">WARNING không trigger alerting default. ERROR → PagerDuty → on-call phản ứng. WARNING chôn lấp trong log stream, không ai đọc → bug sống hàng tuần.</p>
+
+<p class="q">3. Multi-horizon atomicity là gì?</p>
+<p class="a">Nếu bất kỳ horizon fail (T1 OK nhưng T3 crash), xóa toàn bộ 3 artifacts của ticker đó. Không để partial retrain leave shape mismatch. Enforced trong V20 training code.</p>
+
+<p class="q">4. Cache masking sau model swap — fix?</p>
+<p class="a">Bump model_registry.version_stamp → cache key changes → old entries stale. Also DELETE FROM prediction_log WHERE recent (2 days). Force reload.</p>
+
+<p class="q">5. Meta-lesson từ V19.5 áp dụng thế nào cho LLM system?</p>
+<p class="a">Silent failure equivalent: LLM hallucinate wrong facts, user không biết. Fix: (1) Structured output + JSON schema validation (fail-loud). (2) Confidence score + threshold. (3) Retrieval citation (verifiable). (4) Human review loop cho critical decisions. (5) Monitoring hallucination rate + drift.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li><code>v20-master-execution-plan.md</code> §0 "Why V20 exists"</li>
+    <li>V19.5 shape mismatch log: 14 tickers listed <code>FPT/VNM/VCB/HPG/MSN/MWG/ACB/CTG/GAS/HDB/NVL/PLX/POW/VHM</code></li>
+    <li>V20 Slice 5 consistency cron: <code>backend/scripts/v20_consistency_report.py</code></li>
+    <li>Rollback path: <code>reports/_baselines/README_model_dirs.md</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://research.google/pubs/pub43146/">Sculley et al (2015) — Hidden Technical Debt in ML Systems</a> — classic paper</li>
+    <li>📖 Chip Huyen — <em>Designing Machine Learning Systems</em> (2022, O'Reilly)</li>
+    <li>📝 <a href="https://ml-ops.org/">MLOps.org — MLOps Principles</a></li>
+    <li>📖 Google — <a href="https://developers.google.com/machine-learning/testing-debugging/pipeline/production">Testing and Debugging in ML</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L2_5_interpretability.html">← L2.5</a>
+  <a href="L3_1_nn_backprop.html">L3.1 · Neural Networks →</a>
+</div>
+
+</div>
+</body>
+</html>

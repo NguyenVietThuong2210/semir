@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L8.1 — Agents (Production Artifact)</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 8 · Module 1</div>
+  <h1>8.1 · Agents — Production Artifact</h1>
+  <p class="subtitle">Cách agents thực sự deploy trong software dev workflow. Sub-agents, hierarchy, delegation, Claude Code agents, Cursor agents. Best practices từ 2 dự án.</p>
+  <div class="level">Level 8 · AI Artifacts · ~35 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Distinguish 3 senses of "agent" (research / framework / product)</li>
+  <li>Design sub-agent hierarchy (parent-child, delegation)</li>
+  <li>Understand Claude Code Task tool for spawn sub-agents</li>
+  <li>Apply best practices: prompt, tools, context, guardrails</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 "Agent" đa nghĩa bằng ngôn ngữ đời thường</div>
+<p>Từ "agent" khó vì mỗi ngành hiểu khác:</p>
+<ul>
+  <li><strong>Nhân viên bảo hiểm</strong> (agent = đại lý bán) — product agent, dạng ChatGPT có tool.</li>
+  <li><strong>Agent điện ảnh</strong> (agent = đại diện) — user proxy, thay user thực hiện task.</li>
+  <li><strong>FBI agent</strong> (agent = thực thi) — autonomous, có quyền quyết định.</li>
+</ul>
+<p>AI cũng vậy: research agent (Sutton RL, autonomous entity) ≠ framework agent (LangGraph node có LLM+tool) ≠ product agent (Cursor, ChatGPT). Khi nghe từ "agent" hỏi luôn: bạn nói nghĩa nào?</p>
+</div>
+
+<h2>1. Ba nghĩa của "Agent"</h2>
+
+<table>
+<tr><th>Sense</th><th>Definition</th><th>Example</th></tr>
+<tr><td><strong>Research</strong></td><td>Autonomous system perceive-act-learn</td><td>RL policy, robot navigation</td></tr>
+<tr><td><strong>Framework</strong></td><td>LLM + tools + loop</td><td>ReAct, LangChain agent, AutoGPT</td></tr>
+<tr><td><strong>Product</strong></td><td>Specialized assistant với domain knowledge</td><td>Cursor Composer, Claude Code, Devin</td></tr>
+</table>
+
+<p>Curriculum L6 focus framework sense. Module này focus production/product sense.</p>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 3 nghĩa "Agent" head-to-head (đọc SAU section 1)</div>
+
+<table>
+<tr><th></th><th>Product Agent</th><th>Framework Agent</th><th>Research Agent</th></tr>
+<tr><td><strong>Nghĩa</strong></td><td>End-user product</td><td>Building block trong code</td><td>Autonomous entity với goal</td></tr>
+<tr><td><strong>Ví dụ</strong></td><td>ChatGPT, Claude.ai, Cursor, Devin</td><td>LangGraph node, AutoGen agent, CrewAI crew</td><td>Sutton RL agent, AGI research</td></tr>
+<tr><td><strong>Ai làm ra?</strong></td><td>Company (Anthropic/OpenAI)</td><td>Developer</td><td>Research lab (DeepMind, OpenAI)</td></tr>
+<tr><td><strong>Autonomy level</strong></td><td>Medium (tool + reasoning)</td><td>Configurable</td><td>High (long-horizon, planning, self-mod)</td></tr>
+<tr><td><strong>Interaction</strong></td><td>Chat với end-user</td><td>Nhận input, return output trong pipeline</td><td>Sensor + actuator loop trong env</td></tr>
+<tr><td><strong>Memory</strong></td><td>Conversation-level</td><td>State managed by framework</td><td>Long-term, self-updating</td></tr>
+<tr><td><strong>Goal setting</strong></td><td>User sets via prompt</td><td>Developer sets task</td><td>Reward function, intrinsic motivation</td></tr>
+<tr><td><strong>Time horizon</strong></td><td>1 session (~15 min)</td><td>Task duration (~5 min)</td><td>Days/months/years</td></tr>
+<tr><td><strong>Deployment</strong></td><td>Public / SaaS</td><td>Trong app code</td><td>Sandboxed lab</td></tr>
+<tr><td><strong>Safety concerns</strong></td><td>Content filter, PII</td><td>Bug, cost overrun</td><td>Alignment (L8.5)</td></tr>
+<tr><td><strong>Interview relevance</strong></td><td>UX design questions</td><td>System design questions</td><td>Safety, philosophy</td></tr>
+</table>
+
+<h4>Ví dụ vòng đời "agent" trong 3 nghĩa</h4>
+<pre><code>Product Agent:
+User opens Claude.ai → asks question → gets answer → closes tab
+Lifetime: 5-30 minutes. Autonomy: reactive.
+
+Framework Agent (LangGraph):
+def engineer_node(state):
+    response = llm.invoke(state["messages"])
+    return {"messages": [response]}
+
+graph.add_node("engineer", engineer_node)
+Lifetime: 1 task (~1 minute). Autonomy: configured.
+
+Research Agent (Sutton RL):
+class Agent:
+    def act(self, state) -> action
+    def observe(self, reward, next_state) -> update_policy
+
+Lifetime: episodes months long. Autonomy: fully self-directed.
+</code></pre>
+
+<h4>Cạm bẫy phổ biến khi nói "agent"</h4>
+<p><strong>Interviewer</strong>: "Design a multi-agent system"
+<br>Bạn: "Agent nào? Product agent như Cursor? Framework agent nodes? Research agent RL?"
+<br>Interviewer thường muốn <em>framework agent</em> (LangGraph/AutoGen) trong context system design. Không dám hỏi lại = design sai. Luôn clarify.</p>
+</div>
+
+<h2>2. Agent trong software dev workflow</h2>
+
+<h3>2.1 Category</h3>
+<ul>
+  <li><strong>Code completion agents</strong>: Copilot, Cursor Tab, Codeium</li>
+  <li><strong>Chat-mode agents</strong>: Cursor Chat, Claude in IDE, ChatGPT + Code Interpreter</li>
+  <li><strong>Autonomous agents</strong>: Devin, SWE-agent, OpenDevin, Aider</li>
+  <li><strong>Orchestrated agents</strong>: Claude Code, Cursor Composer, Continue.dev</li>
+  <li><strong>Custom sub-agents</strong>: your own via Claude Task tool</li>
+</ul>
+
+<h2>3. Sub-agents + delegation</h2>
+
+<div class="callout">
+<div class="label">Ý tưởng</div>
+<p>Main agent nhận task lớn. Spawn sub-agents với narrower context để handle sub-tasks. Kết quả tổng hợp lên main. Giống human dev team: TL delegate to developer, developer delegate to specialist.</p>
+</div>
+
+<h3>Claude Code Task tool</h3>
+
+<pre><code># Main Claude agent nhận: "Build authentication feature"
+# Spawn sub-agents:
+
+Task(
+    subagent_type="Explore",           # research agent
+    description="Find existing auth code",
+    prompt="Search codebase for existing authentication logic. Report file paths + patterns used."
+)
+
+Task(
+    subagent_type="Plan",               # architect agent
+    description="Design new auth flow",
+    prompt="Given existing patterns [ctx], design new JWT auth flow. List files to change."
+)
+
+# After both return, main agent implement based on their reports.
+</code></pre>
+
+<h3>Isolation benefits</h3>
+
+<ul>
+  <li><strong>Context protection</strong>: main agent context không bị polluted bởi search results 10k lines</li>
+  <li><strong>Specialization</strong>: sub-agent prompt tuned cho task (Explore rất tốt tại grep/find, không tốt code write)</li>
+  <li><strong>Parallelization</strong>: 3 sub-agents chạy đồng thời</li>
+  <li><strong>Cost/quality tradeoff</strong>: sub-agent dùng cheaper model (Haiku) cho simple tasks</li>
+</ul>
+
+<h3>Pitfalls</h3>
+
+<div class="callout warn">
+<ol>
+  <li><strong>Cold start</strong>: sub-agent không có main's chat history — phải hoàn chỉnh brief trong prompt</li>
+  <li><strong>Verify-not-trust</strong>: sub-agent report có thể inaccurate (LLM hallucinate). Main phải verify (đọc file thay chỉ trust summary)</li>
+  <li><strong>Cascading errors</strong>: sub-agent fail → main không biết root cause</li>
+  <li><strong>Cost explosion</strong>: nested sub-agents (grandchild) → token cost multiply</li>
+</ol>
+</div>
+
+<h2>4. Anatomy of a production agent</h2>
+
+<pre><code>Agent = System Prompt + Tools + Model + Loop Logic + Guardrails
+
+┌── System Prompt ──────────────────────────────────────┐
+│  Role, persona, constraints, output format           │
+│  E.g., "You are a senior code reviewer. Output JSON."│
+└───────────────────────────────────────────────────────┘
+
+┌── Tools ──────────────────────────────────────────────┐
+│  Read, Write, Bash, Grep, WebFetch, custom MCP tools │
+│  Each with JSON schema, description, safety rules    │
+└───────────────────────────────────────────────────────┘
+
+┌── Model ──────────────────────────────────────────────┐
+│  Claude Opus 4.7 / GPT-4o / Llama-3.1-405B           │
+│  Choose based on capability + cost + latency         │
+└───────────────────────────────────────────────────────┘
+
+┌── Loop Logic ─────────────────────────────────────────┐
+│  While not done + iter &lt; max:                        │
+│    LLM call → parse output → execute tools →         │
+│    → observe → feed back → next iteration            │
+└───────────────────────────────────────────────────────┘
+
+┌── Guardrails ─────────────────────────────────────────┐
+│  Max iterations, budget cap, forbidden actions,      │
+│  human approval for destructive ops, audit log       │
+└───────────────────────────────────────────────────────┘
+</code></pre>
+
+<h2>5. Best practices — Anthropic 2024 recommendations</h2>
+
+<div class="callout success">
+<div class="label">Từ "Building Effective Agents" paper</div>
+<ol>
+  <li><strong>Simplicity first</strong>: single LLM call > chained agent nếu đủ. Justify complexity.</li>
+  <li><strong>Show your work</strong>: agent explicit trace of thought → debug, audit</li>
+  <li><strong>Test tool-use rigorously</strong>: tool errors most common failure. Handle gracefully.</li>
+  <li><strong>Human in the loop for critical</strong>: destructive/expensive/irreversible → require approval</li>
+  <li><strong>Measure end-to-end</strong>: not just LLM call accuracy — task completion rate</li>
+</ol>
+</div>
+
+<h2>6. Case study — AI Orchestrator engineer agent</h2>
+
+<div class="example-box">
+<div class="title">Engineer agent anatomy</div>
+<p>File: <code>agents/engineer.py</code> (346 lines)</p>
+<pre><code>System prompt (~600 words):
+- Role: Senior software engineer implementing task from spec
+- Constraints: Follow existing code style, don't break tests
+- Output format: &lt;submit&gt; block với artifact_paths: {logical_name: path} dict
+- Tools available: Read, Write, Edit, Bash, Grep
+
+Loop:
+1. Read task from kanban board (state.current_task_index)
+2. Load context: spec + codebase summary + prior agent reports
+3. Call backend (Claude Code CLI or API)
+4. Parse &lt;submit&gt; block: artifact_paths dict
+5. Update kanban card: column='in_review', artifacts=artifact_paths
+6. Return report
+
+Guardrails:
+- Timeout 600s (10 min) — engineer nằm trong nhóm "long-timeout agents"
+  cùng deploy/qa/qa_verify/spec_analyze/task_decompose (agent ngắn hơn: 300s)
+- Files write restricted to project dir
+- Deploy agent (agents/deploy.py) làm smoke-test + health-check, không tự động git push
+</code></pre>
+</div>
+
+<h2>7. Anti-patterns bạn cần tránh</h2>
+
+<div class="callout danger">
+<ol>
+  <li><strong>Kitchen-sink prompt</strong>: 5000-word system prompt cover everything → LLM confused</li>
+  <li><strong>Free-form agent goal</strong>: "figure it out" → drift, no closure. Fix: DoD (Definition of Done) explicit.</li>
+  <li><strong>Nested infinite delegation</strong>: sub-agent spawn sub-sub-agent... 10 levels deep. Fix: max depth.</li>
+  <li><strong>Blind trust output</strong>: agent claim success without verification. Fix: verify observation.</li>
+  <li><strong>Non-idempotent actions</strong>: retry ops with side effects (email send, DB write). Fix: idempotency keys.</li>
+  <li><strong>Cost blackhole</strong>: agent loop expensive tools. Fix: budget cap.</li>
+</ol>
+</div>
+
+<h2>8. Emerging: agentic RAG</h2>
+
+<pre><code># Traditional RAG: fixed retrieve → LLM answer
+# Agentic RAG: LLM iteratively decide next retrieval based on partial answer
+
+Loop:
+1. Initial query → retrieve top-K
+2. LLM: "Do I have enough info? What else needed?"
+3. If gap: reformulate query → retrieve more
+4. Aggregate all chunks → final answer
+
+# Empirically higher accuracy cho multi-hop questions
+# But: 3-10× more LLM calls + retrieval calls
+# Trade-off: quality vs cost
+</code></pre>
+
+<h2>9. Future — self-improving agents</h2>
+
+<div class="callout">
+<div class="label">4 hướng agent "tự học" — giải thích ngắn gọn + ví dụ</div>
+<ul>
+  <li><strong>Reflexion loop</strong> (L6.1): agent tự phê bình lỗi của chính mình NGAY TRONG session (không cần retrain weight). VD: agent viết code → test fail → agent tự đọc error message → tự sửa → chạy lại, không cần user nhắc lần 2. Khác fine-tuning: chỉ đổi prompt/context bước sau, model weight không đổi.</li>
+  <li><strong>Memory</strong> (Letta, MemGPT): lưu bài học <em>xuyên session</em> — session hôm nay agent học "user thích code có docstring", ghi vào memory file → session mai đọc lại, không phải khám phá lại từ đầu. Khác Reflexion: Reflexion sống trong 1 session, Memory sống qua nhiều session.</li>
+  <li><strong>Self-verify</strong>: agent tự sinh test case cho chính output của mình trước khi submit (giống dev viết unit test cho code họ vừa viết) — giảm case "agent nghĩ đúng" nhưng thực ra sai vì chưa ai kiểm tra.</li>
+  <li><strong>Curriculum learning</strong>: cho agent luyện task dễ trước, khó dần (giống dạy trẻ con cộng trừ trước rồi mới nhân chia) — áp dụng khi train/fine-tune agent policy (research sense, L8.1 §1), không chỉ prompt engineering.</li>
+</ul>
+<p><strong>Cạm bẫy hay nhầm</strong>: Reflexion và Self-verify nghe giống nhau nhưng khác thời điểm — Reflexion sửa SAU khi thấy lỗi thực tế (reactive), Self-verify tạo test TRƯỚC khi nộp kết quả (proactive). Cả 4 kỹ thuật này đều KHÔNG phải "agent tự cập nhật model weights" — đó là RL fine-tuning, tốn kém và rủi ro hơn nhiều (liên hệ L8.5 mesa-optimization).</p>
+</div>
+
+<h2>9.5 · Agent artifacts — cái gì persist giữa turns?</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🧠 Deep-dive — Memory, Todos, Plans (Claude Code artifacts)</div>
+
+<p><strong>Câu hỏi</strong>: Khi agent chạy 30 phút, cái gì "còn lại" sau khi session tắt? Đây là điểm khác nhau cốt lõi giữa Claude Code (agent) vs Claude Skill (playbook on-demand).</p>
+
+<h4>3 loại artifact agent persist</h4>
+<table>
+<tr><th>Artifact</th><th>Cách tạo</th><th>Sống ở đâu</th><th>Life-time</th><th>Ví dụ VN</th></tr>
+<tr><td><strong>Memory</strong> (CLAUDE.md, user memory)</td><td>Auto-write bằng /memory command hoặc user rule feedback</td><td><code>~/.claude/projects/&lt;proj&gt;/memory/MEMORY.md</code></td><td>Cross-session, permanent (đến khi user xóa)</td><td>"Luôn `docker system prune -f` trước build" — feedback rule persists mãi</td></tr>
+<tr><td><strong>Todos</strong> (TodoWrite tool)</td><td>Agent tự viết in-session</td><td>Ephemeral trong session context</td><td>Session-scoped, mất khi tắt</td><td>"1. Đọc db.py, 2. Fix null-guard, 3. Chạy test" — todo agent tự quản lý</td></tr>
+<tr><td><strong>Plans</strong> (Plan Mode)</td><td>Agent output plan, user approve trước khi execute</td><td>Chat transcript</td><td>Conversation-scoped</td><td>"Plan: refactor collect_and_build.py thành 3 modules. OK?"</td></tr>
+</table>
+
+<h4>Skill vs Agent — distinction chính xác</h4>
+<pre><code>Claude Skill (.claude/skills/xxx/SKILL.md):
+  = Static playbook + KB + scripts
+  = Loaded ON-DEMAND khi user trigger ("/daily-investor-report")
+  = No memory across invocations (mỗi lần chạy lại là fresh)
+  = Reusable across users, git-versioned
+
+Claude Agent (Claude Code session):
+  = Running loop với LLM + tools + context window
+  = HAS memory (CLAUDE.md), HAS todos, HAS plans
+  = Personal to user + project
+  = Ephemeral session nhưng có persistent layers (memory/)
+
+→ Skill = "công thức phở" (giấy). Agent = "đầu bếp" (người) đọc công thức + nhớ khách quen.
+</code></pre>
+
+<h4>Permission model (Claude Code)</h4>
+<p>Mỗi tool call gate qua permission system, config trong <code>.claude/settings.json</code>:</p>
+<pre><code>{
+  "permissions": {
+    "allow": ["Bash(git status)", "Bash(git diff:*)", "Read", "Grep"],
+    "deny":  ["Bash(rm -rf:*)", "Bash(git push --force:*)"],
+    "ask":   ["Bash(docker:*)", "Write"]
+  }
+}
+</code></pre>
+<ul>
+  <li><strong>allow</strong>: auto-execute, no prompt (VD: read-only ops)</li>
+  <li><strong>ask</strong>: prompt user mỗi lần (default cho destructive)</li>
+  <li><strong>deny</strong>: hard block (không thể override)</li>
+  <li>Rules KHÔNG cascade theo scope (global/user/project) như settings thường. allow/deny/ask lists <strong>merge across mọi scope</strong> — resolve theo category-order cố định: <strong>deny &gt; ask &gt; allow</strong>, bất kể rule đến từ scope nào.</li>
+</ul>
+
+<h4>Anti-pattern VN scenario</h4>
+<p><strong>PredictStock case</strong>: Agent chạy backtest, tạo file <code>reports/tmp_experiment.json</code>. Session tắt. Ngày mai agent mới không biết file này tồn tại → chạy lại tốn 20 phút compute.
+<br><strong>Fix</strong>: Ghi note vào CLAUDE.md ("Cache backtests ở reports/_cache/") + file naming convention persistent. Đây là why memory > todos cho cross-session state.</p>
+
+<h4>Interview Q&A (thêm 3 câu)</h4>
+<ol>
+  <li><strong>Q: Skill có memory không?</strong> A: Không native. Skill = static package. Muốn có memory phải viết script tự-persist state ra file (VD: <code>reports/lessons_learned.jsonl</code> trong daily-investor-report). Đây là workaround, không phải feature.</li>
+  <li><strong>Q: Vì sao TodoWrite thay vì cho LLM tự nhớ trong context?</strong> A: Long context degrade attention (lost-in-the-middle, L9.1). Structured todos = separate scratchpad LLM ref explicitly, không compete với reasoning tokens.</li>
+  <li><strong>Q: Permission cascade — user override project được không?</strong> A: Không phải scope-cascading. Rules merge across mọi scope, resolve theo category cố định deny &gt; ask &gt; allow — nghĩa là bất kỳ "ask" rule nào (ở scope nào) cũng được check trước "allow" rule, không phải vì "project override user".</li>
+</ol>
+</div>
+
+<h2>10. Interview cheat sheet</h2>
+
+<div class="callout">
+<div class="label">Common questions</div>
+<ol>
+  <li>"When would you NOT use an agent?" → Simple deterministic task, high-stakes without HITL, cost-sensitive high volume</li>
+  <li>"Sub-agent vs main agent — how partition?" → Sub-agent for specialized/parallel/context-heavy tasks; main for orchestration + user-facing decisions</li>
+  <li>"How debug an agent?" → LangSmith trace + step through iterations + inspect tool calls + verify tool outputs match LLM's belief</li>
+  <li>"How measure agent quality?" → Task completion rate, cost per task, human satisfaction, avg iterations, tool error rate</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. 3 nghĩa của "agent" — kể + ví dụ.</p>
+<p class="a">Research: RL policy autonomous. Framework: LLM + tools + loop (ReAct). Product: specialized assistant (Cursor, Devin).</p>
+
+<p class="q">2. Sub-agent isolation — 4 lợi ích?</p>
+<p class="a">(1) Context protection main agent. (2) Specialization (sub-agent prompt tuned). (3) Parallelize. (4) Cost — Haiku cho sub, Opus cho main.</p>
+
+<p class="q">3. Claude Code Task tool — vs LangGraph subgraph khác gì?</p>
+<p class="a">Task tool = spawn inline within Claude Code CLI runtime, no persistent state. LangGraph subgraph = compiled part of parent graph, share state, checkpoint. Task tool cho lightweight delegation, subgraph cho structured multi-step.</p>
+
+<p class="q">4. Agentic RAG vs traditional RAG — when justify?</p>
+<p class="a">Multi-hop questions (need chain of retrievals). Complex analytical tasks. Trade-off: 3-10× cost. Traditional OK cho single-hop factual QA.</p>
+
+<p class="q">5. Agent claim "task done" nhưng tests fail. Root cause categories?</p>
+<p class="a">(1) Hallucinate success (didn't run tests). (2) Ran subset of tests. (3) Fixed 1 test broke another. (4) Tool error (bash fail returned confusing output). Fix: main agent verify — actually run tests + inspect output, không trust sub-agent report.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>ai_orchestrator: <code>agents/engineer.py</code> 346 lines — production agent code</li>
+    <li>Claude Code Task tool docs: <a href="https://docs.anthropic.com/en/docs/claude-code/">docs.anthropic.com/claude-code</a></li>
+    <li>Anthropic: <a href="https://www.anthropic.com/research/building-effective-agents">Building Effective Agents</a></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📝 <a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2308.11432">Survey of Large Language Model Agents (Wang 2023)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2410.02703">A Survey on Agentic RAG (Singh 2024)</a></li>
+    <li>📖 <a href="https://github.com/langchain-ai/langgraph/tree/main/examples/multi_agent">LangGraph multi-agent examples</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="../index.html">← Curriculum</a>
+  <a href="L8_2_skills.html">L8.2 · Skills →</a>
+</div>
+
+</div>
+</body>
+</html>

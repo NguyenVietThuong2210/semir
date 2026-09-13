@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L4.3 — LLM Pretraining</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 4 · Module 3</div>
+  <h1>4.3 · LLM Pretraining</h1>
+  <p class="subtitle">Causal LM (GPT), Masked LM (BERT), Denoising (T5). Chinchilla scaling law. Data mix + compute budget cho GPT-3, LLaMA, Claude.</p>
+  <div class="level">Level 4 · LLM · ~40 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>3 pretraining objectives + which model dùng</li>
+  <li>Chinchilla scaling law: data ∝ params</li>
+  <li>Compute budget: GPU-hours cho GPT-3 vs LLaMA</li>
+  <li>Data mixing: web + code + books + Wikipedia</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Pretraining bằng ngôn ngữ đời thường</div>
+<p><strong>CLM (GPT) = luyện văn bằng cách điền vào chỗ trống cuối câu</strong>: "Hôm nay trời ___" → phải đoán "đẹp/mưa/nắng". Làm 100 tỷ câu như vậy → học được cả ngữ pháp + kiến thức thế giới. 1 nhiệm vụ đơn giản nhưng scale up = magic.</p>
+<p><strong>MLM (BERT) = điền chỗ trống giữa câu</strong>: "Hôm ___ trời đẹp" → "nay". Cần nhìn cả 2 bên → hiểu bidirectional. Tốt cho classification/NER nhưng không sinh văn được.</p>
+<p><strong>Denoising (T5) = viết lại câu bị hỏng</strong>: "Hôm ___ trời ___" → "Hôm nay trời đẹp". Kết hợp cả 2 lợi thế trên.</p>
+<p><strong>Vì sao chỉ 1 nhiệm vụ mà học được cả nhân loại?</strong> Để đoán chữ kế tiếp giỏi, model buộc phải hiểu ngữ pháp, logic, kiến thức, cảm xúc, code, math... "Emergent capabilities" khi scale đủ lớn.</p>
+</div>
+
+<h2>1. Causal Language Modeling (CLM) — GPT family</h2>
+
+<pre><code>Given: "The cat sat on the"
+Predict: "mat"
+
+# Loss: cross-entropy of next token prediction
+# Each position i, predict token i+1 using positions 1..i
+# Causal mask ensures no future leak
+
+Loss = Σ_t -log P(x_t | x_1..x_{t-1})
+</code></pre>
+
+<p>Simple, scalable, unsupervised. Nhược: chỉ nhìn past, không thấy bidirectional context.</p>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Vì sao "đoán chữ kế tiếp" tạo ra trí thông minh? (giải thích từng bước)</div>
+
+<p><strong>Câu hỏi nền tảng</strong>: GPT/Claude được train chỉ 1 task cực đơn giản — <em>đoán chữ kế tiếp</em>. Vậy tại sao chúng làm được toán, viết code, dịch thuật, kể chuyện? Không có ai dạy chúng "đây là code", "đây là toán". Câu trả lời sâu hơn nhiều người nghĩ.</p>
+
+<p><strong>Bước 1 — Hiểu "compress = hiểu"</strong>: Shannon 1948 chứng minh: nén dữ liệu tối ưu = mô hình xác suất tối ưu. Nếu bạn nén được 1 văn bản xuống rất nhỏ → bạn PHẢI hiểu nó. Ví dụ: nén "Thủ đô Việt Nam là ___" xuống 1 bit — bạn phải biết đáp án là "Hà Nội". Không thể lookup table (vì có vô hạn câu). Phải học <em>khái niệm</em> "quốc gia → thủ đô".</p>
+
+<p><strong>Bước 2 — Loss = pressure to compress</strong>: Cross-entropy loss của LLM = − log P(next_token). Loss thấp = model dự đoán chính xác = model "biết" continuation. Để giảm loss trên toàn bộ internet text (10 nghìn tỷ tokens), model không thể memorize (memory không đủ). Bắt buộc phải <em>abstract</em> — học pattern chung, quy luật, khái niệm.</p>
+
+<p><strong>Bước 3 — Vì sao 1 task = infinite capability?</strong> Vì "đoán chữ kế tiếp" có trong MỌI DOMAIN:</p>
+<ul>
+<li>"2 + 2 = ___" → model phải học math.</li>
+<li>"def factorial(n): if n == 0: return ___" → phải học code.</li>
+<li>"Traduire 'hello' en français: ___" → phải học translation.</li>
+<li>"Tóm tắt bài này: The company reported...___ " → phải học summarization.</li>
+<li>"Nếu A là bố B, và B là bố C thì A là ___ của C" → phải học logic.</li>
+</ul>
+<p>Cùng 1 loss ép model học ALL. Không cần curriculum. Không cần labeled task data. Chỉ cần <em>đủ text</em>.</p>
+
+<p><strong>Bước 4 — Con số biết nói (emergence)</strong>: Wei et al 2022 tổng hợp hiện tượng emergence qua nhiều model; đường cong MMLU "nhảy vọt" rõ nhất quan sát được ở PaLM (Chowdhery et al 2022) theo model size:</p>
+<ul>
+<li>8B params: MMLU ~25% (≈ random chọn 4 đáp án)</li>
+<li>62B params: ~55% (vẫn còn xa random nhưng chưa "thức tỉnh")</li>
+<li>540B params: <strong>NHẢY VỌT lên ~69%</strong></li>
+</ul>
+<p><em>Lưu ý hay nhầm</em>: GPT-3 175B — dù cùng thời — thực đo MMLU chỉ ~43.9% theo Hendrycks et al., KHÔNG phải 70% như đôi khi bị gán nhầm cho nó; đường cong nhảy vọt rõ rệt là đặc trưng của PaLM, không phải GPT-3.</p>
+<p>Không phải scale linear. Có <strong>phase transition</strong> — dưới ngưỡng thì model chỉ babble, trên ngưỡng thì "thức tỉnh" reasoning. Hiện tượng này gọi là <em>emergence</em>. Không ai lập trình. Nó tự xuất hiện.</p>
+
+<p><strong>Analogy đời thực — học sinh nghèo tự học</strong>: Một đứa trẻ ở làng, không được đến trường formal, nhưng vô tình có access tất cả sách của thư viện quốc gia. Nó bắt đầu đọc. Không ai dạy "đây là toán học, đây là văn học". Nó chỉ đọc và cố hiểu câu tiếp theo. Sau 10 năm đọc 10 nghìn tỷ cuốn → nó biết toán, biết văn, biết code, biết dịch. <em>Không phải vì có curriculum — mà vì đọc đủ nhiều thì hiểu đủ sâu</em>. Đây chính xác là cách LLM học.</p>
+
+<p><strong>Vì sao insight này hiếm ai hiểu?</strong> Vì sản phẩm cuối trông "magic" — chat với GPT/Claude, model trả lời tự nhiên như người. Người ta nghĩ có architecture đặc biệt, dataset chuyên biệt, kỹ thuật bí mật. Sự thật đơn giản khủng khiếp: <strong>1 loss + đủ data + đủ params = intelligence emerges</strong>. Đây là insight cốt lõi mà OpenAI đã bet vào 2019 và thắng.</p>
+
+<p><strong>Chinchilla law — chi tiết vì sao model "quá to" cũng tệ</strong>: DeepMind 2022 nghiên cứu: cùng compute budget X, chọn params N và data tokens D thế nào cho optimal? Kết luận: <strong>D ≈ 20 × N</strong>. Ví dụ:</p>
+<ul>
+<li>GPT-3: 175B params, chỉ train 300B tokens → D/N = 1.7 (thiếu data trầm trọng!)</li>
+<li>Chinchilla: 70B params, train 1.4T tokens → D/N = 20 ✅</li>
+<li>Kết quả benchmark: <strong>Chinchilla 70B đánh bại GPT-3 175B</strong> dù nhỏ hơn 2.5×.</li>
+</ul>
+<p>Bài học: "cứ to hơn" không đúng. Nếu không có đủ data để feed thì tăng params vô nghĩa. Đây là why Llama-3, DeepSeek-V3 2024-2025 investment lớn vào <em>data quality + quantity</em>, không chỉ params.</p>
+
+<p><strong>Hậu quả nếu không hiểu Chinchilla</strong>: Bạn train custom LLM 30B params trên 50B tokens (D/N = 1.7). Cost triệu đô. Kết quả model chỉ ngang với Llama-7B (D/N ≈ 20 với 140B tokens). Waste 90% budget. Ai hiểu Chinchilla sẽ train 7B trên 140B tokens → same quality, 1/4 cost.</p>
+
+<p><strong>Khi cơ chế vỡ — reversal curse (Berglund 2023)</strong>: Model train "A là con của B" (một chiều) không tự suy được "B là mẹ của A". Vì CLM chỉ predict forward — không có pressure để học ngược. Test cụ thể: model biết "Tom Cruise là con của Mary Lee Pfeiffer" (fact trong training data), nhưng khi hỏi "Mary Lee Pfeiffer có con là ai?" — model không biết. Điều này cho thấy: emergence bị GIỚI HẠN bởi task structure của pretraining. Không có magic — có mechanism, có edge case.</p>
+
+<p><strong>Take-away cho interview</strong>: Khi nào bạn trả lời "vì sao LLM thông minh":</p>
+<ul>
+<li>Câu trả lời tệ: "Vì nó có nhiều params và train nhiều data."</li>
+<li>Câu trả lời trung: "Vì next-token prediction ép model học nhiều pattern."</li>
+<li>Câu trả lời SENIOR: "Vì compression = understanding (Shannon). Loss thấp trên corpus lớn buộc model học abstract concepts. Emergence xảy ra ở phase transition ~62B params (Wei 2022). Chinchilla law nói optimal D/N=20. LLM không phải magic, là bài toán tối ưu compression scaled up."</li>
+</ul>
+</div>
+
+<h2>2. Masked Language Modeling (MLM) — BERT family</h2>
+
+<pre><code>Input:  "The [MASK] sat on the mat"
+Output: "cat"
+
+# Randomly mask 15% tokens, predict masked
+# Bidirectional attention: see all context (except masked)
+</code></pre>
+
+<h3>BERT trick 15% rule</h3>
+<pre><code>Của 15% tokens chọn mask:
+- 80% → [MASK]
+- 10% → random token
+- 10% → unchanged
+
+# Vì sao? Test time không có [MASK]. Model phải học predict cả unmasked
+# context. 10% random buộc model không assume token đúng.
+</code></pre>
+
+<h2>3. Span Corruption (T5)</h2>
+
+<pre><code>Input:  "The &lt;X&gt; sat &lt;Y&gt; mat"
+Output: "&lt;X&gt; cat &lt;Y&gt; on the &lt;/s&gt;"
+
+# Mask consecutive spans (không single tokens)
+# Encoder-decoder: encoder thấy corrupted, decoder generate replaced tokens
+</code></pre>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Teacher forcing, CLM/MLM/Prefix-LM math, FLOPs = 6·N·D "vì sao 6"</div>
+
+<p><strong>1. Teacher forcing — kỹ thuật train autoregressive parallel</strong></p>
+<p>Naive: train GPT sinh câu 1 token 1 lần → sequential → chậm.
+<br>Teacher forcing: feed GROUND-TRUTH prefix, model predict token kế tiếp TẠI MỌI VỊ TRÍ trong 1 forward pass. Causal mask đảm bảo position t chỉ nhìn ≤ t.</p>
+<pre><code>Input:  ["The", "cat", "sat", "on", "the"]  (positions 0..4)
+Target: ["cat", "sat", "on", "the", "mat"]  (shift left 1)
+
+Forward 1 lần → logits shape (5, vocab)
+Loss = Σ_{t=0..4} CE(logits[t], target[t]) / 5
+
+Vs naive sequential: 5× nhanh hơn khi train (parallel qua seq).
+Nhưng inference vẫn sequential (không có ground truth) — đây là "exposure bias":
+  model train thấy toàn ground truth, test phải xử lý own errors.</code></pre>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>2. CLM vs MLM vs Prefix-LM — bảng so sánh objective + attention pattern</strong></p>
+<table>
+<tr><th></th><th>CLM (GPT)</th><th>MLM (BERT)</th><th>Prefix-LM (T5, UL2)</th></tr>
+<tr><td>Loss</td><td>Σ −log P(x_t | x_&lt;t)</td><td>Σ_{m∈masked} −log P(x_m | x_visible)</td><td>Σ_{t∈target} −log P(x_t | prefix, x_&lt;t)</td></tr>
+<tr><td>Attention mask</td><td>Causal (tam giác)</td><td>Full bidirectional</td><td>Prefix full, target causal</td></tr>
+<tr><td>Utility per sample</td><td>100% tokens supervise</td><td>15% tokens supervise</td><td>~50% tokens supervise</td></tr>
+<tr><td>Generation</td><td>Native (autoregressive)</td><td>Không (chỉ fill blank)</td><td>Encoder-decoder</td></tr>
+<tr><td>Sample efficiency</td><td>1× (baseline)</td><td>~0.15× (mask 15%)</td><td>~0.5×</td></tr>
+</table>
+<p><strong>Insight</strong>: CLM 100% token contribute loss → sample efficiency cao nhất → scale tốt nhất → why GPT thắng BERT ở scale > 10B.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>3. Vì sao FLOPs = 6 · N · D — chia từng thành phần</strong></p>
+<p>N = số params, D = số tokens train. Với mỗi token forward + backward:</p>
+<pre><code>Forward pass mỗi token qua matrix multiply W ∈ ℝ^(m×n):
+  y = W · x  →  2 · m · n FLOPs (m·n multiply + m·n add)
+  → cho toàn model N params, forward = 2 · N · D FLOPs
+
+Backward pass — 2 gradient cần tính:
+  ∂L/∂x = W^T · ∂L/∂y  → 2 · m · n FLOPs
+  ∂L/∂W = ∂L/∂y · x^T  → 2 · m · n FLOPs
+  → backward = 4 · N · D FLOPs
+
+Total = forward (2) + backward (4) = 6 · N · D</code></pre>
+
+<p><strong>Ví dụ Llama-70B, D = 2T tokens</strong>:
+<br>FLOPs = 6 × 70e9 × 2e12 = 8.4 × 10²³
+<br>H100 = 989 TFLOPS (fp16, dense) = 10¹⁵ ops/sec
+<br>Perfect utilization time = 8.4e23 / 10¹⁵ = 8.4e8 sec = 26.6 GPU-năm
+<br>Thực tế MFU (Model FLOPs Utilization) ~ 40% → 66 GPU-năm → 1024 H100 × 24 ngày. Match với báo cáo Meta.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>4. Chinchilla optimal — derivation intuition</strong></p>
+<p>Hoffmann 2022 fit loss surface: <code>L(N, D) = A/N^α + B/D^β + E</code>. Với α ≈ β ≈ 0.34. Fixed compute C = 6·N·D → minimize L → <code>N_opt ∝ C^0.5</code>, <code>D_opt ∝ C^0.5</code> → <strong>N và D scale cùng tốc độ</strong> → D/N ≈ 20 (empirical constant).</p>
+
+<p><strong>Ý nghĩa từng số hạng</strong>: <code>A/N^α</code> = phần loss do model "quá nhỏ" (thiếu capacity, giảm khi N tăng). <code>B/D^β</code> = phần loss do model "chưa thấy đủ data" (giảm khi D tăng). <code>E</code> = "entropy sàn" — loss tối thiểu tuyệt đối mà ngay cả model vô hạn lớn + data vô hạn cũng không thể xuống thấp hơn (vì ngôn ngữ tự nhiên vốn có tính ngẫu nhiên, VD "Hôm nay trời ___" có nhiều đáp án hợp lệ đúng ngữ pháp).</p>
+
+<p><strong>Vì sao tồn tại 1 điểm tối ưu duy nhất — minh hoạ bằng số đơn giản hoá (illustrative, không phải hằng số chính xác của paper)</strong>: giả sử A=10, B=45, α=β=0.5 (căn bậc 2, dễ tính tay), compute cố định C = 6·N·D → D = C/(6N). Thay vào loss:</p>
+<pre><code>L(N) = A/√N + B·√(6N/C) = 10/√N + 45·√(6N/C),   C = 6×10²² (cố định)
+
+# Giải dL/dN = 0 → N* = (A/B)·√(C/6) = (10/45)·10¹¹ ≈ 2.22×10¹⁰
+#              → D* = C/(6N*) ≈ 4.5×10¹¹  →  D*/N* ≈ 20.3  (khớp con số thật D/N≈20!)
+
+# Thử 3 điểm N quanh N* để thấy đây THẬT SỰ là đáy (không phải random):
+N = 1×10¹¹ (D/N=1, "cân bằng ngây thơ" — giống lỗi GPT-3 quá nhiều params, ít data):
+  L = 10/√1e11 + 45·√(6e11/6e22) ≈ 0.0000316 + 0.0001423 ≈ 1.739×10⁻⁴
+
+N = 2.22×10¹⁰ = N* (D/N≈20 — điểm Chinchilla tối ưu):
+  L = 10/√2.22e10 + 45·√(6·2.22e10/6e22) ≈ 0.0000671 + 0.0000671 ≈ 1.342×10⁻⁴  ← THẤP NHẤT
+
+N = 1×10¹⁰ (D/N=100, quá nghiêng về data, model quá nhỏ):
+  L = 10/√1e10 + 45·√(6e10/6e22) ≈ 0.0001000 + 0.0000450 ≈ 1.450×10⁻⁴
+
+# → L(N*) = 1.342e-4 THẤP HƠN cả 2 điểm lân cận (1.739e-4 và 1.450e-4) → xác nhận N*
+#   đúng là đáy. Quan sát đẹp: TẠI điểm tối ưu, 2 số hạng A/√N và B·√(6N/C) BẰNG NHAU
+#   (0.0000671 = 0.0000671) — tính chất chuẩn của bài toán tối ưu 2 số hạng cạnh tranh.</code></pre>
+<p>Điểm mấu chốt sư phạm: tỷ lệ <code>D/N</code> tối ưu = <code>(B/A)²</code> (suy ra từ đạo hàm) — không phải hệ số tùy ý. Với α=β, nếu hệ số B ("giá" của việc thiếu data) lớn hơn A ("giá" của việc thiếu params) theo hệ số ~4.5× thì optimum lệch về phía D gấp (4.5)²≈20× — đúng bản chất finding thật của Hoffmann 2022: chi phí thực đo cho "thiếu 1 token" đắt hơn nhiều so với trực giác thông thường, nên các model pre-Chinchilla (GPT-3, Gopher) đều bị under-trained.</p>
+
+<p><strong>Gotchas pretraining</strong>:</p>
+<ul>
+  <li><strong>Data contamination</strong>: benchmark test set leak vào training corpus → inflated scores. Kiểm bằng n-gram overlap.</li>
+  <li><strong>Loss spike</strong>: gradient norm bùng nổ ở step ngẫu nhiên → NaN. Fix: skip batch, resume checkpoint. Llama-3 spike 5-10 lần trong training.</li>
+  <li><strong>Learning rate schedule</strong>: warmup 2k steps → cosine decay → cuối = 10% peak. Không warmup = divergence.</li>
+  <li><strong>Data ordering matters</strong>: shuffle epoch nhưng cùng seed → reproducible; dedup trước shuffle để tránh cluster.</li>
+</ul>
+
+<p><strong>Numeric memory table — pretrain 32-layer 4096-dim (6.7B) trên 1T tokens</strong></p>
+<table>
+<tr><th>Component</th><th>Memory</th></tr>
+<tr><td>Model params (fp16)</td><td>13.4 GB</td></tr>
+<tr><td>Gradients (fp16)</td><td>13.4 GB</td></tr>
+<tr><td>Adam state (fp32 m, v, + fp32 master weight copy — chuẩn ZeRO 12 bytes/param, không phải chỉ 8)</td><td>80.4 GB (6.7e9 × 12 bytes)</td></tr>
+<tr><td>Activations (checkpoint on)</td><td>~20 GB (batch=8, seq=2048)</td></tr>
+<tr><td><strong>Total (không shard)</strong></td><td>~127 GB → không fit 1× A100/H100 80GB, cần ZeRO-2+</td></tr>
+<tr><td>Total FLOPs 6·N·D</td><td>4.0 × 10²² → 1 H100 · ~15 tháng (A100 chậm hơn ~3×, cần ~49 tháng)</td></tr>
+</table>
+
+<div class="callout" style="background: rgba(34,197,94,0.06); border-left-color: #22c55e; margin: 10px 0;">
+<div class="label">💡 "ZeRO-2" trong bảng trên là gì?</div>
+<p>Nếu train trên nhiều GPU theo cách "ngây thơ" (data parallel thường), MỖI GPU giữ 1 bản sao ĐẦY ĐỦ của params + gradients + Adam state (~127GB ở bảng trên) — dù chỉ xử lý 1 phần batch. Lãng phí khủng khiếp vì 127GB đó lặp lại y hệt trên từng GPU.</p>
+<p><strong>ZeRO (Zero Redundancy Optimizer, Microsoft DeepSpeed 2020)</strong> = "chia việc giữ đồ, không ai giữ full bộ". Analogy: 4 người bạn cùng thuê 1 tủ sách 100 cuốn — thay vì mỗi người mua nguyên bộ 100 cuốn (dư thừa 4×), mỗi người giữ 25 cuốn, ai cần cuốn nào thì hỏi mượn tạm lúc đó.</p>
+<ul>
+<li><strong>ZeRO-1</strong>: chỉ shard (chia nhỏ, phân tán) Adam optimizer state across GPUs — phần tốn memory nhất (80.4GB ở bảng trên).</li>
+<li><strong>ZeRO-2</strong>: shard thêm cả gradients (13.4GB) — mỗi GPU chỉ giữ 1/N phần optimizer state + gradient, tổng hợp lại khi cần update.</li>
+<li><strong>ZeRO-3</strong>: shard luôn cả params (13.4GB) — mỗi GPU chỉ giữ 1 mảnh model, "mượn" phần thiếu từ GPU khác ngay lúc forward/backward cần đến. Tiết kiệm nhất nhưng tốn network traffic nhất.</li>
+</ul>
+<p>Bảng trên dùng ZeRO-2: shard Adam state + gradients trên 2 GPU → mỗi GPU chỉ cần giữ (13.4 + 20) + (13.4+80.4)/2 ≈ 80.3GB thay vì 127GB — sát trần 1× A100/H100 80GB (gần như không còn dư cho buffer), thực tế production thường cần thêm GPU hoặc lên ZeRO-3 để có margin an toàn.</p>
+
+<p><strong>Nhìn trực tiếp — cùng model 6.7B trên 2 GPU, mỗi tầng ZeRO chia thêm 1 thành phần:</strong></p>
+<pre><code>KHÔNG ZeRO (data parallel thường) — mỗi GPU giữ FULL bản sao:
+  GPU 0: [params 13.4GB][grad 13.4GB][Adam state 80.4GB] = 107.2GB (+ activations riêng ~20GB)
+  GPU 1: [params 13.4GB][grad 13.4GB][Adam state 80.4GB] = 107.2GB (+ activations riêng ~20GB)
+                    ↑ lặp lại y hệt trên MỌI GPU — lãng phí
+
+ZeRO-1 — chỉ Adam state được CHIA đều:
+  GPU 0: [params 13.4GB][grad 13.4GB][Adam state/2 = 40.2GB] = 67.6GB (+ act ~20GB)
+  GPU 1: [params 13.4GB][grad 13.4GB][Adam state/2 = 40.2GB] = 67.6GB (+ act ~20GB)
+
+ZeRO-2 — chia thêm cả gradient (bảng trên dùng mức này):
+  GPU 0: [params 13.4GB][grad/2 = 6.7GB][Adam state/2 = 40.2GB] = 60.3GB (+ act ~20GB ≈ 80.3GB)
+  GPU 1: [params 13.4GB][grad/2 = 6.7GB][Adam state/2 = 40.2GB] = 60.3GB (+ act ~20GB ≈ 80.3GB)
+
+ZeRO-3 — chia luôn cả params (mỗi GPU chỉ giữ 1 mảnh model, "mượn" phần thiếu lúc cần):
+  GPU 0: [params/2 = 6.7GB][grad/2 = 6.7GB][Adam state/2 = 40.2GB] = 53.6GB (+ act ~20GB, + network traffic để mượn params)
+  GPU 1: [params/2 = 6.7GB][grad/2 = 6.7GB][Adam state/2 = 40.2GB] = 53.6GB (+ act ~20GB, + network traffic để mượn params)</code></pre>
+</div>
+</div>
+
+<h2>4. Chinchilla scaling law (DeepMind 2022)</h2>
+
+<p>Trước Chinchilla, common belief: bigger model = better. GPT-3 175B với 300B tokens.</p>
+
+<p>DeepMind experiment: for optimal compute, <strong>N params ~ D tokens equal</strong>. GPT-3 was under-trained. Chinchilla 70B với 1.4T tokens beat GPT-3 175B.</p>
+
+<pre><code>Optimal: N / D ≈ 20 (D = 20× N params)
+
+GPT-3:      175B params × 300B tokens = under-trained (D/N = 1.7)
+Chinchilla: 70B  params × 1.4T tokens = optimal (D/N = 20)
+LLaMA-2:    70B  params × 2T tokens   = over-trained (D/N = 28.6) — smaller model, longer train
+</code></pre>
+
+<div class="callout">
+<div class="label">Modern insight</div>
+<p>2024: inference cost matters. Meta over-trains LLaMA (D/N &gt; 20) intentionally → smaller model, cheaper serve, same quality. Compute for train = 1-time, compute for inference = ongoing → economic sweet spot D/N ≈ 25-50.</p>
+</div>
+
+<h2>5. Data mix — vì sao quan trọng</h2>
+
+<table>
+<tr><th>Source</th><th>% typical</th><th>Purpose</th></tr>
+<tr><td>Web (Common Crawl + filter)</td><td>60-70%</td><td>General knowledge, breadth</td></tr>
+<tr><td>Code (GitHub)</td><td>10-20%</td><td>Reasoning, structured output</td></tr>
+<tr><td>Books</td><td>5-10%</td><td>Long-form coherence</td></tr>
+<tr><td>Academic (arXiv)</td><td>2-5%</td><td>Technical vocabulary</td></tr>
+<tr><td>Wikipedia</td><td>2-5%</td><td>Factual accuracy</td></tr>
+<tr><td>Reddit / dialogue</td><td>2-5%</td><td>Conversational patterns</td></tr>
+</table>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Deep-dive — DoReMi (Xie et al. 2023): thay vì ĐOÁN tỉ lệ mix data, HỌC nó bằng optimization</div>
+
+<p><strong>💡 Analogy</strong>: bảng "% typical" ở mục 5 phía trên (60-70% web, 10-20% code...) là những con số CON NGƯỜI chọn bằng kinh nghiệm/thử-sai — giống 1 đầu bếp nêm gia vị "áng chừng" theo cảm giác. DoReMi giống việc thuê 1 đầu bếp PHỤ (nhỏ, rẻ, nấu thử nhanh) để LIÊN TỤC nếm và điều chỉnh tỉ lệ gia vị TRƯỚC KHI nấu nồi lớn thật (model chính, đắt tiền) — thay vì đoán tỉ lệ 1 lần rồi hy vọng đúng.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: bảng tỉ lệ ở mục 5 là con số TĨNH, chọn 1 lần dựa trên trực giác/kinh nghiệm từ các model trước — không có gì đảm bảo đây là tỉ lệ TỐI ƯU cho corpus/model cụ thể đang train. Tỉ lệ sai (VD quá nhiều web, quá ít code) → model học lệch, tốn compute pretrain (§7, hàng triệu $) để rồi phát hiện ra sau khi train xong là quá muộn.</p>
+
+<pre><code># Cơ chế DoReMi (Xie et al. 2023, Google/Stanford):
+Bước 1 — Train 1 "proxy model" NHỎ (280M params — rẻ, nhanh, chỉ để THỬ NGHIỆM
+          tỉ lệ mix, không phải model dùng thật) trên data đã chia theo domain
+          (web, code, book, wiki, ...) — giống các domain ở bảng mục 5.
+
+Bước 2 — Group DRO (Distributionally Robust Optimization): thay vì tối ưu
+          loss TRUNG BÌNH qua mọi domain (cách làm ngây thơ — có thể "hy sinh"
+          1 domain yếu để domain mạnh kéo trung bình lên), DoReMi tối ưu
+          loss XẤU NHẤT (worst-case) qua các domain — ép mô hình phải học
+          TỐT ĐỀU ở MỌI domain, không domain nào bị bỏ rơi.
+
+Bước 3 — Domain weight (tỉ lệ mix) được ĐIỀU CHỈNH DẦN trong lúc train proxy
+          model: domain nào proxy model đang học TỆ (loss cao so với domain
+          đó "đáng lẽ nên đạt được") → tăng tỉ lệ domain đó lên; domain đã
+          học tốt → giảm tỉ lệ, tiết kiệm chỗ cho domain cần nhiều hơn.
+
+Bước 4 — LẤY tỉ lệ mix cuối cùng học được từ proxy model 280M → áp dụng
+          để resample dữ liệu → train model CHÍNH (VD 8B, 70B params) với
+          tỉ lệ đã tối ưu này, thay vì tỉ lệ đoán tay ở bảng mục 5.</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: proxy model 280M KHÔNG PHẢI để dùng thật (không đủ mạnh) — nó chỉ là 1 "công cụ đo lường" rẻ tiền để tìm tỉ lệ mix, sau đó áp dụng tỉ lệ đó cho model CHÍNH lớn hơn nhiều. Đây là mẹo "proxy/surrogate" phổ biến trong ML research: dùng model nhỏ rẻ để search hyperparameter, rồi transfer kết quả search sang model lớn đắt — tương tự tinh thần scaling-law extrapolation (train nhiều model nhỏ, fit đường cong, dự đoán cho model lớn) đã gặp ở Chinchilla (mục 4).</p>
+
+<p><strong>Insight</strong>: DoReMi biến "chọn tỉ lệ data mix" từ 1 quyết định TRỰC GIÁC (bảng % ở mục 5) thành 1 bài toán OPTIMIZATION có thể giải bằng thuật toán — cùng tinh thần với Chinchilla biến "chọn kích thước model" từ trực giác thành bài toán optimization. Theo báo cáo của paper gốc, tỉ lệ học được từ DoReMi giúp model chính đạt cùng perplexity NHANH HƠN đáng kể so với tỉ lệ mix thủ công, và cải thiện downstream accuracy ở gần như MỌI domain — không chỉ domain được "ưu ái" tăng tỉ lệ.</p>
+
+<p><strong>📖 Mở rộng</strong>: đây là 1 trong nhiều hướng nghiên cứu 2023-2026 áp dụng nguyên lý "học thay vì đoán" vào từng quyết định pretraining trước đây vốn dựa kinh nghiệm — cùng họ với các phương pháp "mixture of data experts" và "capacity-aware mixture laws" xuất hiện sau đó (2024-2026), đều theo tinh thần: dùng model/thí nghiệm nhỏ rẻ tiền để tối ưu 1 quyết định sẽ áp dụng cho lần train tốn kém, quy mô lớn.</p>
+</div>
+
+<h2>6. Data cleaning pipeline</h2>
+
+<ol>
+  <li><strong>Deduplication</strong>: MinHash fuzzy dedup, exact substring match. Crucial — repeats bias model.</li>
+  <li><strong>Quality filter</strong>: heuristics (length, punctuation ratio) + classifier (predict Wikipedia-like)</li>
+  <li><strong>Toxic / NSFW filter</strong>: multi-stage classifier</li>
+  <li><strong>PII removal</strong>: emails, phones, addresses (regex + NER)</li>
+  <li><strong>Language filter</strong>: fasttext lang-id, drop mixed / low-quality</li>
+</ol>
+
+<h2>7. Compute budget</h2>
+
+<pre><code># FLOPs ≈ 6 × N × D  (N params, D tokens, forward + backward)
+
+GPT-3:     6 × 175e9 × 300e9  = 3.14e23 FLOPs
+                              = ~355 V100 GPU-years (ước tính Lambda Labs 2020,
+                                dùng V100 ~28 TFLOPS hiệu dụng — KHÔNG phải A100,
+                                A100 mạnh hơn ~10× nên chỉ cần ~32 GPU-year nếu dùng A100)
+                              = ~$5M cost 2020
+
+LLaMA-2-70B: 6 × 70e9 × 2e12   = 8.4e23 FLOPs (bigger than GPT-3!)
+                                = ~2M A100-hours
+                                = ~$3-5M
+
+GPT-4:     estimated ~2e25 FLOPs, ~$100M+
+</code></pre>
+
+<h2>8. Instruction tuning gap</h2>
+
+<p>Base LLM sau pretrain chỉ biết continue text — không biết follow instructions. Cần:</p>
+<ol>
+  <li><strong>Supervised Fine-Tuning (SFT)</strong>: human-labeled prompt→response pairs (~10k-100k examples)</li>
+  <li><strong>RLHF or DPO</strong>: align với human preferences (xem L4.4)</li>
+</ol>
+
+<p>Pretrain 99% compute, fine-tune 1% — nhưng fine-tune quyết định chatbot có usable không.</p>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. CLM vs MLM — output nào GPT-3 dùng?</p>
+<p class="a">CLM (Causal LM). Predict next token given previous. GPT family all CLM. BERT dùng MLM (bidirectional, mask 15%).</p>
+
+<p class="q">2. Chinchilla optimal D/N ratio? Vì sao GPT-3 under-trained?</p>
+<p class="a">D/N ≈ 20 for optimal compute. GPT-3 175B × 300B tokens = 1.7 → model quá lớn cho data đó. Chinchilla 70B × 1.4T = 20 → beat GPT-3.</p>
+
+<p class="q">3. Vì sao BERT mask 80% [MASK] + 10% random + 10% unchanged?</p>
+<p class="a">Test time không có [MASK]. Nếu 100% mask → model chỉ học predict [MASK] token. 10% random buộc học predict cả unmasked. 10% unchanged buộc model không assume token đúng.</p>
+
+<p class="q">4. Deduplication tại sao critical?</p>
+<p class="a">Duplicates → model memorize thay generalize. Model "leak" training data → privacy issue. Empirically dedup + 10% smaller data → same or better quality.</p>
+
+<p class="q">5. Pretrain 100M USD. SFT 10K USD. Cái nào critical hơn cho chatbot?</p>
+<p class="a">SFT (theo % investment). Pretrain cho capability, SFT cho alignment. Không SFT = base model useless as assistant. Nhưng pretrain limit cả 2 (không thể fine-tune ra reasoning nếu pretrain không có).</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/2203.15556">Hoffmann et al (2022) — Chinchilla paper</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2305.10429">Xie et al (2023) — DoReMi: Optimizing Data Mixtures Speeds Up Language Model Pretraining</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2005.14165">Brown et al (2020) — GPT-3</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1910.10683">Raffel et al (2020) — T5</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2307.09288">LLaMA-2 paper (Touvron 2023)</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L4_2_attention_transformer.html">← L4.2</a>
+  <a href="L4_4_alignment_rlhf.html">L4.4 · RLHF / DPO →</a>
+</div>
+
+</div>
+</body>
+</html>

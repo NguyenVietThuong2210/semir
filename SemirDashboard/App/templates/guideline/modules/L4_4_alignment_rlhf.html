@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L4.4 — Alignment: RLHF / DPO</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 4 · Module 4</div>
+  <h1>4.4 · Alignment — RLHF / DPO / RLAIF</h1>
+  <p class="subtitle">Sau pretrain LLM chỉ biết continue text. Cách turn thành helpful/harmless assistant: RLHF (InstructGPT), DPO (Rafailov 2023), Constitutional AI (Anthropic).</p>
+  <div class="level">Level 4 · LLM · ~40 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Explain 3-stage RLHF: SFT → RM → PPO</li>
+  <li>Understand PPO loss + KL penalty</li>
+  <li>DPO simplification — 1 loss thay 2 stages</li>
+  <li>Constitutional AI (Claude) → RLAIF</li>
+</ul>
+
+<h2>1. Pain point: base LLM output</h2>
+
+<pre><code>User: "How do I write a hello world in Python?"
+Base LLM: "How do I write a hello world in Python? This is a common question
+          often asked by beginners. Related questions include..."
+          [continues rambling]
+
+# Base LLM chỉ continue text natural. Không "answer".
+# Cần alignment để usable as assistant.
+</code></pre>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 RLHF bằng ngôn ngữ đời thường?</div>
+<p><strong>Đào tạo nhân viên chăm sóc khách hàng</strong>:</p>
+<ol>
+  <li><strong>Stage 1 (SFT)</strong>: Cho nhân viên xem 10.000 tình huống mẫu "khách hỏi X → chuyên gia trả lời Y". Nhân viên học <em>bắt chước</em> chuyên gia. Nhưng nói dài dòng, chưa "tự nhiên".</li>
+  <li><strong>Stage 2 (Reward Model)</strong>: Chuyên gia so sánh 2 câu trả lời A vs B (không viết mới, chỉ chọn) — chấm câu nào tốt hơn. Từ 100k lượt so sánh, ta train được "cảm giác chấm điểm" của chuyên gia.</li>
+  <li><strong>Stage 3 (PPO)</strong>: Nhân viên tự trả lời → "cảm giác chấm điểm" chấm → nhân viên tự sửa để điểm cao hơn. Nhưng nếu nhân viên đổi phong cách quá xa mẫu ban đầu (KL penalty) sẽ bị phạt — tránh "hack" điểm.</li>
+</ol>
+<p><strong>Tại sao 3 stage?</strong> Vì viết trả lời mới rất mắc (chuyên gia $1M) nhưng chấm điểm A/B rẻ ($100k) → dùng chấm điểm để tạo signal train được nhiều lượt hơn.</p>
+<p><strong>DPO là gì?</strong> Cách mới (2023): bỏ Stage 2 (không train reward model riêng). Trực tiếp học từ cặp "câu A thắng B" bằng 1 loss thôi. Đơn giản hơn, cho kết quả tương đương RLHF trên nhiều task.</p>
+</div>
+
+<h2>2. RLHF — 3 stages (InstructGPT, ChatGPT)</h2>
+
+<h3>Stage 1: Supervised Fine-Tuning (SFT)</h3>
+
+<pre><code>Data: (prompt, ideal_response) từ human demonstrators
+      ~10k-50k examples, ~$1M cost
+
+Loss: standard cross-entropy on response tokens
+      minimize -log P(response | prompt)
+
+Output: SFT model — can follow instructions, verbose sometimes
+</code></pre>
+
+<h3>Stage 2: Reward Model (RM)</h3>
+
+<pre><code>Data: (prompt, response_A, response_B, preference)
+      Human labels which response better
+      ~100k-500k comparisons
+
+RM architecture: LLM + linear head → scalar reward
+Training loss (pairwise ranking):
+  L = -log σ(r_θ(prompt, chosen) - r_θ(prompt, rejected))
+
+# σ(x - y) high → r_chosen > r_rejected → RM predict human preference
+</code></pre>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Từ điển RL → LLM (đọc trước khi vào PPO — nếu chưa học Reinforcement Learning, các chữ "policy", "state", "action", "advantage" bên dưới sẽ vô nghĩa nếu không map sang ngữ cảnh LLM)</div>
+<p>RLHF mượn toàn bộ vocabulary từ Reinforcement Learning (RL) — lĩnh vực dạy agent chơi game/robot qua thử-sai. Với LLM, mapping cụ thể:</p>
+<table>
+<tr><th>Thuật ngữ RL</th><th>Trong RLHF/LLM là gì?</th></tr>
+<tr><td><strong>Policy (π)</strong></td><td>Chính LLM đang train — "chiến lược" chọn token kế tiếp. π_θ nghĩa là policy với tham số θ (weights của model).</td></tr>
+<tr><td><strong>State (s)</strong></td><td>Prompt + các token đã sinh ra tới hiện tại (context).</td></tr>
+<tr><td><strong>Action (a)</strong></td><td>1 token model chọn sinh ra tiếp theo.</td></tr>
+<tr><td><strong>Episode</strong></td><td>1 lượt sinh câu trả lời hoàn chỉnh (từ prompt tới token EOS).</td></tr>
+<tr><td><strong>Reward (r)</strong></td><td>Điểm số Reward Model (RM) chấm cho TOÀN BỘ response sau khi sinh xong (không chấm từng token riêng lẻ).</td></tr>
+<tr><td><strong>Value function (V)</strong></td><td>1 network phụ dự đoán "nếu tiếp tục sinh từ trạng thái này, kỳ vọng reward cuối cùng là bao nhiêu?" — dùng để tính advantage, giảm variance khi update.</td></tr>
+<tr><td><strong>Advantage (A)</strong></td><td>A = reward thực tế nhận được − reward kỳ vọng (V dự đoán). A &gt; 0 nghĩa là "tốt hơn mong đợi" → tăng xác suất action đó; A &lt; 0 → giảm.</td></tr>
+</table>
+<p><strong>Điểm khác biệt lớn với RL cổ điển (game/robot)</strong>: game có reward liên tục mỗi bước (VD điểm số tăng dần khi ăn coin). RLHF chỉ có 1 reward DUY NHẤT ở cuối episode (sau khi sinh xong cả câu) — đây là "sparse reward", khó học hơn nhiều, đó là lý do cần value function + GAE (Generalized Advantage Estimation — 1 công thức làm mượt việc "chia" reward cuối cùng ngược về từng token, tương tự ý tưởng backprop chia lỗi ngược ở L3.1) để ước lượng advantage cho từng token trung gian dù chỉ biết reward tổng.</p>
+</div>
+
+<h3>Stage 3: PPO — RL against RM</h3>
+
+<pre><code>Objective: maximize E[RM(policy(prompt))]
+           s.t. KL(policy || SFT_reference) < β
+
+Loss:
+  L_PPO = -E[reward - β · KL(policy || ref)]
+
+# reward: RM score of policy's response
+# KL penalty: penalize policy drift từ SFT
+# β = 0.01-0.05 typical
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔢 KL divergence — định nghĩa + ví dụ số (thuật ngữ dùng suốt module này)</div>
+<p><strong>KL divergence KL(P || Q)</strong> đo "P khác Q bao nhiêu" khi P, Q là 2 phân phối xác suất trên cùng tập outcome:</p>
+<pre><code>KL(P || Q) = Σ_x P(x) · log( P(x) / Q(x) )
+
+# = 0 khi P và Q giống hệt nhau
+# càng lớn khi P và Q càng khác nhau
+# KHÔNG đối xứng: KL(P||Q) ≠ KL(Q||P) — đây không phải "khoảng cách" toán học chuẩn</code></pre>
+<p><strong>Ví dụ số cụ thể</strong>: model phải chọn giữa 3 token {A, B, C}. SFT reference π_ref cho: P(A)=0.7, P(B)=0.2, P(C)=0.1. Sau vài bước PPO, policy π lệch thành: P(A)=0.3, P(B)=0.3, P(C)=0.4.</p>
+<pre><code>KL(π || π_ref) = 0.3·log(0.3/0.7) + 0.3·log(0.3/0.2) + 0.4·log(0.4/0.1)
+              = 0.3·log(0.4286) + 0.3·log(1.5) + 0.4·log(4.0)
+              = 0.3·(−0.847) + 0.3·(0.405) + 0.4·(1.386)
+              = −0.254 + 0.122 + 0.554 = 0.422 nats
+
+# Nếu policy KHÔNG đổi gì (π = π_ref): KL = 0.3·log(1) + ... = 0 (không phạt)
+# KL=0.422 > 0 → policy đã "đi xa" khỏi SFT → term −β·KL trong loss sẽ phạt,
+# kéo policy quay lại gần π_ref hơn ở bước update tiếp theo.</code></pre>
+<p>PPO trains until reward saturates. Result: RLHF model helpful + follow instructions.</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — KL penalty: linh hồn của RLHF mà 99% engineer bỏ qua (chi tiết dễ hiểu)</div>
+
+<p><strong>Câu hỏi shock</strong>: RLHF có 3 stage — SFT, Reward Model, PPO. Trong PPO có 1 term nhỏ: KL(π || π_ref). Nhìn qua tưởng "regularization thông thường". Thực tế: <strong>bỏ term này, RLHF hoàn toàn KHÔNG hoạt động</strong>. Nó không phải "nice to have" — nó là NGUYÊN NHÂN RLHF work.</p>
+
+<p><strong>Bước 1 — Vấn đề gốc: reward hacking</strong></p>
+<p>Bạn train Reward Model (RM) trên 100k cặp human preference. RM output score cao cho response tốt, thấp cho tệ. Nhưng RM chỉ HỌC từ 100k mẫu trong distribution của SFT model. RM là <em>ước tính</em> preference thật, không phải preference thật.</p>
+
+<p><strong>Bước 2 — Policy thông minh sẽ hack RM</strong></p>
+<p>PPO tối ưu policy để maximize RM score. Nếu policy tìm được output RARE (không có trong RM training data) mà RM tình cờ score cao → policy sẽ produce output đó liên tục. RM chưa từng thấy → không score xuống được. Policy "hack" RM.</p>
+
+<p>Minh hoạ (không phải trích dẫn số liệu chính xác từ 1 paper cụ thể — hiện tượng reward hacking dạng "khai thác output hiếm" là có thật và đã được ghi nhận, VD Gao, Schulman et al. "Scaling Laws for Reward Model Overoptimization", nhưng các con số điểm cụ thể dưới đây chỉ mang tính minh hoạ): giả sử PPO không có KL penalty sau 500 steps sinh ra:</p>
+<ul>
+<li>Response toàn dấu chấm câu ".,;:!?" → RM cho 9.5/10 (chưa từng thấy nên confidence cao)</li>
+<li>Response lặp lại 1 câu 100 lần → RM cho 8/10</li>
+<li>Response toàn emoji → RM cho 9/10</li>
+</ul>
+<p>Model "học" hack thay vì học tốt. Human user thấy → sản phẩm không dùng được.</p>
+
+<p><strong>Bước 3 — Fix bằng KL constraint</strong></p>
+<p>Objective PPO: maximize <em>Reward(x) − β · KL(π(x) || π_ref(x))</em>. Trong đó:</p>
+<ul>
+<li><strong>Reward(x)</strong> = điểm RM cho output x</li>
+<li><strong>π_ref</strong> = policy sau SFT (chưa đi PPO)</li>
+<li><strong>KL(π ‖ π_ref)</strong> = "khoảng cách" giữa policy mới và cũ (đo bằng KL divergence)</li>
+<li><strong>β</strong> = coefficient (thường 0.01-0.1)</li>
+</ul>
+<p>Ý nghĩa: policy chỉ được sinh output "không xa" so với SFT model. Output "toàn dấu chấm câu" — SFT không bao giờ sinh vậy → KL vô cùng → penalty vô cùng → policy tránh.</p>
+
+<p><strong>Bước 4 — Vì sao KL constraint = "trust region"</strong></p>
+<p>RM chỉ đáng tin trong vùng distribution của SFT (nơi có training data). Xa hơn → RM bị "extrapolate" → score không đáng tin. KL constraint giới hạn policy trong trust region này → RM luôn đáng tin → optimization meaningful.</p>
+
+<p><strong>Analogy đời thực — Goodhart's Law</strong>: "Khi 1 measure trở thành target, nó ngừng là measure tốt". Ví dụ điển hình:</p>
+<ul>
+<li>Sếp đo hiệu suất nhân viên qua "số commit git". Nhân viên chia 1 commit thành 100 commit nhỏ → measure tăng vọt nhưng work không tăng.</li>
+<li>School đo giáo viên qua "điểm test học sinh". Giáo viên teach-to-test, cheat → điểm tăng nhưng học sinh không giỏi hơn.</li>
+<li>RM measure preference. Policy optimize hoàn toàn → hack RM → preference thực không tăng.</li>
+</ul>
+<p>KL constraint = ngăn Goodhart's Law bằng cách giới hạn "target" chỉ được optimize gần measure.</p>
+
+<p><strong>Hậu quả nếu bỏ KL — ví dụ startup fail</strong>: Startup A tự implement RLHF. Copy paper OpenAI nhưng skip KL "vì tưởng nice to have". Train 3 tuần, $50k compute. Loss giảm mượt. Deploy → user complain "chatbot nói câu vô nghĩa, lặp lại lời". Rewind → phát hiện policy hack RM. Reset và thêm KL → work đúng. <em>Skip KL = 3 tuần + $50k phí</em>.</p>
+
+<p><strong>Nhưng KL không dễ tune — sweet spot mỏng</strong>:</p>
+<ul>
+<li>β quá cao (VD 1.0): policy không cải thiện được, stuck ở SFT.</li>
+<li>β quá thấp (VD 0.001): reward hacking như không có KL.</li>
+<li>Sweet spot: β = 0.01-0.1 tùy task.</li>
+</ul>
+<p>Đây là hyperparam KHÓ nhất trong RLHF. Team không có kinh nghiệm sẽ mất tháng để tune. Đây là why nhiều lab từ bỏ tự train RLHF, dùng managed service (Anthropic Constitutional AI, OpenAI fine-tuning API).</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>DPO breakthrough (Rafailov 2023) — vì sao 2024 mọi người chuyển</strong></p>
+
+<p><strong>Insight math</strong>: Rafailov chứng minh rằng RL objective với KL constraint có <em>closed-form solution</em>. Tức là bạn KHÔNG cần:</p>
+<ul>
+<li>Train RM riêng</li>
+<li>Chạy PPO complicated</li>
+<li>Tune β tricky</li>
+</ul>
+<p>Chỉ cần 1 loss trực tiếp trên cặp (chosen, rejected):</p>
+<pre><code>L_DPO = -log σ(β · [logπ(chosen|x) − logπ(rejected|x) − logπ_ref(chosen|x) + logπ_ref(rejected|x)])</code></pre>
+<p>Nghe phức tạp nhưng chỉ là 1 loss, chạy như supervised training.</p>
+
+<p><strong>Advantages</strong>:</p>
+<ul>
+<li>1 stage thay vì 3 (skip RM, skip PPO)</li>
+<li>Ít bug hơn (không có PPO instability)</li>
+<li>Rẻ hơn 3× compute</li>
+<li>Chất lượng comparable với RLHF trên nhiều task</li>
+</ul>
+<p>Đây là why 2024 Meta Llama-3, Mistral, DeepSeek đều chuyển sang DPO / IPO / KTO variants.</p>
+
+<p><strong>Khi DPO vẫn thua RLHF</strong>: Task có reward hackable rõ rệt (math, code với test cases). RLHF với learned reward model handle tốt hơn vì có "extra" signal. DPO chỉ có preference pair — nếu preference noisy → DPO noisy.</p>
+
+<p><strong>Take-away tổng hợp — 3 layer hiểu RLHF</strong>:</p>
+<ol>
+<li><strong>Layer 1 (surface)</strong>: "RLHF align LLM với human preference bằng 3 stage SFT/RM/PPO."</li>
+<li><strong>Layer 2 (mechanism)</strong>: "RM là proxy — policy sẽ hack proxy nếu không có constraint. KL penalty giữ policy trong trust region."</li>
+<li><strong>Layer 3 (essence)</strong>: "RLHF = Goodhart's Law applied to ML. Reward hacking là <em>inevitable</em> của optimization. KL constraint là fundamental, không tùy chọn. DPO = mathematical shortcut cho cùng constraint."</li>
+</ol>
+<p>Interview: Layer 1 = junior. Layer 2 = mid. Layer 3 = senior. Chọn layer trả lời tùy vị trí.</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Reward Model architecture, PPO clip objective, DPO derivation từng bước</div>
+
+<p><strong>1. Reward Model architecture (chi tiết)</strong></p>
+<pre><code>Base: SFT model backbone (VD Llama-7B) — không init từ scratch
+Head: bỏ LM head (vocab logits) → thay bằng linear (d_model → 1) scalar reward
+      W_reward ∈ ℝ^(4096 × 1), khoảng 4k params thêm
+
+Forward: input tokens → hidden states → hidden[LAST_TOKEN] → W_reward → r ∈ ℝ
+
+Loss (Bradley-Terry pairwise ranking):
+  L_RM = −E_(x, y_w, y_l) [ log σ(r_θ(x, y_w) − r_θ(x, y_l)) ]
+  # y_w = winning (chosen) response, y_l = losing (rejected)
+  # σ maximize khi r_chosen ≫ r_rejected
+
+Bias handling: reward chuẩn hóa mean=0 std=1 trước khi vào PPO
+  (unnormalized rewards → PPO unstable)</code></pre>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>2. PPO objective — clip trick chống catastrophic update</strong></p>
+<pre><code>Definitions:
+  ρ_t(θ) = π_θ(a_t|s_t) / π_θ_old(a_t|s_t)   [ratio new/old policy]
+  A_t = advantage estimate (dùng GAE — Generalized Advantage Estimation)
+
+PPO-clip objective (maximize):
+  L^CLIP(θ) = E_t [ min( ρ_t · A_t, clip(ρ_t, 1−ε, 1+ε) · A_t ) ]
+  # ε = 0.2 typical
+
+Ý nghĩa clip:
+  - Nếu A_t > 0 (action tốt): tăng ρ_t nhưng cap 1+ε → không update quá aggressive
+  - Nếu A_t < 0 (action xấu): giảm ρ_t nhưng floor 1−ε → không collapse policy
+
+Full RLHF loss:
+  L_total = −L^CLIP + c_v · L^VF − c_KL · KL(π || π_ref)
+  # L^VF = value function loss (train value network)
+  # c_v ≈ 0.5, c_KL ≈ 0.02</code></pre>
+
+<p><strong>Vì sao 4 model phải ở RAM đồng thời</strong> — mỗi model đóng 1 vai trò khác nhau trong 1 vòng PPO:</p>
+
+<pre><code>                              prompt x
+                                 │
+                                 ▼
+                   ┌───────────────────────────┐
+                   │   Policy π_θ   (TRAIN)      │──── sinh response y ────┐
+                   └───────────────────────────┘                          │
+                          │                                                │
+           (cùng input x, y)                                    (cùng input x, y)
+                          ▼                                                ▼
+          ┌───────────────────────────┐                  ┌───────────────────────────┐
+          │  Reference π_ref            │                  │   Reward Model RM           │
+          │  (FROZEN — copy của SFT)    │                  │   (FROZEN)                   │
+          └─────────────┬───────────────┘                  └─────────────┬───────────────┘
+                        │ KL(π ‖ π_ref)                                  │ reward r = RM(x,y)
+                        │ (policy lệch bao xa so với SFT)                 │ (điểm chất lượng response)
+                        ▼                                                ▼
+                   ┌─────────────────────────────────────────────────────────┐
+                   │           PPO objective: reward − β·KL(π‖π_ref)           │
+                   └───────────────────────────┬─────────────────────────────┘
+                                                │ advantage A_t = reward − V(s_t)
+                                                ▼
+                                  ┌───────────────────────────┐
+                                  │  Value network V  (TRAIN)   │
+                                  │  dự đoán "kỳ vọng reward"    │
+                                  └───────────────────────────┘</code></pre>
+
+<p>Điểm mấu chốt cho bài toán memory: 2 model <strong>FROZEN</strong> (reference, RM) chỉ cần lưu weights. 2 model <strong>TRAIN</strong> (policy, value network) cần thêm gradient + Adam optimizer state — tốn hơn nhiều lần:</p>
+<table>
+<tr><th>Model</th><th>Vai trò</th><th>Trạng thái</th><th>Công thức memory (Llama-70B)</th><th>GB</th></tr>
+<tr><td>Reference π_ref</td><td>Tính KL(π‖π_ref) — mốc so sánh cố định</td><td>FROZEN (copy SFT)</td><td>fp16 weights: 2 bytes/param</td><td>140GB</td></tr>
+<tr><td>Reward Model RM</td><td>Chấm điểm response</td><td>FROZEN</td><td>fp16 weights: 2 bytes/param</td><td>140GB</td></tr>
+<tr><td>Policy π_θ</td><td>Model đang tối ưu — sinh response</td><td>TRAIN</td><td>weights+gradients+Adam: ~16 bytes/param (mixed-precision, xem <code>L4_3_pretraining.html §</code> Adam memory)</td><td>1,120GB</td></tr>
+<tr><td>Value network V</td><td>Dự đoán reward kỳ vọng → tính advantage</td><td>TRAIN</td><td>weights+gradients+Adam: ~16 bytes/param</td><td>1,120GB</td></tr>
+<tr><td colspan="4"><strong>Tổng thực tế</strong></td><td><strong>≈2,520GB (~32× A100 80GB)</strong></td></tr>
+</table>
+<p><strong>Sai lầm hay gặp</strong>: nhân nhẩm "4 model × 140GB = 560GB, ~8×A100" — con số này SAI vì bỏ sót chi phí gradient+optimizer của 2 model đang TRAIN. Đây chính là lý do thực tế các framework RLHF (VD DeepSpeed-Chat) phải dùng LoRA cho policy, share backbone giữa RM/value-network, hoặc offload để né chi phí khổng lồ này — không phải chỉ vì "RLHF đắt gấp 3× SFT" một cách chung chung mà vì bài toán memory ở quy mô 4-model-cùng-lúc này cụ thể.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>3. DPO derivation — vì sao skip được RM</strong></p>
+<p>Bước 1: bài toán RL với KL constraint:
+<br><code>max_π E[r(x,y)] − β · KL(π(y|x) || π_ref(y|x))</code></p>
+
+<p>Bước 2: closed-form optimal policy (dùng Lagrangian):
+<br><code>π*(y|x) = (1/Z(x)) · π_ref(y|x) · exp(r(x,y)/β)</code>
+<br>Đảo lại: <code>r(x,y) = β · log(π*(y|x) / π_ref(y|x)) + β · log Z(x)</code></p>
+
+<p>Bước 3: substitute vào Bradley-Terry preference:
+<br><code>P(y_w ≻ y_l) = σ(r(x,y_w) − r(x,y_l))</code>
+<br>Log Z(x) TRIỆT TIÊU (cùng x) → không cần biết Z!</p>
+
+<p>Bước 4: DPO loss trực tiếp trên policy π:
+<br><code>L_DPO = −log σ( β·log(π(y_w|x)/π_ref(y_w|x)) − β·log(π(y_l|x)/π_ref(y_l|x)) )</code></p>
+
+<p><strong>Chú ý</strong>: DPO không có value network, không có PPO clip, không train RM riêng → 1 loss như SFT. RAM cần: policy + reference = 2 models thay 4.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>4. Reward hacking — 5 dạng thực tế đã ghi nhận</strong></p>
+<ul>
+  <li><strong>Length bias</strong>: RM prefer câu dài (labeler thấy dài = kỹ). Policy học viết dài dòng. Fix: length normalize reward.</li>
+  <li><strong>Sycophancy</strong>: RM prefer câu agree với user premise. Policy học nịnh. "Bạn nói đúng!" dù user sai.</li>
+  <li><strong>Format hacking</strong>: RM prefer markdown bullet. Policy trả lời bullet mọi câu, kể cả "thời tiết hôm nay?".</li>
+  <li><strong>Repetition</strong>: RM training data không có repetition → confidence cao khi thấy repeat → policy exploit.</li>
+  <li><strong>Refusal shortcut</strong>: RM prefer safe refuse → policy refuse mọi câu hơi mơ hồ ("tôi không thể trả lời điều đó").</li>
+</ul>
+
+<p><strong>Gotchas RLHF</strong>: (1) preference data noisy — 20-30% inter-annotator disagreement là chuẩn. (2) DPO cần preference data chất lượng cao hơn RLHF (không có RM smooth). (3) KL với reference: dùng token-level KL không sequence KL (numerically stable). (4) Learning rate PPO cực nhỏ (1e-6 to 5e-6), khác SFT (2e-5).</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — GRPO (DeepSeek 2024): bỏ luôn Value Network, không chỉ bỏ Reward Model như DPO</div>
+
+<p><strong>💡 Analogy</strong>: nhắc lại sơ đồ "4 model trong RAM" ở deep-dive trên — Value Network là 1 network RIÊNG được train để "đoán trước" response này đáng bao nhiêu điểm (dùng làm mốc so sánh/baseline khi tính advantage). Thuê hẳn 1 "chuyên gia định giá" riêng (value network, tốn ~1,120GB như bảng trên) chỉ để ước lượng "giá tham khảo". GRPO (Group Relative Policy Optimization, DeepSeek 2024) làm khác: thay vì thuê chuyên gia định giá riêng, nó lấy NHIỀU câu trả lời (1 nhóm/group) cho CÙNG 1 câu hỏi, chấm điểm cả nhóm, rồi dùng ĐIỂM TRUNG BÌNH CỦA CHÍNH NHÓM ĐÓ làm mốc so sánh — giống việc so sánh 8 người dự thi CÙNG 1 đề, lấy điểm trung bình của 8 người làm chuẩn, thay vì thuê 1 giám khảo riêng chỉ để "đoán điểm chuẩn".</p>
+
+<p><strong>Vấn đề cụ thể</strong>: deep-dive trên đã chỉ ra Value Network là 1 trong 2 model TỐN NHẤT (cùng Policy) vì cần train (weights+gradient+Adam state, ~16 bytes/param) — không chỉ FROZEN như Reference/RM. Với Llama-70B, riêng Value Network đã tốn ~1,120GB. Câu hỏi GRPO đặt ra: có cần 1 network RIÊNG chỉ để ước lượng baseline không, hay có cách rẻ hơn?</p>
+
+<pre><code># PPO (đã học ở trên): advantage A_t = reward − V(s_t)
+#   V(s_t) = Value Network dự đoán "kỳ vọng reward" — cần TRAIN riêng 1 network
+
+# GRPO (DeepSeekMath 2024): KHÔNG có Value Network. Thay vào đó:
+Bước 1 — Với 1 prompt x, sinh ra G response KHÁC NHAU cùng lúc từ policy hiện tại
+          (VD G=8 hoặc 16, không phải chỉ 1 response như PPO):
+          y_1, y_2, ..., y_G  ~ π_θ(·|x)
+
+Bước 2 — Chấm điểm reward cho CẢ G response: r_1, r_2, ..., r_G
+          (dùng Reward Model như PPO, HOẶC — phổ biến hơn cho toán/code —
+          dùng reward RULE-BASED có thể verify tự động: đúng/sai đáp số,
+          code compile+test pass/fail — không cần Reward Model học riêng)
+
+Bước 3 — Advantage của MỖI response = so với TRUNG BÌNH của CHÍNH NHÓM đó
+          (không cần Value Network dự đoán từ trước):
+          A_i = (r_i − mean(r_1,...,r_G)) / std(r_1,...,r_G)
+          # response NÀO tốt hơn trung bình nhóm → A_i > 0 → tăng xác suất
+          # response NÀO tệ hơn trung bình nhóm → A_i < 0 → giảm xác suất
+
+Bước 4 — Update policy bằng PPO-clip objective y hệt công thức đã học ở trên,
+          chỉ thay A_t (từ Value Network) bằng A_i (từ group statistics).</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: GRPO KHÔNG PHẢI DPO — 2 kỹ thuật giải quyết 2 vấn đề chi phí KHÁC NHAU của RLHF gốc. DPO (đã học ở dưới) bỏ luôn cả Reward Model VÀ PPO-loop (chỉ còn 2 model: Policy + Reference). GRPO vẫn GIỮ Reward Model + PPO-loop, chỉ bỏ riêng Value Network (còn lại 3 model: Policy + Reference + RM, hoặc chỉ 2 nếu dùng reward rule-based không cần RM học riêng). GRPO phù hợp khi bạn CẦN giữ cơ chế RL đầy đủ (VD training reasoning nhiều bước cho toán/code, nơi reward tại từng bước trung gian quan trọng) nhưng muốn cắt bớt 1 trong 2 model tốn kém nhất.</p>
+
+<table>
+<tr><th></th><th>PPO (RLHF gốc)</th><th>GRPO (DeepSeek 2024)</th><th>DPO (Rafailov 2023)</th></tr>
+<tr><td>Số model cần TRAIN</td><td>2 (Policy + Value Network)</td><td>1 (chỉ Policy)</td><td>1 (chỉ Policy)</td></tr>
+<tr><td>Cách tính baseline/advantage</td><td>Value Network dự đoán riêng</td><td>Trung bình của group cùng prompt</td><td>Không cần — implicit qua công thức closed-form</td></tr>
+<tr><td>Vẫn cần Reward Model?</td><td>Có</td><td>Có (hoặc rule-based reward)</td><td>Không (chỉ cần preference pair có sẵn)</td></tr>
+<tr><td>Compute/sample</td><td>1 response/prompt/step</td><td>G response/prompt/step (tốn hơn lúc SINH, nhưng đỡ tốn lúc TRAIN vì bỏ Value Net)</td><td>1 cặp preference/step</td></tr>
+<tr><td>Dùng bởi</td><td>InstructGPT, ChatGPT gốc</td><td>DeepSeekMath, DeepSeek-R1</td><td>Zephyr, Tulu, Llama-3 chat</td></tr>
+</table>
+
+<p><strong>Insight</strong>: GRPO minh hoạ 1 nguyên lý chung với DPO (dù giải pháp khác nhau) — chi phí "ước lượng baseline/reference" trong RL truyền thống thường ĐẮT HƠN CẦN THIẾT, và có thể thay bằng 1 cách tính RẺ HƠN khai thác cấu trúc bài toán cụ thể (DPO khai thác closed-form nghiệm tối ưu; GRPO khai thác việc SAMPLE NHIỀU response cùng prompt rồi dùng chính nhóm đó làm mốc so sánh, thay vì train 1 network riêng để "đoán" mốc đó).</p>
+
+<p><strong>📖 Mở rộng</strong>: GRPO là 1 phần quan trọng trong pipeline train DeepSeek-R1 (2025) — model reasoning nổi tiếng vì đạt chất lượng cạnh tranh với chi phí train thấp hơn hẳn — reward rule-based (đúng/sai đáp số toán, test case code pass/fail) kết hợp GRPO giúp scale RL training cho reasoning mà không cần Reward Model học từ human preference (vốn tốn kém và bias) cho những domain có thể VERIFY đúng/sai một cách khách quan.</p>
+</div>
+
+<h2>3. RLHF pitfalls</h2>
+
+<div class="callout warn">
+<div class="label">3 nổi bật</div>
+<ol>
+  <li><strong>Reward hacking</strong>: policy exploit RM weakness (repeat "great question!" → RM high, human low)</li>
+  <li><strong>Complexity</strong>: 4 models in memory (policy, reference, RM, value fn). ~$10M compute cho GPT-4 scale RLHF.</li>
+  <li><strong>Sycophancy</strong>: RM prefer response agree with user → LLM tell user what they want to hear (biased assessment)</li>
+</ol>
+</div>
+
+<h2>4. DPO — Direct Preference Optimization (Rafailov 2023)</h2>
+
+<div class="callout success">
+<div class="label">Key insight</div>
+<p>DPO shows: optimal PPO solution có closed form. Skip RM + PPO, directly train policy trên preference data với 1 loss:</p>
+</div>
+
+<pre><code>L_DPO = -log σ(β · [log(π(y_chosen|x) / π_ref(y_chosen|x))
+                  - log(π(y_rejected|x) / π_ref(y_rejected|x))])
+
+# π: current policy
+# π_ref: reference (SFT) frozen
+# σ: sigmoid
+# Interpretation: increase log-prob chosen relative to rejected,
+#                stay close to reference (via ref term)
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔢 DPO loss — worked example bằng số thật</div>
+<p><strong>Setup</strong>: prompt x = "Viết 1 câu chào". 2 response: y_w (chosen, con người thích hơn) = "Xin chào!", y_l (rejected) = "Ê mày". β = 0.1 (hyperparameter điển hình).</p>
+<p>Giả sử log-probability (tổng log-prob của các token trong response, model đã tính sẵn qua forward pass — số âm vì log của xác suất &lt; 1):</p>
+<pre><code>logπ(y_w|x)     = −2.0   (policy hiện tại, đang train)
+logπ(y_l|x)     = −3.5
+logπ_ref(y_w|x) = −2.3   (SFT reference, đóng băng)
+logπ_ref(y_l|x) = −2.8
+
+# Bước 1: tính "implicit reward" cho mỗi response — mức policy "thích" response
+# đó HƠN so với reference bao nhiêu (đây chính là ý nghĩa của log-ratio):
+r_w = β · (logπ(y_w|x) − logπ_ref(y_w|x)) = 0.1 · (−2.0 − (−2.3)) = 0.1 · 0.3 = 0.03
+r_l = β · (logπ(y_l|x) − logπ_ref(y_l|x)) = 0.1 · (−3.5 − (−2.8)) = 0.1 · (−0.7) = −0.07
+
+# Bước 2: DPO loss = −log σ(r_w − r_l)
+diff = r_w − r_l = 0.03 − (−0.07) = 0.10
+L_DPO = −log σ(0.10) = −log(1/(1+e^−0.10)) = −log(0.52498) ≈ 0.6444
+
+# So sánh: nếu model CHƯA học gì (π = π_ref hệt nhau) → r_w = r_l = 0 → diff = 0
+# → L_DPO = −log σ(0) = −log(0.5) = 0.693 (loss cao hơn — model chưa phân biệt được)
+# → loss 0.6444 < 0.693 nghĩa là model ĐÃ học đúng hướng: tăng log-prob y_w
+# tương đối so với y_l (dù vẫn còn xa mức "tự tin cao" — cần nhiều step nữa)</code></pre>
+<p><strong>Đọc gradient trực giác</strong>: minimize L_DPO ⟺ maximize (r_w − r_l) ⟺ đẩy logπ(y_w|x) lên VÀ/HOẶC kéo logπ(y_l|x) xuống, nhưng LUÔN so với mốc π_ref cố định (không cho phép policy "bay" tự do — đây chính là cơ chế KL-constraint ẩn bên trong, không cần term KL riêng như PPO).</p>
+</div>
+
+<h3>DPO vs RLHF</h3>
+
+<table>
+<tr><th></th><th>RLHF (PPO)</th><th>DPO</th></tr>
+<tr><td>Stages</td><td>3 (SFT, RM, PPO)</td><td>2 (SFT, DPO)</td></tr>
+<tr><td>Models loaded</td><td>4</td><td>2</td></tr>
+<tr><td>Hyperparams</td><td>Many (PPO clipping, GAE)</td><td>1 (β)</td></tr>
+<tr><td>Reward hacking</td><td>Yes</td><td>Reduced (không explicit RM)</td></tr>
+<tr><td>Quality</td><td>Slightly higher (well-tuned)</td><td>Match RLHF empirically</td></tr>
+<tr><td>Adoption</td><td>OpenAI, DeepMind</td><td>Zephyr, Tulu, Mistral, LLaMA-3</td></tr>
+</table>
+
+<h2>5. Constitutional AI (Anthropic 2022)</h2>
+
+<p>Claude sử dụng Constitutional AI (CAI) + RLHF. Ý tưởng: giảm human labeling bằng AI feedback.</p>
+
+<pre><code>1. Initial response từ helpful-only model
+2. Critique: "Is response harmful? Rewrite to be safe."
+3. LLM self-critique + revise theo constitution (nguyên tắc)
+4. Fine-tune on revised responses (SL-CAI = supervised learning)
+5. Preference labels từ LLM (not human) → train RM
+6. RLHF using AI-labeled RM (= RLAIF)
+
+Constitution ví dụ:
+- "Choose response that is helpful, harmless, honest"
+- "Avoid stereotyping, bias, harmful content"
+- "Refuse illegal, unethical requests"
+</code></pre>
+
+<p>Kết quả: Claude ít harmful outputs + easier scale (không cần 100k human labels).</p>
+
+<h2>6. Comparison</h2>
+
+<table>
+<tr><th></th><th>RLHF</th><th>DPO</th><th>Constitutional AI</th></tr>
+<tr><td>Feedback source</td><td>Human labels</td><td>Human labels</td><td>AI self-critique</td></tr>
+<tr><td>Compute</td><td>Very high</td><td>Medium</td><td>High</td></tr>
+<tr><td>Scale</td><td>Bottleneck human</td><td>Bottleneck human</td><td>Scale better</td></tr>
+<tr><td>Used by</td><td>ChatGPT, InstructGPT</td><td>Zephyr, LLaMA-3 chat</td><td>Claude</td></tr>
+</table>
+
+<h2>7. Alignment tax</h2>
+
+<div class="callout warn">
+<div class="label">Alignment tax</div>
+<p>RLHF làm model helpful nhưng đôi khi giảm capability đo bằng benchmark academic — hiện tượng có thật, OpenAI có report cho 1 số benchmark cụ thể. <strong>Lưu ý</strong>: con số MMLU 86.4% hay được nhắc tới của GPT-4 là của bản RLHF/release chính thức (không phải base) — đừng gán nhầm chiều ngược lại. Cost of alignment = capability loss, nhưng không phải mọi benchmark đều giảm.</p>
+<p>Reason: RLHF encourages safe/verbose responses, may skip advanced reasoning shortcuts.</p>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. RLHF 3 stages — list và purpose.</p>
+<p class="a">(1) SFT: teach follow instructions với ~10k human examples. (2) Reward Model: train classifier predict human preference từ ~100k comparisons. (3) PPO: RL với RM as reward + KL penalty vs SFT to stay close.</p>
+
+<p class="q">2. KL penalty trong PPO loss — vì sao cần?</p>
+<p class="a">Không có KL, policy drift xa SFT → over-optimize RM → reward hacking + capability loss. β·KL(policy || ref) penalize drift. β = 0.01-0.05 balance exploration.</p>
+
+<p class="q">3. DPO shows PPO có closed form. Impl gì?</p>
+<p class="a">1 loss thay 2 stages RM+PPO. Bypass explicit RM. Chỉ cần SFT model + preference pairs → train direct với sigmoid ratio loss. Simpler, faster, similar quality.</p>
+
+<p class="q">4. Constitutional AI khác RLHF gì?</p>
+<p class="a">Feedback từ AI (self-critique) not human. Constitution = nguyên tắc guide critique. Scale better (no human bottleneck). Anthropic Claude dùng CAI + traditional RLHF hybrid.</p>
+
+<p class="q">5. Alignment tax là gì? Ví dụ?</p>
+<p class="a">RLHF-tuned model có thể giảm capability trên 1 số benchmark academic vs base — hiện tượng OpenAI có report cho vài benchmark cụ thể (KHÔNG phải MMLU: con số MMLU 86.4% hay nhắc tới của GPT-4 là của bản RLHF/release, không phải base — tránh gán nhầm số cụ thể chưa verify được cho cặp base/RLHF). Reason: RM prefer safe/verbose → skip clever reasoning shortcuts. Trade-off có thật nhưng cần trích đúng benchmark, đúng chiều.</p>
+
+<p class="q">6. [Interview] Trong RL, "state" và "action" của bài toán RLHF ánh xạ (map) sang cái gì trong LLM?</p>
+<p class="a">State = prompt + các token đã sinh tới hiện tại. Action = 1 token được sinh tiếp theo. Policy = chính LLM (π_θ). Khác RL cổ điển (game có reward mỗi bước): RLHF chỉ có 1 reward duy nhất ở cuối episode (sau khi sinh xong cả response) → "sparse reward" — cần value function ước lượng advantage cho từng token trung gian dù chỉ biết reward tổng cuối cùng.</p>
+
+<p class="q">7. [Interview] Tính KL(π||π_ref) khi π = [0.5, 0.5] và π_ref = [0.9, 0.1] cho 2 outcome. Ý nghĩa con số?</p>
+<p class="a">KL = 0.5·log(0.5/0.9) + 0.5·log(0.5/0.1) = 0.5·log(0.556) + 0.5·log(5.0) = 0.5·(−0.588) + 0.5·(1.609) = −0.294 + 0.805 = 0.511 nats. Số dương, khá lớn (so với ví dụ trong bài KL=0.422) → policy đã lệch NHIỀU khỏi reference → nếu β đủ lớn, PPO sẽ phạt mạnh, kéo policy quay lại gần π_ref. KL luôn ≥ 0 (bằng 0 chỉ khi 2 phân phối giống hệt nhau — bất đẳng thức Jensen).</p>
+
+<p class="q">8. [Interview] Vì sao DPO loss KHÔNG cần thêm 1 term KL(π||π_ref) riêng như PPO, dù vẫn "giữ policy gần reference"?</p>
+<p class="a">Vì KL-constraint đã được "nhúng" (embedded) sẵn vào chính công thức DPO qua phép thế closed-form: r(x,y) = β·log(π(y|x)/π_ref(y|x)). Khi bạn tối ưu L_DPO = −log σ(r_w − r_l), bạn đang gián tiếp tối ưu chính xác objective RL-với-KL-constraint gốc (đây là điều Rafailov 2023 chứng minh bằng đại số Lagrangian) — chỉ là không cần 1 hyperparameter β riêng lẻ để tune trong loop RL, β nằm ngay trong công thức reward implicit.</p>
+
+<p class="q">9. [Interview] Cho log-prob: logπ(y_w)=−1.5, logπ(y_l)=−1.5, logπ_ref(y_w)=−1.5, logπ_ref(y_l)=−1.5 (policy chưa học gì, y_w = y_l về log-prob). β=0.1. L_DPO bằng bao nhiêu? Ý nghĩa?</p>
+<p class="a">r_w = 0.1·(−1.5−(−1.5)) = 0, r_l = 0.1·(−1.5−(−1.5)) = 0. diff = 0. L_DPO = −log σ(0) = −log(0.5) = 0.693 nats — đây chính là loss "khởi điểm" khi model hoàn toàn chưa phân biệt được chosen/rejected (ngang với random guess nhị phân). Mọi quá trình train DPO bắt đầu gần giá trị này và giảm dần khi model học phân biệt tốt hơn — dùng làm "sanity check" lúc debug: nếu loss ban đầu không ≈0.693 thì có bug ở cách tính log-prob.</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/2203.02155">Ouyang et al (2022) — InstructGPT / RLHF</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2305.18290">Rafailov et al (2023) — DPO paper</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2402.03300">Shao et al (2024) — DeepSeekMath (GRPO paper)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2212.08073">Bai et al (2022) — Constitutional AI (Anthropic)</a></li>
+    <li>📝 <a href="https://huggingface.co/blog/rlhf">HuggingFace blog — Illustrated RLHF</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L4_3_pretraining.html">← L4.3</a>
+  <a href="L4_5_finetuning_lora.html">L4.5 · Fine-tuning + LoRA →</a>
+</div>
+
+</div>
+</body>
+</html>

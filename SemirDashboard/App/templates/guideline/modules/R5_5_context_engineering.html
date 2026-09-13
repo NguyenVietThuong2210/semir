@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R5.5 · Context Engineering — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM Augmentation · Điểm 5/5</div>
+  <h1>R5.5 · Context Engineering</h1>
+  <p class="subtitle">Gap 100% trong curriculum cũ — thuật ngữ mới nổi 2025-2026 từ chính Anthropic. Bài cuối cùng của LLM Augmentation, và ví dụ sống ngay trong công cụ bạn đang dùng để đọc trang này.</p>
+  <div class="level">Độ khó: Khó · Roadmap AI Engineering · Track 1</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<p>Dễ → khó:</p>
+<ul>
+<li><strong>[Dễ]</strong> Định nghĩa Context Engineering bằng 1 câu: kỷ luật quản lý ngân sách context hữu hạn xuyên suốt nhiều lượt gọi.</li>
+<li><strong>[Trung bình]</strong> Kể tên và phân biệt 3 kỹ thuật chính: compaction, tool-result clearing, memory.</li>
+<li><strong>[Trung bình]</strong> Giải thích được vì sao "context window lớn hơn" không giải quyết được vấn đề gốc.</li>
+<li><strong>[Khó]</strong> Chỉ ra 2 ví dụ SỐNG (không hư cấu) của Context Engineering ngay trong dự án <code>predictor</code>: <code>CLAUDE.md</code>/<code>memory/*.md</code> (memory) và kiến trúc sub-agent (isolation).</li>
+<li><strong>[Trung bình]</strong> Phân bổ được ngân sách context cố định giữa 4 nguồn cạnh tranh (system prompt, lịch sử, context truy xuất, kết quả tool) cho 1 tình huống agent cho trước, và nhận diện đúng bucket KHÔNG được phép cắt.</li>
+<li><strong>[Khó]</strong> Giải thích đúng 2 rủi ro của nén quá tay (mất recall không thấy được, chi phí có thể tăng) và định vị được kỹ thuật nén đang dùng vào đúng tầng trong kiến trúc 3 tầng bộ nhớ.</li>
+<li><strong>[Khó]</strong> Đọc field design thật của <code>ProjectContext</code> (<code>ai_orchestrator</code>) và giải thích được vì sao đây là ví dụ "compaction-by-design", khác với compact SAU KHI đã phình to.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Đây là gap 100% — chưa có ở đâu trong 51 module cũ</div>
+<p>"Context Engineering" là thuật ngữ mới nổi 2025-2026, khác Prompt Engineering (R5.4). Trước bài này, curriculum chưa có module nào dạy riêng khái niệm này. Nguồn chính chủ mạnh nhất trong toàn bộ research của track này: Anthropic, blog kỹ thuật <code>anthropic.com/engineering/effective-context-engineering-for-ai-agents</code> (xem <code>../roadmap_ai_engineering/_research_evidence_track1.md</code> — độ tin cậy CAO, đọc trực tiếp từ nguồn chính chủ).</p>
+</div>
+<p><strong>Prerequisite</strong>: bắt buộc đọc R5.4 (Prompt Engineering) trước — bài này giải quyết đúng giới hạn mà R5.4 đã nêu ra.</p>
+<p><strong>§5-7 (ngân sách context, trade-off nén, <code>ProjectContext</code>) là nội dung bổ sung 2026</strong>, dựa trên nghiên cứu ngành (không phải bài viết gốc của Anthropic ở §1-4) cộng với đọc trực tiếp mã nguồn thật <code>ai_orchestrator/orchestrator/context.py</code> — đánh dấu rõ nguồn khác nhau vì độ tin cậy khác nhau: §1-4 là "theo đúng bài viết gốc", §5-7 là "tổng hợp + verify chéo nhiều nguồn 2026, cần đọc kèm ghi chú (verify 2026-09) ở từng số liệu cụ thể".</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy — bàn làm việc của 1 người đang làm nhiều việc cùng lúc</div>
+<p>Prompt Engineering giống việc viết 1 tờ ghi chú thật rõ ràng, súc tích cho 1 việc cụ thể. Context Engineering giống việc quản lý CẢ CÁI BÀN LÀM VIỆC qua 1 ngày dài — bàn có kích thước cố định (context window hữu hạn), càng làm nhiều việc càng chất đống giấy tờ (tool result, lịch sử) lên bàn, tới lúc bàn đầy tràn thì KHÔNG CÒN CHỖ để đặt tài liệu quan trọng tiếp theo (hết context window) hoặc tệ hơn — người đó nhìn vào đống giấy lộn xộn và "quên" mất việc quan trọng đang làm (lost-in-the-middle). Context Engineering là kỷ luật dọn bàn: cái gì giữ trên bàn, cái gì cất vào tủ hồ sơ (memory, ngoài context) nhưng vẫn lấy lại được khi cần, cái gì thật sự vứt đi.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] Định nghĩa gốc (theo Anthropic)</h3>
+<div class="callout"><div class="label">📖 Định nghĩa gốc</div>
+<p><em>"Context is finite with diminishing marginal returns — the core discipline of context engineering is finding the smallest set of high-signal tokens that maximize the likelihood of your desired outcome."</em> Dịch: context là tài nguyên HỮU HẠN với lợi ích biên GIẢM DẦN (nhồi thêm token không tự động = tốt hơn, có ngưỡng bão hòa rồi phản tác dụng) — kỷ luật cốt lõi là tìm tập NHỎ NHẤT các token có TÍN HIỆU CAO NHẤT.</p>
+</div>
+
+<h3>2. [Trung bình] Vì sao "càng nhiều context càng tốt" là trực giác SAI</h3>
+<p>Nhiều người mới nghĩ context window 200K token nghĩa là "cứ nhồi càng nhiều thông tin liên quan càng an toàn". Sai vì 2 lý do kỹ thuật:</p>
+<ol>
+<li><strong>Lost-in-the-middle</strong> — model có xu hướng chú ý tốt hơn ở đầu/cuối context, thông tin chôn giữa 1 context rất dài dễ bị bỏ sót dù về mặt kỹ thuật nó "có mặt" trong context.</li>
+<li><strong>Cost + latency</strong> — context dài hơn = tốn tiền hơn (input token, xem R2.8) + TTFT chậm hơn (phải prefill nhiều hơn, xem R2.1).</li>
+</ol>
+<p><strong>Ví dụ minh hoạ từ chính bài viết gốc</strong>: 1 agent nghiên cứu KHÔNG quản lý context, context leo lên tới <strong>335,279 token chỉ sau 5 lượt (turn)</strong> — chạm hard stop giữa chừng công việc trên 1 model có context window 200K. Đây không phải lỗi model "kém" — là hệ quả tất yếu của việc để context tích luỹ không kiểm soát qua nhiều lượt tool-call.</p>
+
+<h3>3. [Trung bình] 3 kỹ thuật chính (theo đúng bài viết gốc)</h3>
+<ol>
+<li><strong>Compaction</strong> — nén lại TOÀN BỘ lịch sử/trace hội thoại thành 1 bản tóm tắt ngắn hơn nhiều, giữ lại thông tin quan trọng, bỏ chi tiết dư thừa. Anthropic khuyến nghị quy trình 2 bước: (a) tối ưu <strong>recall</strong> trước — đảm bảo giữ được MỌI thông tin quan trọng, (b) sau đó mới tối ưu <strong>precision</strong> — loại bớt nội dung thừa. Làm ngược thứ tự dễ cắt nhầm thông tin quan trọng mà không biết.</li>
+<li><strong>Tool-result clearing</strong> — hình thức compaction "nhẹ và an toàn nhất": chỉ xoá <strong>output cũ của các tool call trước đó</strong> trong khi vẫn giữ nguyên phần hội thoại/reasoning.</li>
+<li><strong>Memory</strong> — khác biệt CĂN BẢN với 2 kỹ thuật trên: compaction và tool-clearing quản lý những gì <strong>BÊN TRONG</strong> context window hiện tại; memory <strong>ĐẨY thông tin RA NGOÀI</strong> context window để nó <strong>sống sót qua nhiều session</strong> — rồi được nạp lại có chọn lọc khi cần.</li>
+</ol>
+<pre><code>┌─────────────────── Context Window (hữu hạn, VD 200K token) ───────────────────┐
+│  system prompt │ compacted history │ tool results (đã clear cái cũ) │ current  │
+└──────────────────────────────────────────────────────────────────────────────┘
+                              │
+                              │  Memory: đẩy RA NGOÀI window,
+                              ▼  lưu bền vững, nạp lại khi cần
+                    ┌──────────────────────┐
+                    │  Persistent storage   │  (file, DB, vector store...)
+                    │  VD: CLAUDE.md,       │
+                    │  memory/MEMORY.md     │
+                    └──────────────────────┘</code></pre>
+
+<h3>4. [Khó] Sub-agent architecture — 1 kỹ thuật context engineering hay bị bỏ sót</h3>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Nếu 1 người phải vừa nghiên cứu tài liệu dày, vừa viết báo cáo, vừa kiểm tra chính tả — làm cả 3 việc trong CÙNG 1 buổi, trên CÙNG 1 bàn giấy sẽ nhanh chóng lộn xộn. Cách tốt hơn: giao việc 1 cho 1 người khác làm riêng (bàn giấy RIÊNG, sạch), người đó chỉ trả về BẢN TÓM TẮT kết quả — người chính chỉ nhận bản tóm tắt (ít token), không nhận toàn bộ "quá trình làm việc" bừa bộn của việc 1.</p>
+</div>
+<p>Đây chính là nguyên lý đứng sau kiến trúc <strong>sub-agent</strong> (chính công cụ <code>Agent</code> mà agent viết ra trang này có quyền dùng — xem <code>../modules/L8_1_agents_artifact.html</code>, <code>../modules/L6_2_multiagent.html</code>): thay vì 1 agent duy nhất tự đọc hết 50 file để research rồi giữ NGUYÊN 50 file đó trong context của chính nó, agent chính <strong>giao việc research cho 1 sub-agent riêng</strong> — sub-agent đó có context RIÊNG, nhưng khi trả lời chỉ trả về 1 bản tóm tắt vài trăm token. Agent chính chỉ nhận bản tóm tắt — context của agent chính vẫn "sạch".</p>
+
+<h3>5. [Trung bình] Ngân sách context — phân bổ CÓ CHỦ ĐÍCH giữa 4 nguồn cạnh tranh cùng 1 cửa sổ hữu hạn</h3>
+<p>§1-4 dạy CÁC KỸ THUẬT quản lý context (compaction, tool-clearing, memory, sub-agent). Phần này trả lời câu hỏi thực dụng hơn: trước khi cần tới các kỹ thuật đó, làm sao QUYẾT ĐỊNH TRƯỚC ngân sách cho từng loại nội dung, thay vì để chúng cạnh tranh nhau một cách tuỳ tiện? 4 nguồn luôn cạnh tranh cùng 1 cửa sổ context (research 2026):</p>
+<pre><code>┌───────────────────── Cửa sổ context (VD 200K token, minh hoạ) ─────────────────────┐
+│ System prompt +   │ Lịch sử hội   │ Context truy xuất │ Kết quả tool  │ Input +     │
+│ tool description  │ thoại (bị cắt │ (RAG cho lượt      │ (spiky, dễ    │ headroom    │
+│ (cố định)         │ trần bởi sliding│ này)              │ tăng đột biến)│ sinh output │
+│ ~4,000 token       │ window/compact)│ ~12,000 token     │ ~15,000 token │ ~10,000     │
+│                    │ ~8,000 token   │                   │ (đã capped,   │ token       │
+│                    │                │                   │  §1-2 clearing│             │
+└────────────────────┴────────────────┴───────────────────┴───────────────┴─────────────┘
+        Tổng 1 lượt ổn định (steady-state) ≈ 49,000 token — CHỈ khoảng ¼ cửa sổ 200K,
+        dù chạy bao nhiêu lượt đi nữa, MIỄN LÀ lịch sử/tool-result bị cắt trần đúng cách</code></pre>
+<p><strong>Worked example — đối chiếu ngược lại con số 335,279 token ở §2</strong>: agent nghiên cứu KHÔNG quản lý context ở §2 đạt 335,279 token chỉ sau 5 lượt — nghĩa là trung bình <strong>~67,000 token MỚI tích luỹ thêm MỖI LƯỢT</strong> (335,279/5 ≈ 67,056), không hề bị cắt trần. So với ngân sách có kỷ luật ở trên (~49,000 token/lượt NHƯNG ổn định, không cộng dồn qua các lượt vì lịch sử/tool-result bị nén lại), khác biệt cốt lõi không phải "49K &lt; 67K" (khác biệt 1 lượt) — mà là 1 bên CỘNG DỒN tuyến tính theo số lượt, 1 bên GIỮ TRẦN cố định bất kể chạy bao lâu.</p>
+<p>Bảng phân bổ tham khảo theo từng loại nội dung, xếp theo độ ưu tiên khi ngân sách eo hẹp (cắt từ dưới lên khi cần):</p>
+<table>
+<tr><th>Nguồn</th><th>Đặc điểm</th><th>Chiến lược khi ngân sách căng</th></tr>
+<tr><td>System prompt + tool description</td><td>Cố định, không đổi theo lượt</td><td>Không cắt — đây là "hợp đồng" hành vi cốt lõi</td></tr>
+<tr><td>Lịch sử hội thoại</td><td>Tăng dần theo số lượt nếu không quản lý</td><td>Compaction/sliding window (§3) — nén hoặc cắt lượt cũ</td></tr>
+<tr><td>Context truy xuất (RAG)</td><td>Thay đổi mỗi lượt tuỳ câu hỏi</td><td>Giảm top-k (xem R5.3 §4) — đánh đổi recall lấy chỗ trống</td></tr>
+<tr><td>Kết quả tool</td><td>Dễ tăng đột biến (VD đọc 1 file lớn)</td><td>Tool-result clearing (§3) — xoá kết quả cũ đã dùng xong</td></tr>
+<tr><td>Input hiện tại + headroom sinh output</td><td>Nhỏ, ổn định</td><td>Không cắt — model cần chỗ để SINH câu trả lời, hết chỗ này thì output bị cắt cụt giữa chừng, không liên quan gì tới các nguồn còn lại</td></tr>
+</table>
+<p>Cột cuối là thứ tự CẮT KHI CẦN — không phải thứ tự quan trọng: headroom sinh output không bao giờ nên bị cắt (cắt nó = câu trả lời bị đứt giữa chừng), nhưng cũng không "quan trọng" theo nghĩa chứa thông tin — nó đơn giản là chỗ trống bắt buộc phải chừa lại.</p>
+
+<h3>6. [Khó] Trade-off nén/tóm tắt cho phiên chạy dài — rủi ro mất recall KHÔNG THẤY ĐƯỢC, chi phí ẩn ngược trực giác</h3>
+<p>§3 đã dạy compaction LÀ GÌ (nén lịch sử, ưu tiên recall trước precision). Phần này dạy TRADE-OFF THẬT khi áp dụng compaction NHIỀU LẦN liên tiếp trong 1 phiên chạy rất dài — không phải lý thuyết, mà là phát hiện cụ thể từ research 2026:</p>
+<ul>
+<li><strong>Mất recall theo cấp số nhân qua nhiều vòng nén</strong> — sau nhiều chu kỳ tóm tắt liên tiếp (VD 3 vòng), 1 chỉ dẫn hiếm nhưng QUAN TRỌNG có thể biến mất hoàn toàn khỏi bản tóm tắt, mà KHÔNG CÓ CÁCH NÀO "nhìn thấy" nó đã mất (bản tóm tắt vẫn đọc trôi chảy, không báo lỗi) — đây là lý do §3 nhấn mạnh thứ tự "tối ưu recall trước, precision sau": làm ngược lại tăng gấp bội rủi ro này.</li>
+<li><strong>Chi phí có thể TĂNG chứ không giảm khi nén quá tay</strong> — nghe ngược trực giác nhưng có cơ chế rõ ràng: nén càng mạnh (VD giảm 99%+ số token), agent càng dễ "quên" thông tin cần thiết → phải gọi lại tool/đọc lại file để lấy thông tin đã mất → tốn thêm chi phí GỌI LẠI, có thể vượt quá số tiền tiết kiệm được từ việc nén.</li>
+</ul>
+<p><strong>Quy tắc an toàn (đồng thuận 2026)</strong>: <em>không bao giờ để bản tóm tắt là bản ghi DUY NHẤT</em> — luôn giữ bản gốc đầy đủ, không mất mát ở nơi lưu trữ (đĩa/DB), chỉ nén 1 BẢN SAO để dùng trong context cho nhanh. Nếu phát hiện thiếu thông tin, luôn có đường quay lại bản gốc, không phải "chấp nhận mất vĩnh viễn".</p>
+<p>Mức độ nén càng mạnh, 2 rủi ro ở trên càng tăng — không có mức nén "an toàn tuyệt đối", chỉ có đánh đổi rõ ràng hơn hoặc mờ hơn:</p>
+<table>
+<tr><th>Mức nén</th><th>Rủi ro mất recall</th><th>Rủi ro chi phí tăng do re-fetch</th><th>Khi phù hợp</th></tr>
+<tr><td>Nhẹ (giữ phần lớn chi tiết, chỉ bỏ dư thừa rõ ràng)</td><td>Thấp</td><td>Thấp</td><td>Phiên ngắn/trung bình, chưa cần tiết kiệm token gấp</td></tr>
+<tr><td>Vừa (tóm tắt theo chu kỳ, có "neo" giữ lại fact quan trọng — xem kiến trúc 3 tầng dưới đây)</td><td>Trung bình — vẫn cần theo dõi qua nhiều vòng</td><td>Trung bình</td><td>Phiên dài (hàng chục lượt), cần cân bằng token vs an toàn</td></tr>
+<tr><td>Mạnh (giảm &gt;90% số token mỗi vòng nén)</td><td>Cao — dễ mất chỉ dẫn hiếm mà không biết</td><td>Cao — research 2026 ghi nhận trường hợp nén 99.3% khiến TỔNG chi phí tăng, không giảm</td><td>Chỉ khi có cơ chế "neo" fact quan trọng + luôn giữ bản gốc lossless (§ Quy tắc an toàn trên)</td></tr>
+</table>
+<p><strong>Kiến trúc 3 tầng bộ nhớ (production 2026, khớp với 3 kỹ thuật §3 nhưng thêm 1 lớp trung gian)</strong>:</p>
+<pre><code>Tier 1 — Working memory (lượt hiện tại)
+  Đầy đủ, KHÔNG nén, lossless — đúng bằng "context window hiện tại" ở §3
+         │  hết lượt / phiên chạy dài thêm
+         ▼
+Tier 2 — Compressed session memory (trong phiên)
+  "Anchored incremental summarization": nén DẦN mỗi vòng (không dồn
+  tới cuối), + "neo" giữ cố định fact quan trọng qua mọi vòng nén
+  → giảm trực tiếp rủi ro "mất recall theo cấp số nhân" nêu ở trên
+         │  hết phiên / cần nhớ SANG session khác
+         ▼
+Tier 3 — Persistent memory (xuyên session, đã học ở §3)
+  File tĩnh (CLAUDE.md, memory/*.md) HOẶC retrieval-augmented
+  episodic memory (dùng RAG nạp lại đúng phần ký ức liên quan)</code></pre>
+<p>3 tầng này không phải 3 lựa chọn thay thế nhau — 1 hệ thống trưởng thành dùng CẢ 3 tầng cùng lúc, mỗi tầng xử lý đúng phạm vi thời gian sống của nó (1 lượt / 1 phiên / xuyên session).</p>
+<p>4 chiến lược production 2026 để triển khai Tier 2-3 (không loại trừ nhau, nhiều hệ thống kết hợp): (1) gọi API tóm tắt có sẵn từ nhà cung cấp model; (2) tự viết "structured anchored iterative compaction" (đúng cơ chế mô tả ở trên); (3) đẩy hẳn ra bộ nhớ ngoài (external memory offload — gần với Tier 3/Memory §3); (4) memory dạng "episodic" có RAG hỗ trợ truy xuất lại đúng phần liên quan.</p>
+
+<h3>7. [Khó] Ví dụ thật — <code>ProjectContext</code> của <code>ai_orchestrator</code> là 1 thiết kế context engineering có chủ đích, không phải tình cờ</h3>
+<p><code>ai_orchestrator</code> (dự án song song với <code>predictor</code>, dùng LangGraph điều phối 11 agent: pm, analyser, spec_analyze, task_decompose, qa_verify, engineer, reviewer, security, qa, deploy, retrospective) định nghĩa 1 <code>TypedDict</code> tên <code>ProjectContext</code> (<code>orchestrator/context.py</code>) làm state DUY NHẤT truyền qua toàn bộ pipeline. Đọc kỹ field design cho thấy ĐÚNG 2 nguyên lý đã học ở §1-6, áp dụng ở TẦNG THIẾT KẾ SCHEMA chứ không phải patch thêm sau:</p>
+<ul>
+<li><strong><code>history: list[AgentEvent]</code> — compaction-by-design</strong>: mỗi <code>AgentEvent</code> chỉ lưu <code>{agent, timestamp, status, tokens_used, duration_seconds, note, task_id}</code> — 1 dòng log ngắn, KHÔNG lưu toàn bộ output/reasoning của agent đó. Đây chính là "recall trước, precision sau" (§3) được quyết định NGAY TỪ LÚC THIẾT KẾ schema, không phải nén sau khi đã phình to.</li>
+<li><strong><code>artifact_paths: dict[str, str]</code> và comment gốc trong code cho <code>kanban_board</code></strong>: <em>"Metadata only — never embed file content; that stays on disk"</em> — đúng NGUYÊN VĂN quy tắc "giữ bản gốc lossless trên đĩa, chỉ mang theo con trỏ/tóm tắt vào context" đã nêu ở §6, viết thành comment thật trong code, không phải suy diễn.</li>
+<li><strong><code>iteration</code>/<code>qa_analyser_iteration</code>/<code>task_iteration</code> — bộ đếm thay vì log chi tiết</strong>: thay vì lưu lại TOÀN BỘ lịch sử retry (nội dung từng lần thử, lỗi từng lần), schema chỉ giữ 1 SỐ NGUYÊN đếm số vòng lặp — đủ để logic điều phối (dừng khi vượt ngưỡng) hoạt động đúng, không cần "nhớ" chi tiết từng lần retry cũ.</li>
+</ul>
+<p>Điểm đáng chú ý: <code>ProjectContext</code> là 1 state DÙNG CHUNG cho cả 11 agent, nhưng mỗi agent (node trong LangGraph) chỉ ĐỌC/GHI đúng phần field liên quan tới việc của nó (VD <code>qa_verify</code> ghi <code>verify_report</code>, <code>security</code> ghi <code>security_report</code>) — kết hợp "state chung, đọc chọn lọc" với "sub-agent isolation" (§4) thành 1 kiến trúc mạch lạc: không phải 11 agent cùng đọc TOÀN BỘ context của nhau, mà mỗi agent chỉ tiêu thụ đúng phần cần thiết từ 1 nguồn sự thật chung.</p>
+<p>1 field khác đáng chú ý cùng nguyên lý: <code>cost_estimate_usd: Optional[float]</code> — 1 SỐ đơn lẻ tích luỹ chi phí, không phải lưu lại toàn bộ lịch sử token usage chi tiết của từng lần gọi model; đúng tinh thần "tóm tắt đủ dùng, không giữ nguyên văn" áp dụng cả cho dữ liệu SỐ, không chỉ dữ liệu TEXT.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p><strong>Bài tập tư duy — tự chẩn đoán 1 agent "quên" rule giữa chừng</strong>: giả sử skill <code>daily-investor-report</code> chạy mode <code>all</code> (86 ticker), và tới ticker thứ 60 báo cáo bắt đầu vi phạm 1 rule (dù 10 ticker đầu tuân thủ đúng). Theo đúng tư duy context engineering, câu hỏi chẩn đoán ĐÚNG không phải "model có hiểu rule không" (rõ ràng có, vì 10 ticker đầu đúng) mà là: <em>"tới lượt thứ 60, rule (nằm ở đầu context, trong system prompt) có còn đủ 'trọng lượng' so với 59 lượt tool-result đã tích luỹ phía sau không?"</em> Hướng fix đúng: tool-result clearing giữa các ticker, KHÔNG PHẢI viết lại rule dài hơn (viết dài hơn chỉ làm context phình to nhanh hơn, phản tác dụng theo đúng nguyên lý "diminishing marginal returns" ở §1).</p>
+<div class="callout danger"><div class="label">⚠️ Lưu ý</div>
+<p>Đây là bài tập MINH HOẠ tư duy chẩn đoán, không phải khẳng định bug này đang thật sự xảy ra trong <code>daily-investor-report</code> — trước khi kết luận nguyên nhân thật, luôn verify bằng cách đọc trace/log thật (đúng nguyên tắc <code>feedback_evidence_and_document_research.md</code> trong memory dự án: verify load-bearing claims, không đoán).</p>
+</div>
+
+<p><strong>Đối chiếu ngược lại ngân sách §5 với ví dụ 4-tool ở <code>R5_1_tool_use.html</code></strong>: worked example ở <code>R5.1</code> tính 1 lượt 4 tool (<code>get_price</code>, <code>get_volume_signals</code>, <code>get_foreign_flow</code>, <code>get_news</code>) đưa thêm <strong>1,200 token</strong> vào context. Đối chiếu với bảng ngân sách §5 (bucket "Kết quả tool" cap ở ~15,000 token), 1,200 token chỉ chiếm <strong>~8%</strong> ngân sách bucket đó (1200/15000 = 0.08) cho ĐÚNG 1 ticker — cho thấy rõ vì sao ở quy mô 86 ticker chạy TUẦN TỰ (không phải dồn hết vào 1 context), ngân sách "Kết quả tool" không bao giờ tự tích luỹ qua các ticker NẾU có tool-result clearing giữa mỗi ticker (đúng kỹ thuật §3) — mỗi ticker mới lại bắt đầu từ ngân sách trống, không cộng dồn 86 lần.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Kỹ thuật</th><th>Quản lý gì?</th><th>Ai dùng trong dự án này?</th></tr>
+<tr><td>Compaction</td><td>Bên trong context window hiện tại</td><td>Hạ tầng agent harness (Claude Code) — dự án không tự triển khai lại</td></tr>
+<tr><td>Tool-result clearing</td><td>Bên trong context window hiện tại</td><td>Hạ tầng agent harness — dự án không tự triển khai lại</td></tr>
+<tr><td>Memory</td><td>Ngoài context window, xuyên session</td><td><code>CLAUDE.md</code>, <code>memory/*.md</code>, <code>kb/lessons_learned_patterns.json</code></td></tr>
+<tr><td>Sub-agent isolation</td><td>Cô lập context "dùng 1 lần" khỏi context "cần giữ xuyên suốt"</td><td>Chính cách tài liệu roadmap này được tạo ra (10 sub-agent song song)</td></tr>
+<tr><td>Ngân sách context (§5)</td><td>Phân bổ TRƯỚC giữa 4 nguồn cạnh tranh, quyết định caps cho §1-3</td><td>Chưa có ngân sách tường minh — cơ hội cải thiện cho skill chạy mode <code>all</code></td></tr>
+<tr><td>Kiến trúc 3 tầng bộ nhớ (§6)</td><td>Tier 1 (lượt hiện tại) → Tier 2 (nén trong phiên) → Tier 3 (bền vững xuyên session)</td><td>Tier 3 đã có (<code>CLAUDE.md</code>); Tier 2 (anchored incremental summarization) do hạ tầng agent harness xử lý</td></tr>
+<tr><td><code>ProjectContext</code> schema design (§7)</td><td>Compaction-by-design + "con trỏ không nội dung" ngay từ lúc thiết kế state</td><td><code>ai_orchestrator/orchestrator/context.py</code> (dự án song song, không phải <code>predictor</code>)</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án — liên hệ trực tiếp tới CHÍNH môi trường đang chạy agent này</div>
+<p><code>CLAUDE.md</code> (đọc ngay đầu mọi session, ghi rõ trong chính file: <em>"This file is read automatically at the start of every Claude Code session"</em>) và <code>memory/MEMORY.md</code> (auto-memory, "persists across conversations") <strong>CHÍNH LÀ 1 triển khai thật của kỹ thuật Memory trong Context Engineering</strong> — không phải ẩn dụ: thông tin quan trọng (rule kiến trúc, lịch sử quyết định owner correction) được đẩy RA KHỎI context của bất kỳ 1 session cụ thể nào, lưu bền vững trong file, rồi được NẠP LẠI vào đầu mỗi context mới — đúng 3 đặc điểm của "memory" theo định nghĩa Anthropic (ngoài window, bền vững qua session, chọn lọc khi nạp lại).</p>
+<p>Thêm nữa: nếu 1 skill trong tương lai cần vừa (a) research sâu nhiều nguồn (đọc toàn bộ 86 ticker × nhiều field), vừa (b) tổng hợp viết report cuối, cân nhắc tách 2 việc này qua sub-agent thay vì gộp trong 1 luồng context liên tục.</p>
+<p><strong>Bài học từ <code>ProjectContext</code> (§7) áp dụng được cho <code>predictor</code></strong>: nếu 1 skill/agent tương lai của <code>predictor</code> cần state dùng chung qua nhiều bước (VD 1 pipeline phân tích nhiều ticker, nhiều bước xử lý), thiết kế state đó theo đúng nguyên lý <code>AgentEvent</code> — log NGẮN (tên bước, trạng thái, số liệu tóm tắt) thay vì lưu NGUYÊN VĂN output từng bước — quyết định NGAY TỪ SCHEMA, rẻ hơn nhiều so với phải nén lại sau khi context đã phình to.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Nghĩ "context window lớn hơn (200K, 1M token) = không cần lo context engineering nữa"</strong> — sai, vì lost-in-the-middle và cost/latency vẫn tăng tuyến tính theo token dùng, bất kể trần context bao lớn.</p>
+<p><strong>2. Nén (compact) quá tay, tối ưu precision trước recall</strong> — mất thông tin quan trọng mà không biết đã mất, vì không có cách nào "thấy" cái đã bị cắt.</p>
+<p><strong>3. Cố tự triển khai lại compaction/tool-clearing</strong> khi hạ tầng agent harness (Claude Code) đã làm việc đó — lãng phí công sức, nên tập trung vào phần dự án THỰC SỰ cần tự làm: memory ở tầng ứng dụng (<code>CLAUDE.md</code>, <code>kb/*.json</code>).</p>
+<p><strong>4. Nghĩ nén mạnh hơn LUÔN rẻ hơn</strong> — sai theo đúng phát hiện ở §6: nén quá tay có thể làm TỔNG chi phí tăng vì phải gọi lại tool/đọc lại file để bù thông tin đã mất; luôn đo tổng chi phí thực tế (bao gồm re-fetch), không chỉ đo kích thước bản tóm tắt.</p>
+<p><strong>5. Để bản tóm tắt trở thành bản ghi DUY NHẤT</strong> — vi phạm trực tiếp quy tắc an toàn ở §6; không giữ bản gốc lossless = không có đường quay lại khi phát hiện bản tóm tắt đã mất thông tin quan trọng.</p>
+<p><strong>6. Thiết kế state/schema cho 1 pipeline nhiều bước mà không nghĩ tới ngân sách context ngay từ đầu</strong> — phải nén/dọn dẹp SAU khi đã phình to luôn tốn công hơn quyết định đúng ngay từ lúc thiết kế (đúng bài học §7).</p>
+<p><strong>7. Cắt vào ngân sách "input + headroom sinh output" khi ngân sách căng</strong> — đây là bucket DUY NHẤT không nên cắt (§5); cắt nhầm bucket này làm câu trả lời bị đứt giữa chừng thay vì chỉ mất 1 phần ngữ cảnh phụ.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích đúng 3 kỹ thuật context engineering (compaction, tool-result clearing, memory) và chỉ ra khác biệt cốt lõi giữa memory với 2 kỹ thuật còn lại.</li>
+<li>Chỉ ra được <code>CLAUDE.md</code>/<code>memory/MEMORY.md</code> là ví dụ thật của kỹ thuật "memory", giải thích đúng 3 đặc điểm khớp định nghĩa.</li>
+<li>Giải thích được vì sao "context window lớn hơn" không thay thế được kỷ luật context engineering.</li>
+<li>Với bài tập chẩn đoán ở §"Ví dụ cụ thể", giải thích được vì sao viết rule dài hơn là hướng fix SAI.</li>
+<li>Giải thích được sub-agent architecture là 1 kỹ thuật context engineering (isolation), không chỉ là tổ chức code.</li>
+<li>Tính lại được ví dụ ngân sách §5 (~49,000 token/lượt ổn định) và giải thích đúng vì sao khác biệt cốt lõi với agent không quản lý ở §2 là CỘNG DỒN vs GIỮ TRẦN, không chỉ chênh lệch số tuyệt đối.</li>
+<li>Giải thích được 2 rủi ro của nén quá tay ở §6 (mất recall không thấy được, chi phí có thể tăng) và nêu đúng quy tắc an toàn ("không để tóm tắt là bản ghi duy nhất").</li>
+<li>Đọc được field <code>history: list[AgentEvent]</code> và comment "Metadata only" của <code>ProjectContext</code> (§7), giải thích đúng đây là compaction-by-design, không phải tình cờ.</li>
+<li>Xếp đúng 1 kỹ thuật cho trước (compaction/tool-clearing/memory) vào đúng tầng trong kiến trúc 3 tầng bộ nhớ ở §6, giải thích vì sao 3 tầng không thay thế nhau mà chạy song song.</li>
+<li>Tính lại được ví dụ đối chiếu 1,200/15,000 = 8% ở phần cuối "Ví dụ cụ thể", giải thích đúng vì sao tool-result clearing khiến ngân sách KHÔNG cộng dồn qua 86 ticker.</li>
+<li>Giải thích được vì sao bucket "input + headroom sinh output" không nên bị cắt khi ngân sách căng, khác với 3 bucket còn lại đều có chiến lược cắt/nén cụ thể.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R5_4_prompt_engineering.html">← R5.4 · Prompt Engineering</a>
+  <a href="R6_1_memory.html">R6.1 · AI Agents — Memory →</a>
+</div>
+
+</div>
+</body>
+</html>

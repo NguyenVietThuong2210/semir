@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R8.6 · AI Agent Instrumentation — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Observability &amp; Evaluation · Điểm 6/6</div>
+  <h1>R8.6 · AI Agent Instrumentation</h1>
+  <p class="subtitle">Bài cuối của Observability &amp; Evaluation — OpenTelemetry GenAI Semantic Conventions: 1 chuẩn chung để đổi observability backend mà không phải viết lại instrumentation.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>[Dễ]</strong> Hiểu vì sao cần 1 chuẩn đặt tên chung cho instrumentation, thay vì mỗi vendor tự đặt tên riêng.</li>
+<li><strong>[Trung bình]</strong> Nhớ 3 attribute cốt lõi trong namespace <code>gen_ai.*</code>.</li>
+<li><strong>[Trung bình]</strong> Kể đúng 4 vùng phủ chính của OTel GenAI semconv 2026.</li>
+<li><strong>[Khó]</strong> Giải thích đúng privacy default (không capture nội dung prompt/PII mặc định) và vì sao điều đó quan trọng.</li>
+<li><strong>[Trung bình]</strong> Kể đúng tên 3 <code>gen_ai.operation.name</code> riêng cho agent (<code>create_agent</code>, <code>invoke_agent</code>, <code>execute_tool</code>) + cấu trúc span cha-con tương ứng.</li>
+<li><strong>[Trung bình]</strong> Biết tên 3 attribute cụ thể khi content capture được BẬT opt-in (<code>gen_ai.system_instructions</code>, <code>gen_ai.input.messages</code>, <code>gen_ai.output.messages</code>).</li>
+<li><strong>[Dễ]</strong> So sánh 3 SDK auto-instrument 2026 (OpenLLMetry, OpenInference, OpenLIT) — biết khi nào không cần viết span tay như <code>L6_6</code> đã dạy.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Đã có ở module cũ</div>
+<p><a href="L6_6_observability.html"><code>L6_6_observability.html</code> mục 2.4</a> đã dạy "instrument LLM call thủ công" bằng OTel span tự viết — không lặp lại. Trang này bổ sung <strong>chuẩn đặt tên chung</strong> (OpenTelemetry GenAI Semantic Conventions) để instrumentation viết 1 lần dùng được với mọi observability backend.</p>
+</div>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p><code>L6_6</code> đã dạy cách "tự viết nhật ký" cho từng bước agent (OTel span thủ công). Bullet này nói về việc dùng 1 <strong>cuốn sổ nhật ký theo chuẩn chung</strong> — ai đọc cũng hiểu ngay dòng nào ghi gì, không cần đoán, vì mọi người dùng cùng 1 mẫu ghi chép.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] Vì sao cần chuẩn chung — vấn đề trước khi có OTel GenAI semconv</h3>
+<div class="callout"><div class="label">📖 Giải thích sâu — OpenTelemetry GenAI Semantic Conventions</div>
+<p>Đây là bộ chuẩn (do OpenTelemetry — đã graduate CNCF — định nghĩa) quy định tên span, attribute key, metric instrument, event name mà MỌI instrumentation nên phát ra cho: model invocation, tool execution, agent run, retrieval, memory operation. Trước khi có chuẩn này, mỗi vendor (LangSmith, Langfuse, Arize...) tự đặt tên attribute riêng — chuyển vendor phải viết lại instrumentation. Có chuẩn chung → viết instrumentation 1 lần, đổi backend quan sát không cần sửa code.</p>
+</div>
+<div class="callout danger">
+<div class="label">⚠️ Lưu ý độ ổn định (cập nhật 2026)</div>
+<p>Bản thân OpenTelemetry (dự án) đã graduate CNCF từ lâu, nhưng riêng bộ <strong>GenAI Semantic Conventions</strong> thì chưa — tính đến giữa 2026, toàn bộ attribute/span/metric/event trong namespace <code>gen_ai.*</code> vẫn mang nhãn ổn định "Development", chưa cái nào đạt "Stable". Tháng 6/2026 (v1.42.0), toàn bộ quy ước này còn được tách ra khỏi repo semantic-conventions chính sang 1 repo GenAI riêng để tăng tốc độ phát triển — tổ chức lại, không phải "graduate". Thực tế: attribute cho chat/embedding cơ bản (như <code>gen_ai.request.model</code>, <code>gen_ai.usage.*</code>) đã đủ ổn định để dùng cho dashboard production, nhưng quy ước cho agent/tool-orchestration vẫn đang định hình — cần coi là "khả năng cao còn đổi tên" khi áp dụng phần agent-specific.</p>
+</div>
+
+<h3>2. [Trung bình] Attribute cốt lõi (namespace <code>gen_ai.*</code>)</h3>
+<table>
+<tr><th>Attribute</th><th>Ý nghĩa</th></tr>
+<tr><td><code>gen_ai.request.model</code></td><td>Tên model được gọi</td></tr>
+<tr><td><code>gen_ai.usage.input_tokens</code> / <code>gen_ai.usage.output_tokens</code></td><td>Số token mỗi lượt gọi</td></tr>
+<tr><td><code>gen_ai.response.finish_reasons</code></td><td>Vì sao model dừng sinh (stop/length/tool_call...)</td></tr>
+<tr><td><code>gen_ai.agent.name</code> / <code>gen_ai.agent.id</code></td><td>Tên/ID agent đang chạy — dùng cho span <code>invoke_agent</code>/<code>create_agent</code> (mục 5)</td></tr>
+<tr><td><code>gen_ai.tool.name</code> / <code>gen_ai.tool.call.id</code></td><td>Tên tool + ID riêng cho từng lượt gọi — dùng cho span <code>execute_tool</code> (mục 5)</td></tr>
+</table>
+
+<h3>3. [Trung bình] 4 vùng phủ chính (2026)</h3>
+<div class="callout"><div class="label">📖 4 vùng phủ chính</div>
+<p>(1) <strong>LLM client span</strong> — mỗi lệnh gọi API trực tiếp; (2) <strong>Agent span</strong> — workflow nhiều bước; (3) <strong>Event</strong> — nội dung prompt/completion (opt-in, KHÔNG mặc định bật vì có thể chứa dữ liệu nhạy cảm); (4) <strong>Metric</strong> — số liệu tổng hợp (latency, token/s, error rate). Với agent, <strong>mỗi tool call, mỗi LLM invocation, mỗi bước retrieval trở thành 1 child span</strong> — tạo ra 1 trace đầy đủ toàn bộ chuỗi suy luận, đây chính là dữ liệu thô để làm component-level eval (xem R8.4).</p>
+</div>
+
+<h3>4. [Khó] Privacy mặc định — vì sao quan trọng</h3>
+<div class="callout danger"><div class="label">⚠️ Privacy mặc định</div>
+<p>Mặc định KHÔNG capture nội dung prompt/tool argument cùng với telemetry — chỉ có metadata (tên model, số token, thời lượng). Phải bật opt-in riêng nếu cần capture nội dung, và khi bật phải xử lý như dữ liệu nhạy cảm (che PII trước khi lưu telemetry, không log thẳng).</p>
+</div>
+
+<h3>5. [Trung bình] Agent span &amp; tool span — 3 <code>operation.name</code> riêng cho agent</h3>
+<p><code>R6_6_multiagent_systems.html §6</code> đã vẽ ví dụ span cha-con lead→sub-agent nhưng chưa nêu TÊN operation chuẩn hoá — đây là phần OTel GenAI semconv quy định cụ thể cho agent (khác hẳn <code>gen_ai.operation = "chat"</code> của 1 lệnh gọi LLM đơn thuần):</p>
+<table>
+<tr><th><code>gen_ai.operation.name</code></th><th>Khi nào phát ra</th><th>Tên span quy ước</th></tr>
+<tr><td><code>create_agent</code></td><td>Lúc khởi tạo 1 agent (gán persona, tool list, system prompt)</td><td><code>create_agent {gen_ai.agent.name}</code></td></tr>
+<tr><td><code>invoke_agent</code></td><td>Lúc agent bắt đầu chạy 1 task — span CHA của toàn bộ trajectory</td><td><code>invoke_agent {gen_ai.agent.name}</code></td></tr>
+<tr><td><code>execute_tool</code></td><td>Mỗi lần agent gọi 1 tool — span CON của <code>invoke_agent</code></td><td><code>execute_tool {gen_ai.tool.name}</code></td></tr>
+</table>
+<pre><code>invoke_agent "research_agent"        (span cha — 1 task = 1 span này)
+├─ chat (gen_ai.operation="chat")     — LLM quyết định bước tiếp theo
+├─ execute_tool "get_price_history"   — span con, có gen_ai.tool.call.id riêng
+├─ chat                               — LLM đọc kết quả tool, quyết định tiếp
+├─ execute_tool "get_news_sentiment"
+└─ chat                               — LLM tổng hợp câu trả lời cuối
+
+→ Khác ví dụ multi-agent ở R6_6 (nhiều "invoke_agent" SONG SONG, mỗi sub-agent
+  1 span invoke_agent riêng dưới 1 root chung) — ở đây là 1 AGENT ĐƠN chạy tuần
+  tự nhiều bước, mỗi bước 1 loại span khác nhau (chat/execute_tool) lồng trong
+  đúng 1 invoke_agent duy nhất.</code></pre>
+
+<h3>6. [Trung bình] Cấu trúc attribute khi content capture được BẬT opt-in</h3>
+<p>Mục 4 nói "mặc định không capture nội dung" — nếu BẬT (opt-in), nội dung không được nhồi thẳng thành 1 chuỗi text tự do mà có <strong>3 attribute có cấu trúc riêng</strong>, tách biệt theo vai trò:</p>
+<table>
+<tr><th>Attribute</th><th>Chứa gì</th></tr>
+<tr><td><code>gen_ai.system_instructions</code></td><td>System prompt/persona đã cấu hình cho agent</td></tr>
+<tr><td><code>gen_ai.input.messages</code></td><td>Toàn bộ message history gửi vào model ở lượt gọi này (user + assistant + tool result trước đó)</td></tr>
+<tr><td><code>gen_ai.output.messages</code></td><td>Message model sinh ra (bao gồm cả tool call nếu có)</td></tr>
+</table>
+<p>Tách 3 attribute riêng (thay vì 1 blob text) cho phép dashboard lọc/tìm kiếm CHÍNH XÁC theo vai trò (VD chỉ tìm trong system instructions xem prompt có đổi version không, không lẫn với nội dung hội thoại) — và quan trọng hơn: cho phép áp rule che PII (mục 4) RIÊNG theo từng loại, vì <code>gen_ai.input.messages</code> (có thể chứa câu hỏi user) và <code>gen_ai.system_instructions</code> (do dev viết, hiếm khi có PII) có mức rủi ro khác hẳn nhau.</p>
+
+<h3>7. [Dễ] SDK tự động instrument — không phải lúc nào cũng viết span tay</h3>
+<p><code>L6_6_observability.html §2.4</code> dạy viết OTel span THỦ CÔNG (tự gọi <code>tracer.start_as_current_span</code>, tự set từng attribute). Thực tế 2026 có sẵn SDK tự động "bọc" sẵn các thư viện LLM/agent phổ biến, phát ra đúng chuẩn <code>gen_ai.*</code> mà không cần viết tay từng dòng:</p>
+<table>
+<tr><th>SDK</th><th>Điểm mạnh</th><th>Phù hợp backend nào</th></tr>
+<tr><td><strong>OpenLLMetry</strong> (Traceloop)</td><td>Tự động bọc chain/agent/retriever/tool call; convention đã được upstream vào chuẩn OTel chính thức; hỗ trợ Python/TypeScript/Go/Ruby</td><td>Datadog, Honeycomb, New Relic, Grafana, SigNoz</td></tr>
+<tr><td><strong>OpenInference</strong></td><td>Lớp spec bổ sung riêng cho LLM app, phủ rộng framework agent (30+ integration Python)</td><td>Arize Phoenix (thiết kế đi cùng nhau)</td></tr>
+<tr><td><strong>OpenLIT</strong></td><td>Khởi tạo dễ nhất (1 lệnh gọi hàm), có thêm GPU monitoring + OpAMP fleet management</td><td>Khi cần giám sát GPU cùng lúc với LLM call</td></tr>
+</table>
+<p>Ý nghĩa thực hành: nếu stack đã dùng đúng thư viện SDK này hỗ trợ (VD Anthropic SDK, LangChain, LlamaIndex), gắn 1 dòng khởi tạo SDK là có đủ span <code>gen_ai.*</code> chuẩn ngay — không cần viết tay từng <code>tracer.start_as_current_span</code> như ví dụ thủ công ở <code>L6_6</code>. Viết tay vẫn cần thiết cho phần code KHÔNG được SDK nào bọc sẵn (VD 1 hàm nội bộ tự viết không qua thư viện LLM chuẩn).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<pre><code># Instrumentation KHÔNG theo chuẩn (tự đặt tên) — phải viết lại khi đổi backend:
+span.set_attribute("my_model_name", "claude-sonnet-5")
+span.set_attribute("tokens_in", 1200)
+
+# Instrumentation THEO CHUẨN gen_ai.* — đổi backend không cần sửa:
+span.set_attribute("gen_ai.request.model", "claude-sonnet-5")
+span.set_attribute("gen_ai.usage.input_tokens", 1200)
+# Bất kỳ backend nào hỗ trợ OTel GenAI semconv (LangSmith, Langfuse, Arize...)
+# đều hiểu ngay ý nghĩa của 2 attribute này, không cần mapping thủ công.</code></pre>
+<p><strong>Worked example — gắn số liệu thật vào trace agent ở mục 5</strong> (agent nghiên cứu cổ phiếu, 3 span <code>chat</code> + 2 span <code>execute_tool</code>):</p>
+<pre><code>invoke_agent "research_agent"                                total: 4,200ms
+├─ chat (gen_ai.usage.input_tokens=800, output_tokens=120)     620ms
+├─ execute_tool "get_price_history" (tool.call.id=call_1)      340ms
+├─ chat (input_tokens=950, output_tokens=95)                   580ms
+├─ execute_tool "get_news_sentiment" (tool.call.id=call_2)    1200ms  ← chậm bất
+│                                                                     thường
+└─ chat (input_tokens=1400, output_tokens=210)                1460ms
+
+Tổng input_tokens  = 800+950+1400 = 3,150
+Tổng output_tokens = 120+95+210   = 425
+Tổng latency cộng dồn từng span   = 620+340+580+1200+1460 = 4,200ms (khớp đúng
+  span cha invoke_agent — không có "thời gian chết" giữa các span trong ví dụ này)
+
+→ Nhìn riêng span execute_tool "get_news_sentiment" (1200ms, chiếm 28.6% tổng
+  thời gian) là điểm nghẽn rõ ràng — đúng tinh thần component-level eval đã học
+  ở R8.4: có SỐ LIỆU cụ thể để biết sửa ở đâu, không phải đoán cả pipeline.</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Cách tiếp cận</th><th>Đổi observability backend</th><th>Đọc được bởi tool bên thứ 3?</th></tr>
+<tr><td>Tự đặt tên attribute (trước semconv)</td><td>Phải viết lại toàn bộ instrumentation</td><td>Không — mỗi vendor hiểu khác nhau</td></tr>
+<tr><td>Theo chuẩn <code>gen_ai.*</code></td><td>Không cần sửa code, chỉ đổi export target</td><td>Có — mọi platform hỗ trợ OTel đều hiểu</td></tr>
+</table>
+<table>
+<tr><th>Cách viết instrumentation</th><th>Công sức ban đầu</th><th>Độ đầy đủ attribute</th><th>Khi nào chọn</th></tr>
+<tr><td>Viết tay (<code>L6_6</code> §2.4)</td><td>Cao — tự set từng attribute</td><td>Tuỳ người viết, dễ thiếu sót/quên field mới</td><td>Code nội bộ không qua thư viện LLM chuẩn nào</td></tr>
+<tr><td>SDK tự động (mục 7)</td><td>Thấp — 1 lệnh khởi tạo</td><td>Đầy đủ, theo kịp spec khi SDK cập nhật</td><td>Đang dùng đúng thư viện SDK hỗ trợ (Anthropic/OpenAI/LangChain...)</td></tr>
+</table>
+<table>
+<tr><th>Loại span</th><th><code>operation.name</code></th><th>Xuất hiện khi nào trong 1 agent run</th></tr>
+<tr><td>Agent</td><td><code>create_agent</code> / <code>invoke_agent</code></td><td>1 lần khởi tạo, 1 lần cho mỗi task agent chạy (span cha)</td></tr>
+<tr><td>LLM call</td><td><code>chat</code></td><td>Mỗi lần agent gọi model để quyết định/tổng hợp (span con, có thể lặp nhiều lần)</td></tr>
+<tr><td>Tool</td><td><code>execute_tool</code></td><td>Mỗi lần agent gọi 1 tool cụ thể (span con, song song với <code>chat</code>)</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>L6_6_observability.html</code> mục 2.4 đã dạy "instrument LLM call thủ công" bằng OTel span tự viết — cải thiện đáng làm nếu dự án mở rộng LLM hybrid mode: đổi tên attribute tự đặt sang đúng namespace <code>gen_ai.*</code> chuẩn, để nếu sau này đổi observability backend (VD từ tự viết log sang Langfuse/Arize, xem R8.5) không phải viết lại toàn bộ instrumentation.</p>
+<p>Áp cụ thể mục 5-7 vào <code>.claude/skills/daily-investor-report/scripts/collect_and_build.py</code>: pipeline hiện tại không phải "agent" theo đúng nghĩa OTel GenAI (không có vòng lặp LLM tự quyết định bước tiếp theo — các Step chạy tuần tự theo code Python cố định), nên KHÔNG cần span <code>invoke_agent</code>/<code>execute_tool</code> của mục 5. Nếu dự án dùng thư viện Anthropic SDK trực tiếp (đúng hiện trạng), OpenLLMetry (mục 7) là lựa chọn phù hợp nhất trong 3 SDK — hỗ trợ Anthropic SDK trực tiếp, và convention của nó đã upstream vào chuẩn OTel chính thức, không khoá cứng vào riêng 1 backend nào (khác OpenInference thiết kế đi cùng Arize Phoenix).</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Log thẳng nội dung prompt/PII vào telemetry mặc định</strong> — vi phạm privacy default của OTel GenAI semconv.</p>
+<p><strong>2. Tự đặt tên attribute riêng thay vì dùng namespace <code>gen_ai.*</code> chuẩn</strong> — mất khả năng đổi backend mà không viết lại code.</p>
+<p><strong>3. Bật event capture (nội dung prompt) mà không xử lý PII trước</strong> — dữ liệu nhạy cảm bị lưu trần trong hệ thống telemetry.</p>
+<p><strong>4. Nhồi content capture thành 1 chuỗi text tự do</strong> thay vì đúng 3 attribute có cấu trúc (<code>gen_ai.system_instructions</code>/<code>gen_ai.input.messages</code>/<code>gen_ai.output.messages</code>, mục 6) — mất khả năng áp rule che PII riêng theo từng loại nội dung.</p>
+<p><strong>5. Dùng <code>invoke_agent</code>/<code>execute_tool</code> cho pipeline KHÔNG phải agent thật</strong> (VD 1 script tuần tự cố định không có vòng lặp LLM tự quyết định) — gán nhãn sai khiến dashboard hiểu nhầm bản chất hệ thống.</p>
+<p><strong>6. Viết tay toàn bộ span dù thư viện đang dùng đã có SDK tự động</strong> (mục 7) — tốn công trùng lặp, dễ quên attribute so với SDK đã được cộng đồng kiểm chứng.</p>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích <code>gen_ai.*</code> namespace giải quyết vấn đề gì so với tự đặt tên attribute.</li>
+<li>Kể đúng 3 attribute cốt lõi và 4 vùng phủ chính của OTel GenAI semconv.</li>
+<li>Giải thích được vì sao privacy default không capture nội dung prompt/PII quan trọng.</li>
+<li>Kể đúng 3 <code>operation.name</code> riêng cho agent (<code>create_agent</code>/<code>invoke_agent</code>/<code>execute_tool</code>) + vẽ đúng quan hệ span cha-con.</li>
+<li>Kể đúng 3 attribute cấu trúc khi content capture bật opt-in, giải thích vì sao tách riêng 3 attribute thay vì 1 blob text.</li>
+<li>So sánh đúng 3 SDK auto-instrument (OpenLLMetry/OpenInference/OpenLIT) + biết khi nào vẫn cần viết span tay.</li>
+<li>Đề xuất đúng bước cải thiện instrumentation hiện tại của dự án nếu mở rộng LLM hybrid mode.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R8_5_observability_platforms.html">← R8.5 · Observability Platforms</a>
+  <a href="R9_1_cli_agents.html">R9.1 · Advanced Steps — CLI Agents →</a>
+</div>
+
+</div>
+</body>
+</html>

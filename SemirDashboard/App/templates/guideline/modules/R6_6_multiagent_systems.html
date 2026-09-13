@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R6.6 · Multi-agent Systems — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · AI Agents · Điểm 6/8</div>
+  <h1>R6.6 · Multi-agent Systems</h1>
+  <p class="subtitle">Kiến trúc "nhiều agent cùng làm việc" — case study orchestrator-worker thật của Anthropic (+90.2%), và ranh giới bắt buộc khi áp dụng vào AI Trader.</p>
+  <div class="level">Độ khó: Trung bình → Khó · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+  <li>Phân biệt "Multi-agent systems" (khái niệm kiến trúc rộng) với "Design Patterns" (R6.7 — building block cụ thể) và "Orchestration Frameworks" (R6.8 — công cụ implement) — 3 khái niệm rất dễ gộp làm một.</li>
+  <li>Hiểu mô hình orchestrator-worker mà hệ thống nghiên cứu đa-agent thật của Anthropic dùng, và vì sao "sub-agent không biết nhau" lại là 1 lựa chọn thiết kế cố ý, không phải thiếu sót.</li>
+  <li>Đọc được con số đo lường thật (+90.2%) và hiểu ĐÚNG bối cảnh nó áp dụng (research task phức tạp), không suy diễn sang mọi bài toán.</li>
+  <li><strong>Áp dụng an toàn</strong>: biết chính xác ranh giới không được vượt qua khi đề xuất multi-agent cho AI Trader.</li>
+  <li>Nhận diện được các <strong>lỗi ĐẶC THÙ</strong> chỉ xảy ra khi có nhiều agent phối hợp (không xảy ra với 1 agent đơn) — theo đúng phân loại nghiên cứu 2026, không chỉ đoán chung chung "có gì đó lỗi giữa các agent".</li>
+  <li>Hiểu cơ chế trace/observability xuyên nhiều agent — vì sao 1 lỗi trong hệ multi-agent khó debug hơn hẳn 1 agent đơn nếu không có cấu trúc span đúng.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p><a href="L6_2_multiagent.html">L6_2_multiagent.html</a> đã dạy sâu <strong>6 pattern kiến trúc multi-agent</strong> (Supervisor, peer-to-peer, blackboard, consensus/voting, swarm/mesh, marketplace) dựa trên case study AI Orchestrator 11 agent của chính dự án — không lặp lại ở đây. Trang này bổ sung phần <code>L6_2</code> chưa có: <strong>case study thật của Anthropic</strong> (bài "How we built our multi-agent research system", công bố 6/2025 — đã verify lại ngày tháng, vẫn là case study nền tảng được trích dẫn rộng rãi tính tới 2026) và — quan trọng hơn — <strong>ranh giới bắt buộc tuân thủ</strong> khi áp dụng ý tưởng multi-agent vào AI Trader.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Một công ty tư vấn nhận 1 dự án nghiên cứu lớn. Thay vì 1 chuyên gia làm hết, trưởng nhóm (lead) chia nhỏ thành 3-5 mảng độc lập, giao mỗi mảng cho 1 chuyên gia riêng — mỗi người chỉ nhận đúng bản mô tả nhiệm vụ của mình, <strong>không biết ai khác đang làm gì</strong>, không họp giữa chừng. Khi tất cả nộp báo cáo, trưởng nhóm mới tổng hợp lại thành 1 báo cáo cuối. Cách làm này nhanh hơn (song song hoá) và giữ đầu óc trưởng nhóm "sạch" (không phải nhớ chi tiết của 5 mảng cùng lúc) — nhưng đòi hỏi trưởng nhóm giao việc rất rõ ràng ngay từ đầu, vì không có cơ hội "trao đổi thêm" giữa chừng.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Phân biệt 3 khái niệm hay bị gộp làm một</h3>
+<table>
+<tr><th>Khái niệm</th><th>Trả lời câu hỏi gì</th><th>Ví dụ</th></tr>
+<tr><td><strong>Multi-agent systems</strong> (trang này)</td><td>"Có bao nhiêu agent, chúng quan hệ với nhau thế nào?"</td><td>Orchestrator-worker, supervisor, peer-to-peer</td></tr>
+<tr><td><strong>Design Patterns</strong> (R6.7)</td><td>"1 agent (hoặc 1 bước trong hệ nhiều agent) tự vận hành theo cơ chế nào?"</td><td>ReAct, Reflexion, routing, parallelization</td></tr>
+<tr><td><strong>Orchestration Frameworks</strong> (R6.8)</td><td>"Dùng công cụ/thư viện gì để implement 2 cái trên?"</td><td>LangGraph, CrewAI, Microsoft Agent Framework</td></tr>
+</table>
+<p>Ví dụ cụ thể để thấy 3 tầng cùng lúc: 1 hệ thống dùng kiến trúc <strong>orchestrator-worker</strong> (multi-agent systems) trong đó lead-agent áp dụng pattern <strong>evaluator-optimizer</strong> (design pattern) để chấm điểm kết quả worker, tất cả implement bằng <strong>LangGraph</strong> (orchestration framework). 3 câu trả lời cho 3 câu hỏi khác nhau, không phải 3 tên gọi của cùng 1 thứ.</p>
+
+<h3>2. Mô hình orchestrator-worker của Anthropic (case study 6/2025, vẫn được trích dẫn rộng rãi 2026)</h3>
+<p>Trước khi có Agent Teams (nhắc ở R6.8), hệ thống nghiên cứu đa-agent nội bộ của Anthropic dùng mô hình <strong>orchestrator-worker</strong> theo đúng 4 bước:</p>
+<pre><code>Bước 1: Lead agent nhận câu hỏi nghiên cứu phức tạp, LÊN KẾ HOẠCH
+        (chia nhỏ thành 3-5 mảng con, mỗi mảng độc lập được)
+
+Bước 2: Lead SINH 3-5 sub-agent chuyên biệt, chạy SONG SONG
+        Mỗi sub-agent nhận:
+          - 1 mô tả nhiệm vụ TỰ CHỨA (self-contained — đủ thông tin, không cần hỏi lại lead)
+          - 1 format output rõ ràng
+          - 1 context window SẠCH (không thấy lịch sử của lead hay sub-agent khác)
+
+Bước 3: QUAN TRỌNG — sub-agent KHÔNG BIẾT các sub-agent khác tồn tại.
+        Không thể phối hợp giữa chừng. Chạy độc lập hoàn toàn tới khi xong.
+
+Bước 4: Lead nhận kết quả từ tất cả sub-agent → TỔNG HỢP + gắn citation riêng
+        → trả lời cuối cùng
+</code></pre>
+<p>Cách này đo được cải thiện hiệu năng <strong>90.2%</strong> so với single-agent cho tác vụ research phức tạp — nhờ 2 lý do: (1) song song hoá giảm thời gian, (2) giữ context của lead gọn giúp nó suy luận tổng hợp tốt hơn, không bị "nhiễu" bởi chi tiết vụn vặt của từng mảng con.</p>
+
+<h3>3. Vì sao "sub-agent không biết nhau" là lựa chọn CỐ Ý</h3>
+<p>Trực giác sai phổ biến: "cho sub-agent biết nhau, phối hợp real-time chắc sẽ tốt hơn". Thực tế ngược lại trong đa số trường hợp — lý do:</p>
+<ul>
+<li><strong>Context sạch</strong>: nếu sub-agent phải theo dõi trạng thái của N sub-agent khác, context window của nó phình to, hiệu năng suy luận giảm.</li>
+<li><strong>Đơn giản để debug</strong>: lỗi ở sub-agent nào chỉ ảnh hưởng nhiệm vụ của sub-agent đó, không lan sang các sub-agent khác qua kênh phối hợp phức tạp.</li>
+<li><strong>Chi phí phối hợp thật</strong>: "phối hợp real-time" giữa N agent đòi hỏi 1 giao thức đồng bộ (ai chờ ai, khoá gì khi nào) — chi phí kỹ thuật này thường lớn hơn lợi ích, trừ khi nhiệm vụ con thực sự phụ thuộc lẫn nhau.</li>
+</ul>
+
+<h3>4. Bài học chi phí — không miễn phí</h3>
+<p>Multi-agent không miễn phí: <strong>N agent = N× chi phí token + độ trễ điều phối</strong>. Nguyên tắc "Building Effective Agents" của Anthropic (2024, đã dạy ở <code>L6_1</code>) vẫn đúng năm 2026: <strong>"start simple"</strong> — chỉ tách thành multi-agent khi đo được lợi ích rõ ràng, như con số 90.2% ở trên (có đo bằng benchmark thật, không phải đoán theo cảm tính).</p>
+
+<h3>5. Taxonomy lỗi ĐẶC THÙ của multi-agent — không xảy ra với 1 agent đơn</h3>
+<p><code>R3_6_orchestration_frameworks.html §1.4</code> đã dẫn nghiên cứu "multi-agent thường không thắng single-agent" (góc nhìn CHẤT LƯỢNG kết quả). Trang này bổ sung góc nhìn khác: <strong>1 khi đã quyết định dùng multi-agent, có 1 lớp lỗi hoàn toàn mới xuất hiện — không tồn tại khi chỉ có 1 agent</strong>. Nghiên cứu MAST (Multi-Agent System failure Taxonomy, 2026) phân loại 14 kiểu lỗi thành 3 nhóm:</p>
+<table>
+<tr><th>Nhóm lỗi</th><th>Cơ chế</th><th>Ví dụ cụ thể</th></tr>
+<tr><td><strong>System Design Issues</strong></td><td>Định tuyến task sai agent, xử lý lỗi không đủ khi 1 agent con fail giữa chừng</td><td>Task cần agent chuyên tài chính nhưng bị router gán nhầm cho agent chuyên tin tức</td></tr>
+<tr><td><strong>Inter-Agent Misalignment</strong></td><td>Lỗi GIAO TIẾP/ĐỊNH DẠNG giữa các agent — agent A xuất ra 1 format, agent B kỳ vọng format khác</td><td>Agent lập kế hoạch xuất bước dạng YAML, agent thực thi kỳ vọng JSON — lỗi nhỏ ở ranh giới làm hỏng CẢ CHUỖI phía sau (cascading error)</td></tr>
+<tr><td><strong>Task Verification Failures</strong></td><td>Không ai kiểm tra lại output trước khi dùng làm input cho bước sau — lỗi 1 agent con lan truyền không bị chặn</td><td>Agent tổng hợp (lead) nhận kết quả sai từ 1 sub-agent, không có bước verify, đưa thẳng vào báo cáo cuối</td></tr>
+</table>
+<p><strong>Điểm mấu chốt</strong>: cả 3 nhóm lỗi này ĐỀU là lỗi ở TẦNG PHỐI HỢP (giữa các agent), không phải lỗi suy luận của riêng 1 agent — nghĩa là dù mỗi agent con hoạt động "đúng" khi xét độc lập, hệ thống tổng thể vẫn có thể fail vì cách chúng NỐI với nhau. Đây chính là "chi phí ẩn" của multi-agent ngoài chi phí token đã nêu ở mục 4 — chi phí RỦI RO LỖI MỚI, không chỉ chi phí tiền.</p>
+<p>Liên hệ mô hình orchestrator-worker (mục 2): thiết kế "sub-agent không biết nhau" giảm được rủi ro Inter-Agent Misalignment theo 1 cách gián tiếp — vì sub-agent không trao đổi qua lại giữa chừng, không có kênh giao tiếp động nào để format bị lệch pha; toàn bộ hợp đồng dữ liệu chỉ có 2 điểm chạm rõ ràng (lead → sub-agent lúc giao task, sub-agent → lead lúc trả kết quả), dễ kiểm soát format hơn hẳn kiến trúc "agent biết nhau, trao đổi liên tục" ở bảng so sánh mục 3.</p>
+
+<h3>6. Observability xuyên nhiều agent — vì sao debug multi-agent khó hơn hẳn 1 agent</h3>
+<p>Khi lead-agent sinh 3-5 sub-agent song song (mục 2), 1 câu hỏi debug thực tế xuất hiện: <strong>"sub-agent nào, bước nào, gây ra kết quả sai?"</strong> — với 1 agent đơn, log tuần tự đủ để trả lời; với nhiều agent chạy song song, cần cấu trúc trace RÕ RÀNG mới truy được.</p>
+<p><strong>OpenTelemetry GenAI Semantic Conventions</strong> (chuẩn hoá 2025-2026, hiện ở trạng thái experimental — chưa bản 1.0 ổn định, tên attribute có thể còn đổi) giải quyết bằng cách: mỗi lời gọi LLM, mỗi tool call, mỗi bước suy luận trở thành 1 <strong>span</strong> riêng, mang sẵn attribute chuẩn hoá (tên model, số token request/response, trạng thái lỗi). Với multi-agent, mấu chốt là mối quan hệ <strong>span cha-con (parent-child)</strong> khớp đúng cấu trúc lead-worker ở mục 2:</p>
+<pre><code>Trace 1 lượt chạy (1 root span = toàn bộ tác vụ research)
+└─ Span: Lead agent — LÊN KẾ HOẠCH (gen_ai.operation = "chat")
+   ├─ Span con: Sub-agent 1 (kỹ thuật)  ── model, token, latency riêng
+   │   └─ Span cháu: tool call get_price()
+   ├─ Span con: Sub-agent 2 (cơ bản)    ── model, token, latency riêng
+   │   └─ Span cháu: tool call get_financials()
+   └─ Span con: Sub-agent 3 (tin tức)   ── model, token, latency riêng
+       └─ Span cháu: tool call search_news()
+→ Nếu kết quả cuối sai, nhìn NGAY vào span con nào có finish_reason bất
+  thường/latency cao đột biến/token vượt ngưỡng — không cần đọc lại log tuần tự
+  dài dòng của cả 4 agent để đoán.</code></pre>
+<p>Khác biệt với nội dung trace ở <code>R6_4_a2a.html §5</code> (đó là trace LIÊN TỤC xuyên ranh giới TỔ CHỨC khác nhau, dùng W3C Trace Context header): ở đây là trace CÓ CẤU TRÚC PHÂN CẤP bên trong CÙNG 1 hệ thống, phản ánh đúng quan hệ lead→sub-agent — 2 khái niệm liên quan nhưng giải quyết 2 vấn đề khác nhau (liên tục xuyên tổ chức vs phân cấp nội bộ).</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Case study thật trong <code>predictor</code> — mô hình "sub-agent không biết nhau" đã được dùng đúng: <code>.claude/skills/daily-investor-report/scripts/postmortem_runner.py</code> gọi 1 sub-agent deep-read đóng vai trò lớp "LLM-thesis-reasoning". Lớp này tách biệt <strong>hoàn toàn</strong> với <code>analyze_week_v2.py</code> — lớp "system-track-record" thuần Python, không dùng LLM — theo đúng thiết kế trong SKILL.md §8.2.</p>
+<pre><code>Layer 1 (Python thuần, KHÔNG LLM): analyze_week_v2.py
+  → tính toán track-record hệ thống từ dữ liệu số (accuracy, P&amp;L thực tế)
+  → không có ý kiến chủ quan, chỉ là phép tính
+
+Layer 2 (sub-agent LLM riêng biệt): postmortem_runner.py
+  → đọc sâu 1 lượt, hình thành nhận định định tính (thesis-reasoning)
+  → KHÔNG thấy con số combined_score/verdict mà hệ thống đã tính (đúng nguyên tắc
+    "LLM independence" — xem R6_7 và memory feedback_llm_independence.md)
+
+→ 2 layer chạy độc lập, không "biết nhau" trong lúc xử lý, gộp kết quả ở bước report cuối.
+</code></pre>
+<p>Áp mục 5 (MAST) vào chính case study này để thấy vì sao thiết kế 2-layer trên né được rủi ro Inter-Agent Misalignment: hợp đồng dữ liệu giữa Layer 1 và Layer 2 CHỈ CÓ 1 điểm chạm — file/kết quả report cuối cùng, không có kênh trao đổi qua lại giữa lúc 2 layer đang xử lý. Nếu (giả định phản ví dụ, KHÔNG phải thiết kế thật) Layer 2 phải đọc trực tiếp biến nội bộ của Layer 1 giữa chừng thay vì đợi Layer 1 xong hẳn, 1 thay đổi field nhỏ trong <code>analyze_week_v2.py</code> (VD đổi tên field <code>pnl_actual</code> thành <code>realized_pnl</code>) có thể âm thầm làm Layer 2 đọc sai giá trị mà không có lỗi runtime nào bật lên — đúng kiểu lỗi "System Design Issues/Inter-Agent Misalignment" ở mục 5, chỉ khác là ở đây thiết kế thật đã né được nó từ đầu bằng ranh giới rõ ràng.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Sub-agent "biết nhau" (phối hợp real-time)</th><th>Sub-agent "không biết nhau" (orchestrator-worker)</th></tr>
+<tr><td>Độ phức tạp implement</td><td>Cao — cần giao thức đồng bộ</td><td>Thấp — mỗi sub-agent là 1 lời gọi độc lập</td></tr>
+<tr><td>Dễ debug?</td><td>Khó — lỗi có thể lan qua kênh phối hợp</td><td>Dễ — lỗi cô lập trong phạm vi 1 sub-agent</td></tr>
+<tr><td>Context mỗi agent</td><td>Phình to (phải theo dõi agent khác)</td><td>Sạch, gọn</td></tr>
+<tr><td>Khi nào đáng dùng</td><td>Nhiệm vụ con thực sự phụ thuộc lẫn nhau theo thời gian thực</td><td>Nhiệm vụ con độc lập, chỉ cần tổng hợp cuối (đa số trường hợp)</td></tr>
+</table>
+
+<div class="callout danger">
+<div class="label">⚠️ Bối cảnh bắt buộc tuân thủ (CLAUDE.md)</div>
+<p>Owner đã <strong>từ chối rõ ràng</strong> việc đưa LLM vào làm 1 live scoring feature/vote/veto có trọng số học được bên trong <strong>AI Trader execution path</strong> — nguyên văn: <em>"LLM sẽ không phải là 1 feature."</em> Toàn bộ nội dung phần Ứng dụng dự án dưới đây tuân thủ nghiêm ngặt nguyên tắc này.</p>
+</div>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án + ràng buộc bắt buộc</div>
+<p>Mô hình "sub-agent không biết nhau" áp dụng <strong>đúng</strong> vào <code>predictor</code> cho các tác vụ <strong>research/offline/advisory</strong>: ví dụ nhiều sub-agent cùng phân tích <code>.claude/skills/daily-investor-report/kb/lessons_learned_patterns.json</code> từ các góc nhìn khác nhau (VD: 1 sub-agent tìm pattern theo ngành, 1 sub-agent tìm pattern theo thời điểm trong tuần) để sinh hypothesis phong phú hơn cho <strong>kỹ sư</strong> — người sau đó tự quyết định có đưa hypothesis đó thành 1 feature engineered, validate bằng dữ liệu lịch sử thật, hay không.</p>
+<p><strong>Ràng buộc bắt buộc, không có ngoại lệ</strong>: mọi multi-agent pattern áp dụng vào AI Trader chỉ được đóng khung là <strong>research/offline/advisory</strong> — chạy ngoài execution path, không ảnh hưởng quyết định mua/bán runtime. <strong>Tuyệt đối không đề xuất</strong> nhiều agent "vote" hay "swarm quyết định" mua/bán real-time trong AI Trader execution path — đó chính là việc biến LLM thành 1 feature có trọng số học được, điều owner đã từ chối rõ ràng trong <code>CLAUDE.md</code>.</p>
+<p><strong>Áp mục 5-6 vào ràng buộc này</strong>: nếu tương lai có nhiều sub-agent research song song (VD phân tích theo ngành/theo thời điểm ở trên), bắt buộc phải có (1) schema output rõ ràng cho mỗi sub-agent (né Inter-Agent Misalignment, mục 5) và (2) span/log riêng cho mỗi sub-agent (mục 6) — không phải vì lý do kỹ thuật thuần tuý, mà vì đây LÀ bằng chứng audit trail cần thiết để chứng minh hypothesis sinh ra từ research offline, chưa từng chạm vào execution path thật — đúng đòi hỏi minh bạch mà <code>CLAUDE.md</code> đặt ra cho mọi thay đổi liên quan AI Trader.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li><strong>Đề xuất "agent swarm" hoặc "multi-agent vote" làm 1 phần quyết định mua/bán runtime của AI Trader</strong> — VI PHẠM TRỰC TIẾP rule "LLM không phải feature". Đây là sai lầm nghiêm trọng nhất có thể mắc ở chủ đề này.</li>
+<li><strong>Nhầm "multi-agent systems" với "design patterns" hoặc "orchestration frameworks"</strong> — 3 câu hỏi khác nhau, xem bảng phân biệt ở mục 1.</li>
+<li><strong>Tách thành multi-agent chỉ vì "nghe hiện đại hơn"</strong> — không có lợi ích đo được thì không tách; nhớ nguyên tắc "start simple" và con số 90.2% chỉ áp dụng cho đúng loại bài toán research phức tạp, không tự động suy ra cho mọi tác vụ.</li>
+<li><strong>Cho sub-agent "biết nhau" mặc định</strong> — tăng chi phí/độ phức tạp không cần thiết nếu nhiệm vụ con vốn độc lập.</li>
+<li><strong>Không định nghĩa RÕ format hợp đồng dữ liệu giữa lead và sub-agent</strong> (mục 5) — nguồn lỗi Inter-Agent Misalignment phổ biến nhất theo MAST; luôn khai báo schema output cụ thể (VD Pydantic model) cho mỗi sub-agent, không để LLM "tự đoán" định dạng.</li>
+<li><strong>Triển khai multi-agent production mà không có cấu trúc span cha-con</strong> (mục 6) — khi có lỗi, chỉ còn cách đọc log tuần tự dài dòng để đoán, mất nhiều thời gian hơn hẳn có trace đúng cấu trúc.</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li><input type="checkbox" disabled> Phân biệt được 3 khái niệm dễ nhầm: Multi-agent systems vs Design Patterns vs Orchestration Frameworks bằng ví dụ cụ thể của chính mình.</li>
+<li><input type="checkbox" disabled> Vẽ được 4 bước của mô hình orchestrator-worker Anthropic, giải thích được vì sao "không biết nhau" là cố ý.</li>
+<li><input type="checkbox" disabled> Kể đúng case study thật <code>postmortem_runner.py</code> + <code>analyze_week_v2.py</code> là 2 layer độc lập kiểu gì.</li>
+<li><input type="checkbox" disabled> Giải thích được con số 90.2% áp dụng trong bối cảnh nào, không suy diễn nó đúng cho mọi bài toán.</li>
+<li><input type="checkbox" disabled> <strong>Tự confirm: không đề xuất LLM làm live scoring feature của AI Trader</strong> ở bất kỳ đâu trong bài làm/ghi chú của mình về chủ đề này.</li>
+<li><input type="checkbox" disabled> Kể đúng 3 nhóm lỗi MAST (mục 5) và giải thích được vì sao chúng là lỗi TẦNG PHỐI HỢP, không phải lỗi suy luận của 1 agent riêng lẻ.</li>
+<li><input type="checkbox" disabled> Vẽ được cấu trúc span cha-con (mục 6) khớp đúng quan hệ lead-worker, phân biệt được với trace liên tục xuyên tổ chức của <code>R6_4_a2a.html</code>.</li>
+</ul>
+</div>
+
+<div class="nav-bottom"><a href="R6_5_human_in_the_loop.html">← R6.5 · Human-in-the-Loop</a><a href="R6_7_design_patterns.html">R6.7 · Design Patterns →</a></div>
+
+</div>
+</body>
+</html>

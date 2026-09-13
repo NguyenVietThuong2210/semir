@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R6.1 · Memory — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · AI Agents · Điểm 1/8</div>
+  <h1>R6.1 · Memory (Kiến trúc bộ nhớ Agent)</h1>
+  <p class="subtitle">Vì sao context window không đủ, và agent hiện đại "nhớ" theo 5 tầng giống não người — short-term, working, episodic, semantic, procedural.</p>
+  <div class="level">Độ khó: Dễ → Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+  <li>Giải thích được <strong>vì sao</strong> 1 context window, dù to (200k, 1M token), vẫn không thay thế được "bộ nhớ" của agent.</li>
+  <li>Vẽ và phân biệt được 5 tầng bộ nhớ: short-term, working, episodic, semantic, procedural — biết đúng ví dụ cho mỗi loại.</li>
+  <li>Hiểu cơ chế kỹ thuật đứng sau: vector retrieval cho episodic/semantic, state machine cho working, văn bản tĩnh cho procedural.</li>
+  <li>Map đúng 5 tầng này vào các file có thật trong <code>predictor</code> — không phải lý thuyết suông.</li>
+  <li>Nhận diện rủi ro thật của memory layer tự động (contamination, sycophancy, <strong>memory poisoning</strong>) trước khi đề xuất xây thêm.</li>
+  <li>Tính được điểm truy hồi 1 memory bằng đúng công thức <code>recency + importance + relevance</code> (Generative Agents, Stanford) — không chỉ nói "vector similarity" chung chung.</li>
+  <li>Biết cách đánh giá 1 hệ thống memory bằng benchmark thật (LongMemEval, LoCoMo) thay vì chỉ tin lời quảng cáo "agent này có trí nhớ dài hạn".</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p><a href="L6_4_checkpointing.html">L6_4_checkpointing.html</a> đã dạy <strong>PostgresSaver</strong> — cơ chế lưu state của 1 thread hội thoại LangGraph để resume sau crash. Đó thực chất đã là 1 dạng bộ nhớ, nhưng chỉ là <strong>working/procedural memory trong phạm vi 1 session</strong> — resume lại đúng chỗ dở dang, không phải "nhớ" điều gì mới học được. Trang này bổ sung phần <code>L6_4</code> chưa có: <strong>toàn bộ taxonomy 5 tầng</strong> và đặc biệt <strong>long-term memory xuyên session</strong> (agent chạy lần sau biết điều rút ra từ lần chạy trước).</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Trí nhớ con người không phải 1 khối — nó có nhiều tầng, mỗi tầng phục vụ 1 mục đích khác nhau:</p>
+<ul>
+<li><strong>Short-term</strong>: số điện thoại vừa đọc, quên sau 10 giây nếu không lặp lại.</li>
+<li><strong>Working</strong>: đang tính nhẩm 65 × 7 — giữ số trung gian "455" trong đầu để cộng tiếp.</li>
+<li><strong>Episodic</strong>: "hôm qua ăn phở với ai, lúc mấy giờ" — 1 sự kiện cụ thể, có timestamp.</li>
+<li><strong>Semantic</strong>: "Hà Nội là thủ đô Việt Nam" — biết sự thật, không nhớ mình học nó lúc nào.</li>
+<li><strong>Procedural</strong>: biết đi xe đạp — cơ thể "biết làm" mà không cần diễn giải lại từng bước.</li>
+</ul>
+<p>Agent AI hiện đại (2025-2026) được thiết kế đúng theo 5 tầng này, vì lý do giống hệt con người: <strong>bộ nhớ làm việc tức thời (context window) hữu hạn</strong>, không thể chứa toàn bộ lịch sử tương tác.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vì sao context window không phải là "bộ nhớ"</h3>
+<p>Context window giống 1 cái bàn làm việc — mọi thứ bạn đang cần dùng NGAY thì để trên bàn, nhưng bàn có giới hạn diện tích. Khi bàn đầy, phải bỏ bớt (truncate) — thông tin cũ nhất bị "quên" đầu tiên, kể cả khi nó quan trọng. 3 vấn đề cụ thể:</p>
+<table>
+<tr><th>Vấn đề</th><th>Hệ quả thực tế</th></tr>
+<tr><td>Giới hạn cứng (128k-1M token)</td><td>1 dự án chạy 6 tháng, hàng nghìn lượt tương tác — không thể nhét hết vào 1 context</td></tr>
+<tr><td>Chi phí tăng tuyến tính theo độ dài</td><td>Nhồi toàn bộ lịch sử vào mỗi lời gọi = tốn token vô ích cho phần không liên quan</td></tr>
+<tr><td>"Lost in the middle"</td><td>LLM đọc context rất dài có xu hướng bỏ sót thông tin ở giữa, dù còn trong giới hạn token</td></tr>
+</table>
+<p>Giải pháp không phải "context window to hơn" (vẫn hữu hạn, vẫn tốn tiền) mà là <strong>kiến trúc bộ nhớ phân tầng</strong>: chỉ nạp vào context đúng phần cần cho tác vụ hiện tại, phần còn lại lưu ngoài và <em>truy hồi</em> (retrieve) khi cần.</p>
+
+<h3>2. 5 tầng bộ nhớ — cơ chế kỹ thuật từng loại</h3>
+
+<h4>2.1 Short-term memory</h4>
+<p>Đơn giản nhất: chính là nội dung nằm trong context window hiện tại — N turn hội thoại gần nhất. Không cần cơ chế lưu trữ riêng, "chết" ngay khi phiên kết thúc hoặc bị truncate.</p>
+
+<h4>2.2 Working memory</h4>
+<p>Trạng thái của 1 tác vụ multi-step <em>đang chạy dở</em> — "đang ở bước 3/7 của kế hoạch, đã có kết quả bước 1-2". Cơ chế: 1 object state (dict/JSON) được cập nhật sau mỗi bước, ghi xuống checkpoint (VD PostgresSaver) để có thể resume nếu crash. Đây chính là những gì <code>L6_4_checkpointing.html</code> đã dạy sâu.</p>
+
+<h4>2.3 Episodic memory</h4>
+<p>Lưu <strong>1 sự kiện cụ thể</strong> đã xảy ra, gắn timestamp, truy hồi được theo thời gian hoặc theo độ liên quan ngữ nghĩa. Cơ chế kỹ thuật phổ biến:</p>
+<pre><code>1. Sự kiện xảy ra → tóm tắt thành 1 đoạn text ngắn (VD: "2026-08-09: tìm ra ta_score bị sai dấu trong senior_score.py")
+2. Đoạn text → encode thành vector embedding (model embedding, VD 1536 chiều)
+3. Lưu (vector, text gốc, timestamp, metadata) vào vector store
+4. Khi cần: encode câu hỏi hiện tại thành vector → tìm K vector gần nhất (cosine similarity)
+   → trả về K sự kiện liên quan nhất, có thể lọc thêm theo khoảng thời gian
+</code></pre>
+<p>Framework tiêu biểu: <strong>Zep</strong> — cấu trúc hội thoại thành chuỗi sự kiện có timestamp rõ ràng, tối ưu cho truy hồi "cái gì đã xảy ra, khi nào".</p>
+
+<h4>2.4 Semantic memory</h4>
+<p>Tri thức <strong>tổng quát</strong>, rút ra từ <em>nhiều</em> episode, không còn gắn với 1 sự kiện cụ thể nào. Cơ chế: quá trình gọi là <strong>consolidation</strong> — định kỳ (hoặc theo trigger), 1 tiến trình (thường là chính LLM) đọc lại nhiều episodic memory, tìm pattern lặp lại, rồi viết thành 1 câu tri thức tổng quát mới, tách khỏi timestamp gốc.</p>
+<pre><code>Episode 1 (2026-07-01): "Cổ phiếu VCB tăng 2 ngày sau tin lãi suất, không phải ngay hôm công bố"
+Episode 2 (2026-07-15): "Cổ phiếu BID tăng 1 ngày sau tin lãi suất tương tự"
+Episode 3 (2026-08-02): "Cổ phiếu TPB cũng phản ứng trễ 1-2 ngày với tin lãi suất"
+                          ↓ consolidation (rút pattern chung)
+Semantic memory mới: "Cổ phiếu ngành bank thường phản ứng TRỄ (1-2 ngày) với tin lãi suất,
+                       không phản ứng ngay trong phiên công bố"
+</code></pre>
+<p>Đây là bước dễ sai nhất — nếu chỉ 2-3 episode nhiễu (noise) đã bị "chốt" thành tri thức tổng quát, sai số sẽ lan sang mọi quyết định dùng tri thức đó sau này. Xem mục Sai lầm thường gặp.</p>
+
+<h4>2.5 Procedural memory</h4>
+<p>"Biết làm" — 1 quy trình/kỹ năng được ghi lại 1 lần dưới dạng văn bản có cấu trúc, agent nào load lại cũng thực hiện đúng như vậy mà không cần "diễn giải lại từ đầu". Khác biệt cốt lõi so với semantic memory: semantic là 1 <em>sự thật</em> ("bank phản ứng trễ"), procedural là 1 <em>quy trình hành động</em> ("làm walk-forward backtest theo đúng 7 bước sau...").</p>
+
+<table>
+<tr><th>Loại</th><th>Mục đích</th><th>Ví dụ đời thường</th><th>Công cụ/framework điển hình 2026</th></tr>
+<tr><td><strong>Short-term</strong></td><td>Ngữ cảnh hội thoại hiện tại</td><td>10 turn gần nhất</td><td>Context window thô</td></tr>
+<tr><td><strong>Working</strong></td><td>Trạng thái 1 tác vụ multi-step đang chạy</td><td>"đang ở bước 3/7 của kế hoạch"</td><td>LangGraph state, PostgresSaver checkpointer</td></tr>
+<tr><td><strong>Episodic</strong></td><td>1 sự kiện cụ thể, có timestamp</td><td>"Ngày 2026-08-09 tìm ra ta_score bị sai dấu"</td><td>Zep (chuỗi sự kiện theo thời gian), vector store + metadata thời gian</td></tr>
+<tr><td><strong>Semantic</strong></td><td>Tri thức tổng quát, rút ra từ nhiều episode</td><td>"Cổ phiếu ngành bank thường phản ứng trễ với tin lãi suất"</td><td>Vector DB (embedding + retrieval), knowledge graph</td></tr>
+<tr><td><strong>Procedural</strong></td><td>"Biết làm" — quy trình/kỹ năng dạng văn bản</td><td>"Cách chạy walk-forward backtest đúng chuẩn dự án"</td><td>SKILL.md (chính là procedural memory dạng văn bản)</td></tr>
+</table>
+
+<h3>3. Framework quản lý bộ nhớ 2026</h3>
+<p>Xu hướng 2026: bộ nhớ trở thành thứ <strong>agent chủ động quản lý</strong> (tự quyết định lưu gì, quên gì, khi nào consolidate), không chỉ là kho lưu-rồi-truy-vấn thụ động.</p>
+<table>
+<tr><th>Framework</th><th>Trọng tâm</th><th>Cơ chế đặc trưng</th></tr>
+<tr><td><strong>Mem0</strong></td><td>Lớp bộ nhớ "cắm ngoài" (plug-in)</td><td>Trích xuất "memories" từ hội thoại tự động, lưu + truy hồi phục vụ cá nhân hoá dài hạn</td></tr>
+<tr><td><strong>Letta</strong> (kế thừa MemGPT)</td><td>"Hướng LLM như 1 hệ điều hành"</td><td>Agent tự quản lý việc gì nên nhớ/quên, giống OS quản lý virtual memory (paging in/out)</td></tr>
+<tr><td><strong>Zep</strong></td><td>Episodic + temporal memory</td><td>Cấu trúc hội thoại thành chuỗi sự kiện có nghĩa, mạnh về truy hồi theo thời gian</td></tr>
+<tr><td><strong>MIRIX</strong></td><td>Multi-agent memory module hoá</td><td>Tách core/episodic/semantic/procedural/resource memory + "knowledge vault" riêng</td></tr>
+</table>
+
+<h3>4. Cơ chế chấm điểm truy hồi — công thức thật, không phải "vector similarity" chung chung</h3>
+<p>Mục 2.3-2.4 nói "tìm K vector gần nhất (cosine similarity)" — đó là <strong>1 trong 3</strong> tín hiệu thật sự dùng để xếp hạng memory nào được truy hồi. Công thức gốc, từ paper nền tảng <strong>Generative Agents: Interactive Simulacra of Human Behavior</strong> (Stanford, 2023) — hiện vẫn là kiến trúc tham chiếu, được kế thừa gần như nguyên vẹn bởi MemGPT/Letta, Mem0, LangGraph memory store tính tới 2026:</p>
+<pre><code>score(memory) = α_recency · recency + α_importance · importance + α_relevance · relevance
+                (paper gốc đặt cả 3 trọng số α = 1, tức cộng đơn giản không ưu tiên trục nào)
+
+recency    = γ^(số giờ kể từ lần truy cập gần nhất)     γ = 0.995/giờ (decay mũ)
+importance = 1 con số nguyên (LLM tự chấm 1-10 lúc GHI memory, VD "sự kiện quan trọng
+             tới đâu trên thang điểm 1-10") — KHÁC recency/relevance, được tính 1 LẦN
+             lúc lưu, không tính lại mỗi lần truy hồi
+relevance  = cosine similarity giữa vector query hiện tại và vector memory
+
+→ 3 giá trị recency/importance/relevance được chuẩn hoá về [0,1] bằng min-max
+  (trên chính tập ứng viên đang xét), rồi CỘNG lại → memory nào tổng điểm cao nhất
+  được đưa vào context.</code></pre>
+<p><strong>Worked example</strong> — 3 memory ứng viên khi có câu hỏi mới "Cổ phiếu VCB phản ứng thế nào với tin lãi suất?" (nối tiếp đúng ví dụ episode ở mục 2.4), hand-derive từng bước:</p>
+<table>
+<tr><th>Memory</th><th>Giờ từ lần truy cập cuối</th><th>Recency thô = 0.995^giờ</th><th>Importance thô (LLM chấm 1-10)</th><th>Relevance thô (cosine)</th></tr>
+<tr><td>A: "VCB tăng 2 ngày sau tin lãi suất" (episode gốc)</td><td>240h (10 ngày)</td><td>0.995^240 ≈ 0.3003</td><td>8</td><td>0.82</td></tr>
+<tr><td>B: "BID tăng 1 ngày sau tin lãi suất tương tự"</td><td>5h</td><td>0.995^5 ≈ 0.9752</td><td>6</td><td>0.75</td></tr>
+<tr><td>C: "Giá vàng tăng khi USD yếu" (không liên quan)</td><td>1h</td><td>0.995^1 = 0.9950</td><td>4</td><td>0.20</td></tr>
+</table>
+<p>Chuẩn hoá min-max từng cột trên đúng 3 ứng viên này (min→0, max→1):</p>
+<table>
+<tr><th>Memory</th><th>Recency norm</th><th>Importance norm</th><th>Relevance norm</th><th>Tổng score</th></tr>
+<tr><td>A</td><td>(0.3003-0.3003)/0.6947 = <strong>0</strong></td><td>(8-4)/4 = <strong>1.0</strong></td><td>(0.82-0.20)/0.62 = <strong>1.0</strong></td><td><strong>2.0</strong></td></tr>
+<tr><td>B</td><td>(0.9752-0.3003)/0.6947 = <strong>0.9715</strong></td><td>(6-4)/4 = <strong>0.5</strong></td><td>(0.75-0.20)/0.62 = <strong>0.8871</strong></td><td><strong>2.3586</strong> ← cao nhất</td></tr>
+<tr><td>C</td><td>(0.9950-0.3003)/0.6947 = <strong>1.0</strong></td><td>(4-4)/4 = <strong>0</strong></td><td>(0.20-0.20)/0.62 = <strong>0</strong></td><td><strong>1.0</strong></td></tr>
+</table>
+<p><strong>Kết quả phản trực giác nhưng đúng công thức</strong>: memory B (BID, mới truy cập 5h trước, importance/relevance thấp hơn A) thắng memory A (VCB, đúng chủ đề nhất, importance cao nhất) — vì recency của A bị suy giảm mạnh sau 10 ngày, còn min-max normalization "kéo giãn" khoảng cách theo đúng dải giá trị của 3 ứng viên đang xét. Đây không phải lỗi công thức — đây là lý do phải <strong>hiểu cơ chế</strong> trước khi tin "memory liên quan nhất luôn được trả về đầu tiên". Lưu ý quan trọng (áp dụng BUG-13): min-max chuẩn hoá theo <em>đúng tập ứng viên hiện tại</em> — thêm/bớt 1 ứng viên vào tập sẽ đổi lại toàn bộ thang điểm, nên thứ hạng ở đây KHÔNG phải hằng số tuyệt đối của riêng memory A/B/C, nó phụ thuộc ứng viên nào đang được so sánh cùng lúc.</p>
+
+<h3>5. Rủi ro bảo mật — memory poisoning (khác contamination ở mục Sai lầm thường gặp)</h3>
+<p>Mục Sai lầm thường gặp (cuối trang) đã cảnh báo consolidation dựa trên vài episode <em>nhiễu ngẫu nhiên</em> có thể sinh tri thức sai. <strong>Memory poisoning</strong> là 1 lớp rủi ro khác, nghiêm trọng hơn: <strong>kẻ tấn công CHỦ ĐỘNG</strong> chèn thông tin giả vào bộ nhớ dài hạn, khác prompt injection cổ điển (chỉ ảnh hưởng 1 phiên, biến mất khi đóng chat) — memory đã bị nhiễm độc <strong>tồn tại xuyên session</strong>, agent "học" chỉ dẫn độc hại rồi tự nhắc lại nó ở lần chạy sau, có khi cách hàng tuần.</p>
+<pre><code>MINJA (Memory INJection Attack, nghiên cứu 2026) — điểm đáng ngại nhất:
+  KHÔNG cần quyền ghi trực tiếp vào memory store (không cần chiếm quyền DB).
+  Chỉ cần tương tác ở TẦNG QUERY (như 1 user bình thường) — dùng chuỗi câu hỏi
+  được thiết kế khéo để DỤ agent tự ghi lại "bản ghi suy luận" (reasoning record)
+  chứa nội dung độc hại vào chính bộ nhớ của nó.
+  → Tỷ lệ tấn công thành công đo được: 76.8% trung bình, VƯỢT QUA được cả lớp
+    lọc embedding-level lẫn lớp phát hiện prompt-level (vì input từng bước
+    trông "bình thường", chỉ độc hại khi ghép lại thành ngữ cảnh dài).</code></pre>
+<p>Quy mô thực tế (đã verify 2026, số liệu tổng hợp nên coi là ước lượng, gắn nhãn biến động): nghiên cứu ghi nhận sự cố thật trên nhiều nền tảng trợ lý AI thương mại lớn, và 1 báo cáo bảo mật doanh nghiệp ghi nhận hàng chục tổ chức bị phát hiện có nỗ lực đầu độc bộ nhớ AI assistant nội bộ <em>(verify 2026-11)</em>. Phòng thủ thực dụng, áp được ngay cả không có công cụ chuyên dụng: (1) không bao giờ tự động consolidate episodic → semantic memory chỉ từ input do <strong>người dùng cuối chưa xác thực</strong> cung cấp; (2) mọi bước consolidation nên có 1 bước review — người hoặc rule kiểm tra độc lập — trước khi tri thức mới trở thành "sự thật" agent tự tin dùng; (3) giữ lại nguồn gốc (provenance) của mỗi semantic memory — biết nó được rút ra từ episode nào, để có thể truy vết/rollback nếu phát hiện nhiễm độc về sau.</p>
+
+<h3>6. Benchmark đánh giá bộ nhớ agent — đo bằng số, không tin quảng cáo</h3>
+<p>"Agent này có trí nhớ dài hạn" là 1 câu tuyên bố cần đo được, không phải điểm bán hàng chấp nhận suông. 2 benchmark chuẩn 2025-2026:</p>
+<table>
+<tr><th>Benchmark</th><th>Quy mô</th><th>Đo cái gì</th></tr>
+<tr><td><strong>LongMemEval</strong></td><td>500 câu hỏi, 6 nhóm: single-session user/assistant/preference recall, knowledge update, temporal reasoning, multi-session recall</td><td>Bản <em>_S</em>: ~115,000 token / ~40 session mỗi user. Bản <em>_M</em>: mở rộng tới ~500 session — mô phỏng đúng kịch bản "agent chạy hàng trăm ngày, phải nhớ đúng ngữ cảnh cũ"</td></tr>
+<tr><td><strong>LoCoMo</strong></td><td>1,540 câu hỏi: single-hop, multi-hop, open-domain, temporal recall</td><td>Nhấn mạnh truy hồi qua NHIỀU bước suy luận (multi-hop), không chỉ tra cứu 1 sự kiện đơn lẻ</td></tr>
+</table>
+<p>Số liệu <strong>Mem0 tự công bố</strong> giữa 2026 <em>(vendor self-reported — đối thủ Zep đã công khai phản bác cách đo này trong bài "Is Mem0 Really SOTA in Agent Memory?", không phải kết quả trung lập từ 1 leaderboard độc lập; verify theo mốc thời gian cụ thể, các bảng xếp hạng cập nhật liên tục)</em>: ~92.5 điểm trên LoCoMo, ~94.4 điểm trên LongMemEval, đạt được chỉ với <strong>~6,900 token/truy vấn</strong> — con số token này quan trọng ngang điểm số: nó chứng minh đúng luận điểm mục 1 của trang này (context window không phải bộ nhớ) theo chiều ngược lại — 1 hệ thống memory TỐT không "nhồi toàn bộ lịch sử vào context để chắc ăn", nó truy hồi ĐÚNG và ÍT, vẫn đạt độ chính xác cao. Đúng tinh thần "đo bằng số, không tin quảng cáo": số liệu trên LÀ quảng cáo của 1 vendor cụ thể, nên đọc với sự dè dặt tương xứng, không coi là benchmark trung lập.</p>
+
+<h3>7. Bộ nhớ dùng chung vs cách ly — khi có NHIỀU agent (nối sang R6.6)</h3>
+<p>5 tầng ở mục 2 mặc định 1 agent. Khi có nhiều agent cùng hoạt động (xem <a href="R6_6_multiagent_systems.html">R6.6</a>), câu hỏi mới xuất hiện: <strong>tầng nào nên CHIA SẺ giữa các agent, tầng nào phải CÁCH LY riêng từng agent?</strong></p>
+<table>
+<tr><th>Tầng bộ nhớ</th><th>Dùng chung hay cách ly?</th><th>Vì sao</th></tr>
+<tr><td>Working (trạng thái tác vụ đang chạy)</td><td>Cách ly — mỗi agent giữ riêng</td><td>Đúng nguyên tắc "context sạch" ở R6.6 §3: sub-agent không cần (và không nên) thấy trạng thái tác vụ của sub-agent khác, tránh phình context vô ích</td></tr>
+<tr><td>Episodic (sự kiện cụ thể)</td><td>Thường cách ly, có thể chia sẻ CÓ CHỌN LỌC</td><td>1 agent "học" 1 sự kiện không tự động có nghĩa mọi agent khác cần biết ngay — chia sẻ tràn lan làm tăng bề mặt tấn công memory poisoning ở mục 5</td></tr>
+<tr><td>Semantic (tri thức tổng quát đã consolidate)</td><td>Chia sẻ — đúng vai trò "kiến thức nền chung của team"</td><td>Đây chính là lý do <code>lessons_learned_patterns.json</code> có giá trị: nhiều lượt chạy đúc kết thành 1 nguồn tri thức DÙNG CHUNG, không phải mỗi agent tự học lại từ đầu</td></tr>
+<tr><td>Procedural (quy trình/kỹ năng)</td><td>Chia sẻ — đúng vai trò "sách hướng dẫn chung"</td><td>Toàn bộ 11 agent của <code>ai_orchestrator</code> đọc chung 1 bộ <code>SKILL.md</code>/quy ước — không có lý do mỗi agent tự diễn giải quy trình theo cách riêng</td></tr>
+</table>
+<p>Nguyên tắc tổng quát rút ra: <strong>bộ nhớ cấp "cách làm việc chung" (semantic/procedural) nên chia sẻ; bộ nhớ cấp "đang làm gì ngay bây giờ" (working/episodic riêng lẻ) nên cách ly</strong> — đúng khớp với lý do "sub-agent không biết nhau" ở orchestrator-worker (R6.6 §3), chỉ khác ở chỗ "không biết nhau" áp cho working memory trong lúc chạy, không áp cho semantic/procedural memory đã consolidate từ trước.</p>
+<pre><code>                 ┌─────────────────────────────────────┐
+                 │  Semantic + Procedural (CHIA SẺ)     │
+                 │  SKILL.md · lessons_learned_patterns │
+                 └──────────────┬────────────────────────┘
+                     đọc chung  │  đọc chung  │  đọc chung
+              ┌──────────────┐  │  ┌──────────────┐  │  ┌──────────────┐
+              │ Agent 1      │◄─┘  │ Agent 2      │◄─┘  │ Agent N      │
+              │ Working (RIÊNG)│    │ Working (RIÊNG)│    │ Working (RIÊNG)│
+              │ Episodic (RIÊNG)│   │ Episodic (RIÊNG)│   │ Episodic (RIÊNG)│
+              └──────────────┘     └──────────────┘     └──────────────┘
+</code></pre>
+
+<h3>8. Chi phí vận hành episodic memory — không phải lý do thật khiến dự án chưa xây</h3>
+<p>Mục Ứng dụng dự án kết luận "không cần thêm Mem0/Letta/Zep" vì nhu cầu nhỏ — nhưng dễ nhầm sang lý do sai: "chắc vì đắt/nặng". Worked example dưới đây hand-derive chi phí thật NẾU <code>predictor</code> xây episodic memory tự động cho toàn bộ hoạt động AI Trader, để chứng minh chi phí KHÔNG phải rào cản:</p>
+<pre><code>Giả định quy mô: 86 ticker (HIGHLIGHT_GROUP) × ~1 sự kiện episodic/ngày/ticker
+                 × ~250 phiên giao dịch/năm = 21,500 episode/năm
+
+1. Chi phí EMBED (model kiểu text-embedding-3-small, ~$0.02/1M token — giá tham
+   khảo, verify 2026, mỗi provider/model khác nhau):
+   21,500 episode × ~50 token trung bình/episode = 1,075,000 token/năm
+   1,075,000 / 1,000,000 × $0.02 ≈ $0.0215/năm  → GẦN NHƯ MIỄN PHÍ
+
+2. Chi phí LƯU TRỮ (vector 1536 chiều, float32 = 1536 × 4 byte = 6,144 byte/vector):
+   21,500 vector × 6,144 byte ≈ 132,096,000 byte ≈ 132MB/năm → NHỎ, 1 ổ SSD
+   phổ thông chứa hàng chục năm dữ liệu này mà không cần lo dung lượng.
+
+→ Kết luận: chi phí kỹ thuật (embed + lưu trữ) không phải lý do dự án chưa xây
+  episodic memory tự động. Lý do thật là NHU CẦU CHƯA ĐỦ LỚN — 1 skill, chạy
+  hàng ngày, con người (Claude Code session) hoàn toàn đọc nổi vài file .md/.json
+  bằng tay, không cần retrieval tự động vẫn chưa tới điểm "quá tải để đọc thủ công".</code></pre>
+<p>Bài học tổng quát: đừng lấy "chi phí thấp" làm lý do TỰ ĐỘNG xây thêm hạ tầng — chi phí thấp chỉ có nghĩa "nếu cần thì không đắt", không có nghĩa "nên xây ngay". Quyết định vẫn phải dựa trên nhu cầu đo được (số lượng agent, tần suất truy hồi thật cần), đúng nguyên tắc "start simple" đã lặp lại xuyên suốt roadmap này.</p>
+
+<h3>9. Cơ chế "quên" có kiểm soát — forgetting policy khác hẳn công thức chấm điểm truy hồi (mục 4)</h3>
+<p><strong>Phân biệt quan trọng trước khi đọc tiếp</strong>: mục 4 tính điểm <code>recency</code> cho MỖI LẦN truy vấn, trên đúng tập ứng viên đang xét — mục đích là XẾP HẠNG memory nào vào context cho câu hỏi hiện tại. <strong>Forgetting policy</strong> ở mục này là 1 việc khác hẳn: 1 tiến trình bảo trì <strong>chạy định kỳ, độc lập với bất kỳ câu hỏi cụ thể nào</strong> (VD 1 job chạy mỗi đêm), quyết định memory nào còn được GIỮ TRONG KHO, memory nào bị gộp/hạ ưu tiên/xoá hẳn — mục đích là giữ CHÍNH TẬP ỨNG VIÊN gọn và sạch, trước khi bất kỳ câu hỏi nào chạy tới. Nhầm 2 việc này là 1 dẫn tới thiết kế sai: tưởng "đã có công thức recency ở mục 4 là đủ để hệ thống tự quên" — sai, mục 4 không bao giờ XOÁ gì khỏi kho, nó chỉ xếp hạng trong số những gì còn tồn tại.</p>
+<p>Forgetting policy production thật (2026) gồm <strong>4 đòn bẩy</strong>, không phải chỉ "xoá hay không xoá":</p>
+<table>
+<tr><th>Đòn bẩy</th><th>Làm gì</th><th>Có xoá dữ liệu không?</th></tr>
+<tr><td><strong>Importance</strong></td><td>Đánh giá lại mức độ đáng giữ (tái dùng đúng điểm <code>importance</code> đã có ở mục 4, nhưng áp cho toàn kho, không phải 1 truy vấn)</td><td>Không</td></tr>
+<tr><td><strong>Merge</strong></td><td>Gộp nhiều memory GẦN GIỐNG NHAU (trùng lặp/near-duplicate) thành 1 bản ghi — <strong>khác</strong> "consolidation" ở mục 2.4 (đó là rút TRI THỨC MỚI từ nhiều episode khác nhau; merge ở đây chỉ dedup, không tạo tri thức mới)</td><td>Không (gộp, không mất thông tin cốt lõi)</td></tr>
+<tr><td><strong>Decay</strong></td><td>Hạ dần hệ số nhân lên điểm truy hồi của memory lâu không được dùng tới — vẫn còn trong kho, chỉ ít có khả năng được chọn hơn</td><td>Không (vẫn tìm được nếu đủ liên quan)</td></tr>
+<tr><td><strong>Eviction</strong></td><td>Xoá hẳn — áp cho memory quá hạn TTL VÀ gần như không bao giờ được truy cập</td><td><strong>Có</strong> — đây là đòn bẩy DUY NHẤT thực sự xoá dữ liệu</td></tr>
+</table>
+<p><strong>Worked example</strong> — áp forgetting policy cho 4 episodic memory về "ngành bank phản ứng với tin lãi suất" (nối chủ đề mục 2.4), kiểm tra tại mốc <strong>ngày thứ 180</strong> kể từ khi dự án bắt đầu ghi nhớ chủ đề này:</p>
+<table>
+<tr><th>Memory</th><th>Ngày tạo</th><th>Số lần được truy cập</th><th>Số ngày kể từ lần truy cập gần nhất</th></tr>
+<tr><td>Ep1: "VCB tăng 2 ngày sau tin lãi suất"</td><td>Ngày 0</td><td>12 lần</td><td>2 ngày</td></tr>
+<tr><td>Ep2: "BID tăng 1 ngày sau tin tương tự"</td><td>Ngày 5</td><td>3 lần</td><td>10 ngày</td></tr>
+<tr><td>Ep3: "TPB phản ứng trễ 1-2 ngày" (chỉ đọc 1 lần lúc mới ghi, sau đó không ai truy vấn lại)</td><td>Ngày 20</td><td>1 lần</td><td>155 ngày</td></tr>
+<tr><td>Ep4: "ACB không phản ứng rõ rệt" (ghi xong, KHÔNG AI từng truy vấn lại)</td><td>Ngày 100</td><td>0 lần</td><td>80 ngày (từ lúc tạo)</td></tr>
+</table>
+<p>Áp policy (ngưỡng minh hoạ cho mục đích sư phạm — <strong>không phải hằng số chuẩn production duy nhất</strong>, mỗi hệ thống tự chọn theo dữ liệu thật, áp dụng BUG-13): TTL-eviction nếu <code>0 lần truy cập VÀ ≥ 60 ngày kể từ khi tạo</code>; còn lại tính hệ số suy giảm bằng công thức tuyến tính tự thiết kế minh hoạ <code>decay = 1.5 − min(1.2, ngày_không_dùng/100)</code> (tại 0 ngày không dùng → 1.5, tại ≥100 ngày không dùng → chạm sàn 0.3):</p>
+<pre><code>Ep1: 2 ngày không dùng    → decay = 1.5 − min(1.2, 0.02) = 1.5 − 0.02 = 1.48  (gần như KHÔNG suy giảm)
+Ep2: 10 ngày không dùng   → decay = 1.5 − min(1.2, 0.10) = 1.5 − 0.10 = 1.40
+Ep3: 155 ngày không dùng  → decay = 1.5 − min(1.2, 1.55) = 1.5 − 1.20 = 0.30  (CHẠM SÀN)
+Ep4: 0 lần truy cập, tạo cách đây 80 ngày ≥ ngưỡng TTL-eviction (60 ngày, 0 truy cập)
+     → BỊ XOÁ HẲN trước khi tính decay — không còn trong kho để tính điểm nữa.</code></pre>
+<p>Kết quả: sau ngày 180, kho chỉ còn Ep1 (gần như nguyên vẹn), Ep2 (giảm nhẹ), Ep3 (vẫn tìm được nhưng bị đẩy xuống đáy bảng xếp hạng — hệ số nhân 0.30 áp lên TOÀN BỘ điểm mục 4 tính ra cho nó ở bất kỳ truy vấn nào sau này), Ep4 đã mất vĩnh viễn. Đây chính là lý do "decay" và "eviction" phải tách bạch (BUG-1, không phải nhị phân "giữ/xoá"): Ep3 minh hoạ đúng điểm giữa — vẫn CÓ THỂ được tìm lại nếu 1 câu hỏi tương lai liên quan rất sát, chỉ là hiếm khi thắng trong top-K so với memory mới hơn.</p>
+<pre><code>Vòng đời 1 memory dưới forgetting policy:
+
+  [Tạo mới] ──dùng thường xuyên──▶ [Active, decay ≈ 1.5x]
+       │                                    │
+       │                          lâu không truy cập
+       │                                    ▼
+       │                          [Decayed, hệ số → sàn 0.3x]
+       │                                    │
+       │                    gần trùng 1 memory khác?
+       │                          │YES              │NO, nhưng quá hạn TTL
+       │                          ▼                  ▼
+       │                     [MERGE — gộp        [EVICT — xoá hẳn,
+       │                      thành 1 bản ghi]     không thể phục hồi]
+       └──────── vẫn có thể được truy cập lại bất kỳ lúc nào (Active/Decayed) ──┘
+</code></pre>
+<p><strong>Vấn đề khó hơn decay — "staleness" (memory VẪN ĐƯỢC dùng nhiều nhưng đã SAI)</strong>: decay xử lý đúng memory ÍT liên quan/ÍT dùng. Nhưng có 1 lớp lỗi khác, khó hơn: 1 memory được truy cập RẤT NHIỀU, KHÔNG suy giảm theo decay (vì vẫn đang "hot") — nhưng thực tế đã LỖI THỜI (VD: 1 pattern thị trường đúng năm 2023, agent vẫn tự tin dùng lại năm 2026 dù bối cảnh vĩ mô đã đổi hẳn). Decay không giải quyết được ca này — cần 1 cơ chế khác (re-validate định kỳ so với dữ liệu mới, không chỉ dựa vào tần suất truy cập) — đây vẫn là bài toán MỞ, chưa có giải pháp chuẩn hoá rộng rãi tính tới 2026.</p>
+
+<h3>10. Chia sẻ bộ nhớ xuyên SESSION — khác hẳn "nhiều agent trong 1 session" ở mục 7</h3>
+<p><strong>Phân biệt trục chia sẻ</strong>: mục 7 hỏi "trong 1 lần chạy, có NHIỀU agent — tầng nào chia sẻ giữa các agent đó?". Mục này hỏi 1 trục hoàn toàn khác: "<strong>1 agent/hệ thống DUY NHẤT</strong>, chạy ở NHIỀU session khác nhau theo thời gian (hôm nay, tuần sau, tháng sau) — nó có nên nhớ lại điều đã biết từ session trước, và nếu có nhiều USER, làm sao không lẫn dữ liệu của user này sang user khác?".</p>
+<pre><code>Mục 7 (trục AGENT, trong 1 session):        Mục 10 (trục SESSION, qua thời gian):
+  Session hiện tại                            User X, Session ngày 1 ──ghi──▶ Memory
+  ┌─────────┬─────────┬─────────┐                                              │
+  │ Agent 1 │ Agent 2 │ Agent 3 │             User X, Session ngày 30 ◀──đọc lại──┘
+  └────┬────┴────┬────┴────┬────┘                    (CÙNG user, KHÁC session)
+       └── đọc chung semantic/procedural ──┘
+         (cách ly working/episodic riêng)          User Y, Session ngày 30 ──?──▶ có thấy
+                                                     memory của User X không? (câu hỏi ISOLATION)</code></pre>
+<p>Kiến trúc thật (2026, các nền tảng trợ lý cá nhân hoá dài hạn — Mem0, Microsoft Foundry user-scoped memory): mỗi memory được lập chỉ mục theo bộ 3 khoá <code>(user_id, session_id, agent_id)</code>, lưu trong vector store có <strong>kiểm soát truy cập (ACL) theo user/agent/tenant</strong> — mã hoá lúc lưu (encryption at rest) và scoped token cho mỗi truy vấn, KHÔNG dùng 1 pool chung cho mọi user. Đầu 1 session mới: hệ thống truy hồi memory liên quan theo <code>user_id</code> hiện tại (kết hợp semantic + keyword + entity matching), nạp vào context — đúng use-case "agent nhớ sở thích user đã nói vài chục session trước" mà benchmark LongMemEval (mục 6) đo.</p>
+<p><strong>Rủi ro privacy/isolation cụ thể</strong> (khác memory poisoning ở mục 5 — đây là rủi ro <em>kiến trúc phân quyền</em>, không phải tấn công chủ động): nếu thiếu ranh giới isolation rõ ràng, memory của user này có thể RÒ RỈ sang câu trả lời cho user khác — 1 lỗi kiến trúc, không cần kẻ tấn công. Nghiên cứu "Cross-Session Threats in AI Agents" (2026) chỉ ra thêm 1 lớp khó hơn: giả định "mỗi user có 1 <code>user_id</code> ổn định" — giả định này VỠ khi có session ẩn danh, user dùng nhiều thiết bị, hoặc luồng đăng nhập hỗn hợp — việc xác định "2 lượt tương tác này có phải cùng 1 người không" bản thân nó là 1 bài toán identity CHƯA có lời giải chuẩn hoá.</p>
+<p><strong>Áp vào <code>predictor</code></strong>: dự án hiện là hệ thống <strong>1 người vận hành</strong> (không phải SaaS đa người dùng) — nên toàn bộ bài toán ACL/tenant-isolation ở trên hiện <strong>KHÔNG áp dụng</strong>, không phải vì dự án thiếu sót mà vì đúng "start simple": không xây cơ chế phân quyền cho vấn đề chưa tồn tại. <code>lessons_learned_patterns.json</code> (đã nhắc ở mục 2.4/8) VẪN LÀ 1 dạng cross-session memory thật — nó tồn tại xuyên nhiều ngày chạy <code>daily-investor-report</code> — nhưng KHÔNG cần user-scoping vì chỉ có đúng 1 "user" hưởng lợi từ nó. Nếu tương lai dự án mở rộng cho NHIỀU người dùng cùng truy cập (VD nhiều thành viên team), bài toán isolation ở mục này trở thành có thật — đáng ghi nhớ trước, không đáng xây trước khi cần.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Ví dụ retrieval đơn giản hoá cho semantic memory (pseudo-code, minh hoạ cơ chế, không phải code chạy thật trong repo):</p>
+<pre><code># Bước 1: mỗi lần có 1 bài học mới, encode + lưu
+def add_semantic_memory(text, embed_model, store):
+    vector = embed_model.encode(text)          # VD 1536-dim vector
+    store.insert(vector=vector, text=text, ts=now())
+
+# Bước 2: khi agent cần trả lời câu hỏi mới, truy hồi bài học liên quan
+def retrieve(query, embed_model, store, k=5):
+    q_vector = embed_model.encode(query)
+    results = store.search(q_vector, top_k=k)   # cosine similarity
+    return [r.text for r in results]
+
+# Bước 3: đưa kết quả truy hồi vào context của lời gọi LLM hiện tại
+context = retrieve("Cổ phiếu bank phản ứng thế nào với tin lãi suất?", embed_model, store)
+prompt = f"Dựa trên các bài học sau: {context}\n\nPhân tích tin lãi suất hôm nay cho VCB."
+</code></pre>
+<p>Đây chính là cơ chế mà <code>.claude/skills/daily-investor-report/kb/lessons_learned_patterns.json</code> phục vụ về mặt khái niệm — dù trong <code>predictor</code> hiện tại việc "truy hồi" là con người (Claude Code session) chủ động đọc file JSON, không chạy qua 1 vector store tự động.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<p>Bảng phụ — chọn benchmark nào tuỳ câu hỏi đang cần trả lời (nối mục 6):</p>
+<table>
+<tr><th>Câu hỏi cần trả lời</th><th>Benchmark phù hợp</th><th>Vì sao</th></tr>
+<tr><td>"Agent có nhớ đúng sở thích/thông tin user đã nói vài chục session trước không?"</td><td>LongMemEval</td><td>Có riêng nhóm câu hỏi "single-session preference recall" + "knowledge update" đúng kịch bản này</td></tr>
+<tr><td>"Agent có suy luận nối được nhiều sự kiện rời rạc thành 1 kết luận không?"</td><td>LoCoMo</td><td>Nhấn multi-hop — đúng khớp bước consolidation episodic→semantic ở mục 2.4</td></tr>
+</table>
+<p>Map 5 tầng bộ nhớ vào file thật trong dự án <code>predictor</code> — bảng self-check để không nhầm lẫn lý thuyết với thực tế:</p>
+<table>
+<tr><th>Tầng bộ nhớ</th><th>File/cơ chế thật trong <code>predictor</code></th><th>Ghi chú</th></tr>
+<tr><td>Short-term</td><td>Context window của phiên Claude Code hiện tại</td><td>Không cần cơ chế riêng</td></tr>
+<tr><td>Working</td><td>LangGraph state + PostgresSaver (<code>L6_4_checkpointing.html</code>)</td><td>Resume đúng bước dở dang sau crash</td></tr>
+<tr><td>Episodic</td><td><em>Chưa có</em> — gần nhất là các file <code>ai-trader/8_ai-trader-execution-report-*.md</code> (báo cáo có ngày tháng)</td><td>Không có vector store tự động, chỉ có file .md đọc thủ công</td></tr>
+<tr><td>Semantic</td><td><code>.claude/skills/daily-investor-report/kb/lessons_learned_patterns.json</code></td><td>Tri thức tổng quát rút ra từ nhiều lần chạy report — đúng nghĩa "semantic memory" academic</td></tr>
+<tr><td>Procedural</td><td><code>.claude/skills/*/SKILL.md</code> (mọi skill trong dự án)</td><td>1 quy trình ghi 1 lần, agent nào load lại cũng làm đúng như vậy</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>.claude/skills/*/SKILL.md</code> trong <code>predictor</code> <strong>chính là procedural memory</strong> theo đúng nghĩa academic. <code>.claude/skills/daily-investor-report/kb/lessons_learned_patterns.json</code> (nhắc tới trong <code>CLAUDE.md</code> mục LLM-is-not-a-feature) <strong>chính là semantic memory</strong> — tri thức tổng quát rút ra từ nhiều lần chạy (episode). Kết luận thực dụng: dự án <strong>không cần thêm Mem0/Letta/Zep</strong> — nhu cầu bộ nhớ hiện tại nhỏ (1 skill, chạy hàng ngày, không phải hàng nghìn agent song song), giải pháp file-based JSON + Markdown đã đủ và dễ audit hơn 1 vector store phức tạp.</p>
+<p><strong>Áp dụng mục 5 (memory poisoning) vào thực tế</strong>: <code>lessons_learned_patterns.json</code> hiện được cập nhật qua quy trình có Claude Code (con người trong vòng lặp) đọc/ghi trực tiếp — KHÔNG có agent nào tự động consolidate từ input chưa xác thực, nên rủi ro MINJA-kiểu ở mục 5 hiện thấp. Đây là lý do <strong>không nên tự động hoá bước consolidation này</strong> (VD "để LLM tự quyết định lúc nào ghi bài học mới vào file") mà không thêm 1 bước review — tự động hoá consolidation chính là điểm mà tấn công memory poisoning nhắm vào trước tiên.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li><strong>Xây memory layer phức tạp (vector DB + auto-consolidation) khi 1 file JSON + SKILL.md đã đủ</strong> — vi phạm KISS, tăng bề mặt lỗi không cần thiết cho quy mô nhỏ.</li>
+<li><strong>Coi semantic memory là "sự thật tuyệt đối"</strong> — nó chỉ là pattern rút ra từ vài episode, có thể sai nếu consolidation dựa trên mẫu nhỏ/nhiễu. Luôn validate lại bằng dữ liệu mới trước khi dùng để quyết định.</li>
+<li><strong>Để agent tự "nhớ" theo hướng làm hài lòng user (sycophancy) mà không validate lại dữ liệu thị trường thật</strong> — rủi ro mà nghiên cứu <code>MemSyco-Bench</code> (arXiv 2607.01071) cảnh báo: agent có xu hướng ghi nhớ theo hướng "dễ nghe" thay vì đúng sự thật.</li>
+<li><strong>Nhầm memory poisoning (mục 5, tấn công CHỦ ĐỘNG) với contamination thông thường (nhiễu ngẫu nhiên)</strong> — 2 rủi ro khác nhau về bản chất, đòi phòng thủ khác nhau: contamination cần validate dữ liệu tốt hơn, poisoning cần kiểm soát AI đầu vào cho consolidation + giữ provenance để truy vết.</li>
+<li><strong>Nhầm working memory (checkpoint) với long-term memory</strong> — checkpoint chỉ resume lại đúng chỗ dở dang trong 1 session, không phải agent "học được" gì mới cho session sau.</li>
+<li><strong>Không có cơ chế "quên"</strong> — semantic memory tích luỹ mãi mãi mà không rà soát lại có thể giữ tri thức đã lỗi thời (VD 1 pattern thị trường đúng năm 2023 nhưng sai năm 2026). Xem mục 9 cho forgetting policy cụ thể (importance/merge/decay/eviction) — và lưu ý decay KHÔNG giải quyết được ca "staleness" (memory vẫn hot nhưng đã sai), cần cơ chế re-validate riêng.</li>
+<li><strong>Tưởng công thức chấm điểm mục 4 (recency/importance/relevance) đã là "cơ chế quên"</strong> — sai; mục 4 chỉ xếp hạng trong số memory CÒN TỒN TẠI cho 1 truy vấn cụ thể, không bao giờ xoá gì khỏi kho — đó là việc của forgetting policy (mục 9), 1 tiến trình bảo trì độc lập, chạy định kỳ, không gắn với truy vấn nào.</li>
+<li><strong>Xây ACL/tenant-isolation cho cross-session memory (mục 10) khi hệ thống chỉ có 1 người dùng</strong> — over-engineering cho vấn đề chưa tồn tại; ngược lại, nếu hệ thống ĐÃ có nhiều user thật, bỏ qua isolation là lỗi bảo mật thật (rò rỉ memory giữa user), không phải rủi ro lý thuyết.</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li><input type="checkbox" disabled> Kể tên đủ 5 loại memory + đúng ví dụ đời thường cho mỗi loại, không nhầm lẫn thứ tự.</li>
+<li><input type="checkbox" disabled> Giải thích được vì sao context window to (1M token) vẫn không thay thế được kiến trúc bộ nhớ phân tầng.</li>
+<li><input type="checkbox" disabled> Vẽ được sơ đồ cơ chế retrieval (encode → vector store → cosine similarity → top-K) cho episodic/semantic memory.</li>
+<li><input type="checkbox" disabled> Map đúng 5 tầng vào ít nhất 3 file/cơ chế thật trong <code>predictor</code> (không tra bảng, tự nhớ).</li>
+<li><input type="checkbox" disabled> Giải thích được rủi ro "memory contamination" và "sycophancy" — vì sao không nên tự động hoá consolidation mà không kiểm soát.</li>
+<li><input type="checkbox" disabled> Tự tính lại được worked example điểm truy hồi (mục 4) bằng tay — ra đúng thứ tự B &gt; A &gt; C, giải thích được vì sao min-max normalization gây ra kết quả phản trực giác đó.</li>
+<li><input type="checkbox" disabled> Phân biệt được memory poisoning (tấn công chủ động, MINJA) với contamination (nhiễu ngẫu nhiên) — nêu đúng 3 lớp phòng thủ thực dụng.</li>
+<li><input type="checkbox" disabled> Kể được ít nhất 1 benchmark đánh giá bộ nhớ agent (LongMemEval hoặc LoCoMo) và nó đo cái gì cụ thể.</li>
+<li><input type="checkbox" disabled> Phân biệt được forgetting policy (mục 9, tiến trình bảo trì định kỳ, có thể XOÁ dữ liệu qua eviction) với công thức chấm điểm truy hồi (mục 4, chỉ xếp hạng, không bao giờ xoá) — kể đúng 4 đòn bẩy (importance/merge/decay/eviction) và tự tính lại được worked example decay 1.5x→0.3x bằng tay.</li>
+<li><input type="checkbox" disabled> Phân biệt được 2 trục chia sẻ bộ nhớ: mục 7 (nhiều agent, 1 session) vs mục 10 (1 agent, nhiều session/nhiều user theo thời gian) — giải thích đúng rủi ro isolation vì sao KHÔNG áp dụng cho <code>predictor</code> hiện tại nhưng sẽ áp dụng nếu dự án có nhiều người dùng.</li>
+</ul>
+</div>
+
+<div class="nav-bottom"><a href="R5_5_context_engineering.html">← R5.5 · Context Engineering</a><a href="R6_2_mcp.html">R6.2 · MCP →</a></div>
+
+</div>
+</body>
+</html>

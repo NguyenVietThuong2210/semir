@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R4.3 · Hybrid Retrieval — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Retrieval Techniques · Điểm 3/6</div>
+  <h1>R4.3 · Hybrid Retrieval</h1>
+  <p class="subtitle">Vector search giỏi hiểu Ý NGHĨA nhưng dở với từ khoá chính xác. BM25 ngược lại. Hybrid = dùng cả 2, hợp nhất bằng Reciprocal Rank Fusion (RRF) — tự tay tính công thức này.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>Dễ</strong>: giải thích vì sao vector search 1 mình không đủ cho tài liệu có nhiều thuật ngữ/mã số cần khớp chính xác.</li>
+<li><strong>Dễ</strong>: nhớ đúng công thức RRF và ý nghĩa từng ký hiệu.</li>
+<li><strong>Trung bình</strong>: giải thích được VÌ SAO RRF dùng RANK (thứ hạng) thay vì SCORE thô để hợp nhất — đây là điểm hay bị hỏi nhất.</li>
+<li><strong>Trung bình</strong>: tự tay code + tính tay RRF fusion cho 2 danh sách kết quả BM25 + vector.</li>
+<li><strong>Khó</strong>: thiết kế được khi nào hybrid đáng đầu tư cho 1 KB cụ thể, khi nào vector-only đã đủ.</li>
+<li><strong>Khó</strong>: phân biệt BM25/SPLADE/dense embedding theo đúng trục "ai quyết định trọng số" và "xử lý từ chưa từng thấy ra sao" — không coi SPLADE là "BM25 nâng cấp".</li>
+<li><strong>Khó</strong>: tính tay được cả RRF lẫn DBSF cho cùng 1 bộ dữ liệu, chỉ ra được trường hợp cụ thể 2 phương pháp cho ra thứ hạng khác nhau và giải thích đúng NGUYÊN NHÂN cơ chế.</li>
+<li><strong>Khó</strong>: tính tay được weighted linear combination (convex combination) với alpha tự chọn cho CÙNG bộ dữ liệu RRF/DBSF, chỉ ra được rằng đổi alpha có thể tạo ra 1 thứ hạng THỨ BA khác cả 2 phương pháp kia, và biết cần bao nhiêu dữ liệu nhãn để tune alpha an toàn.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Trang này giả định bạn đã hiểu vector search cơ bản (<a href="R4_1_vector_databases.html">R4.1</a>). Nó đào sâu công thức RRF đã có ở mức khái niệm trong <code>../modules/L9_1_advanced_rag.html §3</code> — phần MỚI ở đây là: giải thích từng bước "vì đâu ra công thức", ví dụ số tính tay đầy đủ, và code Python chạy được. Không lặp lại phần BM25 cơ bản (đã có ở <code>L5_2_rag.html</code>).</p>
+<p>Độ khó: <strong>Trung bình</strong> — công thức đơn giản (chỉ cộng phân số), nhưng lý do "vì sao dùng rank chứ không dùng score" đòi hỏi hiểu về vấn đề chuẩn hoá (normalization) giữa 2 hệ thống điểm số khác nhau.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div><p>Vector search giỏi hiểu Ý NGHĨA ("cổ phiếu tăng trưởng tốt" ≈ "công ty có lợi nhuận cải thiện" dù không chung từ nào) nhưng dở với TỪ KHOÁ CHÍNH XÁC (mã ticker "VNM", con số "15.2%", tên riêng ít gặp) — vì embedding "làm mờ" mọi thứ về ý nghĩa tổng quát, con số/mã cụ thể dễ bị "hoà tan" vào ngữ cảnh chung. BM25 (keyword search cổ điển, đếm tần suất từ) ngược lại — giỏi exact match, dở với đồng nghĩa/diễn đạt khác nhau. Hybrid retrieval = dùng CẢ HAI, không chọn 1 bên.</p></div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vì sao không thể chỉ dùng 1 trong 2</h3>
+<table>
+<tr><th></th><th>BM25 (keyword)</th><th>Vector search (semantic)</th></tr>
+<tr><td>Giỏi ở</td><td>Exact match: mã ticker "VNM", số liệu "15.2%", tên riêng hiếm gặp</td><td>Đồng nghĩa, diễn đạt khác nhau cùng ý nghĩa</td></tr>
+<tr><td>Dở ở</td><td>Không hiểu "lợi nhuận cải thiện" ≈ "tăng trưởng tốt" nếu không chung từ</td><td>Dễ bỏ lỡ hoặc pha loãng tín hiệu của 1 mã/số cụ thể giữa văn bản dài</td></tr>
+<tr><td>Cơ chế cốt lõi</td><td>Đếm tần suất từ (term frequency) + độ hiếm từ (inverse document frequency)</td><td>Khoảng cách hình học giữa embedding (xem R4.1)</td></tr>
+</table>
+<p>Với KB tài chính — nơi có RẤT NHIỀU thuật ngữ viết tắt (P/E, ROE, EPS) và mã ticker (VNM, FPT, HPG) — cả 2 loại truy vấn đều xảy ra thường xuyên: "P/E của VNM là bao nhiêu" (cần exact match "VNM", "P/E") và "công ty nào định giá rẻ so với tăng trưởng" (cần hiểu ý nghĩa, không có từ khoá cố định). Dùng 1 mình 1 loại retriever sẽ bỏ lỡ 1 nửa nhu cầu.</p>
+
+<h3>2. Công thức RRF — Reciprocal Rank Fusion</h3>
+<pre><code>RRF_score(doc) = Σ  1 / (k + rank_i(doc))
+                 i∈{BM25, vector}
+
+# k = hằng số (thường 60) — làm mượt, tránh rank #1 áp đảo quá mức
+# rank_i(doc) = thứ hạng của doc trong danh sách kết quả của retriever i (1-indexed)
+# Nếu doc không xuất hiện trong 1 danh sách → coi như không đóng góp từ nhánh đó (= 0)</code></pre>
+
+<div class="callout"><div class="label">📖 Vì sao dùng RANK thay vì SCORE thô để hợp nhất?</div><p>Đây là điểm hay bị bỏ qua nhất khi học RRF. Điểm BM25 (dựa trên term frequency, thường có giá trị 5-30, không giới hạn trên cố định) và điểm cosine similarity (dựa trên vector, range chuẩn [-1, 1] hoặc [0, 1] sau chuẩn hoá) <strong>không cùng thang đo</strong>. Cộng trực tiếp 2 loại điểm này (VD <code>0.8 × bm25_score + 0.2 × cosine_score</code>) đòi hỏi phải tự tay chuẩn hoá (normalize, VD min-max scaling) và tune trọng số bằng tay — dễ sai lệch khi phân phối điểm của 2 retriever khác nhau theo TỪNG query (VD 1 query có nhiều từ khớp chính xác → điểm BM25 vọt cao bất thường so với query khác).</p>
+<p>RRF né hoàn toàn vấn đề này bằng cách chỉ quan tâm <strong>thứ hạng tương đối</strong>, không quan tâm giá trị điểm tuyệt đối — 1 doc đứng #1 trong BM25 luôn đóng góp đúng <code>1/(60+1)</code> bất kể điểm BM25 thô là 8.2 hay 15.7 hay 45.0. Đây là lý do RRF được dùng rộng rãi trong production dù đơn giản hơn nhiều so với "học 1 mô hình kết hợp điểm số" — nó không cần calibrate gì cả, chỉ cần 2 danh sách đã sắp xếp.</p></div>
+
+<h3>3. Cách code RRF</h3>
+<pre><code>def reciprocal_rank_fusion(bm25_results: list[str], vector_results: list[str], k: int = 60):
+    scores: dict[str, float] = {}
+    for rank, doc_id in enumerate(bm25_results, start=1):
+        scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + rank)
+    for rank, doc_id in enumerate(vector_results, start=1):
+        scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + rank)
+    return sorted(scores.items(), key=lambda x: -x[1])</code></pre>
+<p>Lưu ý: hàm này nhận vào 2 <strong>danh sách đã sắp xếp theo thứ hạng</strong> (không phải điểm số) — đây là input tối thiểu cần có, không cần biết gì thêm về cách 2 retriever tính điểm bên trong. Đây cũng là lý do RRF dễ tích hợp: bất kỳ retriever nào miễn là trả về 1 danh sách xếp hạng đều dùng được, kể cả 3, 4 retriever thay vì chỉ 2 (VD thêm 1 nhánh full-text search riêng).</p>
+
+<h3>4. SPLADE — sparse retrieval CÓ HỌC, không phải chỉ đếm từ như BM25 (verify 2026-09)</h3>
+<p>Mục 1 đóng khung BM25 là đại diện duy nhất của "keyword retrieval" — nhưng có 1 họ retriever khác, cũng sparse (đa số chiều = 0, giống BM25 về CẤU TRÚC vector) nhưng trọng số mỗi từ do 1 model học ra, không phải công thức tần suất cố định: <strong>SPLADE</strong> (Sparse Lexical and Expansion model). Khác BM25 (đếm term frequency × inverse document frequency theo công thức cứng), SPLADE dùng 1 model transformer để (a) gán trọng số khác cho từng từ THEO NGỮ CẢNH (không phải đếm thô), và (b) <strong>mở rộng</strong> sang các từ liên quan có thể không xuất hiện literal trong document (gần giống 1 dạng "đồng nghĩa tự động" nhưng vẫn ở dạng sparse vector, khác hẳn embedding dense).</p>
+<table>
+<tr><th></th><th>BM25</th><th>SPLADE</th><th>Dense embedding (vector, mục 1)</th></tr>
+<tr><td>Cấu trúc vector</td><td>Sparse (đa số chiều = 0)</td><td>Sparse (đa số chiều = 0, nhưng trọng số HỌC được)</td><td>Dense (mọi chiều đều khác 0)</td></tr>
+<tr><td>Ai quyết định trọng số từ</td><td>Công thức cố định (TF-IDF/BM25 formula)</td><td>Model transformer học ra (fine-tune trên dữ liệu relevance)</td><td>Model embedding học ra (không tách được theo từng "từ" cụ thể)</td></tr>
+<tr><td>Xử lý từ chưa từng thấy (mã ticker mới, mã lỗi nội bộ)</td><td>Tốt nhất — exact match không cần học trước</td><td>Yếu hơn BM25 — từ không có trong dữ liệu train sẽ không được "mở rộng" đúng</td><td>Yếu nhất — dễ bị "hoà tan" vào ngữ cảnh chung (đã nêu ở phần Analogy)</td></tr>
+<tr><td>Hạ tầng cần</td><td>CPU-only, inverted index cổ điển</td><td>CẦN GPU lúc inference (encode cả query lẫn doc), thêm ~100-300ms latency</td><td>Cần GPU lúc embed (thường offline cho doc, online cho query)</td></tr>
+<tr><td>Hiệu năng đo được (1 benchmark domain thương mại điện tử, KHÔNG phải universal)</td><td>nDCG@10 = 0.305 (baseline)</td><td>0.326 (off-the-shelf) → 0.389 (đã fine-tune riêng cho domain)</td><td>Tuỳ model, không cùng thang đo trực tiếp trong benchmark này</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Không phải "SPLADE thay thế BM25" — vẫn là trade-off, không phải nâng cấp tuyệt đối</div><p>Số liệu benchmark cho thấy SPLADE thường thắng BM25 về độ chính xác (nDCG) — nhưng đây KHÔNG phải lý do coi BM25 "lỗi thời": SPLADE cần chạy transformer lúc inference (GPU, thêm latency), còn BM25 chạy trên CPU với inverted index cực rẻ. Quan trọng hơn với KB tài chính: BM25 xử lý mã ticker/số liệu CHƯA TỪNG XUẤT HIỆN trong dữ liệu train TỐT HƠN SPLADE — vì BM25 chỉ cần khớp chuỗi ký tự chính xác, còn SPLADE phụ thuộc vào việc model đã học cách "mở rộng" đúng cho đúng loại từ đó. Với 1 KB tài chính liên tục có ticker mới/thuật ngữ mới, đây là lý do KHÔNG nên mặc định thay BM25 bằng SPLADE trong pipeline hybrid — cân nhắc thêm SPLADE như nhánh thứ 3 (BM25 + SPLADE + dense, hợp nhất cả 3 bằng RRF/DBSF) chỉ khi đã đo được lợi ích đủ lớn để bù chi phí hạ tầng GPU mới.</p></div>
+
+<h3>5. DBSF — Distribution-Based Score Fusion, lựa chọn thay thế RRF giữ lại được ĐỘ LỚN của điểm số (verify 2026-09, nguồn Qdrant)</h3>
+<p>Mục 2 giải thích vì sao RRF cố tình BỎ QUA giá trị điểm số thô, chỉ dùng rank — đây là điểm mạnh (né chuẩn hoá) nhưng cũng là điểm yếu: nếu 1 retriever có 1 kết quả THẮNG ÁP ĐẢO (điểm số cách biệt rất xa so với vị trí #2), RRF vẫn chỉ tính nó hơn vị trí #2 đúng <code>1/(k+1) - 1/(k+2)</code> — 1 khoảng cách RẤT NHỎ, "làm phẳng" mất thông tin về độ áp đảo đó. <strong>DBSF (Distribution-Based Score Fusion, dùng trong Qdrant)</strong> đi hướng khác: đưa điểm số của MỖI danh sách về cùng 1 thang đo bằng <strong>z-score</strong> (trừ trung bình, chia độ lệch chuẩn của CHÍNH danh sách đó), giới hạn trong khoảng μ±3σ để chặn outlier, rồi CỘNG z-score của 2 danh sách lại — giữ được thông tin "cách biệt bao xa" mà RRF đã bỏ.</p>
+<pre><code>DBSF_score(doc) = z_BM25(doc) + z_vector(doc)
+  z_i(doc) = (score_i(doc) - mean_i) / std_i        (tính riêng cho mỗi danh sách i)</code></pre>
+
+<h3>6. Weighted Linear Combination (Convex Combination) — lựa chọn thứ 3, cần eval set để tune nhưng có thể THẮNG cả RRF lẫn DBSF (verify 2026-09)</h3>
+<p>Mục 2 nêu lý do RRF né chuẩn hoá bằng cách chỉ dùng rank. Mục 5 (DBSF) đi 1 bước xa hơn — giữ lại độ lớn thông qua z-score TỰ ĐỘNG, không cần chọn tham số trọng số. Còn 1 lựa chọn thứ 3, ĐƠN GIẢN HƠN cả 2 nhưng đòi hỏi thứ mà RRF/DBSF không cần: <strong>convex combination</strong> — cộng trực tiếp 2 điểm số ĐÃ CHUẨN HOÁ (thường min-max về [0,1]) theo 1 trọng số <code>alpha</code> do người thiết kế CHỌN (không tự động như DBSF):</p>
+<pre><code>Combined(d) = α × score_vector_norm(d) + (1 - α) × score_bm25_norm(d)     0 ≤ α ≤ 1
+
+score_i_norm(d) = (score_i(d) - min_i) / (max_i - min_i)     (min-max scaling riêng từng danh sách)
+
+α = 0 → thuần BM25;  α = 1 → thuần vector;  α = 0.5 → cân bằng 2 bên</code></pre>
+<p>Khác biệt cốt lõi so với DBSF: DBSF <strong>tự động</strong> hoá phần "biết trọng số bao nhiêu" bằng z-score (không có tham số nào cần tay chọn ngoài ngưỡng cắt outlier μ±3σ cố định). Convex combination <strong>giao quyền kiểm soát</strong> đó cho người thiết kế qua alpha — đây vừa là điểm mạnh (khi có lý do miền domain rõ ràng để tin 1 retriever hơn) vừa là điểm yếu (chọn sai alpha có thể lệch xa hơn cả 2 phương pháp tự động kia).</p>
+<div class="callout"><div class="label">📖 Bruch, Gai &amp; Ingber (2023) nói gì về convex combination so với RRF</div><p>Theo "An Analysis of Fusion Functions for Hybrid Retrieval" (ACM TOIS, arXiv 2210.11934): convex combination đã tune đúng alpha <strong>thắng RRF cả trong-miền lẫn ngoài-miền</strong> (in-domain/out-of-domain) trong nhiều benchmark, có thuộc tính "sample-efficient" — chỉ cần <strong>1 nhúm nhỏ query có nhãn</strong> (paper nói "just a handful") đã đủ để tune ra 1 giá trị alpha ổn định cho 1 domain cụ thể, trong khi RRF "relatively less sample-efficient" hơn (không cần hàng nghìn nhãn như train 1 model learning-to-rank đầy đủ). Đây CHÍNH XÁC là tinh thần mà quy trình đo rerank ở <a href="R4_4_reranking_pipelines.html">R4.4 §3</a> cũng khuyến nghị (30-50 câu hỏi) — "không cần dữ liệu khổng lồ mới tune được, nhưng PHẢI có ít nhất vài chục nhãn thật, không đoán alpha bằng cảm tính". <em>Lưu ý phân biệt</em>: đây KHÔNG phải cơ chế của DAT (Dynamic Alpha Tuning, Hsu &amp; Tzeng, arXiv 2503.23013, 2025) — DAT là 1 phương pháp khác, dùng LLM chấm điểm kết quả top-1 của mỗi retriever để tính alpha <strong>động, theo từng query</strong> lúc runtime, không tune 1 alpha tĩnh từ nhãn offline.</p></div>
+<p><strong>Khi nào convex combination đáng cân nhắc hơn RRF/DBSF</strong>: khi đã có ĐỦ nhãn (≥50-100 cặp) VÀ có lý do domain cụ thể để tin 1 retriever nên được ưu tiên hơn (VD với KB tài chính nhiều mã ticker, có thể biết trước BM25 nên được tin cậy hơn khi query chứa 1 mã ticker rõ ràng) — lúc đó alpha là "núm vặn" tường minh để mã hoá đúng niềm tin đó, thứ mà RRF (không có tham số trọng số nào ngoài k) và DBSF (hoàn toàn tự động, không nhận input miền) đều không làm được.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Tính tay đầy đủ RRF cho 2 doc cạnh tranh, với k=60:</p>
+<pre><code>Ví dụ: doc "MACD_explainer" đứng #2 trong BM25 (khớp từ khóa "MACD" chính xác)
+       và đứng #15 trong vector search (không có synonym gần nghĩa với query)
+
+RRF_score(MACD_explainer) = 1/(60+2) + 1/(60+15)
+                          = 1/62 + 1/75
+                          = 0.01613 + 0.01333
+                          = 0.02946
+
+So sánh với doc "momentum_indicators_overview":
+  đứng #8 trong vector search, KHÔNG xuất hiện trong top BM25 (giả sử top-20)
+RRF_score(momentum_indicators_overview) = 0 (BM25, không xuất hiện) + 1/(60+8)
+                                         = 0 + 1/68
+                                         = 0.01471
+
+→ 0.02946 > 0.01471 → "MACD_explainer" thắng
+→ Đúng trực giác: query có từ khóa "MACD" chính xác nên ưu tiên doc match từ khóa đó,
+  dù doc kia có thể "gần nghĩa" hơn về mặt tổng quát</code></pre>
+<p><strong>Thử thay đổi k để thấy tác dụng "làm mượt"</strong>: nếu k = 0 (không làm mượt), rank #1 đóng góp 1/1 = 1.0, rank #2 chỉ đóng góp 1/2 = 0.5 — chênh lệch rất lớn giữa hạng 1 và hạng 2, khiến 1 retriever tìm đúng ở #1 gần như luôn thắng bất kể retriever kia nói gì. Với k = 60, rank #1 đóng góp 1/61 ≈ 0.0164, rank #2 đóng góp 1/62 ≈ 0.0161 — chênh lệch rất nhỏ, mượt hơn nhiều. k lớn → các rank đầu "gần bằng nhau" hơn → 2 retriever đóng góp cân bằng hơn; k nhỏ → rank #1 áp đảo.</p>
+
+<h3>Ví dụ mở rộng — RRF và DBSF cho ra 2 THỨ HẠNG KHÁC NHAU trên cùng 1 bộ dữ liệu (minh hoạ, không phải benchmark thật)</h3>
+<p>5 tài liệu A-E, điểm BM25 thô và điểm cosine similarity thô cho trước (dữ liệu minh hoạ, dựng để lộ rõ khác biệt cơ chế — không phải số liệu benchmark thật):</p>
+<pre><code>Điểm BM25 thô:     A=50   B=14   C=13   D=12   E=11
+Điểm vector thô:   A=0.65 B=0.80 C=0.75 D=0.60 E=0.55
+
+Bước 1 — Rank hoá cho RRF (chỉ cần thứ tự, k=60):
+  BM25 rank:   A=1  B=2  C=3  D=4  E=5   (đúng theo thứ tự điểm giảm dần)
+  Vector rank: B=1  C=2  A=3  D=4  E=5   (B cao nhất vector, A tụt xuống hạng 3)
+
+  RRF(A) = 1/61 + 1/63 = 0.016393 + 0.015873 = 0.032266
+  RRF(B) = 1/62 + 1/61 = 0.016129 + 0.016393 = 0.032522
+  RRF(C) = 1/63 + 1/62 = 0.015873 + 0.016129 = 0.032002
+  → XẾP HẠNG RRF:  B (0.032522) > A (0.032266) > C (0.032002) > D > E
+    (B thắng vì đều đứng nhì-nhất ở cả 2 danh sách; RRF không "biết" A bỏ xa
+     B tới 50 so với 14 ở BM25 — với RRF, hạng 1 và hạng 3 chỉ cách nhau
+     đúng 1 bậc, bất kể khoảng cách điểm số thật là bao nhiêu)
+
+Bước 2 — Z-score hoá cho DBSF (cần giá trị thô, không chỉ thứ hạng):
+  mean_BM25 = (50+14+13+12+11)/5 = 20;  std_BM25 = √(Σ(x-20)²/5) = √226 ≈ 15.03
+  mean_vec  = (0.65+0.80+0.75+0.60+0.55)/5 = 0.67; std_vec = √(Σ(x-0.67)²/5) ≈ 0.093
+
+  z_BM25(A) = (50-20)/15.03 ≈ +2.00     z_vec(A) = (0.65-0.67)/0.093 ≈ -0.22
+  z_BM25(B) = (14-20)/15.03 ≈ -0.40     z_vec(B) = (0.80-0.67)/0.093 ≈ +1.40
+  z_BM25(C) = (13-20)/15.03 ≈ -0.47     z_vec(C) = (0.75-0.67)/0.093 ≈ +0.86
+
+  DBSF(A) = 2.00 + (-0.22) = 1.78
+  DBSF(B) = -0.40 + 1.40  = 1.00
+  DBSF(C) = -0.47 + 0.86  = 0.40
+  → XẾP HẠNG DBSF:  A (1.78) > B (1.00) > C (0.40) > D > E
+    (A thắng vì độ áp đảo BM25 của nó — +2 độ lệch chuẩn so với trung bình —
+     là có thật và LỚN HƠN NHIỀU so với việc B chỉ nhỉnh hơn A 1 chút ở cả 2 mặt)</code></pre>
+<p><strong>Bài học rút ra</strong>: đây đúng là hiện tượng nguồn Qdrant mô tả — "1 lợi thế áp đảo SỐNG SÓT qua phép cộng của DBSF, trong khi RRF đọc theo Ô THỨ HẠNG nên lợi thế áp đảo đó bị làm phẳng thành đúng 1 bậc". Không có phương pháp nào "đúng tuyệt đối" — khi 2 hệ thống điểm số đáng tin cậy như nhau và có phân phối ổn định, DBSF tận dụng được nhiều thông tin hơn; khi 1 trong 2 hệ thống điểm số có phân phối kỳ lạ theo từng query (VD BM25 vọt cao bất thường chỉ vì query có nhiều từ hiếm), RRF an toàn hơn vì không bị điểm thô "đánh lừa". Khuyến nghị thực hành (theo Qdrant): LUÔN bắt đầu bằng RRF (baseline mặc định, mục 2-3), chỉ so sánh DBSF trên cùng 1 eval set có nhãn thật trước khi đổi mặc định.</p>
+
+<h3>Ví dụ mở rộng — Weighted Linear Combination trên CÙNG bộ dữ liệu A-E, cho ra thứ hạng THỨ BA khi đổi alpha</h3>
+<p>Dùng lại đúng dữ liệu thô ở trên (BM25: A=50,B=14,C=13,D=12,E=11; vector: A=0.65,B=0.80,C=0.75,D=0.60,E=0.55). Bước 1 — chuẩn hoá min-max từng danh sách về [0,1]:</p>
+<pre><code>BM25 norm (min=11, max=50, range=39):  A=1.000  B=0.077  C=0.051  D=0.026  E=0
+Vector norm (min=0.55, max=0.80, range=0.25):  A=0.400  B=1.000  C=0.800  D=0.200  E=0
+
+Với α=0.5 (cân bằng 2 bên — Combined = α×vector_norm + (1-α)×bm25_norm):
+  Combined(A) = 0.5×0.400 + 0.5×1.000 = 0.200 + 0.500 = 0.700
+  Combined(B) = 0.5×1.000 + 0.5×0.077 = 0.500 + 0.0385 = 0.5385
+  Combined(C) = 0.5×0.800 + 0.5×0.051 = 0.400 + 0.0255 = 0.4255
+  → XẾP HẠNG (α=0.5):  A (0.700) > B (0.5385) > C (0.4255) > D > E
+    → GIỐNG HỆT thứ hạng DBSF ở trên (A>B>C) — dễ hiểu vì α=0.5 cũng cố giữ
+      lại độ lớn tương đối, tương tự tinh thần DBSF, chỉ khác cách chuẩn hoá
+      (min-max thay vì z-score)
+
+Với α=0.8 (tin tưởng vector HƠN BM25 — giả sử có lý do domain để làm vậy):
+  Combined(A) = 0.8×0.400 + 0.2×1.000 = 0.320 + 0.200 = 0.520
+  Combined(B) = 0.8×1.000 + 0.2×0.077 = 0.800 + 0.0154 = 0.8154
+  Combined(C) = 0.8×0.800 + 0.2×0.051 = 0.640 + 0.0102 = 0.6502
+  → XẾP HẠNG (α=0.8):  B (0.8154) > C (0.6502) > A (0.520) > D > E
+    → THỨ HẠNG THỨ BA — khác cả RRF (B>A>C) LẪN DBSF/α=0.5 (A>B>C)!
+      B và C vượt lên trên A vì alpha cao ưu tiên hẳn tín hiệu vector, nơi
+      A chỉ đứng thứ 3 (0.65) trong khi B đứng đầu (0.80)</code></pre>
+<p><strong>Bài học</strong>: đây chính là điều mục 6 cảnh báo — convex combination KHÔNG có 1 kết quả "đúng" duy nhất như RRF/DBSF (vốn tất định khi đã có dữ liệu đầu vào); kết quả phụ thuộc TRỰC TIẾP vào alpha do người thiết kế chọn. Alpha=0.5 ở đây tình cờ trùng thứ hạng DBSF, nhưng alpha=0.8 (nếu chọn SAI, không dựa trên eval set thật) có thể đẩy toàn bộ thứ hạng đi xa khỏi cả 2 baseline tự động — đây là lý do mục 6 nhấn mạnh alpha PHẢI tune bằng ≥50-100 cặp nhãn thật, không đoán theo cảm tính hay theo "nghe có vẻ hợp lý".</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Cách hợp nhất</th><th>Cần chuẩn hoá điểm?</th><th>Cần tune trọng số?</th><th>Độ phức tạp triển khai</th><th>Khi dùng</th></tr>
+<tr><td>Weighted linear combination / convex combination (mục 6)</td><td>Có, bắt buộc (min-max scaling từng danh sách)</td><td>Có — đúng 1 tham số α, cần 50-100 cặp nhãn để tune an toàn (mục 6)</td><td>Trung bình — đơn giản hơn DBSF về công thức, nhưng rủi ro nếu α chọn sai (không dựa eval set)</td><td>Khi có ≥50-100 nhãn thật VÀ có lý do domain cụ thể để tin 1 retriever hơn — theo nghiên cứu 2026, tune đúng có thể thắng cả RRF lẫn DBSF trong-miền lẫn ngoài-miền</td></tr>
+<tr><td>RRF (Reciprocal Rank Fusion)</td><td>Không cần</td><td>Chỉ 1 hằng số k (thường giữ mặc định 60)</td><td>Thấp — chỉ cần 2 danh sách xếp hạng</td><td>Baseline mặc định cho hầu hết hệ thống hybrid retrieval production</td></tr>
+<tr><td>DBSF (Distribution-Based Score Fusion)</td><td>Tự động (z-score theo từng danh sách, không cần tune tay)</td><td>Không (chỉ cần cắt outlier ở μ±3σ, cố định)</td><td>Thấp-trung bình — cần giữ lại điểm thô, không chỉ rank</td><td>Khi 2 retriever có phân phối điểm ổn định, muốn giữ thông tin "áp đảo bao nhiêu" mà RRF làm phẳng mất — luôn so sánh với RRF trên eval set thật trước khi đổi mặc định</td></tr>
+<tr><td>Learning-to-rank (mô hình học kết hợp)</td><td>Không cần thủ công (mô hình tự học)</td><td>Không cần thủ công (mô hình tự học)</td><td>Rất cao — cần training data nhãn relevance</td><td>Khi có đủ dữ liệu click/nhãn relevance để train, và RRF không đủ tốt</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div><p>Nếu <code>.claude/skills/daily-investor-report/kb_loader.py</code> được nâng cấp lên semantic search, hybrid retrieval là bước tự nhiên tiếp theo — vì KB tài chính có RẤT NHIỀU thuật ngữ/mã ticker cần exact match (VD "P/E", "ROE", "VNM") mà thuần vector search dễ bỏ lỡ hoặc trả về kết quả "gần nghĩa" thay vì đúng thuật ngữ. Weaviate (xem bảng so sánh ở R4.1) có hybrid search tích hợp sẵn 1-dòng-query — nếu chọn giữa các vector DB CHO MỤC ĐÍCH NÀY cụ thể, đây là điểm cộng thật sự cho Weaviate so với pgvector (pgvector cần tự implement RRF bằng 2 query riêng + merge ở tầng application, đúng như code ở mục 3). Nếu tương lai đánh giá Qdrant cụ thể (đã hỗ trợ cả RRF lẫn DBSF native trong Query API), nên benchmark cả 2 chế độ trên đúng eval set tiếng Việt của KB, không mặc định chọn DBSF chỉ vì nó "mới hơn" — đúng nguyên tắc mục 5. SPLADE (mục 4) hiện CHƯA đáng cân nhắc cho dự án ở quy mô này: cần thêm hạ tầng GPU chỉ để so BM25 hiện có (rẻ, CPU-only, khớp chính xác mã ticker) với 1 lợi ích chưa được đo trên domain tài chính tiếng Việt.</p></div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li>Cộng trực tiếp điểm BM25 và điểm cosine similarity mà không chuẩn hoá — RRF (dùng rank, không dùng score) tránh được vấn đề này hoàn toàn, nên là lựa chọn mặc định trừ khi có lý do cụ thể để không dùng.</li>
+<li>Nghĩ hybrid retrieval luôn tốt hơn vector-only — nếu KB không có nhiều thuật ngữ/mã cần exact match (VD văn bản tự sự thuần tuý), lợi ích của BM25 rất nhỏ mà vẫn phải trả chi phí duy trì 2 hệ thống retrieval song song.</li>
+<li>Đặt k quá nhỏ (VD k=1) khiến rank #1 của 1 retriever áp đảo hoàn toàn — mất đi ý nghĩa "hybrid" thật sự vì gần như chỉ 1 retriever quyết định kết quả cuối.</li>
+<li>Quên rằng doc không xuất hiện trong 1 danh sách đóng góp 0 (không phải điểm âm hay bị phạt) — 1 doc chỉ cần mạnh ở MỘT nhánh vẫn có thể lọt top nếu nhánh kia hoàn toàn im lặng về nó.</li>
+<li>Mặc định thay BM25 bằng SPLADE vì benchmark cho thấy SPLADE chính xác hơn — bỏ qua việc SPLADE cần GPU (thêm chi phí + latency) và xử lý từ/mã chưa từng thấy trong training data KÉM HƠN BM25, đúng loại rủi ro cao với ticker/thuật ngữ tài chính mới xuất hiện liên tục.</li>
+<li>Đổi RRF sang DBSF chỉ vì "DBSF giữ được nhiều thông tin hơn" mà không đo trên eval set thật — DBSF nhạy với phân phối điểm bất thường theo từng query (query có nhiều từ hiếm khiến BM25 vọt điểm) theo cách RRF không gặp phải.</li>
+<li>Chọn alpha cho weighted linear combination "theo cảm tính" (VD "nghe hợp lý thì để 0.5-0.5" hoặc "cứ ưu tiên vector vì nó hiện đại hơn") mà không tune trên ≥50-100 cặp nhãn thật — khác hẳn RRF/DBSF (không cần chọn tham số theo cảm tính), sai alpha ở đây có thể tạo ra thứ hạng LỆCH xa hơn cả 2 baseline tự động, không phải chỉ "hơi khác".</li>
+</ul>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3><ul>
+<li>Giải thích được vì sao BM25 và vector search bù trừ cho nhau, có ví dụ cụ thể cho mỗi loại truy vấn.</li>
+<li>Viết đúng công thức RRF từ trí nhớ, giải thích từng ký hiệu (k, rank_i).</li>
+<li>Giải thích được vì sao RRF dùng rank thay vì score thô — đây là câu hỏi khó nhất, phải trả lời được bằng chính lý do "2 thang đo khác nhau", không chỉ thuộc lòng.</li>
+<li>Tính tay được RRF score cho 2 doc từ 2 danh sách rank cho trước, xếp hạng đúng kết quả cuối.</li>
+<li>Code được hàm RRF fusion từ đầu, không nhìn code mẫu.</li>
+<li>Giải thích được vì sao SPLADE vẫn thuộc họ "sparse" (không phải dense) dù có học trọng số, và vì sao BM25 vẫn thắng SPLADE ở đúng trường hợp mã ticker/thuật ngữ mới.</li>
+<li>Tính tay được DBSF (z-score 2 danh sách rồi cộng) cho 1 bộ dữ liệu cho trước, chỉ ra được khi nào kết quả khác RRF và giải thích đúng nguyên nhân (RRF làm phẳng độ áp đảo theo rank, DBSF giữ nguyên theo độ lệch chuẩn).</li>
+<li>Tính tay được weighted linear combination (min-max normalize + α) cho 1 bộ dữ liệu cho trước với ≥2 giá trị alpha khác nhau, chỉ ra được khi nào kết quả tạo ra 1 thứ hạng khác cả RRF lẫn DBSF, và giải thích đúng vì sao (alpha là tham số CHỌN TAY, không tự động như 2 phương pháp kia).</li>
+</ul></div>
+
+<div class="nav-bottom">
+  <a href="R4_2_graph_databases.html">← R4.2 · Graph Databases</a>
+  <a href="R4_4_reranking_pipelines.html">R4.4 · Reranking Pipelines →</a>
+</div>
+
+</div>
+</body>
+</html>

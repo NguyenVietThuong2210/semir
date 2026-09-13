@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R9.4 · Agent Swarms — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Advanced Steps · Điểm 4/8</div>
+  <h1>R9.4 · Agent Swarms</h1>
+  <p class="subtitle">"Swarm" là tên gọi, không phải công nghệ mới. Và ranh giới bắt buộc: dự án này chưa bao giờ, và sẽ không bao giờ, để nhiều agent tự quyết định 1 lệnh mua/bán thật.</p>
+  <div class="level">Độ khó: Khó (không phải kỹ thuật — mà vì ranh giới áp dụng) · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Nhận ra "Agent Swarm" là tên gọi marketing cho các pattern multi-agent đã học kỹ ở <code>L6_2</code> — không phải 1 công nghệ tách biệt.</li>
+<li>Hiểu đúng "Agent Teams" (Anthropic, 5/2/2026) khác gì mô hình orchestrator-worker cũ — teammate biết nhau và giao tiếp trực tiếp, khác sub-agent "không biết nhau" đã học ở <a href="R9_1_cli_agents.html">R9.1</a>.</li>
+<li>Thuộc lòng con số định lượng thật: 90.2% cải thiện hiệu năng so với single-agent, đo được trên hệ thống nghiên cứu multi-agent nội bộ của Anthropic.</li>
+<li><strong>Ghi nhớ ranh giới bắt buộc</strong>: không bao giờ đề xuất swarm/multi-agent vote làm tín hiệu quyết định mua/bán runtime trong AI Trader — rule "LLM sẽ không phải là 1 feature" áp dụng trực tiếp ở đây.</li>
+<li>Biết đúng 1 ứng dụng hợp lệ duy nhất cho <code>predictor</code>: audit/research song song, không phải quyết định trade.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Xếp độ khó "Khó" không vì kỹ thuật phức tạp (bản chất là pattern multi-agent đã học), mà vì đây là chủ đề <strong>dễ vô tình vi phạm rule quan trọng nhất của dự án</strong> nếu áp dụng cẩu thả. Bắt buộc đọc <code>CLAUDE.md</code> mục "AI Trader — core design principle" trước khi đọc tiếp phần "Ứng dụng dự án" bên dưới.</p>
+<table>
+<tr><th>Module đã có</th><th>Đã cover</th><th>Trang này bổ sung</th></tr>
+<tr><td><a href="../modules/L6_2_multiagent.html"><code>L6_2_multiagent.html</code></a> mục 6.3</td><td>Pattern "Swarm/Mesh — không có leader"</td><td>Đặt tên marketing "Agent Swarm" đúng vào pattern kỹ thuật đã học, + Agent Teams 2026 (có giao tiếp ngang hàng, khác mesh cũ)</td></tr>
+<tr><td>Không có module nào</td><td>—</td><td>Case study định lượng (90.2%) + ranh giới ứng dụng bắt buộc cho AI Trader</td></tr>
+</table>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Gọi 5-10 sub-agent làm việc song song giống việc <strong>thuê 5 nhà nghiên cứu độc lập</strong>, mỗi người đọc 1 phần tài liệu khác nhau, không ai biết người kia đang làm gì, cuối cùng nộp báo cáo riêng cho 1 trưởng nhóm tổng hợp — đây là swarm kiểu "orchestrator-worker" cổ điển. <strong>Agent Teams</strong> mới hơn giống <strong>1 đội dự án thật</strong>: mỗi thành viên vẫn làm việc trong "phòng riêng" (context window riêng) nhưng có thể <em>nhắn tin trực tiếp cho nhau</em> giữa chừng — khác hẳn 5 nhà nghiên cứu cô lập hoàn toàn.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. "Agent Swarm" thực chất là gì</h3>
+<p>"Swarm" (bầy đàn) là 1 <strong>tên gọi hình tượng/marketing</strong> cho các pattern multi-agent đã học rất kỹ ở <a href="../modules/L6_2_multiagent.html"><code>L6_2_multiagent.html</code></a> mục 6.3 "Swarm/Mesh — không có leader" — không phải 1 công nghệ mới tách biệt đứng ngoài các pattern đã biết. Đằng sau bất kỳ hệ thống nào được quảng cáo là "swarm" luôn là 1 trong các pattern kỹ thuật cụ thể:</p>
+<table>
+<tr><th>Pattern nền</th><th>Đặc điểm</th><th>Ví dụ</th></tr>
+<tr><td>Orchestrator-worker</td><td>1 lead lên kế hoạch, sinh N sub-agent độc lập, tổng hợp ở cuối</td><td>Hệ thống nghiên cứu multi-agent cũ của Anthropic (xem mục 2)</td></tr>
+<tr><td>Peer-to-peer / Mesh</td><td>Không có leader cố định, agent giao tiếp ngang hàng</td><td><code>L6_2</code> mục 6.3, framework OpenAI Swarm (cũ)</td></tr>
+<tr><td>Agent Teams (mới nhất, 5/2/2026)</td><td>Mô hình lead-teammate: 1 phiên đóng vai trưởng nhóm điều phối, các teammate chạy trong context riêng, tự động làm task được giao <strong>và giao tiếp trực tiếp với nhau</strong></td><td>Claude Code, ra mắt cùng Opus 4.6</td></tr>
+</table>
+<p>Điểm khác biệt quan trọng của Agent Teams so với sub-agent "cổ điển" (đã học ở <a href="R9_1_cli_agents.html">R9.1</a>): sub-agent cổ điển hoàn toàn không biết agent khác tồn tại; teammate trong Agent Teams <em>biết nhau và trao đổi trực tiếp</em> — gần giống 1 đội người thật hơn là nhiều tiến trình cô lập.</p>
+
+<h3>2. Case study định lượng — hệ thống nghiên cứu multi-agent của Anthropic</h3>
+<p>Trước khi có Agent Teams, hệ thống nghiên cứu nội bộ của Anthropic dùng orchestrator-worker "cổ điển":</p>
+<ol>
+<li>Lead lên kế hoạch cho câu hỏi nghiên cứu phức tạp.</li>
+<li>Sinh 3-5 sub-agent song song, mỗi sub-agent nhận 1 nhiệm vụ tự chứa (self-contained) + context sạch.</li>
+<li>Mỗi sub-agent <strong>không biết agent khác tồn tại</strong> — làm việc hoàn toàn độc lập.</li>
+<li>Kết quả tổng hợp qua 1 bước synthesis + citation riêng, thực hiện ở lead.</li>
+</ol>
+<p>Kết quả đo được: cải thiện hiệu năng <strong>90.2%</strong> so với single-agent cho các tác vụ nghiên cứu phức tạp — đây là con số đo thật, không phải ước lượng. 2 yếu tố tạo ra cải thiện này: (1) song song hoá thời gian (nhiều nhánh chạy cùng lúc thay vì tuần tự), (2) giữ context của lead gọn — lead không phải nhồi toàn bộ chi tiết của N nhánh con vào context của chính nó, chỉ nhận bản tổng hợp cuối. <strong>Đánh đổi cần biết</strong>: kiến trúc multi-agent này tốn khoảng <strong>15 lần</strong> số token so với 1 lượt chat đơn thường — đây là lý do vì sao swarm chỉ hợp lý cho tác vụ nghiên cứu phức tạp giá trị cao, không phải mặc định dùng cho mọi việc.</p>
+<pre><code>Worked example — cụ thể hoá "15 lần token" bằng số ước lượng (minh hoạ, không phải
+số chính thức của Anthropic — gắn nhãn rõ vì con số gốc chỉ công bố hệ số, không
+công bố token tuyệt đối theo tác vụ):
+
+1 lượt chat đơn (single-agent) trả lời 1 câu hỏi nghiên cứu:  ~5.000 token
+
+Hệ thống orchestrator-worker (mục 2), N=4 sub-agent:
+  Lead lên kế hoạch:                              ~2.000 token
+  4 sub-agent × ~15.000 token/agent (tự đọc nguồn, suy luận riêng):  ~60.000 token
+  Lead tổng hợp 4 kết quả + viết câu trả lời cuối: ~8.000 token
+  TỔNG: 2.000 + 60.000 + 8.000 = 70.000 token
+
+  70.000 / 5.000 = 14× — khớp đúng khoảng "~15 lần" đã dẫn ở trên, cho thấy
+  hệ số này đến từ việc MỖI sub-agent phải tự đọc/suy luận từ đầu (không chia
+  sẻ được phần "đọc nguồn" đã làm), không phải chi phí điều phối/giao tiếp.</code></pre>
+
+<h3>3. Ranh giới BẮT BUỘC khi áp dụng vào <code>predictor</code></h3>
+<div class="callout danger">
+<div class="label">⚠️ Đọc kỹ trước khi đề xuất bất kỳ điều gì về "swarm" cho dự án này</div>
+<p><code>CLAUDE.md</code> ghi rõ, nguyên văn owner: <em>"LLM sẽ không phải là 1 feature."</em> Owner đã từ chối rõ ràng việc đưa LLM vào làm 1 live scoring feature/vote/veto có trọng số học được bên trong <strong>AI Trader execution path</strong>. Áp dụng vào chủ đề Agent Swarm, điều này có nghĩa:</p>
+<ul>
+<li><strong>KHÔNG BAO GIỜ</strong> đề xuất "N agent vote quyết định mua/bán real-time".</li>
+<li><strong>KHÔNG BAO GIỜ</strong> đề xuất "swarm consensus" làm tín hiệu trade.</li>
+<li><strong>KHÔNG BAO GIỜ</strong> biến kết quả vote của nhiều agent thành 1 input runtime cho <code>senior_score.py</code> hay bất kỳ phần nào của AI Trader execution path.</li>
+</ul>
+<p>Bất kỳ pattern swarm nào áp dụng vào dự án chỉ được đóng khung là <strong>research/offline/advisory</strong> — không bao giờ là 1 bước trong đường đi ra quyết định trade thật.</p>
+</div>
+
+<h3>4. Trục thứ 3 hay bị bỏ sót — phối hợp GIÁN TIẾP qua trạng thái chung (stigmergy), khác cả "không biết nhau" lẫn "nói chuyện trực tiếp"</h3>
+<p>Bảng mục 1 đã liệt kê 2 cách phối hợp: orchestrator-worker (không biết nhau, chỉ qua lead) và peer-to-peer/Agent Teams (biết nhau, nói chuyện trực tiếp). Có 1 trục thứ 3, khác hẳn cả 2, hay bị gộp nhầm vào "mesh": <strong>stigmergy</strong> — các agent phối hợp <em>gián tiếp</em> qua việc cùng đọc/ghi 1 trạng thái/môi trường chung, không hề gửi tin nhắn trực tiếp cho nhau và cũng không có lead trung tâm điều phối.</p>
+<div class="callout success">
+<div class="label">💡 Analogy — đàn kiến để lại vệt pheromone</div>
+<p>1 con kiến tìm thấy thức ăn không "báo cáo" cho con kiến khác (không có giao tiếp trực tiếp kiểu Agent Teams) và cũng không có "kiến trưởng nhóm" giao việc (không có lead kiểu orchestrator-worker). Nó chỉ để lại 1 vệt pheromone trên đường đi. Con kiến khác đi ngang qua "đọc" được vệt đó từ MÔI TRƯỜNG (không phải từ con kiến kia trực tiếp), quyết định có đi theo hay không. Hành vi tập thể (tìm đường ngắn nhất tới thức ăn) <strong>nổi lên (emergent)</strong> từ hàng ngàn tương tác gián tiếp qua môi trường chung, không ai "thiết kế" đường đi đó từ trên xuống.</p>
+</div>
+<pre><code>3 cách phối hợp — không phải 1 trục nhị phân "biết nhau/không biết nhau":
+
+1. Orchestrator-worker (mục 1, KHÔNG giao tiếp gì cả)
+   Lead ──giao task──► Sub-agent A, B, C (không biết nhau, không đọc chung gì)
+   Lead ◄──kết quả────  (chỉ 2 điểm chạm: giao việc, nhận kết quả)
+
+2. Peer-to-peer / Agent Teams (mục 1, giao tiếp TRỰC TIẾP)
+   Agent A ◄──nhắn tin trực tiếp──► Agent B
+      (biết nhau tồn tại, chủ động trao đổi giữa chừng)
+
+3. Stigmergy (mục này, giao tiếp GIÁN TIẾP qua trạng thái chung)
+   Agent A ──ghi──► [Trạng thái/bảng chung] ◄──đọc── Agent B
+   (A và B không hề gọi nhau, không biết nhau tồn tại theo nghĩa "địa chỉ" —
+    chỉ cùng đọc/ghi 1 nơi chung, hành vi phối hợp "nổi lên" từ đó)</code></pre>
+<p>Ví dụ kỹ thuật thật gần với stigmergy: nhiều agent cùng đọc/ghi 1 <strong>kanban board chung</strong> (task queue/trạng thái shared) thay vì gọi trực tiếp cho nhau — mỗi agent chỉ cần hỏi "còn task nào ở trạng thái TODO" và tự nhận việc, không ai "phân công" theo nghĩa lead chỉ định đích danh. Đây là cơ chế khác — không nhiều hơn không kém — với cả orchestrator-worker (không có lead ra lệnh) lẫn Agent Teams (không có kênh nhắn tin trực tiếp giữa 2 agent cụ thể).</p>
+
+<h3>5. Hành vi nổi lên (emergent behavior) — lợi ích thật, và vì sao khó audit hơn 2 mô hình còn lại</h3>
+<p>"Emergent" nghĩa là hành vi tổng thể của hệ thống <strong>không được lập trình trực tiếp ở bất kỳ 1 agent nào</strong> — nó chỉ xuất hiện khi nhiều agent tương tác theo quy tắc cục bộ đơn giản. Đây là lợi ích cốt lõi được quảng cáo của "swarm intelligence" thật (khác quy mô nhỏ 3-5 sub-agent của mục 2): tự tổ chức, tự chia việc, thích nghi khi 1 phần hệ thống thay đổi — không cần thiết kế trước MỌI kịch bản.</p>
+<table>
+<tr><th>Tiêu chí</th><th>Orchestrator-worker (mục 1-2, đã thiết kế trước)</th><th>Stigmergy/swarm thật (mục 4, hành vi nổi lên)</th></tr>
+<tr><td>Ai quyết định "ai làm việc gì"</td><td>Lead quyết định trước, tường minh</td><td>Không ai quyết định trước — tự nổi lên từ quy tắc cục bộ + trạng thái chung</td></tr>
+<tr><td>Dự đoán trước được hành vi tổng thể?</td><td>Có — đọc kế hoạch của lead là biết trước cấu trúc</td><td>Khó hơn nhiều — hành vi tổng thể chỉ thấy rõ SAU KHI chạy, không suy ra được từ quy tắc từng agent</td></tr>
+<tr><td>Audit lỗi khi sai</td><td>Tương đối dễ — theo đúng cấu trúc lead→sub-agent (đã học ở <code>R6_6</code> mục 6, span cha-con)</td><td>Khó hơn — lỗi có thể là hệ quả của TƯƠNG TÁC giữa nhiều agent qua trạng thái chung, không quy được về 1 agent hay 1 lệnh cụ thể</td></tr>
+</table>
+<div class="callout danger">
+<div class="label">⚠️ Cái giá của "tự tổ chức" — không phải chỉ có lợi ích</div>
+<p>Khả năng dự đoán thấp hơn (bảng trên) chính là lý do <code>MAST taxonomy</code> (đã học ở <code>R6_6_multiagent_systems.html §5</code>) xếp "System Design Issues" và "Inter-Agent Misalignment" là 2/3 nhóm lỗi phổ biến nhất của multi-agent nói chung — swarm/stigmergy thật (mục 4) làm 2 nhóm lỗi đó CÀNG khó phát hiện hơn orchestrator-worker, vì không có 1 lead nào "nhìn thấy toàn cảnh" để bắt lỗi phối hợp trước khi nó lan rộng. Đây là lý do thực tế: tuyệt đại đa số hệ thống multi-agent production 2026 (kể cả case study 90.2% ở mục 2) vẫn chọn orchestrator-worker có cấu trúc rõ ràng, KHÔNG chọn stigmergy/swarm phi tập trung hoàn toàn — dù "swarm" nghe hấp dẫn hơn về mặt lý thuyết.</p>
+</div>
+
+<h3>6. Worked example — stigmergy thật trong chính hệ sinh thái dự án: kanban board của <code>ai_orchestrator</code></h3>
+<p>Áp mục 4 vào 1 ví dụ CÓ THẬT gần với dự án (không phải giả định thuần lý thuyết): <code>ai_orchestrator</code> (11 agent — pm, analyser, spec_analyze, task_decompose, qa_verify, engineer, reviewer, security, qa, deploy, retrospective) dùng 1 kanban board chung để điều phối tiến độ. Đối chiếu đúng 3 trục mục 4:</p>
+<pre><code>Nếu ai_orchestrator dùng orchestrator-worker THUẦN (không đúng thực tế, chỉ để so sánh):
+  pm-agent phải TỰ TAY gọi lệnh cho engineer-agent, đợi xong mới gọi reviewer-agent...
+  → 1 agent trung tâm phải "biết" toàn bộ trình tự, gọi tuần tự từng bước
+
+Cách kanban board thật hoạt động (gần với stigmergy hơn):
+  engineer-agent hoàn tất → GHI vào board: card chuyển cột "in_review"
+  reviewer-agent (chạy độc lập, không ai "gọi" nó) → ĐỌC board, thấy card
+    ở cột "in_review" → tự nhận việc, xử lý, ghi kết quả ngược lại board
+  → Không có 1 lệnh gọi trực tiếp "reviewer, hãy xử lý card X" — reviewer
+    TỰ PHÁT HIỆN việc cần làm qua trạng thái board, đúng cơ chế stigmergy
+    (đọc/ghi trạng thái chung) mục 4, không phải giao tiếp trực tiếp
+    (Agent Teams) hay lệnh tường minh từ 1 lead (orchestrator-worker thuần)</code></pre>
+<p><strong>Lưu ý quan trọng để không phóng đại</strong>: đây KHÔNG phải "swarm phi tập trung hoàn toàn" theo đúng nghĩa mục 5 (không có bất kỳ cấu trúc nào) — <code>ai_orchestrator</code> vẫn có trình tự cột kanban được thiết kế trước (todo → in_progress → in_review → done), tức vẫn có 1 phần cấu trúc orchestrator định trước. Điểm giống stigmergy chỉ nằm ở CÁCH agent phát hiện việc cần làm (đọc trạng thái chung, không phải nhận lệnh gọi trực tiếp) — 1 hệ lai (hybrid) giữa cấu trúc định trước và phối hợp gián tiếp, không phải ví dụ "thuần" của bất kỳ 1 trong 3 mô hình mục 4.</p>
+
+<h3>7. Khung quyết định — chọn 1 trong 3 mô hình phối hợp cho 1 bài toán mới</h3>
+<table>
+<tr><th>Đặc điểm bài toán</th><th>Mô hình phù hợp</th><th>Vì sao</th></tr>
+<tr><td>Các phần việc độc lập hoàn toàn, biết trước cách chia (VD audit N file khác nhau)</td><td>Orchestrator-worker (mục 1-2)</td><td>Không cần phối hợp giữa chừng — chi phí thấp nhất, dễ audit nhất</td></tr>
+<tr><td>Cần phát hiện xung đột GIỮA CHỪNG (1 agent phát hiện thứ ảnh hưởng việc agent khác)</td><td>Agent Teams (mục 1)</td><td>Có kênh giao tiếp trực tiếp để báo ngay, không phải đợi tới bước tổng hợp cuối</td></tr>
+<tr><td>Số lượng agent lớn, việc phát sinh động không biết trước hết, cần tự thích nghi</td><td>Stigmergy/swarm thật (mục 4-5)</td><td>Không cần 1 lead "biết hết" mọi việc trước — nhưng phải chấp nhận đánh đổi khó audit (mục 5)</td></tr>
+<tr><td>Bất kỳ bài toán nào liên quan quyết định trade/trọng số AI Trader</td><td><strong>Không mô hình nào cả</strong> — không dùng multi-agent cho quyết định runtime</td><td>Ràng buộc cứng "LLM không phải feature" (mục 3) — không phải câu hỏi kỹ thuật, là ranh giới owner đã quyết định</td></tr>
+</table>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<div class="callout">
+<p><strong>Ứng dụng hợp lệ (đã thực sự đang dùng)</strong>: skill <code>predictor-qa-review</code> dùng chính pattern "sub-agent không biết nhau" cho phần code audit — nhiều sub-agent song song audit các khía cạnh khác nhau của codebase (VD: data leakage, sign convention, weight sum, null-safety, test coverage cho <code>senior_score.py</code>), rồi gộp báo cáo ở bước cuối. Đây là audit — không phải quyết định trade.</p>
+</div>
+<div class="callout">
+<p><strong>Ứng dụng hợp lệ khác (research, offline)</strong>: dùng nhiều sub-agent phân tích <code>.claude/skills/daily-investor-report/kb/lessons_learned_patterns.json</code> từ nhiều góc nhìn khác nhau (kỹ thuật, tâm lý thị trường, rủi ro vĩ mô) để sinh <strong>nhiều hypothesis phong phú hơn cho kỹ sư</strong> mã hoá thủ công thành feature — không phải để agent tự quyết định trade. Đây khớp đúng với nguyên tắc trong <code>CLAUDE.md</code>: LLM là "nguồn nghiên cứu", kỹ sư (hoặc 1 model học được trong tương lai) mới là người mã hoá thành feature thường, validate lại bằng dữ liệu lịch sử thật.</p>
+</div>
+<div class="callout danger">
+<p><strong>Ứng dụng KHÔNG hợp lệ (ví dụ phản diện để nhớ ranh giới)</strong>: "Cho 5 agent với 5 persona khác nhau (kỹ thuật, cơ bản, vĩ mô, tâm lý, rủi ro) mỗi ngày vote MUA/BÁN/GIỮ cho từng ticker, lấy đa số làm tín hiệu để AI Trader tự động đặt lệnh." Đây là ví dụ điển hình vi phạm trực tiếp rule "LLM không phải feature" — dù nghe rất hợp lý về mặt kỹ thuật multi-agent, nó biến LLM-vote thành 1 input quyết định runtime, đúng thứ owner đã từ chối.</p>
+</div>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Sub-agent cổ điển (R9.1)</th><th>Agent Teams (2026)</th><th>Stigmergy/swarm thật (mục 4)</th></tr>
+<tr><td>Biết agent khác tồn tại?</td><td>Không</td><td>Có — giao tiếp trực tiếp giữa các teammate</td><td>Không theo nghĩa "địa chỉ" — chỉ cùng đọc/ghi 1 trạng thái chung</td></tr>
+<tr><td>Cách phối hợp</td><td>Chỉ qua lead tổng hợp cuối cùng</td><td>Trực tiếp giữa các teammate, không cần qua lead mỗi lần</td><td>Gián tiếp qua môi trường/trạng thái chung, không ai ra lệnh trực tiếp</td></tr>
+<tr><td>Phù hợp cho</td><td>Việc chia nhỏ hoàn toàn độc lập (audit N file)</td><td>Việc cần phối hợp giữa chừng (VD 1 người phát hiện thứ ảnh hưởng việc người khác đang làm)</td><td>Hệ thống cần tự thích nghi/tự chia việc khi quy mô lớn, chấp nhận đánh đổi khó audit hơn</td></tr>
+<tr><td>Dễ audit khi có lỗi?</td><td>Dễ — lỗi cô lập trong phạm vi 1 sub-agent</td><td>Trung bình — cần trace hội thoại giữa các teammate</td><td>Khó nhất — hành vi nổi lên từ tương tác, khó quy trách nhiệm cho 1 điểm cụ thể</td></tr>
+<tr><td>Áp dụng hợp lệ cho AI Trader?</td><td>Chỉ audit/research offline</td><td>Chỉ audit/research offline</td><td>Chỉ audit/research offline — KHÔNG BAO GIỜ cho quyết định trade runtime dù pattern nào</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p>Mô hình "sub-agent không biết nhau" (rẻ, dễ debug, đã đo hiệu quả 90.2% ở use case tương tự) phù hợp cho các tác vụ audit độc lập trong <code>predictor</code> — case thật đã và đang dùng: <code>predictor-qa-review</code> skill (code audit song song) và định hướng research hypothesis từ <code>kb/lessons_learned_patterns.json</code> cho AI Trader Phase R (xem <code>ai-trader/7_ai-trader-full-plan-2026-08-08.md</code>). <strong>Ràng buộc bắt buộc, nhắc lại lần cuối</strong>: mọi ứng dụng swarm/multi-agent trong dự án chỉ ở lớp audit/research/advisory — offline, không chạy trong execution path thật của AI Trader, không có agent nào (dù 1 hay nhiều, dù vote hay không vote) được phép là 1 input runtime cho quyết định mua/bán hay cho trọng số công thức <code>senior_score.py</code>.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Coi "Agent Swarm" là 1 công nghệ hoàn toàn mới</strong> — thực chất là tên gọi khác của pattern multi-agent đã biết ở <code>L6_2</code>, không có gì bí ẩn phía sau cái tên nghe kêu.</p>
+<p><strong>2. Đề xuất swarm/multi-agent vote quyết định mua/bán runtime trong AI Trader</strong> — VI PHẠM TRỰC TIẾP rule "LLM không phải feature", dù đề xuất nghe hợp lý về mặt kỹ thuật đến đâu.</p>
+<p><strong>3. Nhầm Agent Teams với sub-agent cổ điển</strong> — Agent Teams có giao tiếp ngang hàng thật, sub-agent cổ điển thì không; dùng sai thuật ngữ này trong tài liệu kỹ thuật sẽ gây hiểu lầm về khả năng phối hợp thực tế của hệ thống.</p>
+<p><strong>4. Tưởng "chỉ audit thôi thì luôn an toàn"</strong> — vẫn cần kiểm tra: nếu output của swarm audit được dùng để tự động thay đổi trọng số hay tự động thực thi lệnh mà không qua review của kỹ sư, ranh giới đã bị vượt qua dù ban đầu chỉ định "audit".</p>
+<p><strong>5. Gộp "mesh/peer-to-peer" (mục 1) với "stigmergy" (mục 4) làm 1</strong> — cả 2 đều "không có leader cố định" nhưng khác cơ chế phối hợp: mesh là agent nói chuyện TRỰC TIẾP với nhau, stigmergy là agent phối hợp GIÁN TIẾP qua trạng thái chung, không hề "biết" nhau theo nghĩa địa chỉ liên lạc.</p>
+<p><strong>6. Chọn kiến trúc stigmergy/swarm phi tập trung chỉ vì nó "nghe hiện đại/tự nhiên hơn"</strong> — mục 5 đã chỉ ra cái giá thật: khó audit hơn hẳn orchestrator-worker; tuyệt đại đa số hệ thống production 2026 (kể cả case study 90.2%) vẫn chọn kiến trúc có cấu trúc rõ ràng.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích đúng "Agent Swarm" = tên gọi cho pattern multi-agent đã học, không phải công nghệ riêng biệt.</li>
+<li>Phân biệt đúng sub-agent cổ điển (không biết nhau) với Agent Teams (giao tiếp trực tiếp).</li>
+<li>Nhắc đúng con số 90.2% và 2 yếu tố tạo ra cải thiện đó (song song hoá + context gọn).</li>
+<li>Kể đúng 1 ứng dụng hợp lệ (audit/research song song) và 1 ví dụ KHÔNG hợp lệ (vote quyết định trade) để đối chiếu ranh giới.</li>
+<li>Phân biệt đúng 3 trục phối hợp (không giao tiếp/orchestrator-worker, giao tiếp trực tiếp/Agent Teams, giao tiếp gián tiếp qua trạng thái chung/stigmergy) — không gộp mesh và stigmergy làm 1.</li>
+<li>Giải thích được vì sao hành vi "nổi lên" (emergent) của swarm/stigmergy thật khó audit hơn kiến trúc orchestrator-worker có cấu trúc rõ ràng, và liên hệ được với MAST taxonomy đã học ở <code>R6_6</code>.</li>
+<li>Tự tính lại được worked example "15 lần token" (mục 2) từ số ước lượng cho từng thành phần (lead lên kế hoạch + N sub-agent + lead tổng hợp), hiểu đúng hệ số này đến từ đâu (mỗi sub-agent tự đọc nguồn riêng, không chia sẻ được).</li>
+<li>Áp dụng đúng khung quyết định 4 dòng (mục 7) vào 1 bài toán mới bất kỳ, chọn đúng 1 trong 3 mô hình phối hợp hoặc xác nhận "không mô hình nào" khi bài toán chạm AI Trader runtime.</li>
+<li><strong>Tự confirm: không đề xuất swarm/optimizer can thiệp vào quyết định trade hay trọng số <code>senior_score.py</code>.</strong></li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R9_3_computer_use.html">← R9.3 · Computer Use</a>
+  <a href="R9_5_self_refinement.html">R9.5 · Self-Refinement →</a>
+</div>
+
+</div>
+</body>
+</html>

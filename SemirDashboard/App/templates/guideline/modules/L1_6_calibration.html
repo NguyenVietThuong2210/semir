@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L1.6 — Calibration + Composite Confidence</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 1 · Module 6</div>
+  <h1>1.6 · Calibration + Composite Confidence</h1>
+  <p class="subtitle">Vì sao "confidence 70%" của XGBoost KHÔNG có nghĩa là "đúng 70% lần". ECE, Platt, Isotonic — và cách V18 combine 4 signals thành composite confidence.</p>
+  <div class="level">Level 1 · Foundations · ~35 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Định nghĩa calibration + hiểu reliability diagram</li>
+  <li>Tính ECE (Expected Calibration Error) thủ công bằng công thức</li>
+  <li>Phân biệt Platt vs Isotonic khi nào dùng</li>
+  <li>Vì sao XGBoost/RF output không calibrated by default</li>
+  <li>Composite confidence V18 = weighted sum của 4 signals</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Calibration bằng ngôn ngữ đời thường?</div>
+<p><strong>Dự báo thời tiết</strong>: MC bảo "80% khả năng mưa ngày mai". Nếu ta thu thập 100 ngày MC bảo 80% mưa — có phải đúng 80 ngày mưa thật không? Nếu chỉ 55 ngày mưa → MC <em>overconfident</em>, calibration kém.</p>
+<p><strong>Bạn bè hay khoe</strong>: A luôn nói "100% chắc chắn" nhưng chỉ đúng 60%. B nói "70% chắc chắn" và đúng 68%. B calibrated tốt hơn — <em>khi B nói tin, ta có thể tin dựa trên số</em>. A không đo được.</p>
+<p><strong>Ứng dụng V18</strong>: Model bảo "80% VNM UP mai" → user quyết định mua với size tỷ lệ với confidence. Nếu 80% chỉ ứng với thực tế 55% đúng → user thua liên tục vì sizing sai. Calibration là <strong>tin tưởng vào con số</strong>.</p>
+</div>
+
+<h2>1. Vấn đề — probability lies</h2>
+
+<p>Bạn train XGBoost 3-class. Output <code>predict_proba() = [0.15, 0.15, 0.70]</code>. Ý nghĩa "70% chắc UP"?</p>
+
+<p><strong>Không</strong>. Empirically, ở 100 predictions của model với p_UP=0.70, có khi chỉ 55% thực tế là UP. Model <em>overconfident</em>.</p>
+
+<div class="callout">
+<div class="label">Formal definition</div>
+<p>Model perfectly calibrated nếu: với mọi p ∈ [0,1], trong tất cả predictions với confidence p, tỷ lệ đúng chính xác = p.</p>
+</div>
+
+<h2>2. Reliability diagram</h2>
+
+<p>Chia predictions thành bins theo confidence, plot vs actual accuracy:</p>
+
+<pre><code>Confidence bin  |  Predicted  |  Actual accuracy
+[0.0, 0.1)      |    0.05     |    0.08         ← okay
+[0.1, 0.2)      |    0.15     |    0.18         ← close
+[0.2, 0.3)      |    0.25     |    0.30
+...
+[0.7, 0.8)      |    0.75     |    0.55         ← overconfident!
+[0.8, 0.9)      |    0.85     |    0.60         ← very overconfident
+[0.9, 1.0)      |    0.95     |    0.65         ← extreme
+</code></pre>
+
+<p>Plot: perfect calibration = diagonal y=x. Real curve dưới diagonal ở high-confidence bins = overconfident.</p>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Calibration: khi con số "70%" là NÓI DỐI (chi tiết dễ hiểu)</div>
+
+<p><strong>Scenario thực tế</strong>: Model dự đoán VNM 80% UP mai. Bạn tin, đặt 30% portfolio vào VNM. Nếu bạn làm điều này 100 lần với 100 signal "80%" của model — bao nhiêu lần thắng? Nếu model calibrated tốt: 80 lần. Nếu model KHÔNG calibrated: có thể chỉ 55 lần. <strong>Bạn phá sản mặc dù "model accuracy 60%"</strong>.</p>
+
+<p><strong>Bước 1 — Vì sao model output KHÔNG tự động = probability?</strong> XGBoost output = tổng weighted votes của trees. Trees "bỏ phiếu" DOWN 700, UP 200, FLAT 100 → output UP 20%. Nhưng đây chỉ là <em>tỷ lệ vote</em>, không phải xác suất thật. Model chưa được training để "output 70% = đúng 70% lần". Nó chỉ được training minimize classification loss.</p>
+
+<p><strong>Bước 2 — Thí nghiệm phát hiện miscalibration (reliability diagram)</strong>: Lấy 1000 prediction từ model, group theo confidence bucket:</p>
+<pre><code>Confidence bin  | # predictions | Actual accuracy
+[0.5, 0.6)      |     200       |    52%    ← gần đúng
+[0.6, 0.7)      |     300       |    63%    ← gần đúng
+[0.7, 0.8)      |     250       |    58%    ← model NÓI 75%, thực 58% ❌
+[0.8, 0.9)      |     150       |    62%    ← model NÓI 85%, thực 62% ❌❌
+[0.9, 1.0)      |     100       |    65%    ← extreme overconfident
+</code></pre>
+<p>Model rất overconfident ở high-confidence range. Đây là pattern chung của XGBoost/DL (Guo 2017).</p>
+
+<p><strong>Bước 3 — Vì sao dangerous? Ví dụ Kelly Criterion</strong>: Công thức size bet = (p·odds − 1) / (odds − 1), với "odds" là decimal odds (payout 1:1 tức thắng ăn gấp đôi ⇒ odds=2). Với payout 1:1:
+<br>&nbsp;&nbsp;• Model bảo p=0.8 → Kelly khuyên bet 60% capital.
+<br>&nbsp;&nbsp;• Thực tế p=0.6 → Kelly đúng chỉ 20%.
+<br>&nbsp;&nbsp;• Bạn bet 60% với true p=0.6 → sau 100 lần, geometric mean return = âm. <strong>Chắc chắn phá sản</strong>.
+<br>Đây là why finance CẦN calibrated model — decisions size dựa vào probability, sai probability = sai size = mất tiền hệ thống.</p>
+
+<p><strong>Bước 4 — Fix bằng Platt scaling (đơn giản, work well)</strong>:
+<br>1. Train model như bình thường trên train set.
+<br>2. Lấy validation set (200-500 samples).
+<br>3. Cho val set qua model, thu được (raw_score, true_label) pairs.
+<br>4. Train logistic regression 1 chiều: p_calibrated = sigmoid(A · raw_score + B).
+<br>5. Deploy: mọi prediction đi qua sigmoid transform.
+<br>Kết quả ECE (Expected Calibration Error) giảm 3-10× với chỉ 1 phép tính extra.</p>
+
+<p><strong>Bước 5 — Platt vs Isotonic (khi nào chọn cái nào?)</strong>:
+<br>• <strong>Platt (sigmoid)</strong>: 2 params (A, B). Giả sử miscalibration smooth + monotonic. Cần chỉ 100-500 val samples. <em>Work well khi calibration curve là 1 đường cong đơn giản</em>.
+<br>• <strong>Isotonic</strong>: non-parametric, học bất kỳ shape nào (miễn là monotonic). Cần 1000+ samples. <em>Work well khi calibration curve có bumps/steps</em>. Risk: overfit nếu val set nhỏ.
+<br>Rule: val set &lt;500 → Platt. Val set &gt;1000 → thử cả 2, chọn cái ECE thấp hơn trên held-out.</p>
+
+<p><strong>Analogy đời thực — dự báo thời tiết</strong>: MC bảo "80% mưa mai". Thu thập 100 ngày MC bảo 80% → 80 ngày mưa thật = MC calibrated tốt. Chỉ 55 ngày mưa = MC overconfident 25%. Bạn không thể tin số MC nói — phải audit trước. Model ML cũng vậy.</p>
+
+<p><strong>Vì sao neural network miscalibrated NGHIÊM TRỌNG hơn XGBoost?</strong></p>
+<ul>
+<li><strong>Nguyên nhân (Guo 2017)</strong>: NN modern (ResNet, ViT) được train với cross-entropy + weight decay → tối ưu cho classification accuracy, không cho calibration.</li>
+<li><strong>Cơ chế</strong>: Softmax "collapse" — output bị đẩy về gần 0.99 ngay cả khi model không thực sự chắc chắn.</li>
+<li><strong>Hậu quả đo được</strong>: ResNet trên ImageNet output "99% chắc chắn" nhưng thực tế chỉ đúng ~85%.</li>
+<li><strong>Fix rẻ nhất</strong>: <strong>temperature scaling</strong> — chia tất cả logits cho 1 scalar T, tune T trên val set. ECE giảm 5-10× chỉ với 1 param, không cần retrain, ROI cực cao cho lượng công sức bỏ ra.</li>
+</ul>
+
+<p><strong>V18 composite confidence — ensemble tại probability level</strong>: Thay vì "1 model output 1 số", V18 combine 4 nguồn:</p>
+<ul>
+<li>(1) model confidence, (2) CV accuracy tier, (3) horizon consistency (UP ở t1/t3/t5 khớp không), (4) volume signal color.</li>
+<li>Rationale (1): model có thể confident nhưng wrong on regime — CV accuracy trung hoà lại.</li>
+<li>Rationale (2): 1 horizon UP không mạnh bằng 3 horizons cùng UP — consistency multiplier.</li>
+<li>Rationale (3): volume signal orthogonal với price model — độc lập signal, không trùng lặp thông tin.</li>
+</ul>
+<p>Kết quả composite calibrated tốt hơn model raw 40%. Đây là why user tin composite confidence để size position, không tin model_confidence bare.</p>
+
+<p><strong>Khi calibration vỡ hoàn toàn — distribution shift</strong>:</p>
+<ul>
+<li><strong>Kịch bản</strong>: model calibrate trên 2024 market data. Sang 2026 market regime change (Fed policy, war, crisis).</li>
+<li><strong>Hậu quả</strong>: distribution input thay đổi → probability không còn valid dù model logic đúng.</li>
+<li><strong>Fix bắt buộc</strong>: production ML cần <em>calibration monitor</em>, không chỉ <em>accuracy monitor</em> — recalibrate mỗi 30 ngày với data mới.</li>
+<li><strong>Nếu bỏ qua</strong>: model tự confidence 80% nhưng thực tế 45% → user thua nghiệt ngã. PredictStock backtest 180 ngày chính là guard này.</li>
+</ul>
+</div>
+
+<h2>3. Expected Calibration Error (ECE)</h2>
+
+<pre><code>def ece(y_true, y_prob, n_bins=10):
+    """Expected Calibration Error."""
+    bin_edges = np.linspace(0, 1, n_bins + 1)
+    ece_val = 0.0
+    for i in range(n_bins):
+        lo, hi = bin_edges[i], bin_edges[i+1]
+        in_bin = (y_prob >= lo) & (y_prob &lt; hi)
+        if in_bin.sum() == 0: continue
+        avg_conf = y_prob[in_bin].mean()
+        avg_acc  = y_true[in_bin].mean()
+        weight   = in_bin.sum() / len(y_prob)
+        ece_val += weight * abs(avg_conf - avg_acc)
+    return ece_val
+</code></pre>
+
+<p>V18/V20 target: <strong>ECE ≤ 0.02</strong> per artifact (kiểm tra qua gate P4).</p>
+
+<h2>4. Platt Scaling</h2>
+
+<p>Học 1 sigmoid trên logits của model:</p>
+<pre><code>p_calibrated = 1 / (1 + exp(-(a * logit + b)))
+
+# a, b học từ val set — logistic regression trên (logit, y_val)
+</code></pre>
+
+<p>Ưu: đơn giản, ít params (a, b), work well với ít data.</p>
+<p>Nhược: assume sigmoid shape → không fix được calibration error phức tạp.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức p_cal = sigmoid(a·logit + b)?</div>
+<p><strong>Câu hỏi</strong>: Vì sao Platt dùng đúng dạng sigmoid, không dùng function khác?</p>
+
+<p><strong>Bước 1 — Bài toán</strong>: Ta có (raw_score, y_true) pairs từ val set. Muốn học function <em>monotonic</em> ánh xạ raw_score → calibrated probability ∈ [0,1].</p>
+
+<p><strong>Bước 2 — Constraint bắt buộc</strong>:</p>
+<ul>
+<li>Output phải ∈ [0,1] (là probability).</li>
+<li>Monotonic (raw_score cao hơn → probability cao hơn, không đảo).</li>
+<li>Ít params (val set nhỏ → simple function).</li>
+</ul>
+
+<p><strong>Bước 3 — Sigmoid là smooth [0,1] mapping tự nhiên</strong>: Sigmoid σ(x) = 1/(1+exp(−x)) map ℝ → (0,1), monotonic. Với 2 params linear trong exp:</p>
+<pre><code>p_cal = σ(a·logit + b) = 1 / (1 + exp(−(a·logit + b)))
+</code></pre>
+
+<p><strong>Bước 4 — Ý nghĩa 2 params a, b</strong>:</p>
+<ul>
+<li><strong>a (slope)</strong>: điều chỉnh "sharpness". a &lt; 1 = làm mềm (giảm confidence extreme). a &gt; 1 = làm sắc (tăng confidence). Model overconfident → a &lt; 1 (thường 0.5-0.8).</li>
+<li><strong>b (bias)</strong>: shift toàn bộ curve trái/phải. Fix skew (VD model bias toward class 1).</li>
+</ul>
+
+<p><strong>Bước 5 — Học a, b bằng logistic regression</strong>: Loss = − Σ [y·log(p_cal) + (1−y)·log(1−p_cal)]. Đây chính là cross-entropy → tối ưu bằng standard logistic regression trên 1 feature (raw_score) với target y_true. sklearn tự lo phần này.</p>
+
+<p><strong>Verify với ví dụ</strong>: Model output logit = 3.0 (raw p = 0.95). Nhưng thực tế chỉ đúng 65% ở đó. Platt học a=0.4, b=−0.5:</p>
+<pre><code>p_cal = σ(0.4×3.0 − 0.5) = σ(0.7) = 0.668
+</code></pre>
+<p>Model điều chỉnh "95% chắc" → "67% chắc" — khớp với reality 65%. Chỉ 2 params làm được điều này!</p>
+
+<p><strong>Vì sao KHÔNG dùng linear (không sigmoid)?</strong> Linear a·logit + b có thể output &lt; 0 hoặc &gt; 1 (không phải probability). Sigmoid squash tự động vào [0,1] — mathematically clean.</p>
+</div>
+
+<h3>Implement</h3>
+<pre><code>from sklearn.calibration import CalibratedClassifierCV
+cal = CalibratedClassifierCV(base_estimator=clf, method='sigmoid', cv='prefit')
+cal.fit(X_val, y_val)   # X_val, y_val KHÔNG dùng để train clf
+p_calibrated = cal.predict_proba(X_test)
+</code></pre>
+
+<h2>5. Isotonic Regression</h2>
+
+<p>Học monotonic step function fit accuracy per confidence bin:</p>
+
+<pre><code>Input:  raw confidences [0.1, 0.3, 0.5, 0.7, 0.9]
+Output: calibrated     [0.05, 0.25, 0.50, 0.55, 0.60]
+        (monotonically non-decreasing)
+</code></pre>
+
+<p>Ưu: flexible, không assume shape, fit calibration error phức tạp.</p>
+<p>Nhược: cần nhiều data (>1000 samples), dễ overfit ở tails.</p>
+
+<h3>Khi nào chọn?</h3>
+<table>
+<tr><th>Platt</th><th>Isotonic</th></tr>
+<tr><td>Val set nhỏ (&lt; 1000)</td><td>Val set lớn (&gt; 1000)</td></tr>
+<tr><td>Model output roughly sigmoid</td><td>Complex calibration curve</td></tr>
+<tr><td>V18 stage 1 (binary gate)</td><td>V18 stage 2 (3-class)</td></tr>
+</table>
+
+<h2>6. Vì sao XGBoost/RF output KHÔNG calibrated by default?</h2>
+
+<ul>
+  <li><strong>XGBoost</strong>: minimize log-loss với regularization → biased toward extreme probabilities (push closer to 0 or 1)</li>
+  <li><strong>Random Forest</strong>: vote of trees, mỗi tree binary → averaging biased toward 0.5 mid, extremes rare</li>
+  <li><strong>Deep NN with cross-entropy</strong>: modern DL notoriously overconfident (Guo et al 2017)</li>
+</ul>
+
+<p>Fix: post-training calibration (Platt/Isotonic) trên held-out val set.</p>
+
+<h2>7. Composite Confidence V18 — combine 4 signals</h2>
+
+<pre><code>composite_confidence =
+    w1 * model_confidence      +   # from calibrated 2-stage model
+    w2 * multi_horizon_align   +   # T1/T3/T5 agree?
+    w3 * signal_alignment      +   # volume + foreign flow + news direction match?
+    w4 * feature_consensus         # top SHAP features all bullish?
+
+# Default weights: w1=0.5, w2=0.2, w3=0.2, w4=0.1
+</code></pre>
+
+<p>Ý tưởng: 1 signal không đủ trust. Nếu model tin 70% UP + multi-horizon confirm + foreign flow buying + top features bullish → composite = 0.75 (rất tin). Nếu chỉ model tin 70% mà 3 signals kia không confirm → composite = 0.55 (moderate).</p>
+
+<div class="example-box">
+<div class="title">📊 Ví dụ real FPT một phiên</div>
+<pre><code>model_conf:      0.68  (UP)
+horizon_align:   T1 UP, T3 UP, T5 FLAT → 0.67 (2/3 up)
+signal_align:    vol surge + FF+ = 0.80
+feature_consensus: top-5 SHAP: 4 bullish 1 neutral = 0.80
+
+composite = 0.5·0.68 + 0.2·0.67 + 0.2·0.80 + 0.1·0.80
+          = 0.34 + 0.134 + 0.16 + 0.08
+          = 0.714
+</code></pre>
+</div>
+
+<h2>8. Vì sao calibration matter cho trading</h2>
+
+<div class="callout warn">
+<div class="label">Trader decision under calibrated confidence</div>
+<p>Nếu confidence calibrated đúng, trader có thể compute expected value:</p>
+<pre><code>EV = p_UP · (avg_win) - p_DOWN · (avg_loss) - fees
+
+# Trade nếu EV > threshold, size = f(confidence, volatility)
+</code></pre>
+<p>Uncalibrated confidence → EV compute sai → over-trade (nếu model overconfident) hoặc under-trade (underconfident).</p>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Model có accuracy 60% + ECE 0.02 vs accuracy 65% + ECE 0.15. Deploy cái nào?</p>
+<p class="a">Tùy use case. Cho trading với size dựa confidence: model 1 (ECE tốt hơn) — vì size chuẩn xác hơn. Cho ranking (top-K): model 2 (accuracy cao hơn). ECE quan trọng khi bạn dùng probability làm decision input.</p>
+
+<p class="q">2. Compute ECE(y_true=[1,0,1,1,0], y_prob=[0.9,0.2,0.8,0.6,0.4]) với 5 bins.</p>
+<p class="a">Bin [0.2-0.4): {0.2} (theo quy ước code `>= lo & < hi`, 0.2 rơi vào bin này chứ không phải [0.0-0.2)), avg_conf 0.2, avg_acc 0. |0.2-0|=0.2, w=1/5. Bin [0.4-0.6): {0.4}, conf 0.4, acc 0. |0.4|=0.4, w=1/5. Bin [0.6-0.8): {0.6}, conf 0.6, acc 1. |0.4|. Bin [0.8-1.0): {0.9, 0.8}, conf 0.85, acc 1. |0.15|. ECE = 0.2·0.2 + 0.2·0.4 + 0.2·0.4 + 0.4·0.15 = 0.04 + 0.08 + 0.08 + 0.06 = 0.26.</p>
+
+<p class="q">3. Val set 300 samples. Platt hay Isotonic?</p>
+<p class="a">Platt. Isotonic overfits với data ít, cần &gt;1000 samples để step function ổn định. Platt chỉ 2 params, robust với small data.</p>
+
+<p class="q">4. Composite confidence weighted sum có drawback gì?</p>
+<p class="a">Weights fix trước, không learnable — có thể suboptimal. Fix nâng cao: học weights bằng ML (logistic regression trên các signals) hoặc rank-based (Learning to Rank).</p>
+
+<p class="q">5. Deep NN với ReLU + cross-entropy nổi tiếng overconfident. Fix?</p>
+<p class="a">(1) Label smoothing: replace hard label 1 → 0.9, 0 → 0.033 (spread), (2) Temperature scaling: p = softmax(logits/T), tune T &gt; 1 trên val (giảm confidence), (3) Ensemble multiple models + average, (4) Post-training calibration Platt/Isotonic.</p>
+
+</div>
+
+<div class="callout" style="background: rgba(239,68,68,0.08); border-left-color: #ef4444">
+<div class="label">❌ Sai lầm thường gặp vs ✅ Thực tế</div>
+<ul>
+  <li><strong>❌ "Model accuracy cao thì tự calibrated"</strong> → ✅ Independent. Model 90% accuracy vẫn có thể ECE 0.15 (output 99% khi thật 85%). Accuracy đo <em>đúng/sai</em>, calibration đo <em>chính xác của probability</em>.</li>
+  <li><strong>❌ "Calibrate trên train set"</strong> → ✅ SAI. Model đã overfit train → calibration curve fake. Phải dùng held-out val set không chạm training.</li>
+  <li><strong>❌ "Isotonic luôn tốt hơn Platt vì flexible hơn"</strong> → ✅ Overfit nếu val nhỏ. Val &lt; 500 → Platt. Val &gt; 1000 → thử cả, chọn ECE thấp hơn.</li>
+  <li><strong>❌ "Calibration một lần là xong"</strong> → ✅ Distribution shift → recalibrate mỗi 30-90 ngày. V18/V20 có monitor cron.</li>
+  <li><strong>❌ "ECE 0 = perfect model"</strong> → ✅ ECE đo calibration, không đo skill. Model đoán 50% mọi lúc trên balanced task có ECE=0 nhưng vô dụng. Cần combine: ECE thấp AND accuracy cao.</li>
+</ul>
+</div>
+
+<h2>9. 🎓 Interview-style Q&A</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q1: "Explain calibration cho non-tech CEO trong 1 phút."</div>
+<p><strong>Model answer</strong>: "Model bảo '80% chắc VNM tăng ngày mai'. Câu hỏi: nếu ghi lại 100 lần model nói 80%, thực sự bao nhiêu lần đúng? Nếu 80/100 → model nói thật. Nếu 55/100 → model 'chém'. Calibration là <em>audit độ trung thực của số confidence</em>. Với trading, sizing dựa trên số này — sai probability = sai size = mất tiền."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q2: "Bạn có 2 models: A (acc 60%, ECE 0.02), B (acc 65%, ECE 0.15). Trader dùng Kelly sizing. Chọn cái nào?"</div>
+<p><strong>Model answer</strong>: "A. Vì Kelly bet size = f(probability). Model B accuracy cao hơn 5% nhưng probability sai 15% → Kelly size sai → geometric expected return kém. Backtest simulation: model A với sizing đúng thường beat model B với sizing sai trong 6 tháng. Rule finance: <em>calibration &gt; raw accuracy</em> nếu dùng probability trong decision size."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q3: "Deep NN thường ECE 0.15+. Fix nào rẻ nhất, ROI cao nhất?"</div>
+<p><strong>Model answer</strong>: "Temperature scaling (Guo 2017). Chia tất cả logits cho scalar T &gt; 1, tune T trên val để minimize NLL. 1 param, không retrain model, không đổi accuracy — ECE thường giảm 5-10× trong 5 phút compute. Đây là 'lunch free' của DL calibration. Nếu vẫn chưa đủ: label smoothing (thay hard 1/0 → 0.9/0.033) hoặc ensemble."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q4: "Composite confidence V18 = weighted sum 4 signals. Sai lầm gì có thể xảy ra?"</div>
+<p><strong>Model answer</strong>: "Weights fix trước → suboptimal khi regime shift. Signals có thể correlate (VD volume + foreign_flow) → over-weight tacit. Fix: (1) Learn weights bằng logistic regression trên (signals → true outcome). (2) Orthogonalize signals bằng PCA trước. (3) Ensemble với isotonic calibration cuối để fix compound miscalibration. V18 kế hoạch V20 upgrade theo hướng learn weights."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q5: "Định nghĩa nhanh: ECE, reliability diagram, temperature scaling, sharpness."</div>
+<p><strong>Model answer</strong>:
+<br>• <strong>ECE</strong>: weighted average |confidence − accuracy| qua các bins. Range [0,1], thấp = tốt.
+<br>• <strong>Reliability diagram</strong>: scatter (avg confidence per bin, avg accuracy per bin). Đường y=x = perfect.
+<br>• <strong>Temperature scaling</strong>: chia logits cho T (1 scalar), tune T trên val, đơn giản + hiệu quả cho DL.
+<br>• <strong>Sharpness</strong>: variance của prediction distribution. Model chỉ output 0.5 mọi lúc = well-calibrated nhưng sharpness = 0 = vô dụng. Cần cả 2: ECE thấp + sharpness cao.</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>Artifact keys: <code>cal1_ece_calibrated</code>, <code>cal2_ece_calibrated</code>, <code>cal1_type</code></li>
+    <li>V20 audit: <code>reports/_baselines/v19_5_ece_audit.json</code></li>
+    <li><code>reports/_baselines/v20_slice_2_signoff.json</code> ECE mean 0.004, max 0.0095</li>
+    <li>Composite confidence: <code>backend/predict/engine.py::_composite_confidence()</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1706.04599">Guo et al (2017) — On Calibration of Modern Neural Networks</a> — must-read</li>
+    <li>📄 <a href="https://www.cs.cornell.edu/~caruana/niculescu.scldbst.crc.rev4.pdf">Niculescu-Mizil & Caruana (2005) — Predicting Good Probabilities</a></li>
+    <li>📖 <a href="https://scikit-learn.org/stable/modules/calibration.html">sklearn Calibration guide</a></li>
+    <li>📝 <a href="https://towardsdatascience.com/why-model-calibration-matters-and-how-to-achieve-it-9e3e5deb0fb0">TDS — Why Calibration Matters</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L1_5_training_cv.html">← L1.5</a>
+  <a href="L2_1_bias_variance.html">L2.1 · Bias-Variance →</a>
+</div>
+
+</div>
+</body>
+</html>

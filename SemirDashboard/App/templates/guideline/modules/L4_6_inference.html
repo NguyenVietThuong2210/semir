@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L4.6 — LLM Inference</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 4 · Module 6</div>
+  <h1>4.6 · LLM Inference (Decoding + Optimization)</h1>
+  <p class="subtitle">Temperature, top-p, top-k, beam search, speculative decoding. KV cache, PagedAttention, batching. Tại sao vLLM 10× faster HuggingFace.</p>
+  <div class="level">Level 4 · LLM · ~35 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Difference greedy / temperature / top-p / top-k / beam</li>
+  <li>Compute KV cache size cho LLaMA-7B với 4k context</li>
+  <li>Understand PagedAttention (vLLM innovation)</li>
+  <li>Speculative decoding — 2-3× speedup free</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Decoding + Inference bằng ngôn ngữ đời thường</div>
+<p><strong>LLM sinh từng từ như viết văn hoàn thành chỗ trống</strong>: Mỗi bước có xác suất cho 50k từ có thể. Chọn từ nào?</p>
+<ul>
+  <li><strong>Greedy</strong>: Luôn chọn từ likely nhất → an toàn nhưng nhàm chán, lặp lại.</li>
+  <li><strong>Sampling</strong>: Xúc xắc theo xác suất → đa dạng nhưng risk vô lý (chọn từ xa lệch).</li>
+  <li><strong>Temperature</strong>: "Độ liều". T=0 = greedy; T=1 = xúc xắc tự nhiên; T=2 = "say rượu" (kết quả loạn).</li>
+  <li><strong>Top-p (nucleus)</strong>: Chỉ xúc xắc trong 90% xác suất tích lũy → cắt đuôi thấp, giữ sáng tạo.</li>
+</ul>
+<p><strong>KV cache</strong>: Sinh từ thứ 100 không cần tính lại attention từ 1-99. Cache lại → tăng tốc 10-100×. vLLM PagedAttention là bản tối ưu memory của KV cache.</p>
+</div>
+
+<h2>1. Decoding strategies</h2>
+
+<h3>1.1 Greedy</h3>
+<pre><code>next_token = argmax(logits)
+# Deterministic, often boring/repetitive
+</code></pre>
+
+<h3>1.2 Temperature</h3>
+<pre><code>probs = softmax(logits / T)
+next_token = sample(probs)
+
+# T=0: greedy
+# T=1: standard softmax
+# T=1.5-2: creative, more random
+</code></pre>
+
+<h3>1.3 Top-K sampling</h3>
+<pre><code>top_k_logits = top K largest logits
+next_token = sample from top_k (renormalized)
+
+# K=50 default GPT. Prevent rare token noise.
+</code></pre>
+
+<h3>1.4 Top-P (nucleus) sampling — Holtzman 2019</h3>
+<pre><code>Sort probs desc. Take smallest set whose cumsum ≥ p.
+Sample from that set.
+
+# P=0.9: top-90% probability mass
+# Better than top-K: adapt to distribution shape
+# Confident distribution (peak): small set
+# Flat distribution: larger set
+</code></pre>
+
+<h3>1.5 Beam search</h3>
+<pre><code>Maintain K beams (partial sequences).
+At each step, expand each beam K ways, keep top K globally.
+Final: return highest total log-prob beam.
+
+# Best cho translation (BLEU care structure)
+# Worst cho creative gen (repetitive, similar beams)
+# Adopted mostly in seq2seq (T5), rarely GPT
+</code></pre>
+
+<h3>1.6 Min-P sampling (2024) — Top-P "vẫn hỏng" ở temperature cao, Min-P sửa gì?</h3>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Top-P (đã học ở mục 1.4) cắt theo "tổng xác suất tích luỹ" (VD 90%) — nghe hợp lý, nhưng có 1 lỗ hổng: ở temperature CAO (làm phẳng phân phối), ngay cả token "rác" cũng có thể lọt vào top-90% chỉ vì KHÔNG token nào còn đủ dominant để chiếm phần lớn xác suất — giống việc "chọn 90% ứng viên top" trong 1 kỳ thi mà không ai được điểm cao rõ rệt: bạn vẫn phải lấy rất nhiều người, kể cả người tệ. Min-P đổi tiêu chí: thay vì hỏi "tổng bao nhiêu %", nó hỏi "so với ỨNG VIÊN GIỎI NHẤT, ứng viên này có tệ hơn quá X% không?" — 1 tiêu chí SO SÁNH TƯƠNG ĐỐI với token tốt nhất, không phụ thuộc temperature làm phẳng phân phối tới đâu.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: ở temperature cao (VD T=1.5-2, dùng cho creative writing), phân phối xác suất bị "làm phẳng" đáng kể (đã học ở mục 1.2) — khi đó ngay cả Top-P=0.9 cũng có thể phải include rất NHIỀU token (kể cả token gần như vô nghĩa) chỉ để đạt đủ 90% tổng xác suất, vì không token nào còn "nổi bật". Kết quả: temperature cao + Top-P vẫn có thể sinh ra text lộn xộn, mất coherence.</p>
+
+<pre><code># Min-P (Nguyen et al. 2024): threshold ĐỘNG, tỉ lệ với token TỐT NHẤT hiện tại
+τ = α · p_max            # α = tham số min_p (thường 0.05-0.1), p_max = xác suất token cao nhất
+Giữ lại mọi token có p(token) ≥ τ, sample trong tập đó (renormalize).
+
+# Trực giác: token phải đạt ÍT NHẤT α × (xác suất token tốt nhất) mới được xét —
+# không quan tâm TỔNG cộng dồn bao nhiêu %, chỉ quan tâm "có kém quá xa token #1 không"</code></pre>
+
+<p><strong>Ví dụ số cụ thể</strong> — so sánh Top-P vs Min-P trên CÙNG 1 phân phối đã bị temperature cao làm phẳng: giả sử sau softmax(logits/T) với T cao, ta có p = [0.15, 0.13, 0.12, 0.11, 0.10, ...và rất nhiều token nhỏ khác cộng dồn đủ 90%]. α_minP = 0.1.</p>
+<pre><code>Top-P=0.9: phải cộng dồn 0.15+0.13+0.12+0.11+0.10+... tới khi ĐẠT 90% tổng
+  → với phân phối phẳng thế này, có thể phải lấy 30-50+ token mới đủ 90%
+  → bao gồm cả token tệ ở cuối danh sách (dù p rất nhỏ, vẫn cần để đạt đủ 90%)
+
+Min-P với α=0.1: τ = 0.1 × 0.15 (p_max) = 0.015
+  → CHỈ giữ token có p ≥ 0.015 — với ví dụ trên, giữ 0.15/0.13/0.12/0.11/0.10 (đều ≥0.015)
+    và bất kỳ token nào khác cũng ≥0.015, KHÔNG BẮT BUỘC phải cộng đủ 90% tổng
+  → tập kết quả nhỏ hơn, chỉ gồm token "đủ tốt so với token #1", loại bỏ đuôi dài token yếu</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Min-P KHÔNG PHẢI "Top-P với ngưỡng cố định thay vì %" — điểm khác biệt cốt lõi là ngưỡng τ = α·p_max TỰ ĐỘNG THAY ĐỔI theo độ tự tin của model tại MỖI bước sinh token: khi model rất tự tin (p_max cao, VD 0.8) → τ cũng cao theo → tập hợp hẹp, gần giống greedy. Khi model không chắc (p_max thấp, VD 0.15, như ví dụ trên) → τ cũng thấp theo tỉ lệ → tập hợp có thể rộng hơn nhưng vẫn LOẠI trừ được đuôi token quá yếu so với lựa chọn tốt nhất — đây là "adaptive" thực sự theo ĐỘ TỰ TIN, khác với Top-P chỉ adaptive theo HÌNH DẠNG phân phối (số lượng token) chứ không neo vào token tốt nhất.</p>
+
+<p><strong>Insight</strong>: paper gốc báo cáo Min-P cải thiện cả chất lượng lẫn đa dạng trên nhiều model (Mistral, Llama 3, từ 1B tới 123B params), đặc biệt rõ rệt ở temperature cao — đúng chỗ Top-P yếu nhất. Đây là lý do bảng so sánh ngay dưới liệt kê Min-P là lựa chọn "better than Top-P với high temp" — bây giờ đã hiểu vì sao: Min-P neo vào token tốt nhất thay vì neo vào tổng xác suất tích luỹ, nên không bị "cuốn theo" hiệu ứng làm phẳng của temperature cao.</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 6 decoding strategies (đọc SAU khi hiểu decoding cơ bản ở section 1)</div>
+
+<h4>Bảng compare</h4>
+<table>
+<tr><th>Strategy</th><th>Cách hoạt động</th><th>Diversity</th><th>Deterministic?</th><th>Cost</th><th>Khi dùng</th></tr>
+<tr><td><strong>Greedy</strong></td><td>Luôn chọn argmax token</td><td>Rất thấp</td><td>✅ (T=0)</td><td>Rẻ nhất</td><td>Factual QA, code, translation</td></tr>
+<tr><td><strong>Beam search (K=5)</strong></td><td>Giữ K sequences tốt nhất mỗi step</td><td>Trung bình</td><td>✅</td><td>K× memory + compute</td><td>MT nhỏ. Đã die trong LLM.</td></tr>
+<tr><td><strong>Random sampling</strong></td><td>Xúc xắc theo probability</td><td>Cao</td><td>❌</td><td>Rẻ</td><td>Creative writing (poem, story)</td></tr>
+<tr><td><strong>Temperature</strong></td><td>Scale logits trước softmax</td><td>Điều chỉnh được</td><td>Phụ thuộc T</td><td>Rẻ</td><td>Tune diversity: T=0.7 balanced, T=1.5 creative</td></tr>
+<tr><td><strong>Top-K</strong></td><td>Chỉ sample trong K tokens likely nhất</td><td>Trung bình</td><td>❌</td><td>Rẻ</td><td>K=40 default cho chatbot</td></tr>
+<tr><td><strong>Top-P (Nucleus)</strong></td><td>Sample trong tokens tích lũy ≥ P xác suất</td><td>Adaptive</td><td>❌</td><td>Rẻ</td><td>P=0.9 modern default</td></tr>
+<tr><td><strong>Min-P</strong> (2024)</td><td>Cutoff dynamic dựa max prob</td><td>Adaptive</td><td>❌</td><td>Rẻ</td><td>Better than Top-P với high temp</td></tr>
+</table>
+
+<h4>Analogy đời thực — viết văn hoàn thành chỗ trống</h4>
+<pre><code>Câu: "Hôm nay trời rất ___"
+Model output logits: đẹp (35%), nắng (25%), mưa (15%), lạnh (10%), khác 15%
+
+Greedy (T=0):      chọn "đẹp" → mọi lần chạy đều "đẹp" (nhàm)
+Sampling (T=1):    xúc xắc → 35% "đẹp", 25% "nắng"... đa dạng
+Temperature (T=0.3): logits chia 0.3 → sharpen → "đẹp" 70%
+Temperature (T=2):  logits chia 2 → flatten → "khác" 30% (loạn)
+Top-K=3:           chỉ chọn từ {đẹp, nắng, mưa} → đủ diverse, không vô lý
+Top-P=0.75:        cumulative ≥ 75% → chọn từ {đẹp, nắng, mưa} → adaptive
+</code></pre>
+
+<h4>Decision matrix — chọn strategy nào?</h4>
+<table>
+<tr><th>Task</th><th>Recommend</th><th>Params</th></tr>
+<tr><td>Code generation</td><td>Greedy hoặc Top-P với T thấp</td><td>T=0.2, top_p=0.95</td></tr>
+<tr><td>Translation / RAG factual</td><td>Greedy</td><td>T=0</td></tr>
+<tr><td>Chatbot general</td><td>Top-P + Temperature moderate</td><td>T=0.7, top_p=0.9</td></tr>
+<tr><td>Creative writing</td><td>Top-P + high Temperature</td><td>T=1.2, top_p=0.95</td></tr>
+<tr><td>Diverse suggestions (multiple)</td><td>Random sampling with high T</td><td>T=1.5, top_p=0.95, n=5</td></tr>
+<tr><td>JSON output structured</td><td>Greedy + constrained decoding</td><td>T=0 + grammar</td></tr>
+</table>
+
+<p><strong>Insight</strong>: Beam search DIE cho LLM vì (1) K× cost, (2) low diversity, (3) sequences same-flavor. Modern LLM (Claude, GPT-4) mặc định Top-P + Temperature. Nếu API không cho control decoding = flag đỏ (nhà cung cấp không nghiêm túc).</p>
+</div>
+
+<h2>2. KV cache — the biggest win</h2>
+
+<p>Vanilla generate: at step t, recompute attention over 1..t → O(t²) per step, O(T³) total for T tokens.</p>
+
+<pre><code>KV cache: save Keys, Values computed at step 1..t.
+At step t+1: only compute K_{t+1}, V_{t+1}, reuse rest.
+Attention: Q_{t+1} · K_cached[1..t]^T
+
+Cost: O(t) per step, O(T²) total. Massive speedup.
+</code></pre>
+
+<h3>KV cache size</h3>
+<pre><code>cache_size = 2 (K + V) × n_layers × n_heads × d_head × seq_len × 2 bytes (fp16)
+
+# LLaMA-7B: 32 layer × 32 heads × 128 d_head = 131,072 params/token
+# 4k context: 131,072 × 4096 × 2 (K+V) × 2 bytes = 2.15 GB per sample
+# Batch 4: 8.6 GB just for KV cache
+
+# LLaMA-70B: much bigger (80 layers, 64 heads, 128 d_head)
+# 4k context per sample: ~10 GB per sample!
+</code></pre>
+
+<div class="callout">
+<div class="label">📖 Ghi chú quy ước — chi phí 1 phép so khớp Q·K trong ví dụ FLOP ở deep-dive dưới đây</div>
+<p>Ví dụ FLOP ở "Deep-dive" ngay dưới coi mỗi phép so khớp (1 cặp Query-Key) tốn ~d² (d=d_model) để có 1 con số cụ thể minh hoạ — đây là ĐƠN GIẢN HOÁ cho dễ hình dung, không phải quy ước FLOP chuẩn của phần cứng thật. Theo cách tính FLOP chuẩn của transformer, 1 cặp (Query, Key) tốn ~d_model phép nhân-cộng (cộng dồn qua tất cả head, vì mỗi head chỉ so khớp trên d_head chiều, và n_heads × d_head = d_model) — tức tỉ lệ O(d), không phải O(d²). Chi phí O(d²) thật sự nằm ở các ma trận chiếu Q/K/V/Output (mỗi ma trận d_model × d_model), nhưng chi phí đó trả 1 lần cho MỖI TOKEN, không phải 1 lần cho MỖI CẶP so khớp. Dùng quy ước d² thay vì d làm phóng đại số giây/mili-giây tuyệt đối trong ví dụ dưới đây lên nhiều bậc độ lớn — nhưng KHÔNG ảnh hưởng tới tỉ lệ tăng tốc (VD "≈174 lần") hay kết luận O(T³) so với O(T²), vì hằng số đó xuất hiện ở cả tử và mẫu rồi tự triệt tiêu.</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Vì sao KV cache là "cứu tinh" của LLM streaming? (giải thích từng bước)</div>
+
+<p><strong>Scenario cụ thể</strong>: Bạn gửi prompt "Viết cho tôi 1 bài văn 500 chữ về Hà Nội" cho Claude. Prompt = 20 tokens. Claude sinh reply = 500 tokens. Tổng 520 tokens.</p>
+
+<p><strong>Bước 1 — Không có KV cache (naive)</strong>: mỗi lần sinh thêm 1 token, model chạy lại TOÀN BỘ forward pass cho cả chuỗi từ đầu — self-attention phải tính lại cho MỌI vị trí trong chuỗi (không chỉ token mới), mỗi vị trí so khớp với các vị trí đứng trước nó (nhân quả — không token nào nhìn được token tương lai, nên đây là 1 "tam giác", không phải hình vuông đầy). Sinh token 21 (đầu reply, ngữ cảnh 21 token) → cả tam giác 21 hàng phải dựng lại = 21×22/2 = 231 phép so khớp. Sinh token 100 (ngữ cảnh 100 token) → 100×101/2 = 5.050 phép so khớp CHO TOÀN BỘ ngữ cảnh, không chỉ token 100 so với 99 token trước nó. <em>Vấn đề</em>: cả tam giác đó bị dựng lại từ đầu ở MỖI bước, dù phần lớn kết quả giống hệt bước trước.</p>
+
+<p><strong>Bước 2 — Con số biết nói</strong>: cộng dồn tam giác đó đúng theo ngữ cảnh thật của scenario (prompt 20 token, sinh thêm 500 token → ngữ cảnh chạy từ 21 đến 520, không phải từ 1): tổng ≈ <strong>23,6 triệu phép so khớp</strong> (chính xác: 23.568.500 — dùng công thức tổng tứ diện <code>Σt(t+1)/2</code> cho t=21..520 — tăng theo bậc 3, <code>O(T³)</code>, đúng công thức tổng quát ở mục 2 bên trên). Coi mỗi phép so khớp tốn 1 "đơn vị chi phí" tỉ lệ với d² (d=8192 cho Llama-70B, d²≈67M) — đây là ước lượng ĐƠN GIẢN HOÁ để có cảm giác về độ lớn, không phải công thức FLOP chính xác của phần cứng thật (chi phí attention chuẩn tỉ lệ với d, không phải d², xem ghi chú ở callout ngay trên). Tổng ≈ 23.568.500 × 67M ≈ 1,58 × 10^15 đơn vị (1,58 PFLOPs theo quy ước đơn giản hoá này). Trên GPU H100 (~1000 TFLOPS = 10^15 FLOPS/s): ≈1,58 giây <em>chỉ cho phần attention</em> — chưa tính FFN và các phần khác của model, và chưa tính bức tường băng thông bộ nhớ nói ở mục dưới (lý do thật khiến tổng thời gian sinh 500 token trong thực tế còn cao hơn nhiều, tới 15-30 giây — không phải riêng do compute attention).</p>
+
+<p><strong>Bước 3 — Có KV cache (giải pháp)</strong>: mỗi bước chỉ cần Query MỚI so khớp với các Key ĐÃ CÓ sẵn trong cache — không dựng lại tam giác cũ, chỉ thêm đúng 1 "hàng" mới. Tổng số phép so khớp cộng dồn, cùng dải ngữ cảnh 21..520, còn <strong>Σt (t=21..520) = 135.250</strong> (tăng theo bậc 2, <code>O(T²)</code> — không phải 500 tam giác chồng lên nhau như Bước 1-2). Tổng ≈ 135.250 × 67M ≈ 9,08 × 10^12 đơn vị (9,08 TFLOPs theo cùng quy ước đơn giản hoá). Trên H100: ≈9,08 mili-giây. <strong>Nhanh hơn ≈174 lần</strong> (1,58 giây → 9,08ms) — đúng khác biệt bậc 3 so với bậc 2 giữa 2 cách làm (tỉ lệ tốc độ này không phụ thuộc việc quy ước d² ở trên có chính xác về mặt phần cứng hay không, vì nó xuất hiện ở CẢ TỬ LẪN MẪU và tự triệt tiêu).</p>
+
+<p><strong>Analogy dễ hiểu</strong>: Giống như học thuộc đề văn. Không cache = mỗi lần viết 1 câu mới, đọc lại nguyên đề từ đầu. Có cache = đọc đề 1 lần, ghi nhớ, viết tiếp mà không cần đọc lại. Rõ ràng cái nào nhanh.</p>
+
+<p><strong>NHƯNG — cái giá phải trả (memory bomb)</strong>: Cache lưu K, V cho MỖI layer, MỖI head, MỖI token. Công thức:
+<br>&nbsp;&nbsp;<code>cache_per_token = 2 (K + V) × n_layers × n_heads × head_dim × 2 bytes (fp16)</code>
+<br>Llama-70B (80 layers, 64 heads, head_dim 128): <code>2 × 80 × 64 × 128 × 2 = 2.6 MB / token</code>.
+<br>Context 32.000 tokens = 32.000 × 2.6 MB = <strong>84 GB cache</strong>. Model chỉ 140 GB. Cache gần bằng model! GPU A100 80GB không đủ chỉ để giữ cache 1 request.</p>
+
+<p><strong>Bức tường vật lý — memory bandwidth</strong>: Mỗi lần sinh token, phải ĐỌC toàn bộ cache từ HBM (GPU memory). H100 bandwidth = 3 TB/s. Đọc 84 GB = 84 / 3000 = 0.028 giây = 28 ms. <em>Đây là giới hạn vật lý</em> — dù GPU có nhanh cỡ nào cũng phải chờ memory. LLM chậm KHÔNG phải vì compute, mà vì <strong>đọc memory quá nhiều</strong>. Naive intuition "175B params to nên chậm" — SAI. Chậm vì bandwidth.</p>
+
+<p><strong>Hậu quả nếu bạn không biết insight này</strong>: Bạn thuê H100 200 tỷ nhưng chỉ dùng được 5% compute — 95% GPU ngồi chờ memory. Cost lãng phí gấp 20 lần. Ai hiểu memory bandwidth = optimize đúng chỗ.</p>
+
+<p><strong>4 kỹ thuật fix memory-bound (dùng combined)</strong>:
+<br>1. <strong>FlashAttention</strong>: viết attention kernel giảm số lần đọc/ghi HBM (dùng SRAM on-chip nhanh hơn 10×). Không giảm math, giảm memory traffic. → 2-4× faster.
+<br>2. <strong>Grouped-Query Attention (Llama-3)</strong>: 64 heads share cùng 8 K/V groups (thay vì mỗi head riêng). Cache nhỏ 8 lần. → 8× context length cùng memory.
+<br>3. <strong>Quantize KV cache</strong>: lưu K, V dạng INT4 thay vì FP16 → cache nhỏ 4 lần. Chất lượng drop &lt;2%.
+<br>4. <strong>PagedAttention (vLLM)</strong>: quản memory cache như OS quản pages → giảm fragmentation 60-80%. Batch to gấp 4 lần → throughput gấp 4.
+<br>Combine tất cả = <strong>30× throughput</strong> trên cùng GPU. Đây là why vLLM/SGLang thắng HuggingFace vanilla — algorithm, không hardware.</p>
+
+<p><strong>Khi KV cache vỡ (edge case tiết lộ chiều sâu)</strong>: Beam search với K=5 beams (giữ 5 candidate sequences) → 5 cache riêng biệt → memory × 5. Đây là why beam search bị loại dần trong production LLM — chỉ dùng cho MT nhỏ. Speculative decoding cũng cần cache cho cả draft model + target model → double memory. <em>Mọi kỹ thuật "cải thiện quality" đều trả bằng memory</em>. Đây là tradeoff không escape được.</p>
+</div>
+
+<h2>3. PagedAttention (vLLM 2023)</h2>
+
+<div class="callout">
+<div class="label">Innovation</div>
+<p>Standard KV cache: allocate max sequence length upfront per sample. Wasteful — many samples generate short. Fragmented memory.</p>
+<p>PagedAttention (Kwon 2023): quản lý KV cache như OS quản lý virtual memory. Chia thành blocks (16 tokens), allocate on demand.</p>
+</div>
+
+<pre><code>Traditional:
+  Sample A [xxxxx.................]  waste 15 slots
+  Sample B [xxxxxxxxxxxxxxxx......]  waste 4 slots
+  Sample C [xx....................] waste 18 slots
+
+PagedAttention (blocks of 4):
+  Sample A: [x][x] (2 blocks)
+  Sample B: [x][x][x][x] (4 blocks)
+  Sample C: [x] (1 block)
+  Total memory: 7 blocks (vs 24 with padding)
+</code></pre>
+
+<p>Effect: 2-4× throughput improvement. vLLM = production-ready serving.</p>
+
+<h2>4. Continuous batching</h2>
+
+<p>Traditional: batch of N samples, wait for slowest → GPU idle.</p>
+
+<p>Continuous batching: at each step, mix samples at different stages. Finished samples exit, new samples join.</p>
+
+<pre><code>Time step:  1  2  3  4  5  6  7  8  9
+Sample A:   ▓  ▓  ▓  ▓  □
+Sample B:      ▓  ▓  ▓  ▓  ▓  ▓  □
+Sample C:            ▓  ▓  ▓  ▓  ▓  □
+Sample D:                     ▓  ▓  ▓ ...
+
+▓ = generating, □ = done, [space] = new sample join
+GPU always busy → max throughput.
+</code></pre>
+
+<h2>5. Speculative decoding (Leviathan 2022)</h2>
+
+<div class="callout success">
+<div class="label">2-3× speedup free</div>
+<p>Big model slow (10 tok/s), small model fast (200 tok/s). Small model predict K tokens ahead. Big model verify all K in parallel. Accept prefix matching → generate K correct tokens in 1 big model call.</p>
+</div>
+
+<pre><code>1. Draft: small_model.generate(K=5 tokens speculatively)
+2. Verify: big_model.forward(prefix + K draft tokens) → parallel evaluation
+3. Compare: probabilities big vs small at each position
+4. Accept longest matching prefix (probabilistically)
+5. Re-draft from acceptance point
+
+# Empirically 2-3× speedup with 70B big + 7B draft
+# Quality identical to big model alone
+</code></pre>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Speculative decoding algorithm, GPTQ vs AWQ math, continuous batching mechanics</div>
+
+<p><strong>1. Speculative decoding — full algorithm với accept/reject probability</strong></p>
+<pre><code>Setup: target model M_t (Llama-70B), draft model M_d (Llama-1B), γ = 5 tokens/step
+
+For each generation step:
+  1. Draft: generate γ tokens x_1..x_γ từ M_d (autoregressive, cheap)
+     Also record q_i = P_{M_d}(x_i | context, x_1..x_{i-1})
+  2. Verify: 1 forward pass M_t trên context + x_1..x_γ (PARALLEL — key insight)
+     Get p_i = P_{M_t}(x_i | context, x_1..x_{i-1}) for i=1..γ
+
+  3. Accept-reject per position (rejection sampling):
+     For i = 1..γ:
+       r ~ Uniform(0, 1)
+       if r < min(1, p_i / q_i):
+         accept x_i
+       else:
+         reject x_i, break loop
+         resample x_i ~ normalize(max(0, p_i − q_i))
+
+  4. Nếu accept all γ: bonus token M_t(context + x_1..x_γ) — total γ+1 tokens 1 lượt
+     Nếu reject vị trí k: giữ x_1..x_{k-1}, resample x_k, tiếp tục draft
+
+# Property MATH: distribution output = distribution của M_t exact (không gần đúng)
+# Speedup: nếu accept rate α ≈ 0.7, γ=5 → expected tokens/step = (1-α^{γ+1})/(1-α)
+#   = (1-0.7^6)/(1-0.7) = (1-0.1176)/0.3 ≈ 2.94
+# vs 1 token/step naive → ≈2.9× speedup FREE
+# (3.4 là giới hạn tiệm cận khi γ→∞: 1/(1-α)=1/0.3≈3.33 — KHÔNG phải kết quả thật ở γ=5 hữu hạn)</code></pre>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>2. GPTQ vs AWQ — quantization sau training</strong></p>
+
+<p><strong>GPTQ (Frantar 2022)</strong>: quantize weights layer-by-layer, minimize <code>||W·X − Ŵ·X||²</code> (reconstruction lỗi HOẠT ĐỘNG, không phải weights). Dùng Hessian H = X·X^T + λI. Update col j:
+<br><code>Ŵ_j = round(W_j / scale) · scale</code>
+<br><code>W_{j+1:} += (W_j − Ŵ_j) · H^{-1}_{j, j+1:} / H^{-1}_{jj}</code>   [error propagate sang col chưa quantize]
+<br>Kết quả: 4-bit với &lt;1% MMLU drop, cần calibration data ~128 samples.</p>
+
+<p><strong>AWQ (Lin 2023)</strong>: insight — không phải mọi weight equal. 1% "salient" weights (activation lớn) chiếm phần lớn output. Protect chúng bằng cách SCALE trước quantize:
+<br><code>W' = W · diag(s), X' = X / diag(s)</code>  → equivalent (W'·X' = W·X)
+<br>Scale s được chọn theo activation magnitude → salient weights lớn hơn sau scale → quantize round chính xác hơn.</p>
+
+<p><strong>Speed compare</strong>: GPTQ = calibrate 30 min/layer, AWQ = 10 min/layer. Quality tương đương. GPTQ dominant Q4 open-source, AWQ dominant Q4 vLLM prod.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>3. Continuous batching — cơ chế chi tiết</strong></p>
+<pre><code>Traditional (static) batching:
+  batch = [req_A(prompt=10, gen=100), req_B(prompt=10, gen=5), ...]
+  Chờ req dài nhất (100 tokens) mới trả kết quả → req_B chờ 95 steps vô ích.
+  GPU utilization drop khi mix short/long requests.
+
+Continuous (Orca/vLLM):
+  Mỗi step generation:
+    active_batch = tất cả request đang gen (khác nhau progress)
+    Prefill: request mới join → tính KV cache cho prompt (1 shot)
+    Decode: 1 token cho mỗi active request
+    Request done → EJECT khỏi batch
+    New request → JOIN batch
+  → GPU luôn full batch → throughput 5-10× static</code></pre>
+
+<p><strong>Prefill vs decode</strong>: prefill compute-bound (batch prompt qua L·d² per token, parallel over seq), decode memory-bound (đọc KV cache qua HBM). Modern serving TÁCH 2 pha (Splitwise, DistServe): GPU riêng cho prefill (compute), GPU khác cho decode (memory-bandwidth).</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>4. Gotchas inference</strong></p>
+<ul>
+  <li><strong>Repetition penalty vs frequency penalty</strong>: repetition_penalty divide logits của token đã xuất hiện (multiplicative), frequency_penalty subtract (additive). Repetition penalty > 1.3 hại quality (censor natural repeat như "the").</li>
+  <li><strong>Stop tokens</strong>: quên set stop → model gen tới max_tokens → waste compute. Llama-3 stop = ["&lt;|eot_id|&gt;", "&lt;|end_of_text|&gt;"] — cả 2.</li>
+  <li><strong>Padding side khi generate</strong>: <code>padding_side="left"</code> cho decoder — nếu right-pad thì generate bắt đầu từ pad token → garbage.</li>
+  <li><strong>Temperature = 0 không hoàn toàn deterministic</strong> trên GPU vì floating point non-associative với parallel reduce. Fix: <code>torch.use_deterministic_algorithms(True)</code>.</li>
+  <li><strong>KV cache dtype ≠ compute dtype</strong>: cache có thể INT8 (save 2× memory) trong khi compute fp16 — dequantize on-the-fly.</li>
+  <li><strong>Chunked prefill</strong>: prompt 100k tokens → prefill 1 shot OOM. Chunk prefill 2k tokens/lần, cập nhật KV cache dần.</li>
+</ul>
+
+<p><strong>Numeric example — Llama-70B (80 layer, 64 head, d_head=128, GQA n_kv=8) serving</strong></p>
+<table>
+<tr><th>Config</th><th>KV cache per token</th><th>Ctx 8k</th><th>Batch 16 · ctx 8k</th></tr>
+<tr><td>MHA (full 64 heads)</td><td>2·80·64·128·2 = 2.6 MB</td><td>21 GB</td><td>336 GB (không fit)</td></tr>
+<tr><td>GQA (8 KV heads)</td><td>2·80·8·128·2 = 328 KB</td><td>2.6 GB</td><td>42 GB (fit A100 80GB)</td></tr>
+<tr><td>GQA + INT8 KV</td><td>164 KB</td><td>1.3 GB</td><td>21 GB (dư dùng)</td></tr>
+</table>
+<p><strong>Bandwidth bound decode</strong>: mỗi token phải đọc toàn bộ weight (140 GB fp16, 35 GB INT4). H100 3 TB/s → 47 ms/token (fp16) hoặc 12 ms/token (INT4) = 85 tok/s. Đây là lý do quantize base weights = speed up decode 3-4×.</p>
+</div>
+
+<h2>6. Quantization at inference</h2>
+
+<table>
+<tr><th>Format</th><th>Memory</th><th>Quality loss</th></tr>
+<tr><td>fp32</td><td>4 bytes/param</td><td>Baseline</td></tr>
+<tr><td>fp16 / bf16</td><td>2 bytes</td><td>Negligible</td></tr>
+<tr><td>int8 (LLM.int8)</td><td>1 byte</td><td>&lt; 1%</td></tr>
+<tr><td>int4 (GPTQ, AWQ)</td><td>0.5 byte</td><td>1-3%</td></tr>
+<tr><td>1-bit (BitNet)</td><td>0.125 byte</td><td>Research</td></tr>
+</table>
+
+<p>Standard production: fp16 or int8 (best balance). 4-bit cho consumer GPUs (LLaMA on RTX 3090).</p>
+
+<h2>7. Serving stack</h2>
+
+<pre><code>Request → API gateway → Batcher → Router → GPU worker (vLLM/TGI)
+                                  ↓
+                       Multi-LoRA cache (adapters swap)
+                                  ↓
+                       Output stream (SSE, WebSocket)
+</code></pre>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Top-P vs Top-K — khi nào top-P better?</p>
+<p class="a">Top-P adaptive: confident distribution (peak sharp) → small set. Flat distribution → larger set. Top-K fixed size, arbitrary. Empirically top-P (0.9) better cho creative gen.</p>
+
+<p class="q">2. LLaMA-70B, 4k context, batch 8. KV cache size?</p>
+<p class="a">80 layers × 64 heads × 128 d_head × 2 (K+V) × 2 bytes × 4096 tokens × 8 batch ≈ 86 GB. KHÔNG fit A100 80GB chỉ với KV cache (chưa tính trọng số model 140GB) — đây chính xác là lý do bắt buộc phải dùng GQA (giảm n_heads hiệu quả, xem bảng LLaMA-70B GQA n_kv=8 ở mục 5 phía trên, cùng config nhưng đổi sang GQA + batch16/ctx8k chỉ còn ≈42GB) hoặc quantization thay vì MHA đầy đủ ở quy mô này.</p>
+
+<p class="q">3. Continuous batching vs static batching — throughput impact?</p>
+<p class="a">Static: chờ slowest sample done → GPU idle 30-50%. Continuous: mix samples at different stages → GPU always busy → 3-5× throughput improvement.</p>
+
+<p class="q">4. Speculative decoding cần gì?</p>
+<p class="a">2 models: big (target quality) + small (draft, ~10× faster). Small predict K tokens ahead. Big verify parallel. Accept matching prefix. Impl: HuggingFace assistant_model, vLLM speculative.</p>
+
+<p class="q">5. Fine-tuned LLM quality drop khi int4 quantize. Fix?</p>
+<p class="a">(1) GPTQ / AWQ (calibrated quantization with sample data). (2) Post-quantization LoRA (train small adapter to compensate). (3) Increase batch fine-tune data. (4) Fallback fp16 nếu quality critical.</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1904.09751">Holtzman et al (2019) — Nucleus sampling</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2407.01082">Nguyen et al (2024) — Min-p Sampling for Creative and Coherent LLM Outputs</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2309.06180">Kwon et al (2023) — vLLM / PagedAttention</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2211.17192">Leviathan et al (2022) — Speculative Decoding</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2306.00978">Lin et al (2023) — AWQ (activation-aware quantization)</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L4_5_finetuning_lora.html">← L4.5</a>
+  <a href="L5_1_prompt.html">L5.1 · Prompt Engineering →</a>
+</div>
+
+</div>
+</body>
+</html>

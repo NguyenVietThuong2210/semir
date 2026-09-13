@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L7.4 — System Design Mock 2</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 7 · Module 4</div>
+  <h1>7.4 · System Design Mock 2 — Multi-Agent Code Assistant</h1>
+  <p class="subtitle">Design AI Orchestrator-like system. 11 agents, LangGraph, HITL, checkpointing. Best cho senior AI engineer roles.</p>
+  <div class="level">Level 7 · Interview · ~45 phút</div>
+</div>
+<div class="container">
+
+<h2>Prompt</h2>
+
+<div class="callout">
+<div class="label">Interviewer</div>
+<p>"Design a multi-agent system that takes user requirement, plans, implements code, tests, deploys, and provides retrospective. Similar to GitHub Copilot Workspace or Devin."</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Agent System Design bằng ngôn ngữ đời thường</div>
+<p><strong>Client bảo "làm chatbot cho tôi"</strong> — chatbot gì?</p>
+<ul>
+  <li>Support khách hàng (RAG trên FAQ, tone thân thiện)?</li>
+  <li>Bán hàng (product recommendation, upsell)?</li>
+  <li>Nội bộ (code review, HR question)?</li>
+  <li>Multi-agent SDLC (như AI Orchestrator — 11 agents cooperate)?</li>
+</ul>
+<p>Mỗi loại có architecture khác: số agents, tools cần, level HITL, cost profile. Clarify trước = tránh design 10 agents khi client chỉ cần 1 chatbot đơn giản.</p>
+<p><strong>HITL (Human-In-The-Loop)</strong> = điểm dừng bắt buộc trong pipeline chờ người duyệt trước khi AI đi tiếp — như thợ xây phải chờ chủ nhà duyệt bản vẽ trước khi đổ móng, không tự ý xây theo ý mình. Ngược lại là "full autonomous" — AI tự quyết hết, nhanh hơn nhưng rủi ro cao hơn (sai bước đầu → sai cả chuỗi).</p>
+<p><strong>LangGraph</strong> = thư viện xây agent dạng "đồ thị trạng thái" (state graph): mỗi agent là 1 node, cạnh (edge) nối node quy định "xong node này thì đi đâu tiếp". Khác chatbot đơn giản (1 LLM trả lời 1 câu), LangGraph cho phép loop lại (QA fail → quay lại Engineer), rẽ nhánh có điều kiện, và lưu trạng thái (checkpoint) giữa các bước để resume nếu crash.</p>
+</div>
+
+<h2>1. Clarify (5 min)</h2>
+
+<pre><code>Q: Users? SDLC role?
+A: Developer teams. Junior devs + tech leads.
+
+Q: Language / tech stack support?
+A: Start Python, extend later.
+
+Q: Autonomous vs human-in-the-loop?
+A: HITL at spec approval + before deploy. Auto in between.
+
+Q: Cost budget per feature build?
+A: $5-20 range acceptable.
+
+Q: Latency?
+A: Async — 30 min to 2h per feature OK.
+
+Q: Concurrent jobs?
+A: 100 dev teams concurrent, ~10 jobs peak.
+
+Q: Access to real customer code / DB?
+A: Sandbox only. User provide repo copy.
+</code></pre>
+
+<h2>2. High-level architecture (10 min)</h2>
+
+<pre><code>┌── User Interface ──────────────────────────────┐
+│  Web UI + IDE plugin (VSCode, Cursor)          │
+└────────────┬───────────────────────────────────┘
+             │ HTTPS
+             ▼
+┌── API Gateway ────────────────────────────────┐
+│  FastAPI + auth + rate limit                  │
+└────────────┬──────────────────────────────────┘
+             │
+             ▼
+┌── Orchestrator Runtime ───────────────────────┐
+│  LangGraph + Python router                     │
+│  (deterministic control plane)                 │
+└──────┬────────────────────────────────────────┘
+       │
+   ┌───┴───┬───────┬────────┬────────┐
+   ▼       ▼       ▼        ▼        ▼
+  PM   Analyser  Engineer  QA      Deploy    (11 agent nodes, incl. QAVerify)
+   │       │       │        │        │
+   ▼       ▼       ▼        ▼        ▼
+┌── LLM Backend ────────────────────────────────┐
+│  Claude API / Claude Code CLI                  │
+└───────────────────────────────────────────────┘
+
+┌── State + Persistence ────────────────────────┐
+│  Postgres (checkpoints)                       │
+│  Redis (queue, cache)                         │
+└───────────────────────────────────────────────┘
+
+┌── Observability ──────────────────────────────┐
+│  LangSmith traces + Prometheus metrics         │
+└───────────────────────────────────────────────┘
+</code></pre>
+
+<h2>2.5 Concrete walkthrough — 1 user request end-to-end (nói cái này để chứng minh hiểu data flow, không chỉ liệt kê box)</h2>
+
+<div class="callout">
+<div class="label">📦 Ví dụ cụ thể</div>
+<p><strong>User request</strong>: "Thêm dark mode toggle vào trang settings."</p>
+</div>
+
+<pre><code>t=0s     User gửi request qua Web UI → API Gateway xác thực (auth) → tạo
+         job_id, khởi tạo ProjectContext{initial_request: "...dark mode..."}
+         → LangGraph bắt đầu chạy từ node "PM".
+
+t=5s     PM node: LLM đọc initial_request, hỏi lại nếu thiếu info
+         (ở đây đủ rõ, không cần hỏi) → ghi pm_report{
+             scope: "Add toggle UI + persist preference + apply theme CSS",
+             out_of_scope: "không đổi color palette hiện có"
+         }
+         → route sang "Analyser".
+
+t=15s    Analyser node: đọc pm_report + quét codebase (RAG-retrieved:
+         settings.tsx, theme.ts, user_prefs table) → spec_analysis{
+             affected_files: ["Settings.tsx", "ThemeProvider.tsx", "user_prefs schema"],
+             risk: "low — additive feature, không đổi API contract cũ"
+         }
+         → needs_clarification = false → route "SpecAnalyze" → "TaskDecompose".
+
+t=25s    TaskDecompose: chia thành kanban_board = [
+             {id:1, task:"Add dark_mode column to user_prefs"},
+             {id:2, task:"Build ThemeProvider dark variant"},
+             {id:3, task:"Add toggle component in Settings.tsx"},
+             {id:4, task:"Wire toggle → persist → apply on load"}
+         ]
+         → HITL GATE: hiện spec + task list cho user duyệt (đây là điểm
+         dừng bắt buộc — xem HITL ở callout trên). User approve.
+
+t=40s    Engineer node chạy task 1-4 tuần tự (hoặc song song nếu độc lập).
+         Mỗi task: Read code liên quan → Edit/Write → chạy test cục bộ.
+         engineer_reports = [{task:1, success:true, files:["migrations/xxx.sql"]},
+                              ...]
+
+t=3m     Reviewer node: đọc diff toàn bộ 4 task → reviewer_report{
+             verdict: "minor issue — toggle thiếu aria-label (a11y)"
+         }
+         → route "engineer_retry" cho task 3 only (không chạy lại cả 4).
+
+t=3m30s  Engineer sửa task 3 → Reviewer pass → Security node scan
+         (không có secret/injection risk) → route "QA".
+
+t=4m     QA node: chạy full test suite + Playwright screenshot toggle
+         hoạt động → qa_report{verdict:"pass"} → route_qa() trả về "deploy"
+         (xem code route_qa ở mục 5 — Python quyết định, không phải LLM).
+
+t=4m30s  Deploy node: merge branch, chạy CI, deploy staging → smoke test
+         → deploy_report{success:true, url:"staging.app/settings"}.
+
+t=5m     Retrospective node: tổng hợp toàn bộ agent_events → ghi log
+         "4 task, 1 review-fix cycle, $0.35 total cost, 5 min wall-clock"
+         → trả kết quả cuối cho user qua Web UI.
+</code></pre>
+
+<p><strong>Điều cần nói to trong phỏng vấn</strong>: (1) Mỗi node ghi <em>report riêng</em> vào state — audit trail đầy đủ, biết chính xác bước nào fail. (2) HITL gate ở <em>đầu</em> (duyệt spec) chứ không phải cuối (duyệt code) — rẻ hơn: sai ở spec catch sớm, không phí compute Engineer làm sai hướng. (3) Reviewer fail chỉ retry <em>task cụ thể</em> (task 3), không restart toàn bộ pipeline — tiết kiệm cost + thời gian.</p>
+
+<h2>3. State design (5 min)</h2>
+
+<pre><code>class ProjectContext(TypedDict):
+    # Identity
+    job_id: str
+    user_id: str
+    project_id: str
+
+    # Input
+    initial_request: str
+    pipeline_intent: str    # query|test|review|bug_fix|feature
+
+    # Agent reports (populated as pipeline runs)
+    pm_report: dict
+    analyser_report: dict
+    spec_analysis: dict
+    task_decomposition: dict
+    engineer_reports: list[dict]  # per task
+    reviewer_report: dict
+    security_report: dict
+    qa_report: dict
+    deploy_report: dict
+
+    # Kanban tracking
+    kanban_board: list[KanbanCard]
+    current_task_index: int
+
+    # Loops
+    qa_iterations: int
+    spec_revisions: int
+
+    # Human gate
+    needs_clarification: bool
+    interrupt_reason: str
+
+    # Audit
+    agent_events: list[AgentEvent]
+    total_tokens_used: int
+    total_cost_usd: float
+</code></pre>
+
+<h2>4. Deep dive — Engineer agent (5 min)</h2>
+
+<pre><code>Input: task from kanban, spec, codebase summary
+Prompt: system role + tools available + task description
+       + relevant code context (RAG-retrieved)
+
+Tools: Read, Write, Edit, Bash, Grep
+
+Output: files_changed[], report{
+    success: bool,
+    changes_summary: str,
+    tests_added: list[str],
+    concerns: list[str],
+}
+
+Failure handling:
+- Timeout (5 min per task) → mark task failed
+- Tool error → retry với error message
+- Parse error → escalate to Analyser
+</code></pre>
+
+<h2>5. Deep dive — routing (5 min)</h2>
+
+<pre><code>def route_qa(state: ProjectContext) -> str:
+    qa = state.get("qa_report", {})
+    if qa.get("verdict") == "pass":
+        return "deploy"
+
+    iters = state.get("qa_iterations", 0)
+    if iters >= MAX_QA_ITERATIONS:  # 2, matches real orchestrator/graph.py default
+        return "retrospective_failed"
+
+    if qa.get("severity") == "major":
+        return "analyser_qa_fail"   # back Analyser redesign
+
+    return "engineer_retry"
+
+# Python function, testable, deterministic
+# No LLM decides — audit clear
+</code></pre>
+
+<pre><code>                    ┌─────────────────────────┐
+                    │                         │
+                    ▼                         │
+   Engineer ──► QA ──┬── verdict=pass ──► Deploy
+                      │
+                      ├── severity=major ──► Analyser (redesign) ──┐
+                      │                                            │
+                      ├── iters < MAX_QA_ITERATIONS ──► engineer_retry
+                      │   (loops back to Engineer, top of diagram) ─┘
+                      │
+                      └── iters ≥ MAX_QA_ITERATIONS ──► retrospective_failed (terminal)
+</code></pre>
+
+<h2>5.5 Tool registry + budget guard (must mention)</h2>
+
+<pre><code># Tool registry — declarative, versioned, permission-scoped
+TOOL_REGISTRY = {
+    "read_file":  {"handler": read_fs,  "scope": "repo",  "cost_est": 0.001,
+                   "schema": {"path": "str"}},
+    "run_bash":   {"handler": docker_exec, "scope": "sandbox", "cost_est": 0.05,
+                   "requires_approval": True},   # HITL for destructive
+    "web_search": {"handler": tavily,   "scope": "public", "cost_est": 0.02},
+}
+
+def dispatch_tool(name, args, ctx):
+    tool = TOOL_REGISTRY[name]
+    # Permission check
+    if tool.get("requires_approval") and not ctx.approved_tools.get(name):
+        raise ApprovalRequired(name)
+    # Budget guard — pre-check
+    if ctx.spent_usd + tool["cost_est"] > ctx.budget_usd:
+        raise BudgetExceeded(f"would exceed ${ctx.budget_usd}")
+    result = tool["handler"](**args)
+    ctx.spent_usd += tool["cost_est"]
+    return result
+
+# Session persistence — LangGraph PostgresSaver
+# thread_id = f"{user_id}:{project_id}:{job_uuid}"
+# Every node commit → checkpoint row. Resume = load latest by thread_id.
+</code></pre>
+
+<p><strong>3 things senior interviewer looks for</strong>: (1) Tool <em>registry</em> not hardcoded if/else — pluggable + versioned. (2) Budget cap enforced at dispatch, not "check after". (3) HITL flag per-tool (destructive tools = approval required).</p>
+
+<h2>6. Scale considerations (5 min)</h2>
+
+<h3>10 concurrent jobs</h3>
+<ul>
+  <li>API: 1 instance handle async I/O (LangGraph task queue)</li>
+  <li>Backend: multiple worker containers, distributed via Redis queue</li>
+  <li>Postgres: connection pool, index thread_id</li>
+  <li>LLM API: rate limit awareness, backoff, batching</li>
+</ul>
+
+<h3>100 concurrent → 1000</h3>
+<ul>
+  <li>Horizontal scale workers</li>
+  <li>Sharding by user_id</li>
+  <li>Cost concern: LLM API cost dominant — batch + cache aggressive</li>
+</ul>
+
+<h2>7. Cost analysis (5 min)</h2>
+
+<pre><code>Per feature build breakdown:
+  PM:           $0.10
+  Analyser:     $0.30
+  SpecAnalyze:  $0.15
+  TaskDecompose: $0.10
+  Engineer × 5 tasks: $2.50
+  Reviewer:     $0.30
+  Security:     $0.10 (mostly rule-based, small LLM classify)
+  QA × 1-3 iter: $0.60
+  Deploy:       $0.05
+  Retrospective: $0.10
+  ────────────────
+  Total:        $4-5 per feature (median)
+
+Optimizations:
+- Prompt caching (system prompts + spec repeated): 40% saving
+- Route simple tasks to Haiku not Opus: 5-10× cheaper
+- Batch retrospective (offline, discounted API)
+</code></pre>
+
+<h2>8. Failure modes (10 min)</h2>
+
+<div class="callout warn">
+<ol>
+  <li><strong>Infinite loop</strong>: QA fail, Engineer retry same bug, loop. Fix: max_iterations + progress detection (compare Engineer output diff).</li>
+  <li><strong>Cost runaway</strong>: user submit vague request, Analyser loop clarify. Fix: budget cap per job, alert user, cost estimate before start.</li>
+  <li><strong>Malicious code injection</strong>: Engineer generate rm -rf/. Fix: sandboxed Docker exec + code scan (bandit) + human review before deploy.</li>
+  <li><strong>Prompt injection</strong>: user request contains "ignore instructions". Fix: role tag data, guard model check.</li>
+  <li><strong>LLM API outage</strong>: Anthropic down. Fix: multi-provider fallback (Claude → GPT-4 → Llama-3). Circuit breaker.</li>
+  <li><strong>Compliance</strong>: generated code contains license issue. Fix: license scan pre-deploy, DCO signoff, user liability.</li>
+  <li><strong>Data leak</strong>: user's codebase leaked into LLM training. Fix: contract terms (no train on customer data — thường gọi <strong>BYOK</strong>, Bring Your Own Key, cho phép enterprise dùng API key riêng với điều khoản zero-retention), local Llama fine-tune option for sensitive.</li>
+</ol>
+</div>
+
+<div class="callout">
+<div class="label">💡 Circuit breaker — vì sao không chỉ retry</div>
+<p><strong>Circuit breaker</strong> hoạt động như cầu dao điện nhà bạn: dòng điện quá tải → cầu dao TỰ NGẮT để bảo vệ hệ thống, không đợi cháy nhà mới ngắt. Áp dụng cho gọi LLM API:</p>
+<ul>
+  <li><strong>Closed (bình thường)</strong>: request gọi thẳng Anthropic API như thường lệ.</li>
+  <li><strong>Open (ngắt)</strong>: sau N lần lỗi liên tiếp (ví dụ 5 lần trong 30s) → circuit "mở", ngừng gọi Anthropic hoàn toàn trong X giây, route thẳng sang GPT-4 fallback hoặc trả lỗi nhanh cho user — <em>không</em> tiếp tục retry vào 1 service đang chết (retry mù quáng chỉ làm outage tệ hơn, tốn thêm queue).</li>
+  <li><strong>Half-open (thử lại)</strong>: sau X giây, cho 1 request "dò đường" — nếu thành công thì đóng lại circuit (trở về closed), nếu vẫn lỗi thì mở lại, đợi thêm.</li>
+</ul>
+<p>Khác <em>retry đơn thuần</em> (cứ lỗi là thử lại ngay) — circuit breaker biết khi nào nên "ngừng cố gắng tạm thời" để không làm quá tải hệ thống đang gặp sự cố.</p>
+</div>
+
+<h2>9. Trade-offs discussion</h2>
+
+<pre><code>Q: "Fewer LLM calls (1 mega prompt) vs many specialized agents?"
+A: Specialized:
+   + Better quality per role (focused prompt)
+   + Easier debug (know which agent failed)
+   + Reusable roles across projects
+   - Higher cost + latency
+
+   Start monolith, split when observe specific weakness.
+
+Q: "Support arbitrary languages / frameworks?"
+A: Start Python (highest LLM training data).
+   Extend: same graph, different toolset per language.
+   Test coverage grows: don't promise Rust support if not verified.
+</code></pre>
+
+<h2>10. Anti-patterns (mention 2-3 để show maturity)</h2>
+
+<div class="callout danger">
+<ol>
+  <li><strong>LLM as router</strong>: "let the LLM decide next agent" → non-deterministic, cannot unit test. Use Python router.</li>
+  <li><strong>Unbounded loop</strong>: no max_iter → runaway cost + user timeout. Always <code>max_qa_iter=2</code> + progress detection.</li>
+  <li><strong>No sandbox on Bash tool</strong>: LLM generates <code>rm -rf /</code> → catastrophic. Docker isolation + read-only mount + syscall filter.</li>
+  <li><strong>Silent tool failure fallback</strong>: tool returns "" on error → LLM proceeds as if success (V19.5 lesson). Fail loud with typed exception.</li>
+  <li><strong>Storing raw customer code in LLM provider logs</strong>: compliance violation. Enterprise: BYOK + zero-retention API endpoint.</li>
+</ol>
+</div>
+
+<h2>11. Real-world hooks</h2>
+
+<p>Cite từ ai_orchestrator experience:</p>
+<ul>
+  <li>Deterministic routing = key insight (Anthropic Building Effective Agents)</li>
+  <li>11 agents SDLC pattern proven</li>
+  <li>Human gate spec approval = quality boost</li>
+  <li>Retrospective agent = learning loop</li>
+</ul>
+
+<div class="qa-gate">
+<h3>✅ Practice extension</h3>
+<p>Try these variants:</p>
+<ul>
+  <li>Design 1 agent code review bot (subset)</li>
+  <li>Design 1 agent for customer support triage</li>
+  <li>Design 1 agent for legal document analysis</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L7_3_sysdesign_predict.html">← L7.3</a>
+  <a href="L7_5_coding_kit.html">L7.5 · Coding Kit →</a>
+</div>
+
+</div>
+</body>
+</html>

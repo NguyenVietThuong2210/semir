@@ -1,0 +1,2786 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L1.3 — Trees → Random Forest → XGBoost</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 1 · Module 3</div>
+  <h1>1.3 · Trees → XGBoost + Algorithm & Metric Landscape</h1>
+  <p class="subtitle">Progression từ 1 cây decision đến state-of-the-art gradient boosting. Cộng với <strong>bảng đầy đủ Supervised/Unsupervised/RL algorithms + Classification/Regression/Clustering/Ranking/RL metrics</strong>. Module tổng hợp toàn bộ nền tảng ML.</p>
+  <div class="level">Level 1 · Foundations · ~60 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<p><strong>Phần 1 — Tree progression (Sections 1-6)</strong>:</p>
+<ul>
+  <li>Vẽ được 1 decision tree thủ công (bút giấy) từ dataset đơn giản</li>
+  <li>Giải thích Random Forest = bagging + random feature sampling</li>
+  <li>Phân biệt Bagging vs Boosting (RF vs GBM)</li>
+  <li>Hiểu XGBoost innovations: 2nd-order gradient + regularization + histogram</li>
+  <li>Chọn được: khi nào XGBoost vs LightGBM vs CatBoost</li>
+  <li>Đọc + debug XGBoost hyperparameters trong V18 training log</li>
+</ul>
+<p><strong>Phần 2 — Landscape (Sections 7-8)</strong>:</p>
+<ul>
+  <li>Kể tên 13 supervised algorithms từ Linear đến Transformer + khi dùng cái nào</li>
+  <li>Biết 9 unsupervised algorithms (clustering, dim reduction, anomaly)</li>
+  <li>Biết 9 RL algorithms từ Q-Learning đến MuZero</li>
+  <li>Chọn đúng metric cho task: 10 classification metrics + 8 regression + 5 clustering + 5 ranking + 7 RL</li>
+</ul>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Cách đọc module này (easy → hard)</div>
+<p><strong>Nếu bạn newbie</strong>: đọc tuần tự từ mục 1 (Decision Tree) → 6 (so sánh trees) → sau đó có thể skim 7-8 (landscape) để có overview.</p>
+<p><strong>Nếu bạn đã biết trees</strong>: nhảy đến mục 7 (Algorithm landscape) và mục 8 (Metrics landscape) để dùng như bảng tra cứu phỏng vấn.</p>
+<p><strong>Nếu bạn ôn phỏng vấn</strong>: học kỹ mục 6 (so sánh 4 tree methods), 7 (landscape), 8 (metrics). Đây là 3 câu hỏi phổ biến nhất.</p>
+</div>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Trees + XGBoost bằng ngôn ngữ đời thường</div>
+<p><strong>Decision Tree = 20 Questions</strong>: Bạn nghĩ 1 con vật, tôi hỏi Y/N để đoán. "Có chân không?" → "Có lông?" → "Sống dưới nước?"... Mỗi câu chia đôi khả năng. Tree cũng vậy: "RSI &gt; 70?" → "Volume &gt; avg 2×?" → predict UP/DOWN.</p>
+<p><strong>Random Forest = ủy ban 500 người chơi 20Q</strong>: Mỗi người nghe subset câu hỏi khác nhau, độc lập đoán. Cuối cùng vote — ai vote nhiều thắng. Vote tránh 1 người sai kéo cả nhóm.</p>
+<p><strong>XGBoost = 500 người tiếp nối</strong>: Người 1 đoán → sai chỗ nào? Người 2 học điểm sai người 1 → bổ sung. Người 3 học điểm sai người 2... Boosting = học từ lỗi trước. Vì thế XGBoost thường win competitions.</p>
+</div>
+
+<h2>1. Decision Tree — 1 cây (từ đơn giản đến chi tiết)</h2>
+
+<h3>1.1 Ý tưởng cơ bản — nghĩ như bác sĩ chẩn đoán</h3>
+
+<p>Bác sĩ khám bệnh: "sốt không?" → "có ho không?" → "đau ngực không?" → chẩn đoán bệnh. Mỗi câu hỏi là 1 rẽ nhánh. Đến "lá" (leaf) cuối cùng là kết luận.</p>
+
+<p>Decision Tree hoạt động y hệt. Với data chứng khoán:</p>
+
+<pre><code>Câu hỏi 1 (Root): RSI của cổ phiếu &lt; 30 không? (RSI thấp = quá bán)
+  ├── Có (RSI &lt; 30)  → hỏi tiếp câu 2a
+  │     Câu 2a: MA20 status = UP? (giá đang trên MA20?)
+  │       ├── Có → predict UP (chiếm 30% samples train)
+  │       └── Không → predict FLAT (5% samples)
+  │
+  └── Không (RSI ≥ 30) → hỏi tiếp câu 2b
+        Câu 2b: volume_ratio > 1.5? (volume tăng đột biến?)
+          ├── Có → predict UP (25% samples)
+          └── Không → predict DOWN/FLAT (40% samples)
+</code></pre>
+
+<p><strong>Đọc cây</strong>: Với 1 sample mới, đi từ Root xuống. Ở mỗi node, trả lời câu hỏi Y/N để chọn nhánh. Xuống đến leaf → đó là prediction.</p>
+
+<h3>1.2 Làm sao tree "chọn" câu hỏi đúng? — Impurity + Information Gain</h3>
+
+<p>Với 100 candidate features × 100 threshold khả dĩ mỗi feature = 10,000 câu hỏi có thể. Chọn câu nào? Tree dùng <strong>impurity</strong> — đo "độ hỗn loạn" của mỗi node.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Analogy — impurity như "sắp xếp quần áo"</div>
+<p>Bạn có 1 giỏ 100 áo hỗn tạp (đỏ, xanh, vàng). Chia thành 2 giỏ. Cách nào chia "sạch" nhất?</p>
+<ul>
+  <li>Cách A: giỏ 1 có 40 đỏ + 30 xanh + 30 vàng. Giỏ 2 tương tự. → Cả 2 giỏ vẫn hỗn tạp = impurity cao.</li>
+  <li>Cách B: giỏ 1 có 90 đỏ + 5 xanh + 5 vàng. Giỏ 2 có 5 đỏ + 45 xanh + 50 vàng. → Cả 2 giỏ khá "sạch" (chủ yếu 1 màu) = impurity thấp.</li>
+</ul>
+<p>Cách B tốt hơn. Decision Tree chọn split cách B.</p>
+</div>
+
+<h4>Công thức Gini — đo impurity</h4>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức Gini? (giải thích friendly)</div>
+
+<p><strong>Câu hỏi</strong>: Ta muốn 1 con số cho biết "node này hỗn tạp cỡ nào". Có 60 UP + 40 DOWN — số này bằng bao nhiêu?</p>
+
+<p><strong>Bước 1 — Nghĩ theo cách đơn giản nhất</strong>: "Xác suất chọn nhầm class là gì?"</p>
+<p>Tưởng tượng bạn rút ngẫu nhiên 1 sample từ node, sau đó đoán class của nó bằng cách rút thêm 1 sample và đoán "cùng class với sample thứ hai".</p>
+<ul>
+<li>Rút sample 1 là UP (xác suất 0.6). Rút sample 2 cũng UP (xác suất 0.6). → đoán đúng.</li>
+<li>Rút sample 1 là UP, sample 2 là DOWN → đoán SAI.</li>
+<li>Rút sample 1 là DOWN, sample 2 là UP → đoán SAI.</li>
+<li>Rút sample 1 là DOWN, sample 2 cũng DOWN → đoán đúng.</li>
+</ul>
+
+<p><strong>Bước 2 — Tính xác suất SAI</strong>:</p>
+<pre><code>P(SAI) = P(UP × DOWN) + P(DOWN × UP)
+       = p_UP × p_DOWN + p_DOWN × p_UP
+       = 2 × p_UP × p_DOWN
+       = 2 × 0.6 × 0.4 = 0.48
+
+# Hoặc dễ tính hơn: 1 - P(ĐÚNG)
+# P(ĐÚNG) = P(cả 2 cùng UP) + P(cả 2 cùng DOWN)
+#         = p_UP² + p_DOWN²
+#         = 0.36 + 0.16 = 0.52
+
+P(SAI) = 1 - P(ĐÚNG) = 1 - 0.52 = 0.48
+</code></pre>
+
+<p><strong>Bước 3 — Đó chính là Gini!</strong></p>
+<pre><code>Gini = P(SAI) = 1 - Σ p_i²
+</code></pre>
+
+<p><strong>Intuition</strong>: Gini = "xác suất bạn đoán sai class nếu bạn đoán ngẫu nhiên theo distribution của node".
+<br>• Node pure (chỉ 1 class) → luôn đoán đúng → P(SAI) = 0 → Gini = 0.
+<br>• Node 50/50 → xác suất đoán sai cao nhất = 0.5 → Gini = 0.5.
+<br>• Node càng "hỗn tạp" → càng dễ đoán sai → Gini càng cao.</p>
+
+<p><strong>Vì sao dùng bình phương (p_i²)?</strong> Bởi vì P(cả 2 sample cùng class i) = p_i × p_i = p_i². Bình phương xuất hiện tự nhiên từ ý tưởng "2 events độc lập cùng xảy ra".</p>
+
+<p><strong>Có công thức khác không?</strong> Có, entropy:
+<code>entropy = -Σ p_i × log(p_i)</code>. Cùng ý tưởng "hỗn tạp = xấu" nhưng dùng log thay bình phương. Kết quả gần giống Gini (correlation 0.99+). Trong thực tế dùng Gini vì tính nhanh hơn (không log).</p>
+</div>
+
+<pre><code>gini(node) = 1 - Σ p_i²
+
+# Giải thích từng ký hiệu:
+# p_i = tỷ lệ class i trong node (VD 0.6 cho UP)
+# Σ = tổng qua mọi class
+# 1 - Σ p_i² = xác suất đoán SAI class nếu đoán random
+
+# Range:
+# Tối thiểu = 0 (node pure — chỉ 1 class → không thể đoán sai)
+# Tối đa = 0.5 với binary (50/50 → đoán như tung xu)
+# Tối đa với K class = (K-1)/K
+</code></pre>
+
+<p><strong>Ví dụ tính Gini bằng số cụ thể</strong>:</p>
+
+<pre><code>Node có 100 samples: 60 UP, 40 DOWN
+  p_UP = 60/100 = 0.6
+  p_DOWN = 40/100 = 0.4
+  gini = 1 - (0.6² + 0.4²) = 1 - (0.36 + 0.16) = 1 - 0.52 = 0.48
+
+Node "pure" (100 UP, 0 DOWN):
+  gini = 1 - (1² + 0²) = 1 - 1 = 0  ← tốt nhất (dự đoán chắc chắn)
+
+Node 50/50 (50 UP, 50 DOWN):
+  gini = 1 - (0.5² + 0.5²) = 1 - 0.5 = 0.5  ← tệ nhất (đoán như tung xu)
+</code></pre>
+
+<h4>Information Gain — chọn split TỐT NHẤT</h4>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức Information Gain?</div>
+
+<p><strong>Câu hỏi</strong>: Ta muốn "điểm số" cho mỗi candidate split, để chọn split tốt nhất. Điểm số này nên phản ánh "split giúp giảm hỗn tạp bao nhiêu".</p>
+
+<p><strong>Bước 1 — Ý tưởng đơn giản</strong>: Nếu Gini là "hỗn tạp", thì "giảm hỗn tạp" = Gini trước split − Gini sau split. Càng lớn càng tốt.</p>
+
+<pre><code>Impurity giảm = gini_TRƯỚC - gini_SAU
+</code></pre>
+
+<p><strong>Bước 2 — Nhưng "gini_SAU" là gì khi có 2 children?</strong></p>
+<p>Sau split, ta có 2 nodes con (left + right). Mỗi cái có Gini riêng. Ta phải combine 2 Gini này thành 1 số.</p>
+<p><em>Naive cách 1</em>: gini_SAU = (gini_L + gini_R) / 2. → Nhưng SAI vì bỏ qua "số samples mỗi bên".</p>
+<p><em>Đúng cách</em>: <strong>Weighted average theo số samples</strong>. Nếu left có 30 samples và right có 70 samples, thì gini_L đóng góp 30% và gini_R đóng góp 70% vào "hỗn tạp tổng".</p>
+
+<pre><code>gini_SAU = (|left|/|total|) × gini_L + (|right|/|total|) × gini_R
+
+# Vì sao weighted?
+# → Node lớn hơn contribute nhiều hơn vào hỗn tạp tổng.
+# → Node có 1 sample "hỗn tạp cao" không có nghĩa nhiều bằng node 100 samples "hỗn tạp cao".
+</code></pre>
+
+<p><strong>Bước 3 — Ghép lại thành Information Gain</strong>:</p>
+
+<pre><code>IG = gini_TRƯỚC - gini_SAU_weighted
+   = gini(parent) - [|left|/|total| × gini(left) + |right|/|total| × gini(right)]
+</code></pre>
+
+<p><strong>Intuition</strong>: IG cao = split "tách data thành 2 nhóm sạch hơn". IG = 0 = split vô ích (2 nhóm sau vẫn hỗn tạp như trước). IG âm không xảy ra (mathematically, best case là không cải thiện).</p>
+
+<p><strong>Vì sao tree chọn max IG?</strong> Vì tree muốn "làm gọn" data càng nhiều càng tốt ở mỗi bước. Chọn split max IG = tham lam optimize locally.</p>
+
+<p><strong>Trade-off greedy</strong>: Chọn max IG mỗi bước KHÔNG đảm bảo global optimum (nhìn tổng thể có thể có combination khác tốt hơn). Nhưng brute-force global optimum là NP-hard → greedy là compromise thực tế.</p>
+</div>
+
+<pre><code>IG = gini(parent) - weighted_avg(gini(children))
+   = gini(parent) - (|left|/|parent| × gini(left) + |right|/|parent| × gini(right))
+
+# Giải thích từng ký hiệu:
+# gini(parent) = impurity trước split (VD 0.48)
+# |left|, |right| = số samples trong mỗi child
+# |parent| = |left| + |right| = tổng samples
+# weighted_avg = trung bình có trọng số theo cỡ node
+
+# Tree chọn split maximize IG (giảm impurity nhiều nhất)
+# Càng lớn IG → split càng "sạch"
+</code></pre>
+
+<p><strong>Ví dụ tính IG — chọn giữa 2 candidate splits</strong>:</p>
+
+<pre><code>Node parent: 100 samples (60 UP, 40 DOWN), gini = 0.48
+
+Candidate split A: "RSI &lt; 30?"
+  Left (Yes): 30 samples (25 UP, 5 DOWN)
+    gini_left = 1 - (25/30)² - (5/30)² = 1 - 0.694 - 0.028 = 0.278
+  Right (No): 70 samples (35 UP, 35 DOWN)
+    gini_right = 1 - 0.5² - 0.5² = 0.5
+  weighted = 30/100 × 0.278 + 70/100 × 0.5 = 0.083 + 0.35 = 0.433
+  IG_A = 0.48 - 0.433 = 0.047
+
+Candidate split B: "volume > 2× avg?"
+  Left (Yes): 50 samples (45 UP, 5 DOWN)
+    gini_left = 1 - (45/50)² - (5/50)² = 1 - 0.81 - 0.01 = 0.18
+  Right (No): 50 samples (15 UP, 35 DOWN)
+    gini_right = 1 - (15/50)² - (35/50)² = 1 - 0.09 - 0.49 = 0.42
+  weighted = 50/100 × 0.18 + 50/100 × 0.42 = 0.09 + 0.21 = 0.30
+  IG_B = 0.48 - 0.30 = 0.18
+
+⭐ IG_B (0.18) > IG_A (0.047) → chọn split B "volume > 2× avg"
+</code></pre>
+
+<p><strong>Insight</strong>: Split B tốt hơn vì tách data thành 2 nhóm "sạch" hơn — nhóm volume high có 90% UP, nhóm volume low có 70% DOWN. Model có edge rõ.</p>
+
+<h3>1.3 Tree "grow" thế nào? — Greedy recursion</h3>
+
+<p>Tree không tìm split tối ưu toàn cục (impossible — quá nhiều combination). Nó dùng <em>greedy</em>: ở mỗi node, chỉ chọn split tốt nhất cục bộ, sau đó tiếp tục grow subtrees.</p>
+
+<pre><code>function grow_tree(samples):
+    if stopping_criteria(samples):
+        return leaf(majority_class(samples))
+
+    best_split = argmax over (feature, threshold) of IG
+    left, right = split samples theo best_split
+
+    node.left = grow_tree(left)     # recursion
+    node.right = grow_tree(right)
+    return node
+
+# Stopping criteria (bất kỳ cái nào true):
+#   - node "pure" (gini = 0)
+#   - depth đạt max_depth
+#   - samples &lt; min_samples_split
+#   - IG max &lt; ε (tiny improvement, không đáng split)
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Impurity dùng để làm gì, chính xác? (+ giới hạn của greedy)</div>
+
+<p><strong>Vai trò của impurity</strong>: impurity (Gini) đo "độ hỗn loạn" của <em>1 node</em>. Nó <strong>không</strong> xếp hạng feature theo kiểu cố định từ trước (kiểu "feature A luôn tốt hơn feature B"). Nó là nguyên liệu để tính <strong>Information Gain (IG)</strong> — con số dùng để so sánh các candidate split <em>ngay tại node đang xét</em>. Tree chọn split IG cao nhất tại node đó, rồi lặp lại y hệt ở mỗi node con (greedy recursion ở trên) — nên cùng 1 feature có thể được chọn nhiều lần (với threshold khác nhau ở các node khác nhau), hoặc không bao giờ được chọn, tùy data rơi vào node nào.</p>
+
+<p><strong>Hệ quả: greedy KHÔNG đảm bảo global optimum</strong>. Vì mỗi bước chỉ nhìn "tốt nhất ngay bây giờ", hoàn toàn có thể xảy ra: chọn feature 1 trước (IG cao nhất tại root) rồi tiếp tục 2 → 3 cho ra tree tệ hơn so với nếu chọn 2 trước rồi 1 → 3. Thuật toán không "nhìn trước" (lookahead) để biết điều đó — nó chỉ tối ưu local ở từng bước.</p>
+
+<p><strong>Ví dụ kinh điển để thấy rõ giới hạn này — bài toán XOR</strong>: 2 feature nhị phân A, B, label phụ thuộc XOR(A, B):</p>
+
+<pre><code>A   B   Label
+0   0   DOWN
+0   1   UP
+1   0   UP
+1   1   DOWN
+</code></pre>
+
+<p>Nếu chỉ nhìn riêng A: nhóm A=0 có 50% UP/50% DOWN, nhóm A=1 cũng 50/50 → <strong>IG(A) = 0</strong>. Tương tự <strong>IG(B) = 0</strong>. Tại root, greedy thấy cả 2 feature "vô dụng như nhau" (IG=0 hết) → có thể chọn bừa hoặc lạc vào 1 nhánh xấu ngay từ đầu. Nhưng nếu split A trước rồi B (thứ tự nào cũng được), cây sẽ phân loại <strong>hoàn hảo</strong> — vấn đề chỉ giải được khi nhìn 2 feature <em>cùng lúc</em>, không thấy được nếu greedy xét từng feature riêng lẻ theo từng bước 1.</p>
+
+<p><strong>Vì sao vẫn chấp nhận greedy?</strong> Tìm đúng global-optimal tree = thử mọi thứ tự split khả dĩ = NP-hard, không khả thi tính toán với data thực tế (hàng chục feature × hàng nghìn sample). Greedy là compromise: nhanh, "đủ tốt" đa số trường hợp — nhưng đây chính là 1 lý do (cùng với high variance, xem 1.4) khiến 1 cây đơn lẻ có giới hạn (xem 1.5) → động lực ra đời <strong>Random Forest</strong> (nhiều cây, mỗi cây thấy random subset feature/data → tăng cơ hội có cây "vô tình" chọn đúng thứ tự tốt) và <strong>Boosting</strong> (cây sau sửa lỗi cây trước, gián tiếp bù đắp phần greedy bỏ lỡ).</p>
+</div>
+
+<h3>1.4 Ưu và nhược của 1 cây</h3>
+
+<table>
+<tr><th>Ưu điểm</th><th>Nhược điểm</th></tr>
+<tr>
+  <td><strong>Interpretable cực cao</strong> — vẽ ra giấy, sếp non-tech đọc hiểu</td>
+  <td><strong>Overfit dễ</strong> — nếu để grow max, tree sẽ "nhớ vẹt" mọi sample train (95% train acc, 55% test acc)</td>
+</tr>
+<tr>
+  <td><strong>No preprocessing</strong> — không cần scale features, không cần OneHot cho categorical</td>
+  <td><strong>High variance</strong> — thay 1 sample train → tree khác hoàn toàn (unstable)</td>
+</tr>
+<tr>
+  <td><strong>Handle missing values</strong> — sklearn/XGBoost có surrogate splits</td>
+  <td><strong>Bias toward high-cardinality features</strong> — feature có nhiều unique values (VD: user_id) dễ bị chọn dù không có signal thật</td>
+</tr>
+<tr>
+  <td><strong>Fast inference</strong> — traverse tree chỉ O(depth), thường &lt; 20 comparisons</td>
+  <td><strong>Không handle được linear relationship</strong> — muốn learn "y = 2x" cần rất nhiều split</td>
+</tr>
+</table>
+
+<h3>1.5 Vì sao 1 cây KHÔNG đủ cho production?</h3>
+
+<p>Ví dụ thực tế với V18: train 1 Decision Tree trên 1250 samples FPT với max_depth=None (không giới hạn):</p>
+<ul>
+  <li>Train accuracy: <strong>99%</strong> (tree nhớ hết pattern train)</li>
+  <li>Val accuracy: <strong>52%</strong> (gần random!)</li>
+  <li>Gap 47% = <strong>overfit khủng khiếp</strong></li>
+</ul>
+
+<p>Cắt depth xuống 5:</p>
+<ul>
+  <li>Train: 65%, Val: 55%. Gap nhỏ nhưng accuracy tổng vẫn thấp.</li>
+</ul>
+
+<p><strong>Kết luận</strong>: 1 cây không đủ. Cần <em>nhiều cây</em> để (1) giảm variance qua averaging, (2) increase capacity qua boosting. Đây là why Random Forest + XGBoost ra đời.</p>
+
+<h2>2. Random Forest — nhiều cây</h2>
+
+<p>Ý tưởng Leo Breiman (2001): <strong>Train nhiều cây độc lập, mỗi cây nhìn 1 phần data + 1 phần feature. Vote.</strong></p>
+
+<div class="callout">
+  <div class="label">2 kỹ thuật core của RF</div>
+  <ol>
+    <li><strong>Bagging</strong> (bootstrap aggregating): mỗi cây train trên 1 bootstrap sample của data (sample có thay thế)</li>
+    <li><strong>Random feature subset</strong>: mỗi split chỉ được chọn từ √n features ngẫu nhiên (không phải hết)</li>
+  </ol>
+  <p>→ Cây khác nhau, độc lập → vote/average → giảm variance mà giữ bias thấp.</p>
+</div>
+
+<pre><code>from sklearn.ensemble import RandomForestClassifier
+rf = RandomForestClassifier(
+    n_estimators=100,         # số cây
+    max_features='sqrt',      # mỗi split random √n features
+    max_depth=None,           # cho cây grow max
+    bootstrap=True,           # bagging
+)
+rf.fit(X_train, y_train)
+</code></pre>
+
+<h3>RF vs 1 cây</h3>
+<ul>
+  <li>Accuracy tăng (thường +15-25% so với 1 cây đơn — xem bảng so sánh §6.6)</li>
+  <li>Robust hơn với noise + outlier</li>
+  <li>Trade-off: chậm hơn 100× khi predict, mất interpretability (không vẽ được 100 cây)</li>
+</ul>
+
+<h2>3. Gradient Boosting — cây sửa sai cho nhau (giải thích chi tiết)</h2>
+
+<h3>3.1 Ý tưởng cốt lõi bằng ngôn ngữ đời thường</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Analogy — nhóm học sinh giải toán</div>
+<p><strong>Random Forest</strong> = 500 học sinh mỗi người đọc 1 đề khác nhau, giải độc lập, cuối cùng vote. Nếu 300/500 chọn đáp án A → chọn A.</p>
+<p><strong>Gradient Boosting</strong> = 500 học sinh làm theo chuỗi:</p>
+<ol>
+<li>Học sinh 1 giải đề → được 60/100 điểm.</li>
+<li>Học sinh 2 nhìn lỗi của HS 1 → tập trung sửa 40 câu HS 1 sai → cộng thêm 20 điểm → tổng 80/100.</li>
+<li>Học sinh 3 nhìn lỗi của (HS 1 + HS 2) → sửa tiếp → thêm 10 điểm → 90/100.</li>
+<li>... Học sinh 500: chỉ còn vài lỗi nhỏ để sửa → dần dần perfect.</li>
+</ol>
+<p>Mỗi HS <em>không</em> giải lại từ đầu — chỉ <em>vá lỗi</em> của tập thể trước.</p>
+</div>
+
+<h3>3.2 Công thức GBM update — từ đâu ra?</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức ŷ_new = ŷ_old + η · h(x)?</div>
+
+<p><strong>Câu hỏi</strong>: Ta có prediction ŷ_old chưa tốt. Muốn cải thiện. Đặt cây mới h(x) để "bổ sung" vào ŷ_old. Bổ sung THẾ NÀO?</p>
+
+<p><strong>Bước 1 — Ý tưởng đơn giản</strong>: Cứ cộng thẳng cây mới vào:</p>
+<pre><code>ŷ_new = ŷ_old + h(x)
+</code></pre>
+<p>Nếu cây h(x) học đúng phần "còn thiếu", ŷ_new sẽ perfect.</p>
+
+<p><strong>Bước 2 — Nhưng có vấn đề: OVERSHOOTING</strong></p>
+<p>Nếu cây h(x) học từ noise, prediction có thể sai lệch. Cộng nguyên → jump quá đà.</p>
+<pre><code>Ví dụ:
+y thực = 0.8
+ŷ_old = 0.5
+residual thật = 0.3
+
+Nhưng cây h(x) học từ 1 outlier → predict residual = 0.6 (SAI)
+Nếu cộng nguyên: ŷ_new = 0.5 + 0.6 = 1.1 ← overshoot! Xa y=0.8
+
+Nếu chỉ cộng 30% của h(x): ŷ_new = 0.5 + 0.3×0.6 = 0.68 ← gần y=0.8 hơn
+</code></pre>
+
+<p><strong>Bước 3 — Fix bằng learning rate η</strong>:</p>
+<pre><code>ŷ_new = ŷ_old + η · h(x)
+
+# η nhỏ (0.01-0.3): mỗi cây "góp ít" — chậm nhưng ổn định
+# η lớn (~1.0): mỗi cây "góp nhiều" — nhanh nhưng overshoot dễ
+</code></pre>
+
+<p><strong>Analogy đời thực</strong>: Bạn muốn về đích. Bước dài (η lớn) → nhanh nhưng dễ vượt qua đích. Bước ngắn (η nhỏ) → chậm nhưng chắc đến đích. GBM chọn nhiều bước nhỏ để không overshoot.</p>
+
+<p><strong>Bước 4 — Cây mới h(x) học gì?</strong></p>
+<p>Cây phải học "phần còn thiếu" của prediction hiện tại — đó là <em>residual</em>:</p>
+<pre><code>residual = y - ŷ_old
+</code></pre>
+<ul>
+<li>y = ground truth (VD 2.0% return thật của VNM)</li>
+<li>ŷ_old = prediction hiện tại (VD 0.5%)</li>
+<li>residual = 1.5% ← cây mới phải "vá" 1.5% này</li>
+</ul>
+<p><strong>Vì sao KHÔNG học predict y trực tiếp?</strong> Vì mất context. Nếu cây 5 học predict y, nó "quên" 4 cây trước đã đóng góp 0.5% rồi. Học residual = biết "thiếu bao nhiêu" → focus fix đúng chỗ.</p>
+</div>
+
+<h3>3.3 Ví dụ số cụ thể — predict return của VNM step by step</h3>
+
+<p>Giả sử ta muốn predict return của VNM ngày mai (regression, không phải classification cho dễ hiểu). Ground truth: y = <strong>+2.0%</strong>.</p>
+
+<pre><code>═══ Bước 0: Khởi tạo ═══
+Prediction ban đầu (baseline): mean của toàn dataset
+ŷ_0 = 0.1% (trung bình return của mọi ticker)
+
+Residual (lỗi cần sửa): r_1 = y - ŷ_0 = 2.0% - 0.1% = 1.9%
+
+═══ Bước 1: Train cây 1 để predict RESIDUAL (không phải y!) ═══
+Tree 1 học "khi input này, residual = 1.9%"
+Tree 1 output cho VNM: h_1 = 1.5%
+
+Learning rate η = 0.3 (chỉ chấp nhận 30% của tree output)
+ŷ_1 = ŷ_0 + η × h_1 = 0.1% + 0.3 × 1.5% = 0.1% + 0.45% = 0.55%
+
+Residual mới: r_2 = y - ŷ_1 = 2.0% - 0.55% = 1.45%
+(Còn lỗi 1.45% để tree 2 sửa)
+
+═══ Bước 2: Train cây 2 để predict RESIDUAL 1.45% ═══
+Tree 2 nhìn input, học "residual còn 1.45%"
+Tree 2 output cho VNM: h_2 = 1.2%
+
+ŷ_2 = ŷ_1 + η × h_2 = 0.55% + 0.3 × 1.2% = 0.55% + 0.36% = 0.91%
+
+Residual: r_3 = 2.0% - 0.91% = 1.09%
+(Đã gần hơn, tree 3 tiếp tục)
+
+═══ Bước 3: Tree 3 → tree N ═══
+Cứ tiếp tục... mỗi tree "vá" lỗi còn lại.
+Sau 500 cây, ŷ_500 ≈ 1.98% (gần perfect với y = 2.0%)
+</code></pre>
+
+<h3>3.4 Vì sao gọi là "Gradient" Boosting?</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì sao "residual = negative gradient"?</div>
+
+<p><strong>Câu hỏi</strong>: Ta nói cây học "residual". Nhưng tại sao gọi là "Gradient" Boosting? Gradient ở đâu?</p>
+
+<p><strong>Bước 1 — Nhìn loss function của regression MSE</strong>:</p>
+<pre><code>Loss = (y - ŷ)²
+     ↑
+     Hàm bình phương của khoảng cách
+</code></pre>
+
+<p><strong>Bước 2 — Tính đạo hàm loss theo prediction ŷ</strong>:</p>
+<pre><code>∂Loss / ∂ŷ = -2(y - ŷ)
+            = -2 × residual
+</code></pre>
+<p>Nghĩa là: đạo hàm loss theo ŷ = -2 × residual. Bỏ qua factor 2, ta có <strong>residual = negative gradient của loss theo ŷ</strong>.</p>
+
+<p><strong>Bước 3 — Kết nối với Gradient Descent</strong>:</p>
+<p>Gradient Descent update rule (bạn đã biết): <code>w_new = w_old - η × ∂Loss/∂w</code>.</p>
+<p>Áp dụng cho ŷ: <code>ŷ_new = ŷ_old - η × ∂Loss/∂ŷ = ŷ_old - η × (-2 × residual) = ŷ_old + 2η × residual</code>.</p>
+<p>Nếu cây h(x) học predict residual (h(x) ≈ residual), thì:</p>
+<pre><code>ŷ_new = ŷ_old + (2η) × h(x)
+</code></pre>
+<p>Đây chính là <strong>công thức GBM</strong> (chỉ khác constant 2, được absorb vào η). Nói cách khác: <em>GBM thực chất là gradient descent trên function space</em>.</p>
+
+<p><strong>Bước 4 — Generalize cho loss khác</strong>:</p>
+<p>Với Log Loss (classification), Huber (robust regression),... residual "đúng nghĩa toán" không đơn giản y-ŷ nữa. Nhưng công thức tổng quát:</p>
+<pre><code>Cây học predict: -∂Loss/∂ŷ  (negative gradient)
+</code></pre>
+<p>Bất kể loss gì, cây luôn "học hướng ngược gradient" → GBM = gradient descent trên function space. Đây là why algorithm mang tên "Gradient" Boosting.</p>
+
+<p><strong>Intuition sâu</strong>: Vector gradient descent = optimize weights (params). Function space gradient descent = optimize function trực tiếp (mỗi step thêm 1 function nhỏ = 1 cây). GBM tổng quát hóa gradient descent lên functional space.</p>
+</div>
+
+<h3>3.5 Vai trò của Learning Rate (η)</h3>
+
+<p><strong>η lớn (VD 0.3)</strong>: Mỗi cây góp nhiều → converge nhanh nhưng dễ overshoot + overfit.</p>
+<p><strong>η nhỏ (VD 0.01)</strong>: Mỗi cây góp ít → converge chậm, cần nhiều cây hơn, nhưng generalize tốt hơn.</p>
+
+<p><strong>Rule vàng</strong>: <em>giảm η → tăng n_estimators tương ứng</em>. Tổng "capacity" gần như không đổi nhưng chất lượng cải thiện. VD:</p>
+<ul>
+  <li>η=0.1, n=500 trees → CV 62%</li>
+  <li>η=0.05, n=1000 trees → CV 63.5% (tốt hơn, tuy chậm 2×)</li>
+  <li>η=0.01, n=5000 trees → CV 64% (chỉ cải thiện nhỏ, không đáng)</li>
+</ul>
+
+<h3>3.6 Vì sao GBM DỄ OVERFIT hơn Random Forest?</h3>
+
+<p><strong>RF</strong>: 500 cây độc lập → vote average → nếu 1 cây học noise, 499 cây khác "trung hòa". Robust.</p>
+<p><strong>GBM</strong>: 500 cây tiếp nối → nếu cây 5 học noise (fit vào outlier), cây 6, 7, 8 sẽ tiếp tục "vá" cùng chỗ noise đó → càng train càng bị noise dominate → val loss tăng.</p>
+
+<p><strong>Fix</strong>: Regularization mạnh (max_depth thấp 3-6, min_child_weight, subsample &lt; 1.0, early stopping). Đây là why XGBoost dev kỹ regularization — thiếu là chết.</p>
+
+<h3>3.7 Bagging vs Boosting — câu hỏi phỏng vấn kinh điển</h3>
+
+<table>
+<tr><th></th><th>Bagging (RF)</th><th>Boosting (GBM/XGBoost)</th></tr>
+<tr><td><strong>Cây độc lập?</strong></td><td>✅ Có — train parallel</td><td>❌ Không — sequential, cây N phụ thuộc 1..N-1</td></tr>
+<tr><td><strong>Chiến lược</strong></td><td>Vote average để giảm variance</td><td>Sequential fix errors để giảm cả bias + variance</td></tr>
+<tr><td><strong>Overfit</strong></td><td>Khó (average cancel noise)</td><td>Dễ (noise được reinforce nếu không regularize)</td></tr>
+<tr><td><strong>Best với weak learner nào?</strong></td><td>Deep trees (high variance)</td><td>Shallow trees depth 3-6 (weak learner)</td></tr>
+<tr><td><strong>Speed train</strong></td><td>Nhanh (parallel)</td><td>Chậm hơn (sequential)</td></tr>
+<tr><td><strong>Accuracy chuẩn</strong></td><td>Cao</td><td>Cao hơn (thường +5-10%)</td></tr>
+<tr><td><strong>Regularization cần thiết</strong></td><td>Ít (natural robustness)</td><td>Nhiều (L1/L2, subsample, early stop)</td></tr>
+<tr><td><strong>Ví dụ</strong></td><td>RandomForest, ExtraTrees</td><td>XGBoost, LightGBM, CatBoost, AdaBoost</td></tr>
+</table>
+
+<h2>4. XGBoost — Gradient Boosting tối ưu (5 innovations giải thích chi tiết)</h2>
+
+<p>Chen &amp; Guestrin (2016) — <em>XGBoost: A Scalable Tree Boosting System</em>. XGBoost thắng GBM cũ ~5-10% accuracy + train nhanh 10-100× nhờ 5 innovations. Dưới đây giải thích từng cái bằng ngôn ngữ dễ hiểu:</p>
+
+<h3>4.1 Innovation #1 — 2nd-order Taylor approximation</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Analogy — xuống núi</div>
+<p>Bạn ở đỉnh núi, muốn xuống đáy (minimize loss). Có 2 cách quyết định bước tiếp theo:</p>
+<ul>
+<li><strong>Cách 1 (gradient only — GBM cũ)</strong>: chỉ nhìn <em>độ dốc</em> tại chỗ đứng → bước theo hướng dốc nhất.</li>
+<li><strong>Cách 2 (gradient + hessian — XGBoost)</strong>: nhìn cả <em>độ dốc</em> VÀ <em>độ cong</em> địa hình → biết đường phía trước sẽ thoải hay dốc → bước dài/ngắn phù hợp.</li>
+</ul>
+<p>Cách 2 converge nhanh hơn vì "nhìn xa" hơn.</p>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức Taylor approximation?</div>
+
+<p><strong>Câu hỏi</strong>: XGBoost dùng công thức Taylor bậc 2 để xấp xỉ Loss. Nhưng Taylor là gì? Vì sao dùng nó?</p>
+
+<p><strong>Bước 1 — Nhắc lại từ toán 12 (calculus)</strong>:</p>
+<p>Taylor series là <em>cách xấp xỉ 1 hàm phức tạp bằng đa thức</em>. Với hàm f(x) quanh điểm x₀:</p>
+
+<pre><code>f(x) ≈ f(x₀) + f'(x₀)·(x-x₀) + (1/2)·f''(x₀)·(x-x₀)² + ...
+       ↑        ↑                 ↑
+     bậc 0    bậc 1 (linear)   bậc 2 (quadratic)
+</code></pre>
+
+<p><strong>Bước 2 — Ý tưởng trực quan</strong>:</p>
+<ul>
+<li>Bậc 0: xấp xỉ hàm bằng 1 hằng số. Kém.</li>
+<li>Bậc 1 (linear): xấp xỉ bằng đường thẳng tiếp tuyến. Tốt cho khoảng nhỏ quanh x₀.</li>
+<li>Bậc 2 (quadratic): xấp xỉ bằng parabola. Nắm được cả "độ cong" của hàm. Chính xác hơn nữa.</li>
+</ul>
+<p>Ví dụ: xấp xỉ f(x) = e^x quanh x=0.</p>
+<pre><code>Bậc 0: f(x) ≈ 1 (chỉ đúng ở x=0)
+Bậc 1: f(x) ≈ 1 + x (đúng gần x=0, sai với x xa)
+Bậc 2: f(x) ≈ 1 + x + x²/2 (chính xác hơn)
+
+Verify với x=0.1:
+  Thật: e^0.1 = 1.10517
+  Bậc 1: 1 + 0.1 = 1.1 (sai 0.468%, tuyệt đối 0.00517)
+  Bậc 2: 1 + 0.1 + 0.005 = 1.105 (sai 0.0155%, tuyệt đối 0.00017) ← chính xác gấp ~30×!
+</code></pre>
+
+<p><strong>Bước 3 — Áp dụng vào Loss của GBM</strong>:</p>
+<p>Ta muốn tối ưu Loss(y, ŷ_new). Khi thêm cây h(x): ŷ_new = ŷ_old + h(x), tức là Δŷ = h(x). Áp dụng Taylor bậc 2 quanh ŷ_old:</p>
+
+<pre><code>Loss(y, ŷ_new) = Loss(y, ŷ_old + h(x))
+              ≈ Loss(y, ŷ_old) + g·h(x) + (1/2)·H·h(x)²
+
+# g = ∂Loss/∂ŷ tại ŷ_old (gradient bậc 1)
+# H = ∂²Loss/∂ŷ² tại ŷ_old (hessian, đạo hàm bậc 2)
+# h(x) = output cây mới cho input x
+</code></pre>
+
+<p><strong>Bước 4 — GBM cũ chỉ dùng bậc 1, XGBoost dùng bậc 2</strong>:</p>
+<ul>
+<li><strong>GBM cũ</strong>: xấp xỉ Loss chỉ bằng bậc 1 → dùng gradient → như "xuống dốc theo hướng dốc nhất, không biết địa hình xa".</li>
+<li><strong>XGBoost</strong>: xấp xỉ Loss bằng bậc 2 → dùng gradient + hessian → biết cả "độ dốc" và "độ cong" → chọn bước tối ưu hơn.</li>
+</ul>
+
+<p><strong>Bước 5 — Tối ưu Taylor bậc 2 để tìm h(x) tối ưu</strong>:</p>
+<p>Để minimize Loss theo h, lấy đạo hàm theo h và cho = 0:</p>
+<pre><code>d/dh [g·h + (1/2)·H·h²] = g + H·h = 0
+=> h_optimal = -g / H
+</code></pre>
+<p>Nghĩa là leaf weight tối ưu = -gradient / hessian. XGBoost dùng công thức này để chọn leaf values, không phải "chỉ residual" như GBM cũ.</p>
+
+<p><strong>Ý nghĩa thực tế</strong>: Với các loss "phẳng đại thể" (hessian nhỏ), h_optimal lớn → bước dài. Loss "dốc gấp" (hessian lớn), h_optimal nhỏ → bước ngắn. <em>Tự động adjust bước theo curvature</em> → converge nhanh hơn.</p>
+</div>
+
+<p><strong>Toán học Taylor bậc 2 cho Loss</strong>:</p>
+
+<pre><code>Loss(y, ŷ_new) ≈ Loss(y, ŷ_old) + g·Δŷ + (1/2)·h·Δŷ²
+
+# Giải thích từng ký hiệu:
+# Loss(y, ŷ_old) = hằng số (không phụ thuộc cây mới), có thể bỏ khi optimize
+# g = ∂L/∂ŷ (đạo hàm bậc 1 = gradient)
+# h = ∂²L/∂ŷ² (đạo hàm bậc 2 = hessian, GBM cũ bỏ qua)
+# Δŷ = ŷ_new - ŷ_old = output của cây mới cho input x
+</code></pre>
+
+<p><strong>Kết quả thực tế</strong>: XGBoost converge nhanh hơn GBM ~2×. Với cùng số cây, XGBoost cho accuracy cao hơn 2-5%.</p>
+
+<h3>4.2 Innovation #2 — L1 + L2 Regularization trên leaf weights</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức Ω(tree) = γ·T + (1/2)·λ·Σw² + α·Σ|w|?</div>
+
+<p><strong>Câu hỏi</strong>: Regularization thêm penalty vào objective. Nhưng penalty này có 3 phần: γ·T, λ·Σw², α·Σ|w|. Mỗi cái ý nghĩa gì?</p>
+
+<p><strong>Bước 1 — Recap: model càng phức tạp càng dễ overfit</strong></p>
+<p>2 cách model tree phức tạp lên:</p>
+<ol>
+<li>Nhiều leaves (T lớn) → cây to → nhiều decision boundaries → dễ nhớ noise.</li>
+<li>Leaf values (w_j) lớn → 1 sample có thể "swing" prediction quá mạnh → sensitive to noise.</li>
+</ol>
+<p>Ý tưởng: <em>phạt cả 2</em>.</p>
+
+<p><strong>Bước 2 — Ba thành phần penalty</strong></p>
+
+<p><strong>Phần 1: γ·T (phạt số leaves)</strong></p>
+<pre><code>Phần này viết đầy: γ × T
+  γ = hệ số phạt (hyperparameter, thường 0-1)
+  T = số leaves của cây
+
+Ý nghĩa: mỗi leaf thêm vào cây phải "trả giá" γ.
+Kết quả: split chỉ được chấp nhận nếu IG > γ.
+        → Prevent cây to lên khi split không đáng.
+        → Tự động prune.
+</code></pre>
+
+<p><strong>Phần 2: (1/2)·λ·Σ w_j² (L2 regularization — Ridge)</strong></p>
+<pre><code>Phần này viết đầy: (1/2) × λ × (w_1² + w_2² + ... + w_T²)
+  λ = hệ số L2 (hyperparameter, thường 1)
+  w_j = leaf weight của leaf j (giá trị prediction ở leaf đó)
+
+Ý nghĩa: phạt leaf weights có magnitude lớn.
+       Nếu w_j lớn → w_j² rất lớn → penalty huge.
+       Model ưa chọn w nhỏ → predictions "smooth" hơn.
+
+Vì sao có (1/2)? — Toán trick: đạo hàm của (1/2)·w² = w (đẹp).
+                Không có (1/2), đạo hàm = 2w (không đẹp).
+                Kết quả tối ưu như nhau, chỉ khác constant.
+</code></pre>
+
+<p><strong>Phần 3: α·Σ |w_j| (L1 regularization — Lasso)</strong></p>
+<pre><code>Phần này viết đầy: α × (|w_1| + |w_2| + ... + |w_T|)
+  α = hệ số L1 (hyperparameter, thường 0-0.1)
+  |w_j| = giá trị tuyệt đối của leaf weight
+
+Ý nghĩa: phạt tổng |w| → push nhiều w về 0 → SPARSE.
+        Kết quả: 1 số leaves có w=0 (không đóng góp) → cây hiệu quả hơn.
+</code></pre>
+
+<p><strong>Bước 3 — Vì sao L1 sparse mà L2 không?</strong></p>
+<p>Đạo hàm của L2 (w²): = 2w. Giảm dần khi w → 0 → không "đẩy" w về đúng 0.</p>
+<p>Đạo hàm của L1 (|w|): = sign(w) (constant ±1). Đẩy w về 0 với force constant → w thực sự = 0.</p>
+<pre><code>Ví dụ (lr = 0.1, w_start = 0.5):
+Gradient descent với L2: w_new = w_old - lr × 2 × w_old = w_old × (1 - 2×lr) = w_old × 0.8
+                        → 0.5 → 0.4 → 0.32 → 0.256 → 0.205 → ... never quite 0
+                        (nhân với 0.8 mỗi bước — càng gần 0, bước giảm càng nhỏ)
+
+Gradient descent với L1: w_new = w_old - lr × 1 = w_old - 0.1 (trừ 1 lượng CỐ ĐỊNH mỗi bước)
+                        → 0.5 → 0.4 → 0.3 → 0.2 → 0.1 → 0.0 (hits zero!)
+</code></pre>
+
+<p><strong>Bước 4 — Objective XGBoost tối ưu</strong></p>
+<pre><code>Objective = Σ Loss(y, ŷ) + Ω(tree)
+          = "fit data tốt"   + "penalty phức tạp"
+
+Tối ưu Objective = balance giữa 2:
+  - Fit tốt (giảm Loss) VÀ
+  - Không quá phức tạp (giảm Ω)
+
+Nếu chỉ tối ưu Loss (không có Ω) → tree grow to → overfit.
+Nếu Ω quá lớn → tree không grow được → underfit.
+Sweet spot: tune γ, λ, α cẩn thận (Optuna).
+</code></pre>
+</div>
+
+<p><strong>Công thức Regularization XGBoost</strong>:</p>
+
+<pre><code>Obj = Σ Loss + Ω(tree)
+
+Ω(tree) = γ·T + (1/2)·λ·Σ w_j²  + α·Σ |w_j|
+          ↑        ↑              ↑
+       Số leaves  L2 leaf weights  L1 leaf weights
+</code></pre>
+
+<ul>
+  <li><strong>γ (gamma)</strong>: phạt số leaves nhiều → tree nhỏ hơn. Set γ cao → cây bị prune mạnh.</li>
+  <li><strong>λ (reg_lambda)</strong>: L2 penalty trên leaf values → weights nhỏ + smooth. Default 1.0.</li>
+  <li><strong>α (reg_alpha)</strong>: L1 penalty → sparse leaf weights (nhiều leaves có value = 0). Default 0.</li>
+</ul>
+
+<p><strong>Insight</strong>: GBM cũ có regularization qua learning rate + max_depth thôi. XGBoost regularize <em>chính leaf values</em> → chống overfit tốt hơn nhiều.</p>
+
+<h3>4.3 Innovation #3 — Weighted Quantile Sketch (tìm split candidates nhanh)</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vấn đề tìm split</div>
+<p>Với 1 continuous feature (VD RSI có 1000 unique values), có 1000 threshold khả dĩ để split. Nếu có 88 features, tổng = 88,000 split candidates cho MỖI node. Với 500 cây × 20 leaves × 88k candidates = quá đắt tính toán!</p>
+</div>
+
+<p><strong>Ý tưởng Quantile Sketch</strong>: thay vì thử 1000 threshold, chỉ thử ~50 candidate threshold "đại diện" — quantile 2%, 4%, 6%,... 98%. Chọn best trong 50 này.</p>
+
+<p><strong>Weighted</strong>: đánh trọng số quantile theo hessian (điểm data quan trọng có weight cao hơn). Đây là "smart sampling" — không thử tất cả nhưng cover được các threshold quan trọng.</p>
+
+<p><strong>Kết quả</strong>: split search nhanh 20× so brute force, accuracy chỉ giảm &lt; 1%.</p>
+
+<h3>4.4 Innovation #4 — Sparsity-aware (handle missing values natively)</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vấn đề missing values</div>
+<p>Data thực tế thường có missing values. VD: RSI của NVL ngày 5/7 = <code>NaN</code> vì data provider bị lỗi. GBM cũ phải:</p>
+<ol>
+<li>Impute (điền giá trị giả) → có thể sai lệch.</li>
+<li>Drop rows → mất data.</li>
+</ol>
+</div>
+
+<p><strong>XGBoost cách khác</strong>: học "default direction" cho mỗi split. Khi split "RSI &lt; 30?", nếu RSI = NaN → default đi hướng nào? XGBoost tự tìm hướng nào tốt hơn (train cả 2 và chọn IG cao hơn).</p>
+
+<pre><code>Split "RSI &lt; 30?":
+├── Yes (RSI &lt; 30) → left
+├── No (RSI ≥ 30) → right
+└── NaN → default = "left" (learned from training)
+
+# Model học "nếu RSI missing, đi trái" vì historically pattern đó fit tốt hơn.
+</code></pre>
+
+<p><strong>Kết quả</strong>: không cần impute, không cần drop data. Missing được handle tự động và optimally.</p>
+
+<h3>4.5 Innovation #5 — Parallel + Cache-aware (train nhanh 10-100×)</h3>
+
+<p>Engineering optimization:</p>
+<ul>
+  <li><strong>Multi-threading</strong>: tìm split cho các features khác nhau chạy song song trên CPU cores (mỗi core 1 feature).</li>
+  <li><strong>Cache-aware access</strong>: sắp xếp data trong memory sao cho CPU cache hit rate cao → giảm memory latency 5-10×.</li>
+  <li><strong>Block-based sparse data</strong>: nén data thành blocks để fit vào cache.</li>
+</ul>
+
+<p><strong>Kết quả</strong>: XGBoost train 10-100× nhanh hơn GBM Python cổ điển. Đây là why XGBoost thắng competitions trong khi GBM Python chậm.</p>
+
+<h3>4.6 Hyperparameters — walkthrough từng cái</h3>
+
+<pre><code>xgb.XGBClassifier(
+    # ═══ Group 1: Số cây + tốc độ ═══
+    n_estimators=500,        # Số cây tối đa. 100-1000 thường đủ.
+    learning_rate=0.05,      # η nhỏ = từng cây góp ít, cần nhiều cây, nhưng generalize tốt.
+                              # Rule: giảm lr 2× → tăng n_estimators 2×.
+
+    # ═══ Group 2: Complexity mỗi cây (chống overfit chính) ═══
+    max_depth=6,             # Depth tối đa. 3-8 thường best.
+                              # 3-4: bias cao, ít overfit. 8+: capacity cao, dễ overfit.
+    min_child_weight=1,      # Min sum hessian trong leaf. Cao hơn = ít overfit.
+                              # Set 5-10 nếu overfit rõ.
+    gamma=0,                 # Min loss reduction để split.
+                              # Set 0.1-1.0 để prune cây mạnh hơn.
+
+    # ═══ Group 3: Randomness (bagging bên trong) ═══
+    subsample=0.8,           # Bootstrap fraction per tree (0.5-1.0).
+                              # 0.8 = mỗi cây thấy 80% data. Chống overfit.
+    colsample_bytree=0.8,    # Feature fraction per tree (0.5-1.0).
+                              # 0.8 = mỗi cây thấy 80% features. Chống overfit + diversity.
+
+    # ═══ Group 4: L1/L2 regularization ═══
+    reg_alpha=0.1,           # L1 (làm sparse). Set 0.01-1.0.
+    reg_lambda=1.0,          # L2 (làm smooth). Default 1.0.
+
+    # ═══ Group 5: Early stopping (quan trọng!) ═══
+    early_stopping_rounds=50,  # Dừng nếu val loss không giảm sau 50 rounds.
+    eval_metric='mlogloss',    # Metric monitor cho early stopping.
+)
+</code></pre>
+
+<h3>4.7 Tuning strategy — thứ tự tune (quan trọng)</h3>
+
+<p>Đừng tune tất cả cùng lúc (curse of dimensionality). Tune theo thứ tự:</p>
+
+<ol>
+  <li><strong>Bước 1 — Start với default hợp lý</strong>: <code>n_estimators=500, max_depth=6, lr=0.1, early_stopping_rounds=50</code>. Xem baseline CV.</li>
+  <li><strong>Bước 2 — Tune complexity mỗi cây</strong>: grid search <code>max_depth ∈ [3, 5, 7, 9]</code> và <code>min_child_weight ∈ [1, 5, 10]</code>. Chọn combo tốt nhất.</li>
+  <li><strong>Bước 3 — Tune randomness</strong>: grid search <code>subsample ∈ [0.6, 0.8, 1.0]</code> và <code>colsample_bytree ∈ [0.6, 0.8, 1.0]</code>.</li>
+  <li><strong>Bước 4 — Tune regularization</strong>: <code>reg_alpha ∈ [0, 0.1, 1]</code>, <code>reg_lambda ∈ [0.1, 1, 10]</code>.</li>
+  <li><strong>Bước 5 — Giảm lr, tăng n_estimators</strong>: <code>lr = 0.05, n_estimators = 1000</code>. Cải thiện nhỏ nhưng đáng.</li>
+  <li><strong>Bước 6 — Cuối cùng (optional): Bayesian search với Optuna</strong>. Tune 10+ params đồng thời trong 50-100 trials. V18 dùng Optuna.</li>
+</ol>
+
+<p><strong>Warning</strong>: Đừng bỏ qua bước 1! Nhiều dev nhảy thẳng vào Optuna → tốn compute mà không hiểu model. Phải hiểu baseline trước.</p>
+
+<h2>5. LightGBM &amp; CatBoost — biến thể của XGBoost</h2>
+
+<h3>5.1 LightGBM — nhanh hơn XGBoost nhờ 2 tricks</h3>
+
+<p>Microsoft (2017). Cùng gradient boosting nhưng 2 sáng kiến giúp train nhanh 3-10× so XGBoost:</p>
+
+<h4>Trick 1: Histogram-based split (thay full sort)</h4>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Analogy — đếm điểm thi</div>
+<p>Muốn tìm ngưỡng điểm chia học sinh giỏi/kém trong 1 lớp 100 em:</p>
+<ul>
+<li><strong>Cách XGBoost</strong>: sắp xếp 100 điểm từ thấp lên cao, thử từng ngưỡng (giữa mỗi cặp) → O(N log N).</li>
+<li><strong>Cách LightGBM</strong>: chia điểm thành 255 bins (0-4, 5-9, 10-14,...). Chỉ có 255 ngưỡng candidate. Đếm bins nhanh O(N).</li>
+</ul>
+<p>Kết quả: search nhanh 10-100× vì bins ít hơn unique values, nhưng accuracy chỉ giảm &lt; 0.5%.</p>
+</div>
+
+<h4>Trick 2: Leaf-wise growth (thay level-wise)</h4>
+
+<pre><code>═══ XGBoost — Level-wise (balanced) ═══
+       Root
+      /    \
+   L1(30)  L1(50)         ← Cả 2 leaves ở level 1 grow cùng lúc
+   /  \    /  \
+L2  L2  L2   L2           ← Tiếp level 2, dù có leaves không cần grow
+
+Ưu: cây balanced, ít overfit.
+Nhược: waste effort trên leaves đã "đủ tốt".
+
+
+═══ LightGBM — Leaf-wise (best-first) ═══
+       Root
+      /    \
+   L1(30)  L1(50)         ← Chọn leaf có LOSS CAO NHẤT để grow tiếp
+              \
+              L2 (grow leaf loss cao trước)
+                \
+                L3 (tiếp tục grow chỗ loss cao nhất)
+
+Ưu: converge nhanh hơn — focus vào chỗ khó nhất.
+Nhược: cây "lệch" (asymmetric), dễ overfit trên data nhỏ.
+</code></pre>
+
+<p><strong>Rule quan trọng</strong>: dùng LightGBM phải set <code>num_leaves</code> nhỏ (VD 31, 63) và <code>min_data_in_leaf</code> cao (VD 20-100) để tránh overfit lệch.</p>
+
+<h3>5.2 CatBoost — best cho categorical features</h3>
+
+<p>Yandex (2017). Điểm mạnh chính:</p>
+<ul>
+  <li><strong>Native categorical handling</strong>: dùng "ordered target encoding" — encode categorical theo target mean nhưng chỉ dùng data ĐÃ THẤY (tránh leakage). VD với feature "sector = Bank", encode = mean(return | sector = Bank, chỉ samples trước sample hiện tại).</li>
+  <li><strong>Symmetric trees (oblivious)</strong>: mọi node ở cùng depth dùng cùng feature+threshold. Tree nhỏ, ổn định, nhưng ít flexible.</li>
+</ul>
+
+<p>Best cho: dataset có nhiều categorical features (customer segment, product category, geo region,...). Ví dụ e-commerce, ads targeting.</p>
+
+<h3>5.3 So sánh 3 biến thể</h3>
+
+<table>
+<tr><th></th><th>XGBoost</th><th>LightGBM</th><th>CatBoost</th></tr>
+<tr><td><strong>Ai làm</strong></td><td>Tianqi Chen (2016)</td><td>Microsoft (2017)</td><td>Yandex (2017)</td></tr>
+<tr><td><strong>Cây grow</strong></td><td>Level-wise (balanced)</td><td>Leaf-wise (best-first)</td><td>Symmetric (oblivious)</td></tr>
+<tr><td><strong>Split search</strong></td><td>Weighted quantile sketch</td><td>Histogram bins</td><td>Histogram bins</td></tr>
+<tr><td><strong>Tốc độ train</strong></td><td>Baseline</td><td>3-10× nhanh hơn ⭐</td><td>Chậm hơn XGBoost</td></tr>
+<tr><td><strong>Categorical</strong></td><td>Manual one-hot</td><td>Native support (integer encode)</td><td>⭐ Best (ordered target encoding, chống leakage)</td></tr>
+<tr><td><strong>Overfit</strong></td><td>Medium</td><td>High (leaf-wise dễ lệch)</td><td>Low (symmetric tree ổn định)</td></tr>
+<tr><td><strong>Missing values</strong></td><td>Native (learned default)</td><td>Native</td><td>Native</td></tr>
+<tr><td><strong>Small data (&lt;1k)</strong></td><td>OK</td><td>Rủi ro overfit</td><td>⭐ Best</td></tr>
+<tr><td><strong>Large data (1M+ rows)</strong></td><td>OK</td><td>⭐ Best</td><td>Chậm hơn</td></tr>
+<tr><td><strong>Many categoricals</strong></td><td>Weak</td><td>OK</td><td>⭐ Best</td></tr>
+<tr><td><strong>Kaggle wins</strong></td><td>~40%</td><td>~30%</td><td>~15%</td></tr>
+</table>
+
+<div class="callout">
+  <div class="label">V18 chọn XGBoost + LightGBM ensemble</div>
+  <p><code>clf2_xgb</code> + <code>clf2_lgbm</code> in artifact. Chạy cả hai, blend prediction. Redundancy → ensemble diversity → tăng robustness (đo bằng <code>ensemble_corr</code> — muốn < 0.99).</p>
+</div>
+
+<h2>6. 🔍 So sánh 4 tree-based algorithms qua CÙNG 1 dataset</h2>
+
+<p>Đến đây bạn đã hiểu 4 thuật toán riêng biệt (§1-§5). Giờ ta so sánh chúng bằng cách <strong>cùng cho 4 thuật toán xem 1 dataset giống nhau</strong> và xem chúng làm gì khác nhau. Đây là cách hiệu quả nhất để hiểu sự khác biệt.</p>
+
+<h3>6.1 Setup — Dataset chung để so sánh</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Tại sao dùng cùng dataset?</div>
+<p>Nếu compare 4 thuật toán trên 4 dataset khác nhau, bạn không biết khác biệt do <em>thuật toán</em> hay do <em>data</em>. Dùng CÙNG data → khác biệt hoàn toàn là do algorithm.</p>
+</div>
+
+<p>Ta dùng data siêu đơn giản để dễ theo dõi — 8 ticker samples, mỗi ticker có 3 features, mục tiêu predict UP/DOWN:</p>
+
+<pre><code>┌──────┬─────┬────────────┬────────┬────────────┐
+│Ticker│ RSI │ Vol ratio  │ MA20 % │  Actual y  │
+├──────┼─────┼────────────┼────────┼────────────┤
+│ VNM  │  75 │    1.5     │  +2.0% │   DOWN     │  ← RSI cao + có surge nhẹ
+│ FPT  │  40 │    2.5     │  +5.0% │    UP      │  ← RSI OK + volume mạnh
+│ HPG  │  25 │    0.8     │  -3.0% │    UP      │  ← RSI thấp bottom fishing
+│ VIC  │  55 │    1.0     │  +1.0% │   DOWN     │  ← neutral, dữ liệu noise
+│ MSN  │  80 │    3.0     │  +8.0% │   DOWN     │  ← RSI extreme + euphoria
+│ HDB  │  30 │    2.0     │  -1.0% │    UP      │  ← RSI oversold + volume
+│ SAB  │  60 │    1.2     │  +3.0% │    UP      │  ← trend up moderate
+│ MWG  │  70 │    0.5     │  +6.0% │   DOWN     │  ← RSI cao + volume yếu
+└──────┴─────┴────────────┴────────┴────────────┘
+
+Actual pattern (chỉ để ta biết ground truth, model không biết):
+  UP: RSI thấp/moderate + volume tăng, HOẶC bottom fishing
+  DOWN: RSI cao + euphoria, HOẶC volume yếu ở đỉnh
+</code></pre>
+
+<p>Ta có 4 UP + 4 DOWN → data balanced (baseline accuracy = 50%). Giờ xem từng thuật toán học pattern này thế nào.</p>
+
+<hr style="border-top: 2px dashed #f97316; margin: 20px 0;">
+
+<h3>6.2 Decision Tree — 1 cây tự học pattern</h3>
+
+<p><strong>Cách hoạt động</strong>: Duyệt mọi feature × threshold candidate, tính Information Gain (§1.2), chọn split tốt nhất. Lặp cho mỗi child node.</p>
+
+<h4>Bước 1: Tìm split đầu tiên (root node)</h4>
+
+<p>Data ban đầu: 8 tickers, 4 UP + 4 DOWN → gini_root = 1 − 0.5² − 0.5² = 0.5.</p>
+
+<p>Thử vài split candidates:</p>
+
+<pre><code>Split A: "RSI &lt; 50?"
+  Left (Yes): FPT, HPG, HDB → 3 UP + 0 DOWN, gini_L = 0
+  Right (No): VNM, VIC, MSN, SAB, MWG → 1 UP + 4 DOWN, gini_R = 1 - 0.2² - 0.8² = 0.32
+  IG_A = 0.5 - (3/8 × 0 + 5/8 × 0.32) = 0.5 - 0.2 = 0.30
+
+Split B: "Vol ratio &gt; 1.5?"
+  Left (Yes): FPT, HPG, MSN, HDB → 3 UP + 1 DOWN, gini_L = 1 - 0.75² - 0.25² = 0.375
+                                       (HPG có vol 0.8 &lt; 1.5, xin lỗi tính lại)
+  Left (Yes vol&gt;1.5): FPT, MSN, HDB → 2 UP + 1 DOWN, gini_L = 1 - (2/3)² - (1/3)² = 0.44
+  Right (No): VNM, HPG, VIC, SAB, MWG → 2 UP + 3 DOWN, gini_R = 1 - 0.4² - 0.6² = 0.48
+  IG_B = 0.5 - (3/8 × 0.44 + 5/8 × 0.48) = 0.5 - 0.465 = 0.035
+
+Split C: "MA20% &gt; 4%?"
+  Left (Yes): FPT, MSN, MWG → 1 UP + 2 DOWN, gini_L = 0.44
+  Right (No): VNM, HPG, VIC, HDB, SAB → 3 UP + 2 DOWN, gini_R = 0.48
+  IG_C = 0.5 - (3/8 × 0.44 + 5/8 × 0.48) = 0.035
+
+⭐ Split A "RSI &lt; 50?" có IG cao nhất (0.30) → chọn.
+</code></pre>
+
+<h4>Bước 2: Grow subtree (recursion)</h4>
+
+<pre><code>Sau split A:
+  Left node (RSI &lt; 50): FPT, HPG, HDB → 3 UP, 0 DOWN, gini=0 → PURE → LEAF: predict UP
+  Right node (RSI ≥ 50): VNM, VIC, MSN, SAB, MWG → 1 UP, 4 DOWN, gini=0.32 → tiếp tục split
+
+Split Right node bằng "Vol ratio > 1.0?":
+  Left (Vol > 1.0): VNM, MSN, SAB → 1 UP + 2 DOWN, gini=0.44
+  Right (Vol ≤ 1.0): VIC, MWG → 0 UP + 2 DOWN, gini=0 → LEAF: predict DOWN
+
+Split Left tiếp bằng "MA20% > 2%?":
+  Left (MA > 2%): MSN (8%), SAB (3%) → 1 UP (SAB) + 1 DOWN (MSN), còn hỗn tạp
+    Ta stop ở depth 3 → LEAF: majority = TIE, chọn UP hoặc DOWN random
+  Right (MA ≤ 2%): VNM (2%, KHÔNG &gt; 2% nên rơi về nhánh này) → 0 UP + 1 DOWN → LEAF: DOWN
+</code></pre>
+
+<h4>Kết quả — Cây cuối cùng</h4>
+
+<pre><code>            RSI &lt; 50?
+           /         \
+       YES /           \ NO
+          /             \
+    [predict UP]      Vol &gt; 1.0?
+    (3/3 correct)    /         \
+                YES /           \ NO
+                   /             \
+                MA &gt; 2%?      [predict DOWN]
+                /    \          (2/2 correct)
+           YES /      \ NO
+              /        \
+         [UP or DOWN?]     [DOWN]
+         MSN, SAB tie       VNM✓
+</code></pre>
+
+<h4>Kiểm tra performance trên 8 samples</h4>
+
+<pre><code>Ticker | Path                              | Prediction | Actual | Đúng?
+VNM    | RSI≥50 → Vol>1.0 → MA≤2%          | DOWN       | DOWN   | ✓
+FPT    | RSI&lt;50                            | UP         | UP     | ✓
+HPG    | RSI&lt;50                            | UP         | UP     | ✓
+VIC    | RSI≥50 → Vol≤1.0                  | DOWN       | DOWN   | ✓
+MSN    | RSI≥50 → Vol>1.0 → MA>2%          | UP/DOWN?   | DOWN   | ½
+HDB    | RSI&lt;50                            | UP         | UP     | ✓
+SAB    | RSI≥50 → Vol>1.0 → MA>2%          | UP/DOWN?   | UP     | ½
+MWG    | RSI≥50 → Vol≤1.0                  | DOWN       | DOWN   | ✓
+
+Accuracy: 6/8 = 75%. Lỗi ở MSN, SAB (tie ambiguous).
+</code></pre>
+
+<p><strong>Điểm mạnh Decision Tree</strong>: Bạn nhìn cây và <em>đọc quy luật ra được</em> — "RSI thấp thì UP, RSI cao + volume mạnh + MA tăng nhiều thì DOWN". Non-tech user cũng hiểu.</p>
+
+<p><strong>Điểm yếu</strong>:
+<br>1. Overfit dễ — nếu ta cho grow đến depth 6, cây sẽ memorize từng sample (nhớ cả noise).
+<br>2. High variance — thay VIC actual từ DOWN thành UP → cây có thể khác hoàn toàn.
+<br>3. Không handle tốt tie / boundary cases (MSN, SAB).</p>
+
+<hr style="border-top: 2px dashed #f97316; margin: 20px 0;">
+
+<h3>6.3 Random Forest — 5 cây độc lập vote</h3>
+
+<p><strong>Cách hoạt động</strong>: Train 5 cây (thay vì 1). Mỗi cây thấy 1 <em>bootstrap sample</em> (random with replacement) và 1 <em>subset features</em> ngẫu nhiên.</p>
+
+<p><strong>Hình dạng cơ chế — fan-out (train độc lập) rồi fan-in (vote)</strong>:</p>
+<pre><code>                    Data gốc (8 tickers)
+        ┌──────┬──────┬──────┬──────┬──────┐
+        ▼      ▼      ▼      ▼      ▼
+    boot1  boot2  boot3  boot4  boot5      ← mỗi cây: bootstrap sample RIÊNG
+        │      │      │      │      │        + random feature subset RIÊNG
+        ▼      ▼      ▼      ▼      ▼
+    Tree1  Tree2  Tree3  Tree4  Tree5      ← train ĐỘC LẬP, song song
+        │      │      │      │      │        (không cây nào thấy cây khác)
+        └──────┴──────┼──────┴──────┘
+                       ▼
+              MAJORITY VOTE → prediction cuối
+</code></pre>
+<p>Đây là điểm khác biệt cốt lõi với XGBoost ở §6.4: 5 cây ở đây <strong>không nói chuyện với nhau</strong> trong lúc train — chỉ gặp nhau ở bước vote cuối cùng.</p>
+
+<h4>Bước 1: Bootstrap 5 subsets</h4>
+
+<p>Với 8 tickers, mỗi cây random pick 8 tickers có thay thế (có thể trùng):</p>
+
+<pre><code>Cây 1 subset: [VNM, FPT, FPT, HPG, VIC, MSN, HDB, SAB]     ← FPT xuất hiện 2 lần, MWG bị bỏ
+Cây 2 subset: [VNM, HPG, VIC, VIC, MSN, MSN, HDB, MWG]     ← VIC, MSN trùng, FPT+SAB bỏ
+Cây 3 subset: [FPT, FPT, HPG, HPG, VIC, HDB, SAB, MWG]     ← FPT, HPG trùng
+Cây 4 subset: [VNM, FPT, HPG, VIC, VIC, MSN, HDB, MWG]     ← VIC trùng, SAB bỏ
+Cây 5 subset: [VNM, FPT, HPG, MSN, MSN, HDB, SAB, SAB]     ← MSN, SAB trùng, VIC+MWG bỏ
+
+# Mỗi cây thấy ~63% samples unique (theo lý thuyết bootstrap).
+# Samples bị bỏ = "out-of-bag" → dùng để estimate accuracy free.
+</code></pre>
+
+<h4>Bước 2: Feature subsample</h4>
+
+<p>Ta có 3 features, RF pick √3 ≈ 2 features/split ngẫu nhiên. Mỗi cây có thể phải chọn split từ subset khác:</p>
+
+<pre><code>Cây 1: dùng {RSI, Vol ratio} (không có MA20%)
+Cây 2: dùng {Vol ratio, MA20%}
+Cây 3: dùng {RSI, MA20%}
+Cây 4: dùng {RSI, Vol ratio}
+Cây 5: dùng {RSI, Vol ratio, MA20%} (may mắn được cả 3)
+</code></pre>
+
+<h4>Bước 3: Train 5 cây độc lập → mỗi cây có prediction riêng</h4>
+
+<pre><code>Predict cho HDB (RSI=30, Vol=2.0, MA=-1%):
+
+Cây 1: split "RSI &lt; 50" → UP (Cây 1 học được pattern này)
+Cây 2: split "Vol > 1.5" → UP
+Cây 3: split "RSI &lt; 40" → UP
+Cây 4: split "RSI &lt; 45" → UP
+Cây 5: split "RSI &lt; 50 AND Vol > 1.5" → UP
+
+Vote: 5 UP + 0 DOWN → HDB predicted UP với confidence 100%. Actual = UP. ✓
+</code></pre>
+
+<pre><code>Predict cho VNM (RSI=75, Vol=1.5, MA=+2%): (case Decision Tree fail)
+
+Cây 1: RSI ≥ 50 → nhìn Vol > 1.5? Cả 2 tie → predict UP hay DOWN? Random 40/60 → DOWN
+Cây 2: Vol > 1.5 nhưng cây 2 chưa thấy pattern rõ → UP (bootstrap kém may)
+Cây 3: RSI cao + MA tăng → DOWN
+Cây 4: RSI ≥ 50 + Vol > 1.0 → DOWN (từ pattern MSN học được)
+Cây 5: RSI ≥ 50 + Vol ≥ 1.5 + MA > 0 → DOWN
+
+Vote: 1 UP + 4 DOWN → VNM predicted DOWN. Actual = DOWN. ✓
+</code></pre>
+
+<h4>Điểm mạnh Random Forest</h4>
+
+<ul>
+  <li><strong>Robust hơn 1 cây</strong>: 1 cây học sai (Cây 2 bootstrap kém may) → 4 cây khác cân bằng bằng vote. VNM giờ predict đúng dù Decision Tree đơn tie.</li>
+  <li><strong>Confidence output</strong>: 5/5 vote UP = confidence cao. 3/5 vote UP = confidence trung bình.</li>
+  <li><strong>Ít tune</strong>: chỉ n_estimators (số cây) + max_features (√n_features) + max_depth. RF khá "chạy được luôn".</li>
+</ul>
+
+<h4>Điểm yếu Random Forest</h4>
+
+<ul>
+  <li><strong>Redundant</strong>: 5 cây khá giống nhau (cùng data + bootstrap chỉ 63% khác nhau). Có nghĩa vote không "đa dạng" như tưởng.</li>
+  <li><strong>Không "học từ nhau"</strong>: Cây 4 không biết Cây 1-3 sai chỗ nào để tập trung sửa.</li>
+  <li><strong>Slow inference với data lớn</strong>: 500 cây × 20 levels = duyệt 10k nodes cho mỗi prediction.</li>
+</ul>
+
+<hr style="border-top: 2px dashed #f97316; margin: 20px 0;">
+
+<h3>6.4 XGBoost — 5 cây tiếp nối sửa lỗi cho nhau</h3>
+
+<p><strong>Cách hoạt động</strong>: Cây N học sửa lỗi (residuals) của (Cây 1 + Cây 2 + ... + Cây N-1). Regression setup dễ minh họa: predict probability UP (0 = DOWN, 1 = UP).</p>
+
+<p><strong>Hình dạng cơ chế — 1 chuỗi tiếp nối, mỗi mắt xích chỉ sửa phần lỗi CÒN LẠI</strong> (khác hẳn fan-out/fan-in của Random Forest ở §6.3):</p>
+<pre><code>ŷ_0 = 0.5 (baseline, mọi ticker)
+  │
+  ▼  Tree 1 fit residual (y − ŷ_0), η=0.3, split "RSI &lt; 50?"
+ŷ_1 = 0.65 (RSI&lt;50 nhánh)  /  0.41 (RSI≥50 nhánh)
+  │                                     (SAB vẫn SAI ở đây: 0.41 nhưng actual UP)
+  ▼  Tree 2 fit residual (y − ŷ_1), split "Vol &gt; 1.0?" rồi "MA20% ≤ 5%?"
+ŷ_2:  VNM 0.48   FPT 0.72   HPG 0.60   VIC 0.36
+      MSN 0.29   HDB 0.72   SAB 0.48   MWG 0.36
+  │                                     (SAB nhích từ 0.41 → 0.48, đúng hướng)
+  ▼  Tree 3, 4, 5 tiếp tục fit residual còn lại (pattern lặp lại, không show chi tiết)
+  ▼
+ŷ_5 (final):  VNM 0.15   FPT 0.88   HPG 0.80   VIC 0.20
+              MSN 0.10   HDB 0.85   SAB 0.65   MWG 0.15
+  │
+  ▼  threshold 0.5 → UP nếu ŷ &gt; 0.5, DOWN nếu ŷ &lt; 0.5
+Accuracy: 8/8 = 100% — SAB giờ ĐÚNG (0.65 → UP) vì Tree 2 đã sửa đúng
+chỗ Tree 1 bỏ sót, thứ mà 1 cây đơn (§6.2) và cả Random Forest (§6.3, vote
+3 DOWN + 2 UP → SAI) đều không làm được cho riêng ticker này.
+</code></pre>
+<p>Chi tiết từng bước (số liệu đầy đủ, khớp với sơ đồ trên) — đọc để hiểu VÌ SAO các số này ra như vậy:</p>
+
+<h4>Bước 0: Khởi tạo</h4>
+
+<pre><code>Ground truth (encode UP=1, DOWN=0):
+VNM=0, FPT=1, HPG=1, VIC=0, MSN=0, HDB=1, SAB=1, MWG=0
+Mean = 0.5
+
+Prediction ban đầu ŷ_0 = 0.5 cho MỌI ticker (baseline = mean).
+
+Residual bước 1 (y - ŷ_0):
+VNM: 0-0.5 = -0.5    FPT: +0.5    HPG: +0.5    VIC: -0.5
+MSN: -0.5             HDB: +0.5    SAB: +0.5    MWG: -0.5
+</code></pre>
+
+<h4>Bước 1: Cây 1 học predict residual</h4>
+
+<pre><code>Tree 1 tìm split để predict residual tốt nhất.
+Best split: "RSI &lt; 50?"
+  Left (Yes): FPT, HPG, HDB → residuals [+0.5, +0.5, +0.5], mean = +0.5
+  Right (No): VNM, VIC, MSN, SAB, MWG → residuals [-0.5, -0.5, -0.5, +0.5, -0.5], mean = -0.3
+
+Learning rate η = 0.3. Update predictions:
+ŷ_1(RSI &lt; 50) = 0.5 + 0.3 × (+0.5) = 0.65
+ŷ_1(RSI ≥ 50) = 0.5 + 0.3 × (-0.3) = 0.41
+
+Predictions sau Tree 1:
+VNM: 0.41 (actual 0)   FPT: 0.65 (actual 1)   HPG: 0.65 (actual 1)   VIC: 0.41 (actual 0)
+MSN: 0.41 (actual 0)   HDB: 0.65 (actual 1)   SAB: 0.41 (actual 1) ← SAB bị SAI!
+MWG: 0.41 (actual 0)
+</code></pre>
+
+<h4>Bước 2: Cây 2 tập trung sửa lỗi CÒN LẠI</h4>
+
+<pre><code>Residual bước 2 (y - ŷ_1):
+VNM: 0-0.41 = -0.41    FPT: +0.35    HPG: +0.35    VIC: -0.41
+MSN: -0.41              HDB: +0.35    SAB: +0.59 ← RESIDUAL LỚN, Cây 2 focus fix!
+MWG: -0.41
+
+Cây 2 tìm split minimize residual mới. Best split: "Vol ratio > 1.0?"
+  Left (Yes): FPT, MSN, HDB, VNM, SAB → residuals [+0.35, -0.41, +0.35, -0.41, +0.59]
+      Split tiếp "MA20% ≤ 5%?"
+        Left: FPT (5%), VNM (2%), HDB (-1%), SAB (3%) — cả 4 đều ≤5%, KHÔNG được bỏ sót HDB
+          → [+0.35, -0.41, +0.35, +0.59], mean = (0.35-0.41+0.35+0.59)/4 = +0.22
+        Right: MSN (MA=8%, duy nhất &gt;5%) → [-0.41], mean = -0.41
+  Right (No): HPG, VIC, MWG → [+0.35, -0.41, -0.41], mean = -0.16
+
+η × Cây 2 output cộng vào ŷ_1:
+FPT: 0.65 + 0.3 × 0.22 = 0.716    (gần 1 hơn)
+VNM: 0.41 + 0.3 × 0.22 = 0.476    (còn xa 0)
+HDB: 0.65 + 0.3 × 0.22 = 0.716    (gần 1 hơn — trước đây bị bỏ sót khỏi nhóm này)
+SAB: 0.41 + 0.3 × 0.22 = 0.476    (gần 0.5 hơn, dù chưa đủ UP)
+MSN: 0.41 + 0.3 × (-0.41) = 0.287  (gần 0 hơn, đúng hướng)
+HPG: 0.65 + 0.3 × (-0.16) = 0.602 (chỉ nhích lên chút)
+VIC: 0.41 + 0.3 × (-0.16) = 0.362 (cùng nhánh Vol≤1.0 với HPG/MWG, KHÔNG phải nhánh MSN)
+MWG: 0.41 + 0.3 × (-0.16) = 0.362 (cùng nhánh Vol≤1.0 với HPG/VIC)
+
+Predictions sau Tree 2:
+VNM: 0.48   FPT: 0.72   HPG: 0.60   VIC: 0.36
+MSN: 0.29   HDB: 0.72   SAB: 0.48   MWG: 0.36
+</code></pre>
+
+<h4>Bước 3+: Tree 3, 4, 5 tiếp tục vá lỗi</h4>
+
+<p>Sau 5 cây (skip chi tiết vì lặp pattern), predictions gần perfect:</p>
+
+<pre><code>Final predictions sau 5 cây:
+VNM: 0.15 (actual 0)  ✓ DOWN, confidence 85%
+FPT: 0.88 (actual 1)  ✓ UP, confidence 88%
+HPG: 0.80 (actual 1)  ✓ UP
+VIC: 0.20 (actual 0)  ✓ DOWN
+MSN: 0.10 (actual 0)  ✓ DOWN
+HDB: 0.85 (actual 1)  ✓ UP
+SAB: 0.65 (actual 1)  ✓ UP (nhờ Cây 2 fix bug Decision Tree)
+MWG: 0.15 (actual 0)  ✓ DOWN
+
+Accuracy: 8/8 = 100% với threshold 0.5.
+</code></pre>
+
+<h4>So sánh Decision Tree vs Random Forest vs XGBoost cho SAB</h4>
+
+<pre><code>Case SAB (RSI=60, Vol=1.2, MA=+3%, actual = UP)
+
+Decision Tree: RSI≥50 → Vol>1.0 → MA≤2%? NO (MA=3%) →
+   Wait, MA≤2% false → đi phải → tie leaf UP/DOWN → predict RANDOM ½
+   → Đúng 50% thời gian.
+
+Random Forest 5 cây: mỗi cây học pattern khác nhau nhờ bootstrap
+   Vote có thể: 3 DOWN + 2 UP → predict DOWN (SAI, actual UP)
+   → Chỉ đúng ~40% thời gian.
+
+XGBoost: Tree 2 nhìn thấy Tree 1 predict SAI cho SAB (residual +0.59, cao nhất)
+   → Tree 2 tập trung fix bằng cách split khác
+   → Sau 5 cây, SAB predicted 0.65 → UP ĐÚNG.
+</code></pre>
+
+<h4>Điểm mạnh XGBoost</h4>
+
+<ul>
+  <li><strong>"Nhắm" chỗ sai</strong>: mỗi cây chỉ tập trung vào samples mà tổ hợp trước predict tệ (residual lớn). Không waste effort trên samples đã đúng.</li>
+  <li><strong>Confidence xuất sắc</strong>: prediction score 0.15 vs 0.85 rất phân biệt. Random Forest chỉ cho 3/5 vs 4/5 (rời rạc, ít phân biệt).</li>
+  <li><strong>Regularization built-in</strong>: max_depth, min_child_weight, gamma prevent overfit.</li>
+</ul>
+
+<h4>Điểm yếu XGBoost</h4>
+
+<ul>
+  <li><strong>Dễ overfit nếu tune sai</strong>: nếu cho grow depth 15 + không regularize → cây 500 học nguyên noise → val loss tăng.</li>
+  <li><strong>10+ hyperparameters</strong>: cần Optuna để tune, không "chạy được luôn" như RF.</li>
+  <li><strong>Sequential train</strong>: không parallelize dễ như RF (nhưng vẫn có multi-threading internal).</li>
+</ul>
+
+<hr style="border-top: 2px dashed #f97316; margin: 20px 0;">
+
+<h3>6.5 LightGBM — XGBoost tối ưu cho data lớn</h3>
+
+<p>Giống XGBoost về nguyên lý (gradient boosting sequential) nhưng 2 tối ưu khác biệt: <strong>histogram bins</strong> + <strong>leaf-wise growth</strong>.</p>
+
+<h4>Khác biệt 1: Histogram bins — tìm split nhanh 10-100×</h4>
+
+<p>Với 3 features × 8 samples, XGBoost thử mọi threshold:</p>
+
+<pre><code>Feature RSI, values: [25, 30, 40, 55, 60, 70, 75, 80]
+Thresholds cần thử: 27.5, 35, 47.5, 57.5, 65, 72.5, 77.5
+(giữa mỗi cặp values sorted)
+
+→ 7 splits candidate × 3 features = 21 candidates total.
+</code></pre>
+
+<p>LightGBM chia thành histogram bins (255 bins default):</p>
+
+<pre><code>Bin RSI:
+  Bin 0 (RSI 0-10):   0 samples
+  Bin 1 (RSI 10-20):  0 samples
+  Bin 2 (RSI 20-30):  1 sample (HPG=25)
+  Bin 3 (RSI 30-40):  2 samples (HDB=30, FPT=40)
+  ...
+  Bin 7 (RSI 70-80):  4 samples (MWG=70, VNM=75, MSN=80, và bin edge)
+
+Chỉ có tối đa 255 threshold thay vì unique values.
+Với 3 features → 3 × 255 = 765 candidates (chỉ ít hơn 21 vì data tiny).
+Nhưng với 1M rows × 100 features, savings = HUGE.
+</code></pre>
+
+<h4>Khác biệt 2: Leaf-wise growth</h4>
+
+<pre><code>XGBoost (level-wise):
+Level 0: Root (8 samples, loss=X)
+Level 1: split root → 2 leaves (loss_L=2, loss_R=3)
+Level 2: split CẢ 2 leaves ở level 1 → 4 leaves (dù có leaf đã "đủ tốt")
+Level 3: split cả 4 leaves...
+
+Kết quả: cây balanced, mọi nhánh cùng độ sâu.
+
+LightGBM (leaf-wise):
+Level 0: Root
+Level 1: split root → leaves (loss_L=2, loss_R=3)
+         Chọn leaf có LOSS CAO NHẤT (right, loss=3) để split
+Level 2: split right leaf → (loss=1, loss=1.5)
+         Chọn leaf loss cao nhất (loss=2 hoặc 1.5?)
+         Vẫn có leaves loss=2 chưa split → split leaf đó
+Level 3+: tiếp tục pick "chỗ tệ nhất" để fix.
+
+Kết quả: cây "lệch" — 1 nhánh có thể sâu 15 levels, nhánh khác chỉ 3.
+</code></pre>
+
+<h4>Ưu &amp; Nhược của Leaf-wise</h4>
+
+<ul>
+  <li><strong>Ưu</strong>: Converge nhanh hơn — focus compute vào chỗ khó. Với cùng số leaves, LightGBM leaf-wise thường CV cao hơn XGBoost 0.5-2%.</li>
+  <li><strong>Nhược</strong>: Cây "lệch" dễ overfit trên data nhỏ. Nhánh sâu 15 levels có thể memorize outliers. Fix: set <code>num_leaves</code> nhỏ (31-63) + <code>min_data_in_leaf</code> cao (20-100).</li>
+</ul>
+
+<h4>Khi nào LightGBM WIN XGBoost?</h4>
+
+<ul>
+  <li><strong>Data lớn (1M+ rows)</strong>: histogram bins tiết kiệm memory + compute nhiều.</li>
+  <li><strong>Nhiều categorical features</strong>: native support tốt.</li>
+  <li><strong>Cần train nhanh cho iteration</strong>: LightGBM train 3-10× nhanh hơn XGBoost.</li>
+</ul>
+
+<h4>Khi nào XGBoost WIN LightGBM?</h4>
+
+<ul>
+  <li><strong>Data nhỏ-vừa (&lt; 100k)</strong>: Level-wise robust hơn với ít data.</li>
+  <li><strong>Bạn không muốn tune num_leaves</strong>: XGBoost max_depth dễ hiểu hơn.</li>
+  <li><strong>Reproducibility critical</strong>: XGBoost historically stable hơn (LightGBM có nhiều tricks).</li>
+</ul>
+
+<hr style="border-top: 2px dashed #f97316; margin: 20px 0;">
+
+<h3>6.6 Bảng compare 12 dimensions (tổng hợp sau khi đã hiểu từng cái)</h3>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 Head-to-head 12 dimensions</div>
+<table>
+<tr><th></th><th>Decision Tree</th><th>Random Forest</th><th>XGBoost</th><th>LightGBM</th></tr>
+<tr><td><strong>Kiến trúc</strong></td><td>1 cây</td><td>N cây song song (bagging)</td><td>N cây tiếp nối (boosting)</td><td>Boosting + histogram + leaf-wise</td></tr>
+<tr><td><strong>Cách học</strong></td><td>Greedy split maximize IG</td><td>Bootstrap + random features + vote</td><td>Fit residuals sequentially</td><td>Fit residuals với histogram bins</td></tr>
+<tr><td><strong>Accuracy chuẩn (baseline)</strong></td><td>Thấp (baseline)</td><td>+15-25% vs 1 tree</td><td>+30-40% vs 1 tree ⭐</td><td>+30-40% vs 1 tree</td></tr>
+<tr><td><strong>Speed train</strong></td><td>Rất nhanh (1 cây)</td><td>Nhanh (parallel N cây)</td><td>Trung bình (sequential)</td><td>Nhanh nhất (3-10× XGBoost) ⭐</td></tr>
+<tr><td><strong>Speed inference</strong></td><td>Rất nhanh (traverse 1 cây)</td><td>Chậm (500 cây)</td><td>Nhanh (nhưng vẫn 500 cây)</td><td>Nhanh (bin lookup)</td></tr>
+<tr><td><strong>Handle missing</strong></td><td>Cần impute</td><td>Cần impute</td><td>✅ Native (default direction)</td><td>✅ Native</td></tr>
+<tr><td><strong>Handle categorical</strong></td><td>Không native (cần OneHot)</td><td>Không native</td><td>Manual encode</td><td>✅ Native (integer encode)</td></tr>
+<tr><td><strong>Overfit risk</strong></td><td>Rất cao (nếu grow full)</td><td>Thấp (bagging cancel noise)</td><td>Cao nếu không regularize</td><td>Rất cao (leaf-wise dễ lệch)</td></tr>
+<tr><td><strong>Hyperparam nhạy</strong></td><td>2-3 params (dễ tune)</td><td>3-5 params (ít nhạy)</td><td>10+ params (rất nhạy)</td><td>10+ params (rất nhạy)</td></tr>
+<tr><td><strong>Data lớn (1M+ rows)</strong></td><td>OK (nhưng vô nghĩa)</td><td>Chậm</td><td>OK</td><td>⭐ Tốt nhất</td></tr>
+<tr><td><strong>Interpretability</strong></td><td>⭐ Rất cao (vẽ cây được)</td><td>Trung bình (feature importance)</td><td>Trung bình + SHAP tốt</td><td>Trung bình + SHAP</td></tr>
+<tr><td><strong>Kaggle wins tabular</strong></td><td>&lt; 5%</td><td>~10%</td><td>~40% ⭐</td><td>~30%</td></tr>
+</table>
+</div>
+
+<h3>6.7 Decision matrix mở rộng — chọn cái nào cho case cụ thể</h3>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🎯 Chọn algorithm theo tình huống</div>
+<table>
+<tr><th>Tình huống</th><th>Chọn</th><th>Vì sao</th></tr>
+<tr><td>Prototype nhanh trong 1 giờ</td><td>Random Forest</td><td>Chạy được luôn không tune, accuracy OK</td></tr>
+<tr><td>Competition Kaggle — cần accuracy tối đa</td><td>XGBoost + LightGBM ensemble</td><td>Diversity giữa 2 algorithm → vote tốt hơn 1</td></tr>
+<tr><td>Data 1M+ rows tabular</td><td>LightGBM</td><td>Histogram bins tiết kiệm memory + train 3-10× nhanh</td></tr>
+<tr><td>Nhiều categorical features (ecommerce, user_segment)</td><td>CatBoost / LightGBM</td><td>Native support không cần OneHot</td></tr>
+<tr><td>Cần explain cho non-tech (giám đốc, PM)</td><td>Decision Tree depth ≤ 5</td><td>Vẽ ra giấy, đọc rule ai cũng hiểu</td></tr>
+<tr><td>Small data (&lt; 1000 rows)</td><td>Random Forest hoặc XGBoost nhẹ</td><td>LightGBM leaf-wise dễ overfit ít data</td></tr>
+<tr><td>Time-series tabular (V18)</td><td>XGBoost + early stopping</td><td>Level-wise stable, early stopping natural</td></tr>
+<tr><td>Real-time inference &lt; 1ms</td><td>Decision Tree đơn hoặc LightGBM 100 trees</td><td>500 trees XGBoost quá chậm cho real-time</td></tr>
+<tr><td>Data streaming (online learning)</td><td>Không dùng — chuyển sang SGD Linear</td><td>Trees không support online learning tốt</td></tr>
+<tr><td>Features chưa engineered (raw)</td><td>XGBoost nhưng feature engineering trước</td><td>Trees không "học" features như NN, cần input tốt</td></tr>
+</table>
+</div>
+
+<h3>6.8 V18 chọn XGBoost + LightGBM ensemble — case study đầy đủ</h3>
+
+<div class="example-box">
+<div class="title">🎯 Case: PredictStock V18 chọn algorithm</div>
+
+<p><strong>Requirements của V18</strong>:</p>
+<ul>
+  <li>Data: 82 tickers × ~1300 rows/ticker × 88 features</li>
+  <li>Task: predict UP/DOWN/FLAT cho ngày mai (T+1, T+3, T+5)</li>
+  <li>Accuracy target: 60%+ CV (baseline 3-class = 42%)</li>
+  <li>Interpretability: cần giải thích prediction cho user (SHAP)</li>
+  <li>Serving latency: 200ms max (retail app)</li>
+  <li>Retrain: hàng tuần với data mới</li>
+</ul>
+
+<p><strong>Xem xét từng option</strong>:</p>
+
+<pre><code>Option A: Decision Tree
+  ❌ Accuracy 45-52% (baseline). Không đủ 60% target.
+
+Option B: Random Forest
+  ✓ Accuracy 55-58% (moderate).
+  ✓ Ít tune, chạy được luôn.
+  ❌ Không thắng XGBoost, và mất SHAP tốt.
+
+Option C: XGBoost single
+  ✓ Accuracy 60-63% (đạt target).
+  ✓ SHAP xuất sắc cho explain.
+  ✓ Early stopping natural với time-series.
+  ⚠️ Cần tune 10+ params (dùng Optuna).
+
+Option D: LightGBM single
+  ✓ Accuracy 60-62% (tương đương XGBoost).
+  ✓ Nhanh hơn XGBoost.
+  ⚠️ Data 1300 rows/ticker không "lớn" → không tận dụng advantage.
+  ⚠️ Leaf-wise dễ overfit trên data nhỏ, cần set num_leaves cẩn thận.
+
+Option E: XGBoost + LightGBM ensemble ⭐
+  ✓ Accuracy 62-65% (tốt nhất).
+  ✓ Diversity (level-wise vs leaf-wise) → vote không cùng lỗi.
+  ✓ Correlation giữa 2 predictions ~0.85 (không quá redundant).
+  ✓ Cả 2 support SHAP.
+  ⚠️ Train time 2× vs single. Chấp nhận được (retrain weekly).
+
+Option F: Neural Network (MLP)
+  ❌ Data 1300 rows/ticker quá ít cho NN (cần 10k+).
+  ❌ Features đã engineered tốt → NN không có edge.
+  ❌ Interpretability kém.
+</code></pre>
+
+<p><strong>Kết luận V18</strong>: <strong>Option E</strong> — XGBoost + LightGBM ensemble với blend_alpha=0.80 (80% XGBoost + 20% LightGBM).</p>
+
+<p><strong>Kết quả thực tế trên 82 tickers</strong>:</p>
+<ul>
+  <li>Average CV accuracy T+1: <strong>60.5%</strong> (target đạt)</li>
+  <li>Best ticker (BID): 64.1%</li>
+  <li>Worst ticker (SAB): 55.2%</li>
+  <li>Ensemble_correlation: 0.86 (đúng "sweet spot" — không quá redundant, không quá noisy)</li>
+  <li>SHAP feature importance được dùng cho investor thesis explanation</li>
+</ul>
+</div>
+
+<h3>6.9 Insight cuối — quy luật vàng chọn tree algorithm</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 3 câu hỏi ngắn quyết định chọn cái nào</div>
+<ol>
+<li><strong>"Có cần production accuracy tối đa không?"</strong>
+  <br>→ YES: XGBoost hoặc LightGBM (hoặc ensemble)
+  <br>→ NO (baseline nhanh): Random Forest</li>
+<li><strong>"Data bao nhiêu rows?"</strong>
+  <br>→ &lt; 10k: XGBoost (level-wise robust)
+  <br>→ 10k-1M: XGBoost hoặc LightGBM đều OK
+  <br>→ &gt; 1M: LightGBM (histogram bins tiết kiệm)</li>
+<li><strong>"Có nhiều categorical features?"</strong>
+  <br>→ YES: LightGBM hoặc CatBoost
+  <br>→ NO (all numerical): XGBoost</li>
+</ol>
+<p><strong>Rule vàng phỏng vấn</strong>: Nếu bạn không chắc, luôn nói "tôi bắt đầu với Random Forest baseline, sau đó upgrade lên XGBoost nếu tabular numerical (V18-style), hoặc LightGBM nếu data lớn / có categorical. Ensemble XGBoost + LightGBM nếu cần accuracy tối đa cho competition." — 90% cases work.</p>
+</div>
+
+
+<h2>7. 🌐 Algorithm landscape — bức tranh toàn cảnh</h2>
+
+<p>Trees + XGBoost là 1 nhánh trong <strong>Supervised Learning</strong>. Đây là "tour đầy đủ" mọi thuật toán chính bạn cần biết cho phỏng vấn — mỗi thuật toán có <strong>1 câu intuition</strong>, <strong>ví dụ cụ thể</strong>, và <strong>khi dùng / khi tránh</strong>.</p>
+
+<h3>7.1 Supervised Learning — 13 thuật toán chia 4 tầng (dễ → khó)</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Cách đọc phần này</div>
+<p>Mỗi thuật toán được trình bày cùng format: <strong>Intuition trong 1 câu → Ví dụ cụ thể → Dùng khi → Tránh khi</strong>. Bạn có thể skim 10 phút hoặc đào sâu 1 giờ.</p>
+</div>
+
+<h4>💎 Tầng 1 — Linear models (đơn giản nhất, luôn dùng làm baseline)</h4>
+
+<div class="example-box">
+<div class="title">1. Linear Regression</div>
+<p><strong>🎯 Intuition</strong>: Vẽ 1 đường thẳng qua data points sao cho tổng sai số bình phương nhỏ nhất.</p>
+<pre><code># Ví dụ dự đoán giá nhà (regression):
+Input: diện tích m² = 100
+Model: giá = 3.5 × 100 + 200 = 550 (triệu VND)
+        ↑              ↑
+    coefficient    intercept
+
+# Coefficient 3.5 có ý nghĩa: mỗi m² thêm → giá tăng 3.5 triệu.
+# Non-tech user hiểu ngay.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: (1) Baseline luôn cần chạy trước; (2) Feature-target thực sự linear; (3) Cần giải thích cho non-tech (coefficient dễ hiểu).</p>
+<p><strong>❌ Tránh khi</strong>: Pattern non-linear (VD stock price với news events).</p>
+</div>
+
+<div class="example-box">
+<div class="title">2. Logistic Regression</div>
+<p><strong>🎯 Intuition</strong>: Linear Regression + squash output qua sigmoid → probability [0, 1] cho binary classification.</p>
+<pre><code># Ví dụ dự đoán spam:
+z = w_1·"free" + w_2·"CLICK" + w_3·"$$$" + b
+   = 2·1 + 3·1 + 2·1 + (-4) = 3
+
+p(spam) = sigmoid(z) = 1/(1+e^-3) = 0.95 → SPAM (probability 95%)
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Binary classification cần probability calibrated (spam, churn, credit approval).</p>
+<p><strong>❌ Tránh khi</strong>: Decision boundary phức tạp (không thẳng).</p>
+</div>
+
+<h4>💎 Tầng 2 — Instance-based &amp; Probabilistic (đơn giản, work với data nhỏ)</h4>
+
+<div class="example-box">
+<div class="title">3. K-Nearest Neighbors (KNN)</div>
+<p><strong>🎯 Intuition</strong>: "Cho tôi 1 sample, tôi tìm 5 samples gần nhất trong training set, chúng vote gì → predict cái đó."</p>
+<pre><code># Ví dụ classify quán ăn "ngon" hay "dở":
+New quán: [giá=50k, rating=4.2, distance=2km]
+
+Tìm 5 quán gần nhất trong Euclidean distance:
+  Quán A: [55k, 4.3, 1.8km] → ngon
+  Quán B: [45k, 4.1, 2.2km] → ngon
+  Quán C: [50k, 4.0, 2.5km] → dở
+  Quán D: [60k, 4.4, 1.5km] → ngon
+  Quán E: [40k, 4.2, 2.8km] → ngon
+
+Vote: 4 ngon + 1 dở → predict NGON
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Small data (&lt; 10k rows), exploration nhanh, recommender baseline.</p>
+<p><strong>❌ Tránh khi</strong>: (1) High-dim (curse of dimensionality — mọi thứ đều "xa"); (2) Data lớn — mỗi predict phải scan N samples.</p>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Curse of dimensionality — vì sao "mọi thứ đều xa"? (đã nhắc ở L1.1 glossary, đây là ví dụ số)</div>
+<p>KNN dựa trên "khoảng cách gần = giống nhau". Với 1 feature, 100 điểm rải trên 1 đoạn thẳng [0,1] → khoảng cách trung bình giữa 2 điểm gần nhau ~0.01 (rất gần, "hàng xóm" có ý nghĩa).</p>
+<p>Với 20 features (20 chiều), cùng 100 điểm đó rải trong 1 khối lập phương 20 chiều — thể tích khối tăng theo lũy thừa (1^20 vẫn là 1, nhưng "mật độ" điểm giảm theo <code>N^(1/20)</code> mỗi cạnh). Kết quả thực nghiệm: khoảng cách Euclidean giữa "hàng xóm gần nhất" và "hàng xóm xa nhất" gần như BẰNG NHAU khi số chiều lớn — khái niệm "gần" mất ý nghĩa phân biệt. Với 88 features V18, KNN gần như vô dụng nếu không giảm chiều trước (PCA) hoặc chọn lọc features mạnh tay.</p>
+</div>
+</div>
+
+<div class="example-box">
+<div class="title">4. Naive Bayes</div>
+<p><strong>🎯 Intuition</strong>: Dùng Bayes theorem tính P(class|features), giả sử các features độc lập → tính nhanh.</p>
+<pre><code># Ví dụ classify email spam:
+Từ trong email: "buy", "cheap", "click"
+
+P(spam | "buy" + "cheap" + "click")
+  ∝ P("buy"|spam) × P("cheap"|spam) × P("click"|spam) × P(spam)
+  = 0.8 × 0.7 × 0.9 × 0.3 = 0.1512
+
+P(ham | "buy" + "cheap" + "click")
+  = 0.1 × 0.05 × 0.15 × 0.7 = 0.000525
+
+Ratio: 0.1512 / 0.000525 = 288 → email này SPAM (288× likely spam hơn ham)
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Text classification (spam filter, sentiment analysis), medical baseline, real-time need.</p>
+<p><strong>❌ Tránh khi</strong>: Features thực sự phụ thuộc (VD giá + volume trong stock — hay đi cùng nhau).</p>
+</div>
+
+<div class="example-box">
+<div class="title">5. Support Vector Machine (SVM)</div>
+<p><strong>🎯 Intuition</strong>: Tìm đường/mặt phẳng tách 2 class sao cho <em>margin</em> (khoảng cách đến điểm gần nhất mỗi bên) lớn nhất.</p>
+<pre><code># 2D visual: tách UP vs DOWN samples
+
+     UP  UP        DOWN
+    UP  UP   |    DOWN DOWN
+     UP  UP  |   DOWN DOWN
+             ↑
+   Hyperplane có margin lớn nhất
+   (đường thẳng giữa 2 nhóm, cách xa cả 2)
+
+# Kernel trick: nếu 2D không tách được, project lên 3D+ để tách.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: High-dim features (text embeddings, small image), medium data (1k-100k rows), cần margin robustness.</p>
+<p><strong>❌ Tránh khi</strong>: Data cực lớn (train O(N²), 1M rows = năm chờ đợi), cần probability calibrated.</p>
+</div>
+
+<h4>💎 Tầng 3 — Tree-based (thắng tabular data — bao gồm V18)</h4>
+
+<div class="example-box">
+<div class="title">6. Decision Tree — đã học chi tiết ở §1</div>
+<p>Chuỗi if/else greedy. Interpretable. Overfit dễ. Baseline không production.</p>
+</div>
+
+<div class="example-box">
+<div class="title">7. Random Forest — đã học chi tiết ở §2</div>
+<p>N cây độc lập vote. Robust, ít tune. Đứng thứ 2 sau XGBoost cho tabular.</p>
+</div>
+
+<div class="example-box">
+<div class="title">8. Gradient Boosting Machine (GBM) — đã học chi tiết ở §3</div>
+<p>Trees tiếp nối, mỗi cây sửa lỗi cây trước. Precursor của XGBoost. Ít dùng vanilla nữa.</p>
+</div>
+
+<div class="example-box">
+<div class="title">9. XGBoost / LightGBM ⭐ — đã học chi tiết ở §4-§5</div>
+<p>GBM + 2nd-order gradient + regularization + engineering optimizations. <strong>SOTA cho tabular</strong>. V18 chọn.</p>
+</div>
+
+<h4>💎 Tầng 4 — Deep Learning (thắng vision/NLP/sequence, cần nhiều data)</h4>
+
+<div class="example-box">
+<div class="title">10. Neural Network (MLP — Multi-Layer Perceptron)</div>
+<p><strong>🎯 Intuition</strong>: Chain nhiều layer linear + non-linear activation → universal approximator (học được bất kỳ function nào nếu đủ data).</p>
+<pre><code># Ví dụ 3-layer MLP cho digit recognition:
+Input: 784 pixels (28×28)
+   ↓ Layer 1: linear 784→128 + ReLU
+   ↓ Layer 2: linear 128→64 + ReLU
+   ↓ Layer 3: linear 64→10 + softmax
+Output: probability 10 classes (0-9)
+
+# 3 layer × 128 neurons = ~110k params. Cần 60k MNIST samples để train ổn.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Data nhiều (10k+), features raw không pre-engineered, cần learn hierarchical patterns.</p>
+<p><strong>❌ Tránh khi</strong>: (1) Data ít (&lt; 1k rows) — overfit khủng khiếp; (2) Features đã engineered tốt như V18 — XGBoost thắng.</p>
+</div>
+
+<div class="example-box">
+<div class="title">11. CNN (Convolutional Neural Network)</div>
+<p><strong>🎯 Intuition</strong>: Sliding "kính lúp" 3×3 quét ảnh → detect edges → detect shapes → detect objects. Thắng vision vì exploit locality.</p>
+<pre><code># Ví dụ classify chó/mèo:
+Ảnh 224×224×3 (RGB)
+   ↓ Conv 3×3, 64 filters → detect edges (feature map)
+   ↓ Pool 2×2 → giảm resolution
+   ↓ Conv 3×3, 128 filters → detect textures
+   ↓ Pool 2×2
+   ↓ ... (10-100 layers ResNet)
+   ↓ Fully connected → 2 classes
+Output: p(chó), p(mèo)
+
+# Weight sharing: cùng kernel 3×3 dùng cho mọi vị trí → 1000× ít params so MLP.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Vision (image classification, object detection), audio spectrogram, 1D time-series với local patterns.</p>
+<p><strong>❌ Tránh khi</strong>: Tabular data (V18-style) — CNN không capture được feature interactions ngẫu nhiên.</p>
+</div>
+
+<div class="example-box">
+<div class="title">12. RNN / LSTM (Recurrent Neural Network)</div>
+<p><strong>🎯 Intuition</strong>: Đọc sequence từ trái sang phải, mỗi bước cập nhật "hidden state" (trí nhớ ngắn hạn).</p>
+<pre><code># Ví dụ dự đoán từ tiếp theo trong câu:
+Câu: "Hôm nay trời rất ___"
+
+t=1: đọc "Hôm" → h_1 = update memory với "Hôm"
+t=2: đọc "nay" → h_2 = f(h_1, "nay") — nhớ "Hôm nay"
+t=3: đọc "trời" → h_3 = f(h_2, "trời") — nhớ "Hôm nay trời"
+t=4: đọc "rất" → h_4 = f(h_3, "rất")
+t=5: predict từ tiếp: sunny/mưa/lạnh/đẹp...
+
+# LSTM: RNN + "gates" (forget/input/output) → nhớ được xa hơn (~200 steps).
+# Vanilla RNN nhớ tối đa ~10 steps (vanishing gradient).
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Time-series ngắn-vừa, real-time NLP (chatbot 2019-era), legacy code.</p>
+<p><strong>❌ Tránh khi</strong>: NLP modern (Transformer thắng), sequence rất dài (500+ tokens).</p>
+</div>
+
+<div class="example-box">
+<div class="title">13. Transformer ⭐ — foundation của LLM hiện đại</div>
+<p><strong>🎯 Intuition</strong>: Thay vì đọc sequence tuần tự (RNN), "attention" cho phép mỗi token nhìn TẤT CẢ tokens khác cùng lúc → capture long-range dependency + parallelize train.</p>
+<pre><code># Ví dụ dịch "Tôi ăn phở" → English:
+Encoder xử lý cả 3 tokens song song:
+  "Tôi" attention với ["Tôi", "ăn", "phở"] → understand subject
+  "ăn"  attention với ["Tôi", "ăn", "phở"] → understand verb
+  "phở" attention với ["Tôi", "ăn", "phở"] → understand object
+
+Decoder generate: "I ate pho"
+
+# GPT/Claude/Llama đều là Transformer.
+# Scaling luật (Chinchilla): D tokens ≈ 20 × N params.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: NLP (LLM), vision (ViT), long-context (100k+ tokens), foundation model.</p>
+<p><strong>❌ Tránh khi</strong>: Small data (&lt; 100k samples), tabular data (XGBoost thắng), compute-constrained (Transformer đắt: O(N²) memory).</p>
+</div>
+
+<h3>7.2 Unsupervised Learning — không có label, tự tìm cấu trúc</h3>
+
+<p>Chia 3 mục đích chính: <strong>Clustering</strong> (nhóm samples giống nhau), <strong>Dimensionality Reduction</strong> (giảm chiều để visualize), <strong>Anomaly Detection</strong> (tìm outliers).</p>
+
+<h4>🎯 Clustering — nhóm samples giống nhau</h4>
+
+<div class="example-box">
+<div class="title">K-Means</div>
+<p><strong>Intuition</strong>: Chọn K "trung tâm" ngẫu nhiên. Assign mỗi sample về trung tâm gần nhất. Update trung tâm = mean của cluster. Lặp đến khi không đổi.</p>
+<pre><code># Ví dụ segment 100k khách hàng thành 5 nhóm:
+Features: [tổng chi tiêu, tần suất mua, loại sản phẩm]
+
+K=5 clusters output:
+  Cluster 1 (30k users): "chi tiêu cao, mua thường xuyên, mỹ phẩm" → VIP female
+  Cluster 2 (25k users): "chi tiêu thấp, mua ít, đồ ăn" → sinh viên
+  Cluster 3 (20k users): "chi tiêu vừa, mua vừa, điện tử" → office worker
+  Cluster 4 (15k users): "chi tiêu cao, mua ít, luxury" → high-net-worth
+  Cluster 5 (10k users): outliers, khó cluster
+
+# Marketing team dùng để target campaign phù hợp.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Biết trước K (kinh nghiệm), clusters spherical (đều đặn), data không quá noise.</p>
+<p><strong>❌ Tránh khi</strong>: Clusters density khác nhau (dùng DBSCAN), K không biết (dùng elbow method hoặc DBSCAN).</p>
+</div>
+
+<div class="example-box">
+<div class="title">DBSCAN</div>
+<p><strong>Intuition</strong>: Nhóm điểm "gần nhau" theo density. Điểm cô lập → outlier. Không cần biết trước K.</p>
+<pre><code># Ví dụ detect vùng "kẹt xe" từ GPS data:
+Input: 1M GPS points của xe khắp Sài Gòn
+
+DBSCAN với eps=100m, min_samples=50:
+  Cluster 1 (5000 points): quận 1 downtown → kẹt xe
+  Cluster 2 (3000 points): Q7 giao lộ → kẹt xe
+  Cluster 3 (2000 points): sân bay Tân Sơn Nhất
+  Outliers (200 points): xe chạy đường cao tốc rải rác
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: K không biết, clusters shape bất kỳ (không cần spherical), có outliers cần detect.</p>
+<p><strong>❌ Tránh khi</strong>: High-dim data (curse of dimensionality — mọi thứ "xa"), clusters density khác nhau nhiều.</p>
+</div>
+
+<div class="example-box">
+<div class="title">Hierarchical Clustering</div>
+<p><strong>Intuition</strong>: Bắt đầu mỗi sample là 1 cluster riêng. Merge cặp cluster gần nhất. Lặp đến còn 1 cluster tổng → dendrogram.</p>
+<pre><code># Ví dụ phân loại sinh vật theo DNA similarity:
+100 loài → 100 clusters singleton
+   ↓ merge 2 gần nhất → 99 clusters
+   ↓ merge tiếp → ...
+   ↓ ...
+   → 1 cluster (tổ tiên chung)
+
+Dendrogram (cây gia phả): cắt ở level bất kỳ → tùy chọn K.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Muốn explore multi-level structure (dendrogram), small data (&lt; 10k), taxonomy.</p>
+<p><strong>❌ Tránh khi</strong>: Big data (O(N²) memory), cần K rõ ràng.</p>
+</div>
+
+<div class="example-box">
+<div class="title">Gaussian Mixture Model (GMM)</div>
+<p><strong>Intuition</strong>: Giả sử data từ N phân phối Gaussian overlap. Học parameters của N Gaussian đó. Cluster = soft assignment (probability về mỗi Gaussian).</p>
+<pre><code># Ví dụ: chiều cao dân số VN, GMM tìm 2 Gaussian:
+Gaussian 1: μ=158cm, σ=6cm  (nữ)
+Gaussian 2: μ=170cm, σ=7cm  (nam)
+
+1 người cao 165cm:
+  P(nữ | 165) = 40%
+  P(nam | 165) = 60%
+  → Soft cluster: không "chắc chắn 100%" như K-Means.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Clusters overlap (không tách rõ), cần probability của cluster assignment.</p>
+<p><strong>❌ Tránh khi</strong>: Clusters non-Gaussian shape.</p>
+</div>
+
+<h4>🎯 Dimensionality Reduction — giảm chiều để visualize/denoise</h4>
+
+<div class="example-box">
+<div class="title">PCA (Principal Component Analysis)</div>
+<p><strong>Intuition</strong>: Tìm những "hướng" (axes) chứa nhiều variance nhất trong data → project data xuống các hướng này. Linear projection.</p>
+<pre><code># Ví dụ: 100 features V18 → 2D visualization
+X = 1300 × 100 matrix (samples × features)
+
+PCA fit:
+  Direction 1 (33% variance): "market momentum" (combination RSI + MACD + volume)
+  Direction 2 (22% variance): "sector rotation" (combination sector_return + breadth)
+  ...
+
+X_2d = X.dot(top_2_directions)   # 1300 × 2 matrix
+plt.scatter(X_2d[:,0], X_2d[:,1])   # visualize
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Visualization high-dim, denoise, preprocess trước ML (giảm 100 → 20 features).</p>
+<p><strong>❌ Tránh khi</strong>: Non-linear structure (dùng t-SNE/UMAP), muốn interpretability của original features (PCA mix features).</p>
+</div>
+
+<div class="example-box">
+<div class="title">t-SNE / UMAP</div>
+<p><strong>Intuition</strong>: Non-linear projection giữ "neighborhood structure" — nếu 2 points gần nhau trong high-dim, chúng cũng gần nhau trong 2D.</p>
+<pre><code># Ví dụ visualize LLM embeddings 768D → 2D:
+1000 sentences từ 5 topics (sport, tech, food, travel, health)
+
+Embed bằng bge-m3 → 1000 × 768 matrix
+UMAP fit → 1000 × 2 matrix
+plt.scatter(color=topic)
+
+→ 5 nhóm rõ rệt trong 2D → verify embedding quality.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Visualize embeddings (LLM, vision, biology), explore neighborhoods trong data.</p>
+<p><strong>❌ Tránh khi</strong>: Cần distances chính xác giữa clusters (t-SNE bóp méo global structure), preprocessing pipeline (không reproducible ở data mới).</p>
+</div>
+
+<div class="example-box">
+<div class="title">Autoencoder</div>
+<p><strong>Intuition</strong>: Neural network học encode data → bottleneck (nhỏ chiều) → decode lại. Nếu decode được, bottleneck đủ thông tin.</p>
+<pre><code># Ví dụ denoise ảnh:
+Input: ảnh noisy 28×28 = 784 pixels
+   ↓ Encoder: 784 → 128 → 32 (bottleneck)
+   ↓ Decoder: 32 → 128 → 784
+Output: ảnh clean 28×28
+
+Loss: MSE(input, output) → NN học nén "essence" của ảnh vào 32 dims.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Denoise, anomaly detection (loss cao = outlier), pretrain (SimCLR, MAE).</p>
+<p><strong>❌ Tránh khi</strong>: Simple linear structure (PCA đủ), data ít (NN cần nhiều).</p>
+</div>
+
+<h4>🎯 Anomaly Detection — tìm outliers</h4>
+
+<div class="example-box">
+<div class="title">Isolation Forest</div>
+<p><strong>Intuition</strong>: Outliers dễ "isolate" hơn normal points. Random split data — sample nào tách nhanh nhất (ít splits) = outlier.</p>
+<pre><code># Ví dụ fraud detection:
+10M credit transactions.
+
+Isolation Forest tính "isolation score" cho mỗi transaction:
+  Normal transactions: cần ~20 random splits để isolate
+  Outliers (fraud):   chỉ cần 5-10 splits
+
+→ Rank transactions theo score, top 1000 = suspected fraud.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Fraud detection, outlier removal, unsupervised anomaly.</p>
+<p><strong>❌ Tránh khi</strong>: Anomalies cần context/temporal (dùng LSTM/Transformer autoencoder).</p>
+</div>
+
+<h4>🎯 Rules Mining</h4>
+
+<div class="example-box">
+<div class="title">Apriori (Association Rules)</div>
+<p><strong>Intuition</strong>: Tìm pattern "khi mua A thường mua B" trong transaction data. Nổi tiếng với "beer + diapers" case ở Walmart.</p>
+<pre><code># Ví dụ market basket của siêu thị:
+100k transactions.
+
+Rules mined:
+  {sữa} → {bánh mì}: support=15%, confidence=80%
+    (15% transactions có cả 2. Trong transactions mua sữa, 80% mua thêm bánh mì)
+  {tã em bé} → {bia}: support=3%, confidence=60%
+    (Bố đi mua tã cuối tuần thường mua bia luôn)
+
+→ Siêu thị đặt sữa gần bánh mì, tã gần bia.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Market basket analysis, recommendation baseline.</p>
+<p><strong>❌ Tránh khi</strong>: Sequential dependency (dùng sequential pattern mining), personalized recommendation (dùng collaborative filtering).</p>
+</div>
+
+<h3>7.3 Reinforcement Learning — học qua trial-error với reward</h3>
+
+<p>RL khác Supervised: không có label sẵn, chỉ có <strong>reward signal</strong> sau mỗi action. Agent phải explore để tìm chiến lược tối ưu.</p>
+
+<h4>🎯 Value-based (học Q-value cho mỗi state-action)</h4>
+
+<div class="example-box">
+<div class="title">Q-Learning (tabular)</div>
+<p><strong>Intuition</strong>: Học 1 bảng Q[state, action] = "làm action A ở state S sẽ đưa đến reward dài hạn bao nhiêu". Chọn action có Q cao nhất.</p>
+<pre><code># Ví dụ grid world 4×4:
+      goal
+    ┌─────┐
+    │. . E│  reward +10 ở E
+    │. . .│
+    │X . .│  X = pit, reward -10
+    │S . .│  S = start
+    └─────┘
+
+Q-table sau training:
+  Q[S, right] = 3.5
+  Q[S, up]   = 2.1
+  Q[S, left] = 0 (đường cụt)
+  → Agent luôn chọn right (Q cao nhất).
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: State + action rời rạc, không gian nhỏ (&lt; 10k states).</p>
+<p><strong>❌ Tránh khi</strong>: State continuous (chess, robotics) — Q-table quá lớn. Dùng DQN.</p>
+</div>
+
+<div class="example-box">
+<div class="title">DQN (Deep Q-Network)</div>
+<p><strong>Intuition</strong>: Thay Q-table bằng Neural Network Q(state, action). Handle state continuous / high-dim.</p>
+<pre><code># Ví dụ Atari game (DeepMind 2013):
+State: pixels 84×84 của game screen
+Actions: {up, down, left, right, fire}
+
+NN: 84×84 → conv → conv → FC → 5 outputs (Q-value mỗi action)
+Choose action = argmax Q.
+
+# Thắng human-level trên 49 Atari games (DeepMind Nature 2015).
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: State cao chiều (image, sensor arrays), action rời rạc.</p>
+<p><strong>❌ Tránh khi</strong>: Action continuous (steering angle, robot joint) — dùng policy gradient.</p>
+</div>
+
+<h4>🎯 Policy-based (học policy π(action|state) trực tiếp)</h4>
+
+<div class="example-box">
+<div class="title">PPO (Proximal Policy Optimization) ⭐ — dùng cho RLHF</div>
+<p><strong>Intuition</strong>: Học policy π(a|s) sao cho maximize reward. Constraint: policy mới không được "xa" policy cũ quá — tránh update quá mạnh gây collapse.</p>
+<pre><code># Ví dụ RLHF cho ChatGPT/Claude (xem L4.4 chi tiết):
+State: user prompt
+Actions: token sequences
+Reward: reward model score (learned từ human preferences)
+
+PPO objective (ratio = π_new(a|s) / π_old(a|s), Â = advantage estimate):
+  maximize E[ min( ratio × Â, clip(ratio, 1-ε, 1+ε) × Â ) ]
+                                    ↑
+                    Trust region: không đi xa policy cũ — lấy min của
+                    2 phiên bản (chưa clip / đã clip), không phải
+                    reward nhân với 1 min duy nhất
+
+# Đây là why Claude/ChatGPT alignment work.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: RLHF, robotics, action continuous, stable training cần thiết.</p>
+<p><strong>❌ Tránh khi</strong>: Sample efficiency critical (dùng SAC), toy problems (Q-Learning đủ).</p>
+</div>
+
+<h4>🎯 Advanced (SOTA cho specific domains)</h4>
+
+<div class="example-box">
+<div class="title">SAC / TD3 (Continuous control)</div>
+<p><strong>Intuition</strong>: Actor-Critic với maximum entropy bonus (khuyến khích exploration). Best cho robotics real-world.</p>
+<p><strong>✅ Dùng khi</strong>: Robotics arm, self-driving simulator, continuous action space.</p>
+<p><strong>❌ Tránh khi</strong>: Discrete action (dùng DQN), toy problems.</p>
+</div>
+
+<div class="example-box">
+<div class="title">MuZero / AlphaZero (Model-based planning)</div>
+<p><strong>Intuition</strong>: Học "world model" (dự đoán next state) + planning qua MCTS (Monte Carlo Tree Search). Cực mạnh nhưng đắt compute.</p>
+<p><strong>✅ Dùng khi</strong>: Board games (chess, Go, Shogi), planning-heavy environments.</p>
+<p><strong>❌ Tránh khi</strong>: Compute-constrained, real-time (planning tốn thời gian).</p>
+</div>
+
+<h3>7.4 Cheat sheet cuối — "chọn thuật toán trong 30 giây"</h3>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🎯 Decision tree tổng hợp</div>
+<pre><code>Có label không?
+├── KHÔNG → Unsupervised
+│   ├── Muốn nhóm samples → Clustering
+│   │   ├── K biết trước, clusters đều → K-Means
+│   │   ├── K không biết + có outliers → DBSCAN
+│   │   └── Overlap + cần probability → GMM
+│   ├── Muốn giảm chiều → Dim Reduction
+│   │   ├── Linear + interpretable → PCA
+│   │   └── Non-linear + visualize → UMAP
+│   └── Muốn detect outliers → Isolation Forest
+│
+├── CÓ label + reward signal → Reinforcement Learning
+│   ├── Discrete state/action, nhỏ → Q-Learning
+│   ├── Discrete action, state cao chiều → DQN
+│   ├── Continuous action → SAC / PPO
+│   └── RLHF (LLM alignment) → PPO
+│
+└── CÓ label rõ (input → target) → Supervised
+    ├── Data type gì?
+    │   ├── Tabular numerical (V18, tabular Kaggle)
+    │   │   ├── Baseline nhanh → Logistic/Linear Regression
+    │   │   ├── Baseline robust → Random Forest
+    │   │   └── Accuracy tối đa ⭐ → XGBoost / LightGBM
+    │   ├── Text (spam, sentiment)
+    │   │   ├── Baseline nhanh → Naive Bayes
+    │   │   └── SOTA → Transformer (BERT, LLM)
+    │   ├── Image → CNN (ResNet, EfficientNet) hoặc ViT
+    │   ├── Time-series NLP → Transformer
+    │   └── Sequence ngắn → LSTM (legacy)
+    │
+    └── Output type gì?
+        ├── Số liên tục → Regression (Linear, XGBoost regressor, MLP)
+        └── Category → Classification (Logistic, XGBoost classifier, NN + softmax)
+</code></pre>
+</div>
+
+<p><strong>Rule vàng cho phỏng vấn</strong>: Nếu bạn không chắc, luôn nói "tôi bắt đầu với baseline (Linear/RF), rồi upgrade lên XGBoost nếu tabular, hoặc Transformer nếu sequence. Cuối cùng ensemble." — 90% cases hoạt động.</p>
+
+<h2>8. 📊 Metrics landscape — chọn metric ĐÚNG cho task</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì sao metric quan trọng?</div>
+<p><strong>Chọn metric SAI = optimize sai hướng = model tệ dù "accuracy 99%"</strong>. Ví dụ classic: model dự đoán ung thư với data 990 người khỏe / 10 người bệnh. Model "luôn dự đoán khỏe" → accuracy 99% nhưng MISS 100% bệnh nhân → chết người. Metric đúng phải là <em>recall</em>, không phải accuracy.</p>
+<p>Section này sẽ đi qua các metric chính, mỗi cái có <strong>công thức + số cụ thể + khi lie</strong>.</p>
+</div>
+
+<h3>8.1 Classification Metrics — dự đoán class (spam/không, UP/DOWN/FLAT)</h3>
+
+<h4>🎯 Setup: Confusion matrix (nền tảng)</h4>
+
+<p>Với binary classification (spam/ham), 4 outcomes có thể:</p>
+
+<pre><code>                Actual
+                Spam     Ham
+Predicted  ┌───────────┬───────────┐
+Spam       │   TP=80   │   FP=20   │ ← predict spam, actual gì?
+           ├───────────┼───────────┤
+Ham        │   FN=10   │   TN=890  │
+           └───────────┴───────────┘
+
+TP (True Positive) = predict spam ĐÚNG (đúng là spam)
+FP (False Positive) = predict spam SAI (thực ra là ham → giết nhầm)
+FN (False Negative) = predict ham SAI (thực ra là spam → lọt lưới)
+TN (True Negative) = predict ham ĐÚNG
+</code></pre>
+
+<h4>🎯 Metric #1 — Accuracy (đơn giản nhất, cẩn thận!)</h4>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ</div>
+<pre><code>Accuracy = (TP + TN) / (TP + FP + FN + TN)
+         = (80 + 890) / (80 + 20 + 10 + 890)
+         = 970 / 1000
+         = 0.97 = 97%
+
+Nghĩa: 97% predictions đúng.
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Class balanced (50/50). VD MNIST, ImageNet.</p>
+<p><strong>❌ Cẩn thận</strong>: Class imbalanced! VD 1 spam / 99 ham. Model "predict ham cho mọi email" → accuracy 99% nhưng vô dụng (không lọc được spam nào).</p>
+<p><strong>Rule</strong>: Nếu majority class chiếm &gt; 70%, đừng dùng accuracy duy nhất.</p>
+</div>
+
+<h4>🎯 Metric #2 — Precision ("Khi nói spam, có đúng không?")</h4>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ</div>
+<pre><code>Precision = TP / (TP + FP)
+          = 80 / (80 + 20)
+          = 80 / 100
+          = 0.80 = 80%
+
+Nghĩa: "Trong 100 emails tôi predict SPAM, có 80 spam thật, 20 ham vô tội bị giết nhầm."
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: FALSE POSITIVE tốn kém.
+<ul>
+<li>Spam filter: nếu ham bị mark spam → user mất email quan trọng → complain.</li>
+<li>Ad ranking: click bait spam mọi ad → user tin không nhìn ad thật.</li>
+<li>Financial fraud alert: false alarm → user block card, khách hàng bức xúc.</li>
+</ul></p>
+<p><strong>Trade-off</strong>: Precision cao = model rất strict = có thể MISS real positives (recall thấp).</p>
+</div>
+
+<h4>🎯 Metric #3 — Recall ("Trong đám spam thật, tôi catch được bao nhiêu?")</h4>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ</div>
+<pre><code>Recall = TP / (TP + FN)
+       = 80 / (80 + 10)
+       = 80 / 90
+       = 0.89 = 89%
+
+Nghĩa: "Có 90 spam thật, tôi catch được 80. 10 spam lọt lưới (users vẫn nhận)."
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: FALSE NEGATIVE tốn kém.
+<ul>
+<li>Ung thư screening: miss 1 case = chết người → luôn ưu tiên recall.</li>
+<li>Fraud detection: miss 1 fraud = mất tiền.</li>
+<li>Fire alarm: miss 1 fire = tòa nhà cháy.</li>
+</ul></p>
+<p><strong>Trade-off</strong>: Recall cao = model rất loose = nhiều FALSE POSITIVES.</p>
+</div>
+
+<h4>🎯 Ví dụ concrete — 3 metrics KHÁC NHAU chọn model KHÁC NHAU</h4>
+
+<div class="example-box">
+<div class="title">Case: Fraud detection với 3 models</div>
+<pre><code>Data: 1M transactions, 1000 fraud (0.1%).
+
+Model A (conservative — chỉ flag khi rất chắc chắn):
+  Predict fraud: 500
+  Actual fraud: 900 (miss 500)
+  TP=400, FP=100, FN=500, TN=999,000
+
+  Accuracy = 999,400/1,000,000 = 99.94% ✨
+  Precision = 400/500 = 80%
+  Recall = 400/900 = 44%   ❌ Miss half of frauds!
+
+Model B (aggressive — flag mọi transaction đáng nghi):
+  Predict fraud: 5000
+  Actual fraud: 900 (catch 800)
+  TP=800, FP=4200, FN=100, TN=994,900
+
+  Accuracy = 995,700/1,000,000 = 99.57%
+  Precision = 800/5000 = 16%   ❌ 84% flags là false positive!
+  Recall = 800/900 = 89%   ✅ Catch 89% frauds
+
+Model C (balanced — tune threshold):
+  TP=700, FP=1000, FN=200, TN=998,100
+
+  Accuracy = 998,800/1,000,000 = 99.88%
+  Precision = 700/1700 = 41%
+  Recall = 700/900 = 78%
+
+Ai win?
+  Nếu bank muốn: catch fraud tối đa → Model B (recall 89%)
+  Nếu bank muốn: không đụng customer đàng hoàng → Model A (precision 80%)
+  Nếu bank muốn: balance → Model C
+</code></pre>
+<p><strong>Insight</strong>: <em>Không có "best model" — phụ thuộc cost của FP vs FN</em>. Accuracy như nhau nhưng business impact khác biệt!</p>
+</div>
+
+<h4>🎯 Metric #4 — F1 Score (harmonic mean của Precision + Recall)</h4>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức F1 = 2·P·R / (P+R)?</div>
+
+<p><strong>Câu hỏi</strong>: Ta có Precision (P) và Recall (R). Muốn 1 số duy nhất để đánh giá tổng thể. Combine như thế nào?</p>
+
+<p><strong>Bước 1 — Naive: Arithmetic Mean</strong></p>
+<pre><code>Simple average: (P + R) / 2
+
+Model X: P=0.9, R=0.1 → (0.9+0.1)/2 = 0.5
+Model Y: P=0.5, R=0.5 → (0.5+0.5)/2 = 0.5
+
+Cả 2 = 0.5. Nhưng Model X có R=0.1 (miss 90% positive) — TỆ HƠN Y!
+Arithmetic mean KHÔNG phân biệt được → SAI.
+</code></pre>
+
+<p><strong>Bước 2 — Ý tưởng: Harmonic Mean</strong></p>
+<p>Harmonic mean = "trung bình có phạt nếu 1 giá trị nhỏ". Công thức tổng quát:</p>
+<pre><code>Harmonic Mean(a, b) = 2 / (1/a + 1/b) = 2ab / (a+b)
+
+Với F1 (áp dụng P và R):
+F1 = Harmonic Mean(P, R) = 2·P·R / (P+R)
+</code></pre>
+
+<p><strong>Bước 3 — Verify: harmonic phạt low value mạnh hơn arithmetic</strong></p>
+<pre><code>Model X: P=0.9, R=0.1
+Arithmetic: (0.9+0.1)/2 = 0.5
+Harmonic: 2×0.9×0.1 / (0.9+0.1) = 0.18/1.0 = 0.18 ← nhỏ hơn nhiều!
+
+Model Y: P=0.5, R=0.5
+Arithmetic: 0.5
+Harmonic: 2×0.5×0.5 / (0.5+0.5) = 0.5/1.0 = 0.5
+
+X đúng F1 thấp hơn Y → F1 phân biệt được.
+</code></pre>
+
+<p><strong>Bước 4 — Vì sao harmonic phạt low value?</strong></p>
+<p>Bởi vì 1/a rất lớn khi a nhỏ. VD 1/0.1 = 10. Nếu 1 giá trị nhỏ, tổng 1/a + 1/b bị dominate bởi giá trị nhỏ → harmonic mean thấp.</p>
+<pre><code>Nếu P=1, R=1: 1/1 + 1/1 = 2, HM = 2/2 = 1 ✓ (perfect)
+Nếu P=0.5, R=0.5: 1/0.5 + 1/0.5 = 4, HM = 2/4 = 0.5 ✓
+Nếu P=0.9, R=0.1: 1/0.9 + 1/0.1 = 1.11 + 10 = 11.1, HM = 2/11.1 = 0.18 ← low value drag down!
+Nếu P=1, R=0: 1/1 + 1/0 = ∞, HM = 0 ← 1 giá trị = 0 → HM = 0 (extreme penalty)
+</code></pre>
+
+<p><strong>Bước 5 — Vì sao có "2" ở tử số?</strong></p>
+<p>Vì trung bình 2 giá trị. Nếu bạn hỏi "trung bình 3 giá trị", công thức: <code>3 / (1/a + 1/b + 1/c)</code>. Vậy "2" chỉ là số values bạn đang average.</p>
+
+<p><strong>Intuition tổng kết</strong>: F1 = harmonic mean vì ta muốn "cả P và R phải cao". Nếu 1 trong 2 rất thấp, F1 kéo xuống mạnh → force balance.</p>
+
+<p><strong>F-beta — mở rộng F1 với weight khác nhau</strong>:</p>
+<pre><code>F_β = (1+β²) · P · R / (β²·P + R)
+
+β = 1: F1 (P và R weight bằng nhau)
+β = 2: F2 (recall quan trọng 2× hơn precision — dùng cho ung thư, fraud)
+β = 0.5: F0.5 (precision quan trọng 2× hơn recall — dùng cho spam, ad)
+
+Vì đâu có β²? — Toán trick để weight tương ứng.
+                Đạo hàm ra chọn β² dễ tính hơn β.
+</code></pre>
+</div>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ tính</div>
+<pre><code>F1 = 2 · Precision · Recall / (Precision + Recall)
+
+Model A: F1 = 2 × 0.80 × 0.44 / (0.80 + 0.44) = 0.567
+Model B: F1 = 2 × 0.16 × 0.89 / (0.16 + 0.89) = 0.271
+Model C: F1 = 2 × 0.41 × 0.78 / (0.41 + 0.78) = 0.537
+
+→ Model A có F1 cao nhất (balance tốt nhất).
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Cần balance Precision + Recall, class imbalanced, competition benchmark.</p>
+<p><strong>❌ Cẩn thận</strong>: F1 giả sử FP và FN có cost bằng nhau. Nếu 1 cost 10× cái kia → dùng F-beta (β = weight của recall).</p>
+</div>
+
+<h4>🎯 Metric #5 — ROC-AUC ("Model rank positive over negative tốt bao nhiêu?")</h4>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ trực quan</div>
+<p><strong>Cách tính</strong>: Vẽ curve TPR (recall) vs FPR (false alarm rate) khi ta thay đổi threshold từ 0 đến 1. Diện tích dưới curve = AUC.</p>
+<pre><code>       TPR (recall)
+        1 ┤        _______★
+          │      /
+        0.8┤    /
+          │  /
+        0.6┤ /
+          │/
+        0.4┤
+          │
+        0 ┼─────────────────
+          0    0.5      1
+                FPR
+
+★ = "perfect model" (TPR=1 at FPR=0)
+Random model = đường chéo (AUC = 0.5)
+Perfect = AUC = 1.0
+</code></pre>
+<p><strong>Interpretation</strong>: AUC = probability rằng model rank 1 random positive sample cao hơn 1 random negative sample.</p>
+<ul>
+<li>AUC = 0.5 → random guess (như tung xu)</li>
+<li>AUC = 0.7 → OK, hơn random</li>
+<li>AUC = 0.9 → very good</li>
+<li>AUC = 1.0 → perfect</li>
+</ul>
+<p><strong>✅ Dùng khi</strong>: Binary classification, class balanced hoặc mildly imbalanced.</p>
+<p><strong>❌ Cẩn thận</strong>: Với imbalanced (1:100+), ROC-AUC quá lạc quan → dùng PR-AUC.</p>
+</div>
+
+<h4>🎯 Metric #6 — Log Loss (Cross-Entropy)</h4>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức Log Loss = −Σ [y·log(p) + (1−y)·log(1−p)]?</div>
+
+<p><strong>Câu hỏi</strong>: Model output probability p (VD 0.85). Actual y=1 (positive). Sai lệch bao nhiêu? Log Loss là công thức "chuẩn" cho probability. Vì sao có log?</p>
+
+<p><strong>Bước 1 — Ý tưởng: "Xác suất model dự đoán ĐÚNG"</strong></p>
+<p>Nếu y=1 và model predict p=0.85, xác suất model "đoán đúng" = 0.85.
+<br>Nếu y=0 và model predict p=0.85 (positive), xác suất model đoán đúng = 1 − 0.85 = 0.15.</p>
+<p>Tổng quát hóa: <code>P(correct) = p^y · (1-p)^(1-y)</code></p>
+<pre><code>Kiểm tra:
+Nếu y=1: P(correct) = p^1 · (1-p)^0 = p ✓
+Nếu y=0: P(correct) = p^0 · (1-p)^1 = 1-p ✓
+</code></pre>
+
+<p><strong>Bước 2 — Với nhiều samples, tổng xác suất đúng</strong></p>
+<p>Assume samples independent, likelihood tổng = tích:</p>
+<pre><code>Likelihood = P(correct sample 1) × P(correct sample 2) × ... × P(correct sample N)
+           = Π p_i^y_i · (1-p_i)^(1-y_i)
+</code></pre>
+
+<p><strong>Bước 3 — Vấn đề: tích của nhiều số nhỏ = underflow</strong></p>
+<p>Với 1000 samples, mỗi p ≈ 0.9, tích = 0.9^1000 ≈ 10^-46 → floating point precision cạn kiệt.</p>
+<p><strong>Fix: dùng LOG</strong>. Log biến tích thành tổng: <code>log(a × b) = log(a) + log(b)</code>.</p>
+<pre><code>log(Likelihood) = Σ [y_i · log(p_i) + (1-y_i) · log(1-p_i)]
+</code></pre>
+
+<p><strong>Bước 4 — Ta muốn "loss" (càng thấp càng tốt), không phải "likelihood" (càng cao càng tốt)</strong></p>
+<pre><code>Log Loss = -log(Likelihood) / N
+        = -(1/N) Σ [y_i · log(p_i) + (1-y_i) · log(1-p_i)]
+</code></pre>
+<p>Dấu trừ: log(prob) < 0 (vì prob < 1) → -log > 0 → loss dương. Càng nhỏ loss = càng cao likelihood = model càng đúng.</p>
+
+<p><strong>Bước 5 — Verify: log loss penalize confident wrong prediction</strong></p>
+<pre><code>Case 1: y=1, model predict p=0.99 (đúng và tự tin)
+  Log Loss = -log(0.99) = 0.01  ← rất thấp ✓
+
+Case 2: y=1, model predict p=0.5 (undecided)
+  Log Loss = -log(0.5) = 0.69  ← trung bình
+
+Case 3: y=1, model predict p=0.01 (SAI và tự tin)
+  Log Loss = -log(0.01) = 4.6  ← rất cao ✗ (penalty huge)
+
+Case 4: y=1, model predict p=0.001
+  Log Loss = -log(0.001) = 6.9  ← extreme penalty!
+
+Intuition: model càng "confident wrong" → loss càng tăng vũ trụ.
+         Encourage model không "quá tự tin" khi không chắc.
+</code></pre>
+
+<p><strong>Vì sao gọi "Cross-Entropy"?</strong> Trong information theory, cross-entropy đo "khoảng cách" giữa 2 distributions. Ở đây: distribution thực (y ∈ {0,1}) và distribution predicted (p). Log Loss = cross-entropy giữa chúng. Đây là why 2 tên dùng thay thế nhau.</p>
+
+<p><strong>Kết nối với maximum likelihood</strong>: Tối ưu Log Loss = maximize log-likelihood = tìm model probability nhất mà data ta thấy. Đây là why Logistic Regression dùng Log Loss — nó chính là maximum likelihood estimator.</p>
+</div>
+
+<h4>🎯 Các metrics khác (advanced)</h4>
+
+<div class="example-box">
+<div class="title">PR-AUC, MCC, Cohen Kappa</div>
+<ul>
+<li><strong>PR-AUC</strong>: Area under Precision-Recall curve. ⭐ Best cho imbalanced (fraud, ung thư). Range [0, 1], càng cao càng tốt.</li>
+<li><strong>MCC (Matthews Correlation Coefficient)</strong>: Correlation giữa predicted và actual. Range [-1, 1], 0 = random. Best cho binary imbalanced (đối xứng FP/FN).</li>
+<li><strong>Cohen Kappa</strong>: <code>(accuracy − expected) / (1 − expected)</code>. Accuracy adjusted for chance. VD: predict "spam" cho 100% emails → accuracy 0.8 (vì 80% là spam thật). Nhưng "random chance" cũng đạt 0.8 → skill thực = 0. Kappa fix bằng cách trừ expected accuracy do chance.</li>
+</ul>
+</div>
+
+<h3>8.2 Regression Metrics — dự đoán số liên tục (giá nhà, return, temperature)</h3>
+
+<h4>🎯 Metric #1 — RMSE (Root Mean Squared Error) ⭐ default</h4>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức RMSE = √((1/N)·Σ(y−ŷ)²)?</div>
+
+<p><strong>Câu hỏi</strong>: Ta có N predictions với errors. Muốn 1 số đại diện "trung bình sai lệch". Đơn giản nhất: <code>average của |y - ŷ|</code>. Nhưng RMSE dùng bình phương rồi khai căn. Vì sao?</p>
+
+<p><strong>Bước 1 — Naive: average error</strong></p>
+<pre><code>avg_error = (1/N) · Σ(y - ŷ)
+
+Ví dụ 3 samples:
+  y=[10, 20, 30], ŷ=[12, 15, 33] → errors=[-2, +5, -3]
+  avg_error = (-2 + 5 - 3) / 3 = 0
+
+Ơ, avg=0 nghĩa là model perfect? SAI! Model sai cả 3 samples.
+Vấn đề: dương âm cancel nhau.
+</code></pre>
+
+<p><strong>Bước 2 — Fix: dùng absolute value → MAE</strong></p>
+<pre><code>MAE = (1/N) · Σ|y - ŷ|
+    = (2 + 5 + 3) / 3
+    = 3.33
+</code></pre>
+<p>Đây là MAE — nghe hợp lý. Vì sao còn cần RMSE?</p>
+
+<p><strong>Bước 3 — Vấn đề với absolute value: khó tối ưu</strong></p>
+<p>|y - ŷ| có "corner" tại y = ŷ → không differentiable → gradient descent gặp vấn đề tại đó.</p>
+<p>Bình phương (y - ŷ)² smooth mọi nơi → differentiable → gradient descent work.</p>
+
+<p><strong>Bước 4 — Fix: dùng bình phương → MSE</strong></p>
+<pre><code>MSE = (1/N) · Σ(y - ŷ)²
+    = (4 + 25 + 9) / 3
+    = 12.67
+</code></pre>
+<p>Nhưng đơn vị MSE = y² (VD triệu VND²) — khó interpret ("model sai 12.67 triệu-bình-phương" nghĩa là gì?)</p>
+
+<p><strong>Bước 5 — Fix: khai căn → RMSE</strong></p>
+<pre><code>RMSE = √MSE = √12.67 = 3.56
+</code></pre>
+<p>Đơn vị lại về y (triệu VND). Interpretable: "trung bình sai 3.56 triệu".</p>
+
+<p><strong>Bước 6 — Vì sao RMSE ≠ MAE?</strong></p>
+<pre><code>Errors: [2, 5, 3]
+MAE = 3.33
+RMSE = 3.56
+
+Errors: [1, 1, 10]  (outlier)
+MAE = (1+1+10)/3 = 4.0
+RMSE = √((1+1+100)/3) = √34 = 5.83  ← RMSE cao hơn MAE nhiều
+
+Insight: RMSE penalize outliers MẠNH hơn MAE (bình phương blow up với error lớn).
+</code></pre>
+
+<p><strong>Vì sao RMSE là "default"?</strong></p>
+<ul>
+<li>Differentiable → dùng làm loss function trong training.</li>
+<li>Cùng đơn vị y → dễ interpret.</li>
+<li>Penalize outliers → force model không có "large errors".</li>
+</ul>
+
+<p><strong>Trade-off</strong>: RMSE nhạy với outliers. Nếu data có outliers không thể tránh, MAE có thể tốt hơn (robust).</p>
+
+<p><strong>Kết nối với normal distribution</strong>: Nếu errors follow normal distribution N(0, σ), thì RMSE ≈ σ. Đây là why RMSE là "chuẩn" trong statistics — nó estimate σ của noise.</p>
+</div>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ</div>
+<pre><code>RMSE = √( (1/N) · Σ(y - ŷ)² )
+
+Ví dụ predict giá nhà (đơn vị triệu VND):
+  Nhà 1: y=500, ŷ=510 → error=10, squared=100
+  Nhà 2: y=800, ŷ=820 → error=20, squared=400
+  Nhà 3: y=1200, ŷ=1150 → error=-50, squared=2500
+
+RMSE = √((100+400+2500)/3) = √1000 = 31.6 (triệu VND)
+
+Nghĩa: "Trung bình model sai lệch 31.6 triệu."
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Default cho regression, cùng đơn vị y (dễ interpret).</p>
+<p><strong>❌ Cẩn thận</strong>: Sensitive với outliers. 1 nhà predict sai 500 triệu → RMSE tăng vọt.</p>
+</div>
+
+<h4>🎯 Metric #2 — MAE (Mean Absolute Error) — robust hơn RMSE</h4>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ (cùng data)</div>
+<pre><code>MAE = (1/N) · Σ|y - ŷ|
+    = (10 + 20 + 50) / 3
+    = 26.7 (triệu VND)
+
+Nghĩa: "Trung bình model sai 26.7 triệu (không squared).".
+</code></pre>
+<p><strong>So sánh RMSE vs MAE</strong>:
+<br>&nbsp;&nbsp;• RMSE = 31.6, MAE = 26.7 → RMSE luôn ≥ MAE.
+<br>&nbsp;&nbsp;• Gap RMSE − MAE lớn = có outliers.
+<br>&nbsp;&nbsp;• Gap nhỏ = errors đều nhau.</p>
+<p><strong>✅ Dùng khi</strong>: Data có outliers không muốn penalize quá mạnh.</p>
+<p><strong>❌ Cẩn thận</strong>: Không phân biệt lỗi nhỏ vs lớn (linear penalty).</p>
+</div>
+
+<h4>🎯 Metric #3 — MAPE (Mean Absolute Percentage Error) — báo cáo business</h4>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ</div>
+<pre><code>MAPE = (1/N) · Σ |y - ŷ| / |y| · 100
+
+Ví dụ:
+  Nhà 1: |10|/500 · 100 = 2%
+  Nhà 2: |20|/800 · 100 = 2.5%
+  Nhà 3: |50|/1200 · 100 = 4.2%
+
+MAPE = (2 + 2.5 + 4.2) / 3 = 2.9%
+
+Nghĩa: "Trung bình model sai 2.9% giá trị."
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Report cho business (dễ hiểu "sai 3%" hơn "sai 30 triệu").</p>
+<p><strong>❌ Cẩn thận</strong>: Đảo lộn khi y ≈ 0 (chia cho 0). VD predict return chứng khoán return ≈ 0.001 → MAPE vô nghĩa.</p>
+</div>
+
+<h4>🎯 Metric #4 — R² (Coefficient of Determination)</h4>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức R² = 1 − SS_res/SS_tot?</div>
+
+<p><strong>Câu hỏi</strong>: RMSE cho ta "sai lệch bao nhiêu" nhưng không có "context". RMSE = 30 triệu — tốt hay tệ? Phụ thuộc data. R² giải quyết bằng cách so với baseline.</p>
+
+<p><strong>Bước 1 — Baseline "ngu nhất": predict mean cho mọi sample</strong></p>
+<p>Nếu bạn không có model gì, cách dumbest là predict cho mọi sample = mean của training set.</p>
+<pre><code>Ví dụ predict giá nhà:
+Data: 500tr, 800tr, 1200tr → mean = 833tr
+
+Baseline predict: 833tr cho MỌI nhà.
+
+Errors:
+  Nhà 1: |500-833| = 333tr
+  Nhà 2: |800-833| = 33tr
+  Nhà 3: |1200-833| = 367tr
+
+Tổng bình phương error (SS_total):
+  333² + 33² + 367² = 110,889 + 1,089 + 134,689 = 246,667
+</code></pre>
+
+<p><strong>Bước 2 — SS_residual = tổng bình phương error CỦA MODEL</strong></p>
+<pre><code>Model predict: 510, 820, 1150
+
+Errors:
+  Nhà 1: |500-510| = 10
+  Nhà 2: |800-820| = 20
+  Nhà 3: |1200-1150| = 50
+
+SS_residual = 10² + 20² + 50² = 100 + 400 + 2500 = 3000
+</code></pre>
+
+<p><strong>Bước 3 — Ratio: model tốt hơn baseline bao nhiêu?</strong></p>
+<pre><code>SS_residual / SS_total = 3000 / 246,667 = 0.012
+
+Nghĩa là model có error CHỈ 1.2% của baseline.
+Model rất tốt!
+</code></pre>
+
+<p><strong>Bước 4 — R² = "1 minus ratio" để có scale [0, 1]</strong></p>
+<pre><code>R² = 1 - SS_residual / SS_total
+   = 1 - 0.012
+   = 0.988 = 98.8%
+
+Ý nghĩa: model explain 98.8% variance của y.
+        Còn lại 1.2% là "noise không thể explain".
+</code></pre>
+
+<p><strong>Bước 5 — 3 trường hợp giới hạn</strong></p>
+<pre><code>Case 1: Model perfect (mọi ŷ = y)
+  SS_residual = 0 → R² = 1 - 0 = 1  ✓ (tốt nhất)
+
+Case 2: Model = baseline (predict mean cho mọi sample)
+  SS_residual = SS_total → R² = 1 - 1 = 0  ✓ (không hơn baseline)
+
+Case 3: Model tệ hơn baseline (predict linh tinh)
+  SS_residual > SS_total → R² < 0  ✗ (tệ hơn baseline!)
+</code></pre>
+
+<p><strong>Vì sao R² có thể ÂM?</strong> Vì bạn có thể có model tệ hơn "predict mean". VD với data non-linear và bạn fit linear regression sai chiều, model có thể predict luôn ngược hướng → error lớn hơn baseline. R² sẽ âm.</p>
+
+<p><strong>Intuition sâu — SS gọi là "Sum of Squares"</strong></p>
+<pre><code>SS_total = Σ(y - mean(y))² = "spread của y quanh mean"
+                          = total variance của y
+
+SS_residual = Σ(y - ŷ)² = "spread của y quanh predictions"
+                       = unexplained variance
+</code></pre>
+<p>R² = 1 − unexplained/total = <strong>explained/total = "% variance mà model explain"</strong>. Đây là why R² có tên "coefficient of determination" — nó determine bao nhiêu variance được model determine.</p>
+</div>
+
+<div class="example-box">
+<div class="title">Công thức + ví dụ</div>
+<pre><code>R² = 1 - SS_residual / SS_total
+   = 1 - Σ(y - ŷ)² / Σ(y - mean(y))²
+
+Ý nghĩa: % variance của y mà model explain được.
+  R² = 1: model perfect
+  R² = 0: model không tốt hơn "predict = mean(y)"
+  R² &lt; 0: model TỆ HƠN "predict = mean" (rất tệ!)
+
+Ví dụ predict giá nhà, R² = 0.85 → "model explain được 85% variance."
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Compare model performance vs mean baseline. Publication (paper).</p>
+<p><strong>❌ Cẩn thận</strong>: Không interpretable trực tiếp cho business ("85% variance" nghĩa là gì với sếp?).</p>
+</div>
+
+<h4>🎯 Các metrics khác</h4>
+
+<div class="example-box">
+<div class="title">MSE, sMAPE, Adjusted R², Huber Loss</div>
+<ul>
+<li><strong>MSE</strong>: RMSE nhưng chưa √. Đơn vị y² khó interpret. Dùng làm loss function chứ ít report.</li>
+<li><strong>sMAPE (symmetric MAPE)</strong>: <code>2|y-ŷ|/(|y|+|ŷ|)</code>. Handle y=0 tốt hơn MAPE.</li>
+<li><strong>Adjusted R²</strong>: R² điều chỉnh theo # features. Prevent overfit khi thêm features vô nghĩa.</li>
+<li><strong>Huber Loss</strong>: MSE cho error nhỏ + MAE cho error lớn. Robust với outliers mà vẫn smooth.</li>
+</ul>
+</div>
+
+<h3>8.3 Clustering Metrics — khó vì không có ground truth</h3>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vấn đề: đánh giá "cluster tốt" thế nào?</div>
+<p>Không có ground truth (không ai bảo cluster đúng phải thế nào). Chỉ có <em>internal metrics</em> — đo "cluster có compact và tách rời không".</p>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📖 Vì đâu có công thức Silhouette = (b − a) / max(a, b)?</div>
+
+<p><strong>Câu hỏi</strong>: Cluster tốt là "compact + tách rời". Làm sao đo đồng thời 2 điều này bằng 1 số?</p>
+
+<p><strong>Bước 1 — Định nghĩa 2 khoảng cách</strong></p>
+<p>Cho 1 sample x trong cluster A:</p>
+<ul>
+<li><strong>a</strong> = avg distance từ x đến các points KHÁC trong cluster A (measure "compact")
+<br>&nbsp;&nbsp;&nbsp;• a nhỏ = cluster A compact (points gần nhau)
+<br>&nbsp;&nbsp;&nbsp;• a lớn = cluster A rời rạc</li>
+<li><strong>b</strong> = avg distance từ x đến points trong cluster GẦN NHẤT khác (measure "tách rời")
+<br>&nbsp;&nbsp;&nbsp;• b lớn = cluster khác xa (tách rời tốt)
+<br>&nbsp;&nbsp;&nbsp;• b nhỏ = cluster khác gần (không tách được)</li>
+</ul>
+
+<p><strong>Bước 2 — Ý tưởng đơn giản: (b − a)</strong></p>
+<p>Nếu cluster tốt: a nhỏ + b lớn → (b − a) lớn.
+<br>Nếu cluster tệ: a lớn + b nhỏ → (b − a) âm.</p>
+<pre><code>Ví dụ:
+Sample x, a=2, b=10 → b-a = 8 (tốt: cùng cluster gần, khác cluster xa)
+Sample y, a=8, b=3 → b-a = -5 (tệ: y nên thuộc cluster khác!)
+</code></pre>
+
+<p><strong>Bước 3 — Vấn đề: scale không consistent</strong></p>
+<p>b-a phụ thuộc scale của distance. VD:</p>
+<ul>
+<li>Data pixel (0-255): a=5, b=20 → b-a = 15</li>
+<li>Data metric (0-1): a=0.02, b=0.08 → b-a = 0.06</li>
+</ul>
+<p>Cùng chất lượng cluster nhưng values khác nhau → không compare được.</p>
+
+<p><strong>Bước 4 — Fix: chia cho max(a, b) để normalize về [-1, 1]</strong></p>
+<pre><code>Silhouette = (b - a) / max(a, b)
+
+Trường hợp b > a (bình thường):
+  max(a, b) = b → Silhouette = (b-a)/b = 1 - a/b
+  Nếu a → 0 (cluster compact): Silhouette → 1 ✓
+  Nếu a → b (không tách): Silhouette → 0
+
+Trường hợp a > b (sample sai cluster):
+  max(a, b) = a → Silhouette = (b-a)/a
+  Silhouette âm → sample sai cluster.
+</code></pre>
+
+<p><strong>Bước 5 — Verify range [-1, 1]</strong></p>
+<pre><code>Best case: a=0 (perfect compact), b=∞ (perfect separation)
+  Silhouette = (∞-0)/∞ = 1
+
+Boundary case: a = b (không phân biệt được)
+  Silhouette = 0
+
+Worst case: a=∞ (rời rạc trong cluster), b=0 (sát cluster khác)
+  Silhouette = (0-∞)/∞ = -1
+</code></pre>
+
+<p><strong>Vì sao chia max(a,b) mà không phải (a+b)/2?</strong> Vì:</p>
+<ul>
+<li>Chia max(a,b): kết quả trong [-1, 1] chắc chắn (đẹp).</li>
+<li>Chia (a+b)/2: kết quả có thể vượt [-1, 1] khi a, b khác biệt cực đoan.</li>
+</ul>
+<p>max(a,b) là normalizer robust hơn.</p>
+</div>
+
+<div class="example-box">
+<div class="title">Công thức + interpretation</div>
+<pre><code>Silhouette(sample) = (b - a) / max(a, b)
+
+  a = avg distance từ sample đến points cùng cluster
+  b = avg distance từ sample đến points nearest cluster khác
+
+Range: [-1, 1]
+  1  = cluster tốt (a nhỏ, b lớn — cùng cluster gần, khác cluster xa)
+  0  = boundary (không rõ thuộc cluster nào)
+  -1 = wrong cluster (nên thuộc cluster khác)
+
+Toàn dataset: avg silhouette qua mọi samples.
+  &gt; 0.5: clustering strong
+  0.25 - 0.5: clustering weak
+  &lt; 0.25: clustering fail
+</code></pre>
+</div>
+
+<div class="example-box">
+<div class="title">Elbow Method (chọn K)</div>
+<p><strong>Cách</strong>: Chạy K-Means với K = 1, 2, 3, ..., 10. Plot WCSS (Within-Cluster Sum of Squares) theo K. Chọn K ở "khuỷu" (elbow) — nơi WCSS giảm chậm lại.</p>
+<pre><code>WCSS
+  |
+100k┤
+    │ *
+ 80k┤  \
+    │   *
+ 40k┤    \
+    │     *__ ← ELBOW ở K=4
+ 30k┤        *___
+    │            *___
+ 25k┤                *
+    └────────────────→ K
+      1  2  3  4  5  6
+</code></pre>
+</div>
+
+<h3>8.4 Ranking / Recommendation Metrics — dùng cho Search + RAG</h3>
+
+<div class="example-box">
+<div class="title">Precision@K + Recall@K</div>
+<pre><code>Query: "phở ngon Hà Nội"
+Search top-10 results.
+Trong 10 results, có 4 là relevant thật.
+
+Precision@10 = 4/10 = 40%   (trong top-10, 40% relevant)
+
+Có tổng 20 restaurants relevant trong DB.
+Recall@10 = 4/20 = 20%   (top-10 catch được 20% relevant)
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Search results, retrieval systems (RAG), recommendation.</p>
+</div>
+
+<div class="example-box">
+<div class="title">MRR (Mean Reciprocal Rank)</div>
+<pre><code>Cho N queries, mỗi query có 1 correct answer.
+MRR = (1/N) · Σ 1/rank_of_first_correct
+
+Ví dụ 3 queries:
+  Q1: correct answer ở rank 1 → 1/1 = 1.0
+  Q2: correct answer ở rank 3 → 1/3 = 0.33
+  Q3: correct answer ở rank 2 → 1/2 = 0.5
+
+MRR = (1.0 + 0.33 + 0.5) / 3 = 0.61
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Q&amp;A, factoid search — chỉ care rank của first correct answer.</p>
+</div>
+
+<div class="example-box">
+<div class="title">NDCG (Normalized Discounted Cumulative Gain)</div>
+<p><strong>Idea</strong>: Kết quả rank cao hơn được weight cao hơn. Handle graded relevance (không chỉ binary).</p>
+<pre><code>DCG@k = Σ_{i=1}^{k} rel_i / log_2(i+1)
+
+Ví dụ top-3 search results với relevance [3, 2, 1]:
+  DCG@3 = 3/log2(2) + 2/log2(3) + 1/log2(4)
+        = 3/1 + 2/1.58 + 1/2
+        = 3 + 1.26 + 0.5
+        = 4.76
+
+Ideal DCG (nếu top-3 = [3, 3, 2]):
+  IDCG@3 = 3 + 3/1.58 + 2/2 = 5.9
+
+NDCG@3 = DCG@3 / IDCG@3 = 4.76/5.9 = 0.81
+</code></pre>
+<p><strong>✅ Dùng khi</strong>: Search với graded relevance (rất liên quan / hơi liên quan / không liên quan).</p>
+</div>
+
+<h3>8.5 RL Metrics — đo performance của agent</h3>
+
+<div class="example-box">
+<div class="title">Cumulative Reward + Win Rate</div>
+<pre><code>Ví dụ agent chơi Atari Breakout:
+Episode 1: reward = 25 (breaks 25 bricks)
+Episode 2: reward = 40
+Episode 3: reward = 100 (thắng)
+...
+Episode 100: reward = 300
+
+Average return = mean of last 100 episodes.
+Learning curve: plot return over time — should trend UP.
+
+Win rate (game agents):
+  100 games, agent thắng 65 → win rate 65%.
+</code></pre>
+</div>
+
+<div class="example-box">
+<div class="title">Sample Efficiency + KL Divergence</div>
+<ul>
+<li><strong>Sample Efficiency</strong>: Reward đạt sau N training samples. Algorithm nào cần ít samples hơn = better. Compare DQN vs SAC vs PPO.</li>
+<li><strong>KL Divergence vs baseline</strong>: Policy mới khác policy cũ bao nhiêu. Dùng trong PPO / RLHF để prevent policy collapse.</li>
+<li><strong>Regret</strong>: Optimal reward − actual reward. Dùng trong multi-armed bandits để đo "cost of exploration".</li>
+</ul>
+</div>
+
+<h3>8.6 Cheat sheet chọn metric — quick reference</h3>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🎯 Decision tree chọn metric</div>
+<pre><code>Task gì?
+├── Classification
+│   ├── Class balanced (spam 50/50, MNIST) → Accuracy
+│   ├── FP costly (spam filter, ads) → Precision
+│   ├── FN costly (ung thư, fraud) → Recall
+│   ├── Balance FP + FN → F1
+│   ├── Cần probability calibrated → Log Loss
+│   ├── Imbalanced (fraud 1:1000) → PR-AUC ⭐
+│   └── Compare model families → ROC-AUC (careful nếu imbalanced)
+│
+├── Regression
+│   ├── Default → RMSE ⭐
+│   ├── Nhiều outliers → MAE hoặc Huber
+│   ├── Report business → MAPE
+│   └── Compare vs mean baseline → R²
+│
+├── Clustering
+│   ├── Chọn K → Elbow method (WCSS)
+│   └── Đo quality → Silhouette ⭐
+│
+├── Ranking / Search / RAG
+│   ├── Binary relevance → Precision@K + Recall@K
+│   ├── Q&A first answer → MRR
+│   └── Graded relevance → NDCG ⭐
+│
+└── Reinforcement Learning
+    ├── Default → Cumulative reward
+    ├── Games → Win rate
+    ├── Compare algorithms → Sample efficiency
+    └── Safety in RLHF → KL divergence
+</code></pre>
+</div>
+
+<p><strong>Insight cuối</strong>: Nhiều case dùng <em>nhiều metrics đồng thời</em> để có bức tranh tổng. VD spam filter theo dõi: Precision (không giết ham), Recall (catch spam), F1 (balance), PR-AUC (rank quality). Chọn metric primary để optimize, secondary để watch.</p>
+
+<h2>9. Xem 1 XGBoost training log V18 (đọc từng field chi tiết)</h2>
+
+<p>Sau khi train, V18 log ra 1 dòng cho mỗi ticker × horizon. Ví dụ:</p>
+
+<pre><code>[FPT h=1] cv3=0.638 std=0.080 f1=0.526 skill=+0.376 cal=platt ece1=0.005 ece2=0.000 blend_a=0.80 nested=0.472
+[FPT h=1] SAVED → /app/models/v20_pilot_15/FPT.t1.joblib  (cv=0.621  samples=1307  features=114  multi_seed_spread=0.012)
+</code></pre>
+
+<h3>9.1 Field-by-field giải thích</h3>
+
+<table>
+<tr><th>Field</th><th>Giá trị</th><th>Ý nghĩa</th><th>Tốt/Xấu?</th></tr>
+<tr><td><code>cv3</code></td><td>0.638</td><td>3-fold CV accuracy trung bình = 63.8%. Model dự đoán UP/DOWN/FLAT đúng 63.8% trên val sets.</td><td>✅ Tốt (baseline 3-class ~42%, cv 63.8% có edge rõ)</td></tr>
+<tr><td><code>std</code></td><td>0.080</td><td>Standard deviation của cv giữa 3 folds = 8pp. Fold 1 có thể 52%, fold 2 có 68%, fold 3 có 70% (mean 63.3%, population std ≈ 8.1pp).</td><td>⚠️ Chấp nhận được (target &lt; 10pp, càng thấp càng stable)</td></tr>
+<tr><td><code>f1</code></td><td>0.526</td><td>F1 macro (average F1 qua 3 class UP/DOWN/FLAT) = 52.6%. Cân bằng precision + recall.</td><td>✅ OK (F1 luôn thấp hơn accuracy cho class imbalanced)</td></tr>
+<tr><td><code>skill</code></td><td>+0.376</td><td>Skill score = (cv − baseline) / (1 − baseline) = (0.638 − 0.42) / (1 − 0.42) = 0.376. Đo model vượt baseline bao nhiêu %.</td><td>✅ Tốt (&gt; 0.3 = có skill rõ)</td></tr>
+<tr><td><code>cal</code></td><td>platt</td><td>Calibration method dùng. Platt sigmoid fit trên val set để calibrate probability. Alternative: isotonic.</td><td>ℹ️ Info</td></tr>
+<tr><td><code>ece1</code></td><td>0.005</td><td>Expected Calibration Error stage 1. Khoảng cách trung bình giữa predicted probability và actual accuracy. 0.005 = 0.5%.</td><td>✅ Rất tốt (target &lt; 0.02)</td></tr>
+<tr><td><code>ece2</code></td><td>0.000</td><td>ECE stage 2 (sau calibration cả 2 stages). 0.000 = perfectly calibrated.</td><td>✅ Xuất sắc</td></tr>
+<tr><td><code>blend_a</code></td><td>0.80</td><td>Blend alpha — trọng số XGBoost trong ensemble. 0.80 = 80% XGBoost + 20% LightGBM.</td><td>ℹ️ V18 default</td></tr>
+<tr><td><code>nested</code></td><td>0.472</td><td>Nested CV accuracy (tune hyperparams trong inner loop, eval trên outer). Thấp hơn cv3 vì strict hơn — không có leakage giữa tune và eval.</td><td>⚠️ Gap cv3 (0.638) vs nested (0.472) = 17pp. Model có thể hơi optimistic. Chấp nhận nếu nested vẫn &gt; baseline.</td></tr>
+<tr><td><code>samples</code></td><td>1307</td><td>Số samples train (rows sau khi filter valid features).</td><td>✅ Đủ (target &gt; 1000)</td></tr>
+<tr><td><code>features</code></td><td>114</td><td>Số features feed vào model (V18 base + V20 additions + engineered).</td><td>ℹ️ Info</td></tr>
+<tr><td><code>multi_seed_spread</code></td><td>0.012</td><td>Standard deviation của cv giữa 3 random seeds. 0.012 = 1.2pp spread.</td><td>✅ Thấp = model stable, không sensitive to random init</td></tr>
+</table>
+
+<h3>9.2 Verdict nhanh</h3>
+
+<p>Với log trên, FPT h=1 model đánh giá:</p>
+<ul>
+  <li><strong>Chất lượng</strong>: Tốt (cv 63.8%, skill +0.376, ECE 0.005 — production ready).</li>
+  <li><strong>Stability</strong>: Tốt (multi_seed_spread 1.2pp, std 8pp).</li>
+  <li><strong>Cảnh báo</strong>: Nested CV gap 17pp — cần watch nếu deploy: có thể true OOS accuracy gần 47% hơn 64%.</li>
+  <li><strong>Action</strong>: Deploy được nhưng monitor closely trong 2-4 tuần đầu.</li>
+</ul>
+
+<h3>9.3 Warning signs khi đọc log (cần alert)</h3>
+
+<ul>
+  <li>❌ <code>cv3 &lt; 0.45</code> (chỉ hơn random 3pp) → model không đủ signal, xem lại features</li>
+  <li>❌ <code>std &gt; 0.15</code> → 3 folds quá khác nhau, có regime shift trong data</li>
+  <li>❌ <code>ece &gt; 0.05</code> → probability không calibrated, đừng dùng cho position sizing</li>
+  <li>❌ <code>multi_seed_spread &gt; 0.03</code> → model không stable, tune lại hoặc dùng ensemble seeds</li>
+  <li>❌ <code>nested &lt; 0.4</code> → dù cv3 cao, thực tế production sẽ tệ. Cẩn thận optimistic bias.</li>
+</ul>
+
+<h2>10. Khi nào KHÔNG dùng XGBoost?</h2>
+<ul>
+  <li>Text/image data → deep learning wins</li>
+  <li>Sequential dependency > 5-10 steps → transformer/LSTM</li>
+  <li>Data cực ít (&lt; 100 rows) → linear model / rule-based</li>
+  <li>Cần real-time inference < 1ms → linear + FPGA</li>
+</ul>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Sự khác nhau giữa Bagging và Boosting?</p>
+<p class="a">Bagging: cây độc lập, parallel, giảm variance. Boosting: cây sequential, mỗi cây sửa lỗi cây trước, giảm bias + variance nhưng overfit dễ hơn.</p>
+
+<p class="q">2. XGBoost đưa ra 5 innovations gì so với GBM cũ?</p>
+<p class="a">2nd-order Taylor, L1+L2 reg, weighted quantile sketch, sparsity-aware, parallel + cache-aware.</p>
+
+<p class="q">3. max_depth trong XGBoost quá lớn thì gì xảy ra?</p>
+<p class="a">Mỗi cây quá phức tạp → memorize training → overfit → val loss tăng. Combat: giảm depth (3-6), tăng min_child_weight, tăng reg_lambda, dùng early stopping.</p>
+
+<p class="q">4. LightGBM grow leaf-wise. Ưu và nhược?</p>
+<p class="a">Ưu: converge nhanh hơn (chọn lá loss cao nhất grow). Nhược: dễ overfit data nhỏ (imbalance depth). Cần đặt max_leaves + min_data_in_leaf carefully.</p>
+
+<p class="q">5. Đọc log cv3=0.638 std=0.080 skill=+0.376 ece1=0.005. Nhận xét chất lượng model.</p>
+<p class="a">cv 63.8% cao hơn baseline 42% đáng kể (skill +0.376 = có skill rõ). std 0.080 = 3 folds spread 8pp (chấp nhận được nhưng cần chú ý). ECE 0.005 rất tốt (well-calibrated). Overall: production-ready.</p>
+
+</div>
+
+<div class="callout" style="background: rgba(239,68,68,0.08); border-left-color: #ef4444">
+<div class="label">❌ Sai lầm thường gặp vs ✅ Thực tế</div>
+<ul>
+  <li><strong>❌ "XGBoost luôn tốt hơn Random Forest"</strong> → ✅ Nếu overfit là vấn đề + data noisy + không có thời gian tune → RF an toàn hơn. XGBoost win khi tune kỹ.</li>
+  <li><strong>❌ "Tăng n_estimators luôn tốt hơn"</strong> → ✅ Không có early stopping thì boost quá nhiều = overfit. Rule: n_estimators cao + learning_rate thấp + early_stopping_rounds=50.</li>
+  <li><strong>❌ "Feature importance của XGBoost = feature nào quan trọng"</strong> → ✅ Có 3 loại importance (gain, cover, weight) — kết quả khác nhau. Tin SHAP hơn built-in importance.</li>
+  <li><strong>❌ "max_depth = 15 để model học pattern phức tạp"</strong> → ✅ Với gradient boosting, weak learners tốt hơn. Depth 3-6 cho phần lớn trường hợp. Depth cao chỉ tăng overfit.</li>
+  <li><strong>❌ "LightGBM nhanh nên luôn nên chọn"</strong> → ✅ LightGBM leaf-wise dễ overfit trên data nhỏ (&lt; 10k rows). Với V18 mỗi ticker ~1250 rows, phải set num_leaves nhỏ + min_data_in_leaf cao.</li>
+</ul>
+</div>
+
+<h2>11. 🎓 Interview-style Q&A nâng cao</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q1: "Giải thích trong 1 phút vì sao XGBoost dùng Taylor bậc 2."</div>
+<p><strong>Model answer</strong>: "GBM cũ chỉ dùng gradient (đạo hàm bậc 1) để chọn hướng của cây mới → giống 'xuống núi chỉ nhìn độ dốc chân mình'. XGBoost dùng thêm hessian (bậc 2 = độ cong) → 'thấy trước địa hình sẽ dốc lên hay bằng phẳng' → chọn bước tối ưu hơn. Toán học: h_optimal = −g/H (leaf weight optimal). Kết quả: converge nhanh 2× + accuracy tăng 2-5%."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q2: "Model XGBoost của bạn train acc 90%, val acc 55%. Fix theo priority nào?"</div>
+<p><strong>Model answer</strong>: "Overfit rõ. Fix theo priority: (1) Early stopping (nhanh, gần như luôn giúp). (2) Giảm max_depth từ 8 → 4. (3) Tăng min_child_weight từ 1 → 10. (4) Subsample + colsample_bytree từ 1.0 → 0.7. (5) Tăng reg_lambda từ 1 → 10. (6) Cuối cùng: kiểm tra label leak (feature nào đó peek future). Không nhảy Optuna trước khi thử các fix cơ bản."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q3: "Vì sao GBM residual = negative gradient của MSE loss?"</div>
+<p><strong>Model answer</strong>: "Loss MSE = (y−ŷ)². Đạo hàm theo ŷ: ∂L/∂ŷ = −2(y−ŷ) = −2 × residual. Bỏ constant 2 (absorb vào learning rate): residual = −∂L/∂ŷ. Nghĩa là GBM update ŷ_new = ŷ_old + η×residual chính là gradient descent trên function space. Generalize: với loss khác (log-loss, Huber), residual định nghĩa lại là negative gradient — công thức nhất quán."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q4: "Gini vs Entropy — khi nào chọn cái nào?"</div>
+<p><strong>Model answer</strong>: "Correlation 0.99+ giữa 2 impurity metrics → trong thực tế không quan trọng lắm. Nhưng: Gini tính nhanh hơn (không log), default trong sklearn/XGBoost. Entropy chậm hơn 15-20% nhưng có ý nghĩa information-theoretic rõ (bits). Rule: dùng Gini cho speed, entropy nếu cần explain theo information theory. Split cuối cùng thường identical."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q5: "Bạn có 500k rows, 200 features, 100 categorical. Chọn XGBoost / LightGBM / CatBoost?"</div>
+<p><strong>Model answer</strong>: "CatBoost. Lý do: (1) 100 categorical = nhiều — CatBoost native handle với ordered target encoding, tránh leak. (2) Data lớn (500k) đủ cho ordered TS statistics. (3) XGBoost cần one-hot 100 cats → sparse explode. (4) LightGBM có native cat support nhưng dùng simple encoding, kém CatBoost với high-cardinality. Fallback: nếu cần train nhanh nhất → LightGBM."</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li><code>backend/train_v18_unified.py</code> line 415: XGBoost fit call trong Optuna objective</li>
+    <li><code>backend/train_v18_unified.py</code>: <code>train_2stage_multi_seed()</code> — ensemble 3 seeds</li>
+    <li><code>reports/_baselines/v20_slice_2_signoff.json</code>: cv per ticker, ece, multi_seed_spread</li>
+    <li>Artifact keys: <code>clf1</code>, <code>clf2_xgb</code>, <code>clf2_lgbm</code>, <code>cal1</code>, <code>cal2_iso</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1603.02754">XGBoost paper (Chen & Guestrin, KDD 2016)</a> — must-read</li>
+    <li>📄 <a href="https://papers.nips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html">LightGBM paper (Ke et al, NeurIPS 2017)</a></li>
+    <li>📖 Breiman (2001) — <em>Random Forests</em> (paper gốc)</li>
+    <li>🎥 <a href="https://youtu.be/OtD8wVaFm6E">StatQuest — Gradient Boost explained visually</a></li>
+    <li>📖 <a href="https://xgboost.readthedocs.io/">XGBoost official docs</a> — parameter tuning guide</li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L1_2_features.html">← L1.2</a>
+  <a href="L2_1_bias_variance.html">L2.1 · Bias-Variance →</a>
+</div>
+
+</div>
+</body>
+</html>

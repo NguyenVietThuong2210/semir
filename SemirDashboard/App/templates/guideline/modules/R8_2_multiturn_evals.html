@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R8.2 · Multi-turn Evals — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Observability &amp; Evaluation · Điểm 2/6</div>
+  <h1>R8.2 · Multi-turn Evals</h1>
+  <p class="subtitle">Chấm 1 câu trả lời đơn không giống chấm 1 cuộc hội thoại nhiều lượt. Đây là khoảng trống thật trong curriculum hiện tại — chưa có module nào dạy riêng.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+<li>Giải thích vì sao metric single-turn (đã học ở <code>L5_4</code>) <strong>không tự động chuyển sang được</strong> multi-turn.</li>
+<li>Kể đúng 3 failure mode chỉ xuất hiện khi nhìn xuyên nhiều lượt: context drift, knowledge retention, conversational coherence.</li>
+<li>Phân biệt 2 chế độ eval: <strong>holistic evaluation</strong> vs <strong>sliding-window per-turn evaluation</strong>.</li>
+<li>Giải thích vì sao production 2026 cần dùng <strong>cả 2</strong> chế độ, không chọn 1.</li>
+<li>Phân biệt <strong>aptitude collapse</strong> (khả năng tối đa giảm) với <strong>unreliability explosion</strong> (độ nhất quán giữa các lần thử sụp đổ) — 2 cơ chế khác hẳn nhau đứng sau cùng 1 con số "-39%".</li>
+<li>Kể tên + phân biệt 2 benchmark multi-turn 2026 (MT-Bench-101, MultiChallenge) với MT-Bench gốc đã học ở <code>L5_4</code>.</li>
+<li>Hiểu pattern <strong>user-simulator</strong> để sinh test case multi-turn tự động thay vì viết tay từng kịch bản.</li>
+<li>Áp dụng đúng cho tình huống dự án hiện tại chưa có tính năng hội thoại nhiều lượt.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p><a href="../modules/L5_4_llm_eval.html">L5.4 — LLM Evaluation</a> dạy đầy đủ 4 approach eval (auto-metric, LLM-as-judge, benchmark, human eval) nhưng toàn bộ khung đó mặc định là <strong>single-turn</strong>: 1 prompt → 1 output → 1 điểm số. Đây là gap thật — không phải "ôn nhanh" như các mục khác trong topic 8, mà là 1 mảng kiến thức <strong>chưa từng xuất hiện</strong> trong 51 module cũ. Xếp độ khó Trung bình vì khái niệm dễ nắm nhưng thiết kế eval harness cho hội thoại dài đòi hỏi suy nghĩ kỹ hơn 1 phép so khớp đơn giản.</p>
+
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p>Chấm 1 câu trả lời đơn (single-turn) giống chấm 1 câu trong bài thi trắc nghiệm — đúng/sai rõ ràng, không phụ thuộc câu trước đó. Chấm 1 cuộc hội thoại nhiều lượt (multi-turn) giống chấm 1 cuộc <strong>phỏng vấn tuyển dụng kéo dài 1 giờ</strong>: không chỉ từng câu trả lời có đúng không, mà còn phải hỏi "người phỏng vấn có nhớ ứng viên đã nói gì ở câu 3 khi hỏi tiếp câu 15 không, có tự mâu thuẫn với chính mình giữa lượt 5 và lượt 2 không, có giữ được mạch logic xuyên suốt 1 giờ không". 1 ứng viên có thể trả lời đúng từng câu riêng lẻ nhưng vẫn để lại ấn tượng tệ nếu tổng thể rời rạc, quên mất bối cảnh, hoặc tự đá nhau giữa các câu.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Vì sao single-turn metric không transfer được</h3>
+<p>Metric single-turn (BLEU, ROUGE, LLM-judge pointwise của <code>L5_4</code>) đo chất lượng của <strong>1 output tại 1 thời điểm</strong>, tách biệt khỏi lịch sử hội thoại. Khi áp thẳng metric này cho từng lượt trong 1 cuộc hội thoại dài, hệ thống có thể báo "mọi lượt đều pass" trong khi cuộc hội thoại tổng thể đã hỏng — vì cả 3 loại lỗi dưới đây <strong>chỉ lộ ra khi nhìn xuyên nhiều lượt cùng lúc</strong>, không lộ ra khi nhìn từng lượt tách rời. Đây không phải rủi ro lý thuyết: 1 nghiên cứu quy mô lớn (hơn 200.000 hội thoại giả lập) đo được các LLM hàng đầu <strong>giảm trung bình 39% hiệu năng</strong> khi chuyển từ prompt đơn lẻ sang bối cảnh nhiều lượt — chênh lệch đủ lớn để 1 hệ thống "pass mọi test single-turn" vẫn có thể tệ hẳn khi vận hành hội thoại thật.</p>
+
+<h3>2. Ba failure mode riêng của multi-turn</h3>
+<h4>2.1 Context drift</h4>
+<p>Agent dần "trôi" khỏi mục tiêu ban đầu qua nhiều lượt. VD: user hỏi "phân tích rủi ro cổ phiếu X trong 1 tháng tới", đến lượt 8 agent đã chuyển hẳn sang bàn về "chiến lược đầu tư dài hạn 5 năm" — mỗi lượt riêng lẻ nghe hợp lý, nhưng tổng thể đã lạc đề so với câu hỏi gốc.</p>
+<h4>2.2 Knowledge retention</h4>
+<p>Agent quên thông tin user đã cung cấp ở lượt trước. VD: lượt 2 user nói "tôi chỉ có khẩu vị rủi ro thấp", đến lượt 10 agent lại đề xuất 1 mã cổ phiếu biến động cao mà không nhắc lại ràng buộc đã đặt ra — mỗi câu trả lời riêng lẻ có thể "đúng" về mặt phân tích kỹ thuật nhưng sai vì bỏ quên ngữ cảnh.</p>
+<h4>2.3 Conversational coherence</h4>
+<p>Mâu thuẫn giữa các lượt trả lời với nhau. VD: lượt 3 agent nói "RSI đang quá bán, khả năng hồi phục cao", lượt 9 agent nói "RSI thấp là dấu hiệu xu hướng giảm còn tiếp diễn" cho cùng 1 mã — 2 câu riêng lẻ đều có thể đúng về lý thuyết TA tuỳ ngữ cảnh, nhưng đặt cạnh nhau không giải thích được vì sao đổi lập trường.</p>
+
+<h3>3. Hai chế độ eval multi-turn — cần cả 2, không chọn 1</h3>
+<h4>3.1 Holistic evaluation</h4>
+<p>Chấm <strong>toàn bộ cuộc hội thoại như 1 đơn vị duy nhất</strong>, đưa hết lịch sử N lượt vào 1 lần gọi judge, hỏi "cuộc hội thoại này có đạt mục tiêu cuối cùng không, có nhất quán xuyên suốt không". Phù hợp đo outcome tổng thể — trả lời được câu hỏi "cuộc hội thoại này tốt hay tệ" nhưng không chỉ ra được lượt nào là nguyên nhân.</p>
+<h4>3.2 Sliding-window per-turn evaluation</h4>
+<p>Chấm từng lượt riêng nhưng có <strong>cửa sổ ngữ cảnh trước đó</strong> — chấm turn N cùng với turn (N-k)..(N-1) trong context, không chấm turn N một mình và cũng không chấm cả cuộc hội thoại 1 lần. Thuật toán: trượt cửa sổ kích thước k dọc theo hội thoại, mỗi bước chấm 1 turn với k turn gần nhất làm ngữ cảnh.</p>
+<pre><code>Hội thoại 12 lượt, sliding window k=3:
+  Chấm turn 4  → context = [turn 1, 2, 3]
+  Chấm turn 5  → context = [turn 2, 3, 4]
+  Chấm turn 6  → context = [turn 3, 4, 5]
+  ...
+  Chấm turn 12 → context = [turn 9, 10, 11]
+
+Mỗi lần chấm trả về: turn này có drift/quên/mâu thuẫn so với k turn liền trước không?
+→ Định vị CHÍNH XÁC turn nào bắt đầu sai, không chỉ biết "đâu đó trong 12 turn có lỗi".
+</code></pre>
+<p><strong>Trade-off chọn k</strong>: k nhỏ (VD 2) → nhạy với lỗi cục bộ nhưng bỏ sót drift chậm (trôi dần qua 10 turn không thấy rõ trong cửa sổ 2). k lớn (VD toàn bộ lịch sử) → gần giống holistic, tốn token judge hơn nhiều lần (mỗi turn đều phải nhồi lại toàn bộ lịch sử).</p>
+
+<h3>4. Cơ chế thật đứng sau con số "-39%" — aptitude collapse vs unreliability explosion</h3>
+<p>Nghiên cứu "LLMs Get Lost in Multi-Turn Conversation" (Laban et al., outstanding paper ICLR 2026, ~200.000 hội thoại giả lập bằng kỹ thuật <strong>instruction sharding</strong> — tách 1 chỉ thị đầy đủ thành nhiều "mảnh" thông tin nguyên tử, đưa mỗi mảnh vào đúng 1 turn theo dòng hội thoại tự nhiên) không chỉ đo được mức giảm trung bình 39% đã nêu ở mục 1 — nghiên cứu này còn <strong>tách con số đó ra thành 2 cơ chế khác hẳn nhau</strong>:</p>
+<div class="callout">
+<div class="label">📖 "Shard" cụ thể là gì?</div>
+<pre><code>Yêu cầu ĐẦY ĐỦ (single-turn, đưa 1 lần):
+  "Phân tích VNM: khẩu vị rủi ro thấp, ưu tiên cổ tức đều, chỉ xét mã đã niêm yết
+   trên 5 năm, ngân sách tối đa 200 triệu, cần khuyến nghị trong tuần này."
+
+Tách thành 4 shard (mỗi shard = 1 turn, tiết lộ dần):
+  Shard 1 (turn 1): "Phân tích VNM giúp tôi"
+  Shard 2 (turn 3): "Tôi khẩu vị rủi ro thấp, ưu tiên cổ tức đều"
+  Shard 3 (turn 6): "Chỉ xét mã niêm yết trên 5 năm, ngân sách 200 triệu"
+  Shard 4 (turn 8): "Cần khuyến nghị trong tuần này"
+
+→ Model phải TỰ GHÉP LẠI 4 mảnh rải rác qua 8 turn thành đúng 1 yêu cầu đầy đủ —
+  đây chính là phép thử khả năng NHỚ và GHÉP thông tin rải rác nhiều turn:
+  ghép sai/quên 1 mảnh = lỗi.</code></pre>
+</div>
+<ul>
+<li><strong>Aptitude collapse (khả năng tối đa)</strong>: đo bằng điểm CAO NHẤT đạt được nếu cho model thử lại nhiều lần cùng 1 task — chỉ giảm <strong>~16%</strong> so với single-turn. Nghĩa là model vẫn CÓ đủ năng lực giải đúng bài toán khi thông tin đến rải rác nhiều turn.</li>
+<li><strong>Unreliability explosion (độ nhất quán)</strong>: đo bằng độ chênh lệch giữa lần thử tốt nhất và tệ nhất cho CÙNG 1 task — tăng vọt <strong>+112%</strong>. Đây mới là thủ phạm chính của con số "-39%" trung bình: không phải model "kém đi", mà là model trở nên THẤT THƯỜNG — đôi khi đúng hoàn toàn, đôi khi lạc đề hẳn, cho cùng 1 bài toán chỉ khác cách thông tin được tiết lộ dần qua nhiều lượt.</li>
+</ul>
+<div class="callout">
+<div class="label">📖 Worked example minh hoạ — vì sao trung bình cộng che giấu cơ chế thật</div>
+<pre><code>Baseline single-turn (toàn bộ yêu cầu đưa 1 lần): điểm = 90/100
+
+Multi-turn (cùng 1 task, thông tin rải qua nhiều turn), thử lại 4 lần độc lập:
+  Lần 1: 90    Lần 2: 85    Lần 3: 20    Lần 4: 25
+
+Trung bình cộng 4 lần = (90+85+20+25)/4 = 220/4 = 55
+  → so với baseline 90: giảm (90-55)/90 = 38.9% ≈ "-39%" (đúng bậc độ lớn với số đã
+    nêu ở mục 1 — đây là số MINH HOẠ tự thiết kế để khớp hướng, không phải số thật
+    trích nguyên văn từ paper, paper gốc đo trên nhiều task/nhiều model khác nhau)
+
+Aptitude (lấy điểm CAO NHẤT trong 4 lần) = max(90,85,20,25) = 90
+  → so với baseline 90: giảm 0% — khả năng tối đa hầu như KHÔNG đổi
+
+Unreliability (khoảng cách lần tốt nhất − lần tệ nhất, chia cho lần tốt nhất)
+  = (90-25)/90 = 72.2% — độ thất thường rất lớn dù "khả năng" model không hề mất
+</code></pre>
+</div>
+<p>Ý nghĩa cho thiết kế eval (rút ra từ chính cơ chế aptitude/unreliability của Laban et al.): đo multi-turn CHỈ 1 lần/task rồi lấy điểm số đó làm đại diện là sai — phải chạy lại N lần cùng 1 kịch bản (giữ nguyên cách chia shard) và báo cáo CẢ 2 con số (aptitude = max, unreliability = range) thay vì chỉ 1 điểm trung bình duy nhất. (Một hiện tượng liên quan nhưng KHÁC nghiên cứu — He et al. 2024, benchmark Multi-IF — đo model giảm từ 88% xuống 71% qua các turn khi phải theo nhiều chỉ dẫn tích luỹ; nghiên cứu đó không thuộc Laban et al. và không dùng thuật ngữ "instruction forgetting" mà Laban et al. cũng không dùng — 2 nghiên cứu độc lập, đo hiện tượng suy giảm multi-turn theo 2 góc khác nhau, không nên gộp làm 1.)</p>
+
+<h3>5. Benchmark multi-turn 2026 — chi tiết hơn MT-Bench gốc</h3>
+<p><code>L5_4_llm_eval.html</code> đã nhắc MT-Bench (80 câu hỏi 2-lượt cố định, chấm bởi GPT-4). 2 benchmark mới tập trung ĐÚNG vào multi-turn ở độ chi tiết cao hơn:</p>
+<table>
+<tr><th>Benchmark</th><th>Quy mô</th><th>Điểm khác biệt với MT-Bench gốc</th></tr>
+<tr><td><strong>MT-Bench-101</strong></td><td>13 tác vụ, 1.388 hội thoại, 4.208 turn</td><td>Phân loại 3 tầng năng lực (Perceptivity/Adaptability/Interactivity) thay vì 1 điểm tổng — cho biết CHÍNH XÁC model yếu ở loại kỹ năng nào (nhớ ngữ cảnh, suy luận tham chiếu đại từ, đổi chủ đề, diễn giải lại nội dung...)</td></tr>
+<tr><td><strong>MultiChallenge</strong></td><td>Bộ câu hỏi hội thoại thực tế (ACL 2025)</td><td>Độ khó cao hơn hẳn — <strong>frontier model đạt dưới 50%</strong>, dùng để đo đúng loại lỗi "quên ràng buộc đã đặt ra ở turn trước" (giống ví dụ VNM rủi ro thấp ở mục "Ví dụ cụ thể")</td></tr>
+</table>
+<p>Ý nghĩa thực hành: MT-Bench (1 điểm tổng) đủ để so 2 model xem model nào "nói chuyện tốt hơn nói chung", nhưng KHÔNG đủ để biết model yếu ở đúng loại lỗi nào trong 3 failure mode đã học ở mục 2 — cần benchmark chi tiết hơn (MT-Bench-101) hoặc benchmark khó hơn hẳn năng lực hiện tại (MultiChallenge) khi mục tiêu là stress-test đúng điểm yếu.</p>
+
+<h3>6. User-simulator — sinh test case multi-turn tự động thay vì viết tay</h3>
+<p>Viết tay từng kịch bản N-turn (như ví dụ VNM ở dưới) không scale — mỗi kịch bản mới cần người ngồi nghĩ ra từng câu hỏi tiếp theo hợp lý. Kỹ thuật <strong>instruction sharding</strong> ở mục 4 giải quyết bằng cách dùng chính 1 LLM khác đóng vai "user giả lập": LLM này biết TOÀN BỘ yêu cầu gốc (giữ bí mật với agent đang bị test) và mục tiêu ẩn (persona/ràng buộc), rồi tiết lộ đúng 1 mảnh thông tin mỗi turn, phản ứng tự nhiên theo câu trả lời của agent (không theo kịch bản cố định).</p>
+<pre><code>Kiến trúc user-simulator cho multi-turn eval:
+
+  [Yêu cầu đầy đủ + persona ẩn]  (chỉ user-simulator biết)
+            │
+            ▼
+  User-simulator LLM ──turn 1──▶  Agent đang test ──trả lời──┐
+            ▲                                                 │
+            └─────────────── đọc trả lời, quyết định──────────┘
+                              tiết lộ shard tiếp theo (turn 2)
+            │
+           ... lặp đến khi hết shard hoặc agent hoàn thành task
+            │
+            ▼
+     Judge holistic + sliding-window (mục 3) chấm toàn bộ hội thoại sinh ra
+</code></pre>
+<p><strong>Đánh đổi</strong>: kịch bản viết tay rẻ hơn, dễ kiểm soát nhưng không scale và không phản ứng theo câu trả lời thật của agent (agent trả lời khác kịch bản vẫn đi tiếp đúng script cũ, mất tính thực tế). User-simulator scale được, phản ứng tự nhiên theo agent thật, nhưng bản thân simulator LLM cũng có thể có bias riêng (VD luôn hỏi theo 1 kiểu giọng văn) — cần đa dạng hoá persona simulator, không dùng 1 simulator duy nhất cho toàn bộ eval set.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Giả lập 1 tính năng tương lai "hỏi đáp nhiều lượt về 1 báo cáo" (chưa có trong dự án, chỉ minh hoạ):</p>
+<pre><code>Turn 1 (user): "VNM có đáng mua tuần này không?"
+Turn 1 (agent): "VNM đang RSI 42, MA20 flat. Chưa có tín hiệu rõ ràng, nên chờ."
+
+Turn 2 (user): "Tôi khẩu vị rủi ro thấp, chỉ muốn cổ phiếu chia cổ tức đều."
+Turn 2 (agent): "Ghi nhận. Với tiêu chí cổ tức đều + rủi ro thấp, VNM phù hợp vì lịch sử
+                 chi trả ổn định 10 năm qua."
+
+...(6 lượt tiếp theo bàn về các mã khác)...
+
+Turn 9 (user): "Vậy tôi mua VNM luôn nhé?"
+Turn 9 (agent): "VNM đang có biến động mạnh gần đây, phù hợp nhà đầu tư chấp nhận
+                 rủi ro cao để tìm lợi nhuận nhanh."
+</code></pre>
+<p><strong>Chấm bằng single-turn metric</strong>: turn 9 riêng lẻ — câu trả lời mạch lạc, không sai ngữ pháp, có vẻ "hợp lý" nếu đọc tách rời → PASS.</p>
+<p><strong>Chấm bằng sliding-window (k=8, nhìn lại đến turn 2)</strong>: phát hiện turn 9 mâu thuẫn trực tiếp với ràng buộc "rủi ro thấp" đã xác lập ở turn 2 → FAIL, gắn nhãn lỗi <strong>knowledge retention</strong>, định vị chính xác turn 9 là nơi lỗi xảy ra.</p>
+<p><strong>Chấm bằng holistic</strong>: đọc toàn bộ 9 turn → kết luận "cuộc hội thoại không nhất quán, không nên tin tưởng khuyến nghị cuối" — biết tổng thể tệ nhưng nếu không có sliding-window đi kèm, sẽ khó chỉ ra đúng turn 9 (và đúng turn 2) là 2 điểm mấu chốt cần xem lại.</p>
+<p><strong>Áp dụng thêm bài học mục 4 (chạy lại nhiều lần)</strong>: nếu chạy lại ĐÚNG kịch bản 9-turn này 3 lần (cùng seed dữ liệu, temperature &gt; 0 để agent có thể trả lời khác nhau chút ít mỗi lần):</p>
+<pre><code>Lần 1: turn 9 mâu thuẫn với turn 2 (như ví dụ trên)         → FAIL
+Lần 2: turn 9 nhắc lại đúng ràng buộc "rủi ro thấp" từ turn 2 → PASS
+Lần 3: turn 9 mâu thuẫn nhẹ hơn (nói "cân nhắc rủi ro")      → PASS có điều kiện
+
+→ Nếu chỉ chạy 1 lần (lần 1) rồi kết luận "agent lúc nào cũng quên ràng buộc" là
+  KHÔNG đủ bằng chứng — đây chính là unreliability (mục 4): agent CÓ khả năng nhớ
+  đúng (lần 2 chứng minh), nhưng không NHẤT QUÁN nhớ đúng mọi lần. Kết luận đúng
+  phải là "tỷ lệ giữ ràng buộc 1/3 lần thử" (33%), không phải "agent luôn sai".</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Holistic evaluation</th><th>Sliding-window per-turn</th></tr>
+<tr><td>Đơn vị chấm</td><td>Toàn bộ cuộc hội thoại</td><td>Từng turn + cửa sổ ngữ cảnh k turn trước</td></tr>
+<tr><td>Câu hỏi trả lời được</td><td>"Cuộc hội thoại này tốt hay tệ?"</td><td>"Turn nào là nơi bắt đầu sai?"</td></tr>
+<tr><td>Chi phí (số lệnh gọi judge)</td><td>1 lệnh / cuộc hội thoại</td><td>N lệnh / cuộc hội thoại (N = số turn)</td></tr>
+<tr><td>Phát hiện context drift chậm</td><td>Tốt (nhìn toàn cảnh)</td><td>Phụ thuộc kích thước k — k nhỏ dễ bỏ sót</td></tr>
+<tr><td>Định vị lỗi để debug</td><td>Kém — chỉ biết "có lỗi đâu đó"</td><td>Tốt — chỉ đúng turn gây lỗi</td></tr>
+<tr><td>Dùng khi nào</td><td>Đo outcome tổng thể, theo dõi xu hướng theo thời gian</td><td>Debug, tìm nguyên nhân gốc khi có report lỗi</td></tr>
+</table>
+<table>
+<tr><th>Benchmark</th><th>Đo cái gì chính</th><th>Dùng khi nào</th></tr>
+<tr><td>MT-Bench (gốc, <code>L5_4</code>)</td><td>1 điểm chất lượng tổng cho hội thoại 2-lượt</td><td>So sánh nhanh 2 model/prompt "nói chuyện tốt hơn nói chung"</td></tr>
+<tr><td>MT-Bench-101</td><td>Điểm theo 3 tầng năng lực × 13 tác vụ chi tiết</td><td>Tìm ĐÚNG loại kỹ năng multi-turn model đang yếu</td></tr>
+<tr><td>MultiChallenge</td><td>Tỷ lệ pass trên câu hỏi hội thoại thực tế, độ khó cao</td><td>Stress-test giới hạn thật của model (frontier model vẫn &lt;50%)</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>.claude/skills/daily-investor-report</code> hiện tại là <strong>single-shot report</strong> — Claude tạo 1 lần phân tích/thesis cho mỗi ticker trong 1 lần chạy, không có hội thoại nhiều lượt qua lại với user. Vì vậy bullet này <strong>chưa áp dụng trực tiếp</strong> vào pipeline hiện có (<code>collect_and_build.py</code>). Nếu tương lai dự án xây tính năng "hỏi đáp nhiều lượt về 1 báo cáo đã render" (user hỏi thêm về 1 ticker, agent trả lời dựa trên báo cáo + lịch sử hỏi đáp), bắt buộc phải thiết kế cả holistic + sliding-window eval <strong>trước khi ship</strong> — và mọi input đưa vào judge multi-turn vẫn phải tuân thủ rule LLM independence: không được lén đưa <code>combined_score</code>/<code>verdict</code>/<code>ai_signal</code> vào ngữ cảnh chấm điểm tính nhất quán của LLM, vì mục tiêu là đo LLM có tự nhất quán với chính lập luận của nó hay không, không phải có nhất quán với hệ thống hay không.</p>
+<p>Kỹ thuật user-simulator (mục 6) cũng đáng cân nhắc TRƯỚC khi ship tính năng đó: thay vì viết tay vài chục kịch bản hỏi-đáp cố định (tốn công, dễ thiếu case biên), dùng 1 LLM đóng vai nhà đầu tư với persona ẩn (VD "khẩu vị rủi ro thấp, hỏi dồn dập, hay đổi ý") để tự sinh ra hàng trăm kịch bản multi-turn đa dạng, sau đó chấm bằng cả holistic + sliding-window — cách này scale tốt hơn nhiều so với việc 1 người ngồi nghĩ ra từng câu hỏi tiếp theo.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<p>(1) Áp thẳng metric single-turn cho từng turn của 1 hội thoại dài — bỏ sót cả 3 failure mode (drift, quên, mâu thuẫn) vì chúng chỉ lộ ra khi nhìn xuyên nhiều turn. (2) Chỉ dùng holistic mà không dùng sliding-window — biết "cuộc hội thoại này tệ" nhưng không biết TẠI SAO/TỪ ĐÂU, mất khả năng debug. (3) Chỉ dùng sliding-window mà không có holistic — bỏ sót lỗi "từng lượt đều đúng riêng lẻ nhưng tổng thể mâu thuẫn nhau" khi nhìn toàn cảnh. (4) Chọn k quá nhỏ cho sliding-window khiến context drift chậm (trôi dần qua nhiều turn) không bao giờ lọt vào cửa sổ để bị phát hiện. (5) Chạy multi-turn eval CHỈ 1 lần/task rồi báo cáo 1 điểm duy nhất — bỏ sót unreliability explosion (mục 4), vì cùng 1 task có thể ra kết quả rất khác giữa các lần thử. (6) Dùng script kịch bản cố định cho user-simulator — mất tính thực tế khi agent trả lời khác kịch bản dự kiến mà simulator vẫn đi tiếp theo script cũ.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích được vì sao metric single-turn không tự động áp dụng được cho hội thoại nhiều lượt.</li>
+<li>Kể đúng tên + ví dụ cụ thể của 3 failure mode: context drift, knowledge retention, conversational coherence.</li>
+<li>Giải thích được vì sao cần cả holistic VÀ sliding-window cho multi-turn, không chỉ 1 trong 2 — cho ví dụ tình huống mỗi chế độ bắt được lỗi mà chế độ kia bỏ sót.</li>
+<li>Nêu đúng trade-off khi chọn kích thước cửa sổ k trong sliding-window evaluation.</li>
+<li>Phân biệt được aptitude collapse (-16%) và unreliability explosion (+112%) — giải thích vì sao 2 cơ chế này khác nhau dù cùng tạo ra 1 con số trung bình "-39%".</li>
+<li>Kể đúng điểm khác biệt của MT-Bench-101 và MultiChallenge so với MT-Bench gốc đã học ở <code>L5_4</code>.</li>
+<li>Giải thích được cơ chế user-simulator + đánh đổi so với kịch bản viết tay.</li>
+<li>Tự confirm: không đề xuất đưa field hệ thống tính sẵn vào input của 1 judge/eval được thiết kế để độc lập, kể cả khi mở rộng sang eval multi-turn.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R8_1_llm_as_judge.html">← R8.1 · LLM-as-a-Judge</a>
+  <a href="R8_3_agent_evaluation.html">R8.3 · Agent Evaluation →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L5.3 — Function Calling / Tool Use</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 5 · Module 3</div>
+  <h1>5.3 · Function Calling + Tool Use</h1>
+  <p class="subtitle">LLM gọi APIs, chạy code, query DB. OpenAI function calling, Anthropic tools, MCP protocol. Case: Claude Code CLI dùng bash/read/write.</p>
+  <div class="level">Level 5 · LLM Systems · ~30 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Difference function calling vs plain prompting</li>
+  <li>Define tool schema với JSON</li>
+  <li>Multi-turn tool loop pattern</li>
+  <li>MCP (Model Context Protocol) — chuẩn mới</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Function calling / Tools bằng ngôn ngữ đời thường</div>
+<p><strong>Nhân viên văn phòng biết dùng phần mềm</strong>: Không tự nhớ giá 10k sản phẩm — mở Excel tra. Không tự tính thuế — dùng calculator. Không tự nhớ hôm nay ai họp — check Google Calendar. Nhân viên = LLM; các app = tools.</p>
+<p><strong>Function calling</strong> = LLM biết "khi user hỏi giá cổ phiếu VNM hôm nay, tôi phải gọi tool get_stock_price(ticker='VNM'), lấy kết quả, rồi tổng hợp trả lời". Không hallucinate giá bịa.</p>
+<p><strong>MCP (Model Context Protocol)</strong> = chuẩn USB cho tool: 1 chuẩn để bất kỳ LLM nào cắm vào bất kỳ tool nào — không cần code adapter riêng cho mỗi cặp.</p>
+</div>
+
+<h2>1. Vì sao function calling?</h2>
+
+<p>LLM biết nhiều nhưng: (1) không thực thi được (chỉ output text), (2) knowledge cutoff (không current data), (3) không interact với external systems.</p>
+
+<p>Function calling → LLM output structured request → server thực thi tool → return result → LLM continue.</p>
+
+<h2>2. Tool schema</h2>
+
+<p><strong>Tool schema là gì?</strong> Một bản khai báo trước cho LLM biết: tool này tên gì, làm gì (<code>description</code> — LLM đọc mô tả này để quyết định CÓ NÊN gọi tool này không), tool cần input gì (<code>properties</code>, mỗi field có kiểu dữ liệu + có thể có <code>pattern</code> ràng buộc định dạng), và field nào bắt buộc (<code>required</code>). Server dùng đúng schema này để validate trước khi thực thi — LLM không thể tự bịa ra field không khai báo.</p>
+
+<pre><code>tools = [
+    {
+        "name": "get_stock_price",
+        "description": "Get current price of a Vietnamese stock ticker",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "pattern": "^[A-Z0-9]{2,10}$"},
+            },
+            "required": ["ticker"],
+        }
+    },
+    {
+        "name": "get_stock_history",
+        "description": "Get OHLCV history",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "days": {"type": "integer", "minimum": 1, "maximum": 365},
+            },
+            "required": ["ticker", "days"],
+        }
+    }
+]
+</code></pre>
+
+<h2>3. Multi-turn loop</h2>
+
+<p><strong>Vì sao cần loop (thay vì gọi LLM 1 lần)?</strong> LLM không tự thực thi được tool — nó chỉ có thể YÊU CẦU gọi tool (<code>stop_reason == "tool_use"</code>), rồi CHỜ code của bạn chạy tool thật và trả kết quả về (<code>tool_result</code>) trước khi LLM viết tiếp. Vì vậy 1 câu hỏi cần tool có thể tốn NHIỀU lượt gọi API qua lại, không phải 1 lượt duy nhất.</p>
+
+<p><strong>Ví dụ cụ thể — trace 1 vòng lặp thật</strong>:</p>
+<pre><code>Lượt 1 — User hỏi, LLM chưa có dữ liệu, xin gọi tool:
+  messages = [{"role": "user", "content": "FPT giá bao nhiêu?"}]
+  → response.stop_reason = "tool_use"
+  → response.content = [{"type": "tool_use", "name": "get_stock_price",
+                          "input": {"ticker": "FPT"}, "id": "call_1"}]
+
+Code chạy tool thật: execute_tool("get_stock_price", {"ticker": "FPT"})
+  → result = {"ok": True, "price": 72.5, "ts": "2026-09-13T09:30"}
+
+Lượt 2 — Gửi kết quả tool về, LLM viết câu trả lời cuối:
+  messages += [
+    {"role": "assistant", "content": response.content},        # LLM đã "nói" gì lượt 1
+    {"role": "user", "content": [{"type": "tool_result",
+        "tool_use_id": "call_1", "content": '{"price": 72.5}'}]} # kết quả tool
+  ]
+  → response.stop_reason = "end_turn"
+  → response.content = "FPT hiện đang giao dịch quanh 72.5."  ← DỪNG loop tại đây</code></pre>
+
+<pre><code>messages = [{"role": "user", "content": "Analyze FPT trend last 30 days"}]
+
+while True:
+    response = client.messages.create(
+        model="claude-opus-4-7",
+        tools=tools,
+        messages=messages,
+    )
+
+    if response.stop_reason == "end_turn":
+        break
+
+    if response.stop_reason == "tool_use":
+        tool_use = response.content[-1]
+        # Execute tool
+        result = execute_tool(tool_use.name, tool_use.input)
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({
+            "role": "user",
+            "content": [{
+                "type": "tool_result",
+                "tool_use_id": tool_use.id,
+                "content": json.dumps(result),
+            }]
+        })
+        continue
+</code></pre>
+
+<h2>4. LLM as decider — parallel tool calls</h2>
+
+<p>Modern LLM (Claude 3.5+, GPT-4o) có thể request nhiều tools cùng lúc:</p>
+
+<pre><code>response.content = [
+    {"type": "tool_use", "name": "get_price", "input": {"ticker": "FPT"}},
+    {"type": "tool_use", "name": "get_price", "input": {"ticker": "VNM"}},
+    {"type": "tool_use", "name": "get_history", "input": {"ticker": "FPT", "days": 30}},
+]
+
+# Server execute 3 tools parallel → return 3 results
+</code></pre>
+
+<h2>5. Anthropic tools ecosystem</h2>
+
+<table>
+<tr><th>Tool</th><th>Purpose</th></tr>
+<tr><td>bash</td><td>Execute shell commands</td></tr>
+<tr><td>str_replace_editor</td><td>Read/write/edit files</td></tr>
+<tr><td>computer</td><td>Take screenshot, click, type (Computer Use)</td></tr>
+<tr><td>web_search</td><td>Search real web</td></tr>
+<tr><td>MCP servers</td><td>Custom user-defined tools</td></tr>
+</table>
+
+<h2>6. MCP — Model Context Protocol (Anthropic 2024)</h2>
+
+<div class="callout success">
+<div class="label">Chuẩn mới</div>
+<p>MCP = standardized protocol để LLM tools work across providers. Server exposes tools via JSON-RPC (chuẩn gọi hàm qua mạng bằng JSON — giải thích đầy đủ ở §6.9 dưới). Any LLM (Claude, GPT, Llama) có thể connect.</p>
+</div>
+
+<pre><code># MCP server (Python):
+from mcp.server import Server
+server = Server("stock-tools")
+
+@server.tool()
+async def get_stock_price(ticker: str) -> dict:
+    """Get current price of Vietnamese stock."""
+    return {"ticker": ticker, "price": 72.5, "timestamp": "..."}
+
+# LLM discover tools qua handshake
+# Call tools qua JSON-RPC over stdio/HTTP
+</code></pre>
+
+<p>Impact: build 1 MCP server, chạy trong Claude Desktop, Cursor, VSCode. Không duplicate integration.</p>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 5 tool-calling protocols (đọc SAU sections 2-6)</div>
+
+<table>
+<tr><th></th><th>OpenAI Functions</th><th>Anthropic Tools</th><th>MCP</th><th>LangChain Tools</th><th>Semantic Kernel</th></tr>
+<tr><td><strong>Format</strong></td><td>JSON schema</td><td>JSON schema (giống OpenAI)</td><td>JSON-RPC 2.0</td><td>Python decorator</td><td>C#/Python plugin</td></tr>
+<tr><td><strong>Scope</strong></td><td>Chỉ 1 LLM (OpenAI)</td><td>Chỉ 1 LLM (Claude)</td><td>Any LLM (universal)</td><td>Wrap tool cho LangChain</td><td>Microsoft ecosystem</td></tr>
+<tr><td><strong>Parallel calls</strong></td><td>✅ (GPT-4 Turbo+)</td><td>✅</td><td>✅</td><td>Depends</td><td>✅</td></tr>
+<tr><td><strong>Tool description</strong></td><td>function description + params</td><td>Same</td><td>Same</td><td>Docstring + type hints</td><td>Attribute annotations</td></tr>
+<tr><td><strong>Streaming tools</strong></td><td>Partial</td><td>✅</td><td>✅</td><td>Depends</td><td>Partial</td></tr>
+<tr><td><strong>Resource access</strong></td><td>❌ (chỉ function)</td><td>❌</td><td>✅ (Tools + Resources + Prompts)</td><td>❌</td><td>Memory + Skills</td></tr>
+<tr><td><strong>Portability</strong></td><td>Low (lock-in OpenAI)</td><td>Low (lock-in Claude)</td><td>⭐ High</td><td>Medium</td><td>Medium</td></tr>
+<tr><td><strong>Ai dùng cho production?</strong></td><td>ChatGPT plugins, GPT builder</td><td>Claude Code, Anthropic products</td><td>Growing 2024-2025</td><td>LangChain apps</td><td>Microsoft Copilot ecosystem</td></tr>
+</table>
+
+<h4>Ví dụ — cùng 1 tool viết cho 3 protocols</h4>
+<pre><code>Task: Get stock price
+
+=== OpenAI Function ===
+{
+  "name": "get_stock_price",
+  "description": "Get current price of a stock",
+  "parameters": {
+    "type": "object",
+    "properties": {"ticker": {"type": "string"}},
+    "required": ["ticker"]
+  }
+}
+
+=== Anthropic Tools ===
+{
+  "name": "get_stock_price",
+  "description": "Get current price of a stock",
+  "input_schema": {  # <- input_schema thay vì parameters
+    "type": "object",
+    "properties": {"ticker": {"type": "string"}},
+    "required": ["ticker"]
+  }
+}
+
+=== MCP Tool ===
+# server.py
+@server.list_tools()
+async def list_tools():
+    return [Tool(name="get_stock_price", description="...",
+                 inputSchema={"type": "object", ...})]
+
+@server.call_tool()
+async def call_tool(name, arguments):
+    if name == "get_stock_price":
+        return get_price(arguments["ticker"])
+</code></pre>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Nhu cầu</th><th>Chọn</th></tr>
+<tr><td>Prototype nhanh với ChatGPT</td><td>OpenAI Functions</td></tr>
+<tr><td>Prototype với Claude</td><td>Anthropic Tools</td></tr>
+<tr><td>Cross-LLM production (nhiều model)</td><td>⭐ MCP</td></tr>
+<tr><td>Complex agent workflow đã có LangChain</td><td>LangChain Tools</td></tr>
+<tr><td>Microsoft ecosystem (Copilot)</td><td>Semantic Kernel</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: OpenAI Functions + Anthropic Tools là "de facto" API-native. MCP là "chuẩn open" mới đang phổ biến 2024-2025. Nếu build product cross-LLM (dùng cả Claude + GPT + Gemini) → MCP giảm 3× code adapter.</p>
+</div>
+
+<h2>6.5 — Tool error handling (gọi thợ điện: thợ báo lỗi thì AI biết retry hoặc đổi thợ)</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">Return error trong tool_result, đừng throw exception</div>
+<pre><code>def execute_tool(name, args) -> dict:
+    try:
+        if name == "get_stock_price":
+            price = vnstock_api.get(args["ticker"])
+            return {"ok": True, "price": price, "ts": now()}
+    except TickerNotFound:
+        # ← Return structured error, KHÔNG raise
+        return {"ok": False, "error": "TICKER_NOT_FOUND",
+                "hint": "Ticker must be 3-letter HOSE code, e.g. FPT, VNM"}
+    except RateLimited as e:
+        return {"ok": False, "error": "RATE_LIMITED",
+                "retry_after_ms": e.retry_after}
+    except Exception as e:
+        return {"ok": False, "error": "INTERNAL", "message": str(e)[:200]}
+
+# Trong messages, gửi lại LLM:
+{"type": "tool_result", "tool_use_id": id, "is_error": True,
+ "content": json.dumps({"error": "TICKER_NOT_FOUND", "hint": "..."})}
+</code></pre>
+<p><strong>Vì sao return error tốt hơn raise?</strong> LLM đọc error message → tự sửa arg và retry. Nếu raise → conversation break, phải rebuild state.</p>
+<p><strong>Categorize error để LLM biết action</strong>:</p>
+<ul>
+  <li><em>USER_ERROR</em> (arg sai, format sai): LLM sửa và retry ngay.</li>
+  <li><em>TRANSIENT</em> (rate limit, timeout): LLM đợi + retry (backoff).</li>
+  <li><em>PERMANENT</em> (permission denied, quota): LLM báo user, không retry.</li>
+  <li><em>FALLBACK</em>: LLM đổi tool khác (get_price fail → get_history rồi lấy giá cuối).</li>
+</ul>
+</div>
+
+<h2>6.6 — Idempotency: tool có SIDE EFFECT bị gọi 2 lần thì sao?</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Nhắc lại §6.5 — khi tool lỗi (timeout, rate limit), pattern chuẩn là trả error để LLM "tự sửa và retry". Nhưng có 1 câu hỏi §6.5 chưa trả lời: NẾU tool đã THÀNH CÔNG rồi (VD đã đặt lệnh mua cổ phiếu, đã gửi email) nhưng response bị mất giữa đường (network drop) khiến LLM TƯỞNG là lỗi và retry — chuyện gì xảy ra? Giống việc bạn bấm nút "Đặt hàng" trên web, trang load chậm, bạn tưởng chưa gửi nên bấm lại — nếu web không xử lý cẩn thận, bạn vô tình đặt 2 đơn hàng giống hệt nhau.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: multi-turn tool loop (§3) và parallel tool calls (§4) đều có thể khiến CÙNG 1 tool bị gọi nhiều lần với CÙNG tham số — do LLM tự ý retry khi thấy lỗi/timeout (§6.5), do bug ở code orchestrate, hoặc do người dùng bấm lại. Với tool ĐỌC dữ liệu (get_price, get_history) gọi lại vô hại — vẫn ra cùng kết quả. Nhưng với tool GHI dữ liệu/gây side effect (place_order, send_email, deduct_balance) — gọi lại = THỰC HIỆN HÀNH ĐỘNG 2 LẦN, hậu quả thật (mua nhầm 2 lệnh, gửi 2 email, trừ tiền 2 lần).</p>
+
+<pre><code># KHÔNG idempotent (nguy hiểm) — mỗi lần gọi luôn tạo giao dịch MỚI:
+def place_order(ticker, qty, price):
+    order_id = db.insert("orders", {"ticker": ticker, "qty": qty, "price": price})
+    return {"order_id": order_id, "status": "placed"}
+# → gọi 2 lần cùng args = 2 order_id KHÁC NHAU = 2 lệnh mua THẬT, không phải 1
+
+# Idempotent (an toàn) — dùng "idempotency key" để nhận diện request TRÙNG:
+def place_order(ticker, qty, price, idempotency_key):
+    existing = db.find("orders", {"idempotency_key": idempotency_key})
+    if existing:
+        return {"order_id": existing.id, "status": "placed", "note": "duplicate request, trả lại kết quả CŨ"}
+    order_id = db.insert("orders", {"ticker": ticker, "qty": qty, "price": price,
+                                      "idempotency_key": idempotency_key})
+    return {"order_id": order_id, "status": "placed"}
+# → gọi lại với CÙNG idempotency_key → trả lại CHÍNH order cũ, KHÔNG tạo order mới
+# idempotency_key thường = hash(tool_use_id từ chính LLM response, hoặc UUID (Universally
+#   Unique Identifier — chuỗi ký tự ngẫu nhiên gần như không bao giờ trùng, dùng làm ID
+#   duy nhất) sinh 1 lần
+#   ở đầu turn) — miễn là CÙNG 1 "ý định" logic → luôn ra CÙNG 1 key khi retry</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: idempotency KHÔNG có nghĩa "tool chỉ được gọi 1 lần" — tool VẪN được phép gọi lại nhiều lần (network retry là chuyện bình thường, không tránh được hoàn toàn) — điều quan trọng là gọi lại NHIỀU LẦN với CÙNG idempotency key phải cho ra CÙNG 1 KẾT QUẢ và CÙNG 1 SIDE EFFECT (chỉ xảy ra ĐÚNG 1 LẦN), không phải nhân bản side effect theo số lần gọi. Đây là khái niệm mượn từ hệ phân tán (distributed systems) — API thanh toán (Stripe, PayPal) đều bắt buộc idempotency key cho lý do y hệt.</p>
+
+<table>
+<tr><th>Loại tool</th><th>Cần idempotency?</th><th>Ví dụ</th></tr>
+<tr><td>Read-only (query, search, lookup)</td><td>Không cần — gọi lại vô hại</td><td>get_price, search_docs, get_weather</td></tr>
+<tr><td>Write nhưng tự nhiên idempotent</td><td>Không cần thêm gì — set_status("done") gọi 100 lần vẫn = trạng thái "done"</td><td>update_field(x, value) — ghi ĐÈ, không cộng dồn</td></tr>
+<tr><td>Write TẠO MỚI mỗi lần gọi (nguy hiểm nếu duplicate)</td><td>BẮT BUỘC idempotency key</td><td>place_order, send_email, create_invoice, charge_card</td></tr>
+</table>
+
+<p><strong>Insight</strong>: bug lớp này đặc biệt nguy hiểm vì THƯỜNG KHÔNG XUẤT HIỆN trong testing (network hiếm khi drop lúc dev test trên localhost) — chỉ lộ ra ở production dưới tải cao/mạng chập chờn, đúng lúc hậu quả nghiêm trọng nhất (giao dịch tài chính thật). Nguyên tắc thiết kế: bất kỳ tool nào có write/side-effect PHẢI được thiết kế idempotent NGAY TỪ ĐẦU (thêm idempotency key vào schema), không phải "thêm sau khi gặp bug" — giống nguyên tắc "validate ở boundary" chứ không phải vá chỗ lỗi sau khi đã xảy ra.</p>
+</div>
+
+<h2>6.7 — Tool selection: RL-trained vs prompted</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">2 paradigm chính</div>
+<table>
+<tr><th></th><th>Prompted (Claude/GPT hiện tại)</th><th>RL-trained (Toolformer, Gorilla)</th></tr>
+<tr><td>Cách chọn tool</td><td>LLM đọc tool descriptions trong prompt, in-context reasoning</td><td>Fine-tune với reward = tool call correctness</td></tr>
+<tr><td>Update tool mới</td><td>Thêm vào prompt, work ngay</td><td>Phải retrain</td></tr>
+<tr><td>Quality</td><td>Depends prompt engineering</td><td>Cao hơn cho tool đã train</td></tr>
+<tr><td>Latency</td><td>Higher (dài context)</td><td>Lower (compact)</td></tr>
+<tr><td>Dùng khi</td><td>Production app, tool set thay đổi</td><td>Narrow domain, tool set cố định</td></tr>
+</table>
+<p>Đa số production 2025 = <em>prompted</em> vì flexibility. RL tool-use là hướng research — <strong>Toolformer</strong> (Meta 2023, model tự học chèn tool-call token vào lúc train bằng self-supervision — model tự sinh dữ liệu huấn luyện cho chính nó bằng cách thử chèn tool-call rồi giữ lại những lần chèn giúp giảm loss, không cần người gán nhãn tay) và <strong>Gorilla</strong> (Berkeley, model fine-tune chuyên gọi đúng API từ 1000+ API docs, benchmark riêng APIBench) là 2 dự án tiêu biểu — không cùng dự án với <strong>ToolLLM</strong> (Qin et al., Tsinghua, benchmark riêng ToolBench), dù tên nghe giống nhau, đây là 1 dự án khác độc lập.</p>
+</div>
+
+<h2>6.9 — MCP protocol chi tiết (3 concepts: Tools, Resources, Prompts)</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">MCP không chỉ là "function calling universal"</div>
+<ul>
+  <li><strong>Tools</strong>: action gây side effect (send email, exec code) — cần user consent.</li>
+  <li><strong>Resources</strong>: read-only data (file content, DB row) — LLM có thể request qua URI như <code>file:///project/README.md</code>.</li>
+  <li><strong>Prompts</strong>: templates parameterized server cung cấp — client discover và inject (VD: <code>/analyze_pr</code>).</li>
+</ul>
+<p><strong>JSON-RPC 2.0 là gì?</strong> 1 chuẩn nhỏ, cũ (2010) để gọi hàm qua mạng bằng JSON: client gửi <code>{"jsonrpc": "2.0", "method": "get_price", "params": {...}, "id": 1}</code>, server trả <code>{"jsonrpc": "2.0", "result": {...}, "id": 1}</code> (trường <code>"jsonrpc": "2.0"</code> bắt buộc theo spec, hay bị bỏ sót khi viết ví dụ rút gọn). MCP chọn chuẩn này vì đơn giản, nhẹ, không cần framework riêng. <strong>SSE (Server-Sent Events)</strong> = kênh HTTP 1 chiều server→client, server đẩy nhiều message liên tục qua 1 connection mở (khác WebSocket vì chỉ 1 chiều) — dùng để server stream nhiều kết quả/token về mà không cần client poll liên tục.</p>
+<pre><code>Transport: JSON-RPC 2.0 over stdio (local) hoặc HTTP+SSE (remote)
+
+Handshake:
+  Client → initialize(protocolVersion, capabilities)
+  Server → serverInfo, capabilities
+  Client → tools/list, resources/list, prompts/list
+  Server → returns metadata + schemas
+
+Runtime:
+  Client → tools/call(name="get_price", args={...})
+  Server → executes, returns result (or error)
+  Server → sampling/createMessage (server có thể request LLM back!)
+</code></pre>
+<p><strong>Điểm khác biệt lớn nhất so OpenAI Functions</strong>: MCP có <em>bidirectional</em> — server có thể xin client (LLM) làm sampling. Cho phép patterns như "server tự orchestrate multi-step trong 1 tool call".</p>
+<p><strong>Security</strong>: MCP spec không tự authenticate. Production cần wrap OAuth/API-key layer. Tool consent flow phải hiển thị args trước exec (Claude Desktop làm rồi).</p>
+</div>
+
+<h2>6.95 — Vietnamese use case: legal doc summarizer agent</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">Agent tóm tắt hợp đồng luật VN</div>
+<p><strong>Tools</strong>: <code>ocr_pdf</code> (OCR — Optical Character Recognition — công nghệ nhận diện chữ trong ảnh/scan và chuyển thành text xử lý được), <code>extract_entities</code> (bên A, bên B, giá trị), <code>lookup_law</code> (RAG Bộ Luật Dân Sự), <code>compare_clauses</code>, <code>flag_risk</code>.</p>
+<p><strong>Multi-turn flow</strong>: LLM đọc file → parallel call [ocr_pdf, extract_entities] → CoT về clauses → sequential lookup_law từng article được cite → flag_risk cho clauses không standard → summary output JSON.</p>
+<p><strong>Numeric cost</strong>: hợp đồng 20 trang ≈ 15k input tokens sau OCR. 6 tool calls × 2k tokens context each = 12k. Total = 15k+12k = 27k in + 3k out Sonnet = $0.081 + $0.045 = $0.126 (≈3200 VND) per contract. Firm luật xử lý 500 hợp đồng/tháng = $63/tháng vs 40 giờ paralegal manual.</p>
+</div>
+
+<h2>7. Case study — ai_orchestrator</h2>
+
+<div class="example-box">
+<div class="title">ai_orchestrator engineer agent</div>
+<p>File: <code>orchestrator/backends/claude_code_backend.py</code></p>
+<p>Backend gọi Claude Code CLI → CLI có built-in tools: Read, Write, Bash, Grep, Edit, Task.</p>
+<p>Engineer agent nhận task, prompt gồm: (1) spec, (2) codebase summary, (3) available tools. Claude generate calls: Read files → understand → Edit files → Bash to run tests → return report.</p>
+<p>Không cần tool_schema manual — CLI wraps everything.</p>
+</div>
+
+<h2>8. Failure modes</h2>
+
+<div class="callout warn">
+<ol>
+  <li><strong>Hallucinate function call</strong>: LLM invent tool không exist. Fix: strict schema validate, reject unknown tools.</li>
+  <li><strong>Wrong args</strong>: type/format mismatch. Fix: schema validation before execute, retry with error message.</li>
+  <li><strong>Infinite loop</strong>: LLM keep calling same tool. Fix: max_tool_calls limit, dedup consecutive identical calls.</li>
+  <li><strong>Slow serial</strong>: chain 10 tool calls sequential. Fix: prompt for parallel tool use, batch queries.</li>
+  <li><strong>Prompt injection via tool result</strong>: retrieved content includes malicious instructions. Fix: sanitize + tag as data.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Function calling vs prompting "call get_price"?</p>
+<p class="a">Function calling = structured API. LLM output JSON matching schema, validated by system. Prompting = free text, parse fragile. Function calling more reliable, schema-enforced.</p>
+
+<p class="q">2. Multi-turn tool loop — khi nào exit?</p>
+<p class="a">Exit khi stop_reason == "end_turn" (LLM finished). Guard rail: max_iterations (10-20), timeout, no-progress detection (same tool + args repeated).</p>
+
+<p class="q">3. MCP protocol — 3 lợi thế so custom integration?</p>
+<p class="a">(1) Standardize — 1 server work with any LLM client. (2) Discovery — LLM query tools dynamically. (3) Type-safe — JSON-RPC schema validation. (4) Auth — protocol-level security patterns.</p>
+
+<p class="q">4. LLM output tool call với arg sai type. Handle?</p>
+<p class="a">Validate schema, return error trong tool_result: {"error": "ticker must be string, got int"}. LLM see error, retry with correction. Common pattern.</p>
+
+<p class="q">5. Compare Claude Code CLI (built-in tools) vs custom MCP server. Trade-off?</p>
+<p class="a">CLI: turn-key, work immediately, sandbox managed. MCP: custom domain tools (query DB, call internal API). Best combo: use CLI for generic tasks + MCP for domain-specific.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>ai_orchestrator: <code>orchestrator/backends/claude_code_backend.py</code></li>
+    <li>MCP server example: <code>d:/New-jouney/ai_orchestrator/mcp_server/</code></li>
+    <li>Config: <code>.mcp.json</code> — MCP server registration</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use">Anthropic Tool Use guide</a></li>
+    <li>📖 <a href="https://modelcontextprotocol.io/">Model Context Protocol spec</a></li>
+    <li>📖 <a href="https://platform.openai.com/docs/guides/function-calling">OpenAI Function Calling docs</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L5_2_rag.html">← L5.2</a>
+  <a href="L5_4_llm_eval.html">L5.4 · LLM Evaluation →</a>
+</div>
+
+</div>
+</body>
+</html>

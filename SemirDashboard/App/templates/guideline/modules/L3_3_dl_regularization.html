@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L3.3 — DL Regularization</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 3 · Module 3</div>
+  <h1>3.3 · Deep Learning Regularization</h1>
+  <p class="subtitle">Dropout variants, BatchNorm vs LayerNorm vs RMSNorm, stochastic depth, mixup — chi tiết implementation cho DL practitioner.</p>
+  <div class="level">Level 3 · Deep Learning · ~25 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Chọn normalization đúng cho task (BN/LN/RMS/Group)</li>
+  <li>Implement dropout variants (spatial, block, DropPath)</li>
+  <li>Understand mixup + cutmix for data augmentation</li>
+  <li>Ứng dụng: stochastic depth trong Transformer</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 BatchNorm vs LayerNorm bằng ngôn ngữ đời thường</div>
+<p><strong>Chuẩn hóa điểm thi 10 lớp</strong>: Mỗi lớp có thang chấm khác. Muốn so sánh học sinh giữa lớp phải normalize.</p>
+<ul>
+  <li><strong>BatchNorm</strong>: Chuẩn theo batch — "trong batch 32 học sinh này, điểm mỗi em - mean batch / std batch". Vấn đề: batch=1 thì tính std bằng cách nào? → không dùng được ở inference nếu batch động.</li>
+  <li><strong>LayerNorm</strong>: Chuẩn theo từng em — "điểm mỗi môn của em này - mean 10 môn / std 10 môn". Không phụ thuộc batch → Transformer/RNN thích.</li>
+</ul>
+<p><strong>Vì sao normalize giúp?</strong> Gradient truyền qua nhiều layer nếu số quá lớn/nhỏ → vanish/explode. Normalize giữ số ở tầm 0-1 → ổn định.</p>
+</div>
+
+<h2>1. Normalization comparison</h2>
+
+<table>
+<tr><th>Method</th><th>Normalize over</th><th>Best cho</th></tr>
+<tr><td>BatchNorm</td><td>Batch × H × W (per channel)</td><td>CNN với batch &gt; 32</td></tr>
+<tr><td>LayerNorm</td><td>Full sample (all features)</td><td>Transformer, RNN</td></tr>
+<tr><td>InstanceNorm</td><td>H × W (per sample per channel)</td><td>Style transfer</td></tr>
+<tr><td>GroupNorm</td><td>Groups of channels</td><td>CNN với small batch</td></tr>
+<tr><td>RMSNorm</td><td>Same as LN but no mean subtract</td><td>LLaMA, faster than LN</td></tr>
+</table>
+
+<h3>RMSNorm code</h3>
+<pre><code>class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(dim))
+        self.eps = eps
+    def forward(self, x):
+        norm = x.pow(2).mean(-1, keepdim=True).sqrt()
+        return self.gamma * x / (norm + self.eps)
+
+# vs LayerNorm: skip mean subtract → ~30% faster (khớp derivation dưới: mean
+# centering chiếm 30-40% compute time của norm layer), comparable quality
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📏 BatchNorm formula — trọng tài chuẩn hoá điểm từng batch (Ioffe & Szegedy 2015)</div>
+
+<p><strong>Analogy</strong>: trọng tài chuẩn hoá điểm — mỗi vòng thi (batch) tính lại mean/std của batch, dịch điểm về khoảng thoải mái (mean=0, std=1) rồi rescale bằng γ, β học được.</p>
+
+<p><strong>Công thức forward (training)</strong> cho tensor <code>x</code> shape (N, C, H, W) — normalize per channel qua N×H×W:</p>
+<pre><code>μ_c   = (1/M) Σ x                   # mean per channel, M = N·H·W
+σ²_c  = (1/M) Σ (x - μ_c)²          # variance per channel
+x̂    = (x - μ_c) / √(σ²_c + ε)     # normalize (ε=1e-5 tránh chia 0)
+y     = γ_c · x̂ + β_c              # scale + shift (γ, β học được)
+
+# Running stats for inference:
+μ_run ← 0.9·μ_run + 0.1·μ_c
+σ²_run ← 0.9·σ²_run + 0.1·σ²_c</code></pre>
+
+<p><strong>Ví dụ số</strong>: batch=4 activations của 1 channel = [1, 2, 3, 6]:</p>
+<pre><code>μ = (1+2+3+6)/4 = 3.0
+σ² = ((1-3)² + (2-3)² + (3-3)² + (6-3)²)/4 = (4+1+0+9)/4 = 3.5
+σ  = √3.5 ≈ 1.871
+x̂ = [(1-3)/1.871, (2-3)/1.871, (3-3)/1.871, (6-3)/1.871]
+   = [-1.069, -0.535, 0.0, 1.603]
+Với γ=1, β=0 (init): y = x̂. Model học γ, β nếu cần scale khác.</code></pre>
+
+<p><strong>Vì sao normalize giúp?</strong></p>
+<div class="callout danger" style="margin: 10px 0">
+<p style="margin:0"><strong>⚠️ Lưu ý (xem chi tiết ở <code>L2_2_regularization.html</code> §6)</strong>: lý do #1 dưới đây ("internal covariate shift" — ICS) là lời giải thích TRONG PAPER GỐC (Ioffe &amp; Szegedy 2015), nhưng đã bị Santurkar et al. (2018, NeurIPS) chứng minh thực nghiệm là SAI — họ cho thấy BatchNorm vẫn hoạt động tốt ngay cả khi bị CHỦ Ý bơm thêm nhiễu làm ICS tệ hơn. Liệt kê ICS ở đây để biết đây là "lý do phổ biến nhưng lỗi thời" — <strong>lý do #2 (Lipschitzness/landscape smoothing) mới là cơ chế thật được chấp nhận hiện nay.</strong></p>
+</div>
+<ol>
+  <li><strong>Internal covariate shift giảm</strong> — <em>lý do LỊCH SỬ, đã bị debunk, xem cảnh báo trên</em>: layer sau không cần adapt liên tục với distribution shift của layer trước.</li>
+  <li><strong>Smoother loss landscape / Lipschitzness</strong> (Santurkar 2018 — <em>cơ chế THẬT</em>): gradient magnitude ổn định + dự đoán được tốt hơn giữa các bước → LR có thể lớn hơn 10× mà không diverge.</li>
+  <li><strong>Chống vanishing gradient</strong>: activation trong khoảng [-3, 3] → sigmoid/tanh derivative không saturate.</li>
+</ol>
+
+<p><strong>Ý nghĩa biến</strong>:</p>
+<table>
+<tr><th>Biến</th><th>Shape</th><th>Ý nghĩa</th><th>Học được?</th></tr>
+<tr><td>μ_c, σ²_c</td><td>(C,)</td><td>Statistics per channel</td><td>Không (tính từ batch)</td></tr>
+<tr><td>γ_c</td><td>(C,)</td><td>Scale — cho phép hồi phục distribution cũ nếu cần</td><td>✅ init=1</td></tr>
+<tr><td>β_c</td><td>(C,)</td><td>Shift</td><td>✅ init=0</td></tr>
+<tr><td>ε</td><td>scalar</td><td>Numerical stability</td><td>Không</td></tr>
+<tr><td>μ_run, σ²_run</td><td>(C,)</td><td>EMA stats cho inference (momentum 0.9)</td><td>Không (running)</td></tr>
+</table>
+
+<p><strong>LayerNorm khác biệt (Ba 2016)</strong>: normalize qua feature axis (không qua batch axis).</p>
+<pre><code>Per sample n, per position (h,w) hoặc token position:
+μ_n = mean over feature dim (C)
+σ²_n = var over feature dim
+x̂ = (x - μ_n) / √(σ²_n + ε)
+y = γ · x̂ + β        # γ, β shape (C,)</code></pre>
+<p>→ Không phụ thuộc batch size, work với batch=1, autoregressive inference OK, sequence length variable OK. Đây là why Transformer chọn LN.</p>
+
+<p><strong>RMSNorm (Zhang 2019)</strong>: bỏ mean centering → chỉ scale by RMS:</p>
+<pre><code>rms(x) = √((1/C) Σ x_i²)
+y = γ · x / (rms(x) + ε)     # bỏ β, bỏ mean subtract</code></pre>
+<p>→ Rẻ hơn LN ~30% compute, quality tương đương. Llama, DeepSeek, Claude dùng.</p>
+</div>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">⚖️ Weight decay vs L2 — cùng dòng số nhưng khác đường</div>
+
+<p><strong>L2 regularization</strong>: cộng penalty vào loss.</p>
+<pre><code>L_total = L_data + (λ/2) · Σ w²
+∂L_total/∂w = ∂L_data/∂w + λ·w
+w ← w - η(g + λw)</code></pre>
+
+<p><strong>Weight decay</strong>: shrink w trực tiếp, không qua loss.</p>
+<pre><code>w ← w - η·g               # gradient step
+w ← w · (1 - η·λ)         # shrink</code></pre>
+
+<p><strong>Với vanilla SGD, 2 cách gần như bằng nhau (đúng tới bậc nhất theo η)</strong>:</p>
+<ul>
+  <li>L2 đồng thời cho: w(1-ηλ) - ηg.</li>
+  <li>Weight decay tuần tự khai triển thành: (w-ηg)(1-ηλ) = w(1-ηλ) - ηg + η²λg — dư 1 số hạng bậc 2 (η²λg) so với L2, không đáng kể khi η nhỏ nhưng về mặt đại số KHÔNG bằng tuyệt đối.</li>
+  <li><strong>Với Adam, khác biệt còn lớn hơn nhiều</strong> — L2: gradient λw đi qua bias correction + chia √ŝ → param có ŝ lớn nhận effective decay nhỏ → không cân bằng.</li>
+  <li>WD (AdamW): shrink w directly, không qua √ŝ → mọi param decay đều.</li>
+</ul>
+<p><strong>Kết quả thực nghiệm</strong>: BERT với AdamW (wd=0.01) top acc ~+1% so Adam+L2 cùng λ. Nếu bạn tune LR + λ cẩn thận, gap thu hẹp nhưng WD vẫn robust hơn.</p>
+
+<p><strong>Không apply decay cho</strong>: bias, LayerNorm γ/β, embedding — kill scale mà không giảm overfit.</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh BatchNorm/LayerNorm/GroupNorm/RMSNorm (đọc SAU khi đã hiểu cơ chế + công thức từng loại ở trên)</div>
+
+<p><strong>Câu hỏi thực tế</strong>: Vì sao ResNet dùng BatchNorm nhưng Transformer dùng LayerNorm? RMSNorm là gì? GroupNorm khi nào? Đây là 4 loại normalization + decision matrix.</p>
+
+<h4>Bảng so sánh 4 techniques + cơ chế chi tiết</h4>
+
+<table>
+<tr><th>Norm</th><th>Normalize theo trục</th><th>Statistics dùng</th><th>Batch size dependent?</th><th>Params học được</th><th>Cost</th></tr>
+<tr>
+  <td><strong>BatchNorm (2015)</strong></td>
+  <td>Batch × Height × Width (per channel)</td>
+  <td>Mean/std của batch</td>
+  <td>❌ Cần batch ≥ 16</td>
+  <td>γ, β (2 per channel)</td>
+  <td>+15% train time</td>
+</tr>
+<tr>
+  <td><strong>LayerNorm (2016)</strong></td>
+  <td>Feature dim (per sample)</td>
+  <td>Mean/std của sample</td>
+  <td>✅ Batch=1 OK</td>
+  <td>γ, β (2 per feature)</td>
+  <td>+10% train time</td>
+</tr>
+<tr>
+  <td><strong>GroupNorm (2018)</strong></td>
+  <td>Group of channels (per sample)</td>
+  <td>Mean/std của group</td>
+  <td>✅ Batch=1 OK</td>
+  <td>γ, β</td>
+  <td>+12% train time</td>
+</tr>
+<tr>
+  <td><strong>RMSNorm (2019)</strong></td>
+  <td>Feature dim (per sample)</td>
+  <td>Chỉ RMS (bỏ mean centering)</td>
+  <td>✅ Batch=1 OK</td>
+  <td>γ (1 per feature, bỏ β)</td>
+  <td>+7% (rẻ nhất) ⭐</td>
+</tr>
+</table>
+
+<h4>Ví dụ visual — cách mỗi loại normalize</h4>
+
+<pre><code># Input tensor shape (batch=4, features=6, positions=3)
+# = 4 samples, mỗi sample 6 features × 3 positions
+
+# BATCH NORM: normalize theo batch axis
+# Cho feature 1, position 1: mean/std của [sample1[1,1], sample2[1,1], sample3[1,1], sample4[1,1]]
+# Vấn đề: batch=1 → không có mean, chết.
+# Vấn đề: train vs inference khác nhau (dùng moving average → dễ mismatch).
+
+# LAYER NORM: normalize theo feature axis (per sample)
+# Cho sample 1, position 1: mean/std của [sample1[1,1], sample1[2,1], ..., sample1[6,1]]
+# Không phụ thuộc batch → work với batch=1.
+# Train vs inference identical → stable.
+
+# GROUP NORM: chia features thành N groups, normalize per group
+# VD 6 features → 2 groups: [1,2,3] và [4,5,6]
+# Cho sample 1, position 1, group 1: mean/std của [sample1[1,1], sample1[2,1], sample1[3,1]]
+# Compromise giữa BatchNorm + LayerNorm.
+
+# RMS NORM: LayerNorm nhưng bỏ mean centering (chỉ scale by RMS)
+# x_norm = x / sqrt(mean(x²) + eps) × γ
+# Bỏ tính mean và β → rẻ hơn 30% so LayerNorm
+# Zhang 2019 chứng minh: mean centering không thực sự cần
+# Llama-2, Llama-3, DeepSeek-V3 đều dùng RMSNorm.
+</code></pre>
+
+<h4>Vì sao BatchNorm win vision nhưng thua LLM?</h4>
+
+<table>
+<tr><th></th><th>Vision (ResNet)</th><th>LLM (Transformer)</th></tr>
+<tr><td>Batch size</td><td>Lớn (128-1024)</td><td>Nhỏ dynamic (batch varies)</td></tr>
+<tr><td>Sequence length</td><td>Fixed (224×224 image)</td><td>Variable (100-100k tokens)</td></tr>
+<tr><td>Feature stat stability</td><td>Batch stable → BN work</td><td>Batch unstable → BN chết</td></tr>
+<tr><td>Train vs inference</td><td>OK với moving avg</td><td>Autoregressive inference batch=1</td></tr>
+<tr><td>WINNER</td><td>BatchNorm ⭐</td><td>LayerNorm / RMSNorm ⭐</td></tr>
+</table>
+
+<h4>Vì sao Llama-3 dùng RMSNorm thay LayerNorm?</h4>
+
+<pre><code># LayerNorm: y = γ · (x - mean) / sqrt(var + eps) + β
+# 4 phép tính: subtract mean, compute var, add β
+
+# RMSNorm: y = γ · x / sqrt(mean(x²) + eps)
+# 2 phép tính, bỏ 2 phép trên
+
+# Empirical (Zhang 2019):
+# - Mean centering đóng góp &lt; 0.5% quality
+# - Nhưng chiếm 30-40% compute time của norm layer
+# → Bỏ mean centering: quality gần same, speed +30%
+# → Ở scale LLM 400B params, save vài triệu $ compute
+</code></pre>
+
+<h4>Decision matrix — chọn norm nào?</h4>
+
+<table>
+<tr><th>Tình huống</th><th>Chọn</th><th>Lý do</th></tr>
+<tr><td>CNN vision production (ResNet, EfficientNet)</td><td>BatchNorm</td><td>Batch lớn, feature stat stable</td></tr>
+<tr><td>ViT (Vision Transformer)</td><td>LayerNorm</td><td>Transformer default, batch=1 fine</td></tr>
+<tr><td>Object detection với batch nhỏ (Mask R-CNN)</td><td>GroupNorm</td><td>Batch=2-4, BN không work</td></tr>
+<tr><td>LLM foundation (GPT, Llama, Claude)</td><td>RMSNorm</td><td>Cheapest + comparable quality</td></tr>
+<tr><td>Chat fine-tuning</td><td>Cùng norm với base</td><td>Consistency với pretrained</td></tr>
+<tr><td>Small MLP tabular (100 samples)</td><td>Không cần norm</td><td>Model đủ nhỏ, không benefit</td></tr>
+</table>
+
+<h4>Cạm bẫy phổ biến</h4>
+
+<ol>
+  <li><strong>BatchNorm với batch=1</strong>: Std = 0 → division by zero → NaN. Fix: dùng LayerNorm.</li>
+  <li><strong>BatchNorm train vs eval mode</strong>: Quên set <code>model.eval()</code> ở inference → dùng batch stats thay running avg → prediction inconsistent.</li>
+  <li><strong>LayerNorm ở CNN</strong>: Không có benefit như Transformer, chậm hơn BatchNorm 20%.</li>
+  <li><strong>Chọn RMSNorm cho small model</strong>: Save 30% compute nhưng model &lt;100M params, không đáng.</li>
+</ol>
+
+<p><strong>Insight từ 2024-2025 trend</strong>: Mọi LLM foundation đều đang dùng RMSNorm. BatchNorm dying dần khỏi mainstream research (chỉ còn ở legacy vision code). LayerNorm intermediate — dùng khi RMSNorm chưa được test kỹ trong architecture.</p>
+</div>
+
+<h2>2. Dropout variants</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🎲 Dropout math — Bernoulli mask + inverted scaling (với con số)</div>
+
+<p><strong>Analogy</strong>: học nhóm mà mỗi buổi vắng ngẫu nhiên 50%. Không ai được lệ thuộc 1 người — cả nhóm cùng học. Khi thi (inference), tất cả có mặt → dùng full capacity.</p>
+
+<p><strong>Công thức</strong>:</p>
+<pre><code># Training
+m_i ~ Bernoulli(1 - p)              # p = drop rate, thường 0.1-0.5
+y_i = (x_i · m_i) / (1 - p)         # inverted scaling
+
+# Inference (eval mode)
+y_i = x_i                            # no mask, no scaling</code></pre>
+
+<p><strong>Vì sao chia (1-p)?</strong> Giữ E[y] = E[x] để train và inference cùng scale.</p>
+<pre><code>E[y_i] = E[x_i · m_i / (1-p)]
+       = x_i · E[m_i] / (1-p)
+       = x_i · (1-p) / (1-p)          (vì E[Bernoulli(1-p)] = 1-p)
+       = x_i                          ✅ same as inference</code></pre>
+
+<p><strong>Ví dụ số cụ thể</strong>: x = [1.0, 2.0, 3.0, 4.0], p=0.5. Mask ngẫu nhiên [1, 0, 1, 0]:</p>
+<pre><code>y = [1·1, 2·0, 3·1, 4·0] / (1 - 0.5)
+  = [1, 0, 3, 0] / 0.5
+  = [2.0, 0, 6.0, 0]
+Sum training  = 2+0+6+0 = 8
+Sum expected  = 1+2+3+4 = 10, E[Sum training over masks] = 10 ✅</code></pre>
+
+<p><strong>Ý nghĩa biến</strong>:</p>
+<table>
+<tr><th>Biến</th><th>Ý nghĩa</th></tr>
+<tr><td>p</td><td>Drop probability (0.1 attention, 0.5 FC)</td></tr>
+<tr><td>m_i</td><td>Bernoulli mask — 1 giữ, 0 bỏ</td></tr>
+<tr><td>1/(1-p)</td><td>Inverse scaling — giữ mean của output không đổi</td></tr>
+</table>
+
+<p><strong>Gradient</strong>: ∂y/∂x = m/(1-p). Neuron drop → không nhận gradient → không update ở step đó. Tương đương ensemble 2^N sub-network.</p>
+</div>
+
+<h3>2.1 Standard dropout (Srivastava 2014)</h3>
+<pre><code>mask = (torch.rand_like(x) > p).float()
+return x * mask / (1 - p)   # inverted scaling
+</code></pre>
+
+<h3>2.2 Spatial dropout (2D)</h3>
+<pre><code># Drop entire feature map (channel), not pixel
+# Better for CNN (adjacent pixels highly correlated)
+nn.Dropout2d(p)   # PyTorch
+</code></pre>
+
+<h3>2.3 DropPath / Stochastic Depth</h3>
+<pre><code># Drop entire residual block randomly
+# Used trong ResNet, ViT, Transformer:
+def forward(self, x):
+    if self.training and random.random() < self.drop_path:
+        return x    # skip block entirely
+    return x + self.block(x)
+</code></pre>
+
+<h2>3. Data augmentation</h2>
+
+<h3>3.1 Mixup (Zhang 2018)</h3>
+
+<p style="font-size: 0.9em; opacity: 0.85"><strong>Beta(α, α) là gì?</strong> Phân phối xác suất liên tục trên khoảng [0, 1] — dùng để sinh 1 số ngẫu nhiên λ ∈ [0,1] mỗi lần lấy mẫu, hình dạng phụ thuộc α: <strong>α &lt; 1</strong> → hình chữ U (đa số giá trị rơi gần 0 hoặc gần 1, hiếm khi ở giữa); <strong>α = 1</strong> → phẳng đều (uniform, mọi giá trị 0-1 đều như nhau); <strong>α &gt; 1</strong> → hình chuông tập trung quanh 0.5. Mixup dùng α=0.2 (&lt;1) → λ hầu hết gần 0 hoặc gần 1 → phần lớn ảnh mix chỉ "pha trộn nhẹ" (gần giống ảnh gốc), số ít ảnh mix 50/50 thật sự — tránh làm nhiễu training quá mạnh.</p>
+
+<pre><code>λ ~ Beta(α, α)   # α = 0.2 typical
+x_mix = λ · x_i + (1-λ) · x_j
+y_mix = λ · y_i + (1-λ) · y_j
+# Train on (x_mix, y_mix)
+# Effect: smooth decision boundary, reduce overconfidence
+</code></pre>
+
+<h3>3.2 CutMix (Yun 2019)</h3>
+<pre><code># Instead blend pixels, crop patch from image j onto image i
+# Label mixed proportional to patch area
+# Better than Mixup cho image classification
+</code></pre>
+
+<h3>3.3 Label smoothing (revisit)</h3>
+<pre><code>y_smooth = (1 - ε) · y_one_hot + ε / n_classes
+# Common ε = 0.1 for classification, 0.05 cho LLM (large vocab)
+</code></pre>
+
+<h2>4. Stochastic Weight Averaging (SWA) — regularize bằng cách TRUNG BÌNH nhiều checkpoint</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Nhắc lại "sharp vs flat minima" đã học ở L3.2 (Adam vs SGD deep-dive) — flat minima generalize tốt hơn sharp minima. Tưởng tượng bạn ném 1 quả bóng vào 1 cái CHẢO RỘNG (flat minimum): bóng lăn qua lăn lại quanh đáy chảo nhưng KHÔNG BAO GIỜ đứng yên đúng 1 điểm — nếu bạn chụp ảnh vị trí bóng ở nhiều thời điểm rồi lấy TRUNG BÌNH TỌA ĐỘ, điểm trung bình đó sẽ nằm rất gần ĐÁY THẬT của chảo. SWA làm chính xác việc này với weight của model: lấy nhiều "ảnh chụp" weight ở các bước train khác nhau (khi loss đã thấp nhưng còn dao động quanh 1 vùng flat) rồi TRUNG BÌNH CỘNG lại — kết quả gần đáy flat minimum hơn bất kỳ checkpoint riêng lẻ nào.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: cuối training, SGD/Adam với LR không đổi hoặc LR nhỏ dần vẫn KHÔNG đứng yên tại 1 điểm — weight dao động (bounce) quanh 1 vùng loss thấp vì gradient noise từ mini-batch không bao giờ = 0 hoàn toàn. Checkpoint cuối cùng (last epoch) chỉ là 1 điểm NGẪU NHIÊN trong vùng dao động đó — không nhất thiết là điểm tốt nhất.</p>
+
+<p><strong>Cơ chế (Izmailov et al. 2018, UAI)</strong>:</p>
+<pre><code>Phase 1 (0-75% tổng thời gian train): train BÌNH THƯỜNG với LR decay chuẩn (cosine/step)
+Phase 2 (75-100%): chuyển sang LR schedule DẠNG CHU KỲ (cyclical) — không hội tụ về 1 điểm,
+                    mà cố tình "khám phá" quanh vùng flat minimum bằng LR cao vừa phải lặp lại
+
+Mỗi khi kết thúc 1 chu kỳ LR (VD mỗi epoch ở phase 2), LƯU checkpoint weight W_i.
+Sau N chu kỳ, tính:
+  W_SWA = (1/N) · Σ W_i             # trung bình cộng đơn giản các checkpoint
+
+# Trước khi dùng W_SWA để inference, PHẢI update lại BatchNorm running stats
+# (chạy vài forward pass trên train set với W_SWA để tính lại μ_run, σ²_run —
+#  vì μ_run/σ²_run của từng W_i riêng lẻ KHÔNG khớp với W_SWA đã trung bình)</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: SWA KHÁC hẳn "model ensemble" (train N model riêng biệt rồi average OUTPUT của chúng lúc predict). SWA chỉ train MỘT lần, average WEIGHT (không phải output), rồi chỉ cần 1 forward pass lúc inference — không tốn thêm compute ở inference như ensemble thật (vốn cần N forward pass, N lần compute).</p>
+
+<table>
+<tr><th></th><th>Model ensemble truyền thống</th><th>SWA</th></tr>
+<tr><td>Số lần train</td><td>N lần độc lập (tốn N× compute train)</td><td>1 lần (chỉ thêm vài epoch cyclical LR cuối)</td></tr>
+<tr><td>Cái gì được average</td><td>Output/prediction của N model</td><td>Weight của N checkpoint (1 model duy nhất)</td></tr>
+<tr><td>Compute lúc inference</td><td>N× forward pass</td><td>1× forward pass (như model thường)</td></tr>
+<tr><td>Cải thiện generalization</td><td>Có (nhờ đa dạng model)</td><td>Có (nhờ tìm flat minimum), nhưng rẻ hơn nhiều</td></tr>
+</table>
+
+<p><strong>Insight</strong>: SWA gần như "ensemble miễn phí" — tận dụng chính sự dao động tự nhiên của SGD quanh flat minimum (thứ thường bị coi là "nhiễu cần loại bỏ") biến nó thành tín hiệu hữu ích bằng phép trung bình cộng đơn giản. Đây là lý do PyTorch đưa thẳng <code>torch.optim.swa_utils</code> vào core library — không cần thư viện ngoài.</p>
+
+<p><strong>📖 Mở rộng</strong>: biến thể phổ biến nhất hiện nay là <strong>EMA (Exponential Moving Average) của weight</strong> — thay vì trung bình cộng đều N checkpoint cuối, EMA cập nhật liên tục mỗi step: <code>W_ema ← τ·W_ema + (1-τ)·W_current</code> (τ≈0.999) trong SUỐT quá trình train, không chỉ 25% cuối. EMA weight thường được dùng làm checkpoint CUỐI CÙNG để deploy trong hầu hết pipeline vision/diffusion model hiện đại (Stable Diffusion, nhiều LLM SFT pipeline) — cùng ý tưởng cốt lõi với SWA (trung bình theo thời gian để giảm nhiễu vị trí cuối cùng trong không gian weight), chỉ khác công thức trung bình (EMA liên tục có trọng số giảm dần theo thời gian, SWA trung bình đều 1 tập con cuối).</p>
+</div>
+
+<h2>5. Combine techniques (recipe)</h2>
+
+<div class="example-box">
+<div class="title">💡 Modern Transformer training recipe</div>
+<ul>
+  <li>AdamW + warmup 5% + cosine decay</li>
+  <li>LayerNorm (pre-norm) hoặc RMSNorm</li>
+  <li>Dropout 0.1 sau attention + FFN</li>
+  <li>Label smoothing ε=0.1</li>
+  <li>Gradient clipping norm 1.0</li>
+  <li>Weight decay 0.01</li>
+  <li>Batch size lớn (2k-32k tokens) với gradient accumulation</li>
+</ul>
+</div>
+
+<div class="callout danger">
+<div class="label">🐛 Common bugs / gotchas — regularization</div>
+<ol>
+  <li><strong>Quên <code>model.eval()</code> ở inference</strong>: BN dùng batch stats (batch=1 → std=0 → NaN); Dropout vẫn drop → prediction không deterministic. Test accuracy tụt 5-20%.</li>
+  <li><strong>BatchNorm axis sai cho Conv1D</strong>: <code>nn.BatchNorm1d</code> mong đợi (N, C, L). Nếu bạn feed (N, L, C) (Transformer style) → normalize sai chiều → NaN hoặc học chậm.</li>
+  <li><strong>BN với batch size 1-2</strong>: variance nhỏ + noisy → mất tác dụng. Dùng GroupNorm hoặc LN.</li>
+  <li><strong>BN trước ReLU vs sau ReLU</strong>: paper gốc BN trước ReLU. Empirical (post-2016) BN sau ReLU đôi khi tốt hơn. Đừng mix trong cùng 1 residual block.</li>
+  <li><strong>Weight decay apply cho bias/norm params</strong>: shrink bias về 0 làm layer mất khả năng shift. Group params → wd=0 cho bias/norm.</li>
+  <li><strong>Dropout p=0.5 ở Transformer</strong>: quá mạnh. Transformer dùng 0.1 attention + 0.1 FFN. p=0.5 kill capacity.</li>
+  <li><strong>Dropout ở test time</strong>: quên tắt = predict noisy. Ngoại lệ có ý: MC-Dropout (giữ mở, sample N lần → uncertainty estimate).</li>
+  <li><strong>Mixup trên regression target</strong>: interpolate label OK, nhưng loss dùng CE thì convert label thành soft distribution.</li>
+  <li><strong>LayerNorm apply per-channel cho Conv (như BN)</strong>: đây là sai — LN normalize per-sample per-position toàn feature. Muốn per-channel dùng GroupNorm với G=C.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate + Interview Q&A</h3>
+
+<p class="q">1. Vì sao Transformer dùng LayerNorm thay BatchNorm?</p>
+<p class="a">Sequence có variable length + padding. BN dùng batch statistics → padding influence mean/var → distortion. LN per-sample independent → sequence-length-agnostic.</p>
+
+<p class="q">2. Spatial dropout khác standard dropout thế nào?</p>
+<p class="a">Standard drop random pixels. Spatial drop entire channel (feature map). CNN adjacent pixels highly correlated → dropping individual pixels ineffective. Drop channel = drop entire feature detector.</p>
+
+<p class="q">3. Mixup λ~Beta(0.2, 0.2) - shape? Effect?</p>
+<p class="a">Beta(0.2, 0.2) U-shaped: λ concentrated near 0 or 1 → most samples close to original, few in middle. Mild interpolation. α=1 = uniform.</p>
+
+<p class="q">4. Stochastic depth p=0.1 mean gì cho 24-layer Transformer?</p>
+<p class="a">Mỗi block skip với xác suất 0.1. Effective depth = 24 · 0.9 = 21.6 blocks average. Regularization + ensemble effect. Used in DeiT, ConvNeXt.</p>
+
+<p class="q">5. Label smoothing ε=0.1 cho classification 10-class. New target?</p>
+<p class="a">y_new[correct] = 0.9 + 0.1/10 = 0.91. y_new[others] = 0.1/10 = 0.01. Model không push logit → ∞, better calibrated.</p>
+
+<p class="q">6. [Interview] Dropout p=0.3 trên layer 100 neurons. Số cách "sub-network" khác nhau?</p>
+<p class="a">2^100 ≈ 1.27e30 possible masks. Dropout = train ensemble implicit của 2^100 sub-network sharing weights. Inference với full network + scale 1/(1-p) ≈ geometric mean của ensemble outputs (approximation).</p>
+
+<p class="q">7. [Interview] BatchNorm với training mode và eval mode khác nhau ở đâu?</p>
+<p class="a">Training: dùng batch statistics (μ_batch, σ²_batch) + update running EMA. Eval: dùng running EMA (μ_run, σ²_run), γ, β không đổi. Nếu quên .eval() → dùng batch stats → batch=1 std=0 → NaN, hoặc predict inconsistent theo batch composition.</p>
+
+<p class="q">8. [Interview] Vì sao Transformer đặt LayerNorm TRƯỚC attention/FFN (pre-norm) thay vì SAU (post-norm gốc paper Vaswani)?</p>
+<p class="a">Post-norm (original 2017): x → sublayer → LN → residual add. Gradient chạy qua LN có scale — deep model (>12 layers) cần learning rate warmup dài, đôi khi diverge. Pre-norm (GPT-2, LLaMA): x → LN → sublayer → residual add. Gradient có path identity clean qua residual → train stable với LR lớn hơn, không cần warmup nhiều. Trade-off: pre-norm generalize hơi kém post-norm ở small scale, nhưng scale &gt;1B params → pre-norm win.</p>
+
+<p class="q">9. [Interview] Weight decay 0.01 tương đương giảm weight bao nhiêu % mỗi step nếu lr=1e-4?</p>
+<p class="a">w ← w·(1 - η·λ) = w·(1 - 1e-4·0.01) = w·0.999999. Mỗi step giảm 1e-6 = 0.0001%. Sau 10k steps: 0.999999^10000 ≈ 0.99 → giảm ~1%. Effect nhỏ nhưng cumulative đáng kể qua 100k+ steps. Đây là why lr × wd product mới là "effective decay rate".</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/1710.09412">Zhang et al (2018) — mixup</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1603.09382">Huang et al (2016) — Stochastic Depth</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1910.07467">Zhang & Sennrich (2019) — RMSNorm</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1803.05407">Izmailov et al (2018) — Averaging Weights Leads to Wider Optima and Better Generalization (SWA)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/1805.11604">Santurkar, Tsipras, Ilyas, Madry (2018) — How Does Batch Normalization Help Optimization?</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L3_2_optimizers.html">← L3.2</a>
+  <a href="L3_4_cnn.html">L3.4 · CNNs →</a>
+</div>
+
+</div>
+</body>
+</html>

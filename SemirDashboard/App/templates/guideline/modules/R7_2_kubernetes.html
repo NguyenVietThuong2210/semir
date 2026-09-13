@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R7.2 · Kubernetes — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Infrastructure · Điểm 2/6</div>
+  <h1>R7.2 · Kubernetes cho AI/LLM</h1>
+  <p class="subtitle">Stack K8s production 2026 cho LLM serving (vLLM + KServe + Ray + Kueue) — và vì sao <code>predictor</code> (Docker Compose 3 service) chưa cần dùng đến nó.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ol>
+  <li><strong>(Dễ)</strong> Nhắc lại Kubernetes giải quyết vấn đề gì mà Docker Compose không giải quyết được: orchestration nhiều container qua nhiều máy, tự động scale, tự phục hồi khi container chết.</li>
+  <li><strong>(Trung bình)</strong> Biết 4 thành phần cốt lõi của stack K8s-cho-AI 2026: vLLM, Kueue, KServe, Ray/Ray Serve — vai trò từng cái, không nhầm lẫn.</li>
+  <li><strong>(Trung bình)</strong> Hiểu quy tắc chọn: khi nào dùng vLLM standalone, khi nào cần thêm Ray Serve.</li>
+  <li><strong>(Trung bình→Khó)</strong> Phân biệt rõ "CÓ THỂ dùng K8s" và "NÊN dùng K8s" — đây là câu hỏi phỏng vấn/kiến trúc quan trọng nhất của module này.</li>
+  <li><strong>(Khó)</strong> Áp dụng đúng quy tắc đó để đánh giá <code>predictor</code> hiện tại — không đề xuất K8s chỉ vì "công nghệ mới".</li>
+  <li><strong>(Trung bình→Khó)</strong> Biết cơ chế KEDA scale-to-zero, 3 cách chia sẻ GPU (MIG/Time-Slicing/MPS), và đọc hiểu 1 CRD <code>LLMInferenceService</code> thật.</li>
+</ol>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Xây tiếp trên <a href="R7_1_cicd.html"><code>R7.1 CI/CD</code></a> — CI/CD trả lời "code/model mới có an toàn để deploy không", còn Kubernetes trả lời câu hỏi khác: "deploy CÁI GÌ, LÊN ĐÂU, và làm sao tự mở rộng khi tải tăng". Đây là lần đầu trong curriculum một module bàn về orchestration hạ tầng ở mức container-cluster — <a href="../modules/L7_2_deployment.html"><code>L7_2_deployment.html</code></a> đã dạy 3 pattern serving (batch/real-time/streaming) và stack serving V18 thật, nhưng ở mức "chạy trên 1 máy/1 container" — chưa có khái niệm "cluster nhiều máy tự động điều phối".</p>
+<p>Độ khó Trung bình vì cần hiểu trước khái niệm container (nếu chưa quen, đọc <a href="R7_5_containerization.html"><code>R7.5 Containerization</code></a> trước sẽ dễ hơn — dù thứ tự bài học đặt K8s trước vì đây là bullet gốc trong roadmap).</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Analogy</div>
+<p><strong>Docker Compose</strong> (đang dùng ở <code>predictor</code>) giống <strong>1 căn hộ với vài phòng cố định</strong>, bạn tự quản lý: biết chính xác có bao nhiêu phòng (service), phòng nào làm gì (postgres/api/web), tự tay bật/tắt/sửa khi cần.</p>
+<p><strong>Kubernetes</strong> giống <strong>1 chung cư cao tầng có ban quản lý tự động</strong>: khi đông khách (traffic tăng), ban quản lý tự mở thêm tầng (thêm pod); khi vắng khách, tự đóng bớt tầng (scale down) để tiết kiệm; nếu 1 phòng hỏng (container crash), ban quản lý tự sửa/thay phòng khác (self-healing) mà không cần bạn gọi thợ.</p>
+<p>Ban quản lý này <strong>không miễn phí</strong> — chi phí vận hành thêm (etcd, control plane, engineer hiểu YAML) chỉ đáng khi toà nhà đủ lớn/đông khách để việc tự động hoá đó tiết kiệm hơn so với 1 người tự quản lý căn hộ nhỏ.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. Kubernetes giải quyết vấn đề gì (nhắc lại nền tảng)</h3>
+<p>3 vấn đề cốt lõi mà Docker Compose không tự làm được:</p>
+<ul>
+<li><strong>Multi-node orchestration</strong>: Compose chỉ chạy trên 1 máy. K8s dàn container ra nhiều máy (node), tự quyết định container nào chạy ở node nào dựa trên tài nguyên còn trống.</li>
+<li><strong>Auto-scaling</strong>: K8s tự thêm/bớt số bản sao (replica) của 1 service dựa theo metric (CPU%, request/s, hoặc custom metric).</li>
+<li><strong>Self-healing</strong>: container chết → K8s tự khởi động lại; node chết → K8s tự dời container sang node khác.</li>
+</ul>
+
+<h3>2. Stack K8s-cho-AI/LLM 2026 — 4 thành phần, vai trò từng cái</h3>
+<p>Đồng thuận ngành (production stack 2026, theo khảo sát KubernetesGuru + PremAI):</p>
+<table>
+<tr><th>Thành phần</th><th>Vai trò</th><th>Vì sao cần riêng (không dùng K8s Deployment thường)</th></tr>
+<tr><td><strong>vLLM</strong></td><td>Inference engine hiệu năng cao cho LLM</td><td>PagedAttention + continuous batching — tối ưu riêng cho đặc thù LLM (KV-cache, sequence dài ngắn khác nhau), Deployment thường không có cơ chế này</td></tr>
+<tr><td><strong>Kueue</strong></td><td>Job-queueing/admission-control — quyết định job nào ĐƯỢC PHÉP vào hàng đợi chờ scheduler xử lý (không tự lên lịch pod-vào-node, đó vẫn là việc của kube-scheduler)</td><td>GPU là tài nguyên khan hiếm/đắt; K8s scheduler mặc định không tối ưu cho việc chia sẻ GPU công bằng giữa nhiều team/job</td></tr>
+<tr><td><strong>KServe</strong></td><td>Model-serving layer — 1 CRD <code>LLMInferenceService</code> duy nhất</td><td>CNCF incubating project; trừu tượng hoá GPU scheduling/load balancing/autoscaling/canary/multi-model endpoint thành 1 YAML khai báo, không phải tự viết Deployment+Service+HPA thủ công</td></tr>
+<tr><td><strong>Ray / Ray Serve</strong></td><td>Distributed training (Ray) + serving đa-node (Ray Serve)</td><td>Khi 1 model không fit vừa 1 GPU/1 node — cần chia model hoặc pipeline qua nhiều node</td></tr>
+</table>
+
+<h3>3. Quy tắc chọn — khi nào cần Ray Serve, khi nào vLLM standalone là đủ</h3>
+<pre><code>Model fit vừa trong 1 node GPU?
+  ├── CÓ → bắt đầu với vLLM đứng riêng (standalone)
+  │        Đơn giản nhất, latency thấp nhất, không overhead điều phối.
+  │
+  └── KHÔNG → cần Ray Serve khi:
+           - Serving đa-node (model quá lớn, phải chia qua nhiều máy), HOẶC
+           - Muốn compose nhiều model trên 1 cluster (pipeline nhiều bước), HOẶC
+           - Cần autoscale theo queue-depth hoặc routing logic viết bằng Python thuần
+
+Chi phí đổi lại: Ray Serve thêm overhead ~1-2ms/request.
+Chỉ đáng đánh đổi nếu cần đúng 1 trong 3 lợi ích trên — không phải mặc định.</code></pre>
+
+<h3>4. Câu hỏi quan trọng nhất: CÓ THỂ vs NÊN dùng K8s</h3>
+<p>Đây là sai lầm phổ biến nhất khi đánh giá kiến trúc: hỏi "có thể chạy trên K8s không" (hầu như luôn luôn CÓ THỂ — bất kỳ container nào cũng deploy được lên K8s) thay vì hỏi đúng câu "hiện tại có ĐANG cần các lợi ích mà K8s mang lại không" (nhiều GPU cần chia sẻ công bằng, nhiều model, traffic biến động lớn cần scale tự động, cần multi-tenant nhiều team dùng chung cluster). Nếu câu trả lời cho tất cả các điều kiện đó là "không", K8s chỉ thêm chi phí vận hành (etcd, control plane, YAML manifest, người biết vận hành) mà không đổi lại lợi ích tương xứng.</p>
+
+<h3>5. KEDA — giải quyết đúng chỗ Horizontal Pod Autoscaler (HPA) chuẩn KHÔNG làm được: scale-to-zero</h3>
+<p>HPA mặc định của K8s (đã có khái niệm chung ở mục 2) có 1 giới hạn ít người để ý: <code>minReplicas</code> không thể đặt bằng 0 — luôn phải giữ ít nhất 1 pod chạy, kể cả lúc không có request nào. Với workload GPU (đắt gấp hàng chục lần CPU), "giữ ấm" 1 pod GPU-idle 24/7 nghĩa là trả tiền y hệt lúc đang phục vụ hết công suất. <strong>KEDA</strong> (Kubernetes Event-Driven Autoscaling, dự án CNCF) giải quyết đúng khoảng trống này bằng kiến trúc 3 tầng:</p>
+<pre><code>Tầng 1 — Telemetry:    Expose metric GPU thật (SM utilization, VRAM) qua NVIDIA DCGM exporter,
+                        hoặc metric ứng dụng (vLLM tự expose /metrics dạng Prometheus,
+                        metric quan trọng nhất: vllm:num_requests_waiting — số request đang xếp hàng)
+Tầng 2 — Translation:   KEDA external scaler đọc metric ở Tầng 1, quy đổi thành quyết định scale
+Tầng 3 — Execution:     KEDA operator thực thi — thêm/bớt pod, và có thể scale về minReplicaCount: 0
+                        (đây chính là khả năng HPA chuẩn KHÔNG có)</code></pre>
+<p><strong>Vì sao HPA chuẩn "mù" với workload GPU</strong>: HPA mặc định nhìn CPU%/memory — pod GPU-bound có thể CPU chỉ 5% (đang chờ GPU xử lý) trong khi GPU đã bão hoà 100% và hàng đợi request phình to. HPA sẽ không scale vì "trông có vẻ rảnh" theo đúng metric nó biết đọc — đây là góc nhìn bổ sung cho bảng HPA GPU-utilization đã có ở <code>L7_2_deployment.html §4</code> (đã dùng đúng metric GPU rồi, nhưng L7_2 dùng HPA chuẩn nên vẫn không scale-to-zero được — KEDA là lớp thay thế/bổ sung để làm được điều đó).</p>
+
+<h3>6. GPU sharing — MIG vs Time-Slicing vs MPS (khi 1 model không cần nguyên 1 GPU)</h3>
+<p>Câu hỏi khác câu hỏi ở mục 3 (khi nào cần NHIỀU node) — đây là câu hỏi ngược lại: khi 1 model nhỏ dùng không hết 1 GPU, làm sao chia sẻ đúng cách cho nhiều workload cùng lúc mà không lãng phí:</p>
+<table>
+<tr><th>Cơ chế</th><th>Cách hoạt động</th><th>Cách ly lỗi (fault isolation)</th><th>Yêu cầu phần cứng</th><th>Nhược điểm chính</th></tr>
+<tr><td><strong>MIG</strong> (Multi-Instance GPU)</td><td>Chia vật lý GPU thành tối đa 7 instance độc lập, mỗi instance như 1 GPU riêng (VRAM + cache + compute path riêng)</td><td>Đầy đủ ở tầng phần cứng — 1 instance crash không ảnh hưởng instance khác</td><td>Chỉ GPU kiến trúc Ampere trở lên (compute capability ≥8.0, VD A100/H100)</td><td>Profile TĨNH, phải khai báo trước — nghiên cứu 2026 đo được lãng phí 20-30% công suất khi workload không khớp đúng ranh giới profile</td></tr>
+<tr><td><strong>Time-Slicing</strong></td><td>Chia sẻ theo THỜI GIAN — nhiều pod luân phiên dùng chung 1 GPU vật lý</td><td>Không có — 1 pod lỗi/chiếm dụng lâu ảnh hưởng toàn bộ pod khác dùng chung</td><td>Bất kỳ GPU NVIDIA nào (chỉ cần software, không cần kiến trúc mới)</td><td>Không cô lập VRAM — 1 pod dùng tràn bộ nhớ có thể làm pod khác OOM</td></tr>
+<tr><td><strong>MPS</strong> (Multi-Process Service)</td><td>Nhiều process chia sẻ context GPU cùng lúc (không luân phiên theo thời gian như time-slicing)</td><td>Một phần — cô lập tốt hơn time-slicing, kém hơn MIG</td><td>Bất kỳ GPU NVIDIA nào</td><td>Vẫn có thể 1 process lỗi ảnh hưởng process khác trong cùng context</td></tr>
+</table>
+<p><strong>Quy tắc chọn</strong>: cần cô lập lỗi/bảo mật nghiêm ngặt giữa các team dùng chung cluster (multi-tenant thật) → MIG, chấp nhận đánh đổi linh hoạt. Chỉ cần tận dụng GPU rảnh cho nhiều workload nội bộ tin cậy lẫn nhau, không cần cô lập cứng → time-slicing hoặc MPS, đơn giản hơn, không cần phần cứng Ampere+.</p>
+<pre><code>Minh hoạ lãng phí của MIG profile tĩnh khi kích thước workload không khớp ranh giới:
+
+1 GPU A100 80GB chia MIG thành 7 instance cố định ≈ 80/7 ≈ 11.4 GB/instance
+(chỉ có ĐÚNG 7 instance trên 1 GPU — mọi workload minh hoạ phải vừa trong 7 instance này)
+
+Workload thực tế cần: 3 job × 15GB (hơi lớn hơn 1 instance MIG) + 1 job × 5GB (hơi nhỏ hơn)
+  → 3 job 15GB: mỗi job phải CHIẾM 2 instance MIG (2 × 11.4 = 22.8GB) vì 1 instance
+    không đủ 15GB → lãng phí 22.8 - 15 = 7.8GB/job × 3 job = 23.4GB lãng phí (dùng 6/7 instance)
+  → 1 job 5GB: chỉ cần dùng hết được ⅓ dung lượng 1 instance MIG
+    → lãng phí 11.4 - 5 = 6.4GB (dùng nốt instance thứ 7)
+
+Tổng lãng phí ước lượng: (23.4 + 6.4) / 80 ≈ 37% trong kịch bản LỆCH XẤU này (7/7
+instance dùng hết, không GPU thứ 2 nào cần) — minh hoạ vì sao con số ngành báo
+"20-30% trung bình" hoàn toàn có thể tệ hơn nếu phân bố kích thước workload thực
+tế không khớp ranh giới 7 profile cố định của MIG — đây chính là lý do time-slicing/MPS
+(không có ranh giới cố định)
+đôi khi thực dụng hơn dù cô lập kém hơn.</code></pre>
+
+<h3>7. KServe <code>LLMInferenceService</code> — đọc thật 1 CRD, không chỉ nói tên</h3>
+<p>Mục 2 đã nêu KServe "trừu tượng hoá thành 1 YAML khai báo" — đọc cụ thể 1 ví dụ thật (KServe v0.17, giản lược, verify qua tài liệu chính thức) để thấy rõ nó thay thế bao nhiêu YAML thủ công:</p>
+<pre><code>apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: llama3-with-scheduler
+spec:
+  model:
+    uri: hf://meta-llama/Llama-3.1-8B-Instruct
+    name: meta-llama--Llama-3.1-8B-Instruct
+    replicas: 4
+  template:
+    spec:
+      containers:
+      - name: vllm
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+  router:
+    gateway:
+      managed: {}          # KServe tự tạo Gateway API resource, không cần viết Ingress thủ công
+    route:
+      httpRoute: {}
+  scheduler:
+    config:
+      ref: { name: custom-endpoint-picker-config, key: endpoint-picker-config.yaml }
+    pool: {}                # inference pool — điều phối request qua nhiều replica</code></pre>
+<p><strong>Đọc field theo đúng vai trò</strong>: <code>model.uri</code> trỏ thẳng HuggingFace Hub (không cần tự build image chứa weight). <code>model.replicas: 4</code> thay thế cho việc tự viết Deployment + set số replica. <code>router.gateway.managed: {}</code> tự tạo tài nguyên networking (thay Ingress/Service thủ công). <code>scheduler.pool</code> là lớp điều phối request qua nhiều replica theo tải thực tế (endpoint picker) — 1 CRD gộp lại đúng những gì mục 2 mô tả: "không phải tự viết Deployment+Service+HPA thủ công". Bản KServe mới còn hỗ trợ khai báo trực tiếp <strong>disaggregated prefill/decode</strong> (PD disaggregation — cơ chế đã học kỹ ở <code>R2_1_kv_caching.html §7</code>) ngay trong CRD này, không cần tự dựng 2 cụm riêng bằng tay.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+
+<h3>Ví dụ mở rộng — tiết kiệm thật khi bật KEDA scale-to-zero cho 1 GPU inference service</h3>
+<p>Giả định 1 dịch vụ LLM tự host trên 1 GPU A100 (giá thuê cloud on-demand ≈ $2.5/giờ, nằm trong khoảng $2-3/giờ đã dùng ở <code>L7_2_deployment.html §4</code> cho A100 — tái dùng để không tạo số mới; LƯU Ý: đây là giá A100, khác giá H100 $2.5/giờ ở <code>L5_5_cost_latency.html §1</code> — 2 GPU khác tier tình cờ có số gần nhau), traffic có tính chu kỳ rõ (giờ hành chính đông, đêm gần như không ai gọi):</p>
+<pre><code>Kịch bản: dịch vụ nhận traffic 10 tiếng/ngày (giờ hành chính),
+          gần như 0 request 14 tiếng còn lại (đêm + sáng sớm)
+
+KHÔNG scale-to-zero (HPA chuẩn, minReplicas ≥ 1 — luôn giữ ít nhất 1 pod GPU):
+  24 giờ × $2.5/giờ × 30 ngày = $1,800/tháng
+  (trả tiền cho 14 giờ/ngày × 30 ngày = 420 giờ hoàn toàn KHÔNG có request nào)
+
+CÓ scale-to-zero (KEDA, minReplicaCount: 0, tự tắt pod khi vllm:num_requests_waiting = 0
+                  trong N phút, tự bật lại khi có request đầu tiên — chấp nhận cold-start
+                  1 lần cho request đó):
+  10 giờ/ngày × $2.5/giờ × 30 ngày = $750/tháng
+
+→ Tiết kiệm ≈ $1,050/tháng (~58%) CHỈ nhờ đổi cơ chế autoscale, không đổi GPU/model.
+  Đánh đổi: request đầu tiên sau mỗi lần "đánh thức" chịu cold-start (thường 60-180s,
+  đã học ở L7_2_deployment.html §4 "Cold start problem") — chỉ chấp nhận được nếu SLA
+  latency cho phép 1 vài request đầu chậm, không phù hợp cho service cần p99 thấp liên tục.</code></pre>
+
+<p><code>predictor</code> hiện tại không dùng K8s — toàn bộ hạ tầng nằm trong <code>docker-compose.yml</code> ở root repo, 3 service:</p>
+<pre><code>services:
+  postgres:
+    image: postgres:16-alpine
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U predict -d predict_stock"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: { context: ./backend, dockerfile: Dockerfile }
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/api/health"]
+
+  web:
+    build: { context: ./frontend, dockerfile: Dockerfile }
+    depends_on:
+      api:
+        condition: service_healthy</code></pre>
+<p>Quan sát quan trọng: <code>docker-compose.yml</code> đã tự làm được 2 việc mà người ta hay tưởng "phải có K8s mới làm được" — <strong>health-based dependency ordering</strong> (<code>depends_on: condition: service_healthy</code>, không phải chỉ "start sau") và <strong>healthcheck tự động</strong>. Ở quy mô 3 service 1 máy, đây đã là đủ "tự phục hồi cơ bản" (Compose tự restart container theo policy <code>restart: unless-stopped</code>) mà không cần trả chi phí vận hành control plane.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Docker Compose (hiện tại)</th><th>Kubernetes</th></tr>
+<tr><td><strong>Số máy quản lý được</strong></td><td>1 máy</td><td>Nhiều máy (cluster)</td></tr>
+<tr><td><strong>Auto-scale theo tải</strong></td><td>❌ không có (phải tự sửa file, restart)</td><td>✅ Horizontal Pod Autoscaler tự động</td></tr>
+<tr><td><strong>Scale-to-zero (0 pod lúc rảnh)</strong></td><td>❌ không áp dụng (luôn 1 container chạy)</td><td>❌ HPA chuẩn không làm được — cần thêm KEDA (mục 5)</td></tr>
+<tr><td><strong>Self-healing khi node chết</strong></td><td>❌ không áp dụng (chỉ 1 node)</td><td>✅ tự dời pod sang node khác</td></tr>
+<tr><td><strong>Độ phức tạp vận hành</strong></td><td>Thấp — 1 file YAML, đọc hiểu trong vài phút</td><td>Cao — cần hiểu etcd, scheduler, CRD, networking (CNI), RBAC</td></tr>
+<tr><td><strong>Chi phí hạ tầng</strong></td><td>1 máy, có thể là VPS rẻ</td><td>Cần ít nhất 3 node (HA control plane) hoặc dùng managed K8s (EKS/GKE/AKS) — chi phí quản lý cao hơn</td></tr>
+<tr><td><strong>Phù hợp quy mô</strong></td><td>Startup nhỏ, 1 model CPU nhẹ, traffic dự đoán được (đúng <code>predictor</code> hiện tại)</td><td>Nhiều GPU, nhiều model, traffic biến động lớn, multi-tenant nhiều team</td></tr>
+<tr><td><strong>Thời gian dựng pipeline mới</strong></td><td>Nhanh — sửa 1 file, <code>docker compose up</code></td><td>Chậm hơn — cần viết Deployment/Service/Ingress/HPA YAML riêng</td></tr>
+</table>
+
+<h3>8. Managed K8s (EKS/GKE/AKS) — vì sao hầu như không ai tự vận hành control plane nữa</h3>
+<p>Bảng mục 2-7 giả định ngầm đã CÓ 1 cluster K8s sẵn — thực tế câu hỏi đầu tiên khi quyết định dùng K8s là tự vận hành control plane (etcd, API server, scheduler) hay dùng dịch vụ managed:</p>
+<table>
+<tr><th></th><th>Tự vận hành (self-managed)</th><th>Managed (EKS/GKE/AKS)</th></tr>
+<tr><td>Ai vận hành control plane</td><td>Team tự làm — cần ≥3 node HA cho etcd, tự vá lỗi/upgrade</td><td>Cloud provider — trả phí cố định/giờ cho control plane, không tự vận hành</td></tr>
+<tr><td>Chi phí control plane</td><td>Ẩn trong chi phí node (không tính riêng, nhưng tốn nhân sự vận hành)</td><td>Phí cố định theo giờ (khác nhau theo provider, thường vài cent/giờ) + chi phí node (worker) như bình thường</td></tr>
+<tr><td>Độ phức tạp vận hành</td><td>Rất cao — cần chuyên gia K8s toàn thời gian</td><td>Thấp hơn nhiều — provider tự lo HA/backup/upgrade control plane</td></tr>
+<tr><td>Khi nào hợp lý</td><td>Ràng buộc compliance cực kỳ nghiêm ngặt (on-premise bắt buộc), hoặc quy mô cực lớn đủ để có team platform riêng</td><td>Mặc định hợp lý cho tuyệt đại đa số team — kể cả team đã đủ lớn để CẦN K8s theo đúng 4 điều kiện mục 4</td></tr>
+</table>
+<p><strong>Hệ quả cho câu hỏi "NÊN dùng K8s không" ở mục 4</strong>: ngay cả khi 1 team QUYẾT ĐỊNH cần K8s, câu hỏi tiếp theo gần như luôn có cùng 1 câu trả lời mặc định (managed, không tự vận hành control plane) — chi phí/rủi ro tự vận hành control plane hiếm khi đáng, trừ ràng buộc compliance đặc biệt. Đây là lý do phần lớn thảo luận "K8s có đáng không" trong thực tế đã ngầm giả định managed K8s, không phải tự dựng etcd từ đầu.</p>
+
+<h2>🎯 Ứng dụng vào dự án hiện tại</h2>
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> chạy 1 model XGBoost — không phải LLM nặng GPU — với 30-86 ticker (tuỳ phase, xem <code>CLAUDE.md</code>), traffic dự đoán được (chủ yếu batch prediction theo lịch trading day, không phải hàng triệu request/giây bất ngờ). Đối chiếu với đúng 4 điều kiện "NÊN dùng K8s" ở mục 4:</p>
+<ul>
+<li>Nhiều GPU cần chia sẻ công bằng? <strong>Không</strong> — không dùng GPU (XGBoost train/serve trên CPU).</li>
+<li>Nhiều model cạnh tranh tài nguyên? <strong>Không</strong> — 1 model chính, chạy trong 1 container <code>api</code>.</li>
+<li>Traffic biến động lớn cần scale tự động? <strong>Không</strong> — traffic gắn với phiên giao dịch, có lịch dự đoán được.</li>
+<li>Multi-tenant nhiều team dùng chung cluster? <strong>Không</strong> — 1 team, 3 service.</li>
+</ul>
+<p>Kết luận: <strong>Docker Compose hiện tại là lựa chọn đúng</strong> ở quy mô này — không phải "chưa nâng cấp kịp" mà là "đúng quy mô". Kiến thức K8s trong module này cần <em>biết để đánh giá đúng lúc chuyển</em> (ví dụ nếu tương lai <code>predictor</code> mở rộng sang serving 1 LLM tự host thật với traffic lớn), không phải việc cần làm ngay.</p>
+</div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ol>
+<li><strong>Nhảy vào Kubernetes vì "công ty lớn đều dùng K8s"</strong> — sai nếu traffic/quy mô chưa đủ lớn để bù chi phí vận hành control plane; đây là resume-driven-development, không phải kiến trúc dựa trên nhu cầu thật.</li>
+<li><strong>Nhầm KServe với Ray Serve là 2 lựa chọn cạnh tranh</strong> — thực ra KServe (serving layer, CRD khai báo) và Ray Serve (distributed compute framework) có thể dùng cùng nhau tuỳ bài toán, không phải chọn 1 trong 2 luôn luôn.</li>
+<li><strong>Dùng Deployment K8s thường để serve LLM thay vì vLLM</strong> — bỏ lỡ PagedAttention/continuous batching, lãng phí VRAM và throughput thấp hơn nhiều so với dùng đúng inference engine chuyên biệt.</li>
+<li><strong>Coi "có thể chạy Docker container trên K8s" nghĩa là "nên chuyển sang K8s"</strong> — nhầm lẫn giữa khả thi kỹ thuật và lợi ích kinh tế thật.</li>
+<li><strong>Dùng HPA chuẩn rồi thắc mắc "sao GPU idle vẫn tốn tiền"</strong> — HPA không scale-to-zero được (<code>minReplicas</code> tối thiểu là 1); cần KEDA nếu muốn thật sự về 0 pod lúc không có traffic.</li>
+<li><strong>Chọn MIG chỉ vì "cô lập tốt nhất"</strong> mà không xét GPU có phải Ampere+ hay không, và không xét lãng phí 20-30% do profile tĩnh không khớp workload thực tế — time-slicing/MPS có thể là lựa chọn thực dụng hơn nếu không cần cô lập cứng multi-tenant.</li>
+<li><strong>Tự vận hành control plane (self-managed) "cho tiết kiệm"</strong> — trong đa số trường hợp chi phí nhân sự vận hành etcd/API server/scheduler vượt xa khoản phí control plane cố định của EKS/GKE/AKS; chỉ hợp lý khi có ràng buộc compliance on-premise thật sự bắt buộc.</li>
+</ol>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Giải thích đúng 3 vấn đề cốt lõi Kubernetes giải quyết mà Docker Compose không tự làm được.</li>
+<li>Kể đúng vai trò của 4 thành phần vLLM/Kueue/KServe/Ray — không nhầm lẫn cái nào làm gì.</li>
+<li>Áp dụng đúng quy tắc chọn vLLM standalone vs Ray Serve cho 1 tình huống cụ thể.</li>
+<li>Trả lời được câu hỏi "predictor có NÊN chuyển sang K8s không" kèm lý do dựa trên 4 điều kiện, không phải cảm tính.</li>
+<li>Phân biệt được "CÓ THỂ" và "NÊN" khi đánh giá bất kỳ đề xuất hạ tầng mới nào.</li>
+<li>Giải thích được vì sao HPA chuẩn không scale-to-zero được, và KEDA giải quyết đúng khoảng trống đó bằng cơ chế 3 tầng nào.</li>
+<li>So sánh đúng MIG/Time-Slicing/MPS theo 2 trục cô lập lỗi và yêu cầu phần cứng, chọn đúng cơ chế cho 1 tình huống multi-tenant cho trước.</li>
+<li>Tính lại được ví dụ lãng phí MIG khi kích thước workload không khớp ranh giới 7 profile cố định, và giải thích vì sao con số thực tế có thể tệ hơn mức "20-30% trung bình" của ngành.</li>
+<li>Đọc hiểu đúng 1 CRD <code>LLMInferenceService</code> thật — chỉ ra field nào thay thế cho Deployment/Service/Ingress thủ công.</li>
+<li>Giải thích được vì sao managed K8s (EKS/GKE/AKS) là lựa chọn mặc định hợp lý cho đa số team, kể cả team đã đủ điều kiện cần K8s theo mục 4.</li>
+<li>Tính lại được ví dụ tiết kiệm chi phí khi bật KEDA scale-to-zero (từ $1,800/tháng xuống $750/tháng ở kịch bản 10 giờ traffic/ngày) và nêu đúng đánh đổi cold-start đi kèm.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R7_1_cicd.html">← R7.1 · CI/CD</a>
+  <a href="R7_3_cloud_services.html">R7.3 · Cloud Services →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R4.4 · Reranking Pipelines — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Retrieval Techniques · Điểm 4/6</div>
+  <h1>R4.4 · Reranking Pipelines</h1>
+  <p class="subtitle">Rerank chỉ chiếm 5-15% tổng latency của 1 pipeline RAG — nhưng lại là tầng dễ bị thêm vào "cho chắc" nhất mà không đo được nó cải thiện gì thật.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>Dễ</strong>: biết rerank đứng ở đâu trong pipeline retrieval (sau ANN search, trước khi đưa vào prompt LLM).</li>
+<li><strong>Dễ</strong>: nhớ được thứ tự latency của từng bước trong pipeline RAG có rerank.</li>
+<li><strong>Trung bình</strong>: giải thích vì sao cross-encoder (dùng trong rerank) chính xác hơn bi-encoder (dùng trong retrieval ban đầu) nhưng chậm hơn nhiều.</li>
+<li><strong>Trung bình</strong>: quyết định đúng rerank bao nhiêu candidate, self-host hay gọi API.</li>
+<li><strong>Khó</strong>: thiết kế được quy trình ĐO trước khi quyết định có thêm tầng rerank hay không, thay vì thêm "vì best practice nói vậy".</li>
+<li><strong>Khó</strong>: giải thích được kiến trúc cascade (nhiều tầng rerank chi phí tăng dần) khác gì rerank 1 tầng, và biết ngưỡng lợi ích biên (&lt;0.3% cho +50-200ms) khi nào KHÔNG đáng thêm tầng.</li>
+<li><strong>Khó</strong>: tính tay được chi phí USD/tháng thật của rerank API cho 1 quy mô traffic cho trước, phân biệt được rào cản chi phí và rào cản latency/chất lượng.</li>
+<li><strong>Khó</strong>: quyết định đúng khi nào đáng fine-tune 1 reranker generic cho domain riêng (VD tài chính tiếng Việt) thay vì dùng thẳng off-the-shelf, và biết quy trình 2 bước (SFT + quantize) tổng quát.</li>
+<li><strong>Khó</strong>: đặt latency của rerank vào ĐÚNG vị trí trong 1 ngân sách latency tổng của cả request (không chỉ nhìn riêng rerank), và giải quyết được tình huống ngân sách tổng QUÁ CHẶT so với latency rerank thực tế.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Trang này tiếp nối trực tiếp từ <a href="R4_1_vector_databases.html">R4.1</a> (vector search trả về top-K thô) và <a href="R4_3_hybrid_retrieval.html">R4.3</a> (hybrid retrieval trả về top-K đã hợp nhất) — rerank là bước XỬ LÝ TIẾP THEO trên top-K đó. Cơ chế toán học của cross-encoder đã có ở <code>../modules/L9_1_advanced_rag.html §4</code> — trang này <strong>không lặp lại toán học</strong>, mà tập trung vào góc nhìn <strong>production engineering</strong>: đặt rerank vào đâu trong latency/cost budget, và quyết định có đáng thêm hay không.</p>
+<p>Độ khó: <strong>Trung bình</strong> — không có công thức phức tạp, nhưng đòi hỏi tư duy đánh đổi (trade-off) thực tế giữa chất lượng, tốc độ, chi phí.</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy — tuyển nhân sự 2 vòng</div><p>Retrieval ban đầu (bi-encoder + ANN index) giống <strong>vòng lọc CV tự động</strong> — quét nhanh hàng nghìn hồ sơ, chọn ra 100 ứng viên có vẻ phù hợp, dựa trên vài tiêu chí chung (từ khoá, kinh nghiệm). Rerank (cross-encoder) giống <strong>vòng phỏng vấn kỹ</strong> — chỉ áp dụng cho 100 ứng viên đã lọt vòng 1, đọc kỹ TỪNG hồ sơ SO VỚI đúng yêu cầu công việc cụ thể, chậm hơn nhiều nhưng chính xác hơn nhiều. Không ai phỏng vấn kỹ cả 10,000 hồ sơ ngay từ đầu — quá tốn thời gian; cũng không ai chỉ dựa vào lọc CV tự động để quyết định tuyển — quá thô.</p></div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<div class="callout"><div class="label">📖 Vì sao cross-encoder chậm hơn bi-encoder</div><p>Bi-encoder (dùng để tạo embedding cho ANN search) encode <strong>query và mỗi document ĐỘC LẬP</strong> thành 2 vector riêng, rồi so sánh bằng phép toán rẻ (cosine similarity, cộng/nhân đơn giản) — vì vector document đã được tính SẴN TỪ TRƯỚC (index time), query-time chỉ cần encode query 1 lần rồi so với hàng triệu vector có sẵn. Cross-encoder thì ngược lại: nó nhận <strong>CẢ query VÀ document CÙNG LÚC</strong> làm input của 1 model Transformer, để model "chú ý chéo" (cross-attention) giữa 2 chuỗi — cho độ chính xác cao hơn (mô hình thấy được tương tác trực tiếp giữa từng từ của query và từng từ của document) nhưng phải chạy lại toàn bộ model cho MỖI CẶP (query, document) riêng biệt — không thể tính trước, không parallel hoá miễn phí như bi-encoder. Đây là lý do cross-encoder chỉ dùng được cho rerank 1 tập nhỏ (top-20 tới top-100), không thể dùng để quét toàn bộ N triệu document.</p></div>
+
+<h3>1. Latency budget thực tế của 1 pipeline RAG có rerank</h3>
+<pre><code>User query
+  │  embed query (bi-encoder)                    ~20ms
+  ▼
+ANN search top-100 (HNSW, xem R4.5)              ~5-10ms
+  │
+  ▼
+Cross-encoder rerank 100 → top-5                 ~150-300ms  ← ĐIỂM ĐẮT NHẤT trong retrieval pipeline
+  │
+  ▼
+Build prompt + gọi LLM generate                  ~1000-3000ms (TTFT + TPOT)
+  ─────────────────────────────────
+  Tổng: rerank chỉ ~5-15% tổng latency, nhưng lại là phần DỄ BỎ QUA optimize nhất</code></pre>
+<p>Ví dụ số liệu điển hình (không phải số liệu thật của dự án <code>predictor</code>) — mục đích là cho thấy TỈ LỆ tương đối giữa các bước, không phải con số tuyệt đối cần nhớ.</p>
+
+<h3>2. Ba quyết định engineering thật khi thiết kế rerank pipeline</h3>
+<table>
+<tr><th>Quyết định</th><th>Chi tiết</th></tr>
+<tr><td>1. Rerank bao nhiêu candidate?</td><td>Rerank top-100 chậm hơn đáng kể top-20 (cross-encoder là O(n) lời gọi model, không parallel hoá miễn phí). Rule thường dùng: retrieval trả 5-10× số lượng cuối cùng cần (cần top-5 cuối → retrieve top-50, không cần top-500).</td></tr>
+<tr><td>2. Self-host hay qua API?</td><td>Self-host (bge-reranker) rẻ hơn ở volume cao nhưng cần GPU serving riêng (xem <code>../modules/L4_6_inference.html</code> cho serving stack); API (Cohere Rerank) tiện nhưng thêm 1 network round-trip vào latency budget.</td></tr>
+<tr><td>3. Có luôn cần rerank không?</td><td>Nếu bi-encoder retrieval đã đủ tốt cho top-5 (query space nhỏ, ít nhiễu), thêm rerank chỉ tốn thêm 150-300ms mà không cải thiện đáng kể chất lượng. Luôn đo bằng eval set thật (Ragas, xem <code>L9_1 §8</code>) trước khi quyết định.</td></tr>
+</table>
+
+<h3>3. Quy trình ĐO trước khi thêm rerank (không mặc định "thêm = tốt hơn")</h3>
+<pre><code>Bước 1: Đo baseline — retrieval THUẦN (không rerank), đo recall@5 / precision@5
+         trên 1 eval set có nhãn relevance thật (ít nhất 30-50 câu hỏi đại diện)
+
+Bước 2: Thêm rerank, đo lại CÙNG metric trên CÙNG eval set
+
+Bước 3: So sánh:
+  - Cải thiện đáng kể (VD +10-15% recall@5) VÀ latency thêm chấp nhận được
+    → giữ rerank
+  - Cải thiện nhỏ (&lt;3-5%) hoặc không đổi
+    → rerank không đáng chi phí latency, BỎ
+
+Bước 4: Nếu giữ rerank, đo lại định kỳ khi KB thay đổi quy mô — 1 rerank
+         "không đáng" ở KB 100 tài liệu có thể trở nên "rất đáng" ở KB 100,000
+         tài liệu (bi-encoder retrieval bắt đầu trả về nhiễu nhiều hơn khi
+         không gian tài liệu lớn lên)</code></pre>
+
+<h3>4. Cascading — khi 1 tầng rerank không đủ, và khi nào KHÔNG đáng thêm tầng thứ 2 (verify 2026-09)</h3>
+<p>Mục 1-3 giả định 1 tầng rerank duy nhất (top-K thô → cross-encoder → top-5). Kiến trúc production 2026 còn có <strong>cascade</strong> — nhiều tầng rerank chi phí TĂNG DẦN, tầng sau chỉ chạy cho phần candidate chưa đủ tự tin ở tầng trước ("early exit khi đã tự tin"):</p>
+<pre><code>Cascade 3 tầng (ví dụ funnel đầy đủ, không phải mọi hệ thống cần cả 3):
+
+  ANN search (bi-encoder)         N triệu  → top-100      ~5-10ms   (đã học ở R4.1/R4.5)
+        │
+        ▼
+  Tầng rẻ (VD ColBERT/late-interaction — cơ chế đầy đủ đã có ở R3.2 §5,
+  KHÔNG nhắc lại ở đây)            top-100  → top-20       ~20-30ms
+        │
+        ▼
+  Tầng đắt (cross-encoder full)    top-20   → top-5        ~150-300ms  (mục 1-3, trang này)
+        │
+        ▼
+  (early exit): nếu tầng rẻ đã cho điểm số CÁCH BIỆT RÕ giữa top-5 và phần còn lại,
+  có thể BỎ QUA tầng đắt cho batch đó — tiết kiệm latency khi không cần thiết</code></pre>
+<div class="callout danger"><div class="label">⚠️ Lợi ích biên của cascade giảm rất nhanh — không phải "thêm tầng nào cũng lời"</div><p>Số liệu 2026: đi từ kiến trúc 2 tầng (retrieval + 1 rerank, mục 1-3) lên cascade 3 tầng thường chỉ cải thiện <strong>&lt;0.3% chất lượng</strong> trong khi cộng thêm <strong>50-200ms latency</strong> — chỉ đáng đầu tư cho lĩnh vực rủi ro cao (y tế, pháp lý, an toàn) nơi 0.3% cuối cùng có giá trị thật. Đây là hệ quả trực tiếp của đúng quy trình ĐO đã nêu ở mục 3: KHÔNG thêm tầng cascade "vì kiến trúc nghe kỹ lưỡng hơn" — đo cải thiện thật trên eval set, so với ngưỡng "đáng kể" (5-10% đã dùng ở mục 3), trước khi quyết định giữ.</p></div>
+
+<h3>5. Chi phí thật bằng USD khi dùng rerank API — tính tay cho quy mô dự án (verify 2026-09, nguồn Cohere qua OpenRouter/aggregator, verify lại giá chính chủ trước khi triển khai)</h3>
+<p>Cohere Rerank tính phí theo <strong>lượt search</strong>, KHÔNG theo số document trong lượt đó (1 lượt rerank 10 doc và 1 lượt rerank 100 doc CÙNG giá, miễn mỗi doc &lt;500 token) — khác hẳn mô hình tính phí theo token của LLM generate:</p>
+<pre><code>Giá theo tier (verify 2026-09): Pro $0.0025/search · Fast $0.002/search · v3.5 $0.001/search
+
+Áp giả định vào quy mô dự án: nếu daily-investor-report (86 ticker, mode "all")
+gọi rerank ĐÚNG 1 LƯỢT/ticker/ngày (kịch bản giả định — dự án CHƯA có rerank thật):
+
+  Dùng tier Fast ($0.002/search):
+    86 ticker × $0.002 = $0.172/ngày
+    $0.172 × 30 ngày   = $5.16/tháng
+
+  Dùng tier Pro ($0.0025/search):
+    86 × $0.0025 = $0.215/ngày → × 30 = $6.45/tháng
+
+→ Ở ĐÚNG quy mô 86 ticker/ngày, chi phí USD của rerank API gần như không đáng kể
+  (dưới $7/tháng) — nghĩa là nếu dự án SAU NÀY cần rerank thật, rào cản quyết định
+  KHÔNG phải chi phí tiền, mà là latency + liệu recall@5 có thật sự tụt tới mức
+  cần rerank hay chưa (đúng câu hỏi ở mục 3, không phải câu hỏi ngân sách).</code></pre>
+<p>Bảng tổng hợp lại toàn bộ 5 mục ở trên theo đúng thứ tự 1 kỹ sư sẽ ra quyết định (từ "có cần rerank không" tới "có cần cascade không"):</p>
+<table>
+<tr><th>Bước quyết định</th><th>Câu hỏi</th><th>Nếu câu trả lời "không đủ mạnh"</th></tr>
+<tr><td>1. Có cần rerank không? (mục 3)</td><td>Đo recall@5 có/không rerank trên eval set thật — cải thiện có &gt;5-10% không?</td><td>Dừng — retrieval thô đã đủ, KHÔNG thêm tầng nào</td></tr>
+<tr><td>2. Self-host hay API? (mục 2)</td><td>Có sẵn hạ tầng GPU + volume đủ cao để amortize chi phí vận hành không?</td><td>Dùng API (mục 5) — ở volume thấp/trung bình, chi phí USD thường không đáng kể</td></tr>
+<tr><td>3. Rerank bao nhiêu candidate? (mục 2)</td><td>Cần top-5 cuối → nên retrieve top bao nhiêu trước rerank?</td><td>Mặc định 5-10× số cuối cùng cần, đo lại nếu KB đổi quy mô</td></tr>
+<tr><td>4. Có cần cascade nhiều tầng không? (mục 4)</td><td>Đo cải thiện đi từ 2 tầng lên 3 tầng — có &gt;0.3% và bù được +50-200ms không?</td><td>Dừng ở 2 tầng (retrieval + 1 rerank) — cascade chỉ đáng cho lĩnh vực rủi ro cao</td></tr>
+</table>
+
+<h3>6. Fine-tuning / domain adaptation reranker — khi nào 1 reranker generic KHÔNG đủ cho domain riêng (verify 2026-09)</h3>
+<p>Mọi reranker nêu ở mục 2-5 (Cohere Rerank, bge-reranker-v2-m3) đều được huấn luyện trên dữ liệu tổng quát (web text, MS MARCO tiếng Anh chủ yếu) — chúng học được "độ liên quan" theo phân phối NGÔN NGỮ/DOMAIN đó. Với văn bản tài chính tiếng Việt có nhiều thuật ngữ hẹp (VD "room ngoại", "call margin", viết tắt P/E/ROE/EPS, mã ticker) — đúng loại rủi ro domain-mismatch đã nêu ở <a href="R4_6_chunking_embedding.html">R4.6 §3</a> cho embedding model — reranker generic có thể xếp hạng SAI mức độ liên quan giữa 2 đoạn văn bản trông giống nhau về từ vựng bề mặt nhưng khác nhau về ý nghĩa tài chính.</p>
+<table>
+<tr><th>Nguồn</th><th>Cải thiện đo được khi fine-tune domain-specific</th><th>Phương pháp</th></tr>
+<tr><td>Reranker họ Jina, domain khoa học đa ngôn ngữ (benchmark CheckThat! 2026)</td><td>MRR@5: 0.626 (off-the-shelf) → 0.670 (fine-tuned) ≈ +7%</td><td>Fine-tune có giám sát trên tập query-relevance riêng của domain</td></tr>
+<tr><td>LLaMA 3 (8B) huấn luyện lại thành reranker, so với baseline cross-encoder</td><td>+14% answer relevancy, +16% context precision, +19% answer similarity, +21% answer correctness</td><td>2 giai đoạn: (1) SFT trên tập query-document relevance tuỳ biến qua LoRA adapter (framework Unsloth), (2) quantize 4-bit để suy luận hiệu quả — tránh chi phí quadratic của cross-encoder truyền thống</td></tr>
+</table>
+<p>Fine-tuning reranker cần <strong>NHIỀU nhãn hơn hẳn</strong> so với việc tune 1 tham số đơn giản (so sánh: alpha của weighted linear combination ở <a href="R4_3_hybrid_retrieval.html">R4.3 §6</a> chỉ cần 50-100 cặp nhãn; fine-tune 1 model reranker thường cần tối thiểu vài trăm tới vài nghìn cặp query-document có nhãn relevance để SFT hội tụ ổn định — khác biệt bậc độ lớn vì đây là học lại TRỌNG SỐ MODEL, không phải chọn 1 con số vô hướng).</p>
+<div class="callout danger"><div class="label">⚠️ Fine-tune reranker là quyết định TỐN KÉM nhất trong toàn bộ pipeline rerank — chỉ làm SAU KHI đã đo</div><p>Đúng kỷ luật "ĐO trước khi thêm" đã áp dụng xuyên suốt trang này (mục 3): fine-tuning reranker chỉ đáng cân nhắc SAU KHI đã (1) chạy quy trình đo ở mục 3 với reranker OFF-THE-SHELF, (2) xác nhận recall/precision vẫn còn khoảng cách LỚN so với mục tiêu NGAY CẢ KHI đã có rerank generic, VÀ (3) đã có sẵn (hoặc có ngân sách thu thập) hàng trăm-nghìn cặp nhãn relevance domain thật. Bỏ qua bước (1)-(2) mà nhảy thẳng vào fine-tune là lãng phí — phần lớn khoảng cách chất lượng thường đã được rerank generic thu hẹp đủ, fine-tune chỉ nên là bước TỐI ƯU THÊM, không phải bước đầu tiên.</p></div>
+
+<h3>7. Đặt latency rerank vào ngân sách latency TỔNG của cả request — không chỉ nhìn riêng rerank (verify 2026-09)</h3>
+<p>Mục 1 đã chỉ ra rerank chiếm 5-15% latency 1 pipeline RAG đầy đủ (có bước LLM generate ở cuối, hàng giây). Nhưng nhiều hệ thống production KHÔNG có bước LLM generate ở cuối (VD 1 API tìm kiếm ngữ nghĩa thuần tuý, trả kết quả trực tiếp cho UI) — lúc đó ngân sách latency tổng CHẶT HƠN NHIỀU, và tỉ trọng rerank trong ngân sách đó tăng vọt. Số liệu tham khảo 2026 cho 1 ngân sách "retrieval window" (KHÔNG tính LLM generate) 500ms:</p>
+<table>
+<tr><th>Thành phần</th><th>Ngân sách tham khảo (500ms)</th><th>Tỉ trọng</th></tr>
+<tr><td>Network/edge</td><td>50ms</td><td>10%</td></tr>
+<tr><td>Orchestration (routing, gọi service)</td><td>80ms</td><td>16%</td></tr>
+<tr><td>ANN search chính (xem R4.5)</td><td>120ms</td><td>24%</td></tr>
+<tr><td>Rerank + downstream call khác</td><td>100ms</td><td>20%</td></tr>
+<tr><td>Buffer dự phòng biến động (đo theo P95, KHÔNG phải P50)</td><td>150ms</td><td>30%</td></tr>
+</table>
+<div class="callout danger"><div class="label">⚠️ Đây là % PHÂN BỔ KẾ HOẠCH, không phải cơ chế mô tả rerank co giãn theo ngân sách (tránh nhầm BUG-13)</div><p>Phải nói rõ: bảng trên là 1 khung LẬP KẾ HOẠCH ngân sách (chọn tỉ lệ % rồi suy ra ms cho từng bước khi thiết kế SLO mới) — KHÔNG phải mô tả cơ chế "rerank tự động co giãn để chiếm đúng 20% bất kể tổng ngân sách bao nhiêu". Latency thật của rerank phụ thuộc số candidate + model (đã học ở mục 1-2: ~150-300ms cho cross-encoder rerank top-100), gần như CỐ ĐỊNH bất kể ngân sách tổng lớn hay nhỏ — nguồn 2026 khác ghi nhận con số cụ thể "cross-encoder rerank thường cộng thêm ~120ms ở P95, là nguồn latency lớn nhất sau bước generate". Nếu ngân sách tổng nhỏ (VD 300-500ms, không có LLM generate), phần "20% dành cho rerank" trong kế hoạch (60-100ms) CÓ THỂ không đủ cho chi phí thật của rerank top-100 (150-300ms) — đây là tín hiệu phải GIẢM SỐ CANDIDATE rerank (mục 2), không phải bằng chứng rerank "tự nó" co lại theo ngân sách.</p></div>
+<p><strong>Worked example — đối chiếu ngân sách kế hoạch với chi phí rerank thật</strong>:</p>
+<pre><code>Giả định: 1 endpoint semantic search THUẦN (không có LLM generate ở cuối),
+ngân sách retrieval-window mục tiêu P95 = 300ms (mức "chat agent" theo tham
+khảo 2026 — chặt hơn hẳn 500ms ở bảng trên).
+
+Áp cùng tỉ lệ % vào 300ms:
+  Network/edge:        10% × 300ms = 30ms
+  Orchestration:        16% × 300ms = 48ms
+  ANN search:           24% × 300ms = 72ms
+  Rerank + downstream:  20% × 300ms = 60ms   ← ngân sách KẾ HOẠCH cho rerank
+  Buffer P95:           30% × 300ms = 90ms
+  Tổng: 30+48+72+60+90 = 300ms ✓
+
+Nhưng: rerank cross-encoder top-100 (mục 1) tốn THẬT ~150-300ms — vượt xa
+60ms ngân sách kế hoạch, thậm chí vượt CẢ 300ms tổng ngân sách nếu dùng top-100.
+
+→ Kết luận đúng: với ngân sách 300ms này, KHÔNG thể rerank top-100 — phải
+  giảm candidate xuống top-20-30 (đúng rule 5-10× số cuối cùng cần ở mục 2),
+  đưa latency rerank về gần mức "~100-120ms P95" (con số cố định nguồn 2026
+  ghi nhận cho rerank quy mô nhỏ hơn) — vẫn hơi vượt 60ms kế hoạch, nghĩa là
+  BUFFER (90ms) sẽ phải gánh bớt phần chênh lệch, hoặc phải nới ngân sách
+  ANN search/orchestration xuống thấp hơn tỉ lệ mặc định 24%/16%.
+  → Đây đúng là bài toán thật của mục 7: ngân sách kế hoạch chỉ là điểm BẮT
+    ĐẦU đàm phán giữa các bước, KHÔNG phải giới hạn cứng áp được ngay từ đầu.</code></pre>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Giả sử eval set 40 câu hỏi tài chính, đo recall@5 (tỉ lệ câu hỏi mà đáp án đúng nằm trong top-5 trả về):</p>
+<pre><code>Retrieval thuần (bi-encoder + ANN, không rerank):
+  32/40 câu có đáp án đúng trong top-5 → recall@5 = 32/40 = 0.80
+
+Retrieval + rerank (retrieve top-30 → cross-encoder → top-5):
+  38/40 câu có đáp án đúng trong top-5 → recall@5 = 38/40 = 0.95
+
+Cải thiện = 0.95 - 0.80 = 0.15 (+15 điểm phần trăm) — ĐÁNG KỂ
+Chi phí thêm = ~200ms latency mỗi query
+
+→ Quyết định: GIỮ rerank, vì cải thiện 15 điểm % lớn hơn nhiều ngưỡng
+  "đáng kể" (thường 5-10%), và 200ms vẫn nhỏ so với 1-3s của bước LLM generate
+
+--- So sánh với 1 kịch bản khác ---
+Retrieval thuần: recall@5 = 0.92
+Retrieval + rerank: recall@5 = 0.94 (chỉ +2 điểm %)
+
+→ Quyết định: BỎ rerank cho use case này — cải thiện quá nhỏ so với
+  chi phí latency + chi phí vận hành thêm 1 model/API call</code></pre>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>Không rerank</th><th>Self-host cross-encoder (bge-reranker)</th><th>API rerank (Cohere Rerank)</th></tr>
+<tr><td>Latency thêm</td><td>0ms</td><td>~100-300ms (tuỳ GPU, batch size)</td><td>~150-400ms (bao gồm network round-trip)</td></tr>
+<tr><td>Chi phí vận hành</td><td>Không có</td><td>Cần GPU serving riêng (chi phí hạ tầng cố định)</td><td>Trả theo lượt gọi (biến đổi theo volume)</td></tr>
+<tr><td>Kiểm soát model</td><td>—</td><td>Toàn quyền (tự chọn/fine-tune model)</td><td>Phụ thuộc nhà cung cấp</td></tr>
+<tr><td>Phù hợp khi</td><td>Query space nhỏ, retrieval ban đầu đã đủ tốt (đo được)</td><td>Volume cao, đã có hạ tầng GPU, cần kiểm soát</td><td>Volume thấp/trung bình, muốn triển khai nhanh, không muốn vận hành GPU</td></tr>
+</table>
+<p><em>Cập nhật tên model (verify 2026-09)</em>: Cohere Rerank hiện đã lên tới <strong>v4</strong> (v4.0 Pro), <code>bge-reranker-v2-m3</code> vẫn là baseline open-source phổ biến nhất để self-host — 2 lựa chọn đại diện trong bảng trên vẫn đúng, chỉ số version cụ thể (nếu implement thật) nên tra lại bản mới nhất tại thời điểm code thay vì đóng cứng "v3"/"v2-m3" trong tài liệu lâu dài.</p>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div><p>Với quy mô KB hiện tại của <code>.claude/skills/daily-investor-report/kb/*.md</code> (7 file cố định, retrieval hiện tại là exact-match trên heading, không phải semantic search), rerank rất có thể <strong>không cần thiết</strong> — quy trình ĐO ở mục 3 gần như chắc chắn sẽ cho kết quả "cải thiện nhỏ" vì query space quá nhỏ để bi-encoder retrieval trả về nhiễu đáng kể. Rerank chỉ đáng đầu tư <strong>SAU KHI</strong> (1) KB mở rộng đủ lớn (semantic search thay cho exact-match hiện tại) VÀ (2) đã đo được bi-encoder retrieval bắt đầu trả về top-K có nhiễu (recall@5 tụt xuống dưới mức chấp nhận được). Đừng thêm rerank trước khi có (1) và (2) — đúng tinh thần "đo trước khi thêm tầng phức tạp" đã áp dụng nhất quán trong dự án. Nếu (1) và (2) xảy ra, bước tiếp theo là mục 3 (đo recall trước/sau rerank) — KHÔNG nhảy thẳng lên cascade 3 tầng (mục 4): với quy mô 86 ticker/ngày của <code>daily-investor-report</code>, đây không phải lĩnh vực rủi ro cao (y tế/pháp lý) nên ngưỡng "&lt;0.3% không đáng" ở mục 4 gần như chắc chắn áp dụng — 1 tầng rerank (nếu cần) đã là đủ, không cần cascade.</p></div>
+
+<h2>⚠️ Sai lầm thường gặp</h2>
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li>Thêm rerank vào pipeline vì "best practice nói vậy" mà không đo được nó cải thiện gì cụ thể trên eval set thật của mình — rerank có cái giá latency thật, phải đổi lấy cải thiện đo được, không phải thêm cho "cảm giác an toàn".</li>
+<li>Rerank quá nhiều candidate (VD top-500) vì nghĩ "càng nhiều càng chính xác" — chi phí latency tăng gần tuyến tính theo số candidate, trong khi lợi ích biên giảm dần rất nhanh sau top-50-100.</li>
+<li>Không đo lại theo thời gian khi KB thay đổi quy mô — 1 quyết định "không cần rerank" đúng ở thời điểm KB nhỏ có thể sai khi KB lớn lên gấp 10-100 lần.</li>
+<li>So sánh model rerank chỉ bằng benchmark public (MTEB reranking) mà không tự chạy trên chính domain data của mình — rerank model tối ưu cho văn bản tiếng Anh tổng quát có thể không giữ nguyên lợi thế trên văn bản tài chính tiếng Việt.</li>
+<li>Thêm cascade 3 tầng "cho chắc" mà không đo — lợi ích biên đi từ 2 tầng lên 3 tầng thường &lt;0.3% trong khi cộng thêm 50-200ms, chỉ đáng cho lĩnh vực rủi ro cao (y tế, pháp lý), không phải mặc định cho mọi hệ thống RAG.</li>
+<li>Từ chối rerank chỉ vì "sợ tốn tiền API" mà chưa tính tay — ở quy mô vài chục-vài trăm lượt gọi/ngày, chi phí USD thường dưới $10/tháng; rào cản thật nằm ở latency và chất lượng đo được, không phải ngân sách.</li>
+<li>Nhảy thẳng vào fine-tune reranker khi chưa đo được reranker generic thiếu bao nhiêu — fine-tuning cần hàng trăm-nghìn cặp nhãn relevance domain thật, tốn kém hơn hẳn việc chỉ thử reranker off-the-shelf trước (mục 3), phần lớn khoảng cách chất lượng thường đã được rerank generic thu hẹp đủ.</li>
+<li>Áp cứng % phân bổ ngân sách latency (VD "rerank luôn chiếm đúng 20%") như 1 quy luật vật lý — đây chỉ là khung lập kế hoạch; chi phí rerank thật gần như CỐ ĐỊNH theo số candidate/model, không tự co giãn theo tổng ngân sách (mục 7).</li>
+</ul>
+</div>
+
+<h2>📋 QA Gate</h2>
+<div class="qa-gate"><h3>📋 QA Gate</h3><ul>
+<li>Vẽ được sơ đồ latency budget đầy đủ của 1 pipeline RAG có rerank, chỉ đúng vị trí "điểm đắt nhất".</li>
+<li>Giải thích được vì sao cross-encoder chậm hơn bi-encoder — đúng bằng cơ chế (không tính trước được vector, phải chạy full model cho mỗi cặp).</li>
+<li>Trả lời đúng 3 quyết định engineering (số candidate, self-host/API, có cần rerank không) cho 1 tình huống cho trước.</li>
+<li>Thiết kế được quy trình đo A/B (có/không rerank) trên 1 eval set giả định, và ra quyết định đúng dựa trên số liệu (không dựa cảm tính).</li>
+<li>Giải thích được vì sao KB hiện tại của dự án <code>predictor</code> chưa cần rerank, và điều kiện nào sẽ khiến nó trở nên cần thiết.</li>
+<li>Vẽ được sơ đồ cascade 3 tầng, chỉ đúng vị trí "early exit" và giải thích khi nào (&lt;0.3% cải thiện) thì KHÔNG đáng thêm tầng.</li>
+<li>Tính tay được chi phí USD/tháng của rerank API cho 1 traffic (số lượt/ngày) cho trước theo giá per-search, không phải per-document.</li>
+<li>Quyết định đúng khi nào đáng fine-tune reranker (đã đo generic không đủ + có đủ nhãn domain) thay vì mặc định dùng off-the-shelf, và kể được 2 bước tổng quát của quy trình fine-tune (SFT trên nhãn domain + quantize suy luận).</li>
+<li>Đối chiếu được ngân sách latency % kế hoạch với chi phí rerank THẬT (theo số candidate/model), và biết cách xử lý khi 2 con số này lệch nhau (giảm candidate, không phải "hy vọng rerank tự co lại").</li>
+</ul></div>
+
+<div class="nav-bottom">
+  <a href="R4_3_hybrid_retrieval.html">← R4.3 · Hybrid Retrieval</a>
+  <a href="R4_5_hnsw_ivf.html">R4.5 · HNSW/IVF →</a>
+</div>
+
+</div>
+</body>
+</html>

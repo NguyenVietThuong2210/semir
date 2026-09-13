@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R6.8 · Agent Orchestration Frameworks — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · AI Agents · Điểm 8/8</div>
+  <h1>R6.8 · Agent Orchestration Frameworks</h1>
+  <p class="subtitle">Bài cuối của AI Agents — landscape 2026 (Microsoft Agent Framework hợp nhất AutoGen+Semantic Kernel, OpenAI Agents SDK, Google ADK) và vì sao <code>predictor</code> KHÔNG nên migrate framework đang chạy tốt.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 2</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li><strong>[Dễ]</strong> Nhớ lại 8 framework đã học ở <code>L8_6</code> (LangChain, LangGraph, LlamaIndex, DSPy, Semantic Kernel, CrewAI, AutoGen, Haystack).</li>
+<li><strong>[Trung bình]</strong> Cập nhật landscape 2026: framework nào bị deprecate, framework nào mới nổi, framework nào tăng trưởng mạnh.</li>
+<li><strong>[Khó]</strong> Áp dụng đúng nguyên tắc "không migrate framework đang chạy tốt chỉ vì có cái mới hơn" cho chính dự án <code>predictor</code>.</li>
+<li><strong>[Khó]</strong> Đọc hiểu cơ chế thật (không chỉ tên gọi) của 3 tính năng cụ thể: Magentic orchestration (task ledger), Handoffs (OpenAI Agents SDK), và kiến trúc phân cấp của Google ADK.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout"><div class="label">📖 Đã có ở module cũ</div>
+<p><code>../modules/L8_6_ai_frameworks.html</code> đã khảo sát 2025: LangChain, LangGraph, LlamaIndex, DSPy, Semantic Kernel, CrewAI, AutoGen, Haystack — pros/cons đầy đủ, không lặp lại. Trang này chỉ bổ sung landscape <strong>2026</strong> với các thay đổi lớn <code>L8_6</code> chưa có.</p>
+</div>
+<p><strong>Prerequisite</strong>: nên đọc R6.6 (Multi-agent systems) và R6.7 (Design Patterns) trước — 2 bài đó dạy "khái niệm", bài này dạy "công cụ triển khai khái niệm đó".</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Orchestration framework giống bộ dụng cụ nấu ăn công nghiệp — mỗi hãng (LangGraph, CrewAI, Microsoft Agent Framework...) có bộ dao/nồi/lò riêng, nhưng đều nấu được các "món" giống nhau về bản chất (agent gọi tool, nhiều agent phối hợp, checkpoint để resume). Đổi bộ dụng cụ khi bếp đang chạy tốt không làm món ăn ngon hơn — chỉ tốn thời gian học lại cách dùng dao mới.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Trung bình] Cập nhật 2026 #1 — Microsoft hợp nhất AutoGen + Semantic Kernel</h3>
+<p>Microsoft đưa AutoGen và Semantic Kernel (2 framework <code>L8_6</code> liệt kê riêng biệt) vào <strong>maintenance mode</strong>, hợp nhất cả 2 thành <strong>Microsoft Agent Framework</strong> — đạt release-candidate 19/2/2026, GA 1.0 vào 3/4/2026. Framework mới kết hợp orchestration kiểu nghiên cứu của AutoGen với SDK cấp doanh nghiệp của Semantic Kernel, hỗ trợ 5 kiểu orchestration (sequential, concurrent, group chat, handoff, và "magentic" — kiểu manager điều phối bằng 1 "task ledger"), có <strong>native MCP và A2A support</strong> (xem R6.2, R6.4), bindings Python + .NET, tích hợp chặt với Azure AI Foundry/Microsoft 365/Dynamics 365.</p>
+
+<h3>2. [Trung bình] Cập nhật 2026 #2 — OpenAI Agents SDK</h3>
+<p>Thay thế dự án thử nghiệm Swarm (3/2025), trưởng thành nhanh với 3 primitive cốt lõi: <strong>Agents, Handoffs, Guardrails</strong>. Đến 4/2026 đã thêm sandboxed execution, long-horizon harness, subagents, "code mode", và routing đa nhà cung cấp qua 100+ LLM (qua LiteLLM). Đáng chú ý: <strong>Guardrails là 1 primitive hạng nhất</strong> trong SDK này (không phải add-on) — phản ánh đúng xu hướng 2026 coi an toàn là kiến trúc, không phải lớp phủ ngoài (xem thêm <a href="R10_1_guardrails.html">R10.1 Guardrails</a>).</p>
+
+<h3>3. [Trung bình] Cập nhật 2026 #3 — landscape rộng hơn</h3>
+<p>7 framework hay được so sánh năm 2026: LangChain, CrewAI (đã vượt <strong>~52,000 GitHub star</strong> — mốc đo sau, tiếp nối dãy "~31,200-47,800 tuỳ thời điểm" đã dẫn ở <code>R3_6_orchestration_frameworks.html</code>, số vẫn tăng đều qua 2026 chứ không mâu thuẫn), Microsoft Agent Framework, LlamaIndex Workflows, <strong>Google ADK</strong> (Agent Development Kit — Python là bản gốc, đã thêm Java 1.0, Go 1.0, cộng TypeScript và Kotlin đang trưởng thành — 5 ngôn ngữ SDK tổng cộng tính tới 9/2026, đã verify lại), OpenAI Agents SDK, Mastra (framework TypeScript-first mới nổi).</p>
+
+<h3>4. [Khó] Magentic orchestration — cơ chế "task ledger" cụ thể, không chỉ tên gọi</h3>
+<p>Mục 1 nhắc "magentic — kiểu manager điều phối bằng 1 'task ledger'" trong 1 dòng. Cơ chế thật gồm <strong>2 vòng lặp lồng nhau</strong>, kế thừa từ nghiên cứu Magentic-One (Microsoft Research):</p>
+<pre><code>Vòng lặp NGOÀI (task ledger — trí nhớ ngắn hạn cho CẢ tác vụ):
+  Manager (dùng model suy luận, VD Phi-4) lập kế hoạch tổng thể, điền sẵn:
+    - Sự kiện ĐÃ BIẾT/đã xác minh
+    - Sự kiện CẦN tra cứu thêm
+    - Sự kiện cần TỰ SUY RA (không tra được trực tiếp)
+    - Các phỏng đoán có căn cứ (educated guess)
+        │
+        ▼
+  Vòng lặp TRONG (progress ledger — theo dõi TỪNG bước nhỏ):
+    Mỗi vòng điều phối, manager phát ra 1 "progress ledger" trả lời:
+      - Yêu cầu đã được đáp ứng chưa?
+      - Cả nhóm có đang lặp vòng (loop), không tiến triển gì mới?
+      - Có đang tiến triển thật không?
+      - Agent chuyên biệt NÀO nói tiếp theo, với chỉ dẫn CỤ THỂ gì?
+        │
+        ▼
+  Nếu progress ledger phát hiện "đang lặp vòng, không tiến triển"
+    → manager REPLAN lại task ledger (vòng ngoài) — không chỉ đổi agent nói tiếp,
+      mà xét lại CẢ kế hoạch tổng thể.</code></pre>
+<p>Khác biệt cốt lõi so với orchestrator-worker "sub-agent không biết nhau" đã học ở <a href="R6_6_multiagent_systems.html">R6.6</a>: Magentic KHÔNG chạy song song độc lập — nó điều phối <strong>TUẦN TỰ, có trạng thái chia sẻ</strong> (task ledger là bộ nhớ CHUNG cho cả nhóm, mọi agent chuyên biệt đều dựa vào đó), và có khả năng <strong>replan giữa chừng</strong> nếu phát hiện bế tắc — điều mà orchestrator-worker "giao việc 1 lần, chờ tất cả xong" không làm được. 2 kiến trúc phù hợp 2 loại bài toán khác nhau: orchestrator-worker khi các mảng con ĐỘC LẬP thật sự; Magentic khi các bước PHỤ THUỘC lẫn nhau và có thể cần đổi hướng giữa chừng.</p>
+
+<h3>5. [Khó] Handoffs (OpenAI Agents SDK) — thực chất là 1 TOOL, không phải 1 giao thức riêng</h3>
+<p>Điểm dễ hiểu lầm nhất về Handoffs: nó KHÔNG phải 1 cơ chế giao tiếp đặc biệt như A2A (R6.4) — cơ chế thật đơn giản hơn nhiều: <strong>mỗi agent đích được biến thành 1 TOOL tên <code>transfer_to_&lt;tên_agent&gt;</code></strong>, và agent nguồn "chọn" handoff giống hệt cách nó chọn gọi bất kỳ tool nào khác (dựa trên mô tả tool trong prompt).</p>
+<table>
+<tr><th>Tiêu chí</th><th>Handoffs (OpenAI Agents SDK)</th><th>A2A (R6.4)</th></tr>
+<tr><td>Ranh giới</td><td>NỘI BỘ 1 process/SDK — các agent cùng chạy trong 1 ứng dụng, cùng 1 nhà phát triển kiểm soát</td><td>XUYÊN tổ chức/framework — 2 agent có thể thuộc 2 công ty, 2 codebase hoàn toàn khác nhau</td></tr>
+<tr><td>Cơ chế chuyển giao</td><td>Lời gọi tool bình thường (<code>transfer_to_refund_agent</code>) — model tự chọn như chọn tool bất kỳ</td><td>Task có lifecycle riêng (6 trạng thái), gửi qua JSON-RPC, có thể streaming/webhook</td></tr>
+<tr><td>Chi phí thiết kế</td><td>Thấp — chỉ cần khai báo <code>handoffs=[agent_b, agent_c]</code> khi tạo agent</td><td>Cao hơn — cần Agent Card, discovery, xử lý task lifecycle</td></tr>
+<tr><td>Khi nào dùng</td><td>Nhiều "vai" chuyên biệt trong CÙNG 1 ứng dụng (VD agent hỗ trợ khách hàng: đơn hàng/hoàn tiền/FAQ)</td><td>Cần giao việc cho 1 agent BÊN NGOÀI, không kiểm soát được code/hạ tầng</td></tr>
+</table>
+<p>Bài học tổng quát: "chuyển giao việc cho agent khác" không phải LUÔN cần 1 giao thức nặng như A2A — nếu mọi agent liên quan đều nằm trong CÙNG 1 ứng dụng do chính bạn viết, biến việc chuyển giao thành 1 tool call đơn giản (kiểu Handoffs) rẻ hơn nhiều, đúng tinh thần "chọn đúng công cụ cho đúng ranh giới" đã lặp lại xuyên suốt R6.2-R6.4.</p>
+
+<h3>6. [Trung bình] Google ADK — kiến trúc phân cấp + model-agnostic, không khoá vào Gemini</h3>
+<p>Điểm hay bị hiểu lầm: tên "Google ADK" khiến nhiều người nghĩ nó chỉ chạy được với Gemini — thực tế ADK <strong>model-agnostic</strong> (dùng được Gemini, Claude, model mở, hoặc bất kỳ model nào có adapter), và code-first (viết bằng code thật, không phải kéo-thả). 2 điểm kỹ thuật đáng nhớ:</p>
+<ul>
+<li><strong>Kiến trúc phân cấp (hierarchy) có sẵn</strong>: ADK có khung đồ thị (graph-based) dựng sẵn cho việc ghép nhiều agent chuyên biệt thành 1 cây/đồ thị điều phối — không phải tự dựng state machine từ đầu như code Python thuần.</li>
+<li><strong>2 đường triển khai production</strong>: (1) đóng gói agent thành container, chạy trên BẤT KỲ hạ tầng container/Kubernetes nào (không khoá vào Google Cloud); hoặc (2) dùng <strong>Vertex AI Agent Engine</strong> — runtime quản lý sẵn (managed), tự động scale, nếu đã ở trong hệ sinh thái Google Cloud.</li>
+</ul>
+<p>So sánh nhanh với LangGraph (đang dùng ở <code>predictor</code>): ADK và LangGraph đều có kiến trúc đồ thị cho multi-agent — khác biệt lớn nhất là ADK sinh ra gắn liền hệ sinh thái Google Cloud (Vertex AI Agent Engine, đa ngôn ngữ Go/Java/Kotlin phục vụ cả mobile/backend đa dạng), còn LangGraph trung lập hơn về hạ tầng, cộng đồng Python lớn hơn.</p>
+
+<h3>7. [Khó] Cây quyết định — "có đặc điểm này thì chọn framework nào", không tra bảng mục 3 dòng-cột nữa</h3>
+<p>Bảng so sánh mục "So sánh / Bảng tổng hợp" bên dưới liệt kê tiêu chí theo CỘT — hữu ích để tra cứu, nhưng không trả lời trực tiếp "tôi có đặc điểm X, vậy nên chọn framework nào". Cây quyết định dưới đây làm đúng việc đó, gộp cả 4 framework đã học sâu (mục 4-6 + LangGraph) và 2 framework chỉ mới nhắc tên ở mục 3 (LlamaIndex Workflows, CrewAI) theo đúng định vị thị trường 2026 đã verify:</p>
+<pre><code>Bắt đầu: hệ thống của bạn CÓ đặc điểm nào sau đây?
+
+  Cần chạy trên hạ tầng .NET/Microsoft 365/Dynamics 365 sẵn có?
+        │YES ──▶ Microsoft Agent Framework (mục 1, Magentic orchestration, mục 4)
+        │NO
+  Cần định tuyến động qua NHIỀU nhà cung cấp LLM khác nhau (100+ model qua
+  LiteLLM), ưu tiên bàn giao việc gọn giữa vài "vai" trong CÙNG 1 ứng dụng?
+        │YES ──▶ OpenAI Agents SDK (mục 2, Handoffs, mục 5)
+        │NO
+  Đã ở SẴN trong hệ sinh thái Google Cloud, cần đa ngôn ngữ SDK (Go/Java/
+  Kotlin cho mobile/backend), hoặc muốn managed runtime (Vertex AI Agent Engine)?
+        │YES ──▶ Google ADK (mục 6)
+        │NO
+  Pipeline nặng về xử lý TÀI LIỆU/dữ liệu, cần orchestration hướng SỰ KIỆN
+  (event-driven, VD "khi có file mới → chạy bước X")?
+        │YES ──▶ LlamaIndex Workflows
+        │NO
+  Ưu tiên tối đa TỐC ĐỘ dựng prototype multi-agent theo vai trò (role-based,
+  kiểu "đội ngũ ảo"), chấp nhận trừu tượng hoá cao, ít cần tuỳ biến sâu?
+        │YES ──▶ CrewAI (52k+ star, mục 3)
+        │NO
+  Còn lại: cần checkpoint/resume native (L6_4), đồ thị trạng thái tuỳ biến
+  sâu, cộng đồng Python lớn, KHÔNG khoá vào 1 cloud/vendor cụ thể
+        │──▶ LangGraph ← đúng hồ sơ nhu cầu của predictor</code></pre>
+<p><strong>Đối chiếu ngược lại <code>predictor</code></strong>: chạy qua đúng 5 câu hỏi trên — không cần .NET/Azure (loại Microsoft Agent Framework), không cần multi-provider routing 100+ model (loại OpenAI Agents SDK), không ở trong hệ sinh thái Google Cloud (loại Google ADK), không phải pipeline event-driven tài liệu (loại LlamaIndex Workflows), không ưu tiên tốc độ dựng prototype hơn tuỳ biến sâu (loại CrewAI) — rơi đúng vào nhánh cuối: LangGraph. Đây là bằng chứng CÓ HỆ THỐNG (không phải "vì đang dùng nên bảo vệ") cho kết luận "không migrate" đã nêu ở mục Ứng dụng dự án.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Bảng cập nhật nhanh — map framework cũ (từ <code>L8_6</code>) sang trạng thái 2026:</p>
+<table>
+<tr><th>Framework (từ L8_6)</th><th>Trạng thái 2026</th></tr>
+<tr><td>AutoGen</td><td>Maintenance mode → hợp nhất vào Microsoft Agent Framework (GA 4/2026)</td></tr>
+<tr><td>Semantic Kernel</td><td>Maintenance mode → hợp nhất vào Microsoft Agent Framework</td></tr>
+<tr><td>LangGraph</td><td>Vẫn phát triển tích cực, dùng làm nền cho AI Orchestrator của dự án (<code>L6_3</code>)</td></tr>
+<tr><td>CrewAI</td><td>Tăng trưởng mạnh, 52k+ star</td></tr>
+<tr><td>DSPy</td><td>Vẫn phát triển, trọng tâm chuyển sang tối ưu prompt tự động (GEPA — xem R9.8)</td></tr>
+</table>
+<p>Ví dụ áp dụng khung "chọn đúng cơ chế điều phối" (mục 4-5) vào 1 tình huống giả định của <code>predictor</code>: giả sử tương lai AI Orchestrator cần thêm 1 bước "agent viết báo cáo hỏi lại agent phân tích dữ liệu để làm rõ 1 con số mơ hồ" — đây là 1 tác vụ mà các bước PHỤ THUỘC lẫn nhau, có thể cần lặp lại hỏi-đáp nhiều vòng. Theo đúng phân biệt mục 4: đây khớp mô hình Magentic (replan giữa chừng khi phát hiện thiếu thông tin) hơn là orchestrator-worker "giao 1 lần rồi chờ" — dù dự án hiện tại vẫn dùng LangGraph (không phải Microsoft Agent Framework), bài học kiến trúc vẫn áp dụng được: dùng graph có node quay lại (cycle) thay vì graph tuyến tính 1 chiều cho đúng loại tác vụ này.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th>Tiêu chí</th><th>Microsoft Agent Framework</th><th>OpenAI Agents SDK</th><th>Google ADK</th><th>LangGraph (đang dùng)</th></tr>
+<tr><td>Ngôn ngữ</td><td>Python + .NET</td><td>Python (đa provider qua LiteLLM)</td><td>Python/Go/Java/Kotlin/TypeScript</td><td>Python</td></tr>
+<tr><td>MCP/A2A native?</td><td>Có</td><td>Có (qua ecosystem)</td><td>Có (Build with Vertex AI: ADK+MCP+A2A)</td><td>Qua tích hợp thủ công</td></tr>
+<tr><td>Cơ chế điều phối đa-agent</td><td>Magentic (task ledger + progress ledger, mục 4)</td><td>Handoffs (transfer_to_X = tool call, mục 5)</td><td>Đồ thị phân cấp (hierarchy graph) dựng sẵn</td><td>Đồ thị trạng thái (StateGraph), checkpoint native</td></tr>
+<tr><td>Đường triển khai production</td><td>Azure AI Foundry</td><td>Tự host, tự chọn hạ tầng</td><td>Container bất kỳ HOẶC Vertex AI Agent Engine (managed)</td><td>Tự host, tự chọn hạ tầng</td></tr>
+<tr><td>Phù hợp cho <code>predictor</code>?</td><td>Không — không cần .NET/Azure</td><td>Không — không cần multi-provider routing</td><td>Không — không cần đa ngôn ngữ/Google Cloud</td><td>✅ Đã dùng, đang chạy tốt</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>predictor</code> dùng LangGraph cho AI Orchestrator (đã đúng lựa chọn — vẫn là framework tích cực nhất 2026, có checkpointing native khớp với <code>L6_4</code>). <strong>Không cần migrate</strong> sang Microsoft Agent Framework/OpenAI Agents SDK — dự án không có nhu cầu multi-cloud-vendor hay .NET, và chi phí migrate framework đang hoạt động tốt không có lợi ích đo được (đúng tinh thần "start simple" ở R6.6).</p>
+<p><strong>Vẫn đáng học cơ chế (mục 4-6) dù không migrate</strong>: LangGraph tự cài được cả 2 ý tưởng — Magentic (node quay lại/cycle cho tác vụ cần replan) và Handoffs (1 node gọi sang node khác qua tool call, không cần A2A) — bằng đúng các khối nguyên thuỷ StateGraph đã có sẵn, không cần đổi framework mới có được lợi ích thiết kế đó. Bài học đúng không phải "framework nào có tính năng tốt hơn" mà là "hiểu ĐÚNG cơ chế để tự dựng lại bằng công cụ đang có, khi cần".</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>1. Migrate framework đang chạy tốt (LangGraph) chỉ vì có framework mới hơn</strong> — không có lợi ích đo được thì không migrate; chi phí re-architecture luôn thật, lợi ích "mới hơn" thường không.</p>
+<p><strong>2. Chọn framework theo GitHub star thay vì theo nhu cầu thật</strong> — CrewAI có 52k+ star không có nghĩa nó phù hợp hơn LangGraph cho 1 dự án đã có checkpointing/state hoạt động tốt.</p>
+<p><strong>3. Coi "native MCP/A2A support" là lý do đủ để migrate</strong> — nếu dự án chưa cần giao tiếp agent-to-agent xuyên tổ chức (xem R6.4), tính năng đó không tạo giá trị thật.</p>
+<p><strong>4. Nhầm Handoffs (mục 5) với A2A (R6.4)</strong> chỉ vì cả 2 đều "chuyển giao việc cho agent khác" — Handoffs là 1 tool call NỘI BỘ 1 ứng dụng, A2A là 1 giao thức XUYÊN tổ chức; áp nhầm Handoffs cho nhu cầu xuyên tổ chức (không có discovery/auth/lifecycle) sẽ thiếu an toàn, áp nhầm A2A cho nhu cầu nội bộ đơn giản sẽ over-engineering.</p>
+<p><strong>5. Nghĩ "Google ADK" nghĩa là khoá vào Gemini</strong> — sai, ADK model-agnostic (mục 6); tên gọi dễ gây hiểu lầm nhưng không phản ánh đúng ràng buộc kỹ thuật thật.</p>
+<p><strong>6. Chọn framework chỉ dựa vào bảng so sánh mục 3 tra dòng-cột, bỏ qua cây quyết định mục 7</strong> — dễ bị "tê liệt vì quá nhiều lựa chọn"; cây quyết định mục 7 trả lời trực tiếp "đặc điểm nào → framework nào" nhanh hơn so sánh dàn trải.</p>
+</div>
+
+<div class="qa-gate"><h3>📋 QA Gate</h3>
+<ul>
+<li>Kể được Microsoft Agent Framework hợp nhất 2 framework nào, GA khi nào.</li>
+<li>Giải thích được vì sao "Guardrails là primitive hạng nhất" trong OpenAI Agents SDK phản ánh đúng xu hướng 2026.</li>
+<li>Với dự án <code>predictor</code>, giải thích được vì sao KHÔNG nên migrate từ LangGraph sang framework khác hiện tại.</li>
+<li>Tự confirm: hiểu rằng chọn framework dựa trên nhu cầu thật, không dựa trên độ "mới"/độ phổ biến.</li>
+<li>Vẽ được 2 vòng lặp lồng nhau của Magentic orchestration (task ledger/progress ledger) và giải thích khác biệt với orchestrator-worker "không biết nhau" (R6.6).</li>
+<li>Giải thích đúng cơ chế Handoffs (transfer_to_X = 1 tool call) và phân biệt được với A2A — chọn đúng cơ chế cho 1 tình huống cụ thể (nội bộ 1 app vs xuyên tổ chức).</li>
+<li>Nêu đúng 2 đường triển khai production của Google ADK và giải thích được vì sao "Google ADK" không có nghĩa "chỉ chạy được với Gemini".</li>
+<li>Chạy đúng cây quyết định mục 7 cho 1 hệ thống giả định tự nghĩ ra (không phải <code>predictor</code>) và ra đúng kết luận framework phù hợp.</li>
+<li>Tự đối chiếu được <code>predictor</code> qua cả 5 câu hỏi của cây quyết định mục 7, ra đúng kết luận LangGraph bằng suy luận CÓ HỆ THỐNG, không chỉ "vì đang dùng nên hợp lý hoá".</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R6_7_design_patterns.html">← R6.7 · Design Patterns</a>
+  <a href="R7_1_cicd.html">R7.1 · Infrastructure — CI/CD →</a>
+</div>
+
+</div>
+</body>
+</html>

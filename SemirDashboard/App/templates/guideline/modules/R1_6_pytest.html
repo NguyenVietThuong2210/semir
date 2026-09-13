@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R1.6 · Testing frameworks (PyTest) — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · Coding Fundamentals · Điểm 6/6</div>
+  <h1>R1.6 · Testing frameworks — PyTest</h1>
+  <p class="subtitle">Kỷ luật "mock trước, integration khi cần thật" — và bài học thật: mock 100% từng để bug ẩn hàng tháng trời trong <code>senior_score.py</code>.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<ul>
+<li>Viết được 1 pytest fixture đúng convention dự án (mock-first, seed cố định cho dữ liệu ngẫu nhiên).</li>
+<li>Giải thích được vì sao <code>test_*_integration.py</code> là ngoại lệ có chủ đích, không phải vi phạm convention "mock trước".</li>
+<li>Đọc <code>.github/workflows/ci.yml</code> job backend và liệt kê đúng thứ tự 4+ gate mà 1 PR phải qua.</li>
+<li>Giải thích được lớp bug cụ thể (asyncpg type strictness, cross-event-loop connection pooling) mà mock không bao giờ phát hiện được.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<p>Nên đọc sau R1.1 (Python) và R1.5 (Git) — module này giả định đã biết <code>async def</code> là gì (R1.1) và đã hiểu vì sao CI gate quan trọng (liên quan tinh thần R1.5 "không trong version control = không tồn tại"; ở đây là "không có test = không được bảo vệ").</p>
+<p>Độ khó: <strong>Trung bình</strong>. Bản thân cú pháp pytest rất dễ; phần khó là hiểu đúng <em>triết lý</em> khi nào mock đủ, khi nào bắt buộc phải chạm DB thật.</p>
+
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>PyTest giống quy trình kiểm định chất lượng ở nhà máy — mỗi lô hàng (mỗi lần đổi code) phải qua trạm kiểm tra tự động trước khi xuất xưởng (merge/deploy).</p>
+<p>Nhưng có 2 loại trạm kiểm tra khác nhau: trạm "giả lập" (mock — nhanh, rẻ, chạy được ở bất kỳ đâu không cần nhà máy thật) và trạm "thật" (integration — chậm hơn, tốn tài nguyên hơn, nhưng bắt được lỗi mà trạm giả lập không bao giờ thấy, VD lỗi phát sinh từ chính dây chuyền máy móc thật, không phải từ bản vẽ thiết kế).</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>Bước 1 — Khái niệm nền: test discovery, assert, fixture (dễ)</h3>
+<table>
+<tr><th>Khái niệm</th><th>Ý nghĩa</th></tr>
+<tr><td>Test discovery</td><td>pytest tự tìm mọi file <code>test_*.py</code>, mọi hàm <code>def test_*(...)</code> — không cần đăng ký thủ công</td></tr>
+<tr><td><code>assert</code></td><td>Câu lệnh kiểm tra điều kiện — nếu <code>False</code>, test fail ngay và in ra giá trị thực tế để debug</td></tr>
+<tr><td>Fixture (<code>@pytest.fixture</code>)</td><td>Hàm chuẩn bị dữ liệu/tài nguyên dùng chung cho nhiều test — pytest tự "tiêm" (inject) vào test cần nó qua tên tham số</td></tr>
+</table>
+<pre><code>def test_addition():
+    assert 1 + 1 == 2   # PASS nếu đúng, FAIL kèm log nếu sai
+
+@pytest.fixture
+def sample_data():
+    return {"ticker": "VNM", "price": 85.0}
+
+def test_price_positive(sample_data):   # pytest tự truyền fixture vào
+    assert sample_data["price"] > 0</code></pre>
+
+<h3>Bước 2 — Fixture pattern thật của dự án: seed cố định để test tái lập được</h3>
+<p><code>backend/tests/conftest.py</code> (đọc trực tiếp, dòng 27-42) sinh dữ liệu OHLCV giả lập bằng <code>numpy</code>:</p>
+<pre><code>@pytest.fixture
+def ohlcv_df() -> pd.DataFrame:
+    """200 trading days of synthetic OHLCV — enough for all 24 features."""
+    rng = np.random.default_rng(42)     # seed cố định
+    n = 200
+    log_ret = rng.normal(0.0, 0.012, n)
+    closes = 100.0 * np.exp(np.cumsum(log_ret))
+    noise = rng.uniform(0.001, 0.005, n)
+    return pd.DataFrame({
+        "date":   pd.date_range("2023-01-02", periods=n, freq="B").strftime("%Y-%m-%d").tolist(),
+        "open":   closes * (1 - noise / 2),
+        "high":   closes * (1 + noise),
+        "low":    closes * (1 - noise),
+        "close":  closes,
+        "volume": rng.integers(1_000_000, 10_000_000, n).astype(float),
+    })</code></pre>
+<p><strong>Vì sao seed cố định (<code>default_rng(42)</code>) là bắt buộc, không phải tùy chọn</strong>: nếu không set seed, mỗi lần chạy test sinh ra dữ liệu ngẫu nhiên khác nhau. Test có thể pass hôm nay, fail hôm sau mà không có bug thật nào thay đổi — chỉ vì dữ liệu random khác nhau vô tình rơi vào 1 edge case. Đây gọi là <strong>flaky test</strong> — 1 trong những vấn đề gây mất niềm tin vào test suite nhanh nhất (dev bắt đầu bỏ qua test fail vì "chắc lại flaky thôi").</p>
+<p>Repo có thêm <code>short_ohlcv_df</code> (30 rows, dưới ngưỡng tối thiểu cần cho feature) — 1 fixture riêng để test <em>đường lỗi</em> (error path), không chỉ đường thành công.</p>
+
+<h3>Bước 3 — Mock-first, integration khi cần thật</h3>
+<p><code>backend/tests/conftest.py</code> dòng 1-12 (docstring đầu file) định nghĩa rõ 2 tầng convention:</p>
+<pre><code>"""
+Shared pytest fixtures for the predictor backend test suite.
+Most tests run without a live DB or VCI connection — everything is mocked.
+
+Exception: files named `test_*_integration.py` may use `live_db_session`/
+`skip_if_no_db` below to talk to a REAL database. This is deliberate, not a
+policy violation — some bug classes (asyncpg's strict typing on DATE/JSONB
+columns, cross-event-loop connection pooling) are invisible to a mock and
+were only caught by real integration tests...
+"""</code></pre>
+<p>Tên file <code>*_integration.py</code> là 1 <strong>naming convention có ý nghĩa kiến trúc</strong>, không phải sở thích đặt tên: nó báo hiệu ngay lập tức "test này chạm DB thật, chạy chậm hơn, cần Postgres đang sống" — ai đọc <code>ls tests/</code> cũng biết ngay nhóm nào chạy nhanh (CI mặc định), nhóm nào cần môi trường đặc biệt.</p>
+
+<h3>Bước 4 — Vì sao mock 100% từng gây sự cố thật</h3>
+<p>Bài học ghi trong <code>CLAUDE.md</code>: <em>"<code>senior_score.py</code> had zero tests for months; real-DB bugs (asyncpg type strictness, cross-event-loop connection pooling) were invisible to this project's default 'mock everything' test convention until real-DB integration tests were introduced."</em></p>
+<p>2 lớp bug cụ thể mock không bao giờ bắt được:</p>
+<ul>
+<li><strong>asyncpg type strictness</strong>: mock Python object (VD <code>MagicMock</code> trả về <code>"2026-01-01"</code> dạng string cho cột DATE) không phản ánh đúng việc <code>asyncpg</code> thật trả về object <code>datetime.date</code> nghiêm ngặt — code xử lý sai kiểu chỉ lộ ra khi chạm DB thật.</li>
+<li><strong>Cross-event-loop connection pooling</strong>: 2 event loop khác nhau (VD test framework tạo 1 loop, code app tạo loop khác) chia sẻ nhầm 1 connection pool — lỗi loại này về bản chất <em>không thể</em> xảy ra trong mock, vì mock không có event loop thật.</li>
+</ul>
+<p><strong>Kỷ luật đúng</strong>: không phải "mock 100%" (bỏ lỡ lớp bug trên) và cũng không phải "integration 100%" (quá chậm, quá tốn tài nguyên để chạy mỗi lần commit) — mà là mock mặc định + 1 tập nhỏ, có chủ đích, integration test đúng cho lớp bug DB-specific.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>CI gate thật, đọc trực tiếp <code>.github/workflows/ci.yml</code> (job <code>backend</code>, dòng 29-50) — 4 tầng tuần tự:</p>
+<pre><code>- name: ruff lint
+  run: ruff check .
+- name: mypy type-check
+  run: mypy predict/ --ignore-missing-imports --no-strict-optional
+- name: pytest
+  run: pytest tests/ -q --tb=short
+  env:
+    DATABASE_URL: ""   # tests use mocks; no live DB needed
+- name: Per-file coverage floor (single-source-of-truth files)
+  run: python scripts/check_per_file_coverage.py
+- name: Promotion gate check (DB-free subset)
+  run: python scripts/promotion_gate_check.py --skip-db-checks</code></pre>
+<p>Đọc kỹ <code>env: DATABASE_URL: ""</code> — CI job này <strong>không có Postgres service nào chạy</strong>, tức job pytest mặc định trong CI hoàn toàn DB-free, đúng như convention "mock trước". Các integration test <code>test_*_integration.py</code> chạy riêng ở môi trường khác (không nằm trong job CI này), đúng tinh thần "rare and deliberate, not the default" đã ghi trong docstring.</p>
+<p>Đếm thật trong repo (<code>backend/tests/</code>): <strong>39 file test</strong>, trong đó <strong>9 file</strong> có hậu tố <code>_integration.py</code> (<code>test_rollback_trader_config_integration.py</code>, <code>test_ai_trader_status_gate_integration.py</code>, <code>test_advisory_lock_rollback_integration.py</code>, <code>test_v7_blocks_integration.py</code>, <code>test_v7_full_backfill_integration.py</code>, <code>test_trader_trade_write_path_integration.py</code>, <code>test_predict_nested_cv_integration.py</code>, <code>test_ai_trader_loop_heartbeat_integration.py</code>, <code>test_v6_shadow_earlycutoff_integration.py</code>) — đúng tỷ lệ nhỏ (~23%) như triết lý "rare, not the default" mô tả.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<table>
+<tr><th></th><th>Mock test (mặc định)</th><th>Integration test (<code>*_integration.py</code>)</th></tr>
+<tr><td>Tốc độ</td><td>Nhanh — không chờ DB/network thật</td><td>Chậm hơn — chờ Postgres thật</td></tr>
+<tr><td>Chạy ở CI mặc định?</td><td>Có — mọi PR</td><td>Không nằm trong job CI DB-free này</td></tr>
+<tr><td>Bắt được bug loại gì?</td><td>Logic tính toán, luồng điều khiển</td><td>Type coercion thật (asyncpg), connection pooling, race condition DB</td></tr>
+<tr><td>Số lượng trong repo</td><td>~30 file</td><td>9 file (~23%)</td></tr>
+</table>
+
+<div class="evidence-box"><div class="title">🎯 Ứng dụng dự án</div>
+<p><code>backend/tests/test_senior_score.py</code> tồn tại vì bài học ở Bước 4 — trước 2026-08-09, <code>senior_score.py</code> (single source of truth cho công thức composite score, xem <code>CLAUDE.md</code>) không có test nào trong nhiều tháng. Quy tắc coverage floor riêng cho "single-source-of-truth files" (<code>python scripts/check_per_file_coverage.py</code> trong CI) là hệ quả trực tiếp: dự án đặt ngưỡng coverage CAO HƠN cho những file có vai trò kiến trúc quan trọng, không coverage đều 1 mức cho mọi file.</p>
+</div>
+
+<div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp</div>
+<p><strong>#1 — Không set random seed</strong>: dùng <code>np.random.rand()</code> thay vì <code>np.random.default_rng(42)</code> tạo ra flaky test — pass/fail ngẫu nhiên không phản ánh bug thật, làm giảm niềm tin vào cả test suite.</p>
+<p><strong>#2 — Mock 100%, không bao giờ test DB thật</strong>: cho cảm giác an toàn giả — như đã xảy ra thật với <code>senior_score.py</code>, bug type-coercion/connection-pool có thể ẩn hàng tháng vì lớp bug đó chỉ lộ ra khi chạm DB thật, không lộ ra trong bất kỳ mock nào dù viết kỹ đến đâu.</p>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Viết được 1 fixture pytest có seed cố định và giải thích vì sao seed quan trọng.</li>
+<li>Giải thích được vì sao <code>test_*_integration.py</code> là ngoại lệ có chủ đích, không phải vi phạm convention.</li>
+<li>Liệt kê đúng thứ tự 5 bước trong job backend của <code>ci.yml</code> (ruff → mypy → pytest → coverage floor → promotion gate).</li>
+<li>Kể được 2 lớp bug cụ thể mà mock không bao giờ phát hiện được, và vì sao.</li>
+<li>Giải thích được vì sao dự án đặt coverage floor cao hơn riêng cho file "single-source-of-truth" như <code>senior_score.py</code>.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R1_5_git.html">← R1.5 · Git</a>
+  <a href="R2_1_kv_caching.html">R2.1 · LLM APIs — KV Caching →</a>
+</div>
+
+</div>
+</body>
+</html>

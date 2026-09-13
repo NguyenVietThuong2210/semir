@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L3.1 — Neural Networks + Backpropagation</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 3 · Module 1</div>
+  <h1>3.1 · Neural Networks + Backpropagation</h1>
+  <p class="subtitle">Từ perceptron 1957 đến MLP hiện đại. Backprop — thuật toán đơn giản làm cho deep learning khả thi. Code từ đầu bằng NumPy.</p>
+  <div class="level">Level 3 · Deep Learning · ~45 phút</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Vẽ được 1 MLP + forward pass bằng công thức matrix</li>
+  <li>Derive được backprop cho 1 layer đơn giản bằng chain rule</li>
+  <li>Implement 2-layer NN bằng NumPy pure, không dùng framework</li>
+  <li>Giải thích: vanishing gradient là gì, activation nào giải quyết</li>
+  <li>Answer: khi nào NN win vs khi nào tree-based win</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Neural Network là gì bằng ngôn ngữ đời thường?</div>
+<p><strong>Bộ máy văn phòng</strong>: Tưởng tượng công ty có 3 phòng ban. Đơn hàng khách (input) → Phòng Nhận Hàng lọc (layer 1) → Phòng Kỹ Thuật đánh giá (layer 2) → Phòng Quyết Định phê duyệt (output). Mỗi nhân viên = 1 neuron; mỗi mức độ tin của họ với đồng nghiệp = weight; kinh nghiệm học được = bias.</p>
+<p><strong>Học qua sai lầm (backprop)</strong>: Sếp nhìn kết quả cuối "khách hàng phàn nàn" → truy ngược lại: phòng Quyết Định đúng hay sai? Nếu sai, chỉnh trọng số họ tin phòng Kỹ Thuật; chỉnh cách phòng Kỹ Thuật xử lý phòng Nhận Hàng... đó chính là "backprop the error".</p>
+<p><strong>Non-linear activation</strong> = phòng ban chỉ report lên cấp trên khi confidence &gt; 1 ngưỡng. Nếu ai cũng truyền y nguyên (linear) thì 3 phòng ban có ích gì? Non-linear cho phép mỗi layer biểu diễn concept mới.</p>
+</div>
+
+<h2>1. Perceptron — atomic unit</h2>
+
+<p>Frank Rosenblatt (1957). Đầu vào n features, output 1 số:</p>
+
+<pre><code>z = w·x + b        (linear combination)
+y = f(z)           (activation function)
+
+# Ví dụ với binary step:
+f(z) = 1 if z > 0 else 0
+</code></pre>
+
+<p>Perceptron 1 lớp chỉ giải quyết được bài toán <strong>linearly separable</strong> (XOR không giải được — điểm chết của AI 1960s dẫn tới AI winter).</p>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">🎯 Deep-dive — Backprop: vì sao "reverse" mode tạo ra deep learning khả thi (chi tiết dễ hiểu)</div>
+
+<p><strong>Câu hỏi cốt lõi</strong>: Backprop nghe rất kỹ thuật, nhưng hiểu insight thật thì thấy: đây là 1 <em>trick math</em> tiết kiệm compute 175 tỷ lần. Không có nó = không có GPT/Claude, không có LLM. Tại sao trick này mạnh vậy?</p>
+
+<p><strong>Bước 1 — Vấn đề: tìm gradient của loss theo mỗi weight</strong>. Bạn có model 175B params. Loss L phụ thuộc mọi params. Muốn update, phải biết ∂L/∂w cho mỗi w (175 tỷ đạo hàm). Câu hỏi: tính bằng cách nào?</p>
+
+<p><strong>Bước 2 — Cách naive (forward mode)</strong>: Với mỗi w riêng biệt, chạy forward pass với w = w+ε, so sánh L. Tính finite difference. Vấn đề: 175 tỷ passes. Mỗi pass 1 giây → 5500 năm cho 1 iteration. Impossible.</p>
+
+<p><strong>Bước 3 — Trick reverse mode (backprop)</strong>: Chain rule ngược từ output về input, LƯU intermediate gradients. Chỉ cần 1 forward pass + 1 backward pass = tính được tất cả 175 tỷ gradients CÙNG LÚC. Chi phí bằng 2 × forward pass, không phải 175 tỷ ×.</p>
+
+<p><strong>Analogy đời thực</strong>: Bạn muốn biết đóng góp của mỗi nhân viên (175 tỷ nhân viên) vào doanh thu công ty.</p>
+<ul>
+<li><strong>Forward mode</strong>: hỏi từng người "nếu bạn nghỉ 1 ngày, doanh thu giảm bao nhiêu?" → 175 tỷ câu hỏi.</li>
+<li><strong>Reverse mode</strong>: đi từ doanh thu tổng ngược về, phân chia theo tỷ lệ đóng góp qua chain of responsibility. Chỉ cần 1 lần đi ngược → biết đóng góp mọi người.</li>
+</ul>
+
+<p><strong>Bước 4 — Chain rule (nền tảng toán)</strong>: Với f(x) = g(h(x)), đạo hàm ∂f/∂x = ∂g/∂h × ∂h/∂x. Áp dụng đệ quy: đạo hàm loss theo w ở layer 1 = product của đạo hàm qua tất cả layer sau. Backprop = compute product từ layer CUỐI về ĐẦU, tận dụng shared intermediate results.</p>
+
+<p><strong>Bước 5 — Vì sao reverse rẻ hơn forward?</strong> Toán học: với 1 scalar output (loss) + N inputs (params), reverse mode = O(cost forward pass). Forward mode = O(N × cost forward pass). N=175B → tiết kiệm 175 tỷ lần. Đây là insight duy nhất khiến deep learning khả thi — nếu không có, chúng ta còn ở kỷ nguyên linear regression.</p>
+
+<p><strong>Con số biết nói</strong>: Train GPT-3 (175B params) mất ~$4.6M cost + 1 tháng. Nếu dùng forward mode = 175 tỷ × chi phí = không thể tính bằng tiền loài người. Chỉ vì có backprop (từ 1970s Rumelhart bring lại) mà 2020s có LLM.</p>
+
+<hr style="border: none; border-top: 1px dashed #a855f7; margin: 15px 0;">
+
+<p><strong>Vấn đề chết người: Vanishing gradient</strong></p>
+
+<p><strong>Bước 1 — Hiện tượng</strong>: Chain rule = product của N terms. Nếu mỗi term &lt; 1 → product → 0 exponentially. Ví dụ sigmoid derivative max 0.25:</p>
+<pre><code>Layer 1:  gradient = 0.25
+Layer 5:  0.25^5  = 0.001
+Layer 20: 0.25^20 ≈ 10^-12   (thực tế = 0)</code></pre>
+<p>→ Layer sâu KHÔNG cập nhật → không học → deep network fail.</p>
+
+<p><strong>Bước 2 — Vì sao đây là killer của deep learning 1990s-2000s?</strong> Trước 2012, không train được network &gt; 5 layers. Deeper = worse. Đến khi:</p>
+<ol>
+<li><strong>ReLU (2012, Krizhevsky)</strong> — derivative = 0 hoặc 1. Không shrink. Deep nhưng train được. AlexNet 8 layers thắng ImageNet → thắp lửa deep learning.</li>
+<li><strong>Skip connections (2015, He ResNet)</strong> — thêm shortcut: h_out = f(h_in) + h_in. Gradient có "highway" qua chain ngắn → train được 152 layers.</li>
+<li><strong>LayerNorm/BatchNorm</strong> — giữ activation scale ổn định → derivative gần 1 → không shrink.</li>
+<li><strong>Xavier/Kaiming init</strong> — chọn variance của weights sao cho gradient magnitude stable qua layers.</li>
+</ol>
+<p>Combine 4 → 2020s train được Transformer 175B <em>tham số</em> (~100 layer, GPT-3), không phải "175B layer" — 175B là tổng số tham số. Đây là why architecture matter — không phải magic, là engineering solve vanishing gradient.</p>
+
+<p><strong>Hậu quả nếu không hiểu vanishing gradient</strong>: Bạn build model 50-layer sigmoid MLP → không converge. Debug 2 tuần. Fix bằng replace sigmoid → ReLU → converge trong 1 giờ. Không hiểu = không debug được. Hiểu = fix 1 dòng code.</p>
+
+<p><strong>Khi backprop vỡ hoàn toàn — FP16 precision</strong>: Train với FP16 (nửa precision, tiết kiệm memory 2×) có thể làm gradient underflow về 0, model không học được:</p>
+<ul>
+<li><strong>Nguyên nhân</strong>: gradient nhỏ (~10^-7) rơi dưới min FP16 (≈6×10^-5) → underflow thành 0.</li>
+<li><strong>Fix — mixed precision training</strong>: giữ FP32 master weights + FP16 forward pass.</li>
+<li><strong>Loss scaling</strong>: nhân loss × 1024 trước backward → gradient cũng × 1024, đủ lớn để thoát underflow FP16 → unscale lại sau khi backward xong.</li>
+<li>→ "FP16 training" không đơn giản "cast xuống nửa" — là kỹ thuật engineering phức tạp. FP8 (Hopper H100 2023) còn tricky hơn.</li>
+</ul>
+
+<p><strong>Take-away tổng hợp</strong>:</p>
+<ol>
+<li>Backprop = reverse mode autodiff. Không magic — chỉ chain rule + smart caching.</li>
+<li>Nó cắt chi phí gradient từ O(N × forward) → O(2 × forward). Duy nhất khiến deep learning tồn tại.</li>
+<li>Vanishing gradient là killer natural. Fix qua ReLU/skip/norm/init — combine 4 mới train được deep network.</li>
+<li>Precision matter — FP16/FP8 cần careful engineering, không "cast down".</li>
+</ol>
+</div>
+
+<h2>2. Multi-Layer Perceptron (MLP)</h2>
+
+<p>Xếp chồng nhiều lớp perceptron + activation non-linear → giải bất kỳ function nào (Universal Approximation Theorem, Cybenko 1989).</p>
+
+<pre><code>Input x ∈ ℝ⁷⁹  (V18 có 79 features)
+    ↓
+Layer 1: h1 = ReLU(W1·x + b1)         W1 ∈ ℝ⁶⁴ˣ⁷⁹
+    ↓
+Layer 2: h2 = ReLU(W2·h1 + b2)        W2 ∈ ℝ³²ˣ⁶⁴
+    ↓
+Output:  y_hat = softmax(W3·h2 + b3)  W3 ∈ ℝ³ˣ³² (3 class UP/DOWN/FLAT)
+</code></pre>
+
+<h3>Activation functions — công thức + đạo hàm + gradient behaviour</h3>
+
+<table>
+<tr><th>Activation</th><th>f(z)</th><th>f'(z)</th><th>Max f'(z)</th><th>Vanishing?</th><th>Khi dùng</th></tr>
+<tr><td>Sigmoid σ</td><td>1/(1+e^-z)</td><td>σ(z)·(1-σ(z))</td><td>0.25 (tại z=0)</td><td>Nặng — 0.25^N → 0</td><td>Output binary. Hidden layer: TRÁNH</td></tr>
+<tr><td>Tanh</td><td>(e^z - e^-z)/(e^z + e^-z)</td><td>1 - tanh²(z)</td><td>1.0 (tại z=0)</td><td>Vẫn có — bão hoà 2 đầu</td><td>RNN gate, hidden OK</td></tr>
+<tr><td><strong>ReLU</strong></td><td>max(0, z)</td><td>1 nếu z>0, 0 nếu z≤0</td><td>1.0</td><td>Không (path z>0). Dying ReLU nếu z≤0 luôn</td><td>Default hidden 2012+</td></tr>
+<tr><td>Leaky ReLU</td><td>max(αz, z), α=0.01</td><td>1 hoặc α</td><td>1.0</td><td>Không</td><td>Khi ReLU chết</td></tr>
+<tr><td>GELU</td><td>z·Φ(z) ≈ 0.5z(1+tanh(√(2/π)(z+0.044z³)))</td><td>Φ(z) + z·φ(z)</td><td>≈1.13 (tại z≈√2≈1.4)</td><td>Không, smooth ReLU</td><td>Transformer (BERT, GPT-2/3)</td></tr>
+<tr><td>Swish/SiLU</td><td>z·σ(z)</td><td>σ(z) + z·σ(z)(1-σ(z))</td><td>≈1.10</td><td>Không</td><td>EfficientNet, Llama FFN</td></tr>
+<tr><td>Softmax</td><td>e^z_i / Σ e^z_j</td><td>∂softmax_i/∂z_j = s_i(δ_ij - s_j)</td><td>—</td><td>—</td><td>Output multi-class</td></tr>
+</table>
+<p style="font-size: 0.9em; opacity: 0.85"><strong>Φ, φ ở dòng GELU là gì?</strong> Φ(z) = CDF (cumulative distribution function — hàm phân phối tích lũy) của phân phối chuẩn N(0,1): Φ(z) = xác suất 1 biến ngẫu nhiên chuẩn ≤ z. φ(z) = PDF (density — hàm mật độ) tương ứng, φ(z) = Φ'(z) = (1/√(2π))·e^(−z²/2). GELU dùng Φ(z) như "công tắc mềm" (soft gate) — thay vì ReLU cắt cứng tại 0 (0 hoặc 1), GELU nhân z với xác suất Φ(z) ∈ (0,1) mượt dần từ 0 lên 1 quanh z=0, nên đường cong không có góc gãy như ReLU.</p>
+
+<div class="callout warn">
+<div class="label">📊 Vanishing gradient bằng con số — vì sao sigmoid giết deep network</div>
+<p>Giả sử 20-layer MLP, mỗi layer sigmoid, gradient từ output = 1.0. Ước lượng gradient tại layer 1 (input side):</p>
+<pre><code>Layer 20 gradient = 1.0
+Layer 19 = 1.0 × σ'(z) ≤ 1.0 × 0.25 = 0.25
+Layer 18 = 0.25 × 0.25 = 0.0625
+Layer 15 ≈ 0.25^5  ≈ 9.8e-4   (20−15 = 5 phép nhân)
+Layer 10 ≈ 0.25^10 ≈ 9.5e-7   (20−10 = 10 phép nhân)
+Layer 1  ≈ 0.25^19 ≈ 3.6e-12  (20−1 = 19 phép nhân)
+  ← KHÔNG phải underflow FP32 (sàn underflow FP32 là ~1e-38, còn xa) — thực ra
+    là mất vì CỘNG số ~1e-12 vào 1 weight cỡ O(0.1-1) trong FP32 (độ chính xác
+    tương đối ~1.19e-7) bị "nuốt" hoàn toàn, kết quả cộng không đổi = weight update = 0</code></pre>
+<p>Cùng phép tính với ReLU (giả sử 50% neurons active): mỗi layer giữ gradient ≈ 0.5. 0.5^20 = 9.5e-7 — vẫn nhỏ nhưng lớn hơn sigmoid Layer 1 (3.6e-12) khoảng ~2.6×10^5 lần (không phải 10^6 như bản trước tính nhầm từ exponent sai ở trên). Ghép ReLU + skip connection (gradient path × 1.0) → deep network học được.</p>
+</div>
+
+<h2>3. Loss function</h2>
+
+<p>Đo "sai bao nhiêu". Model học cách minimize loss.</p>
+
+<pre><code># Multi-class classification (V18):
+L = -Σ y_i · log(y_hat_i)           # cross-entropy
+                                      # y_i = one-hot true label
+                                      # y_hat_i = softmax probability
+
+# Regression:
+L = Σ (y_i - y_hat_i)²                # MSE
+L = Σ |y_i - y_hat_i|                 # MAE (robust với outlier)
+</code></pre>
+
+<h2>4. Backpropagation — thuật toán học</h2>
+
+<p>Mục tiêu: tính <code>∂L/∂W</code> cho mỗi weight → update <code>W -= η · ∂L/∂W</code> (gradient descent).</p>
+
+<p><strong>Chain rule</strong>: ∂L/∂W1 = ∂L/∂y_hat · ∂y_hat/∂h2 · ∂h2/∂h1 · ∂h1/∂W1</p>
+
+<pre><code>FORWARD  (tính activation, LƯU lại từng bước):
+  x ──[W1]──► h1 ──[W2]──► h2 ──[W3]──► y_hat ──[Loss]──► L
+
+BACKWARD (chuyền gradient ngược, mỗi mũi tên = nhân đạo hàm cục bộ):
+  ∂L/∂x ◄──[W1]── ∂L/∂h1 ◄──[W2]── ∂L/∂h2 ◄──[W3]── ∂L/∂y_hat ◄──[Loss]── L
+
+  ∂L/∂W1 = (∂L/∂h1) · (∂h1/∂W1)   — chỉ cần đúng 1 lượt xuôi + 1 lượt ngược
+                                    là có TẤT CẢ gradient, không phải tính riêng từng W</code></pre>
+
+<div class="callout">
+<div class="label">🧠 Backprop intuition</div>
+<p>Backprop = "chuyền gradient ngược từ output về input, mỗi layer nhân bằng đạo hàm cục bộ của nó." Không cần magic — chỉ là chain rule + dynamic programming (lưu intermediate activations trong forward pass).</p>
+</div>
+
+<h3>Derive backprop cho 1 layer</h3>
+
+<p>Setup: layer <code>h = ReLU(W·x + b)</code>, loss L. Đã có <code>δ_h = ∂L/∂h</code> từ layer sau.</p>
+
+<pre><code># Step 1: ∂h/∂z = ReLU'(z) = 1 if z > 0 else 0
+# Step 2: ∂L/∂z = δ_h * ReLU'(z)    (element-wise multiply)
+# Step 3: ∂L/∂W = ∂L/∂z · x^T       (outer product)
+# Step 4: ∂L/∂b = ∂L/∂z              (sum)
+# Step 5: ∂L/∂x = W^T · ∂L/∂z       (chuyền cho layer trước)
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔢 Worked example — forward + backward bằng số thật (2-layer MLP)</div>
+
+<p><strong>Analogy</strong>: Phân biệt lỗi cho từng nhân viên trong chuỗi cung ứng. Sếp nhìn lỗi cuối (loss). Truy ngược: giám đốc sai bao nhiêu? → trưởng phòng sai bao nhiêu? → nhân viên sai bao nhiêu? Mỗi bước "chia lỗi" = 1 phép chain rule.</p>
+
+<p><strong>Setup</strong>: MLP 2 layer, input dim 2 → hidden dim 2 (ReLU) → output dim 1 (sigmoid). Binary cross-entropy loss.</p>
+
+<pre><code># INPUT
+x  = [1.0, 2.0]           (shape 2)
+y  = 1.0                  (true label)
+
+# WEIGHTS (khởi tạo tay cho dễ tính)
+W1 = [[0.1, 0.2],         (shape 2×2, row = hidden neuron)
+      [0.3, 0.4]]
+b1 = [0.0, 0.0]
+W2 = [0.5, 0.6]           (shape 1×2)
+b2 = [0.0]
+
+# ========== FORWARD ==========
+# Layer 1 pre-activation
+z1_0 = 0.1·1.0 + 0.2·2.0 + 0.0 = 0.5
+z1_1 = 0.3·1.0 + 0.4·2.0 + 0.0 = 1.1
+z1   = [0.5, 1.1]
+
+# ReLU
+h1_0 = max(0, 0.5) = 0.5
+h1_1 = max(0, 1.1) = 1.1
+h1   = [0.5, 1.1]
+
+# Layer 2 pre-activation
+z2   = 0.5·0.5 + 0.6·1.1 + 0.0 = 0.25 + 0.66 = 0.91
+
+# Sigmoid output
+y_hat = 1 / (1 + e^-0.91) = 1 / (1 + 0.4025) = 0.7130
+
+# Loss (BCE)
+L = -[1·log(0.7130) + 0·log(0.2870)] = -log(0.7130) = 0.3381
+
+# ========== BACKWARD ==========
+# Trick đẹp: với sigmoid + BCE, ∂L/∂z2 = y_hat - y
+dz2   = 0.7130 - 1.0 = -0.2870
+
+# ∂L/∂W2 = dz2 · h1^T (outer)
+dW2_0 = -0.2870 · 0.5 = -0.1435
+dW2_1 = -0.2870 · 1.1 = -0.3157
+dW2   = [-0.1435, -0.3157]
+
+# ∂L/∂b2
+db2   = -0.2870
+
+# Chuyền ngược về h1: ∂L/∂h1 = W2^T · dz2
+dh1_0 = 0.5 · (-0.2870) = -0.1435
+dh1_1 = 0.6 · (-0.2870) = -0.1722
+dh1   = [-0.1435, -0.1722]
+
+# ReLU derivative: 1 nếu z1 > 0, 0 nếu z1 ≤ 0
+# z1 = [0.5, 1.1] → cả 2 > 0 → mask = [1, 1]
+dz1_0 = -0.1435 · 1 = -0.1435
+dz1_1 = -0.1722 · 1 = -0.1722
+
+# ∂L/∂W1 = dz1 · x^T (outer product 2×1 × 1×2 = 2×2)
+dW1[0,0] = dz1_0 · x_0 = -0.1435 · 1.0 = -0.1435
+dW1[0,1] = dz1_0 · x_1 = -0.1435 · 2.0 = -0.2870
+dW1[1,0] = dz1_1 · x_0 = -0.1722 · 1.0 = -0.1722
+dW1[1,1] = dz1_1 · x_1 = -0.1722 · 2.0 = -0.3444
+
+# ∂L/∂b1
+db1 = [-0.1435, -0.1722]
+
+# ========== SGD UPDATE (lr=0.1) ==========
+W2 ← [0.5, 0.6]  - 0.1·[-0.1435, -0.3157]  = [0.5144, 0.6316]
+b2 ← 0.0         - 0.1·(-0.2870)           = 0.0287
+W1[0] ← [0.1, 0.2] - 0.1·[-0.1435, -0.2870] = [0.1144, 0.2287]
+W1[1] ← [0.3, 0.4] - 0.1·[-0.1722, -0.3444] = [0.3172, 0.4344]
+b1 ← [0.0, 0.0]  - 0.1·[-0.1435, -0.1722]  = [0.0144, 0.0172]
+
+# Sanity check: chạy forward LẠI TOÀN BỘ với TẤT CẢ weight mới (W1, b1, W2, b2)
+# — không chỉ cắm h1 CŨ vào W2 mới, vì W1/b1 cũng đã đổi, h1 phải tính lại từ đầu
+z1_new_0 = 0.1144·1.0 + 0.2287·2.0 + 0.0144 = 0.5862
+z1_new_1 = 0.3172·1.0 + 0.4344·2.0 + 0.0172 = 1.2032
+h1_new = ReLU([0.5862, 1.2032]) = [0.5862, 1.2032]   # cả 2 vẫn dương → giữ nguyên
+
+z2_new = 0.5144·0.5862 + 0.6316·1.2032 + 0.0287 = 0.3015 + 0.7601 + 0.0287 = 1.0903
+y_hat_new = σ(1.0903) = 0.7485  ← tăng từ 0.7130 gần hơn 1.0 ✅
+L_new = -log(0.7485) = 0.2895   ← giảm từ 0.3381 ✅ HỌC ĐƯỢC (tính đúng bằng h1 MỚI, không phải h1 cũ)</code></pre>
+
+<p><strong>Ý nghĩa từng biến</strong>:</p>
+<table>
+<tr><th>Ký hiệu</th><th>Shape</th><th>Ý nghĩa</th></tr>
+<tr><td>x</td><td>(2,)</td><td>Input features</td></tr>
+<tr><td>z1</td><td>(2,)</td><td>Pre-activation layer 1 = W1·x + b1</td></tr>
+<tr><td>h1</td><td>(2,)</td><td>Post-activation = ReLU(z1)</td></tr>
+<tr><td>z2</td><td>scalar</td><td>Pre-activation layer 2</td></tr>
+<tr><td>y_hat</td><td>scalar</td><td>Sigmoid output = P(y=1)</td></tr>
+<tr><td>dz2</td><td>scalar</td><td>∂L/∂z2 — signal lỗi tại output</td></tr>
+<tr><td>dh1</td><td>(2,)</td><td>∂L/∂h1 — lỗi chuyền về hidden</td></tr>
+<tr><td>dz1</td><td>(2,)</td><td>dh1 × ReLU'(z1) — mask theo ReLU</td></tr>
+<tr><td>dW1, dW2</td><td>matrix</td><td>Gradient theo weight — dùng để update</td></tr>
+</table>
+</div>
+
+<h2>5. Implement 2-layer NN bằng NumPy</h2>
+
+<pre><code>import numpy as np
+
+class TwoLayerNN:
+    def __init__(self, n_in, n_hid, n_out):
+        # Kaiming/He init cho layer có ReLU theo sau (xem Deep-dive ngay dưới): var(W) = 2/n_in
+        self.W1 = np.random.randn(n_hid, n_in) * np.sqrt(2/n_in)
+        self.b1 = np.zeros(n_hid)
+        # Xavier init cho layer output (theo sau là softmax, KHÔNG phải ReLU): var(W) = 1/n_hid
+        self.W2 = np.random.randn(n_out, n_hid) * np.sqrt(1/n_hid)
+        self.b2 = np.zeros(n_out)
+
+    def forward(self, X):
+        # X shape: (batch, n_in)
+        self.X = X
+        self.z1 = X @ self.W1.T + self.b1        # (batch, n_hid)
+        self.h1 = np.maximum(0, self.z1)          # ReLU
+        self.z2 = self.h1 @ self.W2.T + self.b2  # (batch, n_out)
+        # softmax
+        exp_z = np.exp(self.z2 - self.z2.max(axis=1, keepdims=True))
+        self.y_hat = exp_z / exp_z.sum(axis=1, keepdims=True)
+        return self.y_hat
+
+    def backward(self, y_true, lr=0.01):
+        # y_true shape: (batch, n_out) one-hot
+        batch = y_true.shape[0]
+        # Gradient at output layer (softmax + cross-entropy simplified)
+        dz2 = (self.y_hat - y_true) / batch       # (batch, n_out)
+        dW2 = dz2.T @ self.h1                     # (n_out, n_hid)
+        db2 = dz2.sum(axis=0)
+        # Backprop through W2
+        dh1 = dz2 @ self.W2                       # (batch, n_hid)
+        # ReLU derivative
+        dz1 = dh1 * (self.z1 > 0)
+        dW1 = dz1.T @ self.X                      # (n_hid, n_in)
+        db1 = dz1.sum(axis=0)
+        # SGD update
+        self.W1 -= lr * dW1
+        self.b1 -= lr * db1
+        self.W2 -= lr * dW2
+        self.b2 -= lr * db2
+</code></pre>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">📐 Deep-dive — Vì sao 1 dòng code init "đúng cú pháp" vẫn có thể làm model học chậm (Xavier vs Kaiming/He)</div>
+
+<p><strong>💡 Analogy</strong>: Tưởng tượng 1 dàn loa nối tiếp nhau (mỗi loa = 1 layer), tín hiệu qua loa này khuếch đại tiếp cho loa sau. Nếu mỗi loa khuếch đại LÊN một chút (gain &gt; 1) → sau 50 loa, âm thanh vỡ (exploding). Nếu mỗi loa khuếch đại XUỐNG một chút (gain &lt; 1) → sau 50 loa, âm thanh biến mất (vanishing). "Khởi tạo trọng số đúng" = chỉnh gain trung bình qua mọi loa ≈ 1 NGAY TỪ ĐẦU — trước khi train bước nào.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: code NumPy ở mục 5 (trước khi sửa) ghi comment "Xavier init: var(W) = 1/n_in" cho layer có activation <strong>ReLU</strong> theo sau. Đây là 1 sự KHÔNG KHỚP tinh vi: Xavier (Glorot &amp; Bengio 2010) được derive cho activation TUYẾN TÍNH-GẦN-0 (tanh/sigmoid quanh z=0), không phải ReLU. Code vẫn CHẠY được, loss vẫn giảm — nhưng network hội tụ chậm hơn hẳn, đặc biệt rõ khi &gt;20-30 layers. Code ở mục 5 đã được sửa lại đúng — phần dưới đây giải thích vì sao.</p>
+
+<p><strong>Câu hỏi cốt lõi</strong>: khởi tạo random weight với variance bao nhiêu để tín hiệu (và sau này là gradient) không nổ cũng không biến mất qua hàng chục layer?</p>
+
+<p><strong>Bước 1 — Yêu cầu toán học</strong>: muốn Var(output mỗi layer) ≈ Var(input), không đổi qua độ sâu. Với 1 layer tuyến tính y = W·x (n input units, W khởi tạo độc lập, mean 0):</p>
+<pre><code>Var(y) = n · Var(w) · Var(x)     # mỗi trong n input đóng góp độc lập vào tổng
+
+# Muốn Var(y) = Var(x) (giữ nguyên qua layer) → cần:
+n · Var(w) = 1  →  Var(w) = 1/n</code></pre>
+<p><strong>Bước 2 — Đây chính là Xavier/Glorot (2010)</strong>: Var(w) = 1/n_in. Đúng cho activation gần-tuyến tính quanh 0 (tanh, sigmoid) — với input nhỏ, tanh(z)≈z, không đổi variance đáng kể.</p>
+
+<p><strong>Bước 3 — Vì sao ReLU cần công thức KHÁC?</strong> ReLU(z)=max(0,z) CẮT BỎ toàn bộ phần âm — nếu z phân phối đối xứng quanh 0, đúng NỬA số activation bị set về 0 → <strong>variance sau ReLU chỉ còn 1/2 so với trước ReLU</strong>.</p>
+<pre><code>Var(ReLU(z)) ≈ (1/2) · Var(z)     # ReLU giết nửa phân phối (phần z<0 → 0)
+
+Nếu vẫn dùng Var(w)=1/n như Xavier: Var(y) = n·(1/n)·Var(x) = Var(x)  ← tưởng ổn
+NHƯNG sau ReLU: Var(h) = (1/2)·Var(y) = (1/2)·Var(x)  ← MẤT NỬA variance MỖI layer!
+Qua 20 layer ReLU + Xavier: Var còn ≈ (1/2)^20 ≈ 9.5×10^-7 lần ban đầu
+→ activation co lại gần 0 — giống hệt vanishing gradient, nhưng xảy ra ngay ở
+  FORWARD PASS, trước khi backprop chạy bước nào.</code></pre>
+
+<p><strong>Bước 4 — Fix: nhân bù hệ số 2 (Kaiming/He 2015)</strong>: cần Var(w) LỚN GẤP ĐÔI Xavier để bù phần ReLU cắt mất:</p>
+<pre><code>Kaiming/He:   Var(w) = 2/n_in        (thay vì 1/n_in của Xavier)
+Kiểm tra: Var(y)=n·(2/n)·Var(x)=2·Var(x) → sau ReLU: (1/2)·2·Var(x)=Var(x)  ✓ giữ nguyên</code></pre>
+
+<p><strong>Ví dụ số cụ thể</strong> — áp dụng vào chính V18 (n_in=79 features, layer 1 ở code mục 5):</p>
+<pre><code>Xavier std  = √(1/79) = √0.01266 ≈ 0.1125   ← công thức SAI phối cho layer này
+Kaiming std = √(2/79) = √0.02532 ≈ 0.1591   ← ĐÚNG cho layer có ReLU theo sau (đã sửa ở mục 5)
+Tỷ lệ: Kaiming/Xavier = √2 ≈ 1.41×
+
+Không phải lỗi "code chạy sai" — model vẫn train được với Xavier, chỉ HỘI TỤ CHẬM HƠN vì
+signal ban đầu yếu hơn cần thiết. He et al. (2015) báo cáo thực nghiệm: network 30-layer
+ReLU với Xavier KHÔNG hội tụ, cùng kiến trúc với Kaiming hội tụ bình thường.</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Xavier và Kaiming/He KHÔNG phải 2 lựa chọn ngang hàng để "thử cả 2 xem cái nào tốt hơn" — chúng derive cho 2 họ activation khác nhau. Quy tắc: <strong>ReLU/Leaky ReLU/GELU → Kaiming</strong> (PyTorch <code>kaiming_normal_</code>); <strong>tanh/sigmoid/linear output → Xavier</strong> (PyTorch <code>xavier_normal_</code>). Dùng nhầm không crash — chỉ chậm hội tụ, nên bug này hay bị bỏ sót nhiều tuần trước khi ai đó nghi ngờ tới init.</p>
+
+<table>
+<tr><th></th><th>Xavier/Glorot (2010)</th><th>Kaiming/He (2015)</th></tr>
+<tr><td>Công thức Var(w)</td><td>1/n_in</td><td>2/n_in</td></tr>
+<tr><td>Giả định activation</td><td>Tuyến tính quanh 0 (tanh, sigmoid)</td><td>ReLU (cắt nửa phân phối)</td></tr>
+<tr><td>PyTorch API</td><td><code>xavier_normal_</code></td><td><code>kaiming_normal_</code></td></tr>
+<tr><td>Dùng sai họ activation</td><td>Không crash, chỉ hội tụ chậm hơn</td><td>Không crash, chỉ hội tụ chậm hơn</td></tr>
+</table>
+
+<p><strong>Insight</strong>: init không phải "chi tiết kỹ thuật nhỏ nhặt" — nó quyết định network TRAIN ĐƯỢC NGAY TỪ EPOCH ĐẦU hay không, độc lập với optimizer/learning rate. Đây cũng là lý do §1 ở trên (Deep-dive backprop) liệt kê "Xavier/Kaiming init" là 1 trong 4 kỹ thuật BẮT BUỘC kết hợp để train deep network — ReLU không thôi chưa đủ.</p>
+
+<p><strong>📖 Mở rộng — init hiện đại trong Transformer</strong>: GPT-2 (Radford et al. 2019) dùng biến thể riêng cho residual path — nhân thêm 1/√(2·n_layers) vào weight mỗi residual branch, vì residual connection CỘNG DỒN variance qua mọi layer (khác MLP tuần tự), không bù đúng sẽ khiến variance ở output cuối tăng tuyến tính theo số layer. Bản chất vẫn là bài toán variance-qua-layer y hệt Xavier/Kaiming, chỉ khác kiến trúc residual thay vì tuần tự thuần.</p>
+</div>
+
+<h2>6. Vanishing/exploding gradient — problem cơ bản</h2>
+
+<div class="callout warn">
+<div class="label">Vanishing gradient</div>
+<p>Với network sâu (10+ layers) và sigmoid/tanh (đạo hàm max ~0.25), gradient bị nhân liên tục với số < 1 → về 0 rất nhanh ở layer sâu → không update weights → không học được.</p>
+<p><strong>Fix</strong>: ReLU (đạo hàm = 1 khi z>0), Batch Norm, residual connection (ResNet, Transformer).</p>
+</div>
+
+<div class="callout danger">
+<div class="label">Exploding gradient</div>
+<p>Ngược lại — gradient càng lúc càng lớn → weights update jump → training diverge (loss = NaN).</p>
+<p><strong>Fix</strong>: gradient clipping (clip norm to threshold), lower learning rate, careful init.</p>
+</div>
+
+<h2>7. Khi nào dùng NN vs Tree-based?</h2>
+
+<table>
+<tr><th></th><th>Tree-based (XGBoost)</th><th>Neural Network</th></tr>
+<tr><td>Tabular data (numeric features)</td><td>✅ Win thường</td><td>Cần data lớn để win</td></tr>
+<tr><td>Image / speech / text</td><td>❌ Không phù hợp</td><td>✅ Win</td></tr>
+<tr><td>Data size</td><td>Small-medium (10k-1M rows)</td><td>Cần big data (100k+ để justify)</td></tr>
+<tr><td>Interpretability</td><td>Cao (SHAP, feature importance)</td><td>Thấp (black box)</td></tr>
+<tr><td>Training speed</td><td>Nhanh (minutes)</td><td>Chậm (hours-days, cần GPU)</td></tr>
+<tr><td>Ví dụ V18</td><td>✅ Chosen — tabular, 1250 rows/ticker</td><td>Không phù hợp ở data size</td></tr>
+<tr><td>Transformer chat</td><td>❌</td><td>✅</td></tr>
+</table>
+
+<h2>8. Gradient checkpointing — đánh đổi compute lấy memory (production concern)</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Quay lại ẩn dụ "chuỗi cung ứng" ở mục 4 — để backprop tính được gradient, mỗi "trạm" (layer) phải LƯU LẠI trạng thái lúc forward pass đi qua (giống giữ biên lai ở mỗi trạm để đối chiếu sau). Network càng sâu/batch càng lớn → càng nhiều biên lai phải giữ → hết chỗ lưu (hết GPU memory). <strong>Gradient checkpointing</strong> = "chỉ giữ biên lai ở VÀI trạm chốt, trạm nào không giữ thì khi cần sẽ ĐI LẠI từ trạm chốt gần nhất để tính lại" — tốn thêm 1 lượt đi (compute), đỡ tốn kho lưu biên lai (memory).</p>
+</div>
+
+<p><strong>Vấn đề cụ thể</strong>: nhắc lại mục 4 — backprop cần <em>"1 forward pass + 1 backward pass"</em> và phải <strong>LƯU LẠI mọi activation trung gian</strong> (<code>z1, h1, z2...</code> ở ví dụ mục 4) trong lúc forward, vì backward dùng lại chúng (VD <code>dW1 = dz1·x^T</code> cần <code>x</code> đã lưu từ forward). Với network N layer, batch size B, memory activation = O(N·B) — với LLM hàng trăm layer hay batch lớn, con số này VƯỢT QUÁ GPU memory (thường 40-80GB/GPU) trước khi kịp train.</p>
+
+<p><strong>Giải pháp (Chen et al. 2016, "Training Deep Nets with Sublinear Memory Cost")</strong>:</p>
+<pre><code>KHÔNG checkpoint (mặc định):
+  Forward: lưu activation TẤT CẢ N layer → memory O(N)
+  Backward: dùng lại activation đã lưu, không cần tính lại gì
+
+CÓ checkpoint (Chen et al. 2016):
+  Forward: chỉ lưu activation tại √N layer "chốt" (checkpoint), cách đều nhau
+           → memory O(√N) thay vì O(N)
+  Backward: khi cần activation của layer KHÔNG phải checkpoint → chạy lại forward
+           TỪ checkpoint gần nhất tới layer đó (tính lại, không lưu thêm)
+           → tốn thêm ~1 forward pass nữa (không phải N forward pass)</code></pre>
+
+<p><strong>Ví dụ số cụ thể</strong>: network N=100 layer, mỗi layer activation tốn 1 đơn vị memory.</p>
+<pre><code>Không checkpoint:  memory = 100 đơn vị (lưu cả 100 layer)
+Có checkpoint:     đặt checkpoint mỗi √100=10 layer → lưu 10 activation "chốt"
+                   + khi backward cần layer giữa 2 chốt, chạy lại forward tối đa
+                     10 layer (khoảng cách giữa 2 chốt) → memory phụ lúc recompute ~10
+                   → memory đỉnh ≈ 10 (chốt) + 10 (recompute buffer) = 20 đơn vị
+                   → GIẢM từ 100 xuống ~20 đơn vị (≈5× ít hơn), đổi lại TỐN THÊM
+                     đúng 1 forward pass phụ (compute tổng +~30-33%)</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: gradient checkpointing KHÔNG đổi kết quả gradient (vẫn CHÍNH XÁC tuyệt đối, không phải xấp xỉ) — nó chỉ đổi CHỖ activation được lưu hay tính lại. Khác hẳn kỹ thuật "đánh đổi độ chính xác lấy tốc độ" như mixed precision (FP16) hay quantization — checkpointing thuần túy đánh đổi <strong>compute ⟷ memory</strong>, không đụng độ chính xác số học.</p>
+
+<table>
+<tr><th></th><th>Không checkpoint</th><th>Gradient checkpointing (Chen 2016)</th></tr>
+<tr><td>Memory cho activation</td><td>O(N)</td><td>O(√N) (hoặc O(log N) với compute cao hơn)</td></tr>
+<tr><td>Compute thêm</td><td>0 (baseline)</td><td>+1 forward pass phụ (~30-33% tổng compute)</td></tr>
+<tr><td>Độ chính xác gradient</td><td>Chính xác</td><td>Chính xác (không xấp xỉ)</td></tr>
+<tr><td>Khi cần dùng</td><td>Network vừa/nhỏ, đủ GPU memory</td><td>Network rất sâu/rộng, batch lớn, memory hạn chế (LLM training)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: đây là ví dụ kinh điển của "compute rẻ hơn memory" trong deep learning hiện đại — GPU memory tăng chậm hơn nhiều so với kích thước model, nên "trả thêm 1 lượt tính" để tiết kiệm bộ nhớ gần như luôn đáng giá khi train model lớn. PyTorch có sẵn <code>torch.utils.checkpoint</code>, TensorFlow có <code>tf.recompute_grad</code> — implement trực tiếp ý tưởng Chen et al. 2016.</p>
+
+<p><strong>📖 Mở rộng</strong>: kỹ thuật này được dùng RỘNG RÃI khi train LLM (GPT, Llama) vì activation memory cho batch lớn + sequence dài + hàng trăm layer transformer vượt xa memory 1 GPU. Đánh đổi: train chậm hơn ~20-30% nhưng fit được model lớn hơn nhiều lần trên cùng phần cứng — trade-off thường có lợi khi GPU là tài nguyên khan hiếm hơn thời gian train.</p>
+
+<div class="callout danger">
+<div class="label">🐛 Common bugs / gotchas — backprop</div>
+<ol>
+  <li><strong>Quên <code>optimizer.zero_grad()</code> trước <code>loss.backward()</code></strong>: PyTorch accumulate gradient — không zero → gradient batch trước cộng dồn, model diverge. Fix 1 dòng, debug 1 ngày.</li>
+  <li><strong>Dùng <code>.detach()</code> hoặc <code>torch.no_grad()</code> trong training loop</strong>: cắt computation graph → gradient không flow ngược → loss đứng im.</li>
+  <li><strong>In-place op trên tensor có grad</strong>: <code>x += y</code> thay vì <code>x = x + y</code> → error "modified by inplace operation". Dùng <code>x.add_(y)</code> chỉ khi chắc chắn không cần backward.</li>
+  <li><strong>Log(0) trong cross-entropy</strong>: y_hat = 0 → log(0) = -inf → NaN. Dùng <code>log(y_hat + 1e-8)</code> hoặc trực tiếp <code>F.cross_entropy(logits, y)</code> (numerically stable, không softmax + log riêng).</li>
+  <li><strong>Sai axis khi flatten</strong>: <code>x.view(-1)</code> flatten cả batch → loss trung bình sai. Nên <code>x.view(batch, -1)</code>.</li>
+  <li><strong>Init toàn 0</strong>: mọi neuron trong layer nhận cùng gradient → symmetric → chỉ học được 1 feature. Luôn Xavier/Kaiming init.</li>
+  <li><strong>Dying ReLU</strong>: bias init âm + LR cao → z ≤ 0 mọi input → gradient = 0 vĩnh viễn. Fix: Leaky ReLU / GELU / init bias = 0.01.</li>
+  <li><strong>Softmax + CE tính riêng</strong>: overflow do exp(z) lớn. Dùng log-sum-exp trick: <code>logsumexp(z)</code>.</li>
+</ol>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate + Interview Q&A</h3>
+
+<p class="q">1. Perceptron 1 lớp giải được XOR không? Tại sao?</p>
+<p class="a">Không. XOR không linearly separable. Perceptron chỉ define 1 hyperplane. Cần MLP 2 layers + non-linear activation.</p>
+
+<p class="q">2. Universal Approximation Theorem nói gì?</p>
+<p class="a">MLP với 1 hidden layer đủ rộng có thể xấp xỉ bất kỳ continuous function nào tùy ý. Nhưng "đủ rộng" có thể exponential → thực tế dùng deep + narrower.</p>
+
+<p class="q">3. Vanishing gradient là gì? 3 kỹ thuật giải quyết?</p>
+<p class="a">Sigmoid/tanh derivative &le; 0.25. Nhân liên tục ở deep net → gradient về 0. Fix: (1) ReLU thay sigmoid, (2) Batch/Layer Norm, (3) residual connections.</p>
+
+<p class="q">4. Derive gradient của loss cross-entropy + softmax. Vì sao đẹp?</p>
+<p class="a">L = -Σ y·log(softmax(z)). ∂L/∂z = softmax(z) - y = y_hat - y. Đơn giản, không có sigmoid derivative — tránh vanishing.</p>
+
+<p class="q">5. Cho V18 (79 features, ~1250 samples/ticker, tabular). NN có win XGBoost không? Vì sao?</p>
+<p class="a">Không. Data size nhỏ, tabular, XGBoost inductive bias tốt hơn cho tabular (handle categorical, missing, mixed scale native). NN cần big data + augmentation không có ở stock. Empirically Kaggle top tabular đều XGBoost/LightGBM.</p>
+
+<p class="q">6. [Interview] Vì sao ∂L/∂z = y_hat - y đẹp như vậy khi kết hợp softmax + cross-entropy?</p>
+<p class="a">Chain rule: ∂L/∂z_i = Σ_j (∂L/∂y_hat_j)(∂y_hat_j/∂z_i). Với softmax ∂y_hat_j/∂z_i = y_hat_j(δ_ij - y_hat_i), và ∂L/∂y_hat_j = -y_j/y_hat_j. Sum lại: y_hat_i·Σy_j - y_i = y_hat_i - y_i (vì Σy_j = 1). Term sigmoid derivative bị cancel với term 1/y_hat trong CE → không vanishing gradient tại output. Đây là why "logits + F.cross_entropy" chuẩn hơn "softmax + NLL".</p>
+
+<p class="q">7. [Interview] Derivative của GELU tại z=0 là bao nhiêu? So với ReLU?</p>
+<p class="a">GELU(z) = z·Φ(z). GELU'(z) = Φ(z) + z·φ(z). Tại z=0: Φ(0)=0.5, φ(0)=1/√(2π)≈0.399, 0·0.399=0. Vậy GELU'(0) = 0.5. ReLU'(0) undefined (thường code = 0). GELU smooth qua 0 → gradient flow tốt hơn ReLU quanh z=0, đặc biệt cho Transformer với LayerNorm giữ z quanh 0.</p>
+
+<p class="q">8. [Interview] Nếu tôi thay ReLU bằng Identity trong MLP 3 layers, model thoái hóa về gì?</p>
+<p class="a">Về linear regression 1 layer. h1 = W1·x, h2 = W2·W1·x, y = W3·W2·W1·x = (W3W2W1)·x = W_eq·x. Composition của linear = linear. Non-linearity là điều kiện đủ (và cần) cho Universal Approximation.</p>
+
+<p class="q">9. [Interview] Batch size 1 vs 1024 ảnh hưởng gì đến gradient variance và convergence?</p>
+<p class="a">Batch=1: gradient noisy (variance cao), zigzag nhưng escape sharp minima → generalize tốt. Batch=1024: gradient smooth (average nhiều samples), converge nhanh về gần nhất minima, dễ sharp. Thực tế lớn: batch lớn cần LR lớn (linear scaling rule: LR ∝ batch) + warmup dài. LLM training batch 2M-4M tokens là chuẩn.</p>
+
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence & further reading</div>
+  <ul>
+    <li>Xem file <code>d:/New-jouney/predictor/guideline/modules/L3_1_nn_backprop.html</code> — đọc code implementation section 5, thử chạy trong Colab</li>
+    <li>V18 chọn XGBoost thay NN: <code>SOLUTION.md</code> section "Why tree-based"</li>
+    <li>Muốn build NN cho V21 (hybrid)? Xem <code>d:/New-jouney/predictor/backend/predict/</code> — thêm module NN cho re-ranking</li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>🎥 <a href="https://karpathy.ai/zero-to-hero.html">Karpathy — Neural Networks Zero to Hero</a> — build từ đầu, best video series</li>
+    <li>📖 <a href="https://d2l.ai/chapter_multilayer-perceptrons/index.html">D2L Chapter 5 — MLP</a></li>
+    <li>📄 <a href="http://neuralnetworksanddeeplearning.com/">Michael Nielsen — Neural Networks and Deep Learning</a> free book, backprop chapter</li>
+    <li>📄 Cybenko (1989) — Universal Approximation Theorem paper gốc</li>
+    <li>📄 Glorot & Bengio (2010) — Xavier init paper</li>
+    <li>📄 He, Zhang, Ren, Sun (2015) — Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification (Kaiming/He init, ICCV)</li>
+    <li>📄 <a href="https://arxiv.org/abs/1604.06174">Chen, Xu, Zhang, Guestrin (2016) — Training Deep Nets with Sublinear Memory Cost</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L2_1_bias_variance.html">← L2.1</a>
+  <a href="L3_2_optimizers.html">L3.2 · Optimizers →</a>
+</div>
+
+</div>
+</body>
+</html>

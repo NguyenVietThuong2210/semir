@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L8.7 — Multica (Managed Agents Platform)</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 8 · Module 7</div>
+  <h1>8.7 · Multica — Managed Agents Platform</h1>
+  <p class="subtitle">Open-source platform (Multica License — Apache-2.0-based với ràng buộc bổ sung, ~49k ★) turn coding agents (Claude Code, Codex, Cursor, Copilot CLI, Gemini, Kimi...) thành teammates thực sự: assign task, track progress, compound skills. Vendor-neutral, self-hosted. Tech stack: Go backend + Next.js web + Electron desktop + CLI daemon.</p>
+  <div class="level">Level 8 · AI Artifacts · ~35 phút</div>
+</div>
+<div class="container">
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Multica bằng ngôn ngữ đời thường</div>
+<p><strong>Trước Multica</strong>: Bạn có 5 AI coding agents (Claude Code, Cursor, Codex, Copilot CLI, Gemini). Muốn nhờ agent nào làm gì phải mở terminal riêng, copy paste task, chờ trả lời, quên mất context cũ. Giống thuê 5 freelancer nhưng không có phòng chung — chat qua Zalo với từng người mất kiểm soát.</p>
+<p><strong>Sau Multica</strong>: 1 dashboard duy nhất. Bạn tạo issue "sửa bug X trong file Y" → assign cho Claude Code (hoặc Codex, hoặc bất kỳ agent nào) → agent pickup task tự động, chạy trên runtime của bạn, báo tiến độ, log blocker, update status. Giống Jira nhưng cho AI agents thay vì con người.</p>
+<p><strong>Compound skills</strong>: skill 1 agent học được (ví dụ: "cách deploy PredictStock qua docker-compose") lưu vào skill library dùng lại cho các agent khác. Càng chạy càng khôn.</p>
+</div>
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>Multica giải quyết vấn đề gì (agent management fragmentation)</li>
+  <li>Architecture: Go backend, Next.js web, Electron desktop, CLI daemon</li>
+  <li>Task lifecycle: assign → execute → report → skill compound</li>
+  <li>Multi-agent support (12+ agents integrated)</li>
+  <li>So sánh với AutoGen Studio, LangGraph Cloud, Cursor Composer</li>
+  <li>Setup Multica cho project của bạn</li>
+</ul>
+
+<h2>1. Vấn đề Multica giải quyết</h2>
+
+<h3>1.1 Agent fragmentation</h3>
+
+<p>Coding agents 2024-2026 bùng nổ: Claude Code, Codex CLI, GitHub Copilot CLI, Cursor Agent, Gemini CLI, Kimi CLI, Kiro CLI, Qoder CLI, Trae, Aider, Continue.dev... Mỗi agent:</p>
+<ul>
+  <li>UX riêng (terminal, IDE plugin, web)</li>
+  <li>Context riêng — không share memory giữa các agent</li>
+  <li>Auth riêng, config riêng</li>
+  <li>Không có unified task queue</li>
+</ul>
+
+<h3>1.2 Missing management layer</h3>
+
+<table>
+<tr><th>Trước Multica</th><th>Cần thứ giống…</th></tr>
+<tr><td>5 agents, không thấy ai đang làm gì</td><td>Kanban board</td></tr>
+<tr><td>Task đưa cho agent A, agent B không biết</td><td>Shared issue tracker</td></tr>
+<tr><td>Agent A học "cách chạy migration DB", agent B lặp lại từ đầu</td><td>Skill library dùng chung</td></tr>
+<tr><td>Không biết agent chạy tại đâu, log ở đâu</td><td>Centralized runtime + logs</td></tr>
+<tr><td>Muốn approve action rủi ro → phải mở IDE tận nơi</td><td>Remote approve/reject</td></tr>
+</table>
+
+<p>Multica = Jira/Linear + Kubernetes + skills registry, tập trung cho AI agent workflows.</p>
+
+<h2>2. Architecture</h2>
+
+<pre><code>┌────────────────────────────────────────────────────────────┐
+│  Web app (Next.js)     Desktop app (Electron)              │
+│  Dashboard, Kanban, Chat UI, Approvals                     │
+└──────────────────┬─────────────────────────────────────────┘
+                   │  HTTP/WebSocket
+                   ↓
+┌────────────────────────────────────────────────────────────┐
+│  Multica Backend (Go)                                       │
+│  - Task queue + assignment logic                            │
+│  - Agent registry (which agents available, capabilities)    │
+│  - Skill library storage                                    │
+│  - Auth, RBAC, audit log                                    │
+│  - Notifications (Slack, email)                             │
+└──────────────────┬─────────────────────────────────────────┘
+                   │  gRPC / API
+                   ↓
+┌────────────────────────────────────────────────────────────┐
+│  multica-daemon (runs on user's machine or runner)          │
+│  - Receives task assignments                                │
+│  - Spawns agent process (claude, codex, cursor CLI...)      │
+│  - Streams stdout/stderr back                               │
+│  - Reports status transitions                               │
+└──────────────────┬─────────────────────────────────────────┘
+                   │
+                   ↓
+┌────────────────────────────────────────────────────────────┐
+│  Coding agents (installed locally)                          │
+│  claude-code · codex · cursor-agent · copilot · gemini ·    │
+│  kimi · kiro · qoder · trae · aider ...                     │
+└─────────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>Key insight</strong>: agents chạy trên <em>runtime của user</em> (laptop, dev server, CI runner) — Multica không chạy LLM inference. Nó chỉ điều phối. Điều này giữ:</p>
+<ul>
+  <li>Code + secrets local (không upload lên cloud)</li>
+  <li>Agent auth tokens (Claude API key, GitHub PAT) stay local</li>
+  <li>Multica backend chỉ giữ metadata + task graph</li>
+</ul>
+
+<h2>3. Task lifecycle</h2>
+
+<pre><code># 1. Human creates issue
+$ multica issue create "Add rate-limit middleware to /api/predict endpoint"
+→ Issue #142 created, unassigned
+
+# 2. Assign to agent
+$ multica issue assign 142 --agent claude-code
+→ Task queued for claude-code runner
+
+# 3. Runner pickup (autonomous)
+[daemon] pulled task #142
+[daemon] spawning claude-code with task context...
+[claude-code] reading backend/routers/predict.py
+[claude-code] proposed diff: +42 lines to add slowapi middleware
+[claude-code] status → needs_review
+
+# 4. Human review (via web/desktop UI)
+Review diff → Approve OR Request changes with comment
+
+# 5. Auto-apply + verify
+[daemon] applying diff...
+[daemon] running tests: pytest tests/test_predict.py
+[daemon] all pass → status = done
+
+# 6. Skill compound
+[skill-extractor] learned: "adding rate-limit to FastAPI endpoint"
+→ saved to project skill library
+→ next agent asked similar task can reference this
+</code></pre>
+
+<h3>Status flow</h3>
+<pre><code>backlog → assigned → in_progress → needs_review → approved → done
+                                       ↓
+                                    blocked (report to human)
+</code></pre>
+
+<h2>4. Multi-agent support</h2>
+
+<p>Multica hiện integrate 12+ coding agents. Cùng 1 task có thể assign cho agent khác nhau tuỳ thế mạnh:</p>
+
+<table>
+<tr><th>Agent</th><th>Multica plugin</th><th>Sweet spot</th></tr>
+<tr><td>Claude Code (Anthropic)</td><td>native</td><td>Complex refactor, multi-file changes, planning</td></tr>
+<tr><td>Codex CLI (OpenAI)</td><td>native</td><td>Quick code gen, tests</td></tr>
+<tr><td>GitHub Copilot CLI</td><td>native</td><td>Command generation, shell tasks</td></tr>
+<tr><td>Cursor Agent</td><td>bridge</td><td>IDE-integrated review</td></tr>
+<tr><td>Gemini CLI</td><td>native</td><td>Long-context (2M) analysis</td></tr>
+<tr><td>Kimi CLI (Moonshot)</td><td>native</td><td>Chinese docs, long-context</td></tr>
+<tr><td>Kiro CLI (AWS)</td><td>native</td><td>AWS infra tasks</td></tr>
+<tr><td>Qoder CLI</td><td>native</td><td>Enterprise on-prem</td></tr>
+<tr><td>Trae</td><td>native</td><td>ByteDance ecosystem</td></tr>
+<tr><td>Aider</td><td>bridge</td><td>Git-native workflow</td></tr>
+<tr><td>OpenClaw, OpenCode, Hermes, Pi</td><td>native</td><td>Various OSS agents</td></tr>
+</table>
+
+<h3>Routing example</h3>
+<pre><code># .multica/routing.yaml
+rules:
+  - if: task.type == "refactor" AND file_count > 3
+    assign: claude-code
+  - if: task.type == "unit_test"
+    assign: codex
+  - if: task.type == "aws_infra"
+    assign: kiro
+  - default: claude-code
+</code></pre>
+
+<h2>5. Compound skills — killer feature</h2>
+
+<p>Skill = reusable knowledge/procedure agent đã học 1 lần → dùng lại.</p>
+
+<pre><code>.multica/skills/
+├── deploy_docker_compose.md
+├── add_fastapi_endpoint.md
+├── run_alembic_migration.md
+├── setup_postgres_index.md
+└── manifest.json
+</code></pre>
+
+<h3>Ví dụ 1 skill</h3>
+<pre><code># deploy_docker_compose.md
+## When to use
+Sau khi thay đổi code backend, cần rebuild + restart container
+
+## Steps
+1. `docker compose build api`
+2. `docker compose up -d api`
+3. Verify health: `curl localhost:8000/health`
+4. Check logs 20s đầu: `docker compose logs -f api | head -50`
+
+## Common failures
+- Container OOM → tăng memory limit trong docker-compose.yml
+- Port conflict → `docker compose down` trước
+
+## Applied by
+- Task #78 (claude-code, 2026-06-15)
+- Task #142 (codex, 2026-07-01)
+</code></pre>
+
+<p><strong>Cách agent dùng</strong>: khi assign task tương tự, Multica inject relevant skills vào agent context → agent không phải "khám phá lại". Học compound (agent A học → agent B benefit).</p>
+
+<h2>6. 🔍 So sánh Multica với alternatives (chi tiết + decision matrix)</h2>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 Multica vs 4 alternatives — 15 dimensions</div>
+
+<table>
+<tr><th></th><th>Multica</th><th>AutoGen Studio</th><th>LangGraph Cloud</th><th>Cursor Composer</th><th>Devin (Cognition)</th></tr>
+<tr><td><strong>Category</strong></td><td>Managed agents platform</td><td>Multi-agent chat framework</td><td>Graph execution runtime</td><td>IDE-embedded agent</td><td>Autonomous coding agent</td></tr>
+<tr><td><strong>License</strong></td><td>Multica License (Apache-2.0-based + ràng buộc commercial-hosting)</td><td>MIT (OSS)</td><td>SaaS (proprietary)</td><td>Proprietary</td><td>Proprietary SaaS</td></tr>
+<tr><td><strong>Self-hosted</strong></td><td>✅ Full self-host</td><td>✅ OSS</td><td>❌ Cloud-only</td><td>❌</td><td>❌</td></tr>
+<tr><td><strong>Agent support (multiple vendors)</strong></td><td>⭐ 12+ CLI agents (Claude, Codex, Cursor, Gemini, Kimi...)</td><td>OpenAI + custom</td><td>LangGraph agents only</td><td>Cursor's built-in</td><td>Custom (Cognition's stack)</td></tr>
+<tr><td><strong>Task queue / Kanban</strong></td><td>⭐ First-class Jira-like</td><td>❌</td><td>❌ (execution only)</td><td>❌</td><td>Partial</td></tr>
+<tr><td><strong>Skill library</strong></td><td>⭐ Compound reusable</td><td>❌</td><td>❌</td><td>Partial (cursor rules)</td><td>Learned per-project</td></tr>
+<tr><td><strong>Human approval flow</strong></td><td>⭐ Built-in per task</td><td>Partial</td><td>Via interrupts (dev must code)</td><td>Inline diff review</td><td>Devin plans then executes</td></tr>
+<tr><td><strong>Team / multi-user</strong></td><td>⭐ RBAC + shared skills</td><td>❌ Single user</td><td>Partial (LangSmith)</td><td>❌ Personal</td><td>Enterprise plan</td></tr>
+<tr><td><strong>Runtime</strong></td><td>User's machine (daemon)</td><td>User's machine</td><td>Cloud</td><td>User's IDE</td><td>Cognition's cloud</td></tr>
+<tr><td><strong>Code + secrets stay local</strong></td><td>✅ Yes</td><td>✅</td><td>❌ Cloud sees</td><td>Depends</td><td>❌ Cloud sees</td></tr>
+<tr><td><strong>Task lifecycle</strong></td><td>⭐ Full: assign → execute → review → skill compound</td><td>Chat-based</td><td>Graph execution</td><td>Single-turn or agent mode</td><td>Autonomous full task</td></tr>
+<tr><td><strong>Vendor lock-in</strong></td><td>None (agent-agnostic)</td><td>Low</td><td>High (LangChain ecosystem)</td><td>High (Cursor IDE)</td><td>Very high</td></tr>
+<tr><td><strong>Best for</strong></td><td>⭐ Team ≥ 3 dev với multiple AI agents</td><td>Multi-agent research/prototype</td><td>Complex LangGraph agents cloud</td><td>Solo dev IDE workflow</td><td>Enterprise autonomous coding</td></tr>
+<tr><td><strong>Cost</strong></td><td>Free OSS (self-host)</td><td>Free OSS</td><td>$$$ per usage</td><td>$20/month subscription</td><td>$$$$ enterprise</td></tr>
+<tr><td><strong>Setup complexity</strong></td><td>Medium (deploy Go backend)</td><td>Low</td><td>Low (cloud UI)</td><td>Low (install IDE)</td><td>Low (SaaS signup)</td></tr>
+</table>
+
+<h4>Decision matrix — chọn platform nào?</h4>
+<table>
+<tr><th>Situation</th><th>Recommend</th></tr>
+<tr><td>Solo dev, 1 project</td><td>Cursor Composer / Claude Code standalone</td></tr>
+<tr><td>Team ≥ 3 dev, multiple AI agents (Claude + Codex + Cursor)</td><td>⭐ Multica (coordination)</td></tr>
+<tr><td>Complex LangGraph agents production cloud</td><td>LangGraph Cloud</td></tr>
+<tr><td>Multi-agent research / prototype</td><td>AutoGen Studio</td></tr>
+<tr><td>Enterprise autonomous coding (buy vs build)</td><td>Devin</td></tr>
+<tr><td>OSS + self-host required (compliance)</td><td>Multica hoặc AutoGen</td></tr>
+<tr><td>Compound learning across team</td><td>⭐ Multica (skill library)</td></tr>
+</table>
+
+<p><strong>Positioning quan trọng</strong>: Multica <em>KHÔNG</em> cạnh tranh với LangGraph/AutoGen (frameworks) hay Cursor (IDE). Nó lấp khoảng "team-level coordination" — quản lý nhiều agents từ nhiều vendors như teammates trong 1 dashboard. Enterprise dev team dùng Cursor + Claude Code + Codex → Multica orchestrate cả 3.</p>
+
+<p><strong>Insight quan trọng</strong>: 2024-2025 xu hướng "managed agents platforms" đang emerge — Multica là player OSS đầu tiên nghiêm túc. Nếu bạn build product AI-augmented dev cho enterprise → Multica category (không phải LangChain category) là hướng đi.</p>
+</div>
+
+<h2>7. Case study (hypothetical) — Áp dụng Multica cho PredictStock</h2>
+
+<div class="example-box">
+<div class="title">Backlog PredictStock qua Multica — ví dụ minh họa, chưa triển khai thật</div>
+<p style="color: var(--text-dim); font-size: 0.9em;">Lưu ý: đây là kịch bản minh họa cách Multica CÓ THỂ áp dụng, không phải 1 lần triển khai thật đã đo lường — repo PredictStock hiện chưa có thư mục <code>.multica/</code> nào.</p>
+<p><strong>Setup</strong>:</p>
+<pre><code>$ multica init  # trong repo PredictStock
+$ multica agent register claude-code --priority=high
+$ multica agent register codex --priority=medium
+
+# Import backlog từ v18-master-execution-plan.md
+$ multica issue import v18-master-execution-plan.md
+→ N issues created (minh họa)
+</code></pre>
+
+<p><strong>Routing rules cho project</strong>:</p>
+<pre><code>rules:
+  - if: files_touched includes "backend/predict/**"
+    assign: claude-code   # ML logic quan trọng, cần Opus
+  - if: files_touched includes "frontend/**"
+    assign: cursor-agent  # frontend-first workflow
+  - if: task.type == "test_only"
+    assign: codex         # cheap
+  - if: task.type == "docs"
+    assign: gemini        # long-context tốt cho docs
+</code></pre>
+
+<p><strong>Skills đã compound sau 3 tháng</strong>:</p>
+<ul>
+  <li>run_v18_train_parallel.md — cách split 86 tickers × 8 workers</li>
+  <li>check_docker_stats.md — verify RAM/CPU limits trước launch heavy job</li>
+  <li>read_ohlcv_from_db.md — pattern chuẩn dùng SessionLocal + batch</li>
+  <li>daily_investor_report_qa_gate.md — 8 checks trước declare success</li>
+</ul>
+
+<p><strong>Kết quả kỳ vọng</strong> (chưa đo thật): giảm cycle time nhờ agent không phải lặp lại khám phá pattern agent khác đã học tuần trước — cần chạy pilot thật để có con số cụ thể trước khi trích dẫn %.</p>
+</div>
+
+<h2>8. Setup — quickstart</h2>
+
+<pre><code># 1. Install (multiple options)
+# Option A: Homebrew
+$ brew install multica-ai/tap/multica
+
+# Option B: Docker
+$ docker run -d --name multica -p 3000:3000 multicaai/multica:latest
+
+# Option C: from source
+$ git clone https://github.com/multica-ai/multica
+$ cd multica && make install
+
+# 2. Init project
+$ cd your-project
+$ multica init
+→ .multica/ folder created
+
+# 3. Register agents (must be installed separately)
+$ multica agent register claude-code
+$ multica agent register codex
+
+# 4. Start daemon (runs agents when tasks assigned)
+$ multica daemon start
+
+# 5. Open dashboard
+$ multica web
+→ http://localhost:3000
+</code></pre>
+
+<h2>8.5 · Workflow engine — DAG execution, retries, dead-letter queue</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">⚙️ Deep-dive — Multi-agent orchestration internals</div>
+
+<h4>Multi-agent = distributed system</h4>
+<p>Khi có &gt;3 agents chạy song song trên task inter-dependent, bạn có 1 distributed system. Cần đầy đủ: DAG scheduler, retry policy, DLQ, idempotency, monitoring. Multica + AI Orchestrator handle những gì?</p>
+
+<h4>DAG execution model</h4>
+<pre><code># Task graph (ai_orchestrator SDLC):
+SpecAnalyze ──┐
+              ├──► TaskDecompose ──► Engineer ──► Reviewer ──► Tester ──► PRWriter
+Constitution ─┘                                     ▲                       │
+                                                    └────── (retry if fail)─┘
+# Properties:
+# - Node = agent invocation
+# - Edge = data dependency (Engineer needs TaskDecompose output)
+# - Fan-out: TaskDecompose spawn N Engineer runs (per task)
+# - Join: Reviewer wait ALL engineers done
+</code></pre>
+
+<h4>Retry policy matrix</h4>
+<table>
+<tr><th>Failure type</th><th>Strategy</th><th>Max attempts</th><th>Backoff</th></tr>
+<tr><td>Transient (rate limit, network)</td><td>Exponential retry</td><td>5</td><td>2^n seconds + jitter</td></tr>
+<tr><td>LLM refuse (safety)</td><td>Reprompt với clarification</td><td>2</td><td>None</td></tr>
+<tr><td>Tool timeout</td><td>Retry với longer timeout</td><td>3</td><td>Linear 30s</td></tr>
+<tr><td>Test fail (Engineer)</td><td>Feed error back, retry code</td><td>3</td><td>None</td></tr>
+<tr><td>Reviewer REJECT</td><td>Engineer revise, resubmit</td><td>3</td><td>None (loop until ACCEPT hoặc HITL)</td></tr>
+<tr><td>Unrecoverable (spec ambiguous)</td><td>→ Dead-letter queue → HITL</td><td>0</td><td>N/A</td></tr>
+</table>
+
+<h4>Ví dụ số cụ thể — exponential backoff cho "Transient" failure</h4>
+<pre><code># Công thức: wait = 2^attempt (giây) + jitter random(0, 1s)
+# attempt đánh số từ 0 (lần retry đầu tiên sau khi fail lần 1)
+
+attempt 0: wait = 2^0 = 1s   + jitter → ~1.3s
+attempt 1: wait = 2^1 = 2s   + jitter → ~2.7s
+attempt 2: wait = 2^2 = 4s   + jitter → ~4.5s
+attempt 3: wait = 2^3 = 8s   + jitter → ~8.2s
+attempt 4 (max attempts=5 → lần retry cuối): wait = 2^4 = 16s + jitter → ~16.6s
+
+# Tổng thời gian chờ tối đa trước khi move sang DLQ ≈ 1+2+4+8+16 = 31s (+ jitter)
+# Jitter (random 0-1s cộng thêm) tránh "thundering herd" — nếu 100 task cùng fail
+# cùng lúc (VD provider outage), không cho tất cả retry đúng cùng 1 giây → tránh
+# đập lại server đang recover 1 lượt duy nhất.
+</code></pre>
+
+<h4>Retry → DLQ state transition</h4>
+<pre><code>Task attempt fails
+      │
+      ▼
+Transient? ──yes──► exponential backoff (2^n + jitter) ──► retry ──┐
+      │no                                                          │
+      ▼                                                    attempts < max?
+Unrecoverable ──────────────────────────────────────────────────┐ │yes → loop back to "Task attempt"
+(spec ambiguous)                                                 │ │no
+      │                                                          ▼ ▼
+      └────────────────────────────────────────────────► Dead-Letter Queue
+                                                                  │
+                                                          HITL reviewer picks:
+                                                     re-queue / won't-fix / escalate
+</code></pre>
+
+<h4>Dead-Letter Queue (DLQ)</h4>
+<pre><code># Task fail max retries → move to DLQ
+dlq_entry = {
+  "task_id": "auth-middleware-v2",
+  "failed_at": "2026-07-05T10:30:00Z",
+  "agent": "engineer",
+  "attempts": 3,
+  "last_error": "tests fail after 3 revisions",
+  "trace_id": "abc123",
+  "requires": "human_review",
+  "artifacts": ["failed_pr_diff.patch", "test_output.log"]
+}
+# HITL reviewer picks from DLQ dashboard, decides:
+#   → re-queue with hint
+#   → mark won't-fix
+#   → escalate to senior
+</code></pre>
+
+<h4>Idempotency — critical cho multi-agent</h4>
+<p>Agent retry có thể spawn duplicate side effect (git commit x2, PR create x2, email send x2). Fix: idempotency key per task.</p>
+<pre><code>with idempotency_key(f"pr-create-{task_id}"):
+    if not exists(f"prs/{task_id}"):
+        pr = github.create_pr(...)
+        save_state(f"prs/{task_id}", pr.number)
+    else:
+        return get_state(f"prs/{task_id}")  # already done
+</code></pre>
+
+<h4>DAG runtime options</h4>
+<table>
+<tr><th>Runtime</th><th>Style</th><th>Best cho</th></tr>
+<tr><td><strong>LangGraph</strong></td><td>State machine, checkpointer</td><td>Agent loop + HITL breakpoint</td></tr>
+<tr><td><strong>Temporal</strong></td><td>Durable execution, event sourcing</td><td>Long-running, retry, DLQ built-in</td></tr>
+<tr><td><strong>Prefect / Airflow</strong></td><td>Classical DAG</td><td>Batch pipelines, not real-time agent</td></tr>
+<tr><td><strong>Multica custom</strong></td><td>Task queue + agent runners</td><td>Multi-CLI-agent orchestration</td></tr>
+</table>
+
+<h4>VN scenario — PredictStock nightly training pipeline</h4>
+<pre><code>DAG: fetch_data → train_models → backtest → generate_report → notify_zalo
+  - fetch_data fail (VNDirect API down) → retry 3× exp backoff
+  - train_models fail (OOM) → DLQ + Slack alert
+  - backtest fail (metric ngoại lai) → auto rollback, dùng model v_prev
+  - notify_zalo idempotency key = date → không double-send
+</code></pre>
+
+<h4>Interview Q&A</h4>
+<ol>
+  <li><strong>Q: DAG vs state machine cho agent?</strong> A: DAG khi structure fixed (SDLC 6 stages). State machine khi có loop dynamic (agent decide retry vs escalate). LangGraph = state machine, Airflow = DAG.</li>
+  <li><strong>Q: DLQ vì sao quan trọng?</strong> A: Without DLQ, failed task chết silent → build up backlog invisible. Với DLQ, failure visible, prioritizable, human interventable. Critical cho production agent systems.</li>
+  <li><strong>Q: Idempotency key generate thế nào?</strong> A: Hash(task_id + input_snapshot). Same input → same key → dedupe. Include timestamp bucket nếu muốn retry different day (VD hourly bucket).</li>
+  <li><strong>Q: Multi-agent race condition — ví dụ?</strong> A: 2 Engineer agents cùng edit config.yaml (task_1 và task_2 fan-out). Fix: lock per file (pessimistic) hoặc merge với conflict-detector (optimistic). PredictStock dùng git branch-per-task để isolate.</li>
+</ol>
+</div>
+
+<h2>9. Limitations + when NOT to use</h2>
+
+<ul>
+  <li><strong>Solo dev on 1 project</strong>: overhead của Kanban+skills không đáng. Dùng agent trực tiếp.</li>
+  <li><strong>Team đã dùng Linear/Jira nghiêm túc</strong>: cần integration path (Multica có API, chưa native adapters cho mọi issue tracker).</li>
+  <li><strong>Task rất nhỏ (&lt; 5 phút)</strong>: overhead assign/track không justify.</li>
+  <li><strong>Sensitive proprietary code</strong>: verify self-hosted config kỹ; skill library có thể chứa hint về codebase → phải access-control.</li>
+</ul>
+
+<h2>10. Ecosystem</h2>
+
+<ul>
+  <li><strong>multica-ai/multica</strong> — main platform (Go + Next.js + Electron)</li>
+  <li><strong>multica-ai/multica-cli</strong> — agent skill để operate Multica từ CLI (recursive: Multica quản Multica)</li>
+  <li><strong>multica-agent</strong> — org chứa các community agent plugins</li>
+</ul>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. Multica khác LangGraph ở đâu?</p>
+<p class="a">LangGraph = framework để build 1 agent (state, node, edge). Multica = platform để quản nhiều agent (từ nhiều vendor) như teammates — Kanban, skills, approvals, RBAC. Multica có thể quản agents build bằng LangGraph.</p>
+
+<p class="q">2. Multica có tự chạy LLM inference không?</p>
+<p class="a">Không. Multica là orchestration/management layer. LLM call vẫn qua agent CLI (Claude Code, Codex, ...) chạy trên runtime của user với API key của user. Multica chỉ điều phối task + track state. Điều này giữ code + secrets local.</p>
+
+<p class="q">3. Compound skills hoạt động thế nào?</p>
+<p class="a">Sau mỗi task thành công, Multica extract "cách agent giải" thành markdown skill lưu vào <code>.multica/skills/</code>. Task tương lai tương tự → skill được inject vào context agent (bất kỳ agent nào, không chỉ agent gốc). Compound theo project + có thể share cross-project.</p>
+
+<p class="q">4. Khi nào NÊN dùng Multica?</p>
+<p class="a">Team ≥3 dev + ≥2 coding agents + workload &gt;10 task/tuần. Solo dev 1 agent không cần. Team lớn với Jira quen thuộc → cần integration path.</p>
+
+<p class="q">5. Multica so với Cursor Composer?</p>
+<p class="a">Cursor Composer = agent embed trong IDE, edit code interactive. Multica = platform tổ chức nhiều agent (Cursor có thể là 1) cross-project cross-team. Bổ sung nhau, không cạnh tranh — có thể dùng Cursor cho code editing + Multica cho backlog management.</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence</div>
+  <ul>
+    <li>GitHub: <a href="https://github.com/multica-ai/multica">multica-ai/multica</a> — Multica License (custom, Apache-2.0-based), ~49k stars</li>
+    <li>CLI plugin: <a href="https://github.com/multica-ai/multica-cli">multica-ai/multica-cli</a></li>
+    <li>Docs: <a href="https://multica.ai/docs/project-resources">multica.ai/docs</a></li>
+    <li>Deep-dive review: <a href="https://www.arunbaby.com/ai-agents/0089-multica-agents-as-teammates/">Arun Baby — Multica as teammates</a></li>
+    <li>Homepage: <a href="https://multica.ai/">multica.ai</a></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📖 <a href="https://github.com/multica-ai/multica">Main repo (README, architecture docs)</a></li>
+    <li>📖 <a href="https://github.com/multica-ai/multica/releases">Release notes — evolution timeline</a></li>
+    <li>📖 <a href="https://github.com/topics/multica">GitHub topic — related community projects</a></li>
+    <li>📖 <a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a> (design principles behind agent-as-teammate)</li>
+    <li>📖 <a href="https://github.com/microsoft/autogen">AutoGen (Microsoft)</a> — alternative multi-agent framework</li>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/cloud/">LangGraph Cloud</a> — SaaS alternative</li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L8_6_ai_frameworks.html">← L8.6</a>
+  <a href="L9_1_advanced_rag.html">L9.1 · Advanced RAG →</a>
+</div>
+
+</div>
+</body>
+</html>

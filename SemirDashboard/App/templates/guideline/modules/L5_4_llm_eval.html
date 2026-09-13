@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L5.4 — LLM Evaluation</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 5 · Module 4</div>
+  <h1>5.4 · LLM Evaluation</h1>
+  <p class="subtitle">Auto-eval, LLM-as-judge, benchmarks, human eval. MMLU, HumanEval, MT-Bench, Arena. Build custom eval set cho use case.</p>
+  <div class="level">Level 5 · LLM Systems · ~30 phút</div>
+</div>
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<ul>
+  <li>4 evaluation approaches + pros/cons</li>
+  <li>Setup LLM-as-judge properly</li>
+  <li>Understand benchmark limitations (contamination, saturation)</li>
+  <li>Build eval set cho V20 investor thesis skill</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 LLM Eval bằng ngôn ngữ đời thường</div>
+<p><strong>Đánh giá đầu bếp</strong>:</p>
+<ol>
+  <li><strong>Reference-based</strong>: Yêu cầu nấu 1 món chuẩn (trứng ốp la) → so sánh với ảnh mẫu. Đúng recipe = pass. Dùng khi có "đúng/sai" rõ ràng (dịch, tóm tắt).</li>
+  <li><strong>Pairwise (A/B)</strong>: 2 đầu bếp nấu cùng món → khách chọn ngon hơn. Dễ hơn chấm điểm tuyệt đối.</li>
+  <li><strong>Human rating</strong>: Khách chấm 1-5 sao. Chuẩn vàng nhưng đắt, chậm, dễ bias.</li>
+  <li><strong>LLM-as-judge</strong>: Đầu bếp khác (Claude/GPT-4) chấm điểm. Rẻ, scale được, nhưng có bias (thích câu dài, position bias).</li>
+</ol>
+<p><strong>Bench (MMLU, HumanEval)</strong> = kỳ thi tiêu chuẩn hoá — so sánh model. Nhưng không thay thế eval trên use case cụ thể của bạn.</p>
+</div>
+
+<h2>1. 4 approaches</h2>
+
+<table>
+<tr><th>Approach</th><th>Cost</th><th>Reliability</th></tr>
+<tr><td>Auto-metric (BLEU, ROUGE)</td><td>$0</td><td>Low (weak correlation with human)</td></tr>
+<tr><td>Regex/exact match</td><td>$0</td><td>OK for structured tasks</td></tr>
+<tr><td>LLM-as-judge</td><td>$$</td><td>Good with calibration</td></tr>
+<tr><td>Human eval</td><td>$$$$</td><td>Gold standard, slow</td></tr>
+</table>
+
+<h2>2. Auto-metrics</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">n-gram là gì? (nền tảng của BLEU/ROUGE)</div>
+<p>n-gram = cụm N từ liên tiếp trong câu. Câu "VN-Index tăng mạnh hôm nay" có các <strong>2-gram (bigram)</strong>: "VN-Index tăng", "tăng mạnh", "mạnh hôm", "hôm nay". BLEU/ROUGE hoạt động bằng cách đếm bao nhiêu n-gram của câu model sinh ra TRÙNG với câu reference (đáp án mẫu) — không hiểu nghĩa, chỉ đếm trùng chữ.</p>
+<p><strong>Ví dụ tính BLEU thô (n=2)</strong>: Reference: "Cổ phiếu tăng mạnh hôm nay". Model output: "Cổ phiếu tăng rất mạnh hôm nay". Bigram của reference: {Cổ-phiếu, phiếu-tăng, tăng-mạnh, mạnh-hôm, hôm-nay} = 5 bigram. Bigram của output trùng với reference: {Cổ-phiếu, phiếu-tăng, mạnh-hôm, hôm-nay} = 4/6 bigram của output khớp → precision ~0.67. Model chỉ chêm thêm 1 từ "rất" nhưng đã làm giảm điểm — đây chính là lý do BLEU "phạt oan" câu diễn đạt khác nhưng đúng nghĩa.</p>
+</div>
+<ul>
+  <li><strong>BLEU</strong>: đo precision n-gram (bao nhiêu % n-gram của output có xuất hiện trong reference). Translation, summarization. Weak for creative gen — 2 câu đúng nghĩa nhưng khác chữ vẫn bị điểm thấp.</li>
+  <li><strong>ROUGE</strong>: đo recall n-gram (bao nhiêu % n-gram của reference có xuất hiện trong output) — ngược hướng với BLEU. Summarization. Same weakness as BLEU.</li>
+  <li><strong>Perplexity</strong>: exp(loss) — <em>loss</em> ở đây là cross-entropy loss, đo model "bất ngờ" bao nhiêu khi thấy token thực tế tiếp theo (loss cao = model không đoán được, loss thấp = model đoán đúng hướng). Perplexity là loss được "đổi thang" dễ đọc hơn: perplexity=1 nghĩa là model đoán đúng 100% chắc chắn, perplexity=100 nghĩa là model bối rối như đang đoán ngẫu nhiên giữa 100 lựa chọn. Language modeling. Lower = model tin token thực tế hơn.</li>
+  <li><strong>Exact match / F1</strong>: for closed QA (SQuAD).</li>
+</ul>
+
+<h2>3. LLM-as-judge (Zheng 2023, MT-Bench)</h2>
+
+<pre><code>Prompt to judge (Claude/GPT-4):
+
+Rate response quality 1-10 based on:
+- Correctness (facts accurate)
+- Helpfulness (addresses user request)
+- Clarity (well-structured)
+
+User: {original_prompt}
+Response: {model_output}
+Reference (optional): {ground_truth}
+
+Explain reasoning briefly, then rate.
+</code></pre>
+
+<h3>Pitfalls</h3>
+
+<div class="callout warn">
+<div class="label">Biases</div>
+<ul>
+  <li><strong>Verbosity bias</strong>: judge prefer longer answers → gaming.</li>
+  <li><strong>Position bias</strong>: A/B compare, prefer first / second position → randomize order.</li>
+  <li><strong>Self-enhancement bias</strong>: judge model prefer own family (Claude judge prefers Claude output).</li>
+  <li><strong>Formatting bias</strong>: markdown better than plain text.</li>
+</ul>
+<p>Fix: multi-judge (average), randomize positions, control prompt format.</p>
+</div>
+
+<h2>4. Benchmarks</h2>
+
+<table>
+<tr><th>Benchmark</th><th>Test what</th><th>Best model 2025</th></tr>
+<tr><td>MMLU</td><td>Knowledge across 57 subjects</td><td>~89% (Claude 3.5 Opus, GPT-4o)</td></tr>
+<tr><td>HumanEval</td><td>Python code correctness</td><td>~94% (Claude 3.5 Sonnet)</td></tr>
+<tr><td>MATH</td><td>Math word problems</td><td>~85% (o1-preview)</td></tr>
+<tr><td>GPQA</td><td>PhD-level science</td><td>~60%</td></tr>
+<tr><td>MT-Bench</td><td>Multi-turn conversation</td><td>~9/10 (top LLMs)</td></tr>
+<tr><td>Chatbot Arena</td><td>Human blind preference</td><td>Elo ranking, live</td></tr>
+</table>
+<p><strong>Elo ranking là gì?</strong> Hệ thống chấm điểm bắt nguồn từ cờ vua: mỗi model có 1 điểm số; sau mỗi trận đấu (human chọn A hay B thắng), model thắng LẤY điểm từ model thua — thắng model điểm cao được cộng nhiều hơn thắng model điểm thấp (giống thắng kèo dưới không đáng bao nhiêu). Điểm hội tụ dần về đúng "sức mạnh tương đối" sau hàng chục nghìn trận — đây là lý do Chatbot Arena cần traffic sống liên tục thay vì chấm 1 lần rồi thôi.</p>
+
+<h3>Benchmark limitations</h3>
+
+<div class="callout danger">
+<div class="label">Contamination</div>
+<p>Test set may leak vào pretrain data (crawl public benchmarks). Model có thể "memorize" not "reason". → New benchmark saturate quickly. Solution: private eval set, held-out data post model release.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">Saturation</div>
+<p>MMLU 88%+ tất cả top models — không distinguish. Cần harder benchmark (GPQA, Frontier Math).</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 5 LLM eval methods head-to-head (đọc SAU sections 1-4)</div>
+
+<table>
+<tr><th></th><th>Reference-based (BLEU/ROUGE)</th><th>Auto-metric (perplexity)</th><th>LLM-as-judge</th><th>Human eval</th><th>Benchmark suites (MMLU/HumanEval)</th></tr>
+<tr><td><strong>Cần ground truth?</strong></td><td>✅ Cần reference</td><td>Không (tự-compute)</td><td>Không</td><td>Không (rate directly)</td><td>✅ Đã có</td></tr>
+<tr><td><strong>Cost per eval</strong></td><td>Rẻ (compute string overlap)</td><td>Rẻ nhất</td><td>~$0.01-0.1 per pair</td><td>~$1-10 per rating</td><td>~$0.10 per benchmark</td></tr>
+<tr><td><strong>Scale</strong></td><td>1000+ /giờ</td><td>10000+ /giờ</td><td>1000 /giờ</td><td>50-100 /giờ</td><td>1 lần setup, tái sử dụng</td></tr>
+<tr><td><strong>Chất lượng</strong></td><td>Kém cho generative (giết creativity)</td><td>Rất kém (chỉ ngữ pháp)</td><td>Trung bình-Tốt (có bias)</td><td>⭐ Gold standard</td><td>Tốt cho ranking model</td></tr>
+<tr><td><strong>Bias</strong></td><td>Ưu chuỗi giống reference</td><td>Ưu common phrases</td><td>Position bias, length bias, self-preference</td><td>Cultural/individual bias</td><td>Ưu benchmark distribution</td></tr>
+<tr><td><strong>Reproducible</strong></td><td>✅ Deterministic</td><td>✅</td><td>Với seed cố định</td><td>❌ Rater khác nhau</td><td>✅</td></tr>
+<tr><td><strong>Dùng cho</strong></td><td>MT, summarization (short)</td><td>Model pretraining monitor</td><td>Compare 2 models, ranking</td><td>Final validation</td><td>Compare model families</td></tr>
+</table>
+
+<h4>Case study — "Model A và Model B nào tốt hơn cho chatbot?"</h4>
+<pre><code>=== BLEU (SAI cho chatbot) ===
+"Cảm ơn bạn!" vs "Bạn nhận được lời cảm ơn từ tôi." → BLEU 0.15
+Cả 2 correct chỉ khác wording → BLEU misleading
+
+=== Perplexity ===
+Đo trên test corpus → không capture "hữu ích", "friendly"
+
+=== LLM-as-judge (Claude judge GPT vs Gemini) ===
+Prompt: "Which response is more helpful?"
+Response A: 85% wins → A better
+Nhưng có position bias — swap A/B thì kết quả có thể đổi.
+Fix: random order + kappa >0.6 with human sample.
+  (kappa = Cohen's κ, thước đo mức đồng thuận giữa 2 người/hệ thống chấm —
+   0 nghĩa là đồng thuận không hơn gì may rủi, 1 là đồng thuận tuyệt đối;
+   thang điểm đầy đủ giải thích ở §4.8 bên dưới)
+
+=== Human eval (100 pairs, 3 raters) ===
+Kappa 0.72 → reliable.
+A wins 65% → A better. Confidence interval ±9% (SE=√(0.65×0.35/100)≈0.048, 95% margin=1.96×0.048≈9.4pp — rộng hơn case n=200 ở trên vì mẫu nhỏ hơn, đúng chiều thống kê).
+Cost: $500-1000 nhưng đáng tin cậy.
+
+=== MT-Bench ===
+Standardized 80 multi-turn questions
+Judge by GPT-4 với known prompts
+Model A: 8.2/10, Model B: 7.9/10
+Compare cross-model ranking OK.
+</code></pre>
+
+<h4>Decision matrix</h4>
+<table>
+<tr><th>Task</th><th>Chọn</th></tr>
+<tr><td>Model development iteration</td><td>Auto-metric + small human eval set</td></tr>
+<tr><td>Compare 2 candidates before deploy</td><td>LLM-as-judge (fast) + Human eval (final)</td></tr>
+<tr><td>Track training progress</td><td>Perplexity + benchmark subset</td></tr>
+<tr><td>Compare foundation models</td><td>MMLU / HumanEval / MT-Bench</td></tr>
+<tr><td>Final production validation</td><td>⭐ Human eval + user A/B test</td></tr>
+<tr><td>MT translation quality</td><td>BLEU + human raters</td></tr>
+<tr><td>Summarization</td><td>ROUGE + LLM-as-judge</td></tr>
+</table>
+
+<p><strong>Insight quan trọng</strong>: BLEU/ROUGE gần như đã bị đào thải cho generative task (còn dùng cho MT ngắn). Chuẩn hiện tại (2024-2025): LLM-as-judge cho fast iteration + Human eval cho final decision. Position bias là bug lớn nhất của LLM judge — luôn double-swap + check kappa với human.</p>
+</div>
+
+<h2>4.5 — Pointwise vs Pairwise: chọn đúng giảm noise 3×</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Ẩn dụ VN — chấm hoa hậu</div>
+<table>
+<tr><th></th><th>Pointwise (chấm điểm)</th><th>Pairwise (so đôi)</th></tr>
+<tr><td>Cách</td><td>Rate mỗi response 1-10</td><td>Cho 2 response A, B → chọn tốt hơn</td></tr>
+<tr><td>Ẩn dụ</td><td>Chấm mỗi thí sinh 1-10</td><td>2 thí sinh đứng cạnh, chọn 1</td></tr>
+<tr><td>Cognitive load</td><td>Cao (calibrate scale)</td><td>Thấp (chỉ so sánh)</td></tr>
+<tr><td>Inter-rater agreement (κ)</td><td>0.3-0.5 (noise cao)</td><td>0.6-0.8 (ít noise hơn)</td></tr>
+<tr><td>Sample cần</td><td>~500 để tin cậy</td><td>~150 cặp</td></tr>
+<tr><td>Output</td><td>Điểm tuyệt đối</td><td>Ranking / win rate</td></tr>
+<tr><td>Position bias</td><td>Không</td><td>Có (fix: swap A/B)</td></tr>
+</table>
+<p><strong>Rule</strong>: development iteration + model comparison = pairwise (Arena style). Tracking absolute quality theo thời gian = pointwise với rubric. LLM-as-judge pairwise chính xác hơn pointwise 15-25%.</p>
+</div>
+
+<h2>4.7 — Rubric-based eval: định nghĩa rõ mới đo được</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">Từ "response có tốt không" → rubric checklist</div>
+<pre><code># Rubric cho investor thesis (V20 style)
+{
+  "criteria": [
+    {"name": "price_accuracy",
+     "check": "All numbers within ±2% of current_price",
+     "weight": 0.30, "score": [0, 1]},
+    {"name": "rule_compliance_R2",
+     "check": "entry ≤ current × 1.05 AND stop < entry < target",
+     "weight": 0.20, "score": [0, 1]},
+    {"name": "reasoning_quality",
+     "check": "Multi-timeframe context + catalyst + risk section",
+     "weight": 0.25, "score": [1, 2, 3]},
+    {"name": "actionability",
+     "check": "Clear entry/stop/target, no vague 'monitor'",
+     "weight": 0.15, "score": [1, 2, 3]},
+    {"name": "format_compliance",
+     "check": "JSON schema valid + word count ≤ 200",
+     "weight": 0.10, "score": [0, 1]},
+  ]
+}
+</code></pre>
+<p><strong>Vì sao rubric &gt; free-form judge?</strong> Free-form judge trả 1-10 → 2 judges khác nhau 3 điểm. Rubric buộc judge answer từng câu binary/small-scale → κ jumps từ 0.4 → 0.75.</p>
+</div>
+
+<h2>4.8 — Offline vs Online eval + Statistical Significance</h2>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">Đừng ship khi p-value chưa đủ</div>
+<p><strong>Offline</strong>: eval set cố định, LLM-as-judge / rubric. Fast iteration nhưng không capture user behavior thật.</p>
+<p><strong>Online</strong>: A/B test production, đo real metrics (satisfaction, retry rate, conversion). Slow nhưng ground truth.</p>
+<p><strong>Wilson CI là gì?</strong> Wilson score interval — 1 công thức tính khoảng tin cậy (confidence interval) cho tỷ lệ %, chính xác hơn công thức thông thường (normal approximation) khi mẫu nhỏ hoặc tỷ lệ gần 0%/100% — dùng thay vì công thức CI đơn giản chính vì lý do đó.</p>
+<pre><code># Win rate + Wilson CI cho A/B pairwise
+n = 200 comparisons; A wins 118, B wins 82; ties 0
+p_A = 118/200 = 0.59
+95% Wilson CI = [0.52, 0.66]   → LOWER bound > 0.5 → A significantly better
+
+Sample size cần cho win rate 55% vs 50% (power 0.8):
+  n ≈ (1.96+0.84)² × 2×0.25 / 0.05²
+
+  # Giải thích từng phần:
+  # 1.96 = z-score ứng với 95% confidence (mức tin cậy chuẩn ngành)
+  # 0.84 = z-score ứng với 80% power (xác suất phát hiện được khác biệt thật nếu nó tồn tại)
+  # 2×0.25 = 2 × p×(1-p) với p=0.5 (trường hợp "khó phân biệt nhất", variance
+  #          lớn nhất của tỷ lệ nhị phân — dùng làm ước lượng AN TOÀN, chưa
+  #          biết win rate thật nên giả định xấu nhất)
+  # 0.05² = bình phương của "khác biệt nhỏ nhất muốn phát hiện" (55%-50%=5%=0.05,
+  #          gọi là MDE — Minimum Detectable Effect). Muốn phát hiện khác biệt
+  #          CÀNG NHỎ → mẫu số càng nhỏ → n càng LỚN (khó phát hiện hơn cần nhiều data hơn)
+  # Càng muốn chắc chắn (confidence cao) + càng muốn chắc phát hiện được (power cao)
+  #   + càng muốn phát hiện khác biệt nhỏ (MDE nhỏ) → n càng lớn
+
+  n ≈ (1.96+0.84)² × 2×0.25 / 0.05² = 1568 comparisons
+
+Bootstrap CI (khi score continuous):
+  Resample 1000× → 95% CI of mean difference
+  Reject null nếu 0 ∉ CI
+
+Multiple comparison correction:
+  Test 10 rubric criteria → Bonferroni α=0.05/10=0.005
+  Không correct → false positive rate 40%
+</code></pre>
+<p><strong>Kappa (Cohen's κ) interpretation</strong>: &lt;0.2 poor · 0.2-0.4 fair · 0.4-0.6 moderate · 0.6-0.8 substantial · &gt;0.8 near-perfect. Sub-0.6 = eval unreliable, đừng deploy based on it.</p>
+</div>
+
+<h2>4.9 — Calibration: model có BIẾT khi nào nó có thể sai không?</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Mọi phương pháp eval ở mục 1-4 đo "model trả lời ĐÚNG hay SAI bao nhiêu %" — nhưng có 1 câu hỏi KHÁC hoàn toàn: khi model NÓI "tôi chắc 95%", nó có thực sự đúng ~95% số lần không? Giống 1 học sinh làm bài thi: điểm số (accuracy) đo học sinh giỏi cỡ nào, nhưng CALIBRATION đo học sinh có "tự biết mình" không — 1 học sinh nói "chắc chắn 100%" cho MỌI câu trả lời (kể cả câu sai) là học sinh KHÔNG được calibrate, dù điểm thi có thể vẫn cao.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: rất nhiều ứng dụng thực tế (investor thesis, medical advice, code generation) cần model biết "câu này tôi không chắc, nên double-check" — không chỉ cần accuracy cao mà cần confidence score PHẢN ÁNH ĐÚNG xác suất đúng thật. Nghiên cứu gần đây (Xiong et al. 2023 và nhiều paper 2024-2026 tiếp theo) phát hiện: <strong>LLM hệ thống OVERCONFIDENT</strong> — khi hỏi model tự đánh giá confidence bằng lời ("verbalized confidence"), con số trả về gần như luôn rơi vào khoảng 80-100% (thường là bội số của 5: 85%, 90%, 95%) BẤT KỂ accuracy thật của câu trả lời đó cao hay thấp.</p>
+
+<pre><code># Expected Calibration Error (ECE) — đo độ lệch giữa confidence model TỰ NÓI
+# và accuracy THẬT ĐO ĐƯỢC, chia theo từng "bin" (khoảng confidence):
+
+ECE = Σ_bin (|bin| / N) × |accuracy(bin) − confidence_trung_bình(bin)|
+
+# Giải thích: chia mọi câu trả lời thành các bin theo confidence model tự báo
+# (VD bin 90-100%, bin 80-90%, ...). Với MỖI bin, so sánh:
+#   - confidence_trung_bình(bin) = model tự nói trung bình bao nhiêu % trong bin đó
+#   - accuracy(bin) = THỰC TẾ đo được bao nhiêu % câu trong bin đó đúng
+# Bin càng LỆCH giữa 2 con số này càng góp nhiều vào ECE tổng (weighted theo |bin|/N
+# = số câu trong bin đó chia tổng số câu — bin nhiều câu hơn ảnh hưởng ECE nhiều hơn)</code></pre>
+
+<p><strong>Ví dụ số cụ thể</strong>: eval 100 câu hỏi investor thesis, model tự báo confidence cho mỗi câu, chia thành 2 bin:</p>
+<pre><code>Bin "90-100%" (model tự nói tin 90-100%): 70 câu, confidence trung bình tự báo = 95%
+  Đo thực tế: chỉ 60/70 câu ĐÚNG → accuracy(bin) = 60/70 ≈ 85.7%
+  |85.7% − 95%| = 9.3 điểm phần trăm lệch — model OVERCONFIDENT ở bin này
+
+Bin "50-70%" (model tự nói tin 50-70%): 30 câu, confidence trung bình tự báo = 60%
+  Đo thực tế: 20/30 câu ĐÚNG → accuracy(bin) = 20/30 ≈ 66.7%
+  |66.7% − 60%| = 6.7 điểm phần trăm lệch — model hơi UNDERCONFIDENT ở bin này
+
+ECE = (70/100)×9.3 + (30/100)×6.7 = 6.51 + 2.01 = 8.52 điểm phần trăm
+→ ECE càng gần 0 càng "biết mình" tốt; ECE=8.52 nghĩa là trung bình, khi model
+  tự báo 1 con số confidence, con số THẬT lệch khoảng 8.5 điểm phần trăm</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: accuracy cao KHÔNG đồng nghĩa calibration tốt — 1 model có thể đúng 90% câu hỏi (accuracy tốt) nhưng LUÔN tự báo "100% chắc chắn" cho mọi câu kể cả 10% câu sai (calibration tệ, ECE cao). Ngược lại, 1 model yếu hơn (đúng 70%) nhưng biết chính xác lúc nào nên nói "tôi không chắc" lại CALIBRATE TỐT HƠN — hữu ích hơn trong production vì downstream system biết khi nào cần double-check/escalate human review.</p>
+
+<table>
+<tr><th></th><th>Accuracy (mục 1-4 đã học)</th><th>Calibration (ECE)</th></tr>
+<tr><td>Đo cái gì</td><td>% câu trả lời ĐÚNG</td><td>Confidence model tự báo có KHỚP với accuracy thật không</td></tr>
+<tr><td>Model overconfident vẫn có thể</td><td>Accuracy cao</td><td>ECE cao (tệ) — luôn "quá tự tin"</td></tr>
+<tr><td>Ứng dụng</td><td>So sánh model nào giỏi hơn</td><td>Quyết định KHI NÀO tin output, khi nào cần review thêm</td></tr>
+<tr><td>Cách đo</td><td>So với ground truth</td><td>So confidence tự báo vs accuracy thật, theo bin</td></tr>
+</table>
+
+<p><strong>Insight</strong>: đây là lý do "confidence" mà LLM tự in ra trong output (VD field <code>confidence: 0.85</code> trong JSON structured output) KHÔNG NÊN được tin tưởng mù quáng như 1 xác suất thống kê thật — nó chỉ là 1 con số model "cảm thấy" hợp lý để viết ra (thường thiên về 80-100%, xem nghiên cứu Xiong 2023), không tự động = xác suất đúng thực đo. Muốn dùng confidence cho quyết định thật (VD "chỉ auto-approve nếu confidence &gt; 90%"), phải tự đo ECE trên eval set CỦA CHÍNH BẠN trước, không giả định con số model tự báo đã calibrated sẵn.</p>
+
+<p><strong>📖 Mở rộng — cách cải thiện calibration thực tế</strong>: (1) <strong>Temperature scaling</strong> — hậu xử lý đơn giản, chia <em>logit</em> (điểm số thô model gán cho mỗi lựa chọn/token TRƯỚC KHI qua softmax, chưa phải xác suất) cho 1 hằng số học được trên validation set trước softmax, không cần train lại model; (2) <strong>Self-consistency</strong> (đã học ở <code>L5_1_prompt.html</code>) — sample N lần, tỷ lệ đồng thuận giữa N lần TỰ NHIÊN là 1 tín hiệu confidence tốt hơn con số model tự nói ra 1 lần; (3) <strong>Ensemble nhiều model/judge</strong> (đã học ở mục 3 trên) — mức độ đồng thuận giữa nhiều judge độc lập cũng là proxy calibration tốt hơn 1 con số tự báo.</p>
+</div>
+
+<h2>5. Custom eval set cho use case</h2>
+
+<div class="example-box">
+<div class="title">V20 investor thesis eval</div>
+<p>Build 50-100 hand-crafted examples:</p>
+<pre><code>{
+  "ticker": "FPT",
+  "current_price": 70.2,
+  "chart_pattern": {"status": "broken", ...},
+  "expected_verdict": "NOT BUY",
+  "expected_key_insights_include": ["pattern INVALIDATED", "lower-low formed"],
+  "forbidden_patterns": ["BUY 72", "target 82"],
+}
+</code></pre>
+<p>Auto-check với llm_qa_checklist.py (kế thừa từ validate_llm_thesis.py, đã retired 2026-07-11):</p>
+<ul>
+  <li>R1: price sanity (no numbers &gt; 30% off current)</li>
+  <li>R2: no BUY on INVALIDATED pattern</li>
+  <li>R3-R5: entry/stop/target logic</li>
+</ul>
+<p>Pass rate on eval set = signal thesis skill has good "instinct".</p>
+</div>
+
+<h2>6. A/B testing production</h2>
+
+<pre><code># Deploy version A (control) vs B (new prompt/model) 50/50
+# Track:
+- Task completion rate
+- User satisfaction (thumbs up/down)
+- Follow-up questions (proxy for confusion)
+- Token cost per session
+- Latency p50/p95/p99
+
+# Statistical significance: chi-square (test tỷ lệ % giữa 2 nhóm categorical,
+#   VD "% completion" A vs B) hoặc bootstrap (resample nhiều lần để ước lượng
+#   khoảng tin cậy khi metric là số liên tục, VD rating trung bình)
+# Sample size ~1000 sessions per arm for meaningful signal
+</code></pre>
+
+<h2>6.5 — Hiệu trưởng chấm bài: LLM-as-judge biases quantified</h2>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">Ẩn dụ VN — hiệu trưởng thiên vị bài dài</div>
+<table>
+<tr><th>Bias</th><th>Đo bằng</th><th>Magnitude</th><th>Fix</th></tr>
+<tr><td>Position bias</td><td>Swap A/B, đo delta win rate</td><td>5-15% (GPT-4), 15-30% (nhỏ hơn)</td><td>Đánh giá 2 chiều, trung bình. Hoặc random shuffle.</td></tr>
+<tr><td>Verbosity bias</td><td>Correl(len, score)</td><td>+0.35 correlation with GPT-4 judge</td><td>Prompt "ignore length". Length-normalize. Rubric binary.</td></tr>
+<tr><td>Self-preference</td><td>GPT judge vs Claude judge same pair</td><td>10-20% skew toward own family</td><td>Multi-judge ensemble (GPT + Claude + Gemini).</td></tr>
+<tr><td>Formatting bias</td><td>Markdown vs plain text</td><td>Markdown wins 55-60% ngay cả khi content giống</td><td>Strip format trước judge.</td></tr>
+<tr><td>Sycophancy</td><td>Judge ưu response agree với reference</td><td>+8-12% khi có ref</td><td>Blind judge — không show reference.</td></tr>
+</table>
+</div>
+
+<div class="callout danger">
+<div class="label">Common failure modes</div>
+<ol>
+  <li>Eval set overlaps với training data → benchmark cheating.</li>
+  <li>Judge model = candidate model → self-preference bias.</li>
+  <li>Không randomize A/B order → position bias overwhelm signal.</li>
+  <li>Sample &lt;100 → CI quá rộng, "improvement" thực ra noise.</li>
+  <li>Không có κ với human sample → không biết judge có reliable không.</li>
+  <li>Đánh giá offline chỉ, không A/B production → optimize sai metric.</li>
+</ol>
+</div>
+
+<h2>7. Ongoing drift monitoring</h2>
+
+<div class="callout">
+<div class="label">Post-deploy monitoring</div>
+<ul>
+  <li>Output distribution: length, sentiment, verdict rate — alert if shifts</li>
+  <li>Hallucination rate: sample 1% output, human review</li>
+  <li>User feedback: negative rate over time</li>
+  <li>Cost per request: alert if unexpectedly rising</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>✅ QA Gate</h3>
+
+<p class="q">1. BLEU vs LLM-as-judge — nào tốt cho creative writing eval?</p>
+<p class="a">LLM-as-judge. BLEU chỉ đo n-gram overlap — creative task có nhiều valid answers. Judge có thể grade coherence, style, novelty.</p>
+
+<p class="q">2. Judge bias verbosity — fix?</p>
+<p class="a">(1) Explicit prompt "length not quality". (2) Length-normalize scores. (3) Multiple judges + average. (4) Pair with reference answer để anchor.</p>
+
+<p class="q">3. MMLU 88% — model tốt hay benchmark saturate?</p>
+<p class="a">Benchmark saturate. Top models tất cả 85-89% → không distinguish real capability. Cần benchmark harder (GPQA, ARC-Challenge, private held-out set).</p>
+
+<p class="q">4. Contamination detect thế nào?</p>
+<p class="a">(1) Check n-gram overlap benchmark ↔ pretrain data. (2) Perplexity of benchmark data (nếu extremely low → seen). (3) Behavior test: rephrase question → accuracy drop = memorized. (4) Post-release private eval sets.</p>
+
+<p class="q">5. Build eval cho stock LLM. 3 metric?</p>
+<p class="a">(1) Price consistency (all numbers in thesis match current ± tolerance). (2) Rule compliance (no BUY on broken pattern etc). (3) Forward return correlation (BUY thesis → actual return positive over N days, live production only).</p>
+
+</div>
+
+<div class="refs">
+  <div class="title">📚 References</div>
+  <ul>
+    <li>📄 <a href="https://arxiv.org/abs/2306.05685">Zheng et al (2023) — MT-Bench + LLM-as-Judge</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2009.03300">Hendrycks et al (2021) — MMLU</a></li>
+    <li>📖 <a href="https://lmarena.ai/">Chatbot Arena live leaderboard</a></li>
+    <li>📖 <a href="https://github.com/openai/evals">OpenAI evals framework</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2306.13063">Xiong et al (2023) — Can LLMs Express Their Uncertainty? (verbalized confidence calibration)</a></li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="L5_3_tools.html">← L5.3</a>
+  <a href="L5_5_cost_latency.html">L5.5 · Cost + Latency →</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R5.1 · Tool Use — Roadmap AI Engineering</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · <a href="R0_overview.html">Roadmap bổ sung</a> · LLM Augmentation · Điểm 1/5</div>
+  <h1>R5.1 · Tool Use</h1>
+  <p class="subtitle">Kỹ thuật DUY NHẤT trong 5 kỹ thuật augmentation cho phép LLM <strong>hành động</strong> trong thế giới thật, không chỉ sinh text mô tả.</p>
+  <div class="level">Độ khó: Trung bình · Roadmap AI Engineering · Track 1</div>
+</div>
+<div class="container">
+
+<h2>🎯 Mục tiêu học</h2>
+<p>Sắp xếp dễ → khó — đọc tuần tự, đừng nhảy cóc xuống mục cuối nếu chưa chắc mục đầu:</p>
+<ul>
+<li><strong>[Dễ]</strong> Giải thích bằng 1 câu: Tool Use là gì, khác gì với việc chỉ "chat" với LLM.</li>
+<li><strong>[Dễ]</strong> Vẽ được vòng lặp 5 bước của 1 lượt tool-calling (model quyết định → host thực thi → trả kết quả → model đọc → trả lời hoặc gọi tiếp).</li>
+<li><strong>[Trung bình]</strong> Phân loại 1 tool bất kỳ theo khung rủi ro 4 cấp (đọc-thuần / đọc-tri-thức / ghi-không-ảnh-hưởng-hệ-thống-sống / ghi-ảnh-hưởng-quyết-định-tiền-thật) trước khi quyết định có cho LLM tự gọi hay không.</li>
+<li><strong>[Khó]</strong> Giải thích được vì sao Tool Use là kỹ thuật DUY NHẤT trong 5 kỹ thuật augmentation cho phép LLM "hành động" — Fine-tuning/RAG chỉ thêm kiến thức, Prompt/Context Engineering chỉ đổi cách hỏi, cả 4 cái đó vẫn chỉ tạo ra TEXT.</li>
+<li><strong>[Khó]</strong> Áp dụng đúng ranh giới kiến trúc của <code>CLAUDE.md</code> (owner quote: <em>"LLM sẽ không phải là 1 feature"</em>) vào 1 tình huống cụ thể: tool nào được phép cho LLM tự gọi trong dự án <code>predictor</code>, tool nào tuyệt đối không.</li>
+<li><strong>[Khó]</strong> Thiết kế được ma trận quyết định retry-tự-động vs escalate-cho-người cho 1 lỗi tool cụ thể, kết hợp đúng loại lỗi (USER_ERROR/TRANSIENT/PERMANENT) với tier rủi ro của chính tool đó.</li>
+</ul>
+
+<h2>📍 Vị trí &amp; độ khó</h2>
+<div class="callout">
+<div class="label">📖 Cách đọc trang này</div>
+<p>Cơ chế function calling ĐẦY ĐỦ (JSON schema, multi-turn loop, MCP, parallel tool calls, RL-trained vs prompted tool selection, tool error handling chi tiết) đã có rất sâu ở <a href="L5_3_tools.html"><code>L5_3_tools.html</code></a> — 8 mục, đọc file đó TRƯỚC nếu bạn chưa từng học function calling. Trang này giả định bạn đã đọc <code>L5_3</code> hoặc ít nhất biết khái niệm JSON tool schema là gì — nó KHÔNG lặp lại cơ chế, mà tập trung vào phần <code>L5_3</code> chưa có: <strong>định vị Tool Use trong bức tranh 5 kỹ thuật augmentation</strong> + <strong>khung quyết định rủi ro áp dụng thực tế cho dự án này</strong>.</p>
+</div>
+<p>Nếu bạn mới học ML/LLM: đọc phần "Analogy" và "Cơ chế chi tiết §1" trước — đủ để hiểu Tool Use là gì mà không cần biết JSON. Nếu bạn đã biết function calling: nhảy thẳng xuống §2 "Bảng phân loại rủi ro" — đây là phần thực dụng nhất, dùng để tự trả lời "tool này có nên cho LLM tự gọi không".</p>
+
+<h2>💡 Analogy</h2>
+<div class="callout success">
+<div class="label">💡 Người bị nhốt trong phòng không cửa sổ</div>
+<p>Nếu LLM là 1 người cực giỏi suy luận nhưng bị "nhốt trong phòng không cửa sổ" — không biết giờ hiện tại, không truy cập được internet, không tính được số lớn chính xác, không biết giá cổ phiếu VNM đóng cửa hôm nay — thì Tool Use là cho người đó 1 cái điện thoại: gọi ra ngoài để lấy thông tin THẬT hoặc thực hiện hành động THẬT, thay vì tự "đoán" hoặc "bịa" (hallucinate) dựa trên trí nhớ cũ.</p>
+<p>Điểm quan trọng của analogy này: có điện thoại không có nghĩa là người đó tự động biết KHI NÀO nên gọi, gọi cho AI, hỏi cái gì. Đó là phần "cơ chế" ở dưới — model phải tự quyết định (1) có cần gọi tool không, (2) gọi tool nào, (3) truyền tham số gì.</p>
+</div>
+
+<h2>📖 Cơ chế chi tiết</h2>
+
+<h3>1. [Dễ] Vấn đề Tool Use giải quyết — mà 4 kỹ thuật khác không giải quyết được</h3>
+<p>LLM về bản chất chỉ làm 1 việc: nhận chuỗi token đầu vào → sinh chuỗi token đầu ra, dựa trên pattern học được từ dữ liệu train (đã "đóng băng" tại 1 thời điểm cắt — knowledge cutoff). Nó không có "giác quan" (không tự biết giá cổ phiếu hôm nay), không có "tay chân" (không tự đặt lệnh mua, không tự ghi vào database).</p>
+<p>4 kỹ thuật augmentation còn lại đều KHÔNG giải quyết vấn đề này:</p>
+<ul>
+<li><strong>Prompt Engineering / Context Engineering</strong> — chỉ thay đổi CÁCH bạn hỏi, không thêm khả năng mới. Viết prompt hay tới đâu, model vẫn không tự nhiên "biết" giá VNM hôm nay.</li>
+<li><strong>Fine-tuning</strong> — thêm kiến thức "đóng băng" vào trọng số (weight) tại thời điểm train. Vẫn tĩnh, vẫn chỉ sinh text.</li>
+<li><strong>RAG</strong> — thêm kiến thức tra cứu ĐỘNG (đọc từ 1 kho tài liệu tại thời điểm hỏi). Tốt hơn fine-tune về độ mới, nhưng vẫn chỉ là "đọc thêm rồi sinh text" — không có real-time, không thực thi hành động.</li>
+</ul>
+<p>Tool Use là kỹ thuật DUY NHẤT trong 5 cái cho phép LLM <strong>hành động</strong> trong thế giới thật (gọi API lấy dữ liệu sống, ghi file, gọi lệnh thực thi) — không chỉ mô tả bằng lời.</p>
+
+<h3>2. [Trung bình] Vòng lặp 5 bước — tổng quát hoá từ mọi ví dụ tool-calling</h3>
+<p>Dù dùng Anthropic API, OpenAI function calling, hay MCP, cơ chế bên dưới luôn quy về 1 vòng lặp giống nhau:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│  Bước 1: User gửi câu hỏi → model nhận + đọc tool schema có sẵn  │
+│  Bước 2: Model QUYẾT ĐỊNH — trả lời thẳng, hay cần gọi tool?     │
+│           Nếu cần → sinh ra "tool_use" block (tên tool + params) │
+│  Bước 3: HOST (không phải model!) thực thi lệnh gọi tool thật    │
+│           VD: gọi GET /api/predict/VNM, nhận JSON response       │
+│  Bước 4: Host gửi kết quả tool trả về NGƯỢC LẠI vào context      │
+│  Bước 5: Model đọc kết quả → trả lời cuối, HOẶC gọi tool tiếp    │
+│           (multi-turn — lặp lại bước 2-5 nhiều lần nếu cần)      │
+└─────────────────────────────────────────────────────────────────┘</code></pre>
+<p><strong>Điểm hay bị hiểu nhầm ở bước 3</strong>: bản thân LLM KHÔNG thực thi tool. Model chỉ sinh ra 1 khối JSON mô tả "tôi muốn gọi tool X với tham số Y" — chính chương trình host (backend của bạn, Claude Code, MCP client...) mới là nơi thực sự gọi HTTP request/chạy code/đọc file. Đây là lý do 1 developer luôn có thể chèn bước kiểm tra/gate giữa "model muốn gọi" và "tool thực sự chạy" — chính là chỗ áp khung rủi ro ở §2 dưới đây.</p>
+
+<h3>3. [Trung bình] Bảng phân loại tool theo mức rủi ro — khung áp dụng thực tế cho dự án này</h3>
+<p>Đây là phần bổ sung quan trọng nhất so với <code>L5_3_tools.html</code> — không phải cơ chế kỹ thuật, mà là <strong>khung quyết định</strong> áp dụng ranh giới kiến trúc của <code>CLAUDE.md</code> vào việc thiết kế tool mới.</p>
+<table>
+<tr><th>Loại tool</th><th>Ví dụ thật trong dự án</th><th>Cho phép LLM tự gọi không?</th></tr>
+<tr><td>1. Read-only, phục vụ phân tích</td><td><code>GET /api/predict/VNM</code>, <code>GET /api/market/foreign-flow</code></td><td>Có — đúng vai trò "research source" theo <code>CLAUDE.md</code></td></tr>
+<tr><td>2. Read-only, đọc tri thức tĩnh</td><td><code>load_kb_section</code> (đọc <code>kb/lessons_learned_patterns.json</code>)</td><td>Có</td></tr>
+<tr><td>3. Ghi output không thay đổi hệ thống sống</td><td>Ghi file report HTML vào <code>reports/</code></td><td>Có — đây là SẢN PHẨM đầu ra của skill, không phải thay đổi hệ thống</td></tr>
+<tr><td>4. Ghi/thay đổi dữ liệu ảnh hưởng quyết định trade/score</td><td>Ghi <code>backend/predict/senior_score.py</code>, gọi API đặt lệnh AI Trader</td><td><strong>Không</strong> — vi phạm <code>CLAUDE.md</code>, cần con người/pipeline riêng ngoài phạm vi LLM runtime</td></tr>
+</table>
+<p><strong>Cách dùng bảng này khi thiết kế 1 tool mới</strong>: hỏi "nếu tool này trả về kết quả sai/model gọi nhầm tham số, hậu quả tối đa là gì?" — nếu câu trả lời chỉ là "report có 1 dòng sai, sửa lại là xong" → tier 1-3, an toàn. Nếu câu trả lời là "1 lệnh mua/bán thật bị đặt sai, hoặc công thức tính điểm bị model tự sửa" → tier 4, cấm tuyệt đối theo kiến trúc, không phải vì kỹ thuật không làm được.</p>
+
+<h3>4. [Khó] Vì sao Tool Use luôn cần validate output, không tin tưởng mù quáng</h3>
+<p>Điểm hay bị bỏ sót khi mới học Tool Use (đã có phần "Tool error handling" ở <code>L5_3_tools.html §6.5</code> — góc nhìn kỹ thuật; đây là góc nhìn bổ sung riêng cho track augmentation, thiên về hậu quả nghiệp vụ): model quyết định GỌI tool nào, với tham số gì — nhưng bản thân quyết định đó vẫn có thể sai (gọi nhầm tool, truyền sai tham số, hiểu sai kết quả trả về sau khi nhận).</p>
+<p>Với 1 dự án tài chính, 1 lỗi nhỏ (VD nhầm ticker khi gọi API giá — gọi <code>/api/predict/VNM</code> nhưng diễn giải kết quả như thể là của <code>VIC</code>) có thể lan thành 1 nhận định sai trong report gửi tới nhà đầu tư thật. Đây là lý do rule <em>"NEVER invent numbers... Cite the source field"</em> trong <code>SKILL.md</code> tồn tại — không chỉ để chống hallucination thuần tuý, mà còn để mọi con số trong report có thể truy vết ngược lại đúng tool call nào đã tạo ra nó (traceability).</p>
+
+<h3>5. [Trung bình] Parallel tool calling — tăng tốc, nhưng partial-success là bẫy hay bị bỏ sót</h3>
+<p>Model hiện đại (Claude 3.5+) có thể sinh NHIỀU <code>tool_use</code> block trong CÙNG 1 lượt trả lời — host thực thi song song thay vì tuần tự (cơ chế request/response đã có ở <code>L5_3_tools.html §4</code>). Lợi ích: tổng độ trễ giảm từ TỔNG các tool call xuống chỉ còn độ trễ của tool CHẬM NHẤT. Phần <code>L5_3</code> chưa nói tới — và là phần hay gây lỗi thật trong production — là <strong>xử lý khi 1 trong N cuộc gọi song song đó FAIL</strong>.</p>
+<pre><code>Model gọi song song 3 tool trong 1 lượt:
+┌─────────────┐   ┌──────────────────┐   ┌─────────────┐
+│ get_price   │   │ get_volume_signal │   │ get_news    │
+│ (FPT)       │   │ (FPT)             │   │ (FPT)       │
+└──────┬──────┘   └────────┬─────────┘   └──────┬──────┘
+       │ 120ms             │ TIMEOUT 5s          │ 300ms
+       ▼                   ▼                     ▼
+   ✅ price=72.5      ❌ lỗi RATE_LIMITED    ✅ 3 tin tức
+       │                   │                     │
+       └───────────────────┴─────────────────────┘
+                            ▼
+        Cả 3 tool_result PHẢI được trả về model — kể cả
+        cái lỗi — khớp đúng tool_use_id, KHÔNG được bỏ sót
+        1 kết quả nào (model chờ đủ N phản hồi cho N lời gọi)</code></pre>
+<p>2 nguyên tắc rút ra từ cơ chế API (không phải tuỳ chọn — là ràng buộc giao thức của cả Anthropic Tools lẫn OpenAI Functions):</p>
+<ul>
+<li><strong>Không bao giờ âm thầm bỏ 1 kết quả lỗi</strong> — model đã "cam kết" chờ đúng N <code>tool_result</code> cho N <code>tool_use</code> nó sinh ra; thiếu 1 cái sẽ phá vỡ state hội thoại (tool_use_id không khớp). Trả về lỗi CÓ CẤU TRÚC (đúng pattern ở <code>L5_3 §6.5</code>: <code>{"ok": false, "error": "RATE_LIMITED", ...}</code>) cho đúng ID đó, không throw exception làm chết cả lượt.</li>
+<li><strong>"Coupling test" trước khi parallelize</strong>: tự hỏi "nếu tool B fail, kết quả của tool A còn DÙNG ĐƯỢC ĐỘC LẬP không?". Nếu câu trả lời là không (VD: tool A tính điểm rủi ro cần input là kết quả của tool B) thì 2 tool đó thực ra PHỤ THUỘC nhau (coupled) — không nên gọi song song như thể độc lập, phải gọi tuần tự hoặc thiết kế lại tool.</li>
+</ul>
+<p>2 dạng parallel calling hay gặp trong thực tế, khác nhau ở RỦI RO khi partial-fail:</p>
+<table>
+<tr><th>Dạng</th><th>Ví dụ</th><th>Khi 1 cuộc gọi fail</th></tr>
+<tr><td><strong>Batch fan-out</strong> — cùng 1 tool, nhiều tham số khác nhau</td><td><code>get_price</code> gọi 30 lần cho 30 ticker trong watchlist</td><td>Rủi ro thấp — 29/30 kết quả vẫn dùng được, chỉ thiếu đúng 1 ticker</td></tr>
+<tr><td><strong>Multi-tool fan-out</strong> — nhiều tool khác nhau, cùng 1 đối tượng</td><td><code>get_price</code> + <code>get_volume_signals</code> + <code>get_news</code> cho 1 ticker (§ ví dụ dưới)</td><td>Rủi ro trung bình — thiếu 1 tool có thể khiến nhận định thiếu góc nhìn, nhưng vẫn viết được report với ghi chú "thiếu dữ liệu X"</td></tr>
+</table>
+
+<h3>6. [Trung bình] Cache/memoize kết quả tool — khi nào an toàn, khi nào nguy hiểm</h3>
+<p>Không phải khái niệm mới hoàn toàn (đã học <strong>Prompt Caching</strong> ở <code>R2_4_prompt_caching.html</code>) nhưng nhắm 1 tầng KHÁC: Prompt Caching cache phần PREFIX token lặp lại của prompt; <strong>tool-result caching</strong> cache OUTPUT của 1 lời gọi tool cụ thể, khoá theo <code>(tên tool, tham số)</code> — tái dùng được kể cả giữa các lượt/hội thoại khác nhau nếu tham số giống hệt. 2 kỹ thuật này bổ trợ nhau, không thay thế nhau — 1 turn có thể vừa hit prompt cache vừa hit tool-result cache cho 2 phần khác nhau của cùng request.</p>
+<table>
+<tr><th>Điều kiện</th><th>An toàn để cache?</th><th>Ví dụ trong dự án</th></tr>
+<tr><td>Tool <strong>idempotent</strong> (cùng input → luôn cùng output, không side-effect) + dữ liệu ít đổi trong TTL ngắn</td><td>✅ Có — cache với TTL vài giây tới vài phút</td><td><code>GET /api/predict/VNM</code> gọi lại trong CÙNG 1 lượt phân tích (model tự hỏi lại do quên đã gọi)</td></tr>
+<tr><td>Tool ghi/thay đổi trạng thái hệ thống (tier 3-4 ở bảng §3)</td><td>❌ Không — cache 1 lệnh ghi = thực thi 2 lần ngoài ý muốn nếu cache trả nhầm "đã ghi" cho request MỚI</td><td>Ghi report, đặt lệnh AI Trader</td></tr>
+<tr><td>Dữ liệu real-time nhưng TTL cache dài hơn tần suất đổi thật (giá cổ phiếu cache 1 giờ)</td><td>⚠️ Nguy hiểm — đúng loại lỗi đã xảy ra thật (case study "FPT stale price bug", xem <code>L5_1_prompt.html §7</code>): dữ liệu cache CŨ bị model tưởng là giá HIỆN TẠI</td><td>Không nên cache giá phiên đang chạy quá vài chục giây</td></tr>
+</table>
+<p>Số liệu tham khảo (research 2026, ToolCacheAgent — chưa production-verify cho dự án này): cache tool-result đúng cách đạt tới <strong>~1.69× tăng tốc</strong> cho agent loop nhiều bước, không đánh đổi accuracy — vì chi phí tạo cache ở lần gọi đầu chỉ hoàn vốn (amortize) nếu có ≥2 lần gọi trùng tham số trong cùng phiên.</p>
+<p>Checklist thiết kế cache key cho 1 tool mới (thứ tự kiểm tra, dừng ở bước đầu tiên trả lời "không"):</p>
+<ol>
+<li>Tool có phải read-only, không side-effect không? Nếu không → KHÔNG cache, dừng ở đây.</li>
+<li>Dữ liệu trả về có tần suất đổi CHẬM HƠN TTL dự định đặt không? (VD: sector playbook đổi theo tháng → TTL giờ/ngày an toàn; giá phiên đổi theo giây → TTL phải ≤ vài chục giây).</li>
+<li>Key cache có bao gồm ĐỦ tham số ảnh hưởng kết quả không? (thiếu 1 tham số trong key = 2 request khác nhau bị trả nhầm cùng 1 kết quả cache).</li>
+<li>Có cơ chế invalidate thủ công (purge) khi phát hiện dữ liệu nguồn đã đổi ngoài chu kỳ TTL không?</li>
+<li>Tool có ở tier 3-4 (bảng §3) không? Nếu có → mặc định KHÔNG cache trừ khi có review riêng, vì hậu quả của 1 lần trả nhầm kết quả cache cao hơn hẳn tier 1-2.</li>
+</ol>
+
+<h3>7. [Khó] Ma trận quyết định retry-tự-động vs escalate-cho-người — ghép error taxonomy (L5_3) với risk tier (§3 trang này)</h3>
+<p><code>L5_3_tools.html §6.5</code> đã dạy cách PHÂN LOẠI lỗi tool (<code>USER_ERROR</code>/<code>TRANSIENT</code>/<code>PERMANENT</code>/<code>FALLBACK</code>). Phần đó chưa trả lời: với 1 loại lỗi cụ thể, xảy ra trên 1 tool ở tier rủi ro cụ thể (bảng §3 trang này) — ai được quyền quyết định retry, và retry bao nhiêu lần trước khi PHẢI dừng lại cho người xem?</p>
+<table>
+<tr><th>Loại lỗi (L5_3 §6.5)</th><th>Tool tier 1-3 (đọc/ghi-không-ảnh-hưởng)</th><th>Tool tier 4 (ghi/quyết định tiền thật)</th></tr>
+<tr><td><code>USER_ERROR</code> (sai tham số)</td><td>Model tự sửa tham số, retry ngay (giới hạn ~2 lần)</td><td>Model tự sửa tham số, retry ngay (giới hạn ~2 lần) — sửa THAM SỐ không phải sửa QUYẾT ĐỊNH nghiệp vụ, vẫn an toàn</td></tr>
+<tr><td><code>TRANSIENT</code> (rate limit, timeout)</td><td>Auto-retry với backoff, tối đa ~3 lần</td><td>Auto-retry với backoff CHỈ khi có idempotency key (tránh đặt lệnh trùng); vượt ngưỡng → dừng, escalate</td></tr>
+<tr><td><code>PERMANENT</code> (permission denied, quota hết)</td><td>Ghi log/note vào report, KHÔNG chặn toàn bộ luồng</td><td><strong>Dừng cứng ngay lập tức</strong>, escalate cho người — không auto-retry, không auto-fallback</td></tr>
+<tr><td>Circuit breaker (≥3 lỗi liên tiếp CÙNG 1 tool trong 1 phiên)</td><td>Ngừng gọi tool đó phần còn lại của phiên, dùng dữ liệu đã có</td><td>Ngừng gọi + escalate ngay, không đợi tới lỗi thứ 3</td></tr>
+</table>
+<p>Cột tier-4 chính là chỗ khung §3 và ranh giới <code>CLAUDE.md</code> ("LLM sẽ không phải là 1 feature") gặp nhau: dù kỹ thuật hoàn toàn cho phép retry tự động (tool vẫn "hoạt động đúng" về mặt API), <strong>quyết định nghiệp vụ</strong> (có nên đặt lại lệnh, có nên tính lại score) không được để model tự quyết khi hậu quả là tiền thật.</p>
+
+<h3>8. [Khó] Tool execution DAG — khi "coupling test" ở §5 trả lời KHÔNG, phải điều phối theo thứ tự</h3>
+<p>§5 dạy cách PHÁT HIỆN 2 tool bị coupled (không nên song song). Phần này trả lời bước tiếp theo: coupled rồi thì điều phối thế nào? Với 1 lượt agent gọi nhiều hơn 2 tool, quan hệ phụ thuộc thường tạo thành 1 <strong>đồ thị có hướng không chu trình (DAG)</strong> — 1 vài nhánh độc lập (song song được), 1 vài nhánh phải chờ nhánh trước xong (tuần tự bắt buộc).</p>
+<pre><code>Ví dụ: quyết định "có nên đề xuất chốt lời VNM" cần 4 tool,
+không phải cả 4 đều độc lập:
+
+  get_price(VNM) ──┐
+                    ├──▶ compute_risk_score(price, volume) ──▶ get_recommendation(risk_score)
+  get_volume(VNM) ──┘
+
+  get_news(VNM) ─────────────────────────────────────────────▶ (độc lập, gộp vào cuối)
+
+Bước 1 (song song): get_price + get_volume + get_news — cả 3 không phụ
+                      thuộc nhau, đúng điều kiện "coupling test" §5
+Bước 2 (tuần tự, PHẢI chờ bước 1 xong nhánh price+volume):
+                      compute_risk_score cần input là KẾT QUẢ của get_price
+                      VÀ get_volume — gọi sớm hơn sẽ nhận tham số rỗng/cũ
+Bước 3 (tuần tự, chờ bước 2):
+                      get_recommendation cần risk_score vừa tính</code></pre>
+<p>Sai lầm hay gặp khi mới áp dụng parallel tool calling: thấy "gọi song song nhanh hơn" rồi áp dụng cho TOÀN BỘ 4 tool ở ví dụ trên, kể cả <code>compute_risk_score</code> — kết quả là tool đó chạy với tham số rỗng (vì <code>get_price</code>/<code>get_volume</code> chưa trả lời xong) hoặc phải tự đợi (mất hết lợi ích song song, thậm chí chậm hơn tuần tự vì có thêm overhead điều phối). Quy tắc thực dụng: chỉ nhóm các tool KHÔNG có mũi tên phụ thuộc nào trỏ vào nhau trong cùng 1 "bước" song song; tool nào nhận input là output của tool khác luôn ở bước sau.</p>
+
+<h2>🔢 Ví dụ cụ thể</h2>
+<p>Trace thật (rút gọn) của 1 lượt tool-calling trong skill <code>daily-investor-report</code> — theo đúng cấu trúc endpoint mô tả ở <code>.claude/skills/daily-investor-report/SKILL.md</code> Section 2 (dòng 48 trở đi, bảng endpoint dòng 169):</p>
+<pre><code>Bước 1: Model nhận yêu cầu "phân tích VNM cho report hôm nay"
+
+Bước 2: Model sinh tool_use block:
+  {
+    "tool": "http_get",
+    "params": { "url": "/api/predict/VNM" }
+  }
+
+Bước 3: Host (backend skill) thực thi GET /api/predict/VNM thật,
+  nhận JSON response, ví dụ (rút gọn theo field thật mô tả ở SKILL.md dòng 169):
+  {
+    "signal": "BUY",
+    "compositeConfidence": 0.71,
+    "modelConfidence": 0.68,
+    "horizons": { "t1": {...}, "t3": {...}, "t5": {...} },
+    "topFeatures": [ {"name": "rsi_14", "shap": 0.12}, ... ]
+  }
+
+Bước 4: Host gửi JSON này ngược lại vào context của model
+
+Bước 5: Model đọc "signal=BUY, compositeConfidence=0.71" → có thể
+  gọi TIẾP tool khác (VD /api/predict/volume-signals/list để check
+  volume) trước khi viết nhận định cuối, hoặc dừng và viết report
+  nếu đã đủ dữ liệu.</code></pre>
+<p><strong>Điểm mấu chốt cần thấy trong ví dụ này</strong>: mọi con số trong report cuối (0.71, "BUY", "rsi_14") đều PHẢI trace được ngược về đúng 1 tool call cụ thể ở bước 3 — không phải do model "nhớ" hay "đoán" từ kiến thức train sẵn. Đây chính là cơ chế chống hallucination bằng kiến trúc, không phải bằng lời nhắc trong prompt.</p>
+
+<h3>Worked example — ngân sách cost/latency cho 1 lượt agent gọi 4 tool</h3>
+<p>Giả sử 1 lượt phân tích 1 ticker trong <code>daily-investor-report</code> cần gọi 4 tool tier 1-2 (đều read-only, an toàn parallelize theo đúng "coupling test" ở §5 — không tool nào cần input từ tool khác):</p>
+<table>
+<tr><th>Tool</th><th>Độ trễ đo được</th><th>Token trả về (ước lượng)</th></tr>
+<tr><td><code>get_price</code></td><td>100ms</td><td>~150 token</td></tr>
+<tr><td><code>get_volume_signals</code></td><td>150ms</td><td>~300 token</td></tr>
+<tr><td><code>get_foreign_flow</code></td><td>200ms</td><td>~300 token</td></tr>
+<tr><td><code>get_news</code> (kèm 1 bước tóm tắt bằng LLM phụ, chi phí riêng ~$0.01)</td><td>400ms</td><td>~450 token</td></tr>
+</table>
+<p><strong>Độ trễ</strong>: tuần tự = 100+150+200+400 = 850ms. Song song (đúng điều kiện §5) = max(100,150,200,400) = <strong>400ms</strong> — nhanh hơn ~2.1×.</p>
+<p><strong>Chi phí token</strong> (dùng lại đúng đơn giá Sonnet 4.5 đã có ở <code>L5_1_prompt.html §6.5</code>: input $3/1M, output $15/1M — đây là chi phí TẦNG GỌI TOOL, khác tầng với chi phí VIẾT THESIS cuối cùng mà <code>L5_1 §6.5</code> đã tính bằng Opus 4.7, không cộng gộp 2 con số này):</p>
+<pre><code>Input thêm vào context = 150+300+300+450 = 1200 token
+  → 1200/1,000,000 × $3  = $0.0036
+Output (model đọc 4 kết quả rồi viết 1 đoạn tổng hợp ngắn ~500 token)
+  → 500/1,000,000 × $15  = $0.0075
+Cộng 2 phần trên           = $0.0111
++ Chi phí LLM phụ tóm tắt tin tức (get_news nội bộ) = $0.01
+─────────────────────────────────────────────────────
+Tổng chi phí "tầng gọi tool" cho 1 ticker  ≈ $0.021</code></pre>
+<p>Nhân với <strong>86 ticker</strong> (<code>HIGHLIGHT_GROUP</code> hiện tại — lưu ý bảng chi phí cũ ở <code>L5_1 §6.5</code> dùng số 82 ticker, đã lỗi thời so với con số thật hiện nay, không sửa lại ở đây vì ngoài phạm vi file được phép sửa của trang này): 0.021 × 86 ≈ <strong>$1.81/ngày</strong> chỉ riêng cho bước GỌI TOOL, chưa gồm chi phí viết thesis cuối (đã tính riêng ở <code>L5_1</code>). Đây là ước lượng minh hoạ (token/tool giả định, chưa đo thật trên production) — mục đích là cho thấy CÁCH cộng đúng 2 trục chi phí (độ trễ vs token) mà không gộp lẫn 2 tầng pipeline khác nhau, không phải 1 con số ngân sách chính thức.</p>
+
+<h2>📊 So sánh / Bảng tổng hợp</h2>
+<p>Bảng dưới trả lời câu hỏi hay bị nhầm nhất khi mới học 5 kỹ thuật augmentation: "khi nào dùng Tool Use, khi nào dùng cái khác?"</p>
+<table>
+<tr><th>Câu hỏi cần trả lời</th><th>Kỹ thuật đúng</th><th>Vì sao không dùng Tool Use / vì sao dùng Tool Use</th></tr>
+<tr><td>"Giá VNM hôm nay bao nhiêu?" (dữ liệu real-time)</td><td><strong>Tool Use</strong> (gọi API giá)</td><td>Đây chính xác là use case Tool Use được sinh ra để giải quyết — dữ liệu động, không nằm trong training data</td></tr>
+<tr><td>"MACD là gì, tính thế nào?" (kiến thức tĩnh)</td><td>RAG</td><td>Không cần real-time — tra file tĩnh rẻ hơn, nhanh hơn gọi tool</td></tr>
+<tr><td>"Luôn trả lời đúng format JSON 5 field"</td><td>Fine-tuning hoặc Prompt Engineering</td><td>Đây là vấn đề STYLE/FORMAT, không phải THIẾU DỮ LIỆU — Tool Use không liên quan</td></tr>
+<tr><td>"Đặt lệnh mua 100 cổ phiếu VNM ngay bây giờ"</td><td><strong>Tool Use</strong> về mặt kỹ thuật, nhưng <strong>bị cấm</strong> theo <code>CLAUDE.md</code> trong dự án này (tier 4)</td><td>Kỹ thuật cho phép, kiến trúc cấm — phân biệt "làm được" và "được phép làm"</td></tr>
+</table>
+
+<div class="evidence-box">
+<div class="title">🎯 Ứng dụng dự án — ranh giới bắt buộc theo CLAUDE.md</div>
+<p><code>CLAUDE.md</code> ghi rõ owner quote trực tiếp: <em>"LLM sẽ không phải là 1 feature"</em>. Nghĩa là dù kỹ thuật Tool Use hoàn toàn cho phép LLM gọi tool để, ví dụ, tính điểm số hoặc đặt lệnh AI Trader trực tiếp, <strong>dự án cấm việc này theo quyết định kiến trúc, không phải giới hạn kỹ thuật</strong>. Vai trò LLM trong dự án chỉ dừng ở "research source" — đọc <code>.claude/skills/daily-investor-report/kb/lessons_learned_patterns.json</code>, viết nhận định định tính. Bất kỳ tool nào LLM gọi để PHỤC VỤ việc đọc/viết report là hợp lệ (VD gọi API <code>/api/predict/VNM</code> đúng như <code>SKILL.md</code> Section 2 mô tả — xem bảng endpoint dòng 169 file đó), nhưng tool nào cho phép LLM <strong>tự quyết định thay đổi</strong> <code>backend/predict/senior_score.py</code> hoặc đặt lệnh trade thật là vi phạm ranh giới đã được owner correction rõ ràng (xem tier 4 ở bảng §3 trên).</p>
+<p><strong>Áp §5-8 vào đúng luồng thật của skill</strong>: <code>get_price</code>/<code>get_volume_signals</code>/<code>get_foreign_flow</code>/<code>get_news</code> cho 1 ticker là 4 nhánh ĐỘC LẬP (song song an toàn, đúng "coupling test" §5); nếu tương lai skill thêm bước <code>compute_composite_risk</code> nhận input là kết quả của 2-3 tool trên, bước đó PHẢI xếp sau (đúng DAG §8), không được gộp vào cùng batch song song. Với 86 ticker chạy mỗi phiên, cache tool-result (§6) chỉ nên áp cho lời gọi LẶP LẠI trong CÙNG 1 lượt phân tích 1 ticker (model tự hỏi lại do quên đã gọi) — tuyệt đối không cache xuyên NGÀY khác nhau, vì giá/volume đổi mỗi phiên.</p>
+</div>
+
+<div class="callout danger">
+<div class="label">⚠️ Sai lầm thường gặp</div>
+<ul>
+<li>Nhầm "model gọi tool" với "model thực thi tool" — model chỉ SINH ra ý định gọi (JSON), host mới là nơi thực thi thật. Bỏ qua sự khác biệt này dễ dẫn tới thiết kế thiếu bước gate kiểm tra trước khi tool chạy.</li>
+<li>Tin tưởng mù quáng output tool trả về mà không validate — 1 tool trả JSON sai format hoặc field null vẫn có thể khiến model "diễn giải bừa" nếu không có rule bắt buộc cite nguồn.</li>
+<li>Dùng Tool Use để LLM tự thực thi hành động có hậu quả kinh tế thật (đặt lệnh, đổi score) mà không qua gate/xác nhận con người — vi phạm trực tiếp nguyên tắc "LLM sẽ không phải là 1 feature" của dự án.</li>
+<li>Nhầm "RAG" với "Tool Use" khi cả 2 đều "lấy thêm dữ liệu" — phân biệt bằng: RAG là tra cứu tri thức TĨNH đã index sẵn, Tool Use là gọi ra ngoài lấy dữ liệu ĐỘNG/real-time hoặc thực thi hành động.</li>
+<li>Cho rằng 1 tool "read-only" luôn an toàn tuyệt đối — vẫn cần review vì đọc SAI dữ liệu (nhầm ticker, nhầm ngày) vẫn có thể lan thành nhận định sai ảnh hưởng quyết định đầu tư thật.</li>
+<li>Parallelize 2 tool call PHỤ THUỘC nhau như thể chúng độc lập — không qua "coupling test" (§5) trước, dẫn tới kết quả tool A dùng dữ liệu đã stale/sai vì tool B (mà A phụ thuộc) chưa chạy xong hoặc bị lỗi.</li>
+<li>Cache kết quả tool có TTL dài hơn tần suất dữ liệu thật đổi (VD cache giá cổ phiếu 1 giờ) — lặp lại đúng lớp lỗi của case study "FPT stale price bug" nhưng ở tầng tool-cache thay vì tầng đọc nhầm field.</li>
+<li>Cho phép auto-retry không giới hạn số lần trên tool tier 4 khi gặp lỗi <code>TRANSIENT</code> — nếu không có idempotency key, mỗi lần retry có thể là 1 lệnh trùng thật, không phải chỉ gọi lại API vô hại.</li>
+</ul>
+</div>
+
+<div class="qa-gate">
+<h3>📋 QA Gate</h3>
+<ul>
+<li>Vẽ được vòng lặp 5 bước tool-calling và chỉ ra chính xác bước nào model thực hiện, bước nào host thực hiện.</li>
+<li>Phân loại đúng 1 tool bất kỳ (tự nghĩ ra 1 ví dụ) vào 1 trong 4 tier rủi ro, giải thích vì sao.</li>
+<li>Giải thích được vì sao Tool Use là kỹ thuật duy nhất trong 5 kỹ thuật augmentation cho phép "hành động" thay vì chỉ "mô tả".</li>
+<li>Trích đúng owner quote trong <code>CLAUDE.md</code> về "LLM sẽ không phải là 1 feature" và áp dụng đúng vào 1 tình huống cụ thể (VD: có nên cho LLM tự gọi API đặt lệnh AI Trader không, vì sao).</li>
+<li>Phân biệt đúng RAG và Tool Use trong 1 câu hỏi tình huống cụ thể.</li>
+<li>Áp dụng "coupling test" để xác định 2 tool call cho trước có thực sự độc lập (an toàn parallelize) hay bị coupled ngầm.</li>
+<li>Giải thích đúng vì sao tool-result caching và Prompt Caching (R2.4) là 2 tầng khác nhau, bổ trợ chứ không thay thế nhau.</li>
+<li>Dùng đúng ma trận [loại lỗi × tier rủi ro] ở §7 để quyết định 1 tình huống cụ thể: auto-retry, auto-fallback, hay escalate-cho-người.</li>
+</ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="R4_6_chunking_embedding.html">← R4.6 · Chunking/Embedding</a>
+  <a href="R5_2_fine_tuning.html">R5.2 · Fine-tuning →</a>
+</div>
+
+</div>
+</body>
+</html>

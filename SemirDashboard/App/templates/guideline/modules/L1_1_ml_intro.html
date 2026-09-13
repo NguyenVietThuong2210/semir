@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L1.1 — Machine Learning là gì? 3 loại + Pipeline</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="breadcrumb"><a href="../index.html">← Curriculum</a> · Level 1 · Module 1</div>
+  <h1>1.1 · Machine Learning là gì?</h1>
+  <p class="subtitle">Từ định nghĩa, 3 loại chính, đến pipeline end-to-end. Ví dụ thực tế: mô hình V18 dự đoán chứng khoán VN.</p>
+  <div class="level">Level 1 · Foundations · ~25 phút đọc</div>
+</div>
+
+<div class="container">
+
+<h2>🎯 Learning objectives</h2>
+<p>Sau module này bạn sẽ:</p>
+<ul>
+  <li>Định nghĩa được ML bằng 1 câu (không nhìn note)</li>
+  <li>Phân biệt được Supervised / Unsupervised / Reinforcement bằng ví dụ VN</li>
+  <li>Vẽ được ML pipeline 7 bước (data → deploy)</li>
+  <li>Nói được lý do V18 là <strong>supervised classification</strong>, không phải regression</li>
+  <li>Trả lời được 5 câu QA gate ở cuối</li>
+</ul>
+
+<h2>1. ML định nghĩa 1 câu</h2>
+
+<p><strong>Machine Learning</strong> = xây dựng thuật toán học "quy luật" từ dữ liệu, thay vì lập trình quy luật thủ công. Tom Mitchell (1997) chính thức hóa:</p>
+
+<div class="callout">
+  <div class="label">📖 Tom Mitchell definition</div>
+  <p>"A program learns from <em>experience E</em> with respect to some class of <em>tasks T</em> and <em>performance measure P</em>, if its performance at tasks in T, as measured by P, improves with experience E."</p>
+</div>
+
+<p>Áp vào V18:</p>
+<ul>
+  <li><strong>Task T</strong>: dự đoán ticker FPT ngày mai UP / DOWN / FLAT</li>
+  <li><strong>Experience E</strong>: 1250 phiên OHLCV lịch sử + label ngày kế</li>
+  <li><strong>Performance P</strong>: cross-validated accuracy (V18 đạt ~60.5% vs random baseline 42%)</li>
+</ul>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Ví dụ đời thực — Học chạy xe máy</div>
+<p><strong>Cách cũ (rule-based, KHÔNG phải ML)</strong>: Bố dạy "nếu đèn đỏ → thắng; nếu ngã tư → giảm tốc; nếu mưa → chậm 50%". Máy chỉ làm đúng những gì được lập trình.</p>
+<p><strong>Cách ML</strong>: Bạn tự chạy 1000 lần (experience E), té ngã và bị bấm còi (performance P) rồi tự điều chỉnh cách bẻ lái, phanh (task T). Không ai viết luật "khi rẽ trái với tốc độ 30km/h thì nghiêng người 5 độ" — nhưng não bạn học được.</p>
+<p><strong>Áp dụng V18</strong>: Không ai bảo "khi RSI &gt; 70 và volume tăng 2× thì DOWN". Model tự học pattern này từ 1250 phiên lịch sử.</p>
+</div>
+
+<h2>2. Ba loại Machine Learning</h2>
+
+<table>
+<tr><th>Loại</th><th>Có label không?</th><th>Ví dụ VN</th><th>Áp dụng trong project bạn</th></tr>
+<tr>
+  <td><strong>Supervised</strong></td>
+  <td>Có (input + target)</td>
+  <td>Dự đoán giá cổ phiếu, phân loại spam, detect gian lận thẻ</td>
+  <td>V18 = supervised classification 3-class</td>
+</tr>
+<tr>
+  <td><strong>Unsupervised</strong></td>
+  <td>Không (chỉ input)</td>
+  <td>Segment khách hàng, phát hiện anomaly, topic modeling</td>
+  <td>KHÔNG dùng trong PredictStock (nhưng có thể dùng cluster sector rotation)</td>
+</tr>
+<tr>
+  <td><strong>Reinforcement</strong></td>
+  <td>Reward signal (không label sẵn)</td>
+  <td>Bot đánh cờ, giao dịch algo tự học, robot điều hướng</td>
+  <td>RLHF (Level 4.4) dùng RL để align LLM</td>
+</tr>
+</table>
+
+<h3>2.1 Supervised: 2 nhánh con</h3>
+
+<p><strong>Classification (phân loại)</strong> — output là category rời rạc:</p>
+<ul>
+  <li>Ví dụ: FPT ngày mai <code>UP</code> / <code>DOWN</code> / <code>FLAT</code> (3 class)</li>
+  <li>Loss function: cross-entropy</li>
+  <li>Metric: accuracy, F1, precision/recall, AUC</li>
+</ul>
+
+<p><strong>Regression (hồi quy)</strong> — output là số liên tục:</p>
+<ul>
+  <li>Ví dụ: dự đoán return chính xác của FPT (+2.5%, -0.8%, ...)</li>
+  <li>Loss function: MSE, MAE, Huber</li>
+  <li>Metric: RMSE, MAE, R²</li>
+</ul>
+
+<div class="callout warn">
+  <div class="label">Câu hỏi phổ biến phỏng vấn</div>
+  <p>"Tại sao V18 là classification 3-class thay vì regression giá?" → Vì regression giá cổ phiếu <strong>quá nhiễu</strong>: giá phụ thuộc quá nhiều biến (news, sentiment, macro) mà ta không quan sát được. Classification 3-class chỉ hỏi <em>hướng</em> — ít nhiễu hơn + dễ actionable (trader chỉ cần biết long/short/flat).</p>
+</div>
+
+<div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
+<div class="label">🔍 So sánh 3 loại ML — 11 dimensions (đọc SAU khi hiểu định nghĩa ở mục 2)</div>
+
+<p>Sau khi biết 3 loại là gì, đây là bảng compare chi tiết để nhớ khác biệt của chúng. <strong>Chi tiết Algorithm + Metric</strong> sẽ được giới thiệu sâu ở <a href="L1_3_trees_xgboost.html"><strong>L1.3 — Algorithms landscape + Metrics</strong></a>.</p>
+
+<table>
+<tr><th></th><th>Supervised</th><th>Unsupervised</th><th>Reinforcement</th></tr>
+<tr><td><strong>Bạn có gì?</strong></td><td>Input + đáp án đúng (label)</td><td>Chỉ Input, không đáp án</td><td>Environment cho reward khi hành động</td></tr>
+<tr><td><strong>Bạn muốn gì?</strong></td><td>Học "input → label"</td><td>Tìm cấu trúc ẩn trong data</td><td>Học policy tối đa reward dài hạn</td></tr>
+<tr><td><strong>Analogy bé học</strong></td><td>Bố mẹ chỉ "mèo/chó" 1000 lần</td><td>Bé tự nhìn 1000 con vật, tự nhóm</td><td>Bé chạm bếp → đau → học tránh</td></tr>
+<tr><td><strong>Ví dụ VN</strong></td><td>1250 phiên VNM có label → XGBoost predict</td><td>Cluster 100k user thành 5 nhóm behavioral</td><td>Bot cờ tướng: mỗi nước có thắng/thua</td></tr>
+<tr><td><strong>Khó dễ</strong></td><td>Dễ nhất (có ground truth)</td><td>Trung bình (không biết đúng/sai)</td><td>Khó nhất (delayed feedback)</td></tr>
+<tr><td><strong>Data cost</strong></td><td>Cao (label thủ công)</td><td>Thấp (raw data)</td><td>Trung bình (cần simulator)</td></tr>
+<tr><td><strong>Algorithm 3 chính</strong></td><td>XGBoost, NN, Linear</td><td>K-Means, PCA, DBSCAN</td><td>PPO, DQN, Q-Learning</td></tr>
+<tr><td><strong>Metric 3 chính</strong></td><td>Accuracy/F1, RMSE, PR-AUC</td><td>Silhouette, elbow WCSS</td><td>Cumulative reward, win rate</td></tr>
+<tr><td><strong>Dùng khi</strong></td><td>Có label rõ, task predict cụ thể</td><td>Explore data, không biết pattern</td><td>Sequential decision, có reward feedback</td></tr>
+<tr><td><strong>PredictStock</strong></td><td>✅ V18 chính</td><td>❌ Chưa dùng</td><td>❌ Chưa dùng</td></tr>
+<tr><td><strong>AI Orchestrator</strong></td><td>Fine-tune LLM base</td><td>Embedding clustering</td><td>RLHF align LLM (L4.4)</td></tr>
+</table>
+
+<h4>Analogy tổng hợp — 3 cách học của người</h4>
+<ol>
+<li><em>Supervised</em>: Học đại học có giáo viên chấm bài. Nhanh nhưng phụ thuộc chất lượng giáo viên.</li>
+<li><em>Unsupervised</em>: Đọc 1000 cuốn sách một mình. Tự nhóm, tự thấy pattern. Chậm nhưng độc lập.</li>
+<li><em>Reinforcement</em>: Học kinh doanh — thử, lỗ tiền, học, thử lại. Không có "đáp án đúng" — thị trường phản hồi qua doanh thu.</li>
+</ol>
+
+<h4>Cây quyết định — chọn loại nào?</h4>
+<pre><code>Có label không?
+├── Có → Supervised (default 90% ML task)
+│   ├── Output số → Regression → RMSE/MAE
+│   └── Output category → Classification → F1/PR-AUC
+└── Không →
+    ├── Muốn explore/cluster? → Unsupervised → Silhouette
+    └── Muốn learn từ trial-error? → Reinforcement → Cumulative reward
+</code></pre>
+
+<p><strong>➡️ Muốn hiểu sâu Algorithms + Metrics từng loại?</strong> Đọc <a href="L1_3_trees_xgboost.html"><strong>L1.3</strong></a> — module dành riêng cho Algorithm landscape (Supervised/Unsupervised/RL) và bộ Metric đầy đủ.</p>
+
+<p><strong>Câu hỏi phỏng vấn</strong>: "V18 dùng loại nào? Vì sao?" → "Supervised classification 3-class. Có label rõ (UP/DOWN/FLAT tính từ future return) + task discrete + data quantity đủ. Metric CV accuracy vì class gần balanced. RL không phù hợp vì delayed feedback + không có simulator ổn."</p>
+</div>
+
+<h2>3. ML Pipeline — 7 bước end-to-end</h2>
+
+<p>Đây là template bạn PHẢI thuộc lòng cho system design questions.</p>
+
+<pre><code>┌────────────────────────────────────────────────────────────────────┐
+│  1. Problem definition   →   xác định task, metric, business goal   │
+│  2. Data collection      →   fetch OHLCV từ VCI, save vào Postgres  │
+│  3. Feature engineering  →   compute RSI, MACD, MA, volume ratio... │
+│  4. Model selection      →   XGBoost 2-tầng (Direction + 3-class)   │
+│  5. Training + tune      →   CV + Optuna, early-stop, calibration   │
+│  6. Evaluation           →   walk-forward, sector spread, ECE        │
+│  7. Deployment + monitor →   docker container + consistency cron     │
+└────────────────────────────────────────────────────────────────────┘
+                       ▲                                   │
+                       │        retrain nếu drift          │
+                       └───────────────────────────────────┘
+</code></pre>
+
+<div class="example-box">
+  <div class="title">📊 Áp dụng vào V18 (mỗi bước ứng với file/function nào)</div>
+  <ol>
+    <li><strong>Problem</strong>: <code>SOLUTION.md</code> — dự đoán UP/DOWN/FLAT với horizon 1/3/5 phiên</li>
+    <li><strong>Data</strong>: <code>backend/providers/vci.py::get_history()</code> — fetch từ VCI API</li>
+    <li><strong>Features</strong>: <code>backend/predict/features_v18.py::build_v18_features()</code> — 79 features</li>
+    <li><strong>Model</strong>: <code>backend/train_v18_unified.py</code> — 2-stage XGBoost + LightGBM ensemble</li>
+    <li><strong>Training</strong>: chạy <code>python train_v18_unified.py --tickers ALL</code></li>
+    <li><strong>Evaluation</strong>: <code>backend/scripts/validate_v20_artifacts.py</code> — gate check</li>
+    <li><strong>Deploy</strong>: <code>docker-compose.yml</code> + <code>predictor-api-1</code> container</li>
+  </ol>
+</div>
+
+<h2>4. ML vs Traditional Software</h2>
+
+<table>
+<tr><th></th><th>Traditional software</th><th>Machine Learning</th></tr>
+<tr><td>Cách viết logic</td><td>Coder viết <code>if/else</code></td><td>Model học từ data</td></tr>
+<tr><td>Correctness</td><td>Deterministic (input X → output Y luôn)</td><td>Probabilistic (accuracy 60% nghĩa là 40% sai)</td></tr>
+<tr><td>Test</td><td>Unit test + integration</td><td>Metric trên test set + calibration + drift monitor</td></tr>
+<tr><td>Debug</td><td>Trace stack</td><td>Inspect features + SHAP + confusion matrix</td></tr>
+<tr><td>Update</td><td>Deploy code mới</td><td>Retrain model + validate → promote</td></tr>
+</table>
+
+<div class="callout danger">
+  <div class="label">🚨 Bài học đắt giá từ V19.5</div>
+  <p>ML system có thể <strong>fail lặng lẽ</strong> theo cách traditional software không có: 14 blue-chip tickers rơi vào v1 legacy fallback vì T3/T5 artifacts thiếu features. Traditional code sẽ throw exception; ML pipeline chỉ log warning và tiếp tục serve. → Bạn phải build <strong>fail-loud</strong> guard rails (V20 Slice 5 consistency cron).</p>
+</div>
+
+<h2>4b. 📖 Glossary — thuật ngữ nền bạn sẽ gặp xuyên suốt Level 1</h2>
+
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">ⓘ Định nghĩa nhanh (đọc lướt, sẽ đào sâu ở modules sau)</div>
+<ul>
+  <li><strong>Feature (đặc trưng)</strong> — 1 con số mô tả sample. VD: <code>rsi_14 = 65.2</code>. Model chỉ "thấy" thế giới qua features.</li>
+  <li><strong>Label (nhãn)</strong> — đáp án đúng cho 1 sample. VD: FPT ngày mai <code>UP</code>.</li>
+  <li><strong>Model</strong> — hàm f(features) → prediction. VD: XGBoost tree ensemble.</li>
+  <li><strong>Loss function</strong> — số đo "sai bao nhiêu" giữa prediction và label. Model học bằng cách <em>giảm loss</em>.</li>
+  <li><strong>Gradient</strong> — đạo hàm của loss theo tham số. "Hướng dốc" giúp model biết chỉnh weight theo hướng nào để loss giảm. (Analogy: nhắm mắt xuống núi — feeling độ dốc dưới chân = gradient.)</li>
+  <li><strong>Logit</strong> — output "thô" của model trước khi bị nén vào [0,1]. Range (-∞, +∞). Sigmoid(logit) = probability.</li>
+  <li><strong>Cross-entropy</strong> — loss chuẩn cho classification. Phạt <em>rất nặng</em> khi model tự tin sai. Công thức: <code>-Σ y·log(ŷ)</code>, trong đó <code>y</code> = label thật (0 hoặc 1), <code>ŷ</code> = xác suất model dự đoán. Sẽ derive ở L1.3.</li>
+  <li><strong>Curse of dimensionality (lời nguyền chiều cao)</strong> — càng nhiều features (chiều), data càng "thưa" trong không gian đó, khiến khái niệm "gần/xa" mất ý nghĩa và cần exponentially nhiều data hơn để model học tốt. VD cụ thể: chia mỗi chiều thành 10 khoảng ("bin"). Với 1 chiều, 10 bin là đủ phủ. Với 10 chiều, số "ô" cần phủ là 10^10 (10 tỷ ô) so với 10 ô ở 1 chiều — tăng gấp 1 tỷ lần (10^9) — trong khi vẫn chỉ có 100 sample, gần như trống rỗng. Đây là why "cứ thêm feature vô tội vạ" làm model TỆ hơn, không tốt hơn (xem Q4 bên dưới, và KNN ở L1.3 mục 7.1 bị ảnh hưởng nặng nhất).</li>
+  <li><strong>Accuracy</strong> — tỷ lệ đoán đúng. <code>#đúng / #tổng</code>. Đơn giản nhưng lừa khi class imbalanced (model đoán FLAT hết vẫn 50%).</li>
+  <li><strong>Precision</strong> — trong số lần model đoán "UP", bao nhiêu % thực sự đúng UP. <code>TP / (TP+FP)</code>. Cao = model ít "báo động giả".</li>
+  <li><strong>Recall</strong> — trong số lần thực sự UP, model bắt được bao nhiêu %. <code>TP / (TP+FN)</code>. Cao = model ít "bỏ sót". Precision và recall thường đánh đổi nhau (tăng cái này thường giảm cái kia).</li>
+  <li><strong>F1 score</strong> — trung bình điều hoà giữa precision + recall (2 số ở trên). Range [0,1]. Dùng khi class imbalanced.</li>
+  <li><strong>AUC (Area Under ROC Curve)</strong> — xác suất model rank random positive cao hơn random negative. AUC=0.5 = random, AUC=1.0 = perfect.</li>
+  <li><strong>Overfitting</strong> — "học vẹt": model nhớ noise của train set thay vì học pattern. Train acc cao, test acc thấp.</li>
+  <li><strong>Calibration</strong> — model bảo "70% chắc" thì đúng 70% lần thật. Sẽ đào sâu ở L1.6.</li>
+  <li><strong>Leak (data leakage)</strong> — feature vô tình chứa info tương lai. Model "gian lận" trên train, sập trên production. Cạm bẫy #1 của time-series ML.</li>
+  <li><strong>TimeSeriesSplit</strong> — cách chia CV giữ nguyên thứ tự thời gian (train quá khứ, test tương lai). Sẽ đào sâu ở L1.5.</li>
+</ul>
+</div>
+
+<div class="example-box">
+  <div class="title">🧮 Cross-entropy — ví dụ số cụ thể (1 sample)</div>
+  <p>FPT ngày mai thực tế là <strong>UP</strong> (label one-hot <code>y = [0, 0, 1]</code> cho [DOWN, FLAT, UP]). Model dự đoán <code>ŷ = [0.1, 0.2, 0.7]</code>.</p>
+  <pre><code>Loss = -Σ y_i · log(ŷ_i)
+     = -(0·log(0.1) + 0·log(0.2) + 1·log(0.7))
+     = -log(0.7) = 0.357</code></pre>
+  <p>Nếu model tự tin SAI (predict UP chỉ 0.05 khi thật là UP): <code>Loss = -log(0.05) = 3.00</code> — phạt gấp <strong>8.4×</strong> so với case đúng. Đây là "phạt rất nặng khi tự tin sai": log(x) tiến về -∞ khi x → 0, nên loss nổ mạnh khi model chắc chắn nhưng sai.</p>
+</div>
+
+<h2>5. Khi nào KHÔNG dùng ML?</h2>
+
+<ul>
+  <li>Business rule đơn giản (khách VIP nếu spent > 10M) → viết SQL/if-else, đừng train model</li>
+  <li>Không có data hoặc data < 1000 samples</li>
+  <li>Yêu cầu 100% correctness (kiểm toán, y khoa quyết định)</li>
+  <li>Không có way to measure success (nếu bạn không biết đúng/sai, làm sao model học?)</li>
+</ul>
+
+<div class="qa-gate">
+<h3>✅ QA Gate — Tự test trước khi qua module kế</h3>
+
+<p class="q">1. Định nghĩa ML bằng 1 câu (không nhìn note).</p>
+<p class="a">ML = xây thuật toán học quy luật từ data, thay vì lập trình rule thủ công. Perf phải cải thiện khi có nhiều data hơn.</p>
+
+<p class="q">2. Cho 5 ví dụ VN tương ứng: 2 supervised classification, 1 supervised regression, 1 unsupervised, 1 RL.</p>
+<p class="a">Classification: dự đoán churn user Momo, phân loại email spam Gmail. Regression: dự đoán giá nhà TP.HCM. Unsupervised: cluster khách hàng Shopee. RL: bot đấu cờ vua, LLM alignment (RLHF).</p>
+
+<p class="q">3. Vẽ ML pipeline 7 bước từ trí nhớ + đặt vào chỗ nào của V18 pipeline.</p>
+<p class="a">Problem → Data → Features → Model → Train → Eval → Deploy. V18 files: providers/vci.py → features_v18.py → train_v18_unified.py → validate_v20_artifacts.py → docker-compose.yml.</p>
+
+<p class="q">4. Tại sao V18 chọn classification 3-class thay vì regression?</p>
+<p class="a">Giá cổ phiếu quá nhiễu (phụ thuộc nhiều biến không quan sát được: news, macro, retail sentiment). Classification chỉ hỏi hướng — ít nhiễu, dễ actionable (long/short/flat).</p>
+
+<p class="q">5. Khác biệt lớn nhất giữa ML và code truyền thống khi debug production issue?</p>
+<p class="a">Traditional throw exception → stack trace. ML fail lặng lẽ (accuracy giảm 5% chẳng ai biết). Phải build monitoring: drift detector, canary, consistency cron. V19.5 chết vì thiếu cái này.</p>
+
+</div>
+
+<div class="callout" style="background: rgba(239,68,68,0.08); border-left-color: #ef4444">
+<div class="label">❌ Sai lầm thường gặp vs ✅ Thực tế</div>
+<ul>
+  <li><strong>❌ "ML sẽ tự tìm ra mọi pattern nếu có đủ data"</strong> → ✅ Không. Model chỉ học được pattern <em>đã có trong features</em>. Feed close price mỗi ngày, model không tự phát hiện "RSI &gt; 70 = quá mua" — bạn phải compute RSI trước.</li>
+  <li><strong>❌ "Accuracy càng cao càng tốt"</strong> → ✅ Sai khi class imbalanced. Model đoán "FLAT" cho mọi ngày sẽ đạt 50% accuracy nhưng vô dụng. Dùng F1, PR-AUC.</li>
+  <li><strong>❌ "Deep learning luôn tốt hơn XGBoost"</strong> → ✅ Với tabular data cỡ nhỏ-trung (&lt; 1M rows), XGBoost thường thắng DL. DL chỉ vượt trội trên image/text/audio ở scale lớn.</li>
+  <li><strong>❌ "Test accuracy 90% = deploy thành công"</strong> → ✅ Nếu test set bị leak, deploy sẽ chết. V19.5 chính là bài học đắt.</li>
+</ul>
+</div>
+
+<h2>6. 🎓 Interview-style Q&A (phỏng vấn thực tế)</h2>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q1: "Tôi có 1000 rows data khách hàng chợ Bến Thành. Bạn recommend supervised, unsupervised, hay RL?"</div>
+<p><strong>Model answer</strong>: "Depends on business goal. Nếu có label (churn/retain, high/low value) → supervised. Nếu chỉ muốn hiểu segment customer → unsupervised clustering (K-Means/HDBSCAN). RL chỉ hợp lý nếu có sequential decisions với reward (VD tối ưu discount schedule qua thời gian). Với 1000 rows nhỏ, tôi warn: supervised cần ≥ vài trăm mỗi class, unsupervised ổn hơn."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q2: "Vì sao V18 dùng cross-validated accuracy 60.5% mà không phải test accuracy 65%?"</div>
+<p><strong>Model answer</strong>: "CV accuracy đo qua nhiều fold → variance estimate + bớt overfit đến 1 test set duy nhất. Test accuracy 65% single fold có thể là may mắn của split. V18 dùng TimeSeriesSplit 5-fold + gap → CV mean 60.5% là ước lượng honest của live performance."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q3: "Random baseline 42% — con số này từ đâu?"</div>
+<p><strong>Model answer</strong>: "Baseline naive nhất = predict class majority. Nếu FLAT chiếm 42% samples train → predict FLAT mọi lúc → accuracy 42%. V18 đạt 60.5% = beat baseline 18.5 điểm → thực sự có edge. Nếu chỉ đạt 44%, model gần vô dụng dù nghe có vẻ &gt; 50%."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q4: "Sếp bảo 'thêm 100 features nữa xem model có tốt hơn'. Bạn nghĩ sao?"</div>
+<p><strong>Model answer</strong>: "Push back polite. More features ≠ better. Rủi ro: (1) curse of dimensionality — data càng thưa theo cấp số mũ với số chiều (xem glossary phía trên), (2) overfit tăng, (3) slow train + inference. Đúng cách: propose SHAP audit hiện tại, drop features contribution &lt; 0.5%, chỉ add features có business rationale + hypothesis rõ."</p>
+</div>
+
+<div class="callout" style="background: rgba(168,85,247,0.08); border-left-color: #a855f7">
+<div class="label">Q5: "ML pipeline của bạn deploy production. Sau 3 tháng accuracy tụt 5%. Debug thế nào?"</div>
+<p><strong>Model answer</strong>: "Systematic checklist: (1) Data drift — feature distribution 3 tháng qua vs train? (2) Label drift — target distribution shift? (3) Concept drift — mapping feature→label changed (VD market regime)? (4) Pipeline bug — feature compute có silent fail? (5) External factor — Fed, war, corona. Fix theo priority: nếu drift → retrain với recent window; nếu bug → hotfix + re-baseline. Không patch bằng cách 'tune threshold' — đó là band-aid."</p>
+</div>
+
+<div class="evidence-box">
+  <div class="title">🔗 Evidence — kiểm chứng ngay tại project</div>
+  <ul>
+    <li><code>d:/New-jouney/predictor/SOLUTION.md</code> — problem statement V18</li>
+    <li><code>backend/predict/features_v18.py</code> line 621 — build_v18_features (bước 3 pipeline)</li>
+    <li><code>backend/train_v18_unified.py</code> line 1668 — argparse entry point</li>
+    <li><code>reports/_baselines/baseline_v18_tier_a_20260628.json</code> — evaluation baseline</li>
+    <li><code>docker-compose.yml</code> — deploy config</li>
+    <li>V19.5 silent-fail bug: <code>reports/_baselines/v19_5_senior_signoff.md</code></li>
+  </ul>
+</div>
+
+<div class="refs">
+  <div class="title">📚 References để đọc thêm</div>
+  <ul>
+    <li>📖 Tom Mitchell — <em>Machine Learning</em> (1997) — classic textbook, chapter 1 định nghĩa formal</li>
+    <li>🎥 Andrew Ng — <a href="https://www.coursera.org/learn/machine-learning">Coursera ML course</a> — free, 3 tuần đầu đủ nền tảng</li>
+    <li>📖 <a href="https://d2l.ai/chapter_introduction/index.html">D2L Chapter 1: Introduction</a> — modern take</li>
+    <li>📝 <a href="https://research.google/pubs/pub43146/">"Hidden Technical Debt in ML Systems" (NeurIPS 2015)</a> — must-read về pain của ML production</li>
+  </ul>
+</div>
+
+<div class="nav-bottom">
+  <a href="../index.html">← Trang chủ</a>
+  <a href="L1_2_features.html">L1.2 · Feature Engineering →</a>
+</div>
+
+</div>
+</body>
+</html>
