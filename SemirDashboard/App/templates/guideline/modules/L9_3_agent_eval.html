@@ -216,6 +216,28 @@ Return JSON: {task:1-5, eff:1-5, tool:1-5, recov:1-5, safety:1-5, reasoning:"...
 <tr><td>Context overflow</td><td>Fail at turn N as history grows</td><td>No summarization/truncation strategy</td></tr>
 </table>
 
+<h2>6.5 · τ-bench và pass^k — đo ĐỘ ỔN ĐỊNH, không chỉ đo "có làm được không"</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề cụ thể — Tier 2 golden set (§2) đo "task success" nhưng chỉ chạy 1 LẦN mỗi task</div>
+<p>Golden set ở §2 chạy mỗi task 1 lần, chấm PASS/FAIL. Nhưng agent dùng LLM là hệ thống NGẪU NHIÊN (stochastic) — cùng 1 task, cùng 1 input, chạy lại 5 lần có thể ra 5 kết quả khác nhau (do sampling temperature, tool response timing, race condition). Vậy "task success 90%" trên golden set nghĩa là gì: 90% CÁC TASK KHÁC NHAU pass, hay 1 task NHẤT ĐỊNH có 90% cơ hội pass MỖI LẦN CHẠY? Đây là 2 câu hỏi khác nhau hoàn toàn — và benchmark τ-bench (Sierra, 2024) được thiết kế riêng để trả lời câu hỏi THỨ HAI.</p>
+</div>
+
+<p><strong>Cơ chế τ-bench</strong>: mô phỏng hội thoại ĐỘNG giữa agent và 1 "user" GIẢ LẬP bằng LLM (không phải input tĩnh cố định như golden set thông thường) — agent phải dùng tool API domain-specific (VD hệ thống đặt vé máy bay) tuân theo policy guideline, trong khi user (LLM khác đóng vai) có thể hỏi lại, đổi ý, cung cấp thông tin dần dần — giống 1 cuộc gọi tổng đài THẬT, không phải 1 câu lệnh rồi im lặng.</p>
+
+<p><strong>Metric pass^k (đọc "pass-hat-k") — khác pass@k đã quen thuộc thế nào</strong>:</p>
+<table>
+<tr><th></th><th>pass@k (quen thuộc, VD code-gen eval)</th><th>pass^k (τ-bench, mới)</th></tr>
+<tr><td>Định nghĩa</td><td>Xác suất ÍT NHẤT 1 trong k lần chạy THÀNH CÔNG</td><td>Xác suất CẢ k lần chạy ĐỀU thành công</td></tr>
+<tr><td>Đo cái gì</td><td>Khả năng agent CÓ THỂ giải được task (given đủ số lần thử)</td><td>Độ TIN CẬY — agent có giải ỔN ĐỊNH task đó mỗi lần không</td></tr>
+<tr><td>k tăng → điểm</td><td>Tăng dần (càng thử nhiều càng dễ trúng ít nhất 1 lần)</td><td>Giảm dần (càng yêu cầu nhiều lần liên tiếp đều đúng càng khó)</td></tr>
+<tr><td>Phù hợp cho</td><td>Batch code-gen (chọn best-of-N rồi test)</td><td>Production agent chạy 1 LẦN DUY NHẤT mỗi khi user hỏi — không có "thử lại tới khi đúng"</td></tr>
+</table>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: pass@k và pass^k dùng CÙNG 1 công thức chạy k lần, nhưng ĐIỀU KIỆN THÀNH CÔNG ngược nhau — pass@k hỏi "có Ít NHẤT 1 lần đúng không" (lạc quan, phù hợp khi bạn được chọn kết quả tốt nhất trong nhiều lần thử), pass^k hỏi "CẢ k lần có đúng không" (khắt khe, phù hợp khi agent chạy live cho user thật, không có cơ hội "thử lại rồi chọn"). Kết quả thực nghiệm τ-bench cho thấy khoảng cách giữa 2 số này RẤT LỚN — 1 agent GPT-4o đạt pass^1 cao nhưng pass^8 giảm hẳn ~60% (tương đối) — nghĩa là agent "biết cách giải" task nhưng KHÔNG ổn định giải lại được task y hệt nhiều lần liên tiếp.</p>
+
+<p><strong>Insight</strong>: đây là lý do §2's Tier 2 golden set (chạy 1 lần, chấm PASS/FAIL) có thể ĐÁNH GIÁ THẤP mức độ rủi ro thực sự của agent trong production — 1 agent pass 90% trên golden set (mỗi task 1 lần) có thể chỉ đạt pass^5 ~50% nếu bị chấm lại 5 lần liên tiếp trên CÙNG 1 task, nghĩa là user gặp lại đúng câu hỏi đó vào ngày khác có 50% khả năng nhận câu trả lời khác/sai. Team nghiêm túc về reliability (VD hệ thống production chạy hàng ngày như daily-investor-report) nên bổ sung 1 lớp đo pass^k cho ÍT NHẤT vài task quan trọng nhất trong golden set, không chỉ chạy 1 lần rồi tin tưởng.</p>
+
 <h2>7. Case study — AI Orchestrator engineer agent</h2>
 
 <div class="example-box">

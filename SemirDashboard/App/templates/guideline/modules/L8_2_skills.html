@@ -346,6 +346,21 @@ def test_skill_daily_investor_report():
   <li><strong>DSPy Signatures</strong>: declarative task definitions</li>
 </ul>
 
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔬 DSPy Signatures — khác gì với SKILL.md, tại sao gọi "compiler"?</div>
+<p><strong>Vấn đề cụ thể</strong>: SKILL.md (§3 ở trên) là văn bản TIẾNG ANH TỰ DO — engineer tự tay viết câu chữ prompt, muốn cải thiện phải tự đọc lại + sửa tay. DSPy đặt câu hỏi ngược: nếu coi việc gọi LLM giống 1 HÀM (function) có input/output rõ ràng, liệu có thể để MÁY TỰ TÌM câu chữ prompt tốt nhất thay vì người tự viết tay?</p>
+<p><strong>Cơ chế</strong>: DSPy có 3 khái niệm tách biệt: <strong>Signature</strong> = khai báo input/output mong muốn dưới dạng khai báo (declarative), KHÔNG chứa câu chữ prompt cụ thể — VD <code>question -> answer</code> hay <code>context, question -> reasoning, answer</code>. <strong>Module</strong> = 1 pattern gọi LLM cụ thể implement cho signature đó (VD <code>Predict</code> gọi thẳng 1 lần, <code>ChainOfThought</code> tự thêm bước suy luận trước khi trả lời) — module có thể ghép thành pipeline nhiều bước. <strong>Teleprompter (compiler)</strong> = component TỰ ĐỘNG tối ưu câu chữ prompt thật sự + chọn ví dụ few-shot cho từng module trong pipeline, dựa trên 1 tập dữ liệu mẫu (training set nhỏ) + 1 hàm đánh giá (metric) — giống compiler biến code cấp cao thành máy-code tối ưu, DSPy biến signature khai báo thành prompt cụ thể tối ưu.</p>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: DSPy KHÔNG train lại model weight (không phải fine-tuning) — "compile" ở đây nghĩa là tìm ra CÂU CHỮ PROMPT + VÍ DỤ FEW-SHOT tốt nhất cho model ĐÃ CÓ SẴN (frozen), qua thử nghiệm nhiều biến thể trên tập training rồi giữ lại biến thể cho điểm metric cao nhất — khác hẳn RLHF/fine-tuning (L4.4/L4.5, đổi weight thật).</p>
+<table>
+<tr><th></th><th>Claude Skills (SKILL.md)</th><th>DSPy</th></tr>
+<tr><td>Prompt viết bởi</td><td>Người (tay)</td><td>Máy tự tìm (qua teleprompter), người chỉ khai báo signature</td></tr>
+<tr><td>Cải thiện qua thời gian</td><td>Người tự sửa SKILL.md dựa trên lỗi quan sát được</td><td>Chạy lại "compile" trên training set mới/metric mới</td></tr>
+<tr><td>Cần training set không?</td><td>Không bắt buộc (có thể chỉ cần few-shot examples viết tay)</td><td>Cần (để teleprompter có dữ liệu tối ưu)</td></tr>
+<tr><td>Phù hợp nhất khi</td><td>Domain workflow phức tạp, cần multi-file (scripts/KB/templates), discipline rules rõ ràng</td><td>Pipeline có metric đo được rõ ràng (accuracy, F1) và muốn tối ưu tự động, ít cần multi-file phức tạp</td></tr>
+</table>
+<p><strong>Insight</strong>: Skills và DSPy giải quyết 2 bài toán khác nhau, không phải 2 lựa chọn cạnh tranh — Skills tối ưu cho REUSABILITY + DISCIPLINE của 1 domain workflow phức tạp (nhiều file, nhiều rule cứng); DSPy tối ưu cho CHẤT LƯỢNG PROMPT của 1 pipeline có metric đo được, khi không muốn tự tay đoán câu chữ. 1 hệ thống lớn có thể dùng CẢ HAI: DSPy để tối ưu 1 module con (VD prompt classify ticker sentiment) rồi nhúng kết quả (câu chữ đã tối ưu) vào 1 SKILL.md lớn hơn.</p>
+</div>
+
 <div class="qa-gate">
 <h3>✅ QA Gate</h3>
 

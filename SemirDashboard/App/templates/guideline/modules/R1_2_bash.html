@@ -83,6 +83,37 @@ docker exec predictor-api-1 python scripts/ai_predict_status.py
 #   Docker network (postgres:5432, KHÔNG PHẢI localhost), đúng
 #   dependency đã pin trong requirements.txt. Chạy ngoài host dễ lệch version.</code></pre>
 
+<h3>Bước 5 — <code>set -euo pipefail</code>: vì sao script CI không "âm thầm" chạy tiếp sau lỗi</h3>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Bash mặc định giống 1 nhân viên "cứ làm tiếp dù bước trước sai" — lệnh 1 lỗi, nó vẫn chạy lệnh 2, lệnh 3... trừ khi bạn kiểm tra <code>$?</code> tay sau MỖI lệnh (rất dễ quên). <code>set -e</code> đổi hành vi mặc định này: "nếu 1 lệnh lỗi (exit code khác 0), DỪNG NGAY toàn bộ script" — giống lắp 1 công tắc ngắt điện tự động thay vì phải tự tay kiểm tra từng bước.</p>
+</div>
+<p><strong>Vấn đề cụ thể</strong>: Bước 1 đã nói CI chỉ nhìn exit code của <em>step</em> (khối <code>run: |</code> nhiều dòng) — nhưng mặc định, exit code của CẢ KHỐI chỉ là exit code của DÒNG CUỐI CÙNG. Nếu dòng 2 trong 5 dòng lệnh bị lỗi nhưng dòng 5 chạy thành công, cả step vẫn báo exit code 0 (PASS) dù có 1 bước ở giữa đã hỏng — 1 lỗi rất dễ bị bỏ sót trong CI thật.</p>
+<pre><code># Bash THUẦN (chạy local, hoặc CI runner nào đó KHÔNG tự bật -e) —
+# không có "set -e" — lỗi ở dòng 2 bị NUỐT, script vẫn chạy tiếp:
+#!/bin/bash
+pip install -r requirements.txt
+pytest tests/ --broken-flag-typo    # LỖI cú pháp flag → exit code 2
+echo "Done"                          # dòng NÀY vẫn chạy, exit code cuối = 0 (từ echo)
+# → Script kết thúc với exit code 0 dù pytest thực ra chưa từng chạy đúng!
+
+# Có "set -euo pipefail" khai báo tường minh — dừng NGAY khi 1 lệnh bất kỳ lỗi:
+#!/bin/bash
+set -euo pipefail
+pip install -r requirements.txt
+pytest tests/ --broken-flag-typo    # LỖI → script DỪNG NGAY tại đây
+echo "Done"                          # KHÔNG BAO GIỜ chạy tới dòng này
+# → Script kết thúc với exit code khác 0, không bị "nuốt" lỗi giữa chừng</code></pre>
+<p style="color: var(--text-dim); font-size: 0.9em;">Lưu ý: GitHub Actions thực ra đã tự chạy mỗi step <code>run:</code> với cờ tương đương <code>-eo pipefail</code> theo mặc định (không cần bạn khai báo) — nhưng KHÔNG có <code>-u</code>, và hành vi này không phải mọi CI runner/shell nào cũng giống nhau. Ví dụ trên minh hoạ cơ chế bash THUẦN TÚY (không phụ thuộc runner cụ thể) để thấy rõ vì sao khai báo tường minh vẫn là thói quen tốt, đặc biệt khi chạy script ngoài GitHub Actions (local, cron job, container khác).</p>
+<p><strong>3 chữ cái viết tắt trong <code>-euo</code> — mỗi cái chặn 1 loại lỗi khác nhau</strong>:</p>
+<table>
+<tr><th>Flag</th><th>Chặn lỗi gì</th><th>Ví dụ nếu KHÔNG bật</th></tr>
+<tr><td><code>-e</code> (errexit)</td><td>Dừng ngay khi 1 lệnh trả exit code khác 0</td><td>Lệnh giữa script lỗi nhưng script vẫn chạy tiếp tới dòng cuối, ẩn giấu lỗi</td></tr>
+<tr><td><code>-u</code> (nounset)</td><td>Báo lỗi khi dùng biến CHƯA từng được gán giá trị</td><td><code>rm -rf "$UNDEFINED_VAR/"</code> nếu biến rỗng do gõ sai tên → thành <code>rm -rf /</code> (xoá thư mục hiện tại hoặc tệ hơn)</td></tr>
+<tr><td><code>pipefail</code></td><td>Trong 1 chuỗi <code>|</code> pipe, lấy exit code của lệnh ĐẦU TIÊN bị lỗi (không phải chỉ lệnh cuối)</td><td><code>false | echo "ok"</code> mặc định trả exit code của <code>echo</code> (0 = PASS) dù <code>false</code> đã lỗi</td></tr>
+</table>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: <code>set -e</code> KHÔNG bắt được MỌI loại lỗi — nó chỉ nhìn exit code, nên 1 lệnh "chạy được nhưng cho kết quả sai" (VD tính toán sai nhưng vẫn exit 0) sẽ KHÔNG bị chặn. <code>set -e</code> cũng có 1 số ngoại lệ khó nhớ (VD lệnh nằm trong điều kiện <code>if</code> không bị dừng dù lỗi, vì đó là hành vi CỐ Ý của <code>if</code>) — đây là lý do nhiều team coi <code>set -euo pipefail</code> là "vệ sinh cơ bản" chứ không phải "lưới an toàn tuyệt đối".</p>
+<p><strong>Insight</strong>: đây chính là cơ chế kỹ thuật đứng sau nguyên tắc ở mục 🎯 Ứng dụng dự án bên dưới ("mỗi dòng là 1 gate, nếu exit code khác 0 ở bất kỳ bước nào, các bước sau không chạy") — hành vi đó trong CI của dự án này 1 phần đến từ <code>-eo pipefail</code> GitHub Actions tự bật ngầm định cho mỗi step, nhưng khai báo tường minh <code>set -euo pipefail</code> (thêm cả <code>-u</code>, thứ GH Actions KHÔNG tự bật) vẫn là best-practice cho bất kỳ script Bash nào chạy ngoài ngữ cảnh GitHub Actions cụ thể.</p>
+
 <h2>🔢 Ví dụ cụ thể</h2>
 <p>Đoạn Bash thật trong <code>.github/workflows/ci.yml</code> (dòng 80-86) — kiểm tra kích thước bundle frontend sau build:</p>
 <pre><code>- name: Check bundle size

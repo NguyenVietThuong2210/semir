@@ -72,6 +72,39 @@ function render(data: TickerData) {
 }</code></pre>
 <p><code>??</code> (nullish coalescing) chỉ thay thế khi giá trị bên trái là <code>null</code> hoặc <code>undefined</code> — khác <code>||</code> vốn cũng thay thế cả chuỗi rỗng <code>""</code> hay số <code>0</code>, dễ gây bug lặng lẽ nếu dùng nhầm.</p>
 
+<h3>Bước 4 — Runtime schema validation (Zod) — giải quyết 1 lỗ hổng KHÁC với guard tay <code>?? ""</code>, không thay thế nó</h3>
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề cụ thể</div>
+<p>Rule <code>(field ?? "").method()</code> ở Bước 3 là "phòng thủ tại điểm dùng" — bạn phải nhớ guard ở MỌI nơi field đó được dùng, dễ sót 1 chỗ. Nếu API đổi 1 field từ <code>string</code> thành <code>number</code> mà không ai cập nhật <code>interface</code>, TypeScript vẫn "tin" khai báo cũ và không báo lỗi gì — compile-time check hoàn toàn mù trước dữ liệu SAI KIỂU (không chỉ null), không riêng gì null.</p>
+</div>
+<p><strong>Cơ chế Zod (thư viện runtime validation phổ biến nhất cho TypeScript)</strong>: thay vì chỉ khai báo <code>interface</code> (Bước 1) — thứ compiler tin suông — bạn định nghĩa 1 "schema" chạy THẬT lúc runtime, kiểm tra dữ liệu nhận từ API có ĐÚNG shape đã khai không, TRƯỚC KHI code khác được dùng dữ liệu đó.</p>
+<pre><code>import { z } from "zod";
+
+// Định nghĩa schema — vừa là "khai báo type" vừa là "hàm kiểm tra runtime"
+const TickerDataSchema = z.object({
+  ticker: z.string(),
+  verdict: z.string().nullable(),   // cho phép null tường minh, không phải "quên khai"
+});
+
+// Suy ra TypeScript type TỪ CHÍNH schema — không viết interface riêng, tránh 2 nguồn sự thật lệch nhau
+type TickerData = z.infer&lt;typeof TickerDataSchema&gt;;
+
+async function fetchTicker(ticker: string): Promise&lt;TickerData&gt; {
+  const raw = await fetch(`/api/predict/${ticker}`).then(r =&gt; r.json());
+  return TickerDataSchema.parse(raw);   // NÉM LỖI RÕ RÀNG ngay đây nếu raw sai shape
+  // (VD field "verdict" API trả về number thay vì string/null) — thay vì để lỗi
+  // trôi âm thầm tới tận chỗ .toUpperCase() ở xa, khó truy ngược nguồn gốc.
+}</code></pre>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Zod KHÔNG THAY THẾ rule <code>?? ""</code> ở Bước 3 — 2 kỹ thuật giải quyết 2 tầng khác nhau. Zod validate NGAY TẠI BIÊN (khi data vừa vào từ API) — bắt được cả trường hợp SAI KIỂU hoàn toàn (string→number), không chỉ null. Guard <code>?? ""</code> vẫn cần ở nơi SỬ DỤNG dữ liệu, vì Zod schema chính đáng CHO PHÉP field là <code>null</code> (business hợp lệ, VD ticker chưa có prediction) — không phải lỗi cần ném exception, chỉ là 1 giá trị hợp lệ cần code UI xử lý gracefully.</p>
+<table>
+<tr><th></th><th><code>interface</code> (Bước 1)</th><th>Zod schema (Bước 4)</th><th><code>?? ""</code> guard (Bước 3)</th></tr>
+<tr><td>Chạy khi nào</td><td>Compile-time only</td><td>Runtime — mỗi lần data vào</td><td>Runtime — mỗi lần dùng field</td></tr>
+<tr><td>Bắt được sai KIỂU (type mismatch)?</td><td>❌ Không (chỉ tin khai báo)</td><td>✅ Có — parse() ném lỗi ngay</td><td>❌ Không (chỉ xử lý null/undefined)</td></tr>
+<tr><td>Bắt được null hợp lệ về nghiệp vụ?</td><td>—</td><td>Cho qua (nếu schema khai <code>.nullable()</code>)</td><td>✅ Có — đây là việc của nó</td></tr>
+<tr><td>Chi phí</td><td>Miễn phí (không tốn CPU runtime)</td><td>1 lần parse mỗi API response</td><td>Rất rẻ, nhưng cần nhớ áp mọi nơi</td></tr>
+</table>
+<p><strong>Insight</strong>: Zod giải quyết đúng lỗ hổng nêu ở Bước 2 ("compiler chỉ TIN interface, không tự verify runtime") bằng cách biến bản thân schema thành nguồn sự thật DUY NHẤT — vừa sinh ra TypeScript type (compile-time), vừa là hàm kiểm tra thật (runtime), thay vì 2 thứ tách rời dễ lệch nhau theo thời gian. Dự án hiện CHƯA dùng Zod (giữ nguyên rule <code>?? ""</code> thủ công) — đây là hướng nâng cấp hợp lý nếu số lượng field API tăng nhiều và rủi ro lệch schema giữa backend/frontend trở nên đáng kể hơn effort thêm 1 dependency.</p>
+
 <h2>🔢 Ví dụ cụ thể</h2>
 <p>3 ví dụ thật, đọc trực tiếp từ <code>frontend/src/</code>, áp dụng đúng pattern <code>(field ?? "").method()</code>:</p>
 <pre><code>// frontend/src/components/Predict/VolumeSignalCard.tsx dòng 15

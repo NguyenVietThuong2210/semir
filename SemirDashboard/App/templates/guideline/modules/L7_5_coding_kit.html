@@ -62,6 +62,7 @@ def train_logreg(X, y, lr=0.01, epochs=100):
 </code></pre>
 
 <h3>Q3. Compute AUC-ROC from scratch</h3>
+<p><strong>Cơ chế</strong>: AUC-ROC = diện tích dưới đường cong ROC (trục X = FPR, trục Y = TPR) khi thử TẤT CẢ ngưỡng phân loại có thể từ cao xuống thấp. Thay vì thử từng ngưỡng rồi vẽ đường cong rồi tích phân (chậm), thuật toán dưới đây khai thác 1 mẹo: sắp xếp sample theo prob GIẢM DẦN rồi ĐI QUA TỪNG SAMPLE 1 LẦN — mỗi khi gặp sample dương (y=1) thì TP tăng 1 (đường cong "đi lên"), gặp sample âm (y=0) thì FP tăng 1 (đường cong "đi ngang"). Diện tích dưới đường cong = cộng dồn diện tích HÌNH THANG (trapezoidal rule) nhỏ ở mỗi bước — với đường cong dạng bậc thang (không phải cong mượt), hình thang ở mỗi bước ngang thực chất suy biến thành hình chữ nhật (chiều cao = TPR hiện tại, chiều rộng = ΔFPR của bước đó).</p>
 <pre><code>def auc_roc(y_true, y_prob):
     # Sort by predicted prob desc
     order = np.argsort(-y_prob)
@@ -84,6 +85,18 @@ def train_logreg(X, y, lr=0.01, epochs=100):
 
 # Discussion: interpret AUC 0.5 = random, 1.0 = perfect
 </code></pre>
+
+<div class="example-box">
+<div class="title">Ví dụ chạy tay — 4 sample (2 dương, 2 âm), đã sắp xếp sẵn theo prob giảm dần</div>
+<table>
+<tr><th>Bước</th><th>prob</th><th>y_true</th><th>tp</th><th>fp</th><th>tpr = tp/pos</th><th>fpr = fp/neg</th><th>Δarea = (fpr − fpr_trước) × tpr</th><th>auc cộng dồn</th></tr>
+<tr><td>1</td><td>0.9</td><td>1</td><td>1</td><td>0</td><td>1/2 = 0.5</td><td>0/2 = 0</td><td>(0 − 0) × 0.5 = 0</td><td>0</td></tr>
+<tr><td>2</td><td>0.8</td><td>0</td><td>1</td><td>1</td><td>0.5</td><td>1/2 = 0.5</td><td>(0.5 − 0) × 0.5 = 0.25</td><td>0.25</td></tr>
+<tr><td>3</td><td>0.6</td><td>1</td><td>2</td><td>1</td><td>2/2 = 1.0</td><td>0.5</td><td>(0.5 − 0.5) × 1.0 = 0</td><td>0.25</td></tr>
+<tr><td>4</td><td>0.3</td><td>0</td><td>2</td><td>2</td><td>1.0</td><td>2/2 = 1.0</td><td>(1.0 − 0.5) × 1.0 = 0.5</td><td>0.75</td></tr>
+</table>
+<p><strong>Kết quả: AUC = 0.75</strong> — khớp với cách tính chéo kiểm độc lập bằng công thức Mann-Whitney (AUC = xác suất 1 sample dương ngẫu nhiên có prob cao hơn 1 sample âm ngẫu nhiên): 2 sample dương là {0.9, 0.6}, 2 sample âm là {0.8, 0.3}. Trong 4 cặp (dương, âm) có thể: (0.9,0.8)→dương thắng, (0.9,0.3)→dương thắng, (0.6,0.8)→âm thắng, (0.6,0.3)→dương thắng ⇒ 3/4 = 0.75. Hai cách tính ra CÙNG 1 số — xác nhận code đúng.</p>
+</div>
 
 <h3>Q4. Handle class imbalance — code</h3>
 <pre><code>from sklearn.utils.class_weight import compute_class_weight

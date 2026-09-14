@@ -82,6 +82,28 @@ fix(ai-predict): 3 bugs found by independent verification (Giai đoạn 0+1)</co
 <p>Chuỗi sự kiện: (1) ai đó chạy <code>ALTER TABLE</code> trực tiếp trên container đang chạy → (2) thay đổi này không nằm trong bất kỳ commit/file migration nào → (3) hạ tầng bị reset (VD volume Docker bị xoá) → (4) schema quay về trạng thái cũ, không ai biết đã từng đổi gì vì <strong>không có record nào trong version control</strong> → (5) <code>prediction_log</code> hỏng thầm lặng 8+ ngày trước khi phát hiện.</p>
 <p><strong>Bài học tổng quát</strong>: nếu 1 thay đổi chỉ tồn tại dưới dạng lệnh chạy tay 1 lần, nó không thực sự "tồn tại" theo nghĩa có thể tái lập — phải nằm trong file được commit.</p>
 
+<h3>Bước 5 — <code>git bisect</code>: tìm ĐÚNG commit gây bug bằng tìm kiếm nhị phân, không phải đoán</h3>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Giống trò chơi "đoán số từ 1-100" — thay vì hỏi từng số 1, 2, 3... (kiểm tra từng commit theo thứ tự thời gian, O(n)), bạn hỏi "50 lớn hơn hay nhỏ hơn?" rồi chia đôi phạm vi mỗi lần — 100 số chỉ cần tối đa 7 câu hỏi (log₂100 ≈ 6.6). <code>git bisect</code> áp dụng đúng chiến lược đó cho lịch sử commit: thay vì <code>git checkout</code> từng commit một để test, nó nhảy thẳng vào commit ở GIỮA khoảng nghi ngờ.</p>
+</div>
+<p><strong>Vấn đề cụ thể</strong>: production báo bug (VD "V19.5 stale-model incident" trong <code>CLAUDE.md</code>) nhưng không biết bug xuất hiện từ commit nào trong số hàng trăm commit gần đây. Duyệt tuần tự từng commit rồi test lại (checkout → build → test → lặp) với 500 commit khả nghi tốn tới 500 lần build+test trong trường hợp xấu nhất.</p>
+<pre><code># Bắt đầu bisect: khai báo 1 điểm CHẮC CHẮN lỗi (hiện tại) và 1 điểm CHẮC CHẮN tốt (VD tag release trước)
+git bisect start
+git bisect bad HEAD              # commit hiện tại có bug
+git bisect good v18-stable-tag   # commit này biết chắc KHÔNG có bug
+
+# Git tự động checkout commit ở GIỮA khoảng good..bad
+# Bạn build + test lại, rồi báo kết quả:
+git bisect good     # nếu commit này KHÔNG có bug → Git thu hẹp nửa sau
+git bisect bad      # nếu commit này CÓ bug → Git thu hẹp nửa trước
+# Lặp lại — mỗi lần Git tự nhảy vào giữa khoảng còn lại
+
+# Sau log₂(n) lần lặp (500 commit → tối đa 9 lần, không phải 500 lần), Git báo:
+# "abc1234 is the first bad commit"
+git bisect reset    # quay lại HEAD ban đầu khi xong</code></pre>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: <code>git bisect</code> chỉ hoạt động đúng nếu bug thoả 1 điều kiện — <strong>tính đơn điệu</strong> (monotonic): 1 khi bug xuất hiện ở commit X, nó phải TIẾP TỤC xuất hiện ở mọi commit SAU X (không "tự khỏi" rồi "tái phát" xen kẽ). Nếu bug có tính "chập chờn" (flaky — VD race condition chỉ thỉnh thoảng xảy ra), kết quả good/bad bạn báo có thể sai, khiến bisect hội tụ về SAI commit. Với bug chập chờn, nên chạy test nhiều lần tại mỗi bước trước khi báo good/bad, không tin 1 lần chạy duy nhất.</p>
+<p><strong>Insight</strong>: <code>git bisect</code> đặc biệt hiệu quả khi kết hợp với 1 script test tự động (<code>git bisect run &lt;script&gt;</code>) — Git tự chạy script, tự đọc exit code (0 = good, khác 0 = bad, đúng khái niệm exit code đã học ở R1.2 Bash) mà không cần người ngồi gõ good/bad tay ở mỗi bước, biến cả quá trình tìm kiếm nhị phân thành 1 lệnh chạy tự động duy nhất.</p>
+
 <h2>🔢 Ví dụ cụ thể</h2>
 <p><code>backend/db_migrations.py</code> — migration runner thật, đọc trực tiếp (dòng 1-40):</p>
 <pre><code>"""

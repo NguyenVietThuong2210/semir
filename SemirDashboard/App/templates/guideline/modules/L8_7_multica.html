@@ -165,6 +165,31 @@ rules:
   - default: claude-code
 </code></pre>
 
+<h2>4.5 · Squads — routing layer cho team lớn</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề thật: §4's routing.yaml chỉ route 1 task → 1 agent CỤ THỂ, không route được cho 1 NHÓM</div>
+<p>Bảng routing ở §4 ("if task.type == X → assign agent Y") giả định người tạo issue BIẾT TRƯỚC nên gán cho agent nào cụ thể. Nhưng với team lớn (VD 10+ dev), người tạo issue (PM, junior dev) thường KHÔNG biết "task này nên đi Claude Code hay Codex" — họ chỉ biết "đây là việc backend". <strong>Squad</strong> giải quyết bằng cách thêm 1 tầng gián tiếp: assign cho 1 NHÓM (do 1 agent "leader" cầm đầu), leader mới là bên quyết định "trong nhóm này, ai (thành viên nào) hợp nhất để làm việc này" — giống việc giao việc cho "team backend" thay vì chỉ đích danh 1 kỹ sư, rồi để trưởng nhóm backend tự phân công.</p>
+</div>
+
+<pre><code># .multica/squads/backend-squad.yaml
+squad: backend-squad
+leader: claude-code          # leader nhận task trước, quyết định route tiếp
+members:
+  - claude-code               # complex refactor, multi-file
+  - codex                     # quick test gen
+  - kiro                      # AWS infra sub-tasks
+
+# Issue được assign cho SQUAD (không phải agent cụ thể):
+$ multica issue assign 200 --squad backend-squad
+→ leader (claude-code) nhận issue #200 trước
+→ leader phân tích: "đây là task viết unit test đơn giản" → route tiếp cho codex
+→ codex thực thi, report ngược lại leader → leader tổng hợp báo cáo cho human</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Squad KHÔNG PHẢI multi-agent debate/consensus (L6.1/L6.2 đã học — nhiều agent CÙNG làm 1 việc rồi so sánh/tổng hợp kết quả). Squad là <strong>phân cấp trách nhiệm 1 CHIỀU</strong> — leader nhận việc, QUYẾT ĐỊNH giao cho AI THÀNH VIÊN nào (không phải nhiều thành viên cùng làm rồi vote), giống sơ đồ tổ chức công ty (trưởng nhóm → nhân viên) hơn là 1 ủy ban ra quyết định tập thể.</p>
+
+<p><strong>Insight</strong>: Squad hoàn thiện lỗ hổng giữa §4 (routing tĩnh, người tạo issue phải biết rõ agent nào) và nhu cầu thực tế team lớn (người tạo issue chỉ cần biết "việc thuộc domain nào") — đẩy quyết định "agent cụ thể nào" xuống cho 1 AI leader gần với domain expertise hơn, giảm gánh nặng cho người assign task ban đầu.</p>
+
 <h2>5. Compound skills — killer feature</h2>
 
 <p>Skill = reusable knowledge/procedure agent đã học 1 lần → dùng lại.</p>

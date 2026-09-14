@@ -215,6 +215,38 @@ graph.add_conditional_edges(
 )
 </code></pre>
 
+<h3>2.5 Send API — fan-out động khi số lượng nhánh KHÔNG biết trước lúc build graph</h3>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p><code>add_conditional_edges</code> (mục 2.4) chọn 1 trong VÀI đường ĐÃ ĐỊNH SẴN lúc build graph (VD "deploy" hoặc "failed" hoặc "engineer") — giống bảng chỉ dẫn ở ngã tư với SỐ LƯỢNG BIỂN BÁO CỐ ĐỊNH. Nhưng nếu bài toán là "chạy song song 1 sub-task CHO MỖI ticker trong danh sách 86 ticker hôm nay, 120 ticker ngày mai" — số nhánh cần chạy song song THAY ĐỔI mỗi lần, không thể vẽ sẵn 86 edge cố định lúc code graph. <strong>Send API</strong> giải quyết đúng bài toán này: 1 node "phát" (dispatch) ra N bản sao của 1 node khác NGAY LÚC CHẠY (runtime), N là con số CHỈ BIẾT KHI graph đang thực thi, không phải lúc viết code.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: <code>add_edge</code>/<code>add_conditional_edges</code> (mục 2.3-2.4) đều yêu cầu khai báo đích đến (tên node) tại thời điểm BUILD graph (trước khi chạy) — phù hợp khi số nhánh cố định/biết trước (VD luôn có đúng 3 lựa chọn: deploy/failed/retry). Nhưng nhiều bài toán thực tế có số lượng "nhánh cần xử lý song song" phụ thuộc DỮ LIỆU RUNTIME (VD: xử lý N ticker trong watchlist hôm nay, N thay đổi mỗi ngày) — không có cách nào vẽ sẵn N edge cho 1 con số N chưa biết.</p>
+
+<pre><code># Send API (LangGraph) — 1 node "phát" ra nhiều bản sao node khác, số lượng
+# quyết định lúc RUNTIME dựa trên state hiện tại:
+
+from langgraph.types import Send
+
+def dispatch_ticker_analysis(state: State) -> list[Send]:
+    tickers = state["watchlist"]              # VD 86 ticker hôm nay, 120 ngày mai
+    return [
+        Send("analyze_one_ticker", {"ticker": t})   # 1 Send = 1 lần gọi node
+        for t in tickers                             #   "analyze_one_ticker" với
+    ]                                                 #   state RIÊNG cho ticker đó
+
+graph.add_conditional_edges("router", dispatch_ticker_analysis)
+# → N bản sao "analyze_one_ticker" chạy SONG SONG (N = len(tickers) lúc runtime)
+# → mỗi bản sao nhận state ĐỘC LẬP (chỉ {"ticker": t}, không thấy state gốc đầy đủ)
+# → kết quả mỗi bản sao "gộp lại" (reduce) vào state chung qua reducer function
+#   (giống Annotated[list, add] đã học ở mục 2.1 — mỗi bản sao APPEND kết quả
+#   riêng vào 1 list chung, không GHI ĐÈ lẫn nhau)</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Send API KHÔNG PHẢI parallel tool calls (đã học ở <code>L5_3_tools.html</code> §4 — LLM tự yêu cầu gọi nhiều tool cùng lúc TRONG 1 lượt response) — Send API là 1 cơ chế Ở TẦNG GRAPH (Python quyết định fan-out ra bao nhiêu instance của 1 NODE, dựa trên dữ liệu trong state), không liên quan tới việc LLM có tự quyết định gọi bao nhiêu tool hay không. Đây vẫn tuân thủ nguyên tắc "dumb control plane" (mục 3.2 dưới) — QUYẾT ĐỊNH fan-out ra bao nhiêu nhánh là code Python đọc <code>state["watchlist"]</code>, không phải LLM tự "nghĩ ra" số lượng.</p>
+
+<p><strong>Insight</strong>: đây chính là pattern "map-reduce" áp dụng vào graph — <strong>map</strong> = Send() phát N bản sao xử lý N item độc lập song song (giống <code>map()</code> trong lập trình hàm), <strong>reduce</strong> = reducer function (Annotated + operator.add) gộp N kết quả trở lại thành 1 state chung. Không có Send API, cách duy nhất để xử lý "N item, N biến đổi mỗi lần chạy" là viết 1 vòng lặp TUẦN TỰ bên trong 1 node — mất khả năng chạy song song mà graph vốn cho phép.</p>
+</div>
+
 <h2>3. AI Orchestrator graph — sơ đồ giản lược</h2>
 
 <p>Đây là graph production của <code>d:\New-jouney\ai_orchestrator</code> (1512 lines <code>orchestrator/graph.py</code>, thực tế có ~18 <code>add_node()</code> — 11 agent nodes + 7 control/gate/terminal nodes như <code>clarification_gate</code>, <code>human_gate</code>, <code>task_dispatcher</code>). Sơ đồ dưới đây đơn giản hóa, không vẽ đủ mọi control node:</p>
@@ -529,6 +561,7 @@ async def test_engineer_node_mocked_backend(mocker):
     <li>📖 <a href="https://langchain-ai.github.io/langgraph/">LangGraph official docs</a> — must-read</li>
     <li>📖 <a href="https://langchain-ai.github.io/langgraph/tutorials/introduction/">LangGraph Quick Start tutorial</a></li>
     <li>📖 <a href="https://langchain-ai.github.io/langgraph/how-tos/human_in_the_loop/">HITL patterns</a></li>
+    <li>📖 <a href="https://langchain-ai.github.io/langgraph/how-tos/graph-api/#map-reduce-and-the-send-api">LangGraph — Map-reduce and the Send API</a></li>
     <li>📄 <a href="https://arxiv.org/abs/2308.08155">AutoGen paper (Wu et al 2023)</a> — competitor comparison</li>
     <li>🎥 <a href="https://youtu.be/aHCDrAbH_go">LangGraph deep-dive video (Harrison Chase)</a></li>
     <li>📝 <a href="https://blog.langchain.dev/langgraph-multi-agent-workflows/">Multi-agent workflows blog</a></li>

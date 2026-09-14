@@ -110,9 +110,53 @@
 
 <div class="callout">
 <div class="label">💡 Vì sao vLLM nhanh hơn nhiều lần — 2 kỹ thuật cốt lõi</div>
-<p><strong>PagedAttention</strong>: Bình thường, mỗi request cần cấp phát 1 khối bộ nhớ GPU liền mạch (contiguous) cho KV cache (xem L7.5 Q17) — như đặt cả bàn dài cho 1 khách dù họ chỉ ăn ít. Nếu output ngắn hơn dự kiến → phí bộ nhớ (fragmentation). PagedAttention chia bộ nhớ thành "trang" (page) nhỏ như hệ điều hành quản lý RAM — cấp phát đúng nhu cầu, không phí, phục vụ nhiều request đồng thời hơn trên cùng GPU.</p>
+<p><strong>PagedAttention</strong>: Bình thường, mỗi request cần cấp phát 1 khối bộ nhớ GPU liền mạch (contiguous) cho KV cache (Key/Value cache — bộ nhớ lưu lại kết quả Key/Value đã tính của các token trước đó, để không phải tính lại từ đầu mỗi khi sinh token mới; xem L7.5 Q17) — như đặt cả bàn dài cho 1 khách dù họ chỉ ăn ít. Nếu output ngắn hơn dự kiến → phí bộ nhớ (fragmentation). PagedAttention chia bộ nhớ thành "trang" (page) nhỏ như hệ điều hành quản lý RAM — cấp phát đúng nhu cầu, không phí, phục vụ nhiều request đồng thời hơn trên cùng GPU.</p>
 <p><strong>Continuous batching</strong>: Batching kiểu cũ (static) phải đợi đủ N request rồi mới chạy cùng lúc, request xong sớm vẫn phải chờ cả batch — như xe bus chỉ chạy khi đủ khách, ai lên sớm vẫn ngồi chờ. Continuous batching: request nào xong thì rời "bus" ngay, request mới join ngay lập tức vào slot trống — không ai phải chờ vô ích. Kết quả: GPU luôn bận, throughput cao hơn nhiều.</p>
 <p><strong>LoRA (Low-Rank Adaptation)</strong> — nhắc trước khi đọc "Multi-LoRA": thay vì fine-tune lại toàn bộ model (hàng tỷ tham số) cho mỗi use-case, LoRA chỉ train 1 cặp ma trận nhỏ (rank thấp) "gắn thêm" vào model gốc đã đóng băng (frozen). Nhẹ (~50MB thay vì 10GB+), swap nhanh. Multi-LoRA = 1 GPU giữ 1 bản model gốc dùng chung, nạp nhiều "miếng dán" LoRA khác nhau theo request — xem code implementation ở L7.5 Q16.</p>
+</div>
+
+<h2>3.5 Multi-Model Endpoints — khác Multi-LoRA thế nào khi có HÀNG NGHÌN model THẬT SỰ KHÁC NHAU?</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Multi-LoRA (mục 3 ở trên) giải quyết bài toán "1 model GỐC + nhiều 'miếng dán' nhỏ khác nhau" — giống 1 CHIẾC ÁO gốc + nhiều phụ kiện gắn thêm (mỗi phụ kiện nhẹ, gắn/tháo nhanh). Nhưng nếu bài toán là "hàng nghìn model HOÀN TOÀN ĐỘC LẬP, KHÔNG chia sẻ kiến trúc/base nào cả" (VD V18 thật ra có 86 ticker × 3 horizon = 258 model XGBoost riêng biệt, mỗi cái train độc lập) — không thể "gắn phụ kiện" vào 1 base chung vì các model này KHÔNG có base chung. Multi-Model Endpoints (MME) giải quyết bài toán khác: giữ CẢ NGHÌN model trên Ổ ĐĨA (rẻ), chỉ NẠP VÀO RAM/GPU những model đang thực sự được hỏi tới, tự động "đẩy ra" model lâu không dùng để nhường chỗ — giống 1 thư viện có 10,000 đầu sách, không thể trưng bày hết trên kệ (không đủ chỗ), chỉ để SẴN TRÊN KỆ những cuốn ĐANG được mượn nhiều, cuốn ít mượn cất trong kho, cần thì lấy ra.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: nếu có 258 model độc lập (không chia sẻ base), cách "ngây thơ" là chạy 258 instance riêng biệt (mỗi model 1 server/container luôn bật) — cực kỳ lãng phí vì phần lớn model chỉ nhận request THỈNH THOẢNG (VD ticker ít giao dịch), nhưng vẫn phải giữ RAM/compute cho nó 24/7. Ngược lại, gộp tất cả vào 1 process rồi load HẾT 258 model vào RAM cùng lúc cũng lãng phí nếu RAM không đủ hoặc phần lớn model hiếm khi dùng tới.</p>
+
+<pre><code># Multi-Model Endpoint — load/unload ĐỘNG theo nhu cầu thực tế, không phải
+# "load hết" hay "1 model/1 server":
+
+class ModelCache:
+    def __init__(self, max_loaded=20):       # chỉ giữ tối đa 20 model trong RAM
+        self.loaded = {}                      # model_id -> model object
+        self.max_loaded = max_loaded
+        self.last_used = {}                   # model_id -> timestamp (LRU tracking)
+
+    def predict(self, model_id, input_data):
+        if model_id not in self.loaded:
+            if len(self.loaded) >= self.max_loaded:
+                # HẾT CHỖ: đẩy ra model LÂU KHÔNG DÙNG NHẤT (LRU — Least Recently Used)
+                lru_id = min(self.last_used, key=self.last_used.get)
+                del self.loaded[lru_id]        # unload khỏi RAM (vẫn còn trên đĩa)
+            self.loaded[model_id] = load_from_disk(f"/models/{model_id}.joblib")
+
+        self.last_used[model_id] = now()
+        return self.loaded[model_id].predict(input_data)
+
+# 258 model nằm trên đĩa (rẻ, gần như miễn phí storage) — chỉ 20 model
+# "hot" nhất tại 1 thời điểm nằm trong RAM (tốn tài nguyên thật)</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Multi-Model Endpoint KHÔNG PHẢI Multi-LoRA (mục 3) — Multi-LoRA chia sẻ 1 BASE MODEL DUY NHẤT (hàng tỷ tham số) giữa nhiều "biến thể" nhẹ (~50MB/adapter), tất cả adapter có thể nạp CÙNG LÚC vì chúng RẤT NHỎ. MME phục vụ các model ĐỘC LẬP HOÀN TOÀN (không share tham số nào), mỗi model có thể nặng vài trăm MB tới vài GB — không thể "nạp hết cùng lúc" như LoRA adapter, buộc phải LOAD/UNLOAD động theo nhu cầu. Nói cách khác: Multi-LoRA giải quyết "1 model to + N biến thể nhỏ", MME giải quyết "N model độc lập, không cái nào nhỏ để nạp hết cùng lúc".</p>
+
+<table>
+<tr><th></th><th>Multi-LoRA (mục 3)</th><th>Multi-Model Endpoint</th></tr>
+<tr><td>Các model có share base không?</td><td>Có — 1 base chung, N adapter nhỏ</td><td>Không — N model độc lập hoàn toàn</td></tr>
+<tr><td>Có thể nạp TẤT CẢ cùng lúc?</td><td>Có (adapter rất nhỏ, ~50MB)</td><td>Thường không (model đủ lớn, RAM/GPU giới hạn)</td></tr>
+<tr><td>Cơ chế phục vụ nhiều model</td><td>Base cố định + swap adapter theo request</td><td>Load/unload động theo LRU hoặc tần suất dùng</td></tr>
+<tr><td>Phù hợp cho</td><td>N fine-tune biến thể của CÙNG 1 LLM</td><td>N model độc lập (VD 1 model/ticker, 1 model/khách hàng)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: đây là ví dụ khác của nguyên lý chung "tách RIÊNG chi phí LƯU TRỮ (rẻ, gần như vô hạn) khỏi chi phí TÍNH TOÁN/BỘ NHỚ NÓNG (đắt, giới hạn)" — cùng tinh thần với KV cache quantization (nén nhỏ dữ liệu KV cache — xem gloss KV cache ở mục 3 phía trên — để nó tốn ít bộ nhớ nóng hơn mà vẫn giữ trên GPU) hay tiered storage (chia dữ liệu thành nhiều "tầng" lưu trữ: tầng nhanh/đắt cho dữ liệu hay dùng, tầng chậm/rẻ cho dữ liệu ít dùng) — cả 2 kỹ thuật này cũng tách "cái gì cần nhanh" khỏi "cái gì cần rẻ", chỉ khác đối tượng áp dụng (dữ liệu cache, không phải model). Với hệ thống có RẤT NHIỀU model nhỏ-vừa (không phải 1 model khổng lồ), câu hỏi kiến trúc quan trọng không phải "GPU nào đủ mạnh" mà là "cơ chế nào quyết định model nào NẰM TRONG RAM tại 1 thời điểm".</p>
 </div>
 
 <h2>4. Auto-scaling GPU</h2>
@@ -315,6 +359,7 @@ Instance cost:
   <ul>
     <li>📖 Chip Huyen — <em>Designing ML Systems</em> Ch 7 Deployment</li>
     <li>📖 <a href="https://docs.vllm.ai/">vLLM docs</a></li>
+    <li>📖 <a href="https://docs.aws.amazon.com/sagemaker/latest/dg/multi-model-endpoints.html">SageMaker Multi-Model Endpoints docs</a></li>
     <li>📄 <a href="https://cloud.google.com/blog/products/ai-machine-learning/best-practices-for-deploying-ml-models">Google — Best practices for deploying ML models</a></li>
   </ul>
 </div>

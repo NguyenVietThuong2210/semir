@@ -289,6 +289,23 @@ user = client.chat.completions.create(
 <h3>Pydantic AI</h3>
 <p>Newest (2024). Type-safe, Pydantic-native, provider-agnostic.</p>
 
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔬 Cơ chế constrained decoding — vì sao Outlines đảm bảo 100% valid, Instructor chỉ retry</div>
+<p><strong>Vấn đề cụ thể</strong>: §10 mới nói "Outlines = grammar-guided decoding, LLM output guaranteed valid" và "Instructor = post-hoc validate + retry" — nhưng CHƯA giải thích TẠI SAO 1 bên "guaranteed" còn bên kia chỉ "retry". Đây là 2 CƠ CHẾ hoàn toàn khác nhau, không chỉ khác implementation.</p>
+<p><strong>Cơ chế Instructor (post-hoc, retry-based)</strong>: model sinh ra text TỰ DO như bình thường (không bị can thiệp trong lúc sinh) → sau khi sinh XONG, code parse output thành JSON → validate bằng Pydantic → nếu FAIL (JSON sai cú pháp, thiếu field, sai type) → gửi LẠI lỗi cho model kèm yêu cầu sửa → lặp lại tối đa N lần. Vì model sinh tự do, không có gì NGĂN nó sinh sai ngay từ đầu — chỉ có cơ chế PHÁT HIỆN + YÊU CẦU SỬA sau khi đã sai.</p>
+<p><strong>Cơ chế Outlines (constrained decoding, sai từ gốc là KHÔNG THỂ)</strong>: model sinh text từng TOKEN MỘT (như bình thường), nhưng TRƯỚC KHI chọn token tiếp theo, hệ thống tính trước "nếu đang ở vị trí NÀY trong JSON schema, những token nào HỢP LỆ tiếp theo?" (VD: sau dấu <code>{"name": "</code>, chỉ token nào tạo ra ký tự string hoặc dấu <code>"</code> đóng mới hợp lệ — token số hay dấu ngoặc vuông bị LOẠI hoàn toàn) — bằng cách gán xác suất -∞ (hoặc set 0) cho MỌI token không hợp lệ trước khi model chọn, rồi mới sample. Cơ chế theo dõi vị trí hợp lệ này thường dùng finite-state machine (máy trạng thái hữu hạn) được biên dịch sẵn từ JSON Schema/grammar.</p>
+<table>
+<tr><th></th><th>Instructor (post-hoc)</th><th>Outlines (constrained decoding)</th></tr>
+<tr><td>Khi nào can thiệp</td><td>SAU KHI model sinh xong toàn bộ output</td><td>TRƯỚC MỖI token, ngay lúc model đang chọn</td></tr>
+<tr><td>Cơ chế</td><td>Parse + validate + retry loop</td><td>Mask (loại) token không hợp lệ trước khi sample, dùng finite-state machine từ schema</td></tr>
+<tr><td>Đảm bảo valid?</td><td>Không tuyệt đối — hết số lần retry vẫn có thể fail</td><td>✅ Tuyệt đối — model VẬT LÝ KHÔNG THỂ chọn token không hợp lệ</td></tr>
+<tr><td>Chi phí</td><td>Tốn thêm N lần gọi API nếu fail nhiều lần</td><td>Tốn thêm chi phí tính toán mask ở MỖI bước sinh (nhỏ, tính trên logits có sẵn), nhưng chỉ 1 lần gọi</td></tr>
+<tr><td>Cần access gì</td><td>Chỉ cần API thông thường (hoạt động với API đóng như OpenAI/Anthropic)</td><td>Cần access trực tiếp vào logits/token probabilities — CHỈ khả thi với model tự host (open-weight), KHÔNG dùng được qua API đóng thông thường</td></tr>
+</table>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: vì Outlines cần can thiệp trực tiếp vào bước sample token (logits), nó CHỈ hoạt động với model bạn tự host (VD Llama chạy trên vLLM/HuggingFace) — không thể dùng qua API đóng như Claude/GPT vì provider không expose quyền chỉnh sửa logits ở mức đó cho khách hàng. Đây là lý do PredictStock (dùng Claude qua API) chọn Instructor/Pydantic-validate thay vì Outlines, dù Outlines "mạnh hơn" về lý thuyết.</p>
+<p><strong>Insight</strong>: đánh đổi ở đây là ĐỘ ĐẢM BẢO vs PHẠM VI ÁP DỤNG — Outlines mạnh hơn (100% guarantee) nhưng chỉ dùng được với model tự host; Instructor yếu hơn (retry-based, có xác suất fail dù nhỏ) nhưng hoạt động với BẤT KỲ API nào, kể cả API đóng. Đây là lý do đa số production app dùng Claude/GPT (API đóng) chọn Instructor-style, còn team tự host model mở chọn Outlines.</p>
+</div>
+
 <div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
 <div class="label">🔍 So sánh 8 frameworks head-to-head (đọc SAU sections 2-10)</div>
 

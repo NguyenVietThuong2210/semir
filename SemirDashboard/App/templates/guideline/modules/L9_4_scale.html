@@ -320,6 +320,32 @@ adam_v_fp32    = 4 bytes
 <tr><td>MLC-LLM</td><td>Cross-platform (mobile, web)</td><td>Edge deployment</td></tr>
 </table>
 
+<h2>6.5 · RadixAttention — cơ chế thật đằng sau "prefix cache tree" của SGLang</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề cụ thể — §6/§7/deep-dive ở trên nhắc "RadixAttention (prefix cache tree)" nhiều lần nhưng chưa giải thích cây đó hoạt động thế nào</div>
+<p>PagedAttention (§3) giải quyết fragmentation TRONG 1 request. Nhưng nhiều request KHÁC NHAU thường share chung 1 đoạn ĐẦU giống hệt nhau — VD 1000 user cùng dùng chung 1 system prompt "Bạn là senior VN stock analyst..." (giống PredictStock case study). Nếu mỗi request tính KV cache lại từ đầu cho đoạn system prompt giống hệt đó → lãng phí compute khổng lồ. RadixAttention giải quyết bằng cách LƯU + TÁI SỬ DỤNG KV cache của đoạn PREFIX (phần đầu) dùng chung, thay vì tính lại cho từng request.</p>
+</div>
+
+<p><strong>Cơ chế — Radix tree (cây tiền tố)</strong>: SGLang lưu MỌI KV cache đã tính vào 1 cấu trúc dữ liệu gọi là radix tree (cây nén tiền tố) — mỗi NÚT trong cây đại diện cho 1 ĐOẠN TOKEN chung + KV cache page tương ứng của đoạn đó. Khi request mới tới, hệ thống DUYỆT cây từ gốc, so khớp token của request với đường đi trong cây — đi được CÀNG SÂU (khớp càng nhiều token) thì càng nhiều KV cache được TÁI SỬ DỤNG, chỉ cần tính KV cache cho phần token MỚI (chưa từng thấy) ở cuối.</p>
+
+<pre><code># Ví dụ radix tree cho 3 request cùng system prompt, khác câu hỏi cuối
+# Request 1: "Bạn là senior VN stock analyst..." + "Phân tích VNM"
+# Request 2: "Bạn là senior VN stock analyst..." + "Phân tích FPT"
+# Request 3: "Bạn là senior VN stock analyst..." + "Phân tích VNM" (y hệt request 1)
+
+Root
+ └─ "Bạn là senior VN stock analyst..." (node dùng CHUNG, KV cache tính 1 LẦN)
+     ├─ "Phân tích VNM" (request 1 VÀ request 3 dùng CHUNG luôn nhánh này — cache hit 100%)
+     └─ "Phân tích FPT" (request 2 — chỉ cần tính KV cache cho phần "Phân tích FPT" mới)
+
+# Request 3 gần như KHÔNG tốn compute nào cho phần "Phân tích VNM" — toàn bộ path
+# đã có sẵn trong cây từ request 1, chỉ cần "đọc lại" (cache hit), không tính lại.</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: RadixAttention KHÔNG PHẢI prompt caching kiểu Anthropic/OpenAI (L5.5 đã học — cache toàn bộ 1 block cố định, hit/miss nhị phân theo đúng 1 khối). RadixAttention linh hoạt hơn — bất kỳ 2 request nào chia sẻ TIỀN TỐ chung (dù không phải cùng 1 "cache block" khai báo trước) đều tự động share được, và mức độ hit là DẦN DẦN theo độ dài khớp (khớp 50 token đầu → cache 50 token đó, không phải tất-cả-hoặc-không-gì). Đây là lý do bài báo gốc SGLang chứng minh: duyệt cây theo thứ tự "tiền tố dùng chung dài nhất trước" (longest-shared-prefix-first) cho cache hit rate tối ưu — tương đương duyệt theo depth-first search (DFS — đi hết 1 nhánh cho tới cùng rồi mới quay lại thử nhánh khác, thay vì duyệt đều tất cả nhánh song song).</p>
+
+<p><strong>Insight</strong>: nguyên lý này sẽ xuất hiện lại ở §7 (thiết kế "serve Llama-70B") dưới dạng "Cache: SGLang-style radix cache cho system prompt (10× hit rate cho agent workloads)" — agent workloads (nhiều request cùng system prompt + tool definitions dài, chỉ khác phần câu hỏi cuối) là trường hợp LÝ TƯỞNG cho RadixAttention, vì phần "dùng chung" (system prompt) chiếm đa số token trong khi phần "khác nhau" (câu hỏi user) chỉ là 1 đoạn ngắn cuối cùng.</p>
+
 <h2>7. Interview design — "serve Llama-70B at 1000 QPS, p95 &lt; 500ms"</h2>
 
 <div class="example-box">

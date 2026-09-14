@@ -24,6 +24,7 @@
 
 <div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
 <div class="label">💡 Multi-agent bằng ngôn ngữ đời thường</div>
+<p><strong>SDLC là gì?</strong> (thuật ngữ dùng suốt trang này) — <em>Software Development Life Cycle</em>, vòng đời phát triển phần mềm: từ lấy yêu cầu → thiết kế → code → test → deploy → bảo trì. Ở đây "full SDLC" nghĩa là toàn bộ quy trình 1 tính năng đi từ yêu cầu người dùng tới code chạy production, không chỉ riêng bước viết code.</p>
 <p><strong>Xưởng may áo dài</strong>: 1 người không thể may 1 áo dài đẹp một mình. Chia việc: Thiết kế → Cắt vải → May → Thêu → QC → Đóng gói. Mỗi thợ chuyên môn khác nhau, giao tiếp qua "áo đang làm dở" (state).</p>
 <p><strong>AI Orchestrator</strong>: SpecAnalyze (phân tích yêu cầu) → TaskDecompose (chia task nhỏ) → Engineer (viết code) → Reviewer (review) → Tester (test) → PRWriter (viết PR). Mỗi agent = 1 role chuyên biệt.</p>
 <p><strong>Vì sao không dùng 1 agent to</strong>? Vì mỗi role cần system prompt riêng, tool set riêng, thậm chí model tier riêng (Engineer dùng Opus, PRWriter dùng Haiku). Chia nhỏ = specialize + cheaper.</p>
@@ -166,6 +167,45 @@ def triage(msg):
 # Không có supervisor. Agent quyết định handoff cho peer.
 </code></pre>
 <p>Trade-off: linh hoạt (agent mới plug-in dễ) nhưng khó debug (loop giữa 3 agents pass tay nhau).</p>
+
+<h3>6.4 Mixture-of-Agents (Wang et al. 2024) — khác Consensus/Voting ở §6.2 thế nào?</h3>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Consensus/Voting ở §6.2 giống 1 cuộc BẦU CỬ — mỗi LLM đưa 1 câu trả lời, đếm phiếu, CHỌN NGUYÊN 1 câu trả lời thắng cuộc (câu trả lời của các LLM thua bị VỨT BỎ hoàn toàn). Mixture-of-Agents (MoA, Wang et al. 2024) làm khác hẳn: thay vì chọn 1 người thắng, nó đưa CẢ 3-4 câu trả lời cho 1 "biên tập viên" (aggregator — cũng là 1 LLM) đọc HẾT rồi TỰ VIẾT 1 câu trả lời MỚI, tổng hợp điểm mạnh của từng câu — giống 1 tổng biên tập đọc bản thảo của nhiều phóng viên viết về cùng 1 sự kiện, rồi viết lại 1 bài báo cuối cùng kết hợp góc nhìn/chi tiết hay nhất của mỗi người, không phải chỉ chọn nguyên 1 bài đăng.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: Consensus/Voting (§6.2) chỉ hoạt động tốt khi câu trả lời có dạng RỜI RẠC, dễ so khớp giống/khác nhau (VD "APPROVE" hay "REJECT", 1 con số cụ thể) — với câu trả lời dạng VĂN BẢN TỰ DO dài (VD viết 1 đoạn giải thích, tóm tắt), 3 LLM hiếm khi ra CHÍNH XÁC cùng 1 câu chữ để "vote" được — nhưng mỗi câu trả lời có thể có 1 đoạn HAY mà 2 câu kia thiếu. Vote (chọn 1, bỏ 2) sẽ lãng phí thông tin tốt nằm trong 2 câu bị loại.</p>
+
+<pre><code># Kiến trúc MoA — nhiều LAYER xếp chồng, mỗi layer nhiều "proposer" agent:
+
+Layer 1 (Proposers — sinh nhiều câu trả lời ĐA DẠNG cho CÙNG câu hỏi):
+  Agent A (Claude) → response_A
+  Agent B (GPT-4)  → response_B
+  Agent C (Llama)  → response_C
+  (3 agent KHÔNG thấy câu trả lời của nhau — độc lập, giống vòng 1 của Debate)
+
+Layer 2 (Aggregator — MỘT LLM khác đọc TẤT CẢ response Layer 1 làm "tài liệu tham
+          khảo", rồi TỰ VIẾT 1 câu trả lời MỚI tổng hợp, không phải chọn 1 trong 3):
+  final_response = Aggregator_LLM(question, context=[response_A, response_B, response_C])
+
+# Có thể XẾP CHỒNG nhiều layer (Layer 2's output lại làm input cho Layer 3's
+# proposers, v.v.) — mỗi layer "tinh chỉnh" thêm dựa trên layer trước, không
+# dừng lại ở 1 lần tổng hợp duy nhất.</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: MoA KHÔNG PHẢI Debate (đã học ở <code>L6_1_agent_patterns.html</code> §5.5) — Debate cho CÁC PROPOSER thấy câu trả lời của nhau và TỰ SỬA câu trả lời CỦA CHÍNH MÌNH qua nhiều vòng; MoA có 1 AGGREGATOR RIÊNG BIỆT (không phải bản thân các proposer) đọc tất cả rồi viết ra 1 câu trả lời hoàn toàn MỚI — các proposer ở Layer 1 không bao giờ tự sửa câu trả lời của chính họ. Cũng KHÔNG PHẢI Mixture-of-Experts (MoE, khái niệm kiến trúc model — router chọn ra vài "expert" sub-network BÊN TRONG 1 model để dùng cho mỗi input) — MoA hoạt động ở tầng OUTPUT của các model hoàn chỉnh riêng biệt, không đụng vào kiến trúc bên trong model nào cả.</p>
+
+<table>
+<tr><th></th><th>Consensus/Voting (§6.2)</th><th>Multi-Agent Debate (L6.1 §5.5)</th><th>Mixture-of-Agents</th></tr>
+<tr><td>Kết quả cuối lấy từ đâu</td><td>Nguyên 1 câu trả lời thắng phiếu</td><td>Câu trả lời TỰ SỬA của chính các proposer</td><td>Câu trả lời MỚI do aggregator viết, tổng hợp</td></tr>
+<tr><td>Có "vứt bỏ" thông tin không</td><td>Có — câu thua bị bỏ hoàn toàn</td><td>Không hẳn — mọi ý kiến đều ảnh hưởng qua các vòng</td><td>Không — aggregator giữ lại phần hay của mọi câu</td></tr>
+<tr><td>Phù hợp dạng câu trả lời</td><td>Rời rạc, dễ so khớp (label, số)</td><td>Bất kỳ, đặc biệt suy luận nhiều bước</td><td>Văn bản tự do, dài, cần tổng hợp nhiều góc nhìn</td></tr>
+<tr><td>Số lời gọi LLM</td><td>N (1 lần/agent)</td><td>N×K (N agent × K vòng)</td><td>N + 1 mỗi layer (proposers + aggregator), × số layer</td></tr>
+</table>
+
+<p><strong>Insight</strong>: paper gốc báo cáo MoA (chỉ dùng model mã nguồn mở) đạt điểm cao hơn GPT-4 Omni trên AlpacaEval 2.0 (65.1% so với 57.5%) — minh chứng cho nguyên lý "tổng hợp nhiều góc nhìn qua 1 bước biên tập" có thể đánh bại 1 model đơn lẻ mạnh hơn, cùng tinh thần với Debate (L6.1) nhưng đạt được bằng CƠ CHẾ khác (biên tập tập trung thay vì tranh luận phân tán).</p>
+
+<p><strong>📖 Mở rộng</strong>: khác biệt với Mixture-of-Experts (MoE, kiến trúc bên trong 1 model — VD Mixtral, DeepSeek-V3 — router học được chọn vài expert sub-network cho mỗi token) dễ gây nhầm lẫn vì tên gọi giống nhau — MoA hoạt động hoàn toàn ở tầng ỨNG DỤNG (orchestrate nhiều model API riêng biệt), không cần quyền truy cập vào trọng số/kiến trúc bên trong bất kỳ model nào, trong khi MoE là 1 lựa chọn thiết kế kiến trúc phải quyết định TỪ LÚC train model.</p>
+</div>
 
 <h2>7. Marketplace pattern</h2>
 
@@ -355,6 +395,7 @@ class AgentEvent(TypedDict):
   <ul>
     <li>📝 <a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a></li>
     <li>📄 <a href="https://arxiv.org/abs/2308.08155">AutoGen paper (peer-to-peer alternative)</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2406.04692">Wang et al (2024) — Mixture-of-Agents Enhances Large Language Model Capabilities</a></li>
     <li>📖 <a href="https://langchain-ai.github.io/langgraph/tutorials/multi_agent/agent_supervisor/">LangGraph supervisor pattern tutorial</a></li>
   </ul>
 </div>

@@ -304,16 +304,42 @@ primary: user_thumbs_up_rate  (binary)
 guardrail: latency_p95, cost_per_call, refusal_rate
 
 # Sample size (2-proportion test, alpha=0.05, power=0.8)
-# Baseline 60% thumbs up, MDE 3pp → n ≈ 4200/arm
+# alpha=0.05: chấp nhận 5% khả năng báo "có hiệu ứng" trong khi thực ra KHÔNG có (false positive)
+# power=0.8: 80% khả năng PHÁT HIỆN được hiệu ứng thật nếu nó thực sự tồn tại
+# Baseline 60% thumbs up, MDE (minimum detectable effect — chênh lệch nhỏ nhất
+# bạn muốn có thể phát hiện được) 3pp (3 điểm phần trăm) → n ≈ 4200/arm
 # Chạy đến khi đạt n, KHÔNG peek sớm (multiple comparison bias)
 
-# Sequential test (nếu cần): mSPRT, always-valid p-value
+# Sequential test (nếu cần): mSPRT, always-valid p-value — xem giải thích chi tiết bên dưới
 
 # Decision:
 # - primary win + guardrails OK → ship v3
 # - primary flat but latency worse → rollback
 # - primary win but refusal_rate +5% → investigate, không ship
 </code></pre>
+
+<h4>Vì sao "peek sớm" phá p-value, và always-valid p-value/mSPRT sửa thế nào</h4>
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề cụ thể</div>
+<p>p-value chuẩn (dùng ở phần "Sample size" phía trên) được tính toán với GIẢ ĐỊNH bạn chỉ nhìn kết quả ĐÚNG 1 LẦN, sau khi đã thu đủ n mẫu đã định trước. Nếu bạn nhìn kết quả MỖI NGÀY (peek) và dừng thí nghiệm ngay khi thấy p&lt;0.05 lần đầu tiên, bạn đang cho mình NHIỀU CƠ HỘI để "trúng số" ngẫu nhiên — giống việc tung đồng xu 20 lần rồi chỉ báo cáo lần tung ra 5 mặt ngửa liên tiếp, bỏ qua 15 lần còn lại. Anti-pattern "A/B peek sớm" ở dưới đã nêu con số: false positive rate thực tế lên &gt;30% dù mỗi lần check bạn vẫn dùng ngưỡng "chuẩn" p&lt;0.05.</p>
+</div>
+<p><strong>Cơ chế always-valid p-value (mSPRT — mixture Sequential Probability Ratio Test)</strong>: thay vì tính 1 p-value CỐ ĐỊNH dựa trên n mẫu đã định trước, mSPRT tính lại 1 "always-valid p-value" SAU MỖI ĐIỂM DỮ LIỆU MỚI, với công thức được thiết kế đặc biệt sao cho DÙ bạn nhìn bao nhiêu lần đi nữa (peek liên tục), xác suất false positive TỔNG THỂ (qua toàn bộ quá trình theo dõi) vẫn bị giữ chặn ở mức alpha đã đặt (VD 5%) — không tăng dần theo số lần peek như p-value chuẩn.</p>
+<pre><code># So sánh trực quan: p-value chuẩn vs always-valid p-value
+
+# p-value chuẩn (Fixed-horizon test):
+# - Tính 1 lần, SAU KHI đã thu đủ n=4200/arm đã định trước
+# - Peek sớm (n=1000) rồi dừng khi thấy "có ý nghĩa" → false positive rate THỰC bị bơm phồng
+# - An toàn CHỈ NẾU cam kết không nhìn tới khi đủ n
+
+# Always-valid p-value (mSPRT):
+# - Tính LẠI mỗi khi có data mới (n=100, 200, 300... tới bao nhiêu cũng được)
+# - Ngưỡng dừng đã được điều chỉnh SẴN để bù cho việc nhìn nhiều lần
+# - Có thể dừng SỚM HƠN nếu effect rõ ràng ngay, mà KHÔNG bơm phồng false positive
+# - Đánh đổi: cần nhiều mẫu hơn 1 chút so với p-value chuẩn NẾU hiệu ứng thực sự yếu,
+#   để bù cho "cái giá" của việc được phép nhìn liên tục
+</code></pre>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: mSPRT không phải "làm p-value chuẩn nhanh hơn" — nó là 1 CÔNG THỨC THỐNG KÊ KHÁC hoàn toàn, đánh đổi 1 chút hiệu suất (cần thêm mẫu cho hiệu ứng nhỏ) để đổi lấy quyền được PEEK LIÊN TỤC mà không phá vỡ tính đúng đắn thống kê. Nếu team đã cam kết pre-declare n và không peek, dùng p-value chuẩn ở phần "Sample size" phía trên là đủ và đơn giản hơn — mSPRT chỉ cần thiết khi business thực sự MUỐN xem kết quả hàng ngày và có thể dừng sớm.</p>
+<p><strong>Insight</strong>: đây chính là lý do kỹ thuật đằng sau anti-pattern "A/B peek sớm" ngay bên dưới — không phải "peek là xấu" một cách mơ hồ, mà là peek với công thức p-value SAI (fixed-horizon) mới là vấn đề; peek với công thức ĐÚNG (mSPRT/always-valid) hoàn toàn hợp lệ.</p>
 
 <h4>VN scenario — PredictStock LLM Hybrid A/B</h4>
 <pre><code>Baseline (v2): template only, cost $0/report

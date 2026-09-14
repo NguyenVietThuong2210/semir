@@ -298,6 +298,49 @@ def dispatch_tool(name, args, ctx):
   <li>Cost concern: LLM API cost dominant — batch + cache aggressive</li>
 </ul>
 
+<h2>6.5 Fair scheduling — 1 team "noisy neighbor" chiếm hết queue thì sao?</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Nhắc lại bài toán ở mục 6 — "100 dev teams concurrent, ~10 jobs peak", tất cả job đẩy vào 1 Redis queue chung. Nếu 1 team gửi CÙNG LÚC 50 job "feature" (mỗi job 30 phút-2 giờ), job của 99 team còn lại phải XẾP HÀNG PHÍA SAU 50 job đó — dù mỗi team chỉ gửi 1 job nhỏ. Đây gọi là "noisy neighbor" (hàng xóm ồn ào) — 1 tenant (khách thuê) chiếm dụng tài nguyên chung khiến MỌI tenant khác bị ảnh hưởng, dù họ dùng đúng mức bình thường. Giống 1 khu chung cư có nước dùng chung: 1 căn hộ mở vòi xối cả ngày → mọi căn hộ khác mất áp lực nước, dù họ chỉ dùng bình thường.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: hàng đợi (queue) đơn giản kiểu FIFO (First-In-First-Out, vào trước ra trước — đã ngầm dùng ở kiến trúc "Redis queue" mục 6) coi MỌI job như nhau, xử lý đúng thứ tự gửi lên. Vấn đề: FIFO không phân biệt "job đến từ 1 team gửi dồn dập" hay "job đến từ 99 team khác nhau" — 1 team gửi nhiều job LIÊN TỤC sẽ chiếm phần lớn "lượt" trong hàng đợi một cách hợp pháp (không vi phạm gì), khiến team khác phải chờ lâu bất thường dù họ chỉ gửi 1 job.</p>
+
+<pre><code># Fair scheduling — chia hàng đợi THEO TENANT, không phải 1 hàng đợi chung:
+
+# KHÔNG fair (1 queue FIFO chung):
+queue = ["team_A_job1", "team_A_job2", ..., "team_A_job50", "team_B_job1"]
+# team_B phải đợi hết 50 job của team_A dù chỉ gửi 1 job
+
+# Fair scheduling — round-robin giữa các tenant, không phải theo thứ tự gửi:
+per_tenant_queues = {
+    "team_A": ["job1", "job2", ..., "job50"],
+    "team_B": ["job1"],
+    # ... 98 team khác
+}
+
+def get_next_job():
+    # Round-robin: lần lượt lấy 1 job từ MỖI tenant đang có job chờ,
+    # không lấy liên tiếp nhiều job từ CÙNG 1 tenant
+    for tenant in round_robin_order(per_tenant_queues):
+        if per_tenant_queues[tenant]:
+            return per_tenant_queues[tenant].pop(0)
+
+# → team_B's job1 được xử lý ngay ở lượt thứ 2 (không phải lượt 51),
+#   dù team_A gửi TRƯỚC và gửi NHIỀU HƠN</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: fair scheduling KHÔNG PHẢI rate limit (đã học ở <code>L7_3_sysdesign_predict.html</code> §5.5) — rate limit GIỚI HẠN tổng số request/job 1 tenant được GỬI trong 1 khoảng thời gian (chặn TỪ ĐẦU VÀO); fair scheduling không chặn ai gửi bao nhiêu, chỉ đảm bảo THỨ TỰ XỬ LÝ công bằng giữa các tenant ĐÃ gửi (công bằng ở ĐẦU RA/xử lý). 1 hệ thống có thể cần CẢ HAI: rate limit để team_A không gửi 10,000 job/giây (bảo vệ hệ thống khỏi quá tải tổng), fair scheduling để 50 job hợp lệ của team_A không "chèn" job của 99 team khác (bảo vệ CÔNG BẰNG giữa các tenant hợp lệ).</p>
+
+<table>
+<tr><th></th><th>Rate limit (L7.3 §5.5)</th><th>Fair scheduling</th></tr>
+<tr><td>Kiểm soát ở đâu</td><td>Đầu vào — chặn GỬI quá nhiều</td><td>Đầu ra — chặn XỬ LÝ thiên vị</td></tr>
+<tr><td>1 tenant gửi ÍT vẫn có thể bị ảnh hưởng bởi tenant khác?</td><td>Không liên quan — mỗi tenant giới hạn riêng</td><td>Có — nếu không có fair scheduling, tenant gửi ít vẫn bị "chèn hàng"</td></tr>
+<tr><td>Cơ chế</td><td>Token bucket per-tenant</td><td>Round-robin hoặc weighted fair queue (biến thể của round-robin, nhưng mỗi tenant có "trọng số" ưu tiên khác nhau thay vì được chia đều lượt như nhau — tenant trả phí cao hơn/cấp SLA cao hơn được lấy nhiều job hơn mỗi vòng) giữa các tenant</td></tr>
+</table>
+
+<p><strong>Insight</strong>: đây là ví dụ cụ thể của bài toán "multi-tenancy" (nhiều khách thuê chung 1 hạ tầng) — càng nhiều tenant chia sẻ tài nguyên chung (queue, DB connection pool, GPU), càng cần cơ chế đảm bảo 1 tenant "ồn ào" không làm hỏng trải nghiệm của tenant "yên tĩnh". Amazon SQS (dịch vụ hàng đợi phổ biến) ra tính năng "fair queues" chính vì đây là vấn đề thực tế rất phổ biến ở hệ thống multi-tenant quy mô lớn, không phải lý thuyết suông.</p>
+</div>
+
 <h2>7. Cost analysis (5 min)</h2>
 
 <pre><code>Per feature build breakdown:

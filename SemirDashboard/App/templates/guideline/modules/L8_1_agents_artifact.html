@@ -191,6 +191,28 @@ Task(
 </ol>
 </div>
 
+<h2>5.5 · "Workflow" vs "Agent" — phân biệt CHÍNH XÁC theo đúng bài Anthropic đã trích ở mục 5</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề thật: §5 đã trích "Building Effective Agents" nhưng chưa nói nội dung NỔI TIẾNG NHẤT của chính bài đó</div>
+<p>Bài "Building Effective Agents" (Anthropic, cùng nguồn đã trích ở §5) định nghĩa 1 ranh giới rất cụ thể mà nhiều engineer nhầm: <strong>Workflow</strong> = LLM + tool chạy theo ĐƯỜNG ĐI CỐ ĐỊNH được lập trình sẵn trong code (giống 1 quy trình sản xuất: bước 1→2→3, không đổi thứ tự). <strong>Agent</strong> = LLM TỰ QUYẾT ĐỊNH đường đi của chính nó, tự chọn tool nào gọi tiếp theo, tự kiểm soát quy trình — giống giao việc cho 1 nhân viên tự lên kế hoạch, không phải đưa quy trình cố định.</p>
+</div>
+
+<p><strong>Vấn đề cụ thể</strong>: "Simplicity first" (§5 mục 1) nói "single LLM call > chained agent nếu đủ" — nhưng KHÔNG PHẢI mọi bài toán phức tạp cần "agent" đúng nghĩa (tự quyết định); nhiều bài toán chỉ cần 1 trong 5 pattern "workflow" bên dưới — rẻ hơn, dễ debug hơn, dự đoán được hành vi hơn agent thật sự, vì đường đi đã CỐ ĐỊNH sẵn trong code.</p>
+
+<table>
+<tr><th>Pattern</th><th>Cơ chế</th><th>Khi dùng</th></tr>
+<tr><td><strong>Prompt chaining</strong></td><td>Chia task thành các bước LLM call TUẦN TỰ, output bước trước = input bước sau; có checkpoint lập trình sẵn để kiểm tra tiến độ giữa các bước</td><td>Task chia được thành các bước rõ ràng, cố định thứ tự (VD: viết outline → viết draft → dịch)</td></tr>
+<tr><td><strong>Routing</strong></td><td>1 LLM call đầu tiên PHÂN LOẠI input, rồi định tuyến sang 1 trong nhiều prompt/pipeline chuyên biệt khác nhau</td><td>Input đa dạng loại, mỗi loại cần xử lý khác nhau (VD: câu hỏi support → route sang refund-handler / bug-handler / general-handler riêng)</td></tr>
+<tr><td><strong>Parallelization</strong></td><td>Nhiều LLM call chạy ĐỒNG THỜI, 2 biến thể: <em>sectioning</em> (chia nhỏ subtask độc lập, chạy song song) hoặc <em>voting</em> (chạy CÙNG 1 task nhiều lần lấy nhiều output rồi tổng hợp)</td><td>Subtask độc lập nhau (sectioning) hoặc cần nhiều góc nhìn độc lập để tăng độ tin cậy (voting — giống self-consistency: chạy model nhiều lần cho cùng 1 câu hỏi, lấy câu trả lời xuất hiện NHIỀU LẦN NHẤT trong số các lần chạy, đã học ở L5.1)</td></tr>
+<tr><td><strong>Orchestrator-workers</strong></td><td>1 LLM trung tâm (orchestrator) TỰ QUYẾT ĐỊNH chia task thành sub-task gì (không cố định sẵn trong code), giao cho các "worker" LLM, rồi tổng hợp kết quả</td><td>Sub-task cần thiết KHÔNG BIẾT TRƯỚC (phụ thuộc input cụ thể) — đây là pattern GẦN AGENT THẬT SỰ nhất trong 5 pattern, vì orchestrator tự quyết định đường đi</td></tr>
+<tr><td><strong>Evaluator-optimizer</strong></td><td>1 LLM sinh câu trả lời, 1 LLM KHÁC đóng vai giám khảo — chấm điểm + feedback theo vòng lặp, LLM đầu sửa lại dựa trên feedback</td><td>Có tiêu chí đánh giá RÕ RÀNG (VD: code phải pass test, văn bản phải đúng format) và việc lặp lại cải thiện chất lượng đáng kể</td></tr>
+</table>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: theo ĐÚNG cách phân loại của chính bài báo này, cả 5 pattern trên (kể cả orchestrator-workers) đều nằm trong nhóm <strong>"workflow"</strong> — bài báo tách riêng "Agents" thành 1 mục KHÁC hoàn toàn, không phải 1 trong 5 pattern này. Orchestrator-workers chỉ là pattern GẦN với "agent" thật sự NHẤT trong 5 pattern (vì đường đi sub-task không cố định sẵn, do orchestrator tự quyết định lúc chạy), chứ không tự động trở thành "agent" đúng nghĩa. Dù prompt/code thường gọi chung mọi pattern trên là "agent pattern", đây là cách dùng từ không chính xác theo phân loại gốc. Cả AI Orchestrator (case study §6 dưới đây) lẫn Claude Code Task tool (§3) đều đang dùng <strong>orchestrator-workers</strong> (main agent tự quyết định spawn sub-agent nào, không có đường đi cố định trong code) — còn 1 pipeline kanban cố định "spec → design → code → test → deploy" theo đúng thứ tự lại là <strong>prompt chaining</strong>, dù code gọi các bước đó là "agent".</p>
+
+<p><strong>Insight</strong>: bài báo gốc khuyến nghị LUÔN bắt đầu từ pattern đơn giản nhất đủ dùng (đúng tinh thần "Simplicity first" ở §5 mục 1) — chỉ leo lên orchestrator-workers/agent thật sự khi đường đi CHẮC CHẮN không biết trước được, vì agent thật sự khó debug hơn, khó dự đoán chi phí hơn workflow có đường đi cố định.</p>
+
 <h2>6. Case study — AI Orchestrator engineer agent</h2>
 
 <div class="example-box">
@@ -247,6 +269,14 @@ Loop:
 # Trade-off: quality vs cost
 </code></pre>
 
+<div class="callout" style="background: rgba(59,130,246,0.08); border-left-color: #3b82f6">
+<div class="label">🔬 Self-RAG (Asai et al. 2023) — 1 cách implement agentic RAG cụ thể, không chỉ ý tưởng chung</div>
+<p><strong>Vấn đề cụ thể</strong>: vòng lặp "agentic RAG" ở trên mô tả Ý TƯỞNG chung (LLM tự quyết định retrieve tiếp hay không) nhưng không nói CÁCH LÀM cụ thể — nếu để LLM tự quyết định bằng cách hỏi thẳng trong prompt ("bạn có cần tìm thêm không?"), quyết định đó không đáng tin cậy (LLM có thể tự tin sai). Self-RAG giải quyết bằng cách KHÔNG hỏi qua prompt, mà HUẤN LUYỆN model sinh ra <strong>reflection token</strong> (token đặc biệt, VD <code>[Retrieve]</code>, <code>[IsRel]</code>, <code>[IsSup]</code>, <code>[IsUse]</code>) như 1 phần tự nhiên của việc sinh text tiếp theo — giống việc model "tự chấm điểm" ngay trong lúc viết, không phải hỏi riêng 1 câu sau đó.</p>
+<p><strong>Cơ chế</strong>: model được train (dùng dữ liệu có gắn sẵn reflection token bởi 1 "critic model" khác) để tại MỖI bước sinh text, tự quyết định: (1) <code>[Retrieve]</code> — có cần tìm thêm passage không, hay bỏ qua hoàn toàn (khác RAG truyền thống LUÔN retrieve dù câu hỏi đơn giản); (2) <code>[IsRel]</code> — passage tìm được có liên quan không; (3) <code>[IsSup]</code> — câu trả lời có được passage đó HỖ TRỢ (support) thật không, hay model đang bịa; (4) <code>[IsUse]</code> — câu trả lời cuối có hữu ích không. 4 token này được coi như 1 phần của vocabulary bình thường (next-token prediction), không phải 1 lời gọi API riêng.</p>
+<p><strong>⚠️ Khác gì với agentic RAG mô tả ở trên</strong>: agentic RAG (generic) thường dùng 1 LLM có sẵn (GPT-4, Claude) + prompt engineering để "tự hỏi" có cần retrieve thêm không — không cần train riêng, nhưng quyết định kém tin cậy hơn. Self-RAG cần TRAIN LẠI model để sinh reflection token — tốn công hơn nhưng quyết định retrieve/không-retrieve và tự phê bình support/relevance đáng tin cậy hơn vì nó là 1 phần trực tiếp của quá trình sinh, được optimize cùng lúc với chất lượng câu trả lời.</p>
+<p><strong>Insight</strong>: Self-RAG là ví dụ cụ thể cho thấy "agentic" không nhất thiết cần 1 vòng lặp orchestration bên ngoài (như pseudo-code Loop ở trên) — có thể "nhúng" hành vi tự-quyết-định NGAY TRONG chính model, qua special token, đây cùng tinh thần với reflection token cách reasoning model dùng special token để tự kiểm soát quá trình suy luận.</p>
+</div>
+
 <h2>9. Future — self-improving agents</h2>
 
 <div class="callout">
@@ -257,7 +287,7 @@ Loop:
   <li><strong>Self-verify</strong>: agent tự sinh test case cho chính output của mình trước khi submit (giống dev viết unit test cho code họ vừa viết) — giảm case "agent nghĩ đúng" nhưng thực ra sai vì chưa ai kiểm tra.</li>
   <li><strong>Curriculum learning</strong>: cho agent luyện task dễ trước, khó dần (giống dạy trẻ con cộng trừ trước rồi mới nhân chia) — áp dụng khi train/fine-tune agent policy (research sense, L8.1 §1), không chỉ prompt engineering.</li>
 </ul>
-<p><strong>Cạm bẫy hay nhầm</strong>: Reflexion và Self-verify nghe giống nhau nhưng khác thời điểm — Reflexion sửa SAU khi thấy lỗi thực tế (reactive), Self-verify tạo test TRƯỚC khi nộp kết quả (proactive). Cả 4 kỹ thuật này đều KHÔNG phải "agent tự cập nhật model weights" — đó là RL fine-tuning, tốn kém và rủi ro hơn nhiều (liên hệ L8.5 mesa-optimization).</p>
+<p><strong>Cạm bẫy hay nhầm</strong>: Reflexion và Self-verify nghe giống nhau nhưng khác thời điểm — Reflexion sửa SAU khi thấy lỗi thực tế (reactive), Self-verify tạo test TRƯỚC khi nộp kết quả (proactive). Cả 4 kỹ thuật này đều KHÔNG phải "agent tự cập nhật model weights" — đó là RL fine-tuning, tốn kém và rủi ro hơn nhiều (liên hệ mesa-optimization — model tự phát triển 1 "mục tiêu con" khác với mục tiêu training gốc — chi tiết ở L8.5).</p>
 </div>
 
 <h2>9.5 · Agent artifacts — cái gì persist giữa turns?</h2>

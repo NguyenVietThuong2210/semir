@@ -231,6 +231,33 @@
 <tr><td>Impact / business</td><td>V20 promote reduce user churn X% (nếu có data)</td></tr>
 </table>
 
+<h2>Kỹ thuật nâng cao — "Bridging": thích ứng 1 story cho câu hỏi bất ngờ</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề thật: bạn chỉ chuẩn bị 5-8 story, nhưng interviewer hỏi hàng chục câu khác nhau</div>
+<p>Không ai chuẩn bị đủ story riêng cho từng câu hỏi có thể gặp. Kỹ năng senior thật sự là <strong>bridging</strong> — dùng LẠI 1 story đã thuộc, nhưng đổi góc nhìn (angle) để nó trả lời đúng câu hỏi khác. Ví dụ: cùng 1 câu chuyện "Story 3 — chọn LangGraph" có thể trả lời ít nhất 4 câu hỏi khác nhau, tùy vào phần nào bạn NHẤN MẠNH:</p>
+</div>
+
+<table>
+<tr><th>Câu hỏi thực tế</th><th>Cùng dùng Story 3, nhưng nhấn mạnh phần nào</th></tr>
+<tr><td>"Architecture decision bạn từng làm?"</td><td>Nhấn A (7 tiêu chí đánh giá 4 framework) — góc mặc định</td></tr>
+<tr><td>"Influenced without authority?"</td><td>Nhấn: bạn không phải tech lead, nhưng thuyết phục được cả team qua 4-page doc + data, không qua chức vụ</td></tr>
+<tr><td>"Disagreed with team's default choice?"</td><td>Nhấn: phản biện lại lựa chọn AutoGen bằng lập luận cụ thể trong chính Story 3 — AutoGen để LLM tự chọn "speaker" kế tiếp → non-deterministic, khó reproduce bug — trong khi "dumb control plane" (routing = if/else) cho quyết định + testability</td></tr>
+<tr><td>"Made a decision with incomplete information?"</td><td>Nhấn: đánh giá 4 framework dựa trên 7 tiêu chí + docs/community signal — không có benchmark thực chiến sẵn có cho đúng use-case (multi-agent SDLC orchestrator) — vẫn phải chốt quyết định</td></tr>
+</table>
+
+<div class="example-box">
+<div class="title">Kỹ thuật bridging — 3 bước khi gặp câu hỏi không khớp story nào đã chuẩn bị</div>
+<p><strong>Bước 1 — Nhận diện core skill câu hỏi đang test</strong>: "Influenced without authority" thực chất đang test kỹ năng thuyết phục + data-driven persuasion, không nhất thiết cần 1 story về "không có chức vụ" đúng nghĩa đen.</p>
+<p><strong>Bước 2 — Quét nhanh story bank, chọn story có core skill gần nhất</strong>: Story 3 (LangGraph) có yếu tố thuyết phục qua data (4-page doc, 7 tiêu chí) — đủ gần để dùng.</p>
+<p><strong>Bước 3 — Nói câu "bridge" trước khi kể, để interviewer hiểu vì sao bạn chọn story này</strong>: "Tôi không có 1 tình huống hoàn toàn không có authority theo nghĩa đen, nhưng tôi có 1 ví dụ về thuyết phục team qua data thay vì qua chức vụ — đó là lúc tôi đề xuất LangGraph..." — câu bridge này QUAN TRỌNG, thiếu nó interviewer sẽ thấy bạn "lạc đề".</p>
+</div>
+
+<div class="callout warn">
+<div class="label">⚠️ Ranh giới — bridging khác với "trả lời né tránh"</div>
+<p>Bridging = dùng lại story CÓ THẬT, chỉ đổi góc nhấn mạnh — vẫn giữ nguyên S/T/A/R. Né tránh = kể 1 story hoàn toàn không liên quan rồi hy vọng interviewer không để ý — dễ bị hỏi xoáy lại ("nhưng câu tôi hỏi là về X, bạn chưa trả lời"). Dấu hiệu bridging tốt: nếu bỏ câu "bridge" ở Bước 3 đi, story vẫn trả lời được câu hỏi — chỉ là kém rõ ràng hơn. Nếu bỏ câu bridge mà story hoàn toàn lạc đề, đó là né tránh, không phải bridging.</p>
+</div>
+
 <div class="nav-bottom">
   <a href="L7_5_coding_kit.html">← L7.5</a>
   <a href="../index.html">← Trang chủ curriculum</a>

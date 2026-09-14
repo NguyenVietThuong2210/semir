@@ -180,6 +180,47 @@ Day 14: 100% → cut over. v18 archived.
 # Fast rollback if v20 anomaly at any stage.
 </code></pre>
 
+<h2>7.5 Shadow deployment — kiểm tra model MỚI mà KHÔNG rủi ro user thật</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Canary (mục 7 ở trên) cho model MỚI phục vụ THẬT 1% traffic — nếu model mới có bug, 1% user thật đó bị ảnh hưởng ngay. Shadow deployment làm 1 bước THẬN TRỌNG HƠN, đặt TRƯỚC Canary trong quy trình thật (đặt sau ở đây trong bài chỉ vì cần đọc §7 trước để so sánh): gửi request THẬT cho CẢ 2 model (cũ đang chạy production + mới đang thử) cùng lúc, nhưng CHỈ trả lời user bằng kết quả của model CŨ — kết quả model MỚI chỉ được ghi log để đội kỹ thuật SO SÁNH sau, không bao giờ tới tay user. Giống việc để 1 phi công thực tập ngồi ghế phụ, tự lái theo 1 bộ điều khiển GIẢ trong khi phi công chính vẫn lái máy bay thật — nếu phi công thực tập lái sai, không ai trên máy bay bị ảnh hưởng, nhưng vẫn đo được anh ta lái tốt/tệ ra sao với dữ liệu bay THẬT.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: Canary (mục 7) vẫn có RỦI RO THẬT dù chỉ 1% traffic — nếu model mới có bug nghiêm trọng (VD sinh ra giá trị vô lý, crash), 1% user đó VẪN nhận kết quả sai thật. Trước khi chấp nhận rủi ro dù nhỏ đó, cần 1 bước kiểm tra model mới trên DỮ LIỆU PRODUCTION THẬT (không phải chỉ test set tĩnh) mà KHÔNG một user nào bị ảnh hưởng nếu model mới sai.</p>
+
+<pre><code># Shadow deployment — request THẬT, nhưng response THẬT chỉ từ model CŨ:
+
+def handle_request(input_data):
+    # Model production (champion) — luôn trả lời user
+    response_v18 = model_v18.predict(input_data)
+
+    # Model đang thử (shadow) — chạy CÙNG input, nhưng KHÔNG trả cho user
+    try:
+        response_v20_shadow = model_v20_candidate.predict(input_data)
+        log_shadow_comparison(input_data, response_v18, response_v20_shadow)
+    except Exception as e:
+        log_shadow_error(e)   # model mới crash cũng KHÔNG ảnh hưởng user
+
+    return response_v18   # user CHỈ BAO GIỜ thấy kết quả model cũ
+
+# Sau vài ngày/tuần: phân tích log — model mới có ra kết quả GẦN GIỐNG
+# model cũ không (cho case dễ), có XỬ LÝ ĐƯỢC case khó/hiếm không, có
+# CRASH/timeout ở tỷ lệ nào — TẤT CẢ trên dữ liệu production THẬT</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: shadow deployment và canary KHÔNG PHẢI 2 lựa chọn thay thế nhau — chúng là 2 BƯỚC NỐI TIẾP trong cùng 1 quy trình thận trọng: Shadow trước (xác nhận model mới ổn định + không crash trên traffic thật, KHÔNG rủi ro user) → rồi mới Canary (xác nhận model mới thật sự phục vụ tốt khi trả lời user thật, chấp nhận rủi ro nhỏ dần 1%→5%→25%→100%, đã thấy ở bảng rollout mục 7 phía trên). Bỏ qua Shadow đi thẳng vào Canary vẫn có thể làm được, nhưng mất đi 1 lớp an toàn miễn phí (shadow không tốn rủi ro user nào, chỉ tốn thêm compute chạy model song song).</p>
+
+<table>
+<tr><th></th><th>Shadow deployment</th><th>Canary deployment (mục 7)</th></tr>
+<tr><td>User thấy kết quả model mới?</td><td>Không bao giờ</td><td>Có (% traffic được chỉ định)</td></tr>
+<tr><td>Rủi ro nếu model mới sai</td><td>Không (chỉ log, không trả user)</td><td>Có, nhưng giới hạn ở % traffic đó</td></tr>
+<tr><td>Đo được gì</td><td>Model mới có ổn định/không crash/kết quả hợp lý không</td><td>Model mới có thật sự tốt khi phục vụ user thật không</td></tr>
+<tr><td>Chi phí</td><td>Compute chạy 2 model song song (2× compute, không tốn rủi ro)</td><td>Compute bình thường (không chạy song song), nhưng có rủi ro nghiệp vụ</td></tr>
+<tr><td>Thứ tự dùng</td><td>Bước 1 (trước)</td><td>Bước 2 (sau, khi Shadow đã pass)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: Shadow deployment tận dụng 1 sự thật đơn giản — chi phí COMPUTE (chạy thêm 1 model song song) luôn RẺ HƠN chi phí RỦI RO NGHIỆP VỤ (trả kết quả sai cho user thật, dù chỉ 1%) — nên "trả thêm tiền compute để mua sự an toàn" gần như luôn đáng giá trước khi chuyển sang giai đoạn có rủi ro nghiệp vụ thật (Canary). Đây cùng tinh thần "compute rẻ hơn memory/rủi ro" đã gặp ở nhiều nơi khác trong curriculum (VD gradient checkpointing ở <code>L3_1_nn_backprop.html</code> §8 — trả thêm compute để tránh rủi ro hết memory).</p>
+</div>
+
 <h2>8. Training-serving skew</h2>
 
 <div class="callout danger">

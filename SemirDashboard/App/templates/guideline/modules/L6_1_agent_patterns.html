@@ -163,6 +163,44 @@ User: "Build authentication system"
 # Trade-off: more LLM calls, higher cost
 </code></pre>
 
+<h2>5.5 Multi-Agent Debate (Du et al. 2023) — khác hẳn "multi-agent collaboration" ở mục 5</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Multi-agent collaboration ở mục 5 (Researcher → Coder → Reviewer → Judge) giống 1 DÂY CHUYỀN — mỗi agent làm 1 VAI TRÒ KHÁC NHAU, nối tiếp nhau. Multi-Agent Debate hoàn toàn khác: nhiều BẢN SAO của CÙNG 1 loại agent (có thể cùng 1 model, hoặc vài model khác nhau) cùng nhận CÙNG 1 câu hỏi, mỗi bản sao tự trả lời ĐỘC LẬP trước, rồi cho TẤT CẢ thấy câu trả lời của nhau và yêu cầu MỖI bản sao tự sửa lại câu trả lời của mình sau khi đọc ý kiến người khác — lặp lại vài vòng cho tới khi hội tụ về 1 câu trả lời chung. Giống 1 hội đồng thẩm định, không phải 1 dây chuyền sản xuất.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: 1 LLM trả lời độc lập có thể tự tin SAI (<em>hallucinate</em> — model bịa thông tin sai như thể nó đúng, không cố ý gian dối, chỉ là hệ quả của cách LLM dự đoán token tiếp theo) mà không có cơ chế nào tự phát hiện — Reflexion (mục 2) giúp 1 agent tự phê bình dựa trên feedback BÊN NGOÀI (chạy test, thấy fail), nhưng nếu KHÔNG CÓ tín hiệu đúng/sai khách quan (VD câu hỏi suy luận mở, không chạy test được), agent không có gì để tự sửa. Debate giải quyết vấn đề này bằng cách dùng chính SỰ KHÁC BIỆT giữa nhiều câu trả lời độc lập làm tín hiệu — nếu nhiều bản sao ra câu trả lời khác nhau, ít nhất 1 số phải sai, và việc đọc lý lẽ của "phe khác" giúp phát hiện lỗ hổng trong lý lẽ của chính mình.</p>
+
+<pre><code># Cơ chế Multi-Agent Debate (Du et al. 2023):
+Vòng 1: N bản sao agent (VD N=3, cùng hoặc khác model) nhận CÙNG 1 câu hỏi,
+        MỖI bản sao trả lời ĐỘC LẬP (không thấy câu trả lời của nhau) kèm lý do.
+
+Vòng 2+: Gộp CẢ N câu trả lời + lý do vòng trước → đưa lại cho MỖI bản sao xem
+         (mỗi agent thấy "3 câu trả lời khác nhau, đây là lý do của mỗi bên") →
+         yêu cầu MỖI agent VIẾT LẠI câu trả lời của mình, được phép giữ nguyên
+         hoặc đổi ý sau khi cân nhắc lý lẽ người khác.
+
+Lặp lại Vòng 2 vài lần (thường 2-3 vòng) → N câu trả lời dần HỘI TỤ về 1 đáp án
+chung (agent nào lý lẽ yếu hơn thường tự đổi ý theo lý lẽ mạnh hơn qua các vòng).
+
+Đáp án cuối = câu trả lời đa số (majority) sau khi hội tụ, hoặc lấy nguyên câu
+trả lời vòng cuối nếu đã đồng thuận 100%.</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Debate KHÔNG PHẢI Self-Consistency (đã học ở <code>L5_1_prompt.html</code>) — Self-Consistency sample N câu trả lời ĐỘC LẬP rồi VOTE ngay (các bản sao KHÔNG BAO GIỜ thấy câu trả lời của nhau), trong khi Debate cho các bản sao THẤY câu trả lời của nhau và ĐƯỢC PHÉP đổi ý qua nhiều vòng trước khi vote. Debate tốn nhiều lượt gọi LLM hơn (N agent × K vòng) nhưng có thể sửa được lỗi mà Self-Consistency không sửa được — nếu CẢ N bản sao đều mắc CÙNG 1 lỗi suy luận hệt nhau (bias hệ thống của chính model), Self-Consistency vote ra chính lỗi đó (đa số đồng thuận nhầm), còn Debate ít nhất có cơ hội 1 agent phát hiện ra lỗi khi đọc lại lý lẽ và tự sửa ở vòng sau.</p>
+
+<table>
+<tr><th></th><th>Self-Consistency (L5.1)</th><th>Multi-Agent Debate</th><th>Multi-agent collaboration (mục 5)</th></tr>
+<tr><td>Các agent có giống nhau không?</td><td>N lần sample CÙNG 1 model/prompt</td><td>N bản sao, có thể cùng/khác model</td><td>Mỗi agent 1 VAI TRÒ/prompt khác nhau</td></tr>
+<tr><td>Có thấy câu trả lời của nhau?</td><td>Không — độc lập hoàn toàn</td><td>Có — đọc và phản biện qua nhiều vòng</td><td>Có, nhưng theo THỨ TỰ nối tiếp (pipeline)</td></tr>
+<tr><td>Mục tiêu</td><td>Vote đa số ngay lập tức</td><td>Hội tụ dần qua tranh luận</td><td>Chia nhỏ công việc theo chuyên môn</td></tr>
+<tr><td>Sửa được bias hệ thống của model?</td><td>Không (mọi sample cùng bias)</td><td>Có thể (đọc lý lẽ khác giúp lộ ra bias)</td><td>Không áp dụng (mục tiêu khác)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: nghiên cứu thực nghiệm (Du et al. 2023 và các nghiên cứu tiếp theo) cho thấy multi-agent debate giảm hallucination và cải thiện reasoning trên nhiều benchmark (toán, logic, QA) so với 1 agent tự phản biện 1 mình (self-correction) — lý do cốt lõi: phản biện từ 1 "góc nhìn khác" (dù chỉ là 1 bản sao khác của cùng model) tạo áp lực kiểm tra lại lập luận mà tự phản biện 1 mình không tạo ra được (model khó tự phát hiện lỗi trong chính lý luận của mình khi không có ai "cãi lại").</p>
+
+<p><strong>📖 Mở rộng</strong>: chi phí Debate tăng tuyến tính theo N (số agent) × K (số vòng) — với N=3, K=3 đã là 9× lời gọi LLM so với 1 lần hỏi thường, nên chỉ đáng dùng cho câu hỏi QUAN TRỌNG/khó (không dùng cho mọi query production) — cùng nguyên lý trade-off "cost vs quality" đã gặp ở Tree of Thoughts (mục 4) và Self-Consistency (L5.1).</p>
+</div>
+
 <h2>6. Anthropic "Building Effective Agents" (2024)</h2>
 
 <div class="callout success">
@@ -176,7 +214,7 @@ User: "Build authentication system"
 </div>
 
 <div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
-<div class="label">🔍 So sánh 6 agent patterns head-to-head (đọc SAU sections 1-6, bao gồm Tree of Thoughts ở section 4)</div>
+<div class="label">🔍 So sánh 7 agent patterns head-to-head (đọc SAU sections 1-6, bao gồm Tree of Thoughts ở section 4 + Multi-Agent Debate ở section 5.5)</div>
 
 <table>
 <tr><th>Pattern</th><th>Cơ chế</th><th>Turns / task</th><th>Cost</th><th>Best for</th><th>Nhược</th></tr>
@@ -186,6 +224,7 @@ User: "Build authentication system"
 <tr><td><strong>Plan-and-Execute</strong></td><td>Planner tạo plan → Executor chạy từng step</td><td>Plan(1) + Exec(N)</td><td>Trung bình</td><td>Multi-step tasks biết trước</td><td>Không adapt nếu plan sai</td></tr>
 <tr><td><strong>Tree of Thoughts</strong></td><td>Branch, evaluate, backtrack</td><td>10-100</td><td>Rất cao</td><td>Game 24, planning heavy</td><td>Cost cực</td></tr>
 <tr><td><strong>Multi-agent</strong></td><td>Nhiều agents specialize, share state</td><td>Phụ thuộc</td><td>Cao (N agents)</td><td>Complex SDLC (code review, research)</td><td>Coordination overhead</td></tr>
+<tr><td><strong>Multi-Agent Debate</strong></td><td>N bản sao trả lời độc lập → đọc lẫn nhau → sửa lại → hội tụ</td><td>N × K vòng (VD 3×3=9)</td><td>Cao (N×K calls)</td><td>Câu hỏi reasoning/factuality quan trọng, không có test khách quan</td><td>Tốn kém, không đáng cho query thường</td></tr>
 </table>
 
 <h4>Ví dụ — cùng task "sửa bug X trong file Y" bằng 3 patterns</h4>
@@ -308,6 +347,7 @@ Turns: 5 agents × 3-5 turns each = 15-25 total — expensive but organized
   <ul>
     <li>📄 <a href="https://arxiv.org/abs/2210.03629">Yao et al (2023) — ReAct paper</a></li>
     <li>📄 <a href="https://arxiv.org/abs/2303.11366">Shinn et al (2023) — Reflexion</a></li>
+    <li>📄 <a href="https://arxiv.org/abs/2305.14325">Du et al (2023) — Improving Factuality and Reasoning via Multi-Agent Debate</a></li>
     <li>📝 <a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents (must-read 2024)</a></li>
     <li>📖 <a href="https://langchain-ai.github.io/langgraph/tutorials/multi_agent/multi-agent-collaboration/">LangGraph multi-agent tutorials</a></li>
   </ul>

@@ -270,6 +270,35 @@ def classify_error(exc) -> ErrorCategory:
 </ul>
 </div>
 
+<h2>6.5 Output drift detection — phát hiện "hành vi model đang đổi" mà cost/latency không thấy</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Alert rules ở mục 6 (success rate, latency, cost) bắt được lỗi RÕ RÀNG (job fail, chậm, đắt) — nhưng có 1 loại "lỗi" ÂM THẦM hơn: model VẪN trả lời thành công (không lỗi, không timeout, cost bình thường), nhưng NỘI DUNG câu trả lời dần dần LỆCH so với trước (VD sau khi Anthropic/OpenAI âm thầm update model phía sau cùng 1 API endpoint, hoặc do prompt template bị sửa nhẹ mà không ai để ý). Giống 1 nhân viên vẫn đi làm đúng giờ, vẫn nộp báo cáo đúng hạn (không có "lỗi" nào báo động được), nhưng chất lượng công việc dần tệ đi — cần 1 cách đo KHÁC để phát hiện, không phải đo "có đi làm không".</p>
+
+<p><strong>Vấn đề cụ thể</strong>: các alert rule mục 6 đều dựa trên tín hiệu RÕ RÀNG (exception, timeout, số tiền) — không phát hiện được trường hợp model vẫn "chạy thành công" về mặt kỹ thuật nhưng bắt đầu trả lời khác đi về NỘI DUNG/PHONG CÁCH (VD verdict thiên lệch dần về 1 hướng, độ dài câu trả lời tự nhiên tăng dần, tông giọng đổi khác) — nguyên nhân phổ biến: nhà cung cấp âm thầm cập nhật model đằng sau cùng tên gọi (model version pinning không tuyệt đối), hoặc 1 thay đổi nhỏ trong prompt template không qua review kỹ.</p>
+
+<pre><code># Cơ chế: dùng CHÍNH embedding (đã học ở L4_1/L5_2) để đo "khoảng cách" giữa
+# phân phối output HÔM NAY so với BASELINE (VD tuần trước) — không cần đọc
+# từng câu trả lời bằng tay:
+
+Bước 1 — Baseline: lấy N câu trả lời mẫu (tuần trước, lúc hệ thống "khoẻ"),
+         embed mỗi câu → có N vector, tính centroid (điểm trung bình) baseline.
+
+Bước 2 — Theo dõi liên tục: mỗi ngày, lấy M câu trả lời MỚI, embed, tính
+         centroid MỚI, đo cosine similarity (đã học ở L5_2 §5.10) giữa 2 centroid,
+         rồi quy đổi thành "distance" = 1 − similarity (similarity CÀNG THẤP →
+         distance CÀNG CAO → 2 centroid CÀNG KHÁC NHAU).
+
+Bước 3 — Alert nếu distance vượt ngưỡng: nghĩa là "trọng tâm" nội dung câu trả
+         lời đã dịch chuyển đáng kể — không nói CHÍNH XÁC cái gì đổi, nhưng
+         báo hiệu "có gì đó khác, đi kiểm tra thủ công 1 mẫu ngay".</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: drift detection KHÔNG PHẢI thay thế cho eval set/rubric (đã học ở <code>L5_4_llm_eval.html</code>) — nó không nói được "câu trả lời có ĐÚNG không", chỉ nói "câu trả lời có KHÁC TRƯỚC không". 1 sự thay đổi có thể là CẢI THIỆN (model provider fix bug, tốt hơn) hoặc TỆ ĐI — drift alert chỉ là 1 "chuông báo động" để CON NGƯỜI đi xem xét kỹ hơn bằng eval set thật, không phải bản thân là 1 phép đo chất lượng.</p>
+
+<p><strong>Insight</strong>: đây là ứng dụng thực tế của chính khái niệm "embedding đo độ giống nhau về nghĩa" (đã học từ L4.1 Tokenization/Embeddings) sang bài toán observability — thay vì chỉ log số (token, latency, cost), dùng CHÍNH sức mạnh của LLM/embedding model để giám sát LLM khác, tạo ra 1 lớp giám sát "hiểu nghĩa" mà log số liệu thuần không làm được.</p>
+</div>
+
 <h2>7. Prompt versioning</h2>
 
 <pre><code># Prompt in code = git tracked, easy diff

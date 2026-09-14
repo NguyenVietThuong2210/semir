@@ -54,6 +54,7 @@
 <p>Function <code>add(2,3)==5</code> deterministic → 1 unit test đủ. LLM <code>summarize(article)</code> stochastic → 1 example không cover. Cần BDD (Behavior-Driven Development) với scenario matrix.</p>
 
 <h4>Gherkin cho LLM feature</h4>
+<p><strong>Gherkin</strong> = cú pháp viết scenario theo cấu trúc <code>Given-When-Then</code> (Cho trước-Khi-Thì), đọc được bằng ngôn ngữ tự nhiên bởi cả PM lẫn engineer, đồng thời parse được thành test tự động — không phải chỉ là "code ví dụ", mà là 1 định dạng chuẩn có công cụ chạy trực tiếp (VD Cucumber).</p>
 <pre><code>Feature: Investor thesis generation for VN stocks
   As a retail investor
   I want AI to write thesis with grounded numbers
@@ -179,6 +180,27 @@ Enable users login with email + password.
 - MFA (future)
 - Password reset (separate spec)
 </code></pre>
+
+<h2>2.5 · SpecKit thật hoạt động qua slash-command nào — không chỉ folder structure</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề thật: §2 mới cho thấy KẾT QUẢ (folder constitution.md/feature-N.md/tasks/) chứ chưa nói QUY TRÌNH tạo ra chúng</div>
+<p>SpecKit thật (github/spec-kit, dùng qua Claude Code/Copilot/Cursor) không phải chỉ là "1 cấu trúc folder" — nó là 1 chuỗi <strong>slash-command</strong> chạy TUẦN TỰ, mỗi command sinh ra 1 phần của cấu trúc §2, và command SAU đọc output của command TRƯỚC làm input. Giống dây chuyền sản xuất: mỗi trạm chỉ làm 1 việc, nhận bán thành phẩm từ trạm trước, giao cho trạm sau — không phải 1 người viết hết constitution+feature+tasks trong 1 lần.</p>
+
+<table>
+<tr><th>Lệnh</th><th>Làm gì</th><th>Input</th><th>Output</th></tr>
+<tr><td><code>/speckit.constitution</code></td><td>Viết nguyên tắc BẤT BIẾN của dự án (coding standard, kiến trúc, testing bắt buộc) — chạy 1 LẦN đầu dự án, không phải mỗi feature</td><td>User trả lời câu hỏi về nguyên tắc team</td><td><code>constitution.md</code></td></tr>
+<tr><td><code>/speckit.specify</code></td><td>Định nghĩa CÁI GÌ cần xây (requirement), KHÔNG bàn cách làm (how)</td><td>User mô tả feature bằng ngôn ngữ tự nhiên</td><td><code>feature-N.md</code> (phần "what")</td></tr>
+<tr><td><code>/speckit.clarify</code></td><td>Đặt câu hỏi làm rõ vùng CHƯA RÕ trong spec vừa viết — tối đa 5 câu, KHÔNG hỏi tràn lan</td><td>feature-N.md từ bước trên</td><td>feature-N.md cập nhật, đã điền vùng mơ hồ</td></tr>
+<tr><td><code>/speckit.plan</code></td><td>Chọn tech stack + kiến trúc CỤ THỂ để implement spec đã rõ</td><td>feature-N.md đã clarify</td><td>plan.md (design doc kỹ thuật)</td></tr>
+<tr><td><code>/speckit.tasks</code></td><td>Parse design doc → sinh danh sách task theo THỨ TỰ PHỤ THUỘC (dependency-ordered), nhóm theo phase</td><td>plan.md</td><td><code>tasks/task-N.md</code> (đúng những gì §2/§3 mô tả)</td></tr>
+<tr><td><code>/speckit.implement</code></td><td>Thực thi từng task, sinh code thật</td><td>tasks/</td><td>Code trong <code>src/</code></td></tr>
+</table>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: <code>/speckit.constitution</code> chạy 1 LẦN đầu dự án (nguyên tắc áp dụng cho MỌI feature sau này), còn <code>/speckit.specify</code> → <code>/speckit.tasks</code> chạy LẶP LẠI cho MỖI feature mới — không phải cả 6 lệnh đều chạy mỗi lần có feature mới. Nhầm điểm này dẫn tới việc viết lại constitution mỗi feature — lãng phí và có thể tạo ra 2 constitution mâu thuẫn nhau.</p>
+
+<p><strong>Insight</strong>: so với ai_orchestrator ở §3 dưới đây (SpecAnalyze + TaskDecompose — 2 agent Python tự viết), SpecKit đạt được HIỆU QUẢ TƯƠNG TỰ (spec → phân tích → chia task) nhưng bằng 1 bộ slash-command chuẩn hoá công khai (open-source, dùng được với bất kỳ AI coding tool nào hỗ trợ Markdown command), thay vì code Python riêng theo dự án — đánh đổi: SpecKit dễ tái sử dụng across project hơn, nhưng ai_orchestrator's Python agents có thể nhúng logic domain-specific sâu hơn (VD constitution machine-checkable rules ở §4 dưới).</p>
+</div>
 
 <h2>3. ai_orchestrator SDD flow</h2>
 

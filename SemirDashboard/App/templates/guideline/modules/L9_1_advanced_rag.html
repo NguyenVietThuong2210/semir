@@ -128,8 +128,41 @@ elif query.type == "temporal":  use time-series index
 elif query.type == "global":    use GraphRAG summaries
 </code></pre>
 
-<h3>6.3 Iterative retrieval (FLARE)</h3>
+<h3>6.3 Iterative retrieval (FLARE — Jiang et al. 2023)</h3>
 <p>Generate → detect low-confidence token → retrieve more → regenerate. Dùng khi answer cần multi-hop.</p>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Vấn đề cụ thể — RAG truyền thống retrieve 1 LẦN DUY NHẤT, trước khi biết cần gì</div>
+<p>Naive RAG (kể cả agentic self-query ở §6.1) retrieve TRƯỚC KHI sinh câu trả lời — dựa vào query ban đầu, không biết câu trả lời sẽ cần thông tin gì ở CÂU SAU. FLARE (Forward-Looking Active REtrieval) giải quyết bằng cách: SINH TRƯỚC 1 câu "nháp" (temporary next sentence), rồi mới quyết định có cần retrieve thêm không — dựa trên chính LLM có TỰ TIN với câu nháp đó hay không.</p>
+</div>
+
+<pre><code># Cơ chế FLARE (đơn giản hoá từ paper Jiang 2023):
+while not done_generating:
+    # Bước 1: sinh THỬ câu tiếp theo (chưa commit)
+    draft_sentence, token_probs = llm.generate_next_sentence(context)
+
+    # Bước 2: kiểm tra token nào trong câu nháp có xác suất THẤP
+    # (model "không chắc" — dấu hiệu model đang phải ĐOÁN, không phải BIẾT)
+    low_conf_tokens = [t for t, p in zip(draft_sentence, token_probs) if p < threshold]
+
+    if low_conf_tokens:
+        # Bước 3: dùng CHÍNH câu nháp (chứa chỗ không chắc) làm query retrieve thêm
+        # (không phải quay lại query gốc của user — query gốc có thể không đề cập chi tiết này)
+        query = mask_low_confidence_span(draft_sentence, low_conf_tokens)
+        new_docs = retrieve(query)
+        context += new_docs
+        # Bước 4: sinh LẠI câu đó với context mới, THAY THẾ câu nháp
+        final_sentence = llm.generate_next_sentence(context)
+    else:
+        # Model đủ tự tin → giữ nguyên câu nháp, không tốn thêm retrieval
+        final_sentence = draft_sentence
+
+    context += final_sentence
+</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: FLARE KHÔNG dùng câu hỏi GỐC của user để retrieve lần 2 — nó dùng CHÍNH đoạn văn bản model vừa "đoán mò" (câu nháp chứa token thấp tự tin) làm query. Lý do: câu nháp thường chứa đúng CHI TIẾT CỤ THỂ model đang thiếu (VD tên riêng, con số) mà câu hỏi gốc của user không hề nhắc tới — dùng câu nháp làm query "trúng đích" hơn nhiều so với query gốc chung chung.</p>
+
+<p><strong>Insight</strong>: khác biệt cốt lõi so với retrieval 1-lần (kể cả agentic decompose §6.1, vốn quyết định TOÀN BỘ sub-query cần thiết TRƯỚC khi sinh câu trả lời) — FLARE quyết định retrieve theo TỪNG CÂU, dựa vào TÍN HIỆU NỘI TẠI của chính model (xác suất token) thay vì suy luận trước bằng 1 bước riêng biệt. Đánh đổi: linh hoạt hơn (chỉ retrieve khi thực sự cần, tiết kiệm hơn multi-hop cố định) nhưng tốn nhiều lượt gọi LLM hơn (mỗi câu tiềm năng cần 1 lượt sinh-nháp + 1 lượt sinh-lại).</p>
 
 <div class="callout" style="background: rgba(251,146,60,0.08); border-left-color: #f97316">
 <div class="label">🔍 So sánh 6 RAG variants head-to-head (đọc SAU sections 2-6)</div>

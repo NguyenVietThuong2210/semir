@@ -95,6 +95,24 @@ for i in range(20, len(prices)):
     running_sum += prices[i] - prices[i-20]   # + giá mới, - giá rời khỏi cửa sổ
     ma20 = running_sum / 20</code></pre>
 
+<h3>Bước 5 — Heap (priority queue): lấy Top-K mà không cần sort toàn bộ</h3>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Sort toàn bộ danh sách để lấy top 5 giống việc xếp HẠNG toàn bộ 86 thí sinh từ 1 đến 86 chỉ để công bố 5 người đứng đầu — làm thừa 81 phép so sánh không ai cần tới. Heap giống việc giữ 1 "bảng vàng 5 người" nhỏ, mỗi thí sinh mới chỉ cần so với người THẤP NHẤT trong bảng vàng hiện tại — nếu không vượt qua người thấp nhất đó, loại ngay, không cần so với 4 người còn lại.</p>
+</div>
+<p><strong>Vấn đề cụ thể</strong>: bài toán "top 5 BUY picks trong 86 ticker theo combined_score" (đúng dạng bài toán daily-investor-report skill phải giải mỗi ngày) có thể giải bằng <code>sorted(scores)[:5]</code> — nhưng cách đó tốn <strong>O(n log n)</strong> để sort TOÀN BỘ 86 phần tử, dù chỉ cần đúng 5 phần tử đầu.</p>
+<pre><code>import heapq
+
+# Cách 1 — sort toàn bộ rồi cắt: O(n log n), n=86 → ~86×6.4 ≈ 550 phép so sánh
+top5_sort = sorted(scores.items(), key=lambda x: -x[1])[:5]
+
+# Cách 2 — heap kích thước cố định K=5: O(n log k), n=86, k=5 → ~86×2.32 ≈ 200 phép so sánh
+top5_heap = heapq.nlargest(5, scores.items(), key=lambda x: x[1])
+# heapq.nlargest duy trì 1 "min-heap" kích thước 5 bên trong: mỗi ticker mới chỉ
+# so sánh với phần tử NHỎ NHẤT hiện có trong heap (O(log 5) mỗi lần), không phải
+# so sánh/sắp xếp với cả 86 phần tử.</code></pre>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: với n=86, k=5 nhỏ như hiện tại, khác biệt O(n log n) vs O(n log k) KHÔNG đáng kể về thời gian thực (mili-giây) — đây không phải chỗ cần "tối ưu sớm" bằng mọi giá. Điểm quan trọng hơn tốc độ tuyệt đối là <strong>quy mô KHÔNG cố định mãi mãi</strong>: nếu universe ticker tăng từ 86 lên 2000 (VD mở rộng sang toàn bộ HOSE+HNX+UPCOM), <code>sorted()</code> vẫn phải sort hết 2000 phần tử (O(2000 log 2000) ≈ 22,000 phép so sánh) trong khi heap top-5 chỉ tăng nhẹ (O(2000 log 5) ≈ 4,600 phép so sánh) — khoảng cách hiệu năng RỘNG RA theo quy mô, không phải hằng số.</p>
+<p><strong>Insight</strong>: đây là ví dụ cụ thể của nguyên tắc chung đã thấy ở Bước 2 (set vs list) — chọn đúng cấu trúc dữ liệu quan trọng hơn khi bài toán CÓ THỂ scale lên, ngay cả khi ở quy mô hiện tại (86 ticker) sự khác biệt chưa đáng lo. <code>heapq.nlargest</code>/<code>heapq.nsmallest</code> là công cụ built-in sẵn có trong Python, không cần tự cài đặt heap tay.</p>
+
 <h2>🔢 Ví dụ cụ thể</h2>
 <p>Ví dụ thật, đọc trực tiếp từ <code>backend/data/groups.py</code> dòng 40-54 — hàm <code>build_highlight_group()</code> dùng chính xác kỹ thuật ở Bước 2:</p>
 <pre><code>def build_highlight_group() -> list[str]:

@@ -126,6 +126,53 @@ Best cho ambiguous tasks but slower.
 <p><strong>Insight quan trọng</strong>: Cursor Composer là hybrid — mặc định Edit pattern (accept/reject diff), interrupt cho Interactive khi ambiguous. Đây là why Cursor UX beat Copilot early — HITL layered đúng cho coding.</p>
 </div>
 
+<h2>2.5 Risk-based dynamic gating — TẠI SAO 1 hành động cần HITL, hành động khác thì không?</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Decision matrix ở mục 2 (§🔍 So sánh 3 HITL patterns) liệt kê SẴN "financial transactions → Approve/Reject", "data analysis (safe) → Không cần HITL" — nhưng đây là danh sách TĨNH, ai đó phải NGỒI NGHĨ trước cho từng loại hành động. Câu hỏi tổng quát hơn: làm sao QUYẾT ĐỊNH 1 loại hành động MỚI (chưa có trong bảng) có cần HITL hay không, mà không phải đoán mò? Giống 1 bác sĩ cấp cứu phân loại bệnh nhân (triage) — không nhìn TÊN bệnh để quyết định độ khẩn cấp, mà nhìn 1 vài CHỈ SỐ khách quan (nhịp tim, huyết áp, mức độ mất máu) để tính điểm ưu tiên.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: bảng quyết định tĩnh (mục 2) không scale — mỗi khi agent có 1 loại hành động MỚI (VD thêm 1 tool mới), ai đó phải NGỒI ĐOÁN xem có cần HITL không, dễ quyết định theo cảm tính (sợ quá → HITL mọi thứ → "approval fatigue" — user bấm "approve" theo phản xạ, không thực sự đọc, vì bị hỏi duyệt quá nhiều lần, sẽ nói rõ hơn ở mục 9; liều quá → bỏ sót hành động nguy hiểm thật sự cần người duyệt).</p>
+
+<pre><code># Khung 3 chỉ số khách quan để tính điểm rủi ro cho MỌI loại hành động
+# (không cần biết tên hành động là gì, chỉ cần trả lời 3 câu hỏi):
+
+1. Reversibility (khả năng đảo ngược): hành động này có thể HOÀN TÁC được không?
+   - Thấp (khó/không đảo ngược): gửi tiền, xoá dữ liệu, gửi email ra ngoài,
+     force-push, gọi API bên thứ 3 không có endpoint "undo"
+   - Cao (dễ đảo ngược): sửa 1 file trong git (còn commit trước để revert),
+     tạo draft chưa publish, query SELECT không đổi gì
+
+2. Blast radius (phạm vi ảnh hưởng): nếu SAI thì ảnh hưởng tới bao nhiêu
+   người/hệ thống?
+   - Lớn: production database, toàn bộ user, main branch
+   - Nhỏ: 1 file test, 1 user cụ thể, môi trường sandbox
+
+3. Model confidence (đã học ở L5_4_llm_eval.html §4.9 — độ tin cậy CÓ CALIBRATE
+   hay không, không phải con số model tự xưng): model có chắc chắn hành động
+   này đúng không, dựa trên tín hiệu khách quan (đã có unit test pass? đã có
+   validation từ tool khác? hay chỉ "model tự tin nói vậy"?)
+
+# Rule quyết định (dùng phổ biến trong thực tế production 2024-2026):
+# NẾU ít nhất 2/3 yếu tố ở mức "đáng lo" (khó đảo ngược HOẶC blast radius lớn
+#   HOẶC confidence thấp) → BẮT BUỘC gate (dùng 1 trong 3 pattern mục 2)
+# NẾU cả 3 yếu tố đều "an toàn" → cho phép agent tự chạy KHÔNG cần HITL</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: reversibility QUAN TRỌNG HƠN confidence trong khung này — 1 hành động model RẤT tự tin (95%) nhưng KHÔNG THỂ đảo ngược (VD xoá database production) vẫn nên có gate, vì 5% sai còn lại không có đường lùi. Ngược lại, 1 hành động model không chắc lắm (60%) nhưng HOÀN TOÀN đảo ngược được (VD tạo 1 draft PR chưa merge) có thể cho chạy tự động, vì sai thì sửa/xoá dễ dàng — không cần chờ người duyệt trước. Đây là lý do "reversibility là tính chất của HÀNH ĐỘNG, không phải ước lượng của MODEL" — đáng tin cậy hơn để quyết định gate so với chỉ dựa vào confidence (vốn có thể bị model tự đánh giá sai, xem calibration đã học ở L5.4).</p>
+
+<table>
+<tr><th>Reversibility</th><th>Blast radius</th><th>Confidence</th><th>Số yếu tố "đáng lo"</th><th>Quyết định</th></tr>
+<tr><td>Thấp (khó đảo ngược)</td><td>Lớn</td><td>Cao</td><td>2/3</td><td>Gate bắt buộc (financial transaction, đã đúng bảng mục 2)</td></tr>
+<tr><td>Cao (dễ đảo ngược)</td><td>Nhỏ</td><td>Thấp</td><td>1/3</td><td>Không cần gate (data analysis an toàn, đã đúng bảng mục 2)</td></tr>
+<tr><td>Thấp</td><td>Nhỏ</td><td>Cao</td><td>1/3</td><td>Không cần gate (VD sửa 1 dòng comment, dù "khó đảo ngược" về mặt kỹ thuật)</td></tr>
+<tr><td>Cao</td><td>Lớn</td><td>Thấp</td><td>2/3</td><td>Gate (blast radius lớn + confidence thấp đủ để cần người duyệt dù đảo ngược được)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: khung này biến "cần HITL hay không" từ 1 QUYẾT ĐỊNH THIẾT KẾ TĨNH (bảng liệt kê thủ công) thành 1 QUY TẮC TÍNH ĐƯỢC áp dụng cho MỌI hành động mới mà không cần đoán — đúng tinh thần chung với risk-based thinking đã gặp ở nhiều nơi khác trong curriculum (VD threshold tuning theo cost-of-error ở <code>L2_3_imbalance.html</code>). Khi thêm 1 tool mới cho agent, thay vì hỏi "hành động này có 'nguy hiểm' không" (mơ hồ), hỏi CỤ THỂ 3 câu: đảo ngược được không? ảnh hưởng bao nhiêu? confidence có tín hiệu khách quan không?</p>
+
+<p><strong>📖 Mở rộng</strong>: nguyên tắc "reversibility trước, confidence sau" này không phải lý thuyết suông — nó khớp với cách các coding agent production (bao gồm chính Claude Code) thực sự vận hành: hành động low-risk (đọc file, chạy test trong sandbox) luôn tự động; hành động khó đảo ngược (force-push, xoá file, gửi request ra ngoài) luôn cần xác nhận rõ ràng dù model "chắc chắn" tới đâu — vì chi phí của 1 lần sai không đảo ngược được luôn lớn hơn nhiều so với chi phí hỏi thêm 1 câu.</p>
+</div>
+
 <h2>3. LangGraph implementation</h2>
 
 <div class="callout">

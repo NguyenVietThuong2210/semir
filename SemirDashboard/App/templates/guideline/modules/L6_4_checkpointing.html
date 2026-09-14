@@ -246,6 +246,53 @@ Restart: state.next vẫn = ["send_confirmation_email"] (vì checkpoint bước 
 
 <p><strong>Node nào cần lo, node nào không?</strong> Node chỉ đọc dữ liệu hoặc tính toán thuần (LLM call trả text, query database SELECT) — chạy lại vô hại, tự động idempotent. Node có <em>side-effect ra thế giới bên ngoài</em> (gửi email, trừ tiền, gọi webhook, ghi file) — luôn cần idempotency key. Đây chính xác là lý do LLM call bản thân nó thường an toàn để retry (section "ReAct loop" ở L6.1 dùng exponential backoff retry) nhưng node <em>gọi tool có side-effect</em> thì không được retry vô tư.</p>
 
+<h2>9.5 Saga pattern — khi cần HUỶ NGƯỢC các bước ĐÃ THÀNH CÔNG, không chỉ tránh lặp lại</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Idempotency (§9) trả lời câu hỏi "node NÀY có thể bị gọi lại an toàn không?" — nhưng có 1 câu hỏi KHÁC: nếu node 1-2-3 đã CHẠY THÀNH CÔNG THẬT (email đã gửi, tiền đã trừ, đơn hàng đã tạo), rồi node 4 THẤT BẠI VĨNH VIỄN (không phải lỗi tạm thời để retry, mà lỗi thật sự không thể tiếp tục) — làm sao HUỶ NGƯỢC những gì node 1-2-3 đã làm THẬT? Giống việc đặt combo 4 món ở nhà hàng (khai vị → súp → món chính → tráng miệng) — nếu bếp hết nguyên liệu ở món tráng miệng, nhà hàng không thể "undo" việc bạn đã ăn khai vị/súp/món chính, nhưng CÓ THỂ bù lại bằng hành động tương đương (giảm giá hoá đơn, tặng món khác) — đó chính là tinh thần "compensating action" (hành động bù đắp) của Saga pattern.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: agent pipeline nhiều bước có side-effect thật (VD: node "create_git_branch" → node "push_code" → node "create_pr" → node "notify_slack") không có 1 "transaction" bao trùm toàn bộ như database transaction (không thể ROLLBACK cả 4 bước cùng lúc nếu bước 4 lỗi, vì bước 1-3 đã là hành động THẬT trên hệ thống bên ngoài — git branch đã tồn tại, code đã push, PR đã tạo — không có phép "undo" tự động nào của LangGraph/checkpoint hiểu được ý nghĩa nghiệp vụ của việc "huỷ 1 PR" hay "xoá 1 git branch").</p>
+
+<pre><code># Saga pattern: mỗi bước "thuận" (forward action) phải có 1 bước "bù đắp"
+# (compensating action) ĐI KÈM — nếu 1 bước SAU thất bại, chạy NGƯỢC các bước
+# bù đắp của MỌI bước ĐÃ THÀNH CÔNG trước đó, theo thứ tự NGƯỢC LẠI:
+
+SAGA_STEPS = [
+    ("create_git_branch", "delete_git_branch"),      # (forward, compensate)
+    ("push_code",         "revert_commit"),
+    ("create_pr",         "close_pr"),
+    ("notify_slack",      "post_correction_message"),
+]
+
+async def run_saga(state):
+    completed = []   # track bước nào đã chạy THÀNH CÔNG để biết compensate gì
+    try:
+        for forward, _ in SAGA_STEPS:
+            await execute(forward, state)
+            completed.append(forward)
+    except PermanentError:
+        # Chạy NGƯỢC các compensating action, theo thứ tự NGƯỢC LẠI
+        for forward in reversed(completed):
+            compensate = dict(SAGA_STEPS)[forward]
+            await execute(compensate, state)
+        raise</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Saga KHÔNG PHẢI "undo hoàn hảo về đúng trạng thái ban đầu" như rollback database transaction — compensating action chỉ là hành động BÙ ĐẮP tương đương (VD "hoàn tiền" không xoá được sự thật là giao dịch đã từng xảy ra, chỉ tạo ra 1 giao dịch NGƯỢC LẠI để về đúng số dư cuối cùng). Vì vậy, <strong>compensating action bản thân nó CŨNG phải idempotent</strong> (đã học ở §9) — nếu quá trình compensate bị lỗi giữa chừng và phải retry, "hoàn tiền 2 lần" cũng tệ y hệt "trừ tiền 2 lần".</p>
+
+<table>
+<tr><th></th><th>Idempotency (§9)</th><th>Saga pattern</th></tr>
+<tr><td>Giải quyết vấn đề gì</td><td>1 node bị gọi LẶP LẠI (do resume/retry) không tạo side-effect trùng</td><td>1 chuỗi NHIỀU node, node sau thất bại vĩnh viễn cần HUỶ NGƯỢC node trước đã thành công</td></tr>
+<tr><td>Cơ chế</td><td>Idempotency key — kiểm tra "đã làm chưa" trước khi làm</td><td>Compensating action — hành động bù đắp cho mỗi forward action</td></tr>
+<tr><td>Áp dụng cho</td><td>Từng node riêng lẻ</td><td>Toàn bộ chuỗi nhiều node có phụ thuộc side-effect lẫn nhau</td></tr>
+<tr><td>2 kỹ thuật loại trừ nhau?</td><td colspan="2">Không — dùng CÙNG LÚC: mỗi compensating action cũng cần chính nó idempotent</td></tr>
+</table>
+
+<p><strong>Insight</strong>: Saga là câu trả lời kinh điển của <em>distributed systems</em> (hệ thống phân tán — nhiều service/máy chủ độc lập cùng phối hợp) cho bài toán "không có transaction xuyên suốt nhiều service độc lập" — thay vì cố gắng làm "tất cả hoặc không gì cả" (all-or-nothing, như <strong>ACID</strong> transaction trong 1 database — 4 tính chất database transaction phải đảm bảo: Atomicity/tất-cả-hoặc-không-gì, Consistency/dữ liệu luôn hợp lệ, Isolation/giao dịch không can thiệp lẫn nhau, Durability/đã commit thì không mất; ở đây chỉ cần nhớ chữ "A" — Atomicity — là phần liên quan trực tiếp tới Saga), Saga chấp nhận rằng CÁC BƯỚC ĐÃ XẢY RA THẬT rồi, và thiết kế trước 1 kế hoạch "nếu sau này hỏng thì bù đắp thế nào" cho MỖI hành động có side-effect. 2 cách triển khai phổ biến: <strong>Orchestration</strong> (1 "nhạc trưởng" trung tâm — giống Python router/Supervisor đã học ở <code>L6_2_multiagent.html</code> §3 — quyết định gọi compensate theo thứ tự) và <strong>Choreography</strong> (không có nhạc trưởng, mỗi service tự lắng nghe event và tự quyết định compensate) — pattern Supervisor/LangGraph của AI Orchestrator tự nhiên khớp với Orchestration-style Saga.</p>
+
+<p><strong>📖 Mở rộng</strong>: không phải MỌI action đều compensate được — 1 email đã gửi không thể "chưa từng gửi" (compensate tốt nhất chỉ là gửi thêm 1 email đính chính), trong khi 1 bản ghi database có thể xoá sạch (compensate gần như hoàn hảo). Khi thiết kế pipeline nhiều bước có side-effect, nên xếp các bước KHÓ HOÀN TÁC NHẤT (gửi tiền thật, gửi thông báo ra ngoài) ở CUỐI chuỗi — nếu có lỗi, nó xảy ra ở bước dễ compensate hơn trước, giảm thiểu tình huống cần "bù đắp" cho hành động không thể undo thật sự.</p>
+</div>
+
 <h2>10. HA considerations</h2>
 
 <div class="callout">
@@ -292,6 +339,7 @@ Restart: state.next vẫn = ["send_confirmation_email"] (vì checkpoint bước 
   <ul>
     <li>📖 <a href="https://langchain-ai.github.io/langgraph/how-tos/persistence/">LangGraph persistence guide</a></li>
     <li>📖 <a href="https://langchain-ai.github.io/langgraph/how-tos/persistence_postgres/">Postgres persistence tutorial</a></li>
+    <li>📖 <a href="https://microservices.io/patterns/data/saga.html">Saga pattern (microservices.io)</a></li>
   </ul>
 </div>
 

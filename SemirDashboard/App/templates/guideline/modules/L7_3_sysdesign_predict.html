@@ -255,6 +255,46 @@ L3 Postgres (source of truth)    ── always hits, 50ms ──► return + bac
 <tr><td colspan="3"><strong>Effective average</strong></td><td><strong>~11ms</strong></td></tr>
 </table>
 
+<h2>5.7 Load shedding — khác Rate Limit (mục 5.5) thế nào khi CẢ HỆ THỐNG quá tải?</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>Rate limit (mục 5.5, token bucket) giới hạn TỪNG USER — công bằng, ngăn 1 user spam. Nhưng nếu TẤT CẢ user đều gửi request hợp lệ, đúng giới hạn, mà TỔNG LƯỢNG vẫn vượt quá khả năng phục vụ của CẢ HỆ THỐNG (VD 15:00 giờ đóng cửa, mọi trader cùng lúc check giá) — rate limit không giúp được gì (không ai vi phạm giới hạn cá nhân). Load shedding giải quyết bài toán KHÁC: khi hệ thống THẬT SỰ quá tải, chủ động TỪ CHỐI bớt request ÍT QUAN TRỌNG HƠN để cứu request QUAN TRỌNG — giống phòng cấp cứu bệnh viện quá tải: không từ chối HẾT bệnh nhân, mà ưu tiên ca nặng, hoãn ca nhẹ (tái khám định kỳ) lại.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: hệ thống có sức chứa GIỚI HẠN (VD Postgres §5.5 tính được "massive headroom" ở tải bình thường, nhưng có mức tải NÀO ĐÓ sẽ vượt ngưỡng) — nếu không có cơ chế bảo vệ, hệ thống quá tải KHÔNG chỉ chậm đi TỪ TỪ mà thường SỤP HOÀN TOÀN (queue tràn, connection pool cạn, mọi request đều timeout — kể cả request đơn giản) — tệ hơn nhiều so với việc từ chối MỘT PHẦN request để phần còn lại vẫn chạy tốt.</p>
+
+<pre><code># Load shedding — phân loại request theo ĐỘ QUAN TRỌNG, bỏ bớt loại ít quan
+# trọng khi hệ thống báo hiệu "tôi đang quá tải":
+
+PRIORITY = {
+    "get_prediction":        1,   # CRITICAL — lý do chính user dùng app
+    "get_price_realtime":    1,   # CRITICAL
+    "get_historical_chart":  2,   # EXPECTED — quan trọng nhưng chịu được delay nhẹ
+    "log_analytics_event":   3,   # BACKGROUND — không ảnh hưởng trải nghiệm chính
+}
+
+def handle_request(req):
+    current_load = get_system_load()   # VD % connection pool đang dùng, queue depth
+    if current_load > 0.9 and PRIORITY[req.type] >= 3:
+        return Response(503, "Service busy, try again later")   # shed BACKGROUND trước
+    if current_load > 0.97 and PRIORITY[req.type] >= 2:
+        return Response(503, "Service busy")                     # shed cả EXPECTED
+    # CRITICAL (priority 1) luôn được cố gắng phục vụ tới giới hạn cao nhất
+    return process(req)</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Load shedding KHÔNG PHẢI rate limit "phiên bản mạnh hơn" — rate limit (mục 5.5) là PHÒNG NGỪA, áp dụng ĐỀU cho mọi user bất kể hệ thống có tải hay không (giới hạn cố định 10 req/s/user). Load shedding là PHẢN ỨNG, chỉ kích hoạt khi hệ thống THẬT SỰ đang quá tải (đo bằng tín hiệu thực: queue depth, connection pool usage, CPU) và áp dụng KHÔNG ĐỀU (ưu tiên request quan trọng, bỏ request ít quan trọng) — 2 cơ chế bổ sung cho nhau, không thay thế nhau: rate limit ngăn LẠM DỤNG, load shedding xử lý QUÁ TẢI HỢP LỆ (mọi user đều dùng đúng, chỉ là tổng cầu vượt cung).</p>
+
+<table>
+<tr><th></th><th>Rate limit (mục 5.5)</th><th>Load shedding</th></tr>
+<tr><td>Kích hoạt khi nào</td><td>Luôn luôn, per-user cố định</td><td>Chỉ khi hệ thống đo được đang quá tải</td></tr>
+<tr><td>Áp dụng cho ai</td><td>Đều nhau cho mọi user (theo tier)</td><td>Không đều — ưu tiên request QUAN TRỌNG hơn</td></tr>
+<tr><td>Giải quyết vấn đề gì</td><td>1 user lạm dụng/spam</td><td>Tổng cầu hợp lệ vượt quá khả năng hệ thống</td></tr>
+<tr><td>Kết quả khi KHÔNG có cơ chế này</td><td>1 user "chiếm" hết tài nguyên</td><td>Cả hệ thống sụp (mọi request đều timeout, kể cả quan trọng)</td></tr>
+</table>
+
+<p><strong>Insight</strong>: nguyên tắc cốt lõi của load shedding là "degrade có kiểm soát tốt hơn sụp đổ hoàn toàn" — 1 hệ thống từ chối 10% request ÍT QUAN TRỌNG khi quá tải vẫn phục vụ TỐT 90% request còn lại; 1 hệ thống cố phục vụ 100% request khi quá tải thường kết thúc bằng việc KHÔNG phục vụ được request nào (queue timeout dây chuyền, connection pool cạn kiệt). Đây chính là lý do "graceful degrade" đã nhắc ở mục 6 Anti-patterns bên dưới (3-tier fallback: cache → heuristic → "NO SIGNAL") — về bản chất là 1 hình thức load shedding: khi model serving quá tải/lỗi, "shed" xuống mức phục vụ RẺ HƠN (heuristic) thay vì trả lỗi 500 hoàn toàn.</p>
+</div>
+
 <h2>6. Failure modes</h2>
 
 <div class="callout warn">

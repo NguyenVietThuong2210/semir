@@ -123,6 +123,7 @@
 </table>
 
 <h4>Authorization flow (HTTP transport, 2025 spec)</h4>
+<p><strong>OAuth 2.1</strong> (chuẩn cấp quyền qua bên thứ 3 — user đăng nhập 1 lần với provider, ứng dụng nhận 1 "token" đại diện quyền thay vì lưu mật khẩu) và <strong>JWT</strong> (JSON Web Token — 1 chuỗi mã hoá tự chứa thông tin user + chữ ký, server verify chữ ký là biết token hợp lệ mà KHÔNG cần tra database mỗi lần) là 2 chuẩn nền tảng của flow dưới đây:</p>
 <pre><code>1. Client gọi POST /mcp → server trả 401 với WWW-Authenticate header
 2. Client redirect user tới OAuth authorize URL
 3. User consent → callback với authorization code
@@ -255,6 +256,36 @@ Sampling = "Chef muốn hỏi khách nên nêm thêm gia vị không" (nhà hàn
 </table>
 
 <p><strong>Insight quan trọng</strong>: Sampling là primitive độc đáo — server "delegate" LLM call cho client. Vì sao? (1) Client control cost, (2) Client có LLM key, (3) User privacy — server không thấy raw prompts. Đây là why MCP khác Function Calling truyền thống.</p>
+</div>
+
+<h2>3.5 · Roots — primitive thứ 5 ít được nhắc tới</h2>
+
+<div class="callout" style="background: rgba(34,197,94,0.08); border-left-color: #22c55e">
+<div class="label">💡 Analogy</div>
+<p>4 primitive ở §3 (Tools/Resources/Prompts/Sampling) đều là SERVER cung cấp thứ gì đó cho client. <strong>Roots</strong> đi CHIỀU NGƯỢC LẠI: CLIENT nói cho SERVER biết "mày chỉ được phép động vào những thư mục/file NÀY thôi" — giống việc chủ nhà đưa cho thợ sửa ống nước 1 tấm bản đồ khoanh vùng "chỉ được vào bếp và nhà tắm, không được vào phòng ngủ" TRƯỚC KHI thợ bắt đầu làm việc, thay vì để thợ tự do đi khắp nhà rồi hy vọng thợ tự biết giới hạn.</p>
+
+<p><strong>Vấn đề cụ thể</strong>: 1 filesystem MCP server (VD <code>server-filesystem</code> ở bảng §8 dưới) về nguyên tắc CÓ THỂ đọc/ghi bất kỳ đường dẫn nào trên máy nếu code không tự giới hạn — nguy hiểm nếu server có bug hoặc bị command injection. Roots giải quyết bằng cách để CLIENT (không phải server tự khai) là bên quyết định + thông báo boundary, và server phải hỏi client trước khi biết mình được phép động vào đâu.</p>
+
+<pre><code>// Server hỏi client: "tao được phép động vào thư mục nào?"
+{"jsonrpc": "2.0", "id": 1, "method": "roots/list"}
+
+// Client trả lời — CHỈ những root user đã cho phép, KHÔNG phải toàn bộ ổ đĩa:
+{
+  "jsonrpc": "2.0", "id": 1,
+  "result": {
+    "roots": [
+      {"uri": "file:///d:/New-jouney/predictor", "name": "predictor project"}
+    ]
+  }
+}
+
+// Nếu user đổi project (đóng predictor, mở project khác) → client PHẢI gửi:
+{"jsonrpc": "2.0", "method": "notifications/roots/list_changed"}
+// Server nhận notification này → gọi lại roots/list để lấy boundary MỚI</code></pre>
+
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: Roots KHÔNG PHẢI cơ chế enforce/sandbox tự động — spec chỉ định nghĩa GIAO THỨC hỏi-đáp boundary, còn việc SERVER có THỰC SỰ tôn trọng boundary đó khi thao tác file hay không vẫn phụ thuộc vào code của server (spec dùng chữ "SHOULD respect root boundaries", không phải cơ chế OS-level chặn cứng). Khác với OS-level sandbox (VD Docker container giới hạn filesystem thật sự ở tầng hệ điều hành), Roots là 1 "hợp đồng" giao thức — server tuân thủ tự nguyện, không bị chặn cứng nếu cố tình phá vỡ.</p>
+
+<p><strong>Insight</strong>: Roots hoàn thiện bức tranh "4 primitive" ở §3 thành 1 mô hình 2 CHIỀU đầy đủ — server cung cấp Tools/Resources/Prompts, thỉnh thoảng nhờ Sampling; còn client, ngược lại, cũng CHỦ ĐỘNG giới hạn phạm vi hoạt động của server qua Roots, không chỉ thụ động nhận những gì server cung cấp. Đây cùng tinh thần "least privilege" đã nêu ở §9 Best practices bên dưới, nhưng ở cấp GIAO THỨC (protocol-level) chứ không phải chỉ 1 khuyến nghị thiết kế.</p>
 </div>
 
 <h2>4. Build MCP server — 30 min tutorial</h2>

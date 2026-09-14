@@ -70,13 +70,37 @@
 <li><strong>CPU-bound</strong> (train XGBoost, tính ma trận lớn) → CHỈ multi-<em>process</em> mới giúp (mỗi process có GIL riêng, không chia sẻ) — VD Docker container riêng, hoặc <code>ProcessPoolExecutor</code>. Cả <code>threading</code> lẫn <code>asyncio</code> đều KHÔNG giúp gì ở đây, vì tính toán thuần Python luôn cần giữ GIL suốt thời gian chạy, không có chỗ nào để "nhả ra".</li>
 </ul>
 <div class="callout danger"><div class="label">⚠️ Sai lầm thường gặp #1 — 2 hướng hiểu sai ngược nhau, cả 2 đều sai</div>
-<p><strong>Hiểu sai (a)</strong>: nghĩ <code>asyncio</code> chạy 2 đoạn code Python thật sự song song trên 2 core. SAI — nó vẫn chạy tuần tự trên 1 thread, chỉ khác là khi 1 coroutine <code>await</code> một I/O, event loop chuyển ngay sang coroutine khác thay vì đứng im chờ.</p>
+<p><strong>Hiểu sai (a)</strong>: nghĩ <code>asyncio</code> chạy 2 đoạn code Python thật sự song song trên 2 core. SAI — nó vẫn chạy tuần tự trên 1 thread, chỉ khác là khi 1 coroutine (coroutine = hàm khai báo bằng <code>async def</code>, có thể tạm dừng giữa chừng tại <code>await</code> rồi tiếp tục sau, khác hàm thường không tạm dừng được) <code>await</code> một I/O, event loop chuyển ngay sang coroutine khác thay vì đứng im chờ.</p>
 <p><strong>Hiểu sai (b)</strong> — dễ mắc hơn, và dễ bị hiểu lầm từ chính cách trình bày GIL ở trên: nghĩ <code>threading</code> "vô dụng" hoặc "không hoạt động" cho I/O-bound vì GIL. SAI — <code>threading</code> vẫn tăng tốc thật cho I/O-bound (nhờ cơ chế nhả GIL lúc syscall chặn), đây là pattern hợp lệ và được dùng rộng rãi (VD <code>concurrent.futures.ThreadPoolExecutor</code> với thư viện <code>requests</code>). Cái GIL thật sự chặn là <strong>2 thread cùng chạy bytecode CPU-bound</strong>, không phải "mọi hình thức threading".</p>
 </div>
 
 <div class="callout"><div class="label">📖 Cập nhật — GIL không còn "vĩnh viễn bất biến" ở tầm CPython, nhưng chưa ảnh hưởng dự án này</div>
 <p>Python 3.14 (phát hành 10/2025) chính thức đưa free-threaded build (PEP 703/779) lên <strong>Phase 2 — "officially supported" nhưng vẫn opt-in</strong>, không phải mặc định: phải cài riêng biến thể <code>python3.14t</code>, còn bản mặc định <code>python3.14</code> vẫn chạy với GIL bật như bình thường. Phase 3 (no-GIL là build duy nhất) vẫn chưa có ngày chốt. Dự án này chạy <strong>Python 3.12-slim</strong> (<code>backend/Dockerfile</code> dòng 1) — bản GIL mặc định — nên toàn bộ lý luận GIL/asyncio/multi-process ở trên vẫn đúng 100% cho codebase hiện tại; free-threading chỉ liên quan nếu dự án chủ động nâng cấp lên 3.14t sau này.</p>
 </div>
+
+<h3>Bước 4 — Context manager (<code>with</code>/<code>async with</code>) — cơ chế đứng sau mọi ví dụ ở mục dưới</h3>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Mượn sách ở thư viện: bạn "mở" (mượn sách) → dùng → "đóng" (trả sách) — kể cả nếu bạn đánh rơi sách giữa chừng (exception), thủ thư vẫn PHẢI được báo để cập nhật sổ mượn. <code>with</code> là "hợp đồng mượn-trả" tự động: Python đảm bảo bước "trả" LUÔN chạy, dù code ở giữa có ném lỗi hay không.</p>
+</div>
+<p><strong>Vấn đề cụ thể</strong>: mọi ví dụ ở mục 🔢 bên dưới đều dùng <code>with</code> (ThreadPoolExecutor) hoặc <code>async with</code> (session.get) mà chưa giải thích cơ chế — nếu không hiểu, dev mới dễ viết code quên đóng file/connection, hoặc tưởng nhầm <code>with</code> chỉ là "cú pháp cho đẹp".</p>
+<p><strong>Cơ chế</strong>: 1 object trở thành context manager khi nó định nghĩa đúng 2 method đặc biệt — Python tự gọi chúng ở đúng thời điểm, không cần bạn viết <code>try/finally</code> tay:</p>
+<pre><code># Cơ chế "with" (đồng bộ) — Python tự làm việc này phía sau hậu trường:
+obj = SomeContextManager()
+obj.__enter__()          # chạy TRƯỚC khối lệnh trong "with"
+try:
+    # ... code trong khối "with" ...
+    pass
+finally:
+    obj.__exit__(exc_type, exc_val, exc_tb)  # LUÔN chạy, kể cả có exception
+
+# "async with" tương tự nhưng dùng __aenter__/__aexit__ (đều là coroutine,
+# có thể await bên trong — VD chờ đóng connection network trước khi tiếp tục):
+async def fetch():
+    async with session.get(url) as resp:   # __aenter__ await mở connection
+        return await resp.json()
+    # __aexit__ await đóng connection — LUÔN chạy, dù resp.json() ném lỗi</code></pre>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: <code>with</code> KHÔNG PHẢI cú pháp "cho gọn" thay vì gọi <code>.close()</code> tay — khác biệt cốt lõi là <strong>đảm bảo chạy khi có exception</strong>. Code <code>f = open(x); f.read(); f.close()</code> sẽ RÒ RỈ file handle nếu <code>f.read()</code> ném lỗi (dòng <code>f.close()</code> không bao giờ chạy tới) — <code>with open(x) as f: f.read()</code> luôn đóng file dù có lỗi hay không, nhờ <code>__exit__</code> chạy trong khối <code>finally</code> ẩn.</p>
+<p><strong>Insight</strong>: đây chính là lý do <code>ThreadPoolExecutor</code> (Cách 1) và <code>session.get()</code> (Cách 2) ở mục dưới đều dùng <code>with</code>/<code>async with</code> — pool thread cần được "shutdown" đúng cách (chờ hết task rồi giải phóng), connection HTTP cần được đóng để tránh rò rỉ socket; cả 2 đều PHẢI xảy ra dù code giữa chừng có lỗi hay không, nên context manager là công cụ đúng, không phải gọi <code>.close()</code> thủ công ở cuối hàm.</p>
 
 <h2>🔢 Ví dụ cụ thể</h2>
 <p>So sánh 3 cách viết cho cùng 1 việc: gọi API giá cổ phiếu cho 86 ticker (<code>HIGHLIGHT_GROUP</code>) — <strong>cả 2 cách đầu đều CHẠY ĐƯỢC và ĐỀU nhanh hơn tuần tự</strong>, khác nhau ở chi phí tài nguyên và khả năng mở rộng, không phải "1 cái đúng 1 cái sai".</p>

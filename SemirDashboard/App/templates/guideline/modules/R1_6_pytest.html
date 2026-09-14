@@ -96,6 +96,36 @@ were only caught by real integration tests...
 </ul>
 <p><strong>Kỷ luật đúng</strong>: không phải "mock 100%" (bỏ lỡ lớp bug trên) và cũng không phải "integration 100%" (quá chậm, quá tốn tài nguyên để chạy mỗi lần commit) — mà là mock mặc định + 1 tập nhỏ, có chủ đích, integration test đúng cho lớp bug DB-specific.</p>
 
+<h3>Bước 5 — <code>@pytest.mark.parametrize</code>: nhiều test case, 1 hàm test duy nhất</h3>
+<div class="callout success"><div class="label">💡 Analogy</div>
+<p>Kiểm tra 1 công thức tính RSI với 5 bộ dữ liệu khác nhau (giá tăng đều, giá giảm đều, giá đi ngang, dữ liệu thiếu, dữ liệu có giá trị âm bất thường) — viết 5 hàm <code>test_rsi_case1</code>...<code>test_rsi_case5</code> gần như giống hệt nhau (chỉ khác input/expected output) giống việc chép tay 5 lần cùng 1 tờ đơn chỉ đổi vài ô — dễ quên cập nhật cả 5 khi logic đổi. Parametrize giống 1 tờ đơn MẪU + 1 bảng dữ liệu điền sẵn — bạn chỉ cần sửa đúng 1 chỗ (tờ mẫu) khi logic thay đổi.</p>
+</div>
+<p><strong>Vấn đề cụ thể</strong>: viết N hàm <code>test_xxx</code> gần giống hệt nhau (khác input/expected) là dấu hiệu code trùng lặp trong CHÍNH bộ test — vi phạm đúng nguyên tắc "đừng lặp code" mà bản thân code production phải tuân theo, chỉ khác đây là code test.</p>
+<pre><code>import pytest
+
+# KHÔNG parametrize — 3 hàm gần giống hệt nhau, dễ quên sync khi sửa logic:
+def test_classify_up():
+    assert classify_signal(score=0.8) == "BUY"
+def test_classify_down():
+    assert classify_signal(score=-0.8) == "SELL"
+def test_classify_flat():
+    assert classify_signal(score=0.05) == "HOLD"
+
+# CÓ parametrize — 1 hàm test, N bộ input/expected khai báo như bảng dữ liệu:
+@pytest.mark.parametrize("score,expected", [
+    (0.8, "BUY"),
+    (-0.8, "SELL"),
+    (0.05, "HOLD"),
+    (0.0, "HOLD"),        # edge case: đúng biên 0 — dễ bị quên nếu không có bảng liệt kê rõ
+])
+def test_classify_signal(score, expected):
+    assert classify_signal(score=score) == expected
+# pytest tự chạy hàm này 4 LẦN, mỗi lần 1 bộ (score, expected) — báo cáo lỗi
+# riêng biệt cho TỪNG case (VD "test_classify_signal[0.05-HOLD] FAILED"), không
+# gộp chung 1 kết quả PASS/FAIL duy nhất cho cả 4 trường hợp.</code></pre>
+<p><strong>⚠️ Chỗ dễ nhầm nhất</strong>: parametrize không chỉ để "viết ít code hơn" — lợi ích thật sự quan trọng hơn là buộc người viết test liệt kê RÕ RÀNG mọi case cần cover trong 1 bảng duy nhất, dễ nhìn thấy ngay case nào ĐANG THIẾU (VD edge case "score âm cực nhỏ gần 0" hay "score = NaN") hơn là rải rác trong N hàm riêng lẻ khó so sánh cạnh nhau.</p>
+<p><strong>Insight</strong>: đây là công cụ tự nhiên để mở rộng bộ test khi phát hiện 1 bug edge-case mới (đúng tinh thần Bước 2's <code>short_ohlcv_df</code> — test đường lỗi, không chỉ đường thành công) — thay vì viết 1 hàm test hoàn toàn mới, chỉ cần thêm 1 dòng vào bảng parametrize đã có sẵn.</p>
+
 <h2>🔢 Ví dụ cụ thể</h2>
 <p>CI gate thật, đọc trực tiếp <code>.github/workflows/ci.yml</code> (job <code>backend</code>, dòng 29-50) — 4 tầng tuần tự:</p>
 <pre><code>- name: ruff lint
