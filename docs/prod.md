@@ -136,8 +136,14 @@ watch `free -m` during build.
     separate path) still exports the full list. 3 pagination unit tests + the unchanged snapshot prove
     no data change.
 
-### 2026-09-26 — KNOWN: `ca_pos_cnv` tab ("POS vs CNV") has the SAME unpaginated-list problem
-Surfaced while verifying the ca_zalo fix: `GET /cnv/customer-analytics/tab/ca_pos_cnv/` returns
-**~16.9 MB** (`200 16888667`) and is slow — it renders full `pos_only`/`cnv_only` lists with no
-pagination (`_customer_ca_pos_cnv` in `App/analytics/customer_tabs.py`). Not touched by the ca_zalo
-fix. Next candidate for the same server-side-pagination treatment if it becomes a problem.
+### 2026-09-26 — `ca_pos_cnv` tab ("POS vs CNV") — SAME fix, DONE (commit `68895bf`)
+Surfaced while verifying the ca_zalo fix: `GET /cnv/customer-analytics/tab/ca_pos_cnv/` returned
+**~16.9 MB** (`200 16888667`) — full `cnv_only` all-time list, no pagination, same OOM class.
+Fixed with the same server-side pagination (`_customer_ca_pos_cnv`, 50/page on the two all-time
+tables; period lists left as-is). Verified on PROD:
+- fragment **16,888,667 B (16.9 MB) → 32,025 B (31 KB)** (~525× smaller); tab now loads instead of stalling.
+- prod-visual: ca_zalo + all 8 other CNV tabs **diff 0.000%** (the pager JS was refactored to a shared
+  generic `.cnv-tab-inner`/`.cnv-pager` handler — no visual change); ca_pos_cnv now captures.
+- ca_pos_cnv snapshot test unchanged (full mode byte-identical) + 2 new pagination unit tests. **0 OOM.**
+- Note: the *period* lists (only shown with a date filter) are still unpaginated — bounded by the
+  period, low risk; same treatment available if a very wide filter ever makes them large.
