@@ -43,7 +43,8 @@ def _parse_cnv_period_filter(start_date, end_date):
     return parse_cnv_period_filter(start_date, end_date)
 
 
-def get_customer_tab(tab: str, start_date: str = '', end_date: str = '') -> dict:
+def get_customer_tab(tab: str, start_date: str = '', end_date: str = '',
+                     app_page=None, oa_page=None, page_size: int = 50) -> dict:
     """
     Compute data for a single Customer Analytics tab.
     Each tab fetches ONLY the data it needs — no excess queries.
@@ -51,6 +52,8 @@ def get_customer_tab(tab: str, start_date: str = '', end_date: str = '') -> dict
     Args:
         tab: one of CUSTOMER_TABS
         start_date / end_date: 'YYYY-MM-DD' strings ('' = all-time)
+        app_page / oa_page / page_size: ca_zalo only — server-side pagination of the
+            two Zalo tables. None (default) returns the full lists unchanged.
 
     Returns:
         Dict with tab-specific data.
@@ -63,7 +66,8 @@ def get_customer_tab(tab: str, start_date: str = '', end_date: str = '') -> dict
     if tab == 'ca_points':
         return _customer_ca_points(start_date, end_date)
     if tab == 'ca_zalo':
-        return _customer_ca_zalo(start_date, end_date)
+        return _customer_ca_zalo(start_date, end_date,
+                                 app_page=app_page, oa_page=oa_page, page_size=page_size)
     if tab == 'ca_pos_cnv':
         return _customer_ca_pos_cnv(start_date, end_date)
 
@@ -223,11 +227,22 @@ def _customer_ca_points(start_date: str, end_date: str) -> dict:
     }
 
 
-def _customer_ca_zalo(start_date: str, end_date: str) -> dict:
+def _customer_ca_zalo(start_date: str, end_date: str,
+                      app_page=None, oa_page=None, page_size: int = 50) -> dict:
     """
     Lean function for ca_zalo tab.
     Fetches: zalo counts + zalo lists + pos_phones for in_pos flag.
     Does NOT compute: breakdown, pos_only/cnv_only lists, points_mismatch, used_points.
+
+    Pagination (added 2026-09-26 — the full lists are 55k+53k rows ≈ 46 MB of HTML,
+    which OOM-killed gunicorn on the 1.9 GB prod box, see docs/prod.md):
+      - app_page/oa_page is None (default)  → FULL lists, byte-identical to the
+        pre-pagination behaviour. Used by the snapshot test and any legacy caller.
+      - app_page/oa_page given (the AJAX view always passes them) → only that page of
+        `page_size` rows per table is built + rendered. Counts, ordering and per-row
+        values are unchanged; only the *slice* differs. The Excel export path is
+        separate (get_cnv_comparison_data → excel_export) and always exports the full
+        list, so no data is lost.
     """
     from App.cnv.models import CNVCustomer
     from django.db.models import Count as _Count, Q as _Q
@@ -267,33 +282,57 @@ def _customer_ca_zalo(start_date: str, end_date: str) -> dict:
         'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
         'email', 'cnv_created_at', 'points', 'zalo_app_id', 'zalo_oa_id', 'zalo_app_created_at',
     )
-    zalo_app_qs = CNVCustomer.objects.filter(
-        zalo_app_id__isnull=False
-    ).exclude(zalo_app_id='')
-    zalo_oa_qs = CNVCustomer.objects.filter(
-        zalo_oa_id__isnull=False
-    ).exclude(zalo_oa_id='')
-
     # 'cnv_id' tiebreaker: timestamps have many ties — without it the order of
     # tied rows is DB-plan-dependent, which made the ca_zalo snapshot flaky.
-    zalo_mini_app_list = list(zalo_app_qs.order_by('-zalo_app_created_at', 'cnv_id').values(*_zf))
+    zalo_app_qs = CNVCustomer.objects.filter(
+        zalo_app_id__isnull=False
+    ).exclude(zalo_app_id='').order_by('-zalo_app_created_at', 'cnv_id')
     # A-06: OA list sorts by CNV creation date — OA-only customers have no
     # zalo_app_created_at and would otherwise always sink to the bottom.
-    zalo_oa_list       = list(zalo_oa_qs.order_by('-cnv_created_at', 'cnv_id').values(*_zf))
+    zalo_oa_qs = CNVCustomer.objects.filter(
+        zalo_oa_id__isnull=False
+    ).exclude(zalo_oa_id='').order_by('-cnv_created_at', 'cnv_id')
 
-    # One targeted POS lookup via DB subquery — avoids loading all 74k POS rows
-    # via get_cnv_phone_sets() and avoids SQLite "too many variables" for large IN lists.
+    paginated = app_page is not None or oa_page is not None
+    if paginated:
+        from django.core.paginator import Paginator
+        _app_p = Paginator(zalo_app_qs.values(*_zf), page_size).get_page(app_page or 1)
+        _oa_p  = Paginator(zalo_oa_qs.values(*_zf),  page_size).get_page(oa_page or 1)
+        zalo_mini_app_list = list(_app_p.object_list)
+        zalo_oa_list       = list(_oa_p.object_list)
+        app_page_num, app_num_pages, app_total = _app_p.number, _app_p.paginator.num_pages, _app_p.paginator.count
+        oa_page_num,  oa_num_pages,  oa_total  = _oa_p.number,  _oa_p.paginator.num_pages,  _oa_p.paginator.count
+    else:
+        zalo_mini_app_list = list(zalo_app_qs.values(*_zf))
+        zalo_oa_list       = list(zalo_oa_qs.values(*_zf))
+        app_page_num = oa_page_num = 1
+        app_num_pages = oa_num_pages = 1
+        app_total = len(zalo_mini_app_list)
+        oa_total  = len(zalo_oa_list)
+
+    # POS lookup for the in_pos / registration_store flags. A given phone maps to the
+    # same store regardless of which phones we query, so restricting the lookup to the
+    # rows actually being returned yields identical per-row values (full mode == snapshot).
     from App.models import Customer as _POSCustomer
-    _active_zalo_phone_qs = (
-        CNVCustomer.objects
-        .filter(_Q(zalo_app_id__isnull=False) & ~_Q(zalo_app_id='')
-                | _Q(zalo_oa_id__isnull=False) & ~_Q(zalo_oa_id=''))
-        .values('phone')
-    )
+    if paginated:
+        # Only the current page's phones (≤ 2*page_size) — small, fast IN list.
+        _pos_filter = {'phone__in': (
+            {r['phone'] for r in zalo_mini_app_list if r['phone']}
+            | {r['phone'] for r in zalo_oa_list if r['phone']}
+        )}
+    else:
+        # Full mode: subquery over all active-zalo phones — avoids SQLite "too many
+        # variables" for the large IN list (unchanged from the original implementation).
+        _pos_filter = {'phone__in': (
+            CNVCustomer.objects
+            .filter(_Q(zalo_app_id__isnull=False) & ~_Q(zalo_app_id='')
+                    | _Q(zalo_oa_id__isnull=False) & ~_Q(zalo_oa_id=''))
+            .values('phone')
+        )}
     _pos_zalo_rows = {
         row['phone']: row['registration_store']
         for row in _POSCustomer.objects
-        .filter(phone__in=_active_zalo_phone_qs, vip_id__isnull=False)
+        .filter(vip_id__isnull=False, **_pos_filter)
         .exclude(vip_id=0).exclude(phone='')
         .values('phone', 'registration_store')
         if row['phone']
@@ -316,6 +355,15 @@ def _customer_ca_zalo(start_date: str, end_date: str) -> dict:
         'zalo_oa_period_pct':    zalo_oa_period_pct,
         'zalo_mini_app_list':    zalo_mini_app_list,
         'zalo_oa_list':          zalo_oa_list,
+        # ── Pagination metadata (full mode → a single page covering everything) ──
+        'zalo_paginated':        paginated,
+        'zalo_page_size':        page_size,
+        'app_page':              app_page_num,
+        'app_num_pages':         app_num_pages,
+        'app_total':             app_total,
+        'oa_page':               oa_page_num,
+        'oa_num_pages':          oa_num_pages,
+        'oa_total':              oa_total,
     }
 
 

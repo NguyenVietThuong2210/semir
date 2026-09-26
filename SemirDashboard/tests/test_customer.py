@@ -592,6 +592,54 @@ class CustomerTabSnapshotTest(SnapshotTestCase):
             "zalo_oa_list": _norm(data["zalo_oa_list"]),
         })
 
+    # ── ca_zalo server-side pagination (2026-09-26 OOM fix) ──────────────────
+    # DoD guard: pagination must NOT add/drop/reorder/alter any row or count vs the
+    # full (unpaginated) result. Full mode (no page args) stays byte-identical — the
+    # snapshot test above proves that; these prove the paginated path is lossless.
+    def test_ca_zalo_pagination_no_data_loss(self):
+        import math
+        full = get_customer_tab('ca_zalo')                 # full mode
+        self.assertFalse(full['zalo_paginated'], "no page args → full mode")
+        page_size = 10
+
+        def _collect(list_key, page_kw, total_key, pages_key):
+            first = get_customer_tab('ca_zalo', **{page_kw: 1, 'page_size': page_size})
+            self.assertTrue(first['zalo_paginated'], "page arg → paginated mode")
+            total, num_pages = first[total_key], first[pages_key]
+            self.assertEqual(num_pages, max(1, math.ceil(total / page_size)))
+            rows = []
+            for p in range(1, num_pages + 1):
+                d = get_customer_tab('ca_zalo', **{page_kw: p, 'page_size': page_size})
+                rows.extend(d[list_key])
+                if p < num_pages:  # every non-last page is exactly full
+                    self.assertEqual(len(d[list_key]), page_size)
+            return rows, total
+
+        app_rows, app_total = _collect('zalo_mini_app_list', 'app_page', 'app_total', 'app_num_pages')
+        oa_rows,  oa_total  = _collect('zalo_oa_list',       'oa_page',  'oa_total',  'oa_num_pages')
+        # totals match full-mode lengths, and concatenated pages == full list (exact
+        # order + every field incl. in_pos / registration_store)
+        self.assertEqual(app_total, len(full['zalo_mini_app_list']))
+        self.assertEqual(oa_total,  len(full['zalo_oa_list']))
+        self.assertEqual(app_rows,  full['zalo_mini_app_list'])
+        self.assertEqual(oa_rows,   full['zalo_oa_list'])
+
+    def test_ca_zalo_pagination_counts_and_page1(self):
+        full = get_customer_tab('ca_zalo')
+        page_size = 10
+        p1 = get_customer_tab('ca_zalo', app_page=1, oa_page=1, page_size=page_size)
+        for k in ('zalo_app_all_count', 'zalo_oa_all_count', 'zalo_app_all_pct',
+                  'zalo_oa_all_pct', 'zalo_app_period_count', 'zalo_oa_period_count'):
+            self.assertEqual(p1[k], full[k], f"count {k} changed under pagination")
+        self.assertEqual(p1['zalo_mini_app_list'], full['zalo_mini_app_list'][:page_size])
+        self.assertEqual(p1['zalo_oa_list'],       full['zalo_oa_list'][:page_size])
+
+    def test_ca_zalo_pagination_out_of_range_clamped(self):
+        """A page past the end clamps to the last page (Django get_page) — never 500s."""
+        big = get_customer_tab('ca_zalo', app_page=10_000, oa_page=10_000, page_size=10)
+        self.assertEqual(big['app_page'], big['app_num_pages'])
+        self.assertEqual(big['oa_page'],  big['oa_num_pages'])
+
     def test_tab_snapshot_ca_pos_cnv(self):
         t = self.timer("customer_tab_ca_pos_cnv")
         data = self._tab('ca_pos_cnv')

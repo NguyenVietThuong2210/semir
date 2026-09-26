@@ -1,4 +1,7 @@
-{% load perm_tags %}{% check_perm 'cnv.export' as can_dl_cnv %}<div class="d-flex justify-content-between align-items-center mb-2">
+{% load perm_tags %}{% check_perm 'cnv.export' as can_dl_cnv %}<div id="zaloTabInner"
+     data-base-url="{% url 'cnv:customer_tab' 'ca_zalo' %}"
+     data-params="{% if start_date and end_date %}start_date={{ start_date }}&end_date={{ end_date }}{% endif %}">
+<div class="d-flex justify-content-between align-items-center mb-2">
     <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Zalo engagement summary — how many CNV Loyalty customers are connected via Zalo Mini App (in-app experience) or Zalo Official Account (OA, message channel).</p>
     {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=zalo{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm flex-shrink-0 ms-2"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
 </div>
@@ -44,8 +47,8 @@
 </div>
 
 <!-- Zalo Mini App list -->
-<p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-phone"></i> Zalo Mini App Customers ({{ zalo_mini_app_list|length }})</p>
-<div class="table-responsive tab-tbl-wrap mb-4">
+<p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-phone"></i> Zalo Mini App Customers ({{ app_total }})</p>
+<div class="table-responsive tab-tbl-wrap mb-2">
     <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
         <thead style="background-color:var(--primary);color:white;">
             <tr>
@@ -74,10 +77,20 @@
         </tbody>
     </table>
 </div>
+{% if app_num_pages > 1 %}
+<nav class="zalo-pager d-flex align-items-center gap-2 mb-4 flex-wrap" aria-label="Zalo Mini App pages">
+    <button type="button" class="btn btn-sm btn-outline-secondary" {% if app_page <= 1 %}disabled{% endif %}
+            data-app-page="{{ app_page|add:'-1' }}" data-oa-page="{{ oa_page }}"><i class="bi bi-chevron-left"></i> Prev</button>
+    <span class="small text-muted">Page <strong>{{ app_page }}</strong> / {{ app_num_pages }} · {{ app_total }} customers · {{ zalo_page_size }}/page</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" {% if app_page >= app_num_pages %}disabled{% endif %}
+            data-app-page="{{ app_page|add:'1' }}" data-oa-page="{{ oa_page }}">Next <i class="bi bi-chevron-right"></i></button>
+    <span class="small text-muted ms-auto"><i class="bi bi-info-circle"></i> Full list via <em>Download</em>.</span>
+</nav>
+{% else %}<div class="mb-4"></div>{% endif %}
 
 <!-- Zalo OA list -->
-<p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-megaphone"></i> Zalo OA Customers ({{ zalo_oa_list|length }})</p>
-<div class="table-responsive tab-tbl-wrap">
+<p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-megaphone"></i> Zalo OA Customers ({{ oa_total }})</p>
+<div class="table-responsive tab-tbl-wrap mb-2">
     <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
         <thead style="background-color:var(--primary);color:white;">
             <tr>
@@ -105,4 +118,15 @@
         {% endfor %}
         </tbody>
     </table>
+</div>
+{% if oa_num_pages > 1 %}
+<nav class="zalo-pager d-flex align-items-center gap-2 flex-wrap" aria-label="Zalo OA pages">
+    <button type="button" class="btn btn-sm btn-outline-secondary" {% if oa_page <= 1 %}disabled{% endif %}
+            data-app-page="{{ app_page }}" data-oa-page="{{ oa_page|add:'-1' }}"><i class="bi bi-chevron-left"></i> Prev</button>
+    <span class="small text-muted">Page <strong>{{ oa_page }}</strong> / {{ oa_num_pages }} · {{ oa_total }} customers · {{ zalo_page_size }}/page</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" {% if oa_page >= oa_num_pages %}disabled{% endif %}
+            data-app-page="{{ app_page }}" data-oa-page="{{ oa_page|add:'1' }}">Next <i class="bi bi-chevron-right"></i></button>
+    <span class="small text-muted ms-auto"><i class="bi bi-info-circle"></i> Full list via <em>Download</em>.</span>
+</nav>
+{% endif %}
 </div>

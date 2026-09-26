@@ -12,6 +12,7 @@
 | Question | Doc |
 |----------|-----|
 | How do I run/deploy this? | [project_overview.md](project_overview.md) |
+| How do I investigate/deploy PROD (SSH, logs, incidents)? | [prod.md](prod.md) |
 | Where is X file? | [project_structure.md](project_structure.md) |
 | What fields does model Y have? | [project_models.md](project_models.md) |
 | How does analytics/return formula work? | [project_analytics.md](project_analytics.md) |

@@ -267,9 +267,24 @@ Dev and prod both run PostgreSQL 16 via the same `docker-compose.yml` (`db` serv
 
 `Meta.ordering` on `SalesTransaction` and `Customer` models affects `.distinct()` queries — always call `.order_by()` before `.distinct()` to clear model ordering. Indexes exist on `shop_name`, `registration_store`, `using_shop` (migration 0012).
 
+## Production Operations (investigate / deploy prod)
+
+**When the user says "investigate prod", "check prod logs", "deploy prod", or anything touching the
+live server, read `docs/prod.md` first and follow it.** It is the single source of truth for:
+- **Access** — prod is `14.225.254.192` (Ubuntu, `/home/semir/semir/`), SSH as `root` via `plink`
+  (`C:\Program Files\PuTTY\plink`). Credentials are in `prod_visual.env` (repo root, gitignored) —
+  `PROD_ID` = IP, the **2nd** `PROD_PASS` line = SSH root password. **Never hardcode the password
+  into any committed file.**
+- **Investigate** — read-only playbook (`docker compose ps`, `free -m`, `swapon --show`, web-log greps).
+- **Deploy** — manual, `bash scripts/deploy.sh` on the server (git pull → build web → up → migrate → perm sync → collectstatic).
+- **Constraints** — the box has only **1.9 GB RAM** (a 4 GB swapfile was added 2026-09-26); any
+  endpoint rendering a large unpaginated list is an OOM risk — paginate/cap server-side.
+- **History log** — dated record of prod incidents/changes (e.g. the 2026-09-26 `ca_zalo` OOM + swap fix).
+
 ## Detailed Docs
 
 Extended documentation is in `docs/`:
+- `prod.md` — **production ops**: SSH access, investigate/deploy playbooks, RAM/swap constraints, incident history
 - `ANALYSIS.md` — navigation index + architecture summary (both web + mobile)
 - `project_overview.md` — stack, paths, deploy, commands (both web + mobile)
 - `project_mobile.md` — SemirPhone Flutter app: auth, navigation, API, widgets, tests, release checklist

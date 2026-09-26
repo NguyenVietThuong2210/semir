@@ -540,5 +540,44 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
 });
 
 </script>
+<script>
+// ── ca_zalo server-side pagination ───────────────────────────────────────────
+// The Zalo tab renders two large tables (55k + 53k rows) one page at a time.
+// Pager buttons carry the intended app_page/oa_page; we re-fetch the (now small)
+// fragment and swap #zaloTabInner in place. Delegated so it survives re-renders.
+(function () {
+    "use strict";
+    document.addEventListener("click", function (e) {
+        var btn = e.target.closest(".zalo-pager button[data-app-page]");
+        if (!btn || btn.disabled) return;
+        var inner = document.getElementById("zaloTabInner");
+        if (!inner) return;
+
+        var base = inner.dataset.baseUrl;
+        var extra = inner.dataset.params || "";
+        var qs = "app_page=" + encodeURIComponent(btn.dataset.appPage) +
+                 "&oa_page=" + encodeURIComponent(btn.dataset.oaPage) +
+                 (extra ? "&" + extra : "");
+        var url = base + (base.includes("?") ? "&" : "?") + qs;
+
+        inner.style.opacity = "0.5";
+        inner.style.pointerEvents = "none";
+        fetch(url, {headers: {"X-Requested-With": "XMLHttpRequest"}})
+            .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+            .then(function (html) {
+                inner.outerHTML = html;
+                // keep the just-loaded table in view
+                var pane = document.getElementById("tabZalo");
+                if (pane) pane.scrollIntoView({block: "nearest"});
+            })
+            .catch(function (err) {
+                inner.style.opacity = "1";
+                inner.style.pointerEvents = "";
+                inner.insertAdjacentHTML("afterbegin",
+                    '<div class="alert alert-danger m-2">Failed to load page: ' + err.message + '</div>');
+            });
+    });
+})();
+</script>
 {% include "components/lazy_tabs_js.html" %}
 {% endblock %}

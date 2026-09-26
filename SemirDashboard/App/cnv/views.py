@@ -182,13 +182,24 @@ def customer_tab(request, tab: str):
     start_date = request.GET.get("start_date", "")
     end_date   = request.GET.get("end_date", "")
 
+    # ca_zalo renders two very large tables (55k + 53k rows ≈ 46 MB of HTML) that
+    # OOM-killed gunicorn on prod — paginate server-side. Other tabs ignore these.
+    kw = {}
+    if tab == "ca_zalo":
+        def _pg(name):
+            try:
+                return max(1, int(request.GET.get(name, 1)))
+            except (TypeError, ValueError):
+                return 1
+        kw = {"app_page": _pg("app_page"), "oa_page": _pg("oa_page")}
+
     logger.info(
         "customer_tab: tab=%s from=%s to=%s user=%s",
         tab, start_date or "all", end_date or "all", request.user,
         extra={"step": "customer_tab"},
     )
 
-    data = get_customer_tab(tab, start_date=start_date, end_date=end_date)
+    data = get_customer_tab(tab, start_date=start_date, end_date=end_date, **kw)
     ctx = {
         **data,
         "start_date": start_date,
