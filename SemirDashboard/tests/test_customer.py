@@ -658,6 +658,42 @@ class CustomerTabSnapshotTest(SnapshotTestCase):
             "cnv_only_all":       data["cnv_only_all"],
         })
 
+    # ── ca_pos_cnv server-side pagination (2026-09-26 — same OOM class as ca_zalo) ──
+    def test_ca_pos_cnv_pagination_no_data_loss(self):
+        import math
+        full = get_customer_tab('ca_pos_cnv')                 # full mode
+        self.assertFalse(full['poscnv_paginated'], "no page args → full mode")
+        page_size = 10
+
+        def _collect(list_key, page_kw, total_key, pages_key):
+            first = get_customer_tab('ca_pos_cnv', **{page_kw: 1, 'page_size': page_size})
+            self.assertTrue(first['poscnv_paginated'], "page arg → paginated mode")
+            total, num_pages = first[total_key], first[pages_key]
+            self.assertEqual(num_pages, max(1, math.ceil(total / page_size)))
+            rows = []
+            for p in range(1, num_pages + 1):
+                d = get_customer_tab('ca_pos_cnv', **{page_kw: p, 'page_size': page_size})
+                rows.extend(d[list_key])
+                if p < num_pages:
+                    self.assertEqual(len(d[list_key]), page_size)
+            return rows, total
+
+        pos_rows, pos_total = _collect('pos_only_all', 'pos_page', 'pos_total', 'pos_num_pages')
+        cnv_rows, cnv_total = _collect('cnv_only_all', 'cnv_page', 'cnv_total', 'cnv_num_pages')
+        self.assertEqual(pos_total, len(full['pos_only_all']))
+        self.assertEqual(cnv_total, len(full['cnv_only_all']))
+        self.assertEqual(pos_rows,  full['pos_only_all'])
+        self.assertEqual(cnv_rows,  full['cnv_only_all'])
+
+    def test_ca_pos_cnv_pagination_counts_and_page1(self):
+        full = get_customer_tab('ca_pos_cnv')
+        page_size = 10
+        p1 = get_customer_tab('ca_pos_cnv', pos_page=1, cnv_page=1, page_size=page_size)
+        self.assertEqual(p1['pos_only_all_count'], full['pos_only_all_count'])
+        self.assertEqual(p1['cnv_only_all_count'], full['cnv_only_all_count'])
+        self.assertEqual(p1['pos_only_all'], full['pos_only_all'][:page_size])
+        self.assertEqual(p1['cnv_only_all'], full['cnv_only_all'][:page_size])
+
 
 class CustomerTimingBreakdownTest(SnapshotTestCase):
     """Isolated per-query timing — run after main import to identify bottlenecks."""

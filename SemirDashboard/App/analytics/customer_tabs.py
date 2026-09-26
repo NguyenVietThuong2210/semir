@@ -44,7 +44,8 @@ def _parse_cnv_period_filter(start_date, end_date):
 
 
 def get_customer_tab(tab: str, start_date: str = '', end_date: str = '',
-                     app_page=None, oa_page=None, page_size: int = 50) -> dict:
+                     app_page=None, oa_page=None, pos_page=None, cnv_page=None,
+                     page_size: int = 50) -> dict:
     """
     Compute data for a single Customer Analytics tab.
     Each tab fetches ONLY the data it needs — no excess queries.
@@ -54,6 +55,8 @@ def get_customer_tab(tab: str, start_date: str = '', end_date: str = '',
         start_date / end_date: 'YYYY-MM-DD' strings ('' = all-time)
         app_page / oa_page / page_size: ca_zalo only — server-side pagination of the
             two Zalo tables. None (default) returns the full lists unchanged.
+        pos_page / cnv_page / page_size: ca_pos_cnv only — server-side pagination of
+            the two all-time POS-only / CNV-only tables. None (default) = full lists.
 
     Returns:
         Dict with tab-specific data.
@@ -69,7 +72,8 @@ def get_customer_tab(tab: str, start_date: str = '', end_date: str = '',
         return _customer_ca_zalo(start_date, end_date,
                                  app_page=app_page, oa_page=oa_page, page_size=page_size)
     if tab == 'ca_pos_cnv':
-        return _customer_ca_pos_cnv(start_date, end_date)
+        return _customer_ca_pos_cnv(start_date, end_date,
+                                    pos_page=pos_page, cnv_page=cnv_page, page_size=page_size)
 
     raise ValueError(f"Unknown customer tab: {tab!r}")
 
@@ -367,12 +371,23 @@ def _customer_ca_zalo(start_date: str, end_date: str,
     }
 
 
-def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
+def _customer_ca_pos_cnv(start_date: str, end_date: str,
+                         pos_page=None, cnv_page=None, page_size: int = 50) -> dict:
     """
     Lean function for ca_pos_cnv tab.
     Fetches: pos_only / cnv_only lists (all-time + period).
     Points mismatch tables have moved to ca_points tab (_customer_ca_points).
     Does NOT compute: breakdown, zalo, used_points, points_mismatch.
+
+    Pagination (added 2026-09-26 — the all-time cnv_only list is ~16.9 MB of HTML
+    on prod, same OOM class as ca_zalo, see docs/prod.md):
+      - pos_page/cnv_page is None (default) → FULL all-time lists, byte-identical to
+        before (the ca_pos_cnv snapshot test stays green). Used by tests / exports.
+      - pos_page/cnv_page given (the AJAX view passes them) → only that page of
+        `page_size` rows per all-time table. Counts and ordering are unchanged.
+        The period lists (only shown with a date filter, period-bounded) are not
+        paginated here. Excel export uses the separate get_cnv_comparison_data path
+        and still exports the full lists, so no data is lost.
     """
     from App.models import Customer as _POS
     from App.cnv.models import CNVCustomer
@@ -393,12 +408,12 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
     # registration_date nor cnv_created_at is unique, so without a
     # fully-deterministic key Postgres can order tied rows differently
     # between runs (SQLite happened to look stable by accident).
-    pos_only_all = list(
+    _pos_only_qs = (
         pos_all.exclude(phone__in=_cnv_phone_qs)
         .values('vip_id', 'phone', 'name', 'vip_grade', 'email', 'registration_date', 'points')
         .order_by('-registration_date', 'vip_id')
     )
-    cnv_only_all = list(
+    _cnv_only_qs = (
         cnv_all.exclude(phone__in=_pos_phone_qs)
         .values(
             'cnv_id', 'phone', 'last_name', 'first_name', 'level_name',
@@ -406,6 +421,23 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
         )
         .order_by('-cnv_created_at', 'cnv_id')
     )
+
+    poscnv_paginated = pos_page is not None or cnv_page is not None
+    if poscnv_paginated:
+        from django.core.paginator import Paginator
+        _pos_p = Paginator(_pos_only_qs, page_size).get_page(pos_page or 1)
+        _cnv_p = Paginator(_cnv_only_qs, page_size).get_page(cnv_page or 1)
+        pos_only_all = list(_pos_p.object_list)
+        cnv_only_all = list(_cnv_p.object_list)
+        pos_page_num, pos_num_pages, pos_total = _pos_p.number, _pos_p.paginator.num_pages, _pos_p.paginator.count
+        cnv_page_num, cnv_num_pages, cnv_total = _cnv_p.number, _cnv_p.paginator.num_pages, _cnv_p.paginator.count
+    else:
+        pos_only_all = list(_pos_only_qs)
+        cnv_only_all = list(_cnv_only_qs)
+        pos_page_num = cnv_page_num = 1
+        pos_num_pages = cnv_num_pages = 1
+        pos_total = len(pos_only_all)
+        cnv_total = len(cnv_only_all)
 
     # Period lists
     pos_only_period = []
@@ -471,14 +503,23 @@ def _customer_ca_pos_cnv(start_date: str, end_date: str) -> dict:
         'cnv_only_all':              cnv_only_all,
         'pos_only_period':           pos_only_period,
         'cnv_only_period':           cnv_only_period,
-        'pos_only_all_count':        len(pos_only_all),
-        'cnv_only_all_count':        len(cnv_only_all),
+        'pos_only_all_count':        pos_total,
+        'cnv_only_all_count':        cnv_total,
         'pos_only_period_count':     pos_only_period_count,
         'cnv_only_period_count':     cnv_only_period_count,
         'new_pos_count':             new_pos_count,
         'new_pos_inv_count':         new_pos_inv_count,
         'new_pos_no_inv_count':      new_pos_no_inv_count,
         'new_cnv_count':             new_cnv_count,
+        # ── Pagination metadata (full mode → a single page covering everything) ──
+        'poscnv_paginated':          poscnv_paginated,
+        'poscnv_page_size':          page_size,
+        'pos_page':                  pos_page_num,
+        'pos_num_pages':             pos_num_pages,
+        'pos_total':                 pos_total,
+        'cnv_page':                  cnv_page_num,
+        'cnv_num_pages':             cnv_num_pages,
+        'cnv_total':                 cnv_total,
     }
 
 

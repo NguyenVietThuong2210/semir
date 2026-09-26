@@ -541,24 +541,24 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
 
 </script>
 <script>
-// ── ca_zalo server-side pagination ───────────────────────────────────────────
-// The Zalo tab renders two large tables (55k + 53k rows) one page at a time.
-// Pager buttons carry the intended app_page/oa_page; we re-fetch the (now small)
-// fragment and swap #zaloTabInner in place. Delegated so it survives re-renders.
+// ── CNV tab server-side pagination (ca_zalo, ca_pos_cnv) ─────────────────────
+// These tabs render very large tables one page at a time. A pager button carries
+// data-qs (the full page query string for its target); we re-fetch the (now small)
+// fragment and swap its .cnv-tab-inner wrapper in place. Delegated so it survives
+// re-renders, and generic so any CNV tab with the same markup works.
 (function () {
     "use strict";
     document.addEventListener("click", function (e) {
-        var btn = e.target.closest(".zalo-pager button[data-app-page]");
+        var btn = e.target.closest(".cnv-pager button[data-qs]");
         if (!btn || btn.disabled) return;
-        var inner = document.getElementById("zaloTabInner");
+        var inner = btn.closest(".cnv-tab-inner");
         if (!inner) return;
 
         var base = inner.dataset.baseUrl;
         var extra = inner.dataset.params || "";
-        var qs = "app_page=" + encodeURIComponent(btn.dataset.appPage) +
-                 "&oa_page=" + encodeURIComponent(btn.dataset.oaPage) +
-                 (extra ? "&" + extra : "");
-        var url = base + (base.includes("?") ? "&" : "?") + qs;
+        var url = base + (base.includes("?") ? "&" : "?") + btn.dataset.qs +
+                  (extra ? "&" + extra : "");
+        var pane = inner.closest(".tab-pane");
 
         inner.style.opacity = "0.5";
         inner.style.pointerEvents = "none";
@@ -566,8 +566,6 @@ document.querySelectorAll('.sync-points-btn').forEach(btn => {
             .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
             .then(function (html) {
                 inner.outerHTML = html;
-                // keep the just-loaded table in view
-                var pane = document.getElementById("tabZalo");
                 if (pane) pane.scrollIntoView({block: "nearest"});
             })
             .catch(function (err) {

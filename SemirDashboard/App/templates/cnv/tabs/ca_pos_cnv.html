@@ -1,4 +1,7 @@
-{% load perm_tags %}{% check_perm 'cnv.export' as can_dl_cnv %}<div class="d-flex justify-content-between align-items-center mb-2">
+{% load perm_tags %}{% check_perm 'cnv.export' as can_dl_cnv %}<div class="cnv-tab-inner"
+     data-base-url="{% url 'cnv:customer_tab' 'ca_pos_cnv' %}"
+     data-params="{% if start_date and end_date %}start_date={{ start_date }}&end_date={{ end_date }}{% endif %}">
+<div class="d-flex justify-content-between align-items-center mb-2">
     <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Compares POS system customers against CNV Loyalty members — shows how many are matched in both systems, POS-only (not in loyalty), or CNV-only (not in POS).</p>
     {% if can_dl_cnv %}<a href="{% url 'cnv:export_customer_analytics' %}?tab=pos_cnv{% if start_date and end_date %}&start_date={{ start_date }}&end_date={{ end_date }}{% endif %}" class="btn btn-outline-success btn-sm flex-shrink-0 ms-2"><i class="bi bi-file-earmark-excel"></i> Download</a>{% endif %}
 </div>
@@ -45,7 +48,7 @@
 
 <!-- POS Only (All Time) -->
 <p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-person-x"></i> POS Only — All Time ({{ pos_only_all_count }})</p>
-<div class="table-responsive tab-tbl-wrap mb-4">
+<div class="table-responsive tab-tbl-wrap mb-2">
     <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
         <thead style="background-color:var(--cnv-purple);color:white;">
             <tr><th>VIP ID</th><th>Phone</th><th>Name</th><th>Grade</th><th>Email</th><th>Reg Date</th><th class="text-end">Points</th></tr>
@@ -61,10 +64,20 @@
         </tbody>
     </table>
 </div>
+{% if pos_num_pages > 1 %}
+<nav class="cnv-pager d-flex align-items-center gap-2 mb-4 flex-wrap" aria-label="POS Only pages">
+    <button type="button" class="btn btn-sm btn-outline-secondary" {% if pos_page <= 1 %}disabled{% endif %}
+            data-qs="pos_page={{ pos_page|add:'-1' }}&cnv_page={{ cnv_page }}"><i class="bi bi-chevron-left"></i> Prev</button>
+    <span class="small text-muted">Page <strong>{{ pos_page }}</strong> / {{ pos_num_pages }} · {{ pos_total }} customers · {{ poscnv_page_size }}/page</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" {% if pos_page >= pos_num_pages %}disabled{% endif %}
+            data-qs="pos_page={{ pos_page|add:'1' }}&cnv_page={{ cnv_page }}">Next <i class="bi bi-chevron-right"></i></button>
+    <span class="small text-muted ms-auto"><i class="bi bi-info-circle"></i> Full list via <em>Download</em>.</span>
+</nav>
+{% else %}<div class="mb-4"></div>{% endif %}
 
 <!-- CNV Only (All Time) -->
 <p class="text-muted small fw-semibold text-uppercase mb-1"><i class="bi bi-person-x"></i> CNV Only — All Time ({{ cnv_only_all_count }})</p>
-<div class="table-responsive tab-tbl-wrap mb-4">
+<div class="table-responsive tab-tbl-wrap mb-2">
     <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
         <thead style="background-color:var(--primary);color:white;">
             <tr><th>CNV ID</th><th>Phone</th><th>Name</th><th>Level</th><th>Email</th><th>Created</th><th class="text-end">Points</th><th class="text-end">Total</th><th class="text-end">Used</th></tr>
@@ -84,6 +97,16 @@
         </tbody>
     </table>
 </div>
+{% if cnv_num_pages > 1 %}
+<nav class="cnv-pager d-flex align-items-center gap-2 mb-4 flex-wrap" aria-label="CNV Only pages">
+    <button type="button" class="btn btn-sm btn-outline-secondary" {% if cnv_page <= 1 %}disabled{% endif %}
+            data-qs="pos_page={{ pos_page }}&cnv_page={{ cnv_page|add:'-1' }}"><i class="bi bi-chevron-left"></i> Prev</button>
+    <span class="small text-muted">Page <strong>{{ cnv_page }}</strong> / {{ cnv_num_pages }} · {{ cnv_total }} customers · {{ poscnv_page_size }}/page</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" {% if cnv_page >= cnv_num_pages %}disabled{% endif %}
+            data-qs="pos_page={{ pos_page }}&cnv_page={{ cnv_page|add:'1' }}">Next <i class="bi bi-chevron-right"></i></button>
+    <span class="small text-muted ms-auto"><i class="bi bi-info-circle"></i> Full list via <em>Download</em>.</span>
+</nav>
+{% else %}<div class="mb-4"></div>{% endif %}
 
 <!-- POS Only (Period) -->
 {% if pos_only_period %}
@@ -130,4 +153,4 @@
     </table>
 </div>
 {% endif %}
-
+</div>
