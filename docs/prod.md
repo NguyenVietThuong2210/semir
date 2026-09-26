@@ -125,6 +125,19 @@ watch `free -m` during build.
   echo '/swapfile none swap sw 0 0' >> /etc/fstab
   sysctl -w vm.swappiness=10 && echo 'vm.swappiness=10' > /etc/sysctl.d/99-swappiness.conf
   ```
-- **Follow-up (not yet done):** Option 1 — server-side pagination/cap of the `ca_zalo` tab lists to
-  cut the 46 MB fragment and the ~30 s render (swap fixes *stability*, not *speed*). Export path
-  (`get_cnv_comparison_data` → `excel_export`) is separate and must keep exporting the **full** list.
+- **Follow-up — DONE, deployed 2026-09-26 (commit `1aa073d`, branch `release/2.4.0`):** Option 1 —
+  server-side pagination of the `ca_zalo` tab (50/page, two independent pagers). Result verified on
+  PROD:
+  - ca_zalo fragment **46,262,153 B (46 MB) → 46,432 B (45 KB)** — ~1000× smaller; renders in <1 s.
+  - **0 `SIGKILL`/OOM** since deploy; RAM after restart: used ~0.8 GB, ~1.2 GB available.
+  - prod-visual: the 8 other CNV tabs are pixel-identical pre/post (`diff 0.000%`) — no side effect;
+    ca_zalo now captures (it was un-screenshottable before).
+  - Counts/ordering/values unchanged; Excel export (`get_cnv_comparison_data` → `excel_export`,
+    separate path) still exports the full list. 3 pagination unit tests + the unchanged snapshot prove
+    no data change.
+
+### 2026-09-26 — KNOWN: `ca_pos_cnv` tab ("POS vs CNV") has the SAME unpaginated-list problem
+Surfaced while verifying the ca_zalo fix: `GET /cnv/customer-analytics/tab/ca_pos_cnv/` returns
+**~16.9 MB** (`200 16888667`) and is slow — it renders full `pos_only`/`cnv_only` lists with no
+pagination (`_customer_ca_pos_cnv` in `App/analytics/customer_tabs.py`). Not touched by the ca_zalo
+fix. Next candidate for the same server-side-pagination treatment if it becomes a problem.
